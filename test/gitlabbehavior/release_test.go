@@ -1,0 +1,436 @@
+// SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+// SPDX-License-Identifier: EUPL-1.2 OR GPL-3.0-or-later
+
+package gitlabbehavior
+
+import (
+	"context"
+	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
+)
+
+// The real orchestration must reject misplaced credentials before it invokes
+// even the trusted CLI. These cases never start a network tool or a signer.
+func TestReleaseJobRejectsCredentialsOutsideItsRole(t *testing.T) {
+	t.Parallel()
+
+	for _, pair := range [][2]string{
+		{"Check: release request", "RELEASE_SSH_SIGNING_KEY"},
+		{"Prepare: changelog", "RELEASE_COSIGN_PRIVATE_KEY"},
+		{"Prepare: version", "RELEASE_SSH_SIGNING_KEY"},
+		{"Build: release files", "RELEASE_TOKEN"},
+		{"Sign: files and images", "RELEASE_SSH_SIGNING_KEY"},
+		{"Sign: files and images", "RELEASE_TOKEN"},
+		{"Publish: images", "RELEASE_COSIGN_PRIVATE_KEY"},
+		{"Publish: release", "RELEASE_GPG_PRIVATE_KEY"},
+		{"Publish: tidy up", "RELEASE_SSH_SIGNING_KEY"},
+		// A job's former name has no role, so it holds no secret.
+		{"release-sign", "RELEASE_COSIGN_PRIVATE_KEY"},
+	} {
+		t.Run(pair[0]+"/"+pair[1], func(t *testing.T) {
+			t.Parallel()
+
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+
+			script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
+			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", `source "$1"; rc_engine() { echo engine-called; }; rc_release_context`, "release-guard", script) //nolint:gosec // Reviewed script, isolated environment and an inert CLI function.
+			command.Dir = t.TempDir()
+			command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + command.Dir, "CI_JOB_NAME=" + pair[0], pair[1] + "=inert-canary-value"}
+
+			output, err := command.CombinedOutput()
+			if err == nil || !strings.Contains(string(output), pair[1]+" is available to the wrong release job") ||
+				strings.Contains(string(output), "inert-canary-value") || strings.Contains(string(output), "engine-called") {
+				t.Fatalf("misplaced credential was not refused cleanly: %v", err)
+			}
+		})
+	}
+}
+
+func TestReleaseHandoffNeverSourcesItsDigestAsShell(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "digest"), []byte("$(touch exploited)\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
+
+	const invocation = `set -eu; source "$1"; engine_status=$3; rc_engine() { echo engine-called; return "$engine_status"; }; if rc_read_handoff "$2"; then exit 0; else exit $?; fi`
+
+	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", invocation, "handoff-guard", script, dir, "0") //nolint:gosec // Reviewed script and inert CLI. Conditional invocation proves refusal does not depend on errexit.
+	command.Dir = dir
+	command.Env = []string{"PATH=" + componentTools(t), "HOME=" + dir}
+
+	output, err := command.CombinedOutput()
+	if err == nil || strings.Contains(string(output), "engine-called") {
+		t.Fatal("invalid digest reached an engine operation")
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "exploited")); !os.IsNotExist(err) {
+		t.Fatal("handoff data was evaluated as shell")
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "digest"), []byte(strings.Repeat("a", 64)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Mkdir(filepath.Join(dir, "dist"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, status := range []string{"17", "0"} {
+		control := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", invocation, "handoff-guard", script, dir, status) //nolint:gosec // Same inert fixture with a valid digest and explicit engine status.
+		control.Dir, control.Env = t.TempDir(), command.Env
+
+		output, err := control.CombinedOutput()
+		if !strings.Contains(string(output), "engine-called") {
+			t.Fatalf("valid digest did not reach validation: %v\n%s", err, output)
+		}
+
+		if status != "0" {
+			var exit *exec.ExitError
+			if !errors.As(err, &exit) || exit.ExitCode() != 17 {
+				t.Fatalf("engine failure lost its status: %v\n%s", err, output)
+			}
+
+			if _, statErr := os.Stat(filepath.Join(control.Dir, "dist")); !os.IsNotExist(statErr) {
+				t.Fatal("rejected handoff was copied")
+			}
+
+			continue
+		}
+
+		if err != nil {
+			t.Fatalf("valid handoff was refused: %v\n%s", err, output)
+		}
+
+		if _, statErr := os.Stat(filepath.Join(control.Dir, "dist")); statErr != nil {
+			t.Fatal(statErr)
+		}
+	}
+}
+
+func TestBaseSigningRequiresExplicitPolicyOptIn(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "base-images.json"), []byte("[]"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
+	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", //nolint:gosec // Actual trusted shell with an inert engine and owned artifacts only.
+		`source "$1"; rc_engine() { echo engine-called; }; rc_sign_bases`, "base-policy", script)
+	command.Dir = dir
+	command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + dir, "DIST_DIR=" + dir, "RC_BASE_IMAGES=false"}
+
+	output, err := command.CombinedOutput()
+	if err == nil || strings.Contains(string(output), "engine-called") {
+		t.Fatal("a producer base ledger acquired authority without policy opt-in")
+	}
+}
+
+func TestPublicationRegistryBelongsToTheSeparateProject(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		project, image string
+		allowed        bool
+	}{
+		{"owner/publication", "registry.invalid/owner/publication", true},
+		{"owner/publication", "registry.invalid/owner/publication/bases", true},
+		{"owner/source", "registry.invalid/owner/source", false},
+		{"owner/publication", "registry.invalid/owner/source/bases", false},
+		{"owner/publication", "registry.invalid/owner/publication-other", false},
+		{"owner/publication", "other.invalid/owner/publication", false},
+	} {
+		t.Run(tc.image, func(t *testing.T) {
+			t.Parallel()
+
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+
+			script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
+			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", `source "$1"; rc_publication_scope`, "publication-scope", script) //nolint:gosec // Actual scope guard, closed environment and no external commands.
+
+			command.Env = []string{"PATH=/usr/bin:/bin", "CI_REGISTRY=registry.invalid", "CI_PROJECT_PATH=owner/source",
+				"RC_PUBLICATION_PROJECT=" + tc.project, "RC_PUBLICATION_IMAGE_REPOSITORY=" + tc.image}
+
+			if err := command.Run(); (err == nil) != tc.allowed {
+				t.Fatalf("publication scope admitted=%t, want %t", err == nil, tc.allowed)
+			}
+		})
+	}
+}
+
+// GitLab hands every project CI/CD variable to the job as an environment
+// variable, and the engine's branch flags fall back to RELEASE_BRANCH and
+// BRANCH. Only the head check used to name the branch, so a project variable
+// could move where the release commit was pushed while the check stayed on
+// main. Every branch-reading call now gets the one value rc_release_context
+// set: the release-branch input, else the project's default branch.
+func TestReleaseBranchIsNotTakenFromTheEnvironment(t *testing.T) {
+	t.Parallel()
+
+	script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
+
+	body, err := os.ReadFile(script) //nolint:gosec // repository contract fixture.
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	joined := strings.ReplaceAll(string(body), "\\\n", " ")
+	for _, call := range []string{"validate tag commit", "version render-changelog", "version commit-changelog-release"} {
+		for line := range strings.SplitSeq(joined, "\n") {
+			if strings.Contains(line, "rc_engine "+call) && !strings.Contains(line, `--branch "${RC_RELEASE_BRANCH}"`) {
+				t.Errorf("rc_engine %s does not pass the release branch explicitly: %s", call, strings.TrimSpace(line))
+			}
+		}
+	}
+
+	for _, test := range []struct{ name, input, want string }{
+		{name: "default branch", input: "", want: "main"},
+		{name: "input", input: "release/1.x", want: "release/1.x"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			output, runErr := runReleasePrepare(t, script, test.input)
+			if runErr != nil {
+				t.Fatalf("prepare did not run: %v\n%s", runErr, output)
+			}
+
+			if strings.Contains(output, "hostile") {
+				t.Fatalf("an environment variable chose the release branch:\n%s", output)
+			}
+
+			for _, want := range []string{"git -c core.hooksPath=/dev/null checkout -b " + test.want, "--branch " + test.want + " --repository team/app"} {
+				if !strings.Contains(output, want) {
+					t.Errorf("prepare output lacks %q:\n%s", want, output)
+				}
+			}
+		})
+	}
+}
+
+func TestReleaseBranchInputMustBeABranchName(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
+	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", //nolint:gosec // Reviewed script with an inert engine.
+		`set -eu; source "$1"; rc_engine() { printf 'engine %s\n' "$*"; }; rc_release_context`, "branch-name", script)
+	command.Env = []string{
+		"PATH=/usr/bin:/bin", "HOME=" + t.TempDir(), "CI_JOB_NAME=Prepare: release commit and tag",
+		"CI_COMMIT_TAG=release-request/v1.2.3", "CI_COMMIT_SHA=" + strings.Repeat("a", 40),
+		"CI_DEFAULT_BRANCH=main", "RC_RELEASE_BRANCH_INPUT=bad..name",
+	}
+
+	output, err := command.CombinedOutput()
+	if err == nil || !strings.Contains(string(output), "not a valid branch name") {
+		t.Fatalf("release context accepted an invalid branch: %v\n%s", err, output)
+	}
+}
+
+// runReleasePrepare runs rc_prepare_release with inert engine and git
+// functions under hostile branch variables, returning its combined output.
+func runReleasePrepare(t *testing.T, script, input string, extraEnv ...string) (string, error) {
+	t.Helper()
+
+	return runReleasePrepareIn(t, t.TempDir(), script, input, extraEnv...)
+}
+
+func runReleasePrepareIn(t *testing.T, dir, script, input string, extraEnv ...string) (string, error) {
+	t.Helper()
+
+	if err := os.MkdirAll(filepath.Join(dir, "_release-render"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, name := range []string{"CHANGELOG.md", "commit-msg.txt"} {
+		if err := os.WriteFile(filepath.Join(dir, "_release-render", name), []byte("x\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", //nolint:gosec // Reviewed script with inert engine and git functions.
+		`set -eu; source "$1"; rc_engine() { printf 'engine %s\n' "$*"; }; git() { printf 'git %s\n' "$*"; }; rc_release_context; rc_request_checkout() { rc_engine validate tag commit --branch "${RC_RELEASE_BRANCH}"; }; rc_prepare_release`,
+		"branch-guard", script)
+	command.Dir = dir
+	command.Env = []string{
+		"PATH=" + componentTools(t), "HOME=" + dir, "CI_JOB_NAME=Prepare: release commit and tag", "CI_PROJECT_DIR=" + dir,
+		"CI_COMMIT_TAG=release-request/v1.2.3", "CI_COMMIT_SHA=" + strings.Repeat("a", 40), "CI_PROJECT_PATH=team/app",
+		"RELEASE_SSH_SIGNING_KEY=inert", "RC_GIT_URL=ssh://git@gitlab.invalid/team/app.git", "RC_GIT_HOST_KEY=SHA256:x",
+		"RC_BOT_NAME=bot", "RC_BOT_EMAIL=bot@invalid.example", "CI_DEFAULT_BRANCH=main", "RC_RELEASE_BRANCH_INPUT=" + input,
+		"RC_RELEASE_BRANCH=hostile", "RELEASE_BRANCH=hostile", "BRANCH=hostile",
+	}
+	command.Env = append(command.Env, extraEnv...)
+
+	output, err := command.CombinedOutput()
+
+	return string(output), err
+}
+
+// With a version bump, release-prepare runs no build tool: it hands the patch
+// the key-free bump job made, with that job's digest, to the engine's text
+// check, and commits the files the check names beside the changelog. Without
+// one it commits the changelog alone, and a missing patch stops the release.
+func TestReleasePrepareAppliesOnlyAVerifiedVersionBump(t *testing.T) {
+	t.Parallel()
+
+	script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
+	digest := strings.Repeat("b", 64)
+
+	t.Run("bump", func(t *testing.T) {
+		t.Parallel()
+
+		dir, work := t.TempDir(), t.TempDir()
+		if err := os.MkdirAll(filepath.Join(dir, "_release-bump"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+
+		for name, body := range map[string]string{"version-bump.patch": "diff --git a/pom.xml b/pom.xml\n", "digest": digest + "\n"} {
+			if err := os.WriteFile(filepath.Join(dir, "_release-bump", name), []byte(body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		output, err := runReleasePrepareIn(t, dir, script, "", "RC_VERSION_BUMP=maven", "RC_WORK="+work)
+		if err != nil {
+			t.Fatalf("prepare did not run: %v\n%s", err, output)
+		}
+
+		for _, want := range []string{
+			"engine version apply-bump --project-type maven --version v1.2.3 --working-dir . --patch " + dir + "/_release-bump/version-bump.patch --sha256 " + digest + " --paths-file " + work + "/bump-paths",
+			"--include-paths-file " + work + "/bump-paths",
+		} {
+			if !strings.Contains(output, want) {
+				t.Errorf("prepare output lacks %q:\n%s", want, output)
+			}
+		}
+
+		if strings.Contains(output, "engine version bump ") {
+			t.Errorf("release-prepare ran the build tool itself:\n%s", output)
+		}
+	})
+
+	t.Run("no bump", func(t *testing.T) {
+		t.Parallel()
+
+		output, err := runReleasePrepare(t, script, "")
+		if err != nil || strings.Contains(output, "apply-bump") || strings.Contains(output, "--include-paths-file") {
+			t.Fatalf("prepare without a bump = %v:\n%s", err, output)
+		}
+	})
+
+	t.Run("bump without its patch", func(t *testing.T) {
+		t.Parallel()
+
+		output, err := runReleasePrepare(t, script, "", "RC_VERSION_BUMP=maven", "RC_WORK="+t.TempDir())
+		if err == nil || strings.Contains(output, "commit-changelog-release") {
+			t.Fatalf("prepare went on without the bump patch:\n%s", output)
+		}
+	})
+}
+
+// A path guard of the trusted release script stops the job. The bare
+// `test -f x && test ! -L x` it replaces stopped nothing under set -e when its
+// first test failed: a preseeded dist or publication ledger went through.
+func TestReleasePathGuardsStopTheJob(t *testing.T) {
+	t.Parallel()
+
+	script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
+
+	for name, test := range map[string]struct {
+		setup, call string
+		stops       bool
+	}{
+		"absent path is required absent":    {call: `rc_require_absent missing`},
+		"existing path is required absent":  {setup: `mkdir present`, call: `rc_require_absent present`, stops: true},
+		"link is required absent":           {setup: `ln -s nowhere link`, call: `rc_require_absent link`, stops: true},
+		"regular file is required regular":  {setup: `printf x >file`, call: `rc_require_regular_file file`},
+		"missing file is required regular":  {call: `rc_require_regular_file missing`, stops: true},
+		"link is required regular":          {setup: `printf x >file; ln -s file link`, call: `rc_require_regular_file link`, stops: true},
+		"preseeded dist stops the hand-off": {setup: `mkdir -p hand/dist dist; printf '%064d' 0 >hand/digest`, call: `rc_read_handoff hand`, stops: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			setup := test.setup
+			if setup == "" {
+				setup = ":"
+			}
+
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+
+			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", //nolint:gosec // Reviewed script with an inert engine.
+				`set -euo pipefail; source "$1"; rc_engine() { :; }; `+setup+`; `+test.call+`; echo went-on`, "guards", script)
+			command.Dir = t.TempDir()
+			command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + command.Dir}
+
+			output, err := command.CombinedOutput()
+			if stopped := err != nil && !strings.Contains(string(output), "went-on"); stopped != test.stops {
+				t.Fatalf("stopped %v, want %v:\n%s", stopped, test.stops, output)
+			}
+		})
+	}
+}
+
+// Every job keeps the secrets its role needs: the policy is written in roles,
+// and each displayed job name maps to its role.
+func TestReleaseJobKeepsTheCredentialsOfItsRole(t *testing.T) {
+	t.Parallel()
+
+	for _, pair := range [][2]string{
+		{"Prepare: release commit and tag", "RELEASE_SSH_SIGNING_KEY"},
+		{"Sign: files and images", "RELEASE_COSIGN_PRIVATE_KEY"},
+		{"Sign: files and images", "RELEASE_GPG_PASSPHRASE"},
+		{"Sign: files and images", "RELEASE_REGISTRY_TOKEN"},
+		{"Publish: release", "RELEASE_TOKEN"},
+		{"Publish: images", "RELEASE_REGISTRY_TOKEN"},
+		{"Publish: tidy up", "RELEASE_REGISTRY_TOKEN"},
+		{"Check: signing access", "RELEASE_COSIGN_PRIVATE_KEY"},
+		{"Check: publishing access", "RELEASE_TOKEN"},
+		{"Check: registry access", "RELEASE_REGISTRY_TOKEN"},
+	} {
+		t.Run(pair[0]+"/"+pair[1], func(t *testing.T) {
+			t.Parallel()
+
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+
+			script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
+			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", //nolint:gosec // Reviewed script, isolated environment and an inert CLI function.
+				`source "$1"; rc_engine() { :; }; rc_release_context`, "release-guard", script)
+			command.Dir = t.TempDir()
+			command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + command.Dir, "CI_JOB_NAME=" + pair[0], pair[1] + "=inert-canary-value",
+				"CI_COMMIT_TAG=release-request/v1.2.3", "CI_COMMIT_SHA=" + strings.Repeat("a", 40), "CI_DEFAULT_BRANCH=main"}
+
+			output, err := command.CombinedOutput()
+			if strings.Contains(string(output), "is available to the wrong release job") {
+				t.Fatalf("the role's own credential was refused: %v\n%s", err, output)
+			}
+		})
+	}
+}
