@@ -16,6 +16,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/git"
 	"github.com/diggsweden/forge-ci/internal/domain/validate"
 )
 
@@ -71,7 +72,7 @@ func callInputViolations(in IsolationInput, job string, call isolationCall) []va
 	}
 
 	relative, pin, _ := strings.Cut(strings.TrimPrefix(call.Uses[end:], "/"), "@")
-	if !isSHA1(pin) || !validLayerContractPath(relative) {
+	if !git.ValidCommitSHA(pin) || !validLayerContractPath(relative) {
 		return []validate.IsolationViolation{{Line: 1, Msg: fmt.Sprintf("job %q has no supported pinned layer declaration for %s", job, call.Uses)}}
 	}
 

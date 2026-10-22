@@ -37,6 +37,13 @@ func TestIsolationChecksInputsAgainstTheSuppliedLayer(t *testing.T) {
 		want string
 	}{
 		{name: "declared inputs"},
+		{name: "SHA-256 declared inputs", edit: func(tree fstest.MapFS) {
+			tree["caller/release.yml"].Data = []byte(strings.ReplaceAll(caller, pin, strings.Repeat("a", 64)))
+		}},
+		{name: "SHA-256 unknown input fails closed", want: "unknown-message", edit: func(tree fstest.MapFS) {
+			body := strings.ReplaceAll(caller, pin, strings.Repeat("a", 64))
+			tree["caller/release.yml"].Data = []byte(strings.ReplaceAll(body, "message: hello", "unknown-message: hello"))
+		}},
 		{name: "unknown action input", want: "unknown-message", edit: func(tree fstest.MapFS) {
 			tree["caller/release.yml"].Data = []byte(strings.ReplaceAll(caller, "message: hello", "unknown-message: hello"))
 		}},

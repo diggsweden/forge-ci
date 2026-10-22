@@ -15,6 +15,7 @@ import (
 
 	"github.com/diggsweden/forge-ci/internal/clicolor"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/git"
 	"github.com/diggsweden/forge-ci/internal/domain/output"
 	"github.com/diggsweden/forge-ci/internal/domain/validate"
 	"gopkg.in/yaml.v3"
@@ -258,7 +259,7 @@ func subjectCallInputPins(body []byte, subject, input string) ([]string, []valid
 		}
 
 		value := job.With[input]
-		if sha, ok := resolvedScalar(&value); ok && isSHA1(sha) {
+		if sha, ok := resolvedScalar(&value); ok && git.ValidCommitSHA(sha) {
 			pins = append(pins, sha)
 
 			continue

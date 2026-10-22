@@ -104,7 +104,7 @@ func resolvedScalar(node *yaml.Node) (string, bool) {
 	return node.Value, true
 }
 
-// pinnedSubjectSHA returns the 40-hex commit a uses: value pins subject to,
+// pinnedSubjectSHA returns the full commit a uses: value pins subject to,
 // or "" when the value does not reference subject as whole path components.
 //
 // A bare substring match also accepted a sibling repository whose name merely
@@ -123,7 +123,7 @@ func pinnedSubjectSHA(uses, subject string) string {
 		return ""
 	}
 
-	if ref := uses[end+at+1:]; isSHA1(ref) {
+	if ref := uses[end+at+1:]; git.ValidCommitSHA(ref) {
 		return ref
 	}
 
@@ -171,9 +171,4 @@ func subjectIsPathComponent(uses string, idx, end int) bool {
 	}
 
 	return end < len(uses) && (uses[end] == '/' || uses[end] == '@')
-}
-
-func isSHA1(value string) bool {
-	// A workflow pin is a SHA-1 commit; the 64-hex SHA-256 form is not accepted here.
-	return len(value) == 40 && git.ValidCommitSHA(value)
 }

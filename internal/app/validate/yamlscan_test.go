@@ -104,23 +104,24 @@ func TestPinnedSubjectSHA_RequiresSubjectAsWholePathComponents(t *testing.T) {
 	}
 }
 
-// TestPinnedSubjectSHA_EnforcesTheSHA1Grammar covers the pin grammar on its
+// TestPinnedSubjectSHA_EnforcesTheCommitGrammar covers the pin grammar on its
 // own, independently of where the subject sits in the value.
 //
 // The subject-component cases above all pin an all-ones SHA or the branch name
 // "main", so they separate 40 characters from 4 and nothing else. Removing the
-// hexadecimal check from isSHA1 entirely leaves every one of them passing: the
+// hexadecimal check entirely leaves every one of them passing: the
 // only property they need is length. That matters because the check is what
 // distinguishes an immutable commit pin from a mutable ref, which is the whole
 // point of requiring a pin — a 40-character tag or branch name is a legal Git
 // ref, and treating one as a pin would report a mutable reference as immutable.
-func TestPinnedSubjectSHA_EnforcesTheSHA1Grammar(t *testing.T) {
+func TestPinnedSubjectSHA_EnforcesTheCommitGrammar(t *testing.T) {
 	t.Parallel()
 
 	const (
 		hex40 = "0123456789abcdef0123456789abcdef01234567"
 		hex39 = "0123456789abcdef0123456789abcdef0123456"
 		hex41 = "0123456789abcdef0123456789abcdef012345678"
+		hex64 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	)
 
 	for name, tc := range map[string]struct {
@@ -129,6 +130,11 @@ func TestPinnedSubjectSHA_EnforcesTheSHA1Grammar(t *testing.T) {
 		why  string
 	}{
 		"exactly 40 hexadecimal characters is a pin": {hex40, hex40, "the canonical Git object name"},
+		"exactly 64 hexadecimal characters is a pin": {hex64, hex64, "the canonical SHA-256 Git object name"},
+		"63 characters is not a pin":                 {hex64[:63], "", "an abbreviated SHA-256 object name is ambiguous"},
+		"65 characters is not a pin":                 {hex64 + "a", "", "longer than either supported Git object format"},
+		"64 characters with non-hex suffix":          {hex64[:63] + "g", "", "length does not prove a hexadecimal pin"},
+		"uppercase SHA-256 is not a pin":             {strings.ToUpper(hex64), "", "pins are lowercase"},
 		"39 characters is not a pin":                 {hex39, "", "an abbreviated object name is ambiguous and must not be accepted"},
 		"41 characters is not a pin":                 {hex41, "", "longer than any Git SHA-1"},
 		"a non-hex character at the end":             {"0123456789abcdef0123456789abcdef0123456g", "", "'g' is outside the hexadecimal alphabet"},

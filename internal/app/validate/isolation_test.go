@@ -498,6 +498,39 @@ func TestIsolation_SinglePinInputIsTheCallersName(t *testing.T) {
 	}
 }
 
+// Full SHA-256 pins obey the same exact-match rule as SHA-1 pins.
+func TestIsolation_SHA256PinInputs(t *testing.T) {
+	t.Parallel()
+
+	pin := strings.Repeat("a", 64)
+	workflow := strings.ReplaceAll(otherSubjectWorkflow, strings.Repeat("1", 40), pin)
+
+	for _, scenario := range []struct {
+		name, input, want string
+	}{
+		{"matching", pin, ""},
+		{"different SHA-256", strings.Repeat("b", 64), "mixed example/other-ci pins"},
+		{"SHA-1 prefix", pin[:40], "mixed example/other-ci pins"},
+		{"abbreviated SHA-256", pin[:63], "without a literal commit"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			t.Parallel()
+
+			mem := testfs.NewMemory(t)
+			mem.WriteFile(".forgejo/workflows/release.yml", fmt.Appendf(nil, workflow, "      layer-sha: "+scenario.input+"\n"))
+
+			out, err := runIsolationForSubject(t, mem, "example/other-ci", "layer-sha")
+			if scenario.want == "" {
+				if err != nil {
+					t.Fatalf("matching SHA-256 pins refused: %v\n%s", err, out)
+				}
+			} else if !errors.Is(err, errs.ErrValidation) || !strings.Contains(out, scenario.want) {
+				t.Fatalf("err = %v, output = %s, want validation failure containing %q", err, out, scenario.want)
+			}
+		})
+	}
+}
+
 // TestIsolation_SinglePinInputCoversEveryWorkflowFile holds the directory-wide
 // half: a call to the subject in a sibling workflow file answers to the same
 // input.
