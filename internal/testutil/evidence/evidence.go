@@ -115,6 +115,29 @@ func RequireTool(t *testing.T, name string) string {
 	return ""
 }
 
+// RequireWorkingTool returns the resolved path of the named command after
+// verifying it actually runs, or gives up on the test: a skip in the default
+// profile, a failure in the strict one.
+//
+// RequireTool only checks that the binary is on PATH. Some environments ship
+// proxy shims (e.g. rustup's cargo on ubuntu-26.04) that are present and
+// executable but fail at runtime because no default toolchain is configured.
+// RequireWorkingTool runs the tool with the given args (typically --version)
+// and treats a non-zero exit as the tool being absent: the shim is there but
+// the toolchain behind it is not.
+func RequireWorkingTool(t *testing.T, name string, args ...string) string {
+	t.Helper()
+
+	path := RequireTool(t, name)
+
+	cmd := exec.CommandContext(t.Context(), path, args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		NotProvenf(t, "%s is on PATH but failed to run: %v\n%s", name, err, out)
+	}
+
+	return path
+}
+
 // NotProvenf records that the run cannot produce a piece of evidence, then
 // skips (default profile) or fails (strict profile).
 //

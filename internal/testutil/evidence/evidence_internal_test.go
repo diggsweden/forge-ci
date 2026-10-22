@@ -182,3 +182,41 @@ func tallySnapshot() map[string]int {
 
 	return copied
 }
+
+func TestRequireWorkingTool_ReturnsThePathOfAToolThatRuns(t *testing.T) {
+	dir := t.TempDir()
+	tool := filepath.Join(dir, "evidence-fixture-working-tool")
+	require.NoError(t, os.WriteFile(tool, []byte("#!/bin/sh\nexit 0\n"), 0o700)) //nolint:gosec // an executable is the point of the fixture.
+	t.Setenv("PATH", dir)
+
+	before := tallySnapshot()
+
+	require.Equal(t, tool, RequireWorkingTool(t, "evidence-fixture-working-tool", "--version"))
+	require.Equal(t, before, tallySnapshot(), "a tool that runs is not a shortfall")
+}
+
+// A binary that is on PATH and executable but exits non-zero — the shape of
+// a rustup proxy shim with no default toolchain — is treated as absent.
+func TestRequireWorkingTool_SkipsAndTalliesWhenTheToolIsPresentButBroken(t *testing.T) {
+	dir := t.TempDir()
+	tool := filepath.Join(dir, "evidence-fixture-broken-tool")
+	require.NoError(t, os.WriteFile(tool, []byte("#!/bin/sh\necho 'no default is configured' >&2\nexit 1\n"), 0o700)) //nolint:gosec // an executable is the point of the fixture.
+	t.Setenv("PATH", dir)
+	useProfile(t, "")
+
+	before := tallySnapshot()
+
+	t.Run("broken", func(sub *testing.T) {
+		sub.Cleanup(func() {
+			if !sub.Skipped() {
+				sub.Error("RequireWorkingTool returned for a tool that exits non-zero")
+			}
+		})
+
+		RequireWorkingTool(sub, "evidence-fixture-broken-tool", "--version")
+	})
+
+	key := "evidence-fixture-broken-tool is on PATH but failed to run: exit status 1\nno default is configured\n"
+	require.Equal(t, before[key]+1, tallySnapshot()[key],
+		"the broken tool was not recorded as a shortfall")
+}
