@@ -99,6 +99,20 @@ jobs:
         # Normalize the embedded date and tarball mtimes to the commit timestamp.
         # Other resolved build inputs must also match for byte-identical payloads.
         run: printf 'SOURCE_DATE_EPOCH=%s\n' "$(git log -1 --format=%ct HEAD)" >> "$GITHUB_ENV"
+      - name: Validate signing prerequisites
+        # sign=true is only valid for the rolling pre-release channel (-pre tag).
+        # Version-tag releases use release-binary.yml, which creates the
+        # FORGE_CI_RELEASE_REFERENCE that sign-reproducible-release.sh requires.
+        # Fail early with a clear message instead of deep in the GoReleaser hook.
+        if: ${{ inputs.sign }}
+        env:
+          TAG: ${{ inputs.version-tag }}
+        run: |
+          if [[ "$TAG" != *-pre ]]; then
+            echo "::error::sign=true requires a -pre tag for the rolling pre-release channel."
+            echo "::error::Version-tag releases use release-binary.yml, which creates FORGE_CI_RELEASE_REFERENCE."
+            exit 1
+          fi
       - name: Resolve version
         id: version
         env:

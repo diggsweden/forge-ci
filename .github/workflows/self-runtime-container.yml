@@ -273,7 +273,12 @@ jobs:
     with:
       version-tag: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.90.0-pre' }}
       artifact-name: cli-dist
-      sign: ${{ github.event_name != 'pull_request' }}
+      # Tag pushes build the runtime images only; the signed CLI release is
+      # release-binary.yml's job (it creates the reproducibility reference
+      # that sign-reproducible-release.sh requires for non-pre tags).
+      # The pre-release branch signs because its -pre tag skips the
+      # reproducibility comparison.
+      sign: ${{ github.event_name != 'pull_request' && github.ref_type != 'tag' }}
 
   # The runtime images' platforms, declared once in RUNTIME_PLATFORMS and
   # selected by the RELEASE_PLATFORMS repository variable: unset builds
