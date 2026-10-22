@@ -15,6 +15,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/diggsweden/forge-ci/internal/domain/git"
 	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
 	"github.com/diggsweden/forge-ci/internal/domain/projecttype"
 	"github.com/diggsweden/forge-ci/internal/testutil/evidence"
@@ -279,10 +280,9 @@ func TestPublishContainerAlwaysRemovesMaterializedBuildSecrets(t *testing.T) {
 func TestPinnedCompanionSuiteUsesStrictBlackboxContract(t *testing.T) {
 	t.Parallel()
 
-	const (
-		pin                 = "9fd37b40703075b4319d63e251b6e2860121ad82"
-		validatorInvocation = "run: ./scripts/validate-strict-profile-contract.sh"
-	)
+	const validatorInvocation = "run: ./scripts/validate-strict-profile-contract.sh"
+
+	var sharedPin string
 
 	for _, workflow := range []string{"self-pullrequest.yml", "self-release.yml"} {
 		body, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".github", "workflows", workflow)) //nolint:gosec // repository fixture.
@@ -291,6 +291,14 @@ func TestPinnedCompanionSuiteUsesStrictBlackboxContract(t *testing.T) {
 		}
 
 		text := string(body)
+
+		pin := companionCheckoutPin(t, body)
+		if sharedPin == "" {
+			sharedPin = pin
+		} else if pin != sharedPin {
+			t.Errorf("%s companion pin %s differs from %s", workflow, pin, sharedPin)
+		}
+
 		for _, want := range []string{
 			"ref: " + pin,
 			"name: Validate strict companion behavioral contract",
@@ -322,6 +330,36 @@ func TestPinnedCompanionSuiteUsesStrictBlackboxContract(t *testing.T) {
 			t.Errorf("%s companion gate order checkout=%d setup=%d validation=%d run=%d", workflow, checkoutAt, setupAt, validationAt, runAt)
 		}
 	}
+}
+
+// The workflow owns the immutable pin; the guard checks its shape and agreement
+// across callers rather than keeping a third copy that every fork must edit.
+func companionCheckoutPin(t *testing.T, body []byte) string {
+	t.Helper()
+
+	var workflow eventWorkflow
+	require.NoError(t, yaml.Unmarshal(body, &workflow))
+
+	var pin string
+
+	matches := 0
+
+	for _, job := range workflow.Jobs {
+		for _, step := range job.Steps {
+			if scalarChild(&step.With, "path") != "forge-ci-blackbox-tests" {
+				continue
+			}
+
+			require.Contains(t, step.Uses, "actions/checkout@")
+			pin = scalarChild(&step.With, "ref")
+			matches++
+		}
+	}
+
+	require.Equal(t, 1, matches, "expected exactly one companion checkout")
+	require.True(t, git.ValidCommitSHA(pin), "companion checkout requires a full immutable pin: %q", pin)
+
+	return pin
 }
 
 // TestReleaseGateRunsTheStrictIntegrationTier pins the asymmetry between the
