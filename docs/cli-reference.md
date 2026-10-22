@@ -4172,16 +4172,17 @@ compares recorded digests with the registry.
 
 ### `forge-ci validate allowed-signers`
 
-validate the OpenSSH allowed_signers file format
+check SSH allowed_signers entries and public keys
 
 ```
 Checks each non-comment line of .forge-ci/allowed_signers
-against the OpenSSH allowed_signers format:
+for principal/key structure and supported option names:
 
   principal [options] key-type base64-key
 
-Exits non-zero with one error per malformed line if any entry is
-malformed. Useful as a pre-commit hook or CI pre-flight gate.
+OpenSSH evaluates option values, principal matching and authorization.
+Empty files authorize nobody. Reports each malformed entry and exits
+non-zero on failure. Useful as a pre-commit hook or CI pre-flight check.
 
 EXAMPLE:
    forge-ci validate allowed-signers
@@ -4340,8 +4341,9 @@ validate the armored GPG public-key bundle format
 
 ```
 Checks .forge-ci/allowed_gpg_keys.asc for well-formed
-RFC 4880 ASCII armor: at least one PGP PUBLIC KEY BLOCK with
-matching BEGIN/END markers and non-empty body.
+public keys: at least one complete PGP PUBLIC KEY BLOCK, with
+parseable public keys in every block. Uses the release verifier's
+key-bundle parser; this does not verify a release signature.
 
 Exits non-zero with errors if the file is malformed. Useful as
 a pre-commit hook or CI pre-flight gate.

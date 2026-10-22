@@ -1,94 +1,57 @@
+// SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 // SPDX-License-Identifier: EUPL-1.2 OR GPL-3.0-or-later
 
 package validate
 
 import (
-	"bufio"
+	"bytes"
+	"errors"
 	"fmt"
-	"io"
 	"os"
-	"strings"
 
-	"github.com/ProtonMail/go-crypto/openpgp/armor"
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/pgp"
 )
 
-// ValidateGPGKeysFormat reads an armored GPG public-key bundle
-// (.forge-ci/allowed_gpg_keys.asc) and returns one human-readable
-// error per structural problem. An empty slice means the file
-// contains at least one well-formed PGP PUBLIC KEY BLOCK.
-//
-// Two layers of validation:
-//  1. Marker balance — every BEGIN must have a matching END.
-//     armor.Decode is lenient about missing END markers (it
-//     returns a partial block at EOF), so we check explicitly.
-//  2. armor.Decode — validates the base64 body and CRC24
-//     checksum using ProtonMail/go-crypto's RFC 4880 parser.
-func ValidateGPGKeysFormat(path string) []string {
-	data, err := os.ReadFile(path)
+// GPGKeysFormat checks that every armor block is a complete public-key
+// block containing keys accepted by the release verifier's key-bundle parser.
+func GPGKeysFormat(path string) error {
+	data, err := os.ReadFile(path) //nolint:gosec // G304: explicitly selected local allowlist; read-only validation.
 	if err != nil {
-		return []string{fmt.Sprintf("cannot read %s: %v", path, err)}
+		return fmt.Errorf("read allowed GPG keys: %w", err)
 	}
 
-	content := string(data)
-
-	var errs []string
-
-	// Layer 1: marker balance.
-	const (
-		beginMarker = "-----BEGIN PGP PUBLIC KEY BLOCK-----"
-		endMarker   = "-----END PGP PUBLIC KEY BLOCK-----"
-	)
-
-	beginCount := strings.Count(content, beginMarker)
-	endCount := strings.Count(content, endMarker)
-
-	if beginCount == 0 {
-		return []string{fmt.Sprintf(
-			"no %q marker found — the file must contain at least one "+
-				"armored PGP public key block (RFC 4880 section 6)", beginMarker)}
+	blocks := pgp.SplitArmorBlocks(data)
+	if len(blocks) == 0 {
+		return fmt.Errorf("%s: no PGP PUBLIC KEY BLOCK found: %w", path, errs.ErrMalformedInput)
 	}
 
-	if beginCount != endCount {
-		errs = append(errs, fmt.Sprintf(
-			"BEGIN/END marker mismatch: %d BEGIN, %d END — a block is truncated",
-			beginCount, endCount))
-	}
+	var problems []error
 
-	// Layer 2: armor.Decode for body validation (base64, CRC24).
-	reader := bufio.NewReader(strings.NewReader(content))
-	blockCount := 0
+	for index, block := range blocks {
+		block = bytes.TrimSpace(block)
 
-	for {
-		block, err := armor.Decode(reader)
-		if err == io.EOF {
-			break
+		const (
+			begin = "-----BEGIN PGP PUBLIC KEY BLOCK-----"
+			end   = "-----END PGP PUBLIC KEY BLOCK-----"
+		)
+
+		// The armor reader tolerates missing end markers; require a complete
+		// public envelope before using the same key parser as verification.
+		if !bytes.HasPrefix(block, []byte(begin+"\n")) && !bytes.HasPrefix(block, []byte(begin+"\r\n")) ||
+			!bytes.HasSuffix(block, []byte(end)) || bytes.Count(block, []byte("-----BEGIN ")) != 1 {
+			problems = append(problems, fmt.Errorf("%s: block %d: expected complete PGP PUBLIC KEY BLOCK markers: %w", path, index+1, errs.ErrMalformedInput))
+
+			continue
 		}
 
+		fingerprints, err := pgp.PrimaryFingerprints(block)
 		if err != nil {
-			errs = append(errs, fmt.Sprintf("armor block %d: %v", blockCount+1, err))
-
-			break
+			problems = append(problems, fmt.Errorf("%s: block %d: %w", path, index+1, err))
+		} else if len(fingerprints) == 0 {
+			problems = append(problems, fmt.Errorf("%s: block %d: contains no public keys: %w", path, index+1, errs.ErrMalformedInput))
 		}
-
-		if block.Type != "PGP PUBLIC KEY BLOCK" {
-			errs = append(errs, fmt.Sprintf(
-				"block %d: unexpected armor type %q, expected \"PGP PUBLIC KEY BLOCK\"",
-				blockCount+1, block.Type))
-		}
-
-		// Drain the body — base64 decode errors surface here, not
-		// in Decode itself.
-		if _, err := io.Copy(io.Discard, block.Body); err != nil {
-			errs = append(errs, fmt.Sprintf(
-				"block %d: body is not valid base64: %v", blockCount+1, err))
-		}
-
-		blockCount++
 	}
 
-	if blockCount == 0 && len(errs) == 0 {
-		errs = append(errs, "no PGP PUBLIC KEY BLOCK found — the file must contain at least one armored public key (RFC 4880 section 6)")
-	}
-
-	return errs
+	return errors.Join(problems...)
 }

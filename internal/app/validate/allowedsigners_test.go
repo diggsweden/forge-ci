@@ -1,20 +1,22 @@
+// SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 // SPDX-License-Identifier: EUPL-1.2 OR GPL-3.0-or-later
 
 package validate_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/app/validate"
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
 // realKeyB64 is a real ed25519 SSH public key body (base64 wire format,
 // RFC 4253 §6.6). Generated with ssh-keygen for testing; not a real
-// credential. The test file is allowlisted in development/gitleaks/
-// gitleaks.toml.
+// credential.
 const realKeyB64 = "AAAAC3NzaC1lZDI1NTE5AAAAIFKw6+NIKWOtsi2O+WmFbxgYTmak1rpcEPrvx23EQ3yJ" // gitleaks:allow — throwaway test key
 
 // invalidKeyB64 is valid base64 but NOT a valid SSH public key wire
@@ -27,7 +29,7 @@ func TestValidateAllowedSignersFormat(t *testing.T) {
 	tests := []struct {
 		name    string
 		content string
-		wantErr int // expected number of error strings
+		wantErr int // number of malformed entries reported
 	}{
 		{
 			name:    "valid single entry",
@@ -35,18 +37,18 @@ func TestValidateAllowedSignersFormat(t *testing.T) {
 			wantErr: 0,
 		},
 		{
-			name:    "valid cert key type",
+			name:    "certificate type with plain key",
 			content: "alice@example.com ssh-ed25519-cert-v01@openssh.com " + realKeyB64 + "\n",
-			wantErr: 0,
+			wantErr: 1,
 		},
 		{
-			name:    "valid sk key type",
+			name:    "security key type with plain key",
 			content: "alice@example.com sk-ssh-ed25519@openssh.com " + realKeyB64 + "\n",
-			wantErr: 0,
+			wantErr: 1,
 		},
 		{
 			name:    "valid multiple principals",
-			content: "alice@example.com,bob@example.com ssh-rsa " + realKeyB64 + "\n",
+			content: "alice@example.com,bob@example.com ssh-ed25519 " + realKeyB64 + "\n",
 			wantErr: 0,
 		},
 		{
@@ -56,7 +58,7 @@ func TestValidateAllowedSignersFormat(t *testing.T) {
 		},
 		{
 			name:    "valid multiple entries with comments and blanks",
-			content: "# comment\n\nalice@example.com ssh-ed25519 " + realKeyB64 + "\nbob@example.com ssh-rsa " + realKeyB64 + " bob's key\n",
+			content: "# comment\n\nalice@example.com ssh-ed25519 " + realKeyB64 + "\nbob@example.com ssh-ed25519 " + realKeyB64 + " bob's key\n",
 			wantErr: 0,
 		},
 		{
@@ -75,9 +77,42 @@ func TestValidateAllowedSignersFormat(t *testing.T) {
 			wantErr: 0,
 		},
 		{
+			name:    "declared RSA with Ed25519 key",
+			content: "alice@example.com ssh-rsa " + realKeyB64,
+			wantErr: 1,
+		},
+		{
+			name:    "unknown option",
+			content: "alice@example.com nonsense-option ssh-ed25519 " + realKeyB64,
+			wantErr: 1,
+		},
+		{
+			name:    "multiple option fields",
+			content: "alice@example.com cert-authority nonsense-option ssh-ed25519 " + realKeyB64,
+			wantErr: 1,
+		},
+		{
+			name:    "unterminated quoted option",
+			content: "alice@example.com namespaces=\"git ssh-ed25519 " + realKeyB64,
+			wantErr: 1,
+		},
+		{
+			name:    "case insensitive option names",
+			content: `alice@example.com CERT-AUTHORITY,NameSpaces="git",VALID-BEFORE="20270101Z" ssh-ed25519 ` + realKeyB64,
+		},
+		{
+			name:    "combined options",
+			content: `alice@example.com cert-authority,namespaces="file,git",valid-before="20270101Z" ssh-ed25519 ` + realKeyB64,
+		},
+		{
+			name:    "option without required value",
+			content: "alice@example.com namespaces ssh-ed25519 " + realKeyB64,
+			wantErr: 1,
+		},
+		{
 			name:    "missing principal — fields shifted right",
 			content: "ssh-ed25519 " + realKeyB64 + " josef.andersson@digg.se\n",
-			wantErr: 1, // no recognised key type found (base64 and email are not key types)
+			wantErr: 1,
 		},
 		{
 			name:    "too few fields",
@@ -97,12 +132,12 @@ func TestValidateAllowedSignersFormat(t *testing.T) {
 		{
 			name:    "valid base64 but not an SSH key",
 			content: "alice@example.com ssh-ed25519 " + invalidKeyB64 + "\n",
-			wantErr: 1, // ssh.ParsePublicKey rejects "test" bytes
+			wantErr: 1,
 		},
 		{
 			name:    "multiple errors across lines",
 			content: "ssh-ed25519 " + realKeyB64 + " alice@example.com\nalice@example.com foo-bar " + realKeyB64 + "\n",
-			wantErr: 2, // line 1: no key type; line 2: no key type
+			wantErr: 2,
 		},
 		{
 			name:    "empty file",
@@ -125,9 +160,17 @@ func TestValidateAllowedSignersFormat(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			errs := validate.ValidateAllowedSignersFormat(path)
-			if len(errs) != tt.wantErr {
-				t.Errorf("got %d errors, want %d: %v", len(errs), tt.wantErr, errs)
+			err := validate.AllowedSignersFormat(path)
+			if (err != nil) != (tt.wantErr != 0) {
+				t.Fatalf("error = %v, want malformed = %t", err, tt.wantErr != 0)
+			}
+
+			if err != nil && !errors.Is(err, errs.ErrMalformedInput) {
+				t.Errorf("expected malformed input, got %v", err)
+			}
+
+			if err != nil && strings.Count(err.Error(), path+":") != tt.wantErr {
+				t.Errorf("expected %d entry diagnostics, got %v", tt.wantErr, err)
 			}
 		})
 	}
@@ -136,35 +179,29 @@ func TestValidateAllowedSignersFormat(t *testing.T) {
 func TestValidateAllowedSignersFormat_MissingPrincipalMessage(t *testing.T) {
 	t.Parallel()
 
-	// The exact bug we just fixed: the line starts with the key-type,
-	// not the principal. With no principal, the parser scans all
-	// remaining fields looking for a key-type and finds none — the
-	// base64 blob and the email are not recognised key types.
+	// A public-key export is not an allowed-signers entry: it needs a principal.
 	path := filepath.Join(t.TempDir(), "allowed_signers")
 	content := "ssh-ed25519 " + realKeyB64 + " josef.andersson@digg.se\n"
+
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	errs := validate.ValidateAllowedSignersFormat(path)
-	if len(errs) != 1 {
-		t.Fatalf("got %d errors, want 1: %v", len(errs), errs)
+	err := validate.AllowedSignersFormat(path)
+	if err == nil {
+		t.Fatal("missing principal accepted")
 	}
 
-	if !strings.Contains(errs[0], "key type") {
-		t.Errorf("error should mention 'key type' for shifted fields, got: %s", errs[0])
+	if !strings.Contains(err.Error(), "principal [options] key-type base64-key") {
+		t.Errorf("error should explain the expected entry structure, got: %v", err)
 	}
 }
 
 func TestValidateAllowedSignersFormat_FileNotFound(t *testing.T) {
 	t.Parallel()
 
-	errs := validate.ValidateAllowedSignersFormat(filepath.Join(t.TempDir(), "nonexistent"))
-	if len(errs) != 1 {
-		t.Fatalf("got %d errors, want 1: %v", len(errs), errs)
-	}
-
-	if !strings.Contains(errs[0], "cannot read") {
-		t.Errorf("error should mention 'cannot read', got: %s", errs[0])
+	err := validate.AllowedSignersFormat(filepath.Join(t.TempDir(), "nonexistent"))
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("expected missing file cause, got %v", err)
 	}
 }

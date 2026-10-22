@@ -1,3 +1,4 @@
+// SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 // SPDX-License-Identifier: EUPL-1.2 OR GPL-3.0-or-later
 
 package validate
@@ -6,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/urfave/cli/v3"
 
@@ -20,44 +20,37 @@ import (
 func allowedSignersCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "allowed-signers",
-		Usage: "validate the OpenSSH allowed_signers file format",
+		Usage: "check SSH allowed_signers entries and public keys",
 		Description: `Checks each non-comment line of .forge-ci/allowed_signers
-against the OpenSSH allowed_signers format:
+for principal/key structure and supported option names:
 
   principal [options] key-type base64-key
 
-Exits non-zero with one error per malformed line if any entry is
-malformed. Useful as a pre-commit hook or CI pre-flight gate.
+OpenSSH evaluates option values, principal matching and authorization.
+Empty files authorize nobody. Reports each malformed entry and exits
+non-zero on failure. Useful as a pre-commit hook or CI pre-flight check.
 
 EXAMPLE:
    forge-ci validate allowed-signers
    forge-ci validate allowed-signers --path .forge-ci/allowed_signers`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:    "path",
+				Name:    flagPath,
 				Sources: cli.EnvVars("ALLOWED_SIGNERS_PATH"),
 				Usage:   "path to the allowed_signers file (default: .forge-ci/allowed_signers)",
 				Value:   ".forge-ci/allowed_signers",
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			path := cmd.String("path")
+			path := cmd.String(flagPath)
 
-			errs := appvalidate.ValidateAllowedSignersFormat(path)
-			if len(errs) == 0 {
-				_, _ = fmt.Fprintf(os.Stdout, "✓ %s is well-formed\n", path)
-
-				return nil
+			if err := appvalidate.AllowedSignersFormat(path); err != nil {
+				return err
 			}
 
-			for _, e := range errs {
-				_, _ = fmt.Fprintf(os.Stderr, "✗ %s\n", e)
-			}
+			_, _ = fmt.Fprintf(os.Stdout, "✓ %s passed basic entry/key checks; OpenSSH evaluates option values and authorization\n", path)
 
-			_, _ = fmt.Fprintf(os.Stderr, "\n%d format error(s) in %s — each line must be 'principal [options] key-type base64-key'\n", len(errs), path)
-			_, _ = fmt.Fprintf(os.Stderr, "See: ssh-keygen(1) ALLOWED SIGNERS, docs/verification.md#release-authorisation\n")
-
-			return fmt.Errorf("allowed_signers format validation failed: %s", strings.Join(errs, "; "))
+			return nil
 		},
 	}
 }

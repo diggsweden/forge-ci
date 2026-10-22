@@ -10,3 +10,5 @@ package validate
 // part of the CLI contract — docs/cli-reference.md is generated from it and
 // a sync test gates any change.
 const flagWorkflow = "workflow"
+
+const flagPath = "path"

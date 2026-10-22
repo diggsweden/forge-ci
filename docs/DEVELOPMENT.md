@@ -526,7 +526,8 @@ are internal-use only.
 
    Each line must follow the OpenSSH allowed_signers format:
    `principal [options] key-type base64-key`. Run `forge-ci doctor`
-   to validate the file before committing.
+   for basic entry/key checks before committing. OpenSSH evaluates option
+   values, principal matching and authorization during signature verification.
 
    Commit and push to `main`.
 

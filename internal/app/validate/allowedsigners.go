@@ -1,130 +1,78 @@
+// SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 // SPDX-License-Identifier: EUPL-1.2 OR GPL-3.0-or-later
 
 package validate
 
 import (
-	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
 	"golang.org/x/crypto/ssh"
+
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
-// sshKeyTypes is the set of SSH public-key algorithm names accepted in
-// an OpenSSH allowed_signers entry (see ssh-keygen(1), ALLOWED SIGNERS).
-// The list matches `ssh -Q key` output — plain key types and their
-// certificate variants.
-var sshKeyTypes = map[string]bool{
-	"ssh-ed25519":                        true,
-	"ssh-ed25519-cert-v01@openssh.com":   true,
-	"ssh-rsa":                            true,
-	"ssh-rsa-cert-v01@openssh.com":       true,
-	"ssh-dss":                            true,
-	"ecdsa-sha2-nistp256":                true,
-	"ecdsa-sha2-nistp256-cert-v01@openssh.com": true,
-	"ecdsa-sha2-nistp384":                true,
-	"ecdsa-sha2-nistp384-cert-v01@openssh.com": true,
-	"ecdsa-sha2-nistp521":                true,
-	"ecdsa-sha2-nistp521-cert-v01@openssh.com": true,
-	"sk-ssh-ed25519@openssh.com":         true,
-	"sk-ssh-ed25519-cert-v01@openssh.com": true,
-	"sk-ecdsa-sha2-nistp256@openssh.com": true,
-	"sk-ecdsa-sha2-nistp256-cert-v01@openssh.com": true,
-}
-
-// ValidateAllowedSignersFormat reads an OpenSSH allowed_signers file and
-// returns one human-readable error per malformed line. An empty slice
-// means every entry is well-formed.
-//
-// Each non-comment line must follow the ssh-keygen(1) ALLOWED SIGNERS
-// format:
-//
-//	principals, [options,] key-type base64-encoded-key
-//
-// where principals is a comma-separated pattern-list (ssh_config(5)
-// PATTERNS, supports * and ? wildcards), options is an optional
-// comma-separated list of key=value pairs (cert-authority,
-// namespaces=…, valid-after=…, valid-before=…), key-type is a
-// recognised SSH key algorithm (matching `ssh -Q key`), and the final
-// field is the base64-encoded public key. Empty lines and lines
-// starting with '#' are ignored.
-func ValidateAllowedSignersFormat(path string) []string {
-	data, err := os.ReadFile(path)
+// AllowedSignersFormat checks principal/key structure and option names.
+// OpenSSH remains responsible for option values, matching and authorization.
+// Empty files are syntactically valid; they authorize nobody.
+func AllowedSignersFormat(path string) error {
+	data, err := os.ReadFile(path) //nolint:gosec // G304: explicitly selected local allowlist; read-only validation.
 	if err != nil {
-		return []string{fmt.Sprintf("cannot read %s: %v", path, err)}
+		return fmt.Errorf("read allowed signers: %w", err)
 	}
 
-	var errs []string
+	var problems []error
 
-	for i, line := range strings.Split(string(data), "\n") {
-		lineNo := i + 1
-		trimmed := strings.TrimSpace(line)
-
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+	for index, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 
-		fields := strings.Fields(trimmed)
-		if len(fields) < 3 {
-			errs = append(errs, fmt.Sprintf(
-				"line %d: expected at least 3 fields (principals [options] key-type key), got %d — "+
-					"the OpenSSH allowed_signers format is 'principal [options] key-type base64-key'",
-				lineNo, len(fields)))
-
-			continue
+		if err := checkAllowedSignerEntry(line); err != nil {
+			problems = append(problems, fmt.Errorf("%s:%d: %w", path, index+1, err))
 		}
+	}
 
-		principals := fields[0]
-		if principals == "" {
-			errs = append(errs, fmt.Sprintf("line %d: principals field is empty", lineNo))
+	return errors.Join(problems...)
+}
+
+func checkAllowedSignerEntry(line string) error {
+	separator := strings.IndexAny(line, " \t")
+	if separator < 0 {
+		return fmt.Errorf("expected principal [options] key-type base64-key: %w", errs.ErrMalformedInput)
+	}
+
+	for _, principal := range strings.Split(line[:separator], ",") {
+		if principal == "" {
+			return fmt.Errorf("empty principal in pattern list: %w", errs.ErrMalformedInput)
 		}
+	}
 
-		// Find the key-type field: scan from index 1 for the first
-		// field that matches a known SSH key algorithm. Fields between
-		// principals and key-type are options (key=value pairs).
-		keyTypeIdx := -1
+	// The key/options suffix shares authorized_keys syntax. The library checks
+	// the encoded key against its declared algorithm and handles quoted options.
+	_, _, options, _, err := ssh.ParseAuthorizedKey([]byte(strings.TrimSpace(line[separator:]))) //nolint:dogsled // Only options and parse errors are needed; the parser checks the key type.
+	if err != nil {
+		return fmt.Errorf("expected principal [options] key-type base64-key: %w: %w", err, errs.ErrMalformedInput)
+	}
 
-		for j := 1; j < len(fields); j++ {
-			if sshKeyTypes[fields[j]] {
-				keyTypeIdx = j
-
-				break
+	for _, option := range options {
+		name, _, hasValue := strings.Cut(option, "=")
+		switch strings.ToLower(name) {
+		case "cert-authority":
+			if !hasValue {
+				continue
+			}
+		case "namespaces", "valid-after", "valid-before":
+			if hasValue {
+				continue
 			}
 		}
 
-		if keyTypeIdx == -1 {
-			errs = append(errs, fmt.Sprintf(
-				"line %d: no recognised key type found — expected a type from `ssh -Q key` "+
-					"(e.g. ssh-ed25519, ssh-rsa, ecdsa-sha2-nistp256, or a -cert-v01@openssh.com variant)",
-				lineNo))
-
-			continue
-		}
-
-		// The field after key-type is the base64 key.
-		if keyTypeIdx+1 >= len(fields) {
-			errs = append(errs, fmt.Sprintf("line %d: missing base64 key after key type %q", lineNo, fields[keyTypeIdx]))
-
-			continue
-		}
-
-		keyB64 := fields[keyTypeIdx+1]
-		keyBytes, err := base64.StdEncoding.DecodeString(keyB64)
-		if err != nil {
-			errs = append(errs, fmt.Sprintf(
-				"line %d: key field is not valid base64: %v", lineNo, err))
-
-			continue
-		}
-
-		// Validate the key is a well-formed SSH public key (wire
-		// format per RFC 4253 §6.6), not just valid base64.
-		if _, err := ssh.ParsePublicKey(keyBytes); err != nil {
-			errs = append(errs, fmt.Sprintf(
-				"line %d: key is not a valid SSH public key: %v", lineNo, err))
-		}
+		return fmt.Errorf("unsupported or malformed allowed-signers option %q: %w", name, errs.ErrMalformedInput)
 	}
 
-	return errs
+	return nil
 }

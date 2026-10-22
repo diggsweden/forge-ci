@@ -28,6 +28,8 @@ import (
 func TestValidateCommands_EachRefusalHasItsExitClassAndNoEffects(t *testing.T) {
 	fsys := testfs.NewReal(t)
 	fsys.WriteFile("malformed/.github/workflows/broken.yml", []byte("jobs: [\n"))
+	fsys.WriteFile("bad-signers", []byte("ssh-ed25519 not-a-key\n"))
+	fsys.WriteFile("bad-keys.asc", []byte("-----BEGIN PGP PUBLIC KEY BLOCK-----\n\ndGVzdA==\n-----END PGP PUBLIC KEY BLOCK-----\n"))
 	fsys.WriteFile("expression/.github/workflows/a.yml", []byte("on:\n  workflow_call:\n    inputs:\n      ref:\n        default: ${{ github.ref_name }}\n"))
 
 	tests := []struct {
@@ -37,6 +39,10 @@ func TestValidateCommands_EachRefusalHasItsExitClassAndNoEffects(t *testing.T) {
 		exit  errs.ExitCodeType
 		cause string
 	}{
+		{name: "malformed SSH allowlist", argv: []string{"validate", "allowed-signers", "--path", fsys.Path("bad-signers")}, exit: errs.ExitCodeDataErr, cause: "bad-signers:1"},
+		{name: "malformed GPG allowlist", argv: []string{"validate", "gpg-keys", "--path", fsys.Path("bad-keys.asc")}, exit: errs.ExitCodeDataErr, cause: "block 1"},
+		{name: "missing SSH allowlist", argv: []string{"validate", "allowed-signers", "--path", fsys.Path("absent-signers")}, exit: errs.ExitCodeNoInput, cause: "absent-signers"},
+		{name: "missing GPG allowlist", argv: []string{"validate", "gpg-keys", "--path", fsys.Path("absent-keys.asc")}, exit: errs.ExitCodeNoInput, cause: "absent-keys.asc"},
 		{name: "tag format", argv: []string{"validate", "tag", "format", "--tag", "not-a-tag"}, exit: errs.ExitCodeValidation, cause: `invalid tag format: "not-a-tag"`},
 		{name: "expression default", argv: []string{"validate", "workflow", "input-defaults", "--root", fsys.Path("expression")}, exit: errs.ExitCodeValidation, cause: "workflow input defaults validation failed"},
 		{name: "malformed workflow", argv: []string{"validate", "job-graph", "--root", fsys.Path("malformed")}, exit: errs.ExitCodeDataErr, cause: "broken.yml: parse workflow yaml"},

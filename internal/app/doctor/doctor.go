@@ -254,12 +254,11 @@ func checkGitSigningSSHAllowlist(root string, cfg *config.Config) (Check, bool) 
 		}, true
 	}
 
-	if formatErrs := appvalidate.ValidateAllowedSignersFormat(allowedSigners); len(formatErrs) > 0 {
+	if err := appvalidate.AllowedSignersFormat(allowedSigners); err != nil {
 		return Check{
 			Name:     name,
 			Severity: SeverityFail,
-			Message: fmt.Sprintf(".forge-ci/allowed_signers has %d format error(s): %s",
-				len(formatErrs), strings.Join(formatErrs, "; ")),
+			Message:  fmt.Sprintf(".forge-ci/allowed_signers failed entry/key checks: %v", err),
 			Remediation: "fix the entries above — each line must be " +
 				"'principal [options] key-type base64-key'; " +
 				"see docs/verification.md#release-authorisation",
@@ -269,7 +268,7 @@ func checkGitSigningSSHAllowlist(root string, cfg *config.Config) (Check, bool) 
 	return Check{
 		Name:     name,
 		Severity: SeverityOK,
-		Message: ".forge-ci/allowed_signers present and well-formed — ensure it lists the release signing public key " +
+		Message: ".forge-ci/allowed_signers passed basic entry/key checks — OpenSSH evaluates option values; ensure it lists the release signing public key " +
 			"under the intended signer principal",
 	}, true
 }
@@ -524,42 +523,48 @@ func checkAllowedSignersIfRequired(root string, artifacts []config.Artifact) Che
 	sshExists := regularFileExists(ssh)
 	gpgExists := regularFileExists(gpg)
 
-	if sshExists || gpgExists {
-		var formatErrs []string
+	const name = "release-authorization allowlist present"
 
-		if sshExists {
-			formatErrs = append(formatErrs, appvalidate.ValidateAllowedSignersFormat(ssh)...)
-		}
-
-		if gpgExists {
-			formatErrs = append(formatErrs, appvalidate.ValidateGPGKeysFormat(gpg)...)
-		}
-
-		if len(formatErrs) > 0 {
-			return Check{
-				Name:     "release-authorization allowlist present",
-				Severity: SeverityFail,
-				Message: fmt.Sprintf("allowlist file(s) have %d format error(s): %s",
-					len(formatErrs), strings.Join(formatErrs, "; ")),
-				Remediation: "fix the entries above — SSH: 'principal [options] key-type base64-key'; " +
-					"GPG: RFC 4880 ASCII armor with PGP PUBLIC KEY BLOCK markers; " +
-					"see docs/verification.md#release-authorisation",
-			}
-		}
-
+	if !sshExists && !gpgExists {
 		return Check{
-			Name:     "release-authorization allowlist present",
-			Severity: SeverityOK,
-			Message:  "found .forge-ci/allowed_signers and/or allowed_gpg_keys.asc",
+			Name:     name,
+			Severity: SeverityFail,
+			Message:  "release authorization is required but neither .forge-ci/allowed_signers nor allowed_gpg_keys.asc exists",
+			Remediation: "commit .forge-ci/allowed_signers (SSH OpenSSH format) and/or " +
+				".forge-ci/allowed_gpg_keys.asc (armored GPG public keys of authorised signers); see docs/verification.md#release-authorisation",
+		}
+	}
+
+	var formatErrs []string
+
+	if sshExists {
+		if err := appvalidate.AllowedSignersFormat(ssh); err != nil {
+			formatErrs = append(formatErrs, err.Error())
+		}
+	}
+
+	if gpgExists {
+		if err := appvalidate.GPGKeysFormat(gpg); err != nil {
+			formatErrs = append(formatErrs, err.Error())
+		}
+	}
+
+	if len(formatErrs) > 0 {
+		return Check{
+			Name:     name,
+			Severity: SeverityFail,
+			Message: fmt.Sprintf("%d allowlist file(s) failed validation: %s",
+				len(formatErrs), strings.Join(formatErrs, "; ")),
+			Remediation: "fix the entries above — SSH: 'principal [options] key-type base64-key'; " +
+				"GPG: complete armor blocks containing public keys; " +
+				"see docs/verification.md#release-authorisation",
 		}
 	}
 
 	return Check{
-		Name:     "release-authorization allowlist present",
-		Severity: SeverityFail,
-		Message:  "release authorization is required but neither .forge-ci/allowed_signers nor allowed_gpg_keys.asc exists",
-		Remediation: "commit .forge-ci/allowed_signers (SSH OpenSSH format) and/or " +
-			".forge-ci/allowed_gpg_keys.asc (armored GPG public keys of authorised signers); see docs/verification.md#release-authorisation",
+		Name:     name,
+		Severity: SeverityOK,
+		Message:  "found .forge-ci/allowed_signers and/or allowed_gpg_keys.asc",
 	}
 }
 

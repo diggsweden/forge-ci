@@ -1,3 +1,4 @@
+// SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 // SPDX-License-Identifier: EUPL-1.2 OR GPL-3.0-or-later
 
 package validate
@@ -6,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/urfave/cli/v3"
 
@@ -21,8 +21,9 @@ func gpgKeysCmd() *cli.Command {
 		Name:  "gpg-keys",
 		Usage: "validate the armored GPG public-key bundle format",
 		Description: `Checks .forge-ci/allowed_gpg_keys.asc for well-formed
-RFC 4880 ASCII armor: at least one PGP PUBLIC KEY BLOCK with
-matching BEGIN/END markers and non-empty body.
+public keys: at least one complete PGP PUBLIC KEY BLOCK, with
+parseable public keys in every block. Uses the release verifier's
+key-bundle parser; this does not verify a release signature.
 
 Exits non-zero with errors if the file is malformed. Useful as
 a pre-commit hook or CI pre-flight gate.
@@ -32,30 +33,22 @@ EXAMPLE:
    forge-ci validate gpg-keys --path .forge-ci/allowed_gpg_keys.asc`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:    "path",
+				Name:    flagPath,
 				Sources: cli.EnvVars("ALLOWED_GPG_KEYS_PATH"),
 				Usage:   "path to the armored GPG public-key bundle (default: .forge-ci/allowed_gpg_keys.asc)",
 				Value:   ".forge-ci/allowed_gpg_keys.asc",
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			path := cmd.String("path")
+			path := cmd.String(flagPath)
 
-			errs := appvalidate.ValidateGPGKeysFormat(path)
-			if len(errs) == 0 {
-				_, _ = fmt.Fprintf(os.Stdout, "✓ %s is well-formed\n", path)
-
-				return nil
+			if err := appvalidate.GPGKeysFormat(path); err != nil {
+				return err
 			}
 
-			for _, e := range errs {
-				_, _ = fmt.Fprintf(os.Stderr, "✗ %s\n", e)
-			}
+			_, _ = fmt.Fprintf(os.Stdout, "✓ %s contains parseable public keys in complete armor blocks\n", path)
 
-			_, _ = fmt.Fprintf(os.Stderr, "\n%d format error(s) in %s — expected RFC 4880 ASCII armor with PGP PUBLIC KEY BLOCK markers\n", len(errs), path)
-			_, _ = fmt.Fprintf(os.Stderr, "See: docs/verification.md#release-authorisation\n")
-
-			return fmt.Errorf("gpg-keys format validation failed: %s", strings.Join(errs, "; "))
+			return nil
 		},
 	}
 }

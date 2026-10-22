@@ -1,20 +1,22 @@
+// SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 // SPDX-License-Identifier: EUPL-1.2 OR GPL-3.0-or-later
 
 package validate_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/app/validate"
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
 // realArmorBlock is a real GPG armored public key block (ed25519,
 // generated with gpg --batch --gen-key for testing; not a real
-// credential). The test file is allowlisted in
-// development/gitleaks/gitleaks.toml.
+// credential).
 const realArmorBlock = `-----BEGIN PGP PUBLIC KEY BLOCK-----
 
 mDMEatoqQhYJKwYBBAHaRw8BAQdA6J7V7z1+yuqChs73KDn8BIltMjNxBpRABQXC
@@ -43,6 +45,41 @@ func TestValidateGPGKeysFormat(t *testing.T) {
 			name:    "valid multiple blocks",
 			content: realArmorBlock + "\n" + realArmorBlock,
 			wantErr: 0,
+		},
+		{
+			name:    "empty public key block",
+			content: "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n-----END PGP PUBLIC KEY BLOCK-----\n",
+			wantErr: 1,
+		},
+		{
+			name:    "base64 text is not a public key",
+			content: "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\ndGVzdA==\n-----END PGP PUBLIC KEY BLOCK-----\n",
+			wantErr: 1,
+		},
+		{
+			name:    "later block is malformed",
+			content: realArmorBlock + "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\ndGVzdA==\n-----END PGP PUBLIC KEY BLOCK-----\n",
+			wantErr: 1,
+		},
+		{
+			name:    "later block is truncated",
+			content: realArmorBlock + "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\ndGVzdA==\n",
+			wantErr: 1,
+		},
+		{
+			name:    "private key envelope",
+			content: strings.ReplaceAll(realArmorBlock, "PUBLIC KEY", "PRIVATE KEY"),
+			wantErr: 1,
+		},
+		{
+			name: "nested begin marker",
+			content: strings.Replace(realArmorBlock, "-----END PGP PUBLIC KEY BLOCK-----",
+				"-----BEGIN PGP PUBLIC KEY BLOCK-----\n-----END PGP PUBLIC KEY BLOCK-----", 1),
+			wantErr: 1,
+		},
+		{
+			name:    "CRLF",
+			content: strings.ReplaceAll(realArmorBlock, "\n", "\r\n"),
 		},
 		{
 			name:    "empty file",
@@ -80,9 +117,13 @@ func TestValidateGPGKeysFormat(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			errs := validate.ValidateGPGKeysFormat(path)
-			if len(errs) != tt.wantErr {
-				t.Errorf("got %d errors, want %d: %v", len(errs), tt.wantErr, errs)
+			err := validate.GPGKeysFormat(path)
+			if (err != nil) != (tt.wantErr != 0) {
+				t.Fatalf("error = %v, want malformed = %t", err, tt.wantErr != 0)
+			}
+
+			if err != nil && !errors.Is(err, errs.ErrMalformedInput) {
+				t.Errorf("expected malformed input, got %v", err)
 			}
 		})
 	}
@@ -91,12 +132,8 @@ func TestValidateGPGKeysFormat(t *testing.T) {
 func TestValidateGPGKeysFormat_FileNotFound(t *testing.T) {
 	t.Parallel()
 
-	errs := validate.ValidateGPGKeysFormat(filepath.Join(t.TempDir(), "nonexistent"))
-	if len(errs) != 1 {
-		t.Fatalf("got %d errors, want 1: %v", len(errs), errs)
-	}
-
-	if !strings.Contains(errs[0], "cannot read") {
-		t.Errorf("error should mention 'cannot read', got: %s", errs[0])
+	err := validate.GPGKeysFormat(filepath.Join(t.TempDir(), "nonexistent"))
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("expected missing file cause, got %v", err)
 	}
 }
