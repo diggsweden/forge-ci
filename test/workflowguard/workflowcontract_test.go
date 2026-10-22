@@ -280,7 +280,7 @@ func TestPinnedCompanionSuiteUsesStrictBlackboxContract(t *testing.T) {
 	t.Parallel()
 
 	const (
-		pin                 = "792a045d0e2fcda302d91994bfc746294f3a07f5"
+		pin                 = "9fd37b40703075b4319d63e251b6e2860121ad82"
 		validatorInvocation = "run: ./scripts/validate-strict-profile-contract.sh"
 	)
 

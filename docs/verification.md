@@ -1211,7 +1211,7 @@ silently mean that Maven, Gradle, Cargo, npm, Buildah, or signing coverage was
 omitted.
 
 The parent gates pin
-`792a045d0e2fcda302d91994bfc746294f3a07f5`, which contains the strict-profile
+`9fd37b40703075b4319d63e251b6e2860121ad82`, which contains the strict-profile
 implementation. Both gates validate the checked-out source contract before tool
 setup and then run the suite with the strict profile enabled. Future updates
 must deliberately bump both gates to one reviewed immutable commit SHA; a
