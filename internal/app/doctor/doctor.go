@@ -254,7 +254,7 @@ func checkGitSigningSSHAllowlist(root string, cfg *config.Config) (Check, bool) 
 		}, true
 	}
 
-	if formatErrs := ValidateAllowedSignersFormat(allowedSigners); len(formatErrs) > 0 {
+	if formatErrs := appvalidate.ValidateAllowedSignersFormat(allowedSigners); len(formatErrs) > 0 {
 		return Check{
 			Name:     name,
 			Severity: SeverityFail,

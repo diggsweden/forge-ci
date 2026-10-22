@@ -4170,6 +4170,28 @@ compares recorded digests with the registry.
 "report status" renders collected outcomes; it is not a validation gate.
 ```
 
+### `forge-ci validate allowed-signers`
+
+validate the OpenSSH allowed_signers file format
+
+```
+Checks each non-comment line of .forge-ci/allowed_signers
+against the OpenSSH allowed_signers format:
+
+  principal [options] key-type base64-key
+
+Exits non-zero with one error per malformed line if any entry is
+malformed. Useful as a pre-commit hook or CI pre-flight gate.
+
+EXAMPLE:
+   forge-ci validate allowed-signers
+   forge-ci validate allowed-signers --path .forge-ci/allowed_signers
+```
+
+| Flag | Description | Type | Default | Env vars |
+|------|-------------|------|---------|----------|
+| `--path` | path to the allowed_signers file (default: .forge-ci/allowed_signers) | string | `".forge-ci/allowed_signers"` | `$ALLOWED_SIGNERS_PATH` |
+
 ### `forge-ci validate artifact-signature`
 
 verify a release artifact's signature (gpg .asc, or cosign .bundle for sigstore/kms); method auto-detected from sidecars unless --method is set

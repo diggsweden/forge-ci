@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2 OR GPL-3.0-or-later
 
-package doctor_test
+package validate_test
 
 import (
 	"os"
@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diggsweden/forge-ci/internal/app/doctor"
+	"github.com/diggsweden/forge-ci/internal/app/validate"
 )
 
 // fakeKeyB64 is valid base64 but not a real SSH key — safe for tests
@@ -29,6 +29,26 @@ func TestValidateAllowedSignersFormat(t *testing.T) {
 			wantErr: 0,
 		},
 		{
+			name:    "valid cert key type",
+			content: "alice@example.com ssh-ed25519-cert-v01@openssh.com " + fakeKeyB64 + "\n",
+			wantErr: 0,
+		},
+		{
+			name:    "valid sk key type",
+			content: "alice@example.com sk-ssh-ed25519@openssh.com " + fakeKeyB64 + "\n",
+			wantErr: 0,
+		},
+		{
+			name:    "valid multiple principals",
+			content: "alice@example.com,bob@example.com ssh-rsa " + fakeKeyB64 + "\n",
+			wantErr: 0,
+		},
+		{
+			name:    "valid wildcard principal",
+			content: "*@example.com ssh-ed25519 " + fakeKeyB64 + "\n",
+			wantErr: 0,
+		},
+		{
 			name:    "valid multiple entries with comments and blanks",
 			content: "# comment\n\nalice@example.com ssh-ed25519 " + fakeKeyB64 + "\nbob@example.com ssh-rsa " + fakeKeyB64 + " bob's key\n",
 			wantErr: 0,
@@ -36,6 +56,16 @@ func TestValidateAllowedSignersFormat(t *testing.T) {
 		{
 			name:    "valid entry with options",
 			content: `alice@example.com valid-before="20270101Z" ssh-ed25519 ` + fakeKeyB64 + "\n",
+			wantErr: 0,
+		},
+		{
+			name:    "valid entry with cert-authority option",
+			content: "*@example.com cert-authority ssh-ed25519 " + fakeKeyB64 + "\n",
+			wantErr: 0,
+		},
+		{
+			name:    "valid entry with namespaces option",
+			content: `alice@example.com namespaces="file,git" ssh-ed25519 ` + fakeKeyB64 + "\n",
 			wantErr: 0,
 		},
 		{
@@ -84,7 +114,7 @@ func TestValidateAllowedSignersFormat(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			errs := doctor.ValidateAllowedSignersFormat(path)
+			errs := validate.ValidateAllowedSignersFormat(path)
 			if len(errs) != tt.wantErr {
 				t.Errorf("got %d errors, want %d: %v", len(errs), tt.wantErr, errs)
 			}
@@ -105,7 +135,7 @@ func TestValidateAllowedSignersFormat_MissingPrincipalMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	errs := doctor.ValidateAllowedSignersFormat(path)
+	errs := validate.ValidateAllowedSignersFormat(path)
 	if len(errs) != 1 {
 		t.Fatalf("got %d errors, want 1: %v", len(errs), errs)
 	}
@@ -118,7 +148,7 @@ func TestValidateAllowedSignersFormat_MissingPrincipalMessage(t *testing.T) {
 func TestValidateAllowedSignersFormat_FileNotFound(t *testing.T) {
 	t.Parallel()
 
-	errs := doctor.ValidateAllowedSignersFormat(filepath.Join(t.TempDir(), "nonexistent"))
+	errs := validate.ValidateAllowedSignersFormat(filepath.Join(t.TempDir(), "nonexistent"))
 	if len(errs) != 1 {
 		t.Fatalf("got %d errors, want 1: %v", len(errs), errs)
 	}
