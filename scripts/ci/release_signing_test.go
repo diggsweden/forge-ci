@@ -101,6 +101,7 @@ func TestReleaseWorkflowPreparesReferenceBeforeSigning(t *testing.T) {
 		Jobs map[string]struct {
 			Steps []struct {
 				Name string            `yaml:"name"`
+				Uses string            `yaml:"uses"`
 				Run  string            `yaml:"run"`
 				With map[string]string `yaml:"with"`
 				Env  map[string]string `yaml:"env"`
@@ -109,13 +110,24 @@ func TestReleaseWorkflowPreparesReferenceBeforeSigning(t *testing.T) {
 	}
 	require.NoError(t, yaml.Unmarshal(body, &workflow))
 	prepared, signed, provenance := false, false, false
+
+	var installedVersion string
+
 	for _, step := range workflow.Jobs["goreleaser"].Steps {
+		if strings.HasPrefix(step.Uses, "goreleaser/goreleaser-action@") && step.With["install-only"] == "true" {
+			require.Equal(t, "goreleaser", step.With["distribution"])
+			require.Regexp(t, `^v[0-9]+\.[0-9]+\.[0-9]+$`, step.With["version"])
+			installedVersion = step.With["version"]
+		}
+
 		if strings.Contains(step.Run, "verify-reproducible.sh --release-reference") {
+			require.NotEmpty(t, installedVersion, "install-only must expose GoReleaser on PATH before the shell rebuild")
 			require.False(t, signed)
 			require.Contains(t, step.Run, `"$RELEASE_TAG" "$RUNNER_TEMP/forge-ci-release-reference"`)
 			prepared = true
 		}
 		if step.Name == "Run goreleaser" {
+			require.Equal(t, installedVersion, step.With["version"], "reference and published archives must use the same GoReleaser version")
 			require.True(t, prepared, "a final-tag rebuild must precede publication")
 			require.Equal(t, "release --clean", step.With["args"], "signing must not be skipped")
 			require.Equal(t, "${{ runner.temp }}/forge-ci-release-reference", step.Env["FORGE_CI_RELEASE_REFERENCE"])
