@@ -36,8 +36,8 @@ func TestSetupToolchainEngineCalls(t *testing.T) {
 		env  []string
 		argv func(s *sandbox) []string
 	}{
-		{"Choose the Go provider", []string{"FORGEJO_PATH=/runner/path-file", "FORGEJO_ENV=/runner/env-file"}, func(*sandbox) []string {
-			return []string{"toolchain", "setup-go-env", "--path-file", "/runner/path-file", "--env-file", "/runner/env-file"}
+		{"Choose the Go provider", []string{"FORGEJO_PATH=/runner/path-file", "FORGEJO_ENV=/runner/env-file", "TOOLS_SUBSET=go aqua:example/tool"}, func(*sandbox) []string {
+			return []string{"toolchain", "setup-go-env", "--tools", "go aqua:example/tool", "--path-file", "/runner/path-file", "--env-file", "/runner/env-file"}
 		}},
 		{"Install bootstrap system dependencies", nil, func(*sandbox) []string {
 			return []string{"toolchain", "install-system-dependencies", "--packages", "gettext libxml2-utils", "--skip-if-missing-apt"}
@@ -153,6 +153,10 @@ func TestSetupToolchainInstallsGoOnce(t *testing.T) {
 	}
 
 	choose := action.step(t, "go")
+	if choose.Env["TOOLS_SUBSET"] != "${{ inputs.tools }}" {
+		t.Fatal("Go provider selection must receive the install step's tool subset")
+	}
+
 	if choose.If != "hashFiles('go.mod') != ''" || order[choose.Name] > order[setupGo.Name] {
 		t.Fatalf("the provider step runs on %q at %d, setup-go at %d", choose.If, order[choose.Name], order[setupGo.Name])
 	}
@@ -174,7 +178,7 @@ func TestSetupToolchainInstallsGoOnce(t *testing.T) {
 			pathFile := box.write("path-file", "", 0o600)
 			envFile := box.write("env-file", "", 0o600)
 
-			got := box.run(choose.Run, append(env, "GITHUB_ACTIONS=true", "FORGEJO_PATH="+pathFile, "FORGEJO_ENV="+envFile, "GOPATH=")...)
+			got := box.run(choose.Run, append(env, "GITHUB_ACTIONS=true", "FORGEJO_PATH="+pathFile, "FORGEJO_ENV="+envFile, "GOPATH=", "TOOLS_SUBSET=")...)
 			if got.status != 0 || box.output() != test.output {
 				t.Fatalf("status %d outputs %q, want %q; stderr %s", got.status, box.output(), test.output, got.stderr)
 			}

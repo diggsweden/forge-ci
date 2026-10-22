@@ -245,6 +245,42 @@ func TestSetupGoEnv(t *testing.T) {
 	}
 }
 
+func TestSetupGoEnv_ToolSubset(t *testing.T) {
+	for _, scenario := range []struct {
+		name, tools string
+		refused     bool
+	}{
+		{"all tools", "", false},
+		{"explicit runtime", "go aqua:example/packager", false},
+		{"backend runtime", "go:example.com/tool", false},
+		{"missing runtime", "aqua:example/packager", true},
+		{"unknown tool", "go missing", true},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			t.Setenv("GOPATH", "")
+			root, files := t.TempDir(), t.TempDir()
+			writeToolchainFile(t, root, ".mise.toml", "[tools]\ngo='1.27.3'\n'aqua:example/packager'='1.0.0'\n'go:example.com/tool'='1.0.0'\n")
+
+			provider, err := toolchain.SetupGoEnv(toolchain.SetupGoEnvInput{
+				Root: root, PathFile: filepath.Join(files, "path"), EnvFile: filepath.Join(files, "env"), Tools: scenario.tools,
+			})
+			if scenario.refused {
+				if !errors.Is(err, errs.ErrUsage) {
+					t.Fatalf("provider=%q err=%v, want refusal", provider, err)
+				}
+
+				entries, readErr := os.ReadDir(files)
+				if readErr != nil || len(entries) != 0 {
+					t.Fatalf("refusal changed runner files: %v, %v", entries, readErr)
+				}
+			} else if err != nil || provider != toolchain.GoProviderMise {
+				t.Fatalf("provider=%q err=%v, want mise", provider, err)
+			}
+		})
+	}
+}
+
 func TestSetupGoEnv_Refusals(t *testing.T) {
 	t.Parallel()
 

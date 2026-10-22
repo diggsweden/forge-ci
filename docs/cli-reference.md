@@ -4103,6 +4103,8 @@ declares go, so that the mise install brings Go (from mise.lock in locked mode),
 and "go.mod" otherwise. setup-toolchain installs Go from go.mod only in the
 second case, so a job downloads Go once. For "mise" it also writes
 GOTOOLCHAIN=local to the runner env file and GOPATH/bin to the runner path file.
+If a tools subset is supplied, it must include the declared Go runtime directly
+or as a selected go: tool's dependency; an omitted runtime fails before env writes.
 ```
 
 | Flag | Description | Type | Default | Env vars |
@@ -4110,6 +4112,7 @@ GOTOOLCHAIN=local to the runner env file and GOPATH/bin to the runner path file.
 | `--root` | repository root containing mise config | string | `"."` | `$MISE_PROJECT_ROOT` |
 | `--path-file` | runner path file to append GOPATH/bin to (required) | string | `""` | `$FORGEJO_PATH`, `$GITHUB_PATH` |
 | `--env-file` | runner env file receiving GOTOOLCHAIN (required) | string | `""` | `$FORGEJO_ENV`, `$GITHUB_ENV` |
+| `--tools` | mise tool subset used by the install step; empty selects all declared tools | string | `""` | `$TOOLS_SUBSET` |
 
 ### `forge-ci toolchain setup-mise-env`
 

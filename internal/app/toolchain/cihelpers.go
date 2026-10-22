@@ -54,6 +54,7 @@ type SetupGoEnvInput struct {
 	Root     string
 	PathFile string
 	EnvFile  string
+	Tools    string // same subset passed to install-mise-tools; empty selects all tools
 }
 
 // SetupGoEnv says which of setup-toolchain's two Go sources installs Go for
@@ -82,6 +83,15 @@ func SetupGoEnv(in SetupGoEnvInput) (string, error) {
 
 	if !toolDeclared(configs, toolGo) {
 		return GoProviderGoMod, nil
+	}
+
+	selected, err := selectedMiseTools(configs, strings.Fields(in.Tools))
+	if err != nil {
+		return "", err
+	}
+
+	if !toolDeclared(selected, toolGo) {
+		return "", fmt.Errorf("setup-go-env: tools subset omits the declared Go runtime; include go in tools: %w", errs.ErrUsage)
 	}
 
 	goBin, err := goPathBin()

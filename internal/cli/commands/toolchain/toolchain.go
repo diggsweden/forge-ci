@@ -203,17 +203,21 @@ func setupGoEnvCmd() *cli.Command {
 declares go, so that the mise install brings Go (from mise.lock in locked mode),
 and "go.mod" otherwise. setup-toolchain installs Go from go.mod only in the
 second case, so a job downloads Go once. For "mise" it also writes
-GOTOOLCHAIN=local to the runner env file and GOPATH/bin to the runner path file.`,
+GOTOOLCHAIN=local to the runner env file and GOPATH/bin to the runner path file.
+If a tools subset is supplied, it must include the declared Go runtime directly
+or as a selected go: tool's dependency; an omitted runtime fails before env writes.`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: flagMiseRoot, Value: ".", Sources: cli.EnvVars("MISE_PROJECT_ROOT"), Usage: usageMiseRoot},
 			&cli.StringFlag{Name: flagPathFile, Required: true, Sources: cli.EnvVars("FORGEJO_PATH", "GITHUB_PATH"), Usage: "runner path file to append GOPATH/bin to"},
 			&cli.StringFlag{Name: "env-file", Required: true, Sources: cli.EnvVars("FORGEJO_ENV", "GITHUB_ENV"), Usage: "runner env file receiving GOTOOLCHAIN"},
+			&cli.StringFlag{Name: "tools", Sources: cli.EnvVars("TOOLS_SUBSET"), Usage: "mise tool subset used by the install step; empty selects all declared tools"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			provider, err := apptoolchain.SetupGoEnv(apptoolchain.SetupGoEnvInput{
 				Root:     cmd.String(flagMiseRoot),
 				PathFile: cmd.String(flagPathFile),
 				EnvFile:  cmd.String("env-file"),
+				Tools:    cmd.String("tools"),
 			})
 			if err != nil {
 				return err
