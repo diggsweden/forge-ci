@@ -32,6 +32,14 @@ func TestIsolatedVersionBump_TwoNativeNPMCargoRounds(t *testing.T) {
 		t.Run(string(kind), func(t *testing.T) {
 			tool := string(kind)
 			evidence.RequireTool(t, tool)
+			// RequireTool only checks that the binary is on PATH. On runners
+			// that ship rustup, cargo is a proxy shim with no default toolchain
+			// behind it; verify it actually runs before using it.
+			if kind == projecttype.Cargo {
+				if out, err := exec.CommandContext(t.Context(), "cargo", "--version").CombinedOutput(); err != nil {
+					evidence.NotProvenf(t, "cargo is on PATH but has no usable toolchain (rustup proxy without default): %v\n%s", err, out)
+				}
+			}
 			repo := isolatedgit.NewRepo(t)
 			config := filepath.Join(t.TempDir(), "empty-npmrc")
 			if err := os.WriteFile(config, nil, 0o600); err != nil {
