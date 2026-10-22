@@ -15,6 +15,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/git"
 	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
 	"github.com/diggsweden/forge-ci/internal/domain/projecttype"
@@ -292,7 +293,9 @@ func TestPinnedCompanionSuiteUsesStrictBlackboxContract(t *testing.T) {
 
 		text := string(body)
 
-		pin := companionCheckoutPin(t, body)
+		pin, err := companionCheckoutPin(body)
+		require.NoError(t, err, "%s", workflow)
+
 		if sharedPin == "" {
 			sharedPin = pin
 		} else if pin != sharedPin {
@@ -334,11 +337,11 @@ func TestPinnedCompanionSuiteUsesStrictBlackboxContract(t *testing.T) {
 
 // The workflow owns the immutable pin; the guard checks its shape and agreement
 // across callers rather than keeping a third copy that every fork must edit.
-func companionCheckoutPin(t *testing.T, body []byte) string {
-	t.Helper()
-
+func companionCheckoutPin(body []byte) (string, error) {
 	var workflow eventWorkflow
-	require.NoError(t, yaml.Unmarshal(body, &workflow))
+	if err := yaml.Unmarshal(body, &workflow); err != nil {
+		return "", fmt.Errorf("parse companion workflow: %w", err)
+	}
 
 	var pin string
 
@@ -350,16 +353,62 @@ func companionCheckoutPin(t *testing.T, body []byte) string {
 				continue
 			}
 
-			require.Contains(t, step.Uses, "actions/checkout@")
+			if !strings.HasPrefix(step.Uses, "actions/checkout@") {
+				return "", fmt.Errorf("companion path must be populated by actions/checkout: %w", errs.ErrValidation)
+			}
+
 			pin = scalarChild(&step.With, "ref")
 			matches++
 		}
 	}
 
-	require.Equal(t, 1, matches, "expected exactly one companion checkout")
-	require.True(t, git.ValidCommitSHA(pin), "companion checkout requires a full immutable pin: %q", pin)
+	if matches != 1 {
+		return "", fmt.Errorf("expected exactly one companion checkout, found %d: %w", matches, errs.ErrValidation)
+	}
 
-	return pin
+	if !git.ValidCommitSHA(pin) {
+		return "", fmt.Errorf("companion checkout requires a full immutable pin: %q: %w", pin, errs.ErrValidation)
+	}
+
+	return pin, nil
+}
+
+func TestCompanionCheckoutPinRejectsInvalidCheckouts(t *testing.T) {
+	t.Parallel()
+
+	pin := strings.Repeat("a", 40)
+	step := "      - uses: actions/checkout@" + strings.Repeat("b", 40) + "\n" +
+		"        with:\n          path: forge-ci-blackbox-tests\n          ref: " + pin + "\n"
+	workflow := "jobs:\n  integration:\n    steps:\n" + step
+
+	for _, scenario := range []struct {
+		name, body, want string
+	}{
+		{"SHA-1", workflow, pin},
+		{"SHA-256", strings.ReplaceAll(workflow, pin, strings.Repeat("c", 64)), strings.Repeat("c", 64)},
+		{"lookalike action", strings.ReplaceAll(workflow, "actions/checkout@", "fixture/actions/checkout@"), ""},
+		{"different action", strings.ReplaceAll(workflow, "actions/checkout@", "actions/upload-artifact@"), ""},
+		{"branch ref", strings.ReplaceAll(workflow, pin, "main"), ""},
+		{"expression ref", strings.ReplaceAll(workflow, pin, "${{ vars.COMPANION_REF }}"), ""},
+		{"abbreviated ref", strings.ReplaceAll(workflow, pin, pin[:12]), ""},
+		{"missing ref", strings.ReplaceAll(workflow, "          ref: "+pin+"\n", ""), ""},
+		{"missing checkout", "jobs: {}\n", ""},
+		{"duplicate checkout", workflow + step, ""},
+		{"malformed YAML", "jobs: [", ""},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := companionCheckoutPin([]byte(scenario.body))
+			if scenario.want == "" {
+				require.Error(t, err)
+				require.Empty(t, got)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, scenario.want, got)
+			}
+		})
+	}
 }
 
 // TestReleaseGateRunsTheStrictIntegrationTier pins the asymmetry between the
