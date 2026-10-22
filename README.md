@@ -17,58 +17,36 @@ signing, SLSA provenance and pinned third-party actions yourself.
 - A single-manifest repository needs no configuration file; add
   `.forge-ci/artifacts.yml` only when you need more.
 
-The first planned release is **0.90.0**, and it is not published yet. The
-`@v0.90.0` pins in the docs are forward-looking; consumers wait for the tag
-and its runtime images, and maintainers test unreleased changes with the
-pre-release branch's `sha-*` images as described in
-[Runtime Images](docs/runtime-images.md#branch-testing).
-[Project Reference](docs/project.md) has names, versioning and release
-readiness.
-
 ## Quick Start
 
-### Evaluate from source now
+Install the CLI, then add two workflows — one for pull-request checks, one
+for releases. The same two flows work on GitHub, GitLab and Forgejo.
 
-Use a reviewed checkout and the pinned Go toolchain from
-[Development](docs/DEVELOPMENT.md#source-checkout). From that checkout:
+### Install
 
 ```bash
-mise exec -- go install ./cmd/forge-ci
-forge-ci --version
-forge-ci --help
+# With mise (manages the Go toolchain):
+mise use -g go@1.27.3
+go install github.com/diggsweden/forge-ci/cmd/forge-ci@v0.90.0
+
+# Or with Go alone:
+go install github.com/diggsweden/forge-ci/cmd/forge-ci@v0.90.0
 ```
 
-Your Go bin directory must be on `PATH`. This installs the CLI for local
-inspection and development; it does not publish reusable workflows or runtime
-images. `init` reads examples from a release tag on the repository you name,
-so a local build alone does not make an unpublished adoption path available.
+`forge-ci init <repo-url>` writes a project's first CI files;
+`forge-ci doctor` checks the setup.
 
-### Adopt released workflows when available
+### Pull-request checks
 
-The following release-based route applies once the matching release and its
-runtime images are published and your forge's prerequisites are in place.
-
-On every forge a release starts from a signed `release-request/vX.Y.Z` tag,
-and the flow creates `vX.Y.Z` once: never push the final tag yourself.
-`forge-ci doctor` in a job shows what the detected forge supports.
-
-At that point, `go install github.com/diggsweden/forge-ci/cmd/forge-ci@v0.90.0`
-installs the CLI. `forge-ci init <Forge CI URL>` writes a repository's first
-files for its forge and ecosystem, and `forge-ci doctor` then checks the
-setup.
-
-Initialization writes a starting point, not a ready-to-release guarantee:
-review the generated project names and build paths. Doctor checks local
-configuration, not remote secrets, runner availability or publication rights.
-The GitHub PR caller below runs lint and security checks; add your own project
-test job and require both before merging.
-
-#### GitHub
-
-Copy the example's `github/` workflows into `.github/workflows/`. The
-pull-request caller is one job:
+One caller workflow runs lint and security scans on every PR. Add your
+own test job alongside it:
 
 ```yaml
+# .github/workflows/pr.yml
+on:
+  pull_request:
+permissions:
+  contents: read
 jobs:
   pr-checks:
     uses: diggsweden/forge-ci/.github/workflows/pullrequest-orchestrator.yml@v0.90.0
@@ -77,54 +55,44 @@ jobs:
       contents: read
     with:
       forge-ci-binary-ref: v0.90.0
-      project-type: maven  # or npm, gradle, gradle-android, xcode-ios, cargo, go
+      project-type: go  # maven, npm, gradle, cargo, ...
 ```
 
-See [Getting started](docs/github.md#getting-started) and the
-[examples](examples/README.md).
+### Release
 
-#### GitLab
-
-Include the components, hosted on your own instance, in `.gitlab-ci.yml`; the
-example's `gitlab/.gitlab-ci.yml` is the merge-request gate, the lint
-component and the `check` component:
+Push a signed tag — the flow builds, signs, publishes and creates the
+final version tag:
 
 ```yaml
-include:
-  - component: gitlab.example.com/team/ci/forge-ci/nanolinter@0.90.0
-    inputs:
-      forge-ci-repository: team/ci/forge-ci
-      nanolinter-image: "ghcr.io/itiquette/nanolinter:go@sha256:PIN_DIGEST"
-  - component: gitlab.example.com/team/ci/forge-ci/check@PIN_FORGE_CI_SHA
-    inputs:
-      forge-ci-repository: team/ci/forge-ci
-      job-image: registry.example.com/team/check-tools@sha256:PIN_IMAGE_DIGEST
-      commands:
-        - just test-unit
-```
-
-Releases run from a separate, pinned policy project that includes the
-`release` component; once it is the project's CI configuration path, GitLab
-runs it instead of `.gitlab-ci.yml` and the policy includes this gate for
-merge requests.
-
-See [Getting started](docs/gitlab.md#getting-started) and the
-[examples](examples/README.md).
-
-#### Forgejo
-
-Fill in the example's `forgejo/` workflows and add them to
-`.forgejo/workflows/`. The release calls the layer, served on your instance,
-around your own build job:
-
-```yaml
+# .github/workflows/release.yml
+on:
+  push:
+    tags: ["release-request/v*"]
+permissions:
+  contents: read
 jobs:
-  prepare:
-    uses: OWNER/forge-ci/.forgejo/workflows/prepare-release.yml@<commit>
+  release:
+    uses: diggsweden/forge-ci/.github/workflows/release-orchestrator.yml@v0.90.0
+    permissions:
+      contents: write
+      packages: write
+      id-token: write  # Sigstore keyless signing
+      actions: read
+    secrets:
+      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+      RELEASE_SSH_SIGNING_KEY: ${{ secrets.RELEASE_SSH_SIGNING_KEY }}
+    with:
+      branch: main
+      forge-ci-binary-ref: v0.90.0
 ```
 
-See [Getting started](docs/forgejo.md#getting-started) and the
-[examples](examples/README.md).
+```bash
+git tag -s release-request/v1.0.0 -m "Release v1.0.0"
+git push origin release-request/v1.0.0
+```
+
+GitLab and Forgejo use the same two flows through their own CI syntax —
+see the [examples](examples/README.md) for complete per-forge files.
 
 ## Using Forge CI
 
