@@ -591,6 +591,12 @@ build-all: (_job "build-all" ("targets=linux,darwin x amd64,arm64; output=" + bi
 refresh-forgejo-binary:
     @bash scripts/ci/forgejo-binary.sh refresh
 
+# ▪ Fail if the recorded checksums are stale (no writes; CI gate before tests)
+[doc('Check the Forgejo layer binary checksums are fresh')]
+[group('build')]
+check-forgejo-binary:
+    @bash scripts/ci/forgejo-binary.sh check
+
 # ==================================================================================== #
 # DOCUMENTATION - Generated files
 # ==================================================================================== #

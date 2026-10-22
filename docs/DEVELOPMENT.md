@@ -437,6 +437,18 @@ CLI of your tree for both architectures as
 `internal/`, `go.mod`, `go.sum`); a change to documentation, workflows or
 tests names the same binary and needs nothing.
 
+Before pushing, verify the lines are fresh with a read-only check that builds
+both architectures and compares, without writing anything:
+
+```bash
+just check-forgejo-binary
+```
+
+It fails with the same digests `refresh-forgejo-binary` would record, so you
+can see what changed without running the write. CI runs this check as a fast
+gate before the integration suite in both the pull-request and release
+workflows.
+
 **The tip must be consistent, not every commit.** Commit the lines with the
 change they follow, or in a commit after it. Two branches that both change Go
 code both change the lines; after merging them, record them once more. What a

@@ -7,6 +7,7 @@
 # recorded and published.
 #
 #   forgejo-binary.sh build <arch> <output>    build this tree's CLI to <output>
+#   forgejo-binary.sh check                    fail if the recorded checksums are stale
 #   forgejo-binary.sh refresh                  record each build's sha256 in the tree
 #   forgejo-binary.sh publish <arch> <binary>  upload a build the tree records
 #   forgejo-binary.sh inputs                   print the build inputs, one path a line
@@ -36,7 +37,7 @@ architectures=(amd64 arm64)
 version=forgejo-layer
 
 usage() {
-	printf 'usage: %s build <amd64|arm64> <output>\n       %s refresh\n       %s publish <amd64|arm64> <binary>\n       %s inputs\n' "$0" "$0" "$0" "$0" >&2
+	printf 'usage: %s build <amd64|arm64> <output>\n       %s check\n       %s refresh\n       %s publish <amd64|arm64> <binary>\n       %s inputs\n' "$0" "$0" "$0" "$0" "$0" >&2
 	exit 2
 }
 
@@ -179,6 +180,26 @@ build)
 	# caller compares the result with the recorded checksum.
 	require_pinned_toolchain
 	build "$2" "$3"
+	;;
+check)
+	[[ $# -eq 1 ]] || usage
+	require_pinned_toolchain
+	staging=$(mktemp -d "${TMPDIR:-/tmp}/forge-ci-forgejo-binary.XXXXXXXX")
+	trap 'rm -rf -- "$staging"' EXIT
+	failed=0
+	for arch in "${architectures[@]}"; do
+		build "$arch" "$staging/forge-ci-$arch"
+		built=$(sha256_of "$staging/forge-ci-$arch")
+		recorded=$(recorded_sha256 "$arch")
+		if [[ "$built" == "$recorded" ]]; then
+			printf '✓ linux/%s checksum matches: %s\n' "$arch" "$built"
+		else
+			printf '✗ linux/%s checksum is stale: recorded %s, built %s\n' "$arch" "$recorded" "$built"
+			printf '  Run `just refresh-forgejo-binary` and commit the updated files.\n'
+			failed=1
+		fi
+	done
+	exit "$failed"
 	;;
 refresh)
 	[[ $# -eq 1 ]] || usage
