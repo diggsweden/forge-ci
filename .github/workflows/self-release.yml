@@ -115,7 +115,10 @@ jobs:
       - name: Set default Rust toolchain
         # ubuntu-26.04 ships rustup without a default toolchain; cargo is a
         # proxy that fails until one is set.
-        run: rustup default stable
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          cargo --version
       - name: Install cargo-cyclonedx
         run: cargo install --locked cargo-cyclonedx --version 0.5.9
       - name: Install cyclonedx-gomod
@@ -180,7 +183,10 @@ jobs:
       - name: Set default Rust toolchain
         # ubuntu-26.04 ships rustup without a default toolchain; the cargo
         # integration test needs a working cargo, not just one on PATH.
-        run: rustup default stable
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          cargo --version
       - name: Run the integration tier, refusing to skip evidence
         run: just test-integration-strict
 

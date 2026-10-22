@@ -92,7 +92,10 @@ jobs:
       - name: Set default Rust toolchain
         # ubuntu-26.04 ships rustup without a default toolchain; cargo is a
         # proxy that fails until one is set.
-        run: rustup default stable
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          cargo --version
       - name: Validate reusable workflow input defaults
         run: go run ./cmd/forge-ci validate workflow input-defaults
       - name: Run tests
@@ -188,7 +191,10 @@ jobs:
       - name: Set default Rust toolchain
         # ubuntu-26.04 ships rustup without a default toolchain; cargo is a
         # proxy that fails until one is set.
-        run: rustup default stable
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          cargo --version
 
       - name: Install cargo-cyclonedx
         run: cargo install --locked cargo-cyclonedx --version 0.5.9
