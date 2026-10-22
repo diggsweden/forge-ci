@@ -24,7 +24,7 @@ permissions:
   contents: read
 jobs:
   resolve-branch:
-    name: Resolve release branch and images
+    name: Resolve release branch
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
@@ -64,24 +64,6 @@ jobs:
           printf 'Release branch: %s\n' "$branch"
           printf 'branch=%s\n' "$branch" >>"$GITHUB_OUTPUT"
           printf 'image-tag=sha-%s\n' "${SHA:0:7}" >>"$GITHUB_OUTPUT"
-      - name: Require this commit's runtime images
-        # The release runs on the images built from this commit. Fail here, before
-        # the black-box gate and the release, when they are not public yet.
-        # Check anonymously so a token cannot hide a private package.
-        env:
-          NAMESPACE: ${{ vars.FORGE_CI_IMAGE_NAMESPACE || format('ghcr.io/{0}', github.repository_owner) }}
-          IMAGE_TAG: ${{ steps.branch.outputs.image-tag }}
-        run: |
-          set -euo pipefail
-          missing=0
-          for name in base "" java-25 node-24 rust-stable go-1.27 android-35; do
-            image="${NAMESPACE}/forge-ci-runtime${name:+-$name}:${IMAGE_TAG}"
-            if ! docker manifest inspect "$image" >/dev/null 2>&1; then
-              printf 'Runtime image %s is not publicly readable; check package visibility and wait for Self Runtime Container to publish this commit\n' "$image" >&2
-              missing=1
-            fi
-          done
-          exit "$missing"
 
   blackbox:
     name: Strict companion black-box gate
@@ -194,8 +176,54 @@ jobs:
       - name: Run the integration tier, refusing to skip evidence
         run: just test-integration-strict
 
-  release:
+  wait-for-images:
+    # The release orchestrator runs on the runtime images built from this
+    # commit (sha-<short> tags, published by Self Runtime Container). Those
+    # images are built asynchronously — pushing the release-request tag does
+    # not wait for them. The blackbox and evidence gates run in parallel with
+    # the image build, so by the time they finish the images are usually
+    # ready. This job is a safety net: it polls briefly for any images still
+    # being published, then fails with an actionable message if they never
+    # appear. Check anonymously so a token cannot hide a private package.
+    name: Wait for runtime images
     needs: [resolve-branch, blackbox, evidence]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Poll for this commit's runtime images
+        env:
+          NAMESPACE: ${{ vars.FORGE_CI_IMAGE_NAMESPACE || format('ghcr.io/{0}', github.repository_owner) }}
+          IMAGE_TAG: ${{ needs.resolve-branch.outputs.image-tag }}
+        run: |
+          set -euo pipefail
+          timeout=300  # 5 minutes
+          interval=30  # check every 30 seconds
+          elapsed=0
+          while [ "$elapsed" -lt "$timeout" ]; do
+            missing=0
+            for name in base "" java-25 node-24 rust-stable go-1.27 android-35; do
+              image="${NAMESPACE}/forge-ci-runtime${name:+-$name}:${IMAGE_TAG}"
+              if ! docker manifest inspect "$image" >/dev/null 2>&1; then
+                missing=1
+                break
+              fi
+            done
+            if [ "$missing" -eq 0 ]; then
+              printf 'All runtime images are available for %s\n' "$IMAGE_TAG"
+              exit 0
+            fi
+            printf 'Waiting for runtime images (%ds / %ds)...\n' "$elapsed" "$timeout"
+            sleep "$interval"
+            elapsed=$((elapsed + interval))
+          done
+          printf '::error::Runtime images for %s not available after %ds of polling.\n' "$IMAGE_TAG" "$timeout" >&2
+          printf '::error::Re-run this job after Self Runtime Container completes for commit %s.\n' "${{ github.sha }}" >&2
+          exit 1
+
+  release:
+    needs: [resolve-branch, blackbox, evidence, wait-for-images]
     uses: ./.github/workflows/release-orchestrator.yml
     permissions:
       contents: write
