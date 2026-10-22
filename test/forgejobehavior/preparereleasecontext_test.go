@@ -151,14 +151,14 @@ func TestPrepareReleaseContextEngine(t *testing.T) {
 	t.Parallel()
 	script := actionStep(t, "prepare-release", releaseContextStep)
 	engine := forgeCIEngine(t)
-	lib := string(reporoot.ReadFile(t, ".forgejo/bin/lib-forge-ci.sh"))
+	lib := string(reporoot.ReadFile(t, ".engine/bin/lib-forge-ci.sh"))
 
 	run := func(t *testing.T, ref string) (*sandbox, result) {
 		t.Helper()
 
 		box, path := releaseContextSandbox(t)
 		// The real resolver runs the built engine as a non-strict override.
-		box.write(".forgejo/bin/lib-forge-ci.sh", lib, 0o600)
+		box.write(".engine/bin/lib-forge-ci.sh", lib, 0o600)
 
 		return box, box.run(script, append(releaseContextEnv(path, ref), "FORGE_CI_BIN="+engine, "FORGE_CI_RUNNER=forgejo")...)
 	}

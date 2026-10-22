@@ -32,7 +32,7 @@ func signerToolchainSandbox(t *testing.T) (*sandbox, string) {
 
 	const engineBody = "#!/usr/bin/env bash\nexit 0\n"
 
-	box.write(".forgejo/bin/forge-ci", engineBody, 0o700)
+	box.write(".engine/bin/forge-ci", engineBody, 0o700)
 
 	sum := sha256.Sum256([]byte(engineBody))
 	box.write(trackedChecksum(runtime.GOARCH), hex.EncodeToString(sum[:])+"  bin/forge-ci\n", 0o600)
@@ -61,7 +61,7 @@ func signerToolchainSandbox(t *testing.T) (*sandbox, string) {
 }
 
 // The strict toolchain check finds the engine of the checkout it runs from at
-// .forgejo/bin, one directory beside its own, and holds it to the checksum
+// .engine/bin, one directory beside its own, and holds it to the checksum
 // recorded there. Every privileged job runs this before it touches a secret,
 // so an engine that drifted from its pin, or lost it, stops the job here.
 //
@@ -83,7 +83,7 @@ func TestVerifySignerToolchainHoldsTheLayerEngineToItsPin(t *testing.T) {
 		{name: "accepts the engine at its recorded checksum", want: 0, say: "forge-ci binary matches the recorded pin"},
 		{
 			name: "refuses an engine that differs from its checksum", want: 1, say: "does not match the recorded pin",
-			spoil: func(box *sandbox) { box.write(".forgejo/bin/forge-ci", "#!/usr/bin/env bash\nexit 1\n", 0o700) },
+			spoil: func(box *sandbox) { box.write(".engine/bin/forge-ci", "#!/usr/bin/env bash\nexit 1\n", 0o700) },
 		},
 		{
 			name: "refuses an engine without a checksum", want: 1, say: "the recorded pin is missing",
@@ -96,7 +96,7 @@ func TestVerifySignerToolchainHoldsTheLayerEngineToItsPin(t *testing.T) {
 		{
 			name: "refuses a checkout whose engine was not fetched", want: 1, say: "the layer's forge-ci binary is missing",
 			spoil: func(box *sandbox) {
-				if err := os.Remove(filepath.Join(box.root, ".forgejo", "bin", "forge-ci")); err != nil {
+				if err := os.Remove(filepath.Join(box.root, ".engine", "bin", "forge-ci")); err != nil {
 					box.t.Fatal(err)
 				}
 			},
@@ -104,7 +104,7 @@ func TestVerifySignerToolchainHoldsTheLayerEngineToItsPin(t *testing.T) {
 		{
 			name: "accepts the image build, which has no checkout", want: 0,
 			spoil: func(box *sandbox) {
-				for _, name := range []string{".forgejo/bin/forge-ci", trackedChecksum(runtime.GOARCH)} {
+				for _, name := range []string{".engine/bin/forge-ci", trackedChecksum(runtime.GOARCH)} {
 					if err := os.Remove(filepath.Join(box.root, filepath.FromSlash(name))); err != nil {
 						box.t.Fatal(err)
 					}
@@ -126,7 +126,7 @@ func TestVerifySignerToolchainHoldsTheLayerEngineToItsPin(t *testing.T) {
 				t.Fatalf("status %d, want %d with %q\nstdout %s\nstderr %s", got.status, test.want, test.say, got.stdout, got.stderr)
 			}
 
-			if test.want == 0 && test.say != "" && !strings.Contains(got.stdout, box.root+"/.forgejo/scripts/../bin/forge-ci") {
+			if test.want == 0 && test.say != "" && !strings.Contains(got.stdout, box.root+"/.forgejo/scripts/../../.engine/bin/forge-ci") {
 				t.Fatalf("the check did not judge the layer's own engine:\n%s", got.stdout)
 			}
 		})

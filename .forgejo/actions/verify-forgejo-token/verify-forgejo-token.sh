@@ -41,8 +41,8 @@ if [ -z "${FORGEJO_API_TOKEN:-}" ]; then
 	exit 1
 fi
 
-# shellcheck source=.forgejo/bin/lib-forge-ci.sh
-source "${script_dir}/../../bin/lib-forge-ci.sh"
+# shellcheck source=.engine/bin/lib-forge-ci.sh
+source "${script_dir}/../../../.engine/bin/lib-forge-ci.sh"
 
 safe_repository=''
 safe_repository=$(first_safe_log_line "${VERIFY_REPO:-}") || safe_repository=''

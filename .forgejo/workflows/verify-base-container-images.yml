@@ -256,8 +256,8 @@ jobs:
       - name: Fetch engine binary
         run: |
           set -euo pipefail
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           fetch_forge_ci
 
       - name: Verify signer toolchain
@@ -270,8 +270,8 @@ jobs:
           CHECKOUT_REF: ${{ inputs.release-sha }}
         run: |
           set -euo pipefail
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           FORGEJO_WORKSPACE="${CONSUMER_WORKSPACE:?}" \
             FORGE_CI_PROVIDER=forgejo \
             run_forge_ci platform checkout --ref "${CHECKOUT_REF}"
@@ -310,8 +310,8 @@ jobs:
           # value pasted in sha256sum format does not become the digest.
           read -r COSIGN_PUBLIC_KEY_SHA256 _ <"${trusted_key}.sha256"
           export COSIGN_PUBLIC_KEY_PATH COSIGN_PUBLIC_KEY_SHA256
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           FORGE_CI_PROVIDER=forgejo run_forge_ci container base-images validate
 
       - name: Cleanup signer workspace

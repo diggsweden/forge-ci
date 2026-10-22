@@ -11,10 +11,10 @@
 // receives, what reaches its environment, and how each status is classified.
 // Most tests put an offline fake in the engine's place. The engine tier puts
 // the real one there: the CLI built from this tree by
-// scripts/ci/forgejo-binary.sh, so a verb and the shell that calls it are
+// scripts/ci/engine-binary.sh, so a verb and the shell that calls it are
 // tested together and a renamed flag fails here, not inside a release job.
 // The same build, for each architecture, holds the checksum a job downloads
-// the binary by, .forgejo/bin/forge-ci-linux-<arch>.sha256, to the tree
+// the binary by, .engine/bin/forge-ci-linux-<arch>.sha256, to the tree
 // (TestRecordedEngineChecksumIsABuildOfThisTree).
 //
 // Nothing here goes through the action runner, a forge, a registry or a

@@ -55,8 +55,8 @@ runs:
         BUILD_CARGO_BUILD_SBOM: ${{ inputs.enable-build-sbom }}
       run: |
         set -euo pipefail
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         run_forge_ci build cargo run \
           --version "${BUILD_CARGO_VERSION:?version is required}" \
           --commit "${BUILD_CARGO_COMMIT:?commit is required}" \

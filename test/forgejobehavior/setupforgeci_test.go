@@ -27,11 +27,11 @@ import (
 func setupForgeCISandbox(t *testing.T, body string) (*sandbox, string, string) {
 	t.Helper()
 	box := newSandbox(t, "setup-forge-ci")
-	box.write(".forgejo/bin/lib-forge-ci.sh", string(reporoot.ReadFile(t, ".forgejo/bin/lib-forge-ci.sh")), 0o600)
+	box.write(".engine/bin/lib-forge-ci.sh", string(reporoot.ReadFile(t, ".engine/bin/lib-forge-ci.sh")), 0o600)
 	box.write(".forgejo/actions/setup-forge-ci/setup-forge-ci.sh", string(reporoot.ReadFile(t, ".forgejo/actions/setup-forge-ci/setup-forge-ci.sh")), 0o700)
 	starts := filepath.Join(box.root, "starts")
 	fixture := "#!/usr/bin/env bash\nprintf 'started\\n' >>'" + starts + "'\n" + body + "\n"
-	box.write(".forgejo/bin/forge-ci", fixture, 0o755)
+	box.write(".engine/bin/forge-ci", fixture, 0o755)
 	sum := sha256.Sum256([]byte(fixture))
 	digest := hex.EncodeToString(sum[:])
 	box.write(trackedChecksum(runtime.GOARCH), digest+"  bin/forge-ci\n", 0o600)
@@ -173,7 +173,7 @@ func testSetupForgeCIExposure(t *testing.T, script, printVersion, version, addTo
 		t.Fatal(err)
 	}
 
-	want := "binary-path=" + filepath.Join(box.root, ".forgejo", "bin", "forge-ci") + "\nsha256=" + digest + "\nversion=" + version + "\n"
+	want := "binary-path=" + filepath.Join(box.root, ".engine", "bin", "forge-ci") + "\nsha256=" + digest + "\nversion=" + version + "\n"
 	if string(outputs) != want {
 		t.Fatalf("outputs = %q, want %q", outputs, want)
 	}
@@ -185,7 +185,7 @@ func testSetupForgeCIExposure(t *testing.T, script, printVersion, version, addTo
 
 	wantPath := ""
 	if addToPath == "true" {
-		wantPath = filepath.Join(box.root, ".forgejo", "bin") + "\n"
+		wantPath = filepath.Join(box.root, ".engine", "bin") + "\n"
 	}
 
 	if string(path) != wantPath {

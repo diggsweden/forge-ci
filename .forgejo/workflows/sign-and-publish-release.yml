@@ -319,8 +319,8 @@ jobs:
       - name: Fetch engine binary
         run: |
           set -euo pipefail
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           fetch_forge_ci
 
       - name: Verify signer toolchain
@@ -346,8 +346,8 @@ jobs:
           TRUSTED_KEY_SHA256_INPUT: ${{ inputs['cosign-public-key-sha256'] }}
         run: |
           set -euo pipefail
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           # The caller supplies the trust root; the layer ships none. The
           # engine refuses an empty key, an empty digest and a mismatch.
           trusted_key="${SIGNER_WORKSPACE:?}/cosign.pub"
@@ -365,8 +365,8 @@ jobs:
           CHECKOUT_REF: ${{ inputs['release-sha'] }}
         run: |
           set -euo pipefail
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           # Tags too: validate-tag reads the release tag's local object.
           FORGEJO_WORKSPACE="${CONSUMER_WORKSPACE:?}" \
             FORGE_CI_PROVIDER=forgejo \
@@ -379,8 +379,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           FORGE_CI_PROVIDER=forgejo run_forge_ci artifact download \
             --name "${ARTIFACT_NAME}" \
             --dir "${ARTIFACT_PATH}"
@@ -393,8 +393,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           run_forge_ci release sign-publish-context \
             --release-sha "${RELEASE_SHA}" \
             --tag "${RELEASE_TAG}" \
@@ -407,8 +407,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           run_forge_ci release validate-tag \
             --release-sha "${RELEASE_SHA:?}" \
             --tag "${RELEASE_TAG:?}" \
@@ -421,8 +421,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           run_forge_ci release validate-dist \
             --dist-dir "${DIST_DIR:?}" \
             --expected-digest "${EXPECTED_DIGEST:?}"
@@ -431,8 +431,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           # First contact with the producer's files: a signature, a bundle or a
           # provenance statement that is already in the dist would be published
           # as this signer's, so the engine refuses one before anything is signed.
@@ -450,8 +450,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           run_forge_ci release gpg sign-packages \
             --fingerprint "${GPG_SIGNING_FINGERPRINT:?}" \
             --dir "${DIST_DIR:?}"
@@ -467,8 +467,8 @@ jobs:
           cosign_password="${COSIGN_PASSWORD:?}"
           unset COSIGN_KEY COSIGN_PASSWORD FORGEJO_TOKEN GPG_SIGNING_FINGERPRINT GPG_SIGNING_KEY \
             GPG_SIGNING_PASSWORD MISE_FORGEJO_TOKEN MISE_GITHUB_TOKEN REGISTRY_TOKEN REGISTRY_USER
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           COSIGN_KEY="${cosign_key}" COSIGN_PASSWORD="${cosign_password}" \
             run_forge_ci release sign \
               --method kms \
@@ -493,8 +493,8 @@ jobs:
           cosign_password="${COSIGN_PASSWORD:?}"
           unset COSIGN_KEY COSIGN_PASSWORD FORGEJO_TOKEN GPG_SIGNING_FINGERPRINT GPG_SIGNING_KEY \
             GPG_SIGNING_PASSWORD MISE_FORGEJO_TOKEN MISE_GITHUB_TOKEN REGISTRY_TOKEN REGISTRY_USER
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           # The job runs for the release-request tag, so the statement's source
           # ref and commit are named here. The repository, the builder and the
           # invocation are this job's own runner variables.
@@ -538,8 +538,8 @@ jobs:
           registry_user="${REGISTRY_USER:?}"
           unset COSIGN_KEY COSIGN_PASSWORD FORGEJO_TOKEN GPG_SIGNING_FINGERPRINT GPG_SIGNING_KEY \
             GPG_SIGNING_PASSWORD MISE_FORGEJO_TOKEN MISE_GITHUB_TOKEN REGISTRY_PASSWORD REGISTRY_TOKEN REGISTRY_USER
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           forge_ci_mark_external_registry "${LEDGER_EXPECTED_IMAGE_REPOSITORY:-}" "${FORGEJO_SERVER:-}"
           COSIGN_KEY="${cosign_key}" \
             COSIGN_PASSWORD="${cosign_password}" \
@@ -564,8 +564,8 @@ jobs:
           cosign_password="${COSIGN_PASSWORD:?}"
           unset COSIGN_KEY COSIGN_PASSWORD FORGEJO_TOKEN GPG_SIGNING_FINGERPRINT GPG_SIGNING_KEY \
             GPG_SIGNING_PASSWORD MISE_FORGEJO_TOKEN MISE_GITHUB_TOKEN REGISTRY_TOKEN REGISTRY_USER
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           COSIGN_KEY="${cosign_key}" COSIGN_PASSWORD="${cosign_password}" \
             run_forge_ci release sign \
               --method kms \
@@ -582,8 +582,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           run_forge_ci release files manifest \
             --manifest "${RELEASE_FILES_MANIFEST:?}" \
             --dist-dir "${DIST_DIR:?}"
@@ -597,8 +597,8 @@ jobs:
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
           dist_dir="${ARTIFACT_PATH%/}"
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           digest=$(run_forge_ci release dist-digest --dist-dir "${dist_dir}")
           printf 'signed-dist-digest=%s\n' "${digest}" >>"${FORGEJO_OUTPUT}"
           echo "signed dist/ digest: ${digest}"
@@ -688,8 +688,8 @@ jobs:
       - name: Fetch engine binary
         run: |
           set -euo pipefail
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           fetch_forge_ci
 
       - name: Verify signer toolchain
@@ -702,8 +702,8 @@ jobs:
           CHECKOUT_REF: ${{ inputs['release-sha'] }}
         run: |
           set -euo pipefail
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           # Tags too: validate-tag reads the release tag's local object.
           FORGEJO_WORKSPACE="${CONSUMER_WORKSPACE:?}" \
             FORGE_CI_PROVIDER=forgejo \
@@ -716,8 +716,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           FORGE_CI_PROVIDER=forgejo run_forge_ci artifact download \
             --name "${ARTIFACT_NAME}" \
             --dir "${ARTIFACT_PATH}"
@@ -730,8 +730,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           run_forge_ci release sign-publish-context \
             --release-sha "${RELEASE_SHA}" \
             --tag "${RELEASE_TAG}" \
@@ -744,8 +744,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           run_forge_ci release validate-tag \
             --release-sha "${RELEASE_SHA:?}" \
             --tag "${RELEASE_TAG:?}" \
@@ -758,8 +758,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           run_forge_ci release validate-dist \
             --dist-dir "${DIST_DIR:?}" \
             --expected-digest "${EXPECTED_DIGEST:?}"
@@ -780,8 +780,8 @@ jobs:
           registry_user="${REGISTRY_USER:?}"
           unset COSIGN_KEY COSIGN_PASSWORD FORGEJO_TOKEN GPG_SIGNING_FINGERPRINT GPG_SIGNING_KEY \
             GPG_SIGNING_PASSWORD MISE_FORGEJO_TOKEN MISE_GITHUB_TOKEN REGISTRY_PASSWORD REGISTRY_TOKEN REGISTRY_USER
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           forge_ci_mark_external_registry "${LEDGER_EXPECTED_IMAGE_REPOSITORY:-}" "${FORGEJO_SERVER:-}"
           REGISTRY_TOKEN="${registry_token}" \
             REGISTRY_USER="${registry_user}" \
@@ -869,8 +869,8 @@ jobs:
       - name: Fetch engine binary
         run: |
           set -euo pipefail
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           fetch_forge_ci
 
       - name: Verify signer toolchain
@@ -885,8 +885,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           FORGE_CI_PROVIDER=forgejo run_forge_ci artifact download \
             --name "${ARTIFACT_NAME}" \
             --dir "${ARTIFACT_PATH}"
@@ -899,8 +899,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           run_forge_ci release sign-publish-context \
             --release-sha "${RELEASE_SHA}" \
             --tag "${RELEASE_TAG}" \
@@ -912,8 +912,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           run_forge_ci release validate-dist \
             --dist-dir "${DIST_DIR:?}" \
             --expected-digest "${EXPECTED_DIGEST:?}"
@@ -938,8 +938,8 @@ jobs:
           unset COSIGN_KEY COSIGN_PASSWORD FORGEJO_TOKEN GITEA_TOKEN GPG_SIGNING_FINGERPRINT GPG_SIGNING_KEY \
             GPG_SIGNING_PASSWORD MISE_FORGEJO_TOKEN MISE_GITHUB_TOKEN REGISTRY_PASSWORD REGISTRY_TOKEN \
             REGISTRY_USER FORGE_CI_PACKAGE_API_TOKEN
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           forge_ci_mark_external_registry "${LEDGER_EXPECTED_IMAGE_REPOSITORY:-}" "${FORGEJO_SERVER:-}"
           REGISTRY_TOKEN="${registry_token}" \
             REGISTRY_USER="${registry_user}" \
@@ -1028,8 +1028,8 @@ jobs:
       - name: Fetch engine binary
         run: |
           set -euo pipefail
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           fetch_forge_ci
 
       - name: Verify signer toolchain
@@ -1042,8 +1042,8 @@ jobs:
           CHECKOUT_REF: ${{ inputs['release-sha'] }}
         run: |
           set -euo pipefail
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           # Tags too: validate-tag reads the release tag's local object.
           FORGEJO_WORKSPACE="${CONSUMER_WORKSPACE:?}" \
             FORGE_CI_PROVIDER=forgejo \
@@ -1055,8 +1055,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           FORGE_CI_PROVIDER=forgejo run_forge_ci artifact download \
             --name "${SIGNED_DIST_ARTIFACT}" \
             --dir "${ARTIFACT_PATH}"
@@ -1069,8 +1069,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           run_forge_ci release sign-publish-context \
             --release-sha "${RELEASE_SHA}" \
             --tag "${RELEASE_TAG}" \
@@ -1083,8 +1083,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           run_forge_ci release validate-dist \
             --dist-dir "${ARTIFACT_PATH%/}" \
             --expected-digest "${EXPECTED_SIGNED_DIGEST}"
@@ -1097,8 +1097,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           run_forge_ci release validate-tag \
             --release-sha "${RELEASE_SHA:?}" \
             --tag "${RELEASE_TAG:?}" \
@@ -1116,8 +1116,8 @@ jobs:
           unset COSIGN_KEY COSIGN_PASSWORD FORGEJO_TOKEN GPG_SIGNING_FINGERPRINT GPG_SIGNING_KEY \
             GITEA_TOKEN GITHUB_TOKEN GPG_SIGNING_PASSWORD MISE_FORGEJO_TOKEN MISE_GITHUB_TOKEN \
             PUBLISH_RELEASE_TOKEN_INPUT REGISTRY_TOKEN REGISTRY_USER RELEASE_TOKEN
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           FORGEJO_TOKEN="${forgejo_token}" \
             FORGEJO_SERVER_URL="${FORGEJO_SERVER:?}" \
             FORGEJO_REPOSITORY="${FORGEJO_REPO:?}" \
@@ -1143,8 +1143,8 @@ jobs:
           unset COSIGN_KEY COSIGN_PASSWORD FORGEJO_TOKEN GPG_SIGNING_FINGERPRINT GPG_SIGNING_KEY \
             GITEA_TOKEN GITHUB_TOKEN GPG_SIGNING_PASSWORD MISE_FORGEJO_TOKEN MISE_GITHUB_TOKEN \
             PUBLISH_RELEASE_TOKEN_INPUT REGISTRY_TOKEN REGISTRY_USER RELEASE_TOKEN
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           FORGEJO_TOKEN="${forgejo_token}" \
             FORGEJO_SERVER_URL="${FORGEJO_SERVER:?}" \
             FORGEJO_REPOSITORY="${FORGEJO_REPO:?}" \

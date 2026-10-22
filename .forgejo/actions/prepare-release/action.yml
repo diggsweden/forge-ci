@@ -83,8 +83,8 @@ runs:
           true|false) ;;
           *) echo "ERROR: verify-release-request-signature must be true or false" >&2; exit 1 ;;
         esac
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         run_forge_ci version derive-release \
           --ref-name "${RELEASE_CONTEXT_REF:?}" \
           --require-release-request \
@@ -111,8 +111,8 @@ runs:
       run: |
         set -euo pipefail
         unset SSH_SIGNING_KEY
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         # Verify before the signing key is loaded; the key-holding step then
         # runs this exact path without sourcing any library code.
         verify_forge_ci
@@ -138,8 +138,8 @@ runs:
         if [ "${VERIFY_RELEASE_REQUEST_SIGNATURE}" != true ]; then
           signature_options=(--skip-signature)
         fi
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         run_forge_ci release validate-request \
           --release-request "${RELEASE_REQUEST:?}" \
           --tag "${RELEASE_TAG:?}" \

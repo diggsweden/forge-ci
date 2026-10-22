@@ -79,8 +79,8 @@ runs:
         if [ -n "${BUILD_GO_SOURCE_DATE_EPOCH}" ]; then
           export SOURCE_DATE_EPOCH="${BUILD_GO_SOURCE_DATE_EPOCH}"
         fi
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         run_forge_ci build go run \
           --version "${BUILD_GO_VERSION:?version is required}" \
           --commit "${BUILD_GO_COMMIT:?commit is required}" \

@@ -64,7 +64,7 @@ func TestSetupToolchainEngineCalls(t *testing.T) {
 			box := newSandbox(t, "setup-toolchain")
 			// Record the engine environment too, so a token handed over by
 			// environment instead of argv is caught.
-			box.write(".forgejo/bin/forge-ci", setupToolchainFakeEngine, 0o700)
+			box.write(".engine/bin/forge-ci", setupToolchainFakeEngine, 0o700)
 
 			got := box.run(loadAction(t, "setup-toolchain").step(t, test.step).Run, test.env...)
 			if want := test.argv(box); got.status != 0 || !slices.Equal(box.argv(), want) {

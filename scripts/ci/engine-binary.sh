@@ -6,14 +6,14 @@
 # The delivery layers' engine binary: the one place that says how it is built,
 # recorded and published.
 #
-#   forgejo-binary.sh build <arch> <output>    build this tree's CLI to <output>
-#   forgejo-binary.sh check                    fail if the recorded checksums are stale
-#   forgejo-binary.sh refresh                  record each build's sha256 in the tree
-#   forgejo-binary.sh publish <arch> <binary>  upload a build the tree records
-#   forgejo-binary.sh inputs                   print the build inputs, one path a line
+#   engine-binary.sh build <arch> <output>    build this tree's CLI to <output>
+#   engine-binary.sh check                    fail if the recorded checksums are stale
+#   engine-binary.sh refresh                  record each build's sha256 in the tree
+#   engine-binary.sh publish <arch> <binary>  upload a build the tree records
+#   engine-binary.sh inputs                   print the build inputs, one path a line
 #
 # <arch> is amd64 or arm64. The tree tracks one checksum per architecture,
-# .forgejo/bin/forge-ci-linux-<arch>.sha256, and not the binaries. A job
+# .engine/bin/forge-ci-linux-<arch>.sha256, and not the binaries. A job
 # downloads the binary of its host's architecture by that checksum from the
 # generic package registry of the forge that serves the layer, and verifies
 # it; see "The binary in the layer" in docs/forgejo.md.
@@ -34,7 +34,7 @@ build_inputs=(cmd internal go.mod go.sum)
 architectures=(amd64 arm64)
 # What `forge-ci --version` of the layer's binary answers. The sha256 is
 # its identity; setup-forge-ci prints both.
-version=forgejo-layer
+version=engine-layer
 
 usage() {
 	printf 'usage: %s build <amd64|arm64> <output>\n       %s check\n       %s refresh\n       %s publish <amd64|arm64> <binary>\n       %s inputs\n' "$0" "$0" "$0" "$0" "$0" >&2
@@ -42,7 +42,7 @@ usage() {
 }
 
 fail() {
-	printf 'forgejo-binary: %s\n' "$1" >&2
+	printf 'engine-binary: %s\n' "$1" >&2
 	exit 1
 }
 
@@ -53,7 +53,7 @@ require_arch() {
 
 # The tracked checksum of the architecture's build, relative to the tree.
 checksum_path() {
-	printf '.forgejo/bin/forge-ci-linux-%s.sha256\n' "$1"
+	printf '.engine/bin/forge-ci-linux-%s.sha256\n' "$1"
 }
 
 # go_env ARCH COMMAND... runs a command with the build's whole environment
@@ -110,13 +110,13 @@ sha256_of() {
 }
 
 # The digest the tree records for ARCH: one `<sha256>  bin/forge-ci` line, the
-# name relative to .forgejo/, the layer root the resolver anchors on.
+# name relative to .engine/, the engine root the resolver anchors on.
 recorded_sha256() {
 	local file digest name extra
 	file=$repo_root/$(checksum_path "$1")
 	read -r digest name extra <"$file" || true
 	[[ "$digest" =~ ^[0-9a-f]{64}$ && "$name" == bin/forge-ci && -z "$extra" ]] ||
-		fail "$file is not one '<sha256>  bin/forge-ci' line; rewrite it with \`just refresh-forgejo-binary\`"
+		fail "$file is not one '<sha256>  bin/forge-ci' line; rewrite it with \`just refresh-engine-binary\`"
 	printf '%s\n' "$digest"
 }
 
@@ -139,8 +139,8 @@ The checksum was recorded from another toolchain or other modules than this job 
 	[[ -n "${FORGE_CI_PACKAGE_TOKEN:-}" ]] ||
 		fail 'FORGE_CI_PACKAGE_TOKEN is empty: a token that may write to the engine package registry'
 
-	# shellcheck source=.forgejo/bin/lib-forge-ci.sh
-	source "$repo_root/.forgejo/bin/lib-forge-ci.sh"
+	# shellcheck source=.engine/bin/lib-forge-ci.sh
+	source "$repo_root/.engine/bin/lib-forge-ci.sh"
 	url=$(forge_ci_package_url "$recorded" "$arch") || exit 1
 	authorization='Authorization: token'
 	if [[ "${FORGE_CI_PACKAGE_PROVIDER:-forgejo}" == gitlab ]]; then
@@ -152,7 +152,7 @@ The checksum was recorded from another toolchain or other modules than this job 
 	fi
 
 	# Not local: the exit trap reads it after this function has returned.
-	staging=$(mktemp -d "${TMPDIR:-/tmp}/forge-ci-forgejo-binary.XXXXXXXX")
+	staging=$(mktemp -d "${TMPDIR:-/tmp}/forge-ci-engine-binary.XXXXXXXX")
 	trap 'rm -rf -- "$staging"' EXIT
 
 	# The token is read from standard input, so it is in no argument list.
@@ -184,7 +184,7 @@ build)
 check)
 	[[ $# -eq 1 ]] || usage
 	require_pinned_toolchain
-	staging=$(mktemp -d "${TMPDIR:-/tmp}/forge-ci-forgejo-binary.XXXXXXXX")
+	staging=$(mktemp -d "${TMPDIR:-/tmp}/forge-ci-engine-binary.XXXXXXXX")
 	trap 'rm -rf -- "$staging"' EXIT
 	failed=0
 	for arch in "${architectures[@]}"; do
@@ -195,7 +195,7 @@ check)
 			printf '✓ linux/%s checksum matches: %s\n' "$arch" "$built"
 		else
 			printf '✗ linux/%s checksum is stale: recorded %s, built %s\n' "$arch" "$recorded" "$built"
-			printf '  Run `just refresh-forgejo-binary` and commit the updated files.\n'
+			printf '  Run `just refresh-engine-binary` and commit the updated files.\n'
 			failed=1
 		fi
 	done
@@ -204,7 +204,7 @@ check)
 refresh)
 	[[ $# -eq 1 ]] || usage
 	require_pinned_toolchain
-	staging=$(mktemp -d "${TMPDIR:-/tmp}/forge-ci-forgejo-binary.XXXXXXXX")
+	staging=$(mktemp -d "${TMPDIR:-/tmp}/forge-ci-engine-binary.XXXXXXXX")
 	trap 'rm -rf -- "$staging"' EXIT
 	# Every build first, so a failed one records nothing.
 	for arch in "${architectures[@]}"; do
@@ -216,7 +216,7 @@ refresh)
 		printf 'Recorded the linux/%s build of this tree in %s\n  sha256 %s\n' \
 			"$arch" "$(checksum_path "$arch")" "$(recorded_sha256 "$arch")"
 	done
-	if [[ -z "$(git -C "$repo_root" status --porcelain=v1 -- .forgejo/bin/)" ]]; then
+	if [[ -z "$(git -C "$repo_root" status --porcelain=v1 -- .engine/bin/)" ]]; then
 		printf 'The recorded checksums already matched; nothing to commit.\n'
 	else
 		printf 'Commit the files, with the change they follow or after it.\n'

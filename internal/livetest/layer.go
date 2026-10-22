@@ -55,10 +55,10 @@ const (
 	// layerChecksum is the tracked line that names the binary the layer runs
 	// on the lab's AMD64 runners: `<sha256>  bin/forge-ci`. The launcher
 	// builds that architecture (scripts/ci/run-live-tests.sh).
-	layerChecksum = layerDir + "/bin/forge-ci-linux-amd64.sha256"
+	layerChecksum = ".engine/bin/forge-ci-linux-amd64.sha256"
 
 	// The generic package a job downloads the binary from, under the sha256
-	// as its version: the coordinate .forgejo/bin/lib-forge-ci.sh builds.
+	// as its version: the coordinate .engine/bin/lib-forge-ci.sh builds.
 	layerPackage     = "forge-ci"
 	layerPackageFile = "forge-ci-linux-amd64"
 
@@ -106,7 +106,7 @@ type Layer struct {
 // always yields the same pin.
 //
 // The binary published is the build `just test-live` made with
-// scripts/ci/forgejo-binary.sh and handed over by path. It must be the one the
+// scripts/ci/engine-binary.sh and handed over by path. It must be the one the
 // tree records: a job accepts no other, and a tree whose checksum is stale
 // would fail every job at its first engine call with a message about a
 // download.
@@ -182,7 +182,7 @@ func readLayerBinary(tb TB, root string) (string, []byte) {
 	}
 
 	if digest := sha256.Sum256(binary); hex.EncodeToString(digest[:]) != recorded {
-		tb.Fatalf("livetest: %s records %s, and the build is %s; run just refresh-forgejo-binary and commit",
+		tb.Fatalf("livetest: %s records %s, and the build is %s; run just refresh-engine-binary and commit",
 			layerChecksum, recorded, hex.EncodeToString(digest[:]))
 	}
 
@@ -386,6 +386,9 @@ type layerGit struct {
 // refuses a checkout whose layer differs from HEAD, naming the files.
 func (git layerGit) snapshot(ctx context.Context, root string) (string, error) {
 	if err := git.requireClean(ctx, root, layerDir); err != nil {
+		return "", err
+	}
+	if err := git.requireClean(ctx, root, ".engine"); err != nil {
 		return "", err
 	}
 

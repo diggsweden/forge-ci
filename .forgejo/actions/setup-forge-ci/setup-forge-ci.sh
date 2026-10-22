@@ -3,28 +3,28 @@
 #
 # SPDX-License-Identifier: EUPL-1.2 OR GPL-3.0-or-later
 
-# Makes the forge-ci binary of LAYER_ROOT (.forgejo/ of the checkout the
+# Makes the forge-ci binary of ENGINE_ROOT (.engine/ of the checkout the
 # action was fetched from) present in the job, downloading it by the recorded
 # checksum when the job does not have it yet, verifies it against that
 # checksum and an optional caller pin, then exposes it.
-# Usage: setup-forge-ci.sh LAYER_ROOT
+# Usage: setup-forge-ci.sh ENGINE_ROOT
 
 set -euo pipefail
 
-layer_root=${1:-}
+engine_root=${1:-}
 fail() {
 	printf 'ERROR: setup-forge-ci: %s\n' "$1" >&2
 	exit "${2:-1}"
 }
-[[ "${layer_root}" == /* && -d "${layer_root}" && ! -L "${layer_root}" ]] ||
-	fail 'layer root must be an absolute, real directory'
+[[ "${engine_root}" == /* && -d "${engine_root}" && ! -L "${engine_root}" ]] ||
+	fail 'engine root must be an absolute, real directory'
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-# shellcheck source=../../bin/lib-forge-ci.sh
-source "${script_dir}/../../bin/lib-forge-ci.sh"
+# shellcheck source=../../../.engine/bin/lib-forge-ci.sh
+source "${script_dir}/../../../.engine/bin/lib-forge-ci.sh"
 # The action verifies the checkout it was given, never an override.
 # shellcheck disable=SC2034 # Read by verify_forge_ci.
-HELPERS_ROOT=${layer_root}
+HELPERS_ROOT=${engine_root}
 unset FORGE_CI_BIN
 
 case "${ADD_TO_PATH:-true}" in

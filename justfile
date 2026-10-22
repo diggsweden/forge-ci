@@ -259,7 +259,7 @@ test-fuzz-all time="14s": (_job "test-fuzz-all" ("suite=generated fuzz campaign;
 
 # The guards over .forgejo/ (test/forgejoguard) and the layer's own shell
 # (test/forgejobehavior), run against fakes and, in its engine tier, against the
-# CLI built from this tree by scripts/ci/forgejo-binary.sh. Needs Bash, Git and
+# CLI built from this tree by scripts/ci/engine-binary.sh. Needs Bash, Git and
 # the Go toolchain; no forge, registry or container. Reach for it after editing
 # a workflow or action under .forgejo/, or a verb one of them calls.
 [arg('args', help='Arguments passed literally to go test, for example -v or -run TestName')]
@@ -576,8 +576,8 @@ build-all: (_job "build-all" ("targets=linux,darwin x amd64,arm64; output=" + bi
         done
     done
 
-# The Forgejo layer tracks the checksum of its binary, not the binary:
-# .forgejo/bin/forge-ci-linux-<amd64|arm64>.sha256, by which every job
+# The engine layer tracks the checksum of its binary, not the binary:
+# .engine/bin/forge-ci-linux-<amd64|arm64>.sha256, by which every job
 # downloads and verifies the binary of its runner's architecture. This is the
 # only way to write those lines: it builds the CLI of this tree reproducibly
 # for both architectures, with the Go release go.mod names, and records the
@@ -586,16 +586,16 @@ build-all: (_job "build-all" ("targets=linux,darwin x amd64,arm64; output=" + bi
 # TestRecordedEngineChecksumIsABuildOfThisTree fails until this is done after
 # a change to Go source, go.mod or go.sum, and prints the line to record.
 # docs/DEVELOPMENT.md says how the binary reaches a forge.
-[doc('Record the Forgejo layer binary checksum')]
+[doc('Record the engine binary checksum')]
 [group('build')]
-refresh-forgejo-binary:
-    @bash scripts/ci/forgejo-binary.sh refresh
+refresh-engine-binary:
+    @bash scripts/ci/engine-binary.sh refresh
 
 # ▪ Fail if the recorded checksums are stale (no writes; CI gate before tests)
-[doc('Check the Forgejo layer binary checksums are fresh')]
+[doc('Check the engine binary checksums are fresh')]
 [group('build')]
-check-forgejo-binary:
-    @bash scripts/ci/forgejo-binary.sh check
+check-engine-binary:
+    @bash scripts/ci/engine-binary.sh check
 
 # ==================================================================================== #
 # DOCUMENTATION - Generated files

@@ -211,7 +211,7 @@ func TestBaseImageSigningIsOneEngineCall(t *testing.T) {
 	assertOrderedFragments(t, stepName, run, []string{
 		`registry_token="${REGISTRY_TOKEN:?}"`,
 		"unset COSIGN_KEY COSIGN_PASSWORD REGISTRY_TOKEN REGISTRY_USER",
-		`source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"`,
+		`source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"`,
 		"run_forge_ci artifact download",
 		"--dir premade-sboms",
 		`printf '%s' "${LEDGER_JSON:?}" > base-images.ledger.json`,
@@ -414,7 +414,7 @@ func registryLoginOrderViolation(run string) string {
 	unexport := index("export -n registry_login_token")
 	unsetToken := index("unset REGISTRY_LOGIN_TOKEN")
 
-	source := index(`source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"`)
+	source := index(`source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"`)
 	switch {
 	case capture < 0 || unexport != capture+1 || unsetToken != unexport+1:
 		return "the token is not captured, unexported and cleared on consecutive lines"

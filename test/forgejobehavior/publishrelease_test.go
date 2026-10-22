@@ -48,8 +48,8 @@ type recording struct {
 // recording fakes and returns the environment entries they need.
 func installRecordingFakes(box *sandbox) []string {
 	box.t.Helper()
-	box.write(".forgejo/bin/lib-forge-ci.sh", recordingResolver, 0o600)
-	box.write(".forgejo/bin/forge-ci", recordingEngine, 0o700)
+	box.write(".engine/bin/lib-forge-ci.sh", recordingResolver, 0o600)
+	box.write(".engine/bin/forge-ci", recordingEngine, 0o700)
 
 	return []string{
 		"FAKE_SHELL_VARS_LOG=" + filepath.Join(box.root, "shell-vars"),

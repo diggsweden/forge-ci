@@ -362,7 +362,7 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null
-          source ./.forge-ci-helpers/.forgejo/bin/lib-forge-ci.sh
+          source ./.forge-ci-helpers/.engine/bin/lib-forge-ci.sh
           fetch_forge_ci
 
       - name: Check signer image availability
@@ -381,7 +381,7 @@ jobs:
           esac
           # No consumer checkout or signing secret exists in this step.
           # shellcheck source=/dev/null
-          source ./.forge-ci-helpers/.forgejo/bin/lib-forge-ci.sh
+          source ./.forge-ci-helpers/.engine/bin/lib-forge-ci.sh
           run_forge_ci container manifest digest --ref "${SIGNER_IMAGE}" \
             --anonymous --retry-attempts 1 >/dev/null
           echo "Signer image manifest is available anonymously."
@@ -397,7 +397,7 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null
-          source ./.forge-ci-helpers/.forgejo/bin/lib-forge-ci.sh
+          source ./.forge-ci-helpers/.engine/bin/lib-forge-ci.sh
           run_forge_ci platform checkout --fetch-all-refs
 
       - name: Reject non-stable release request
@@ -417,7 +417,7 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null
-          source ./.forge-ci-helpers/.forgejo/bin/lib-forge-ci.sh
+          source ./.forge-ci-helpers/.engine/bin/lib-forge-ci.sh
           run_forge_ci validate tag commit \
             --tag "${RELEASE_REQUEST:?}" \
             --branch "${TARGET_BRANCH:?}" \
@@ -446,7 +446,7 @@ jobs:
             cp -- "${file}" "${handoff}/${file}"
           done
           # shellcheck source=/dev/null
-          source ./.forge-ci-helpers/.forgejo/bin/lib-forge-ci.sh
+          source ./.forge-ci-helpers/.engine/bin/lib-forge-ci.sh
           run_forge_ci artifact upload \
             --name release-changelog --dir "${handoff}" \
             --retention-days 1 --if-no-files error
@@ -514,7 +514,7 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null
-          source ./.forge-ci-helpers/.forgejo/bin/lib-forge-ci.sh
+          source ./.forge-ci-helpers/.engine/bin/lib-forge-ci.sh
           fetch_forge_ci
 
       - name: Checkout consumer repository at release request tag
@@ -524,7 +524,7 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null
-          source ./.forge-ci-helpers/.forgejo/bin/lib-forge-ci.sh
+          source ./.forge-ci-helpers/.engine/bin/lib-forge-ci.sh
           run_forge_ci platform checkout
 
       # guard-release-tag's own check, run inline: a container job here runs
@@ -537,7 +537,7 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null
-          source ./.forge-ci-helpers/.forgejo/bin/lib-forge-ci.sh
+          source ./.forge-ci-helpers/.engine/bin/lib-forge-ci.sh
           FORGE_CI_PROVIDER=forgejo run_forge_ci validate tag release-guard \
             --tag "${RELEASE_REQUEST:?}" --pattern '^v[0-9]+[.][0-9]+[.][0-9]+$'
 
@@ -552,7 +552,7 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null
-          source ./.forge-ci-helpers/.forgejo/bin/lib-forge-ci.sh
+          source ./.forge-ci-helpers/.engine/bin/lib-forge-ci.sh
           run_forge_ci version bump --project-type "${PROJECT_TYPE:?}" \
             --version "${RELEASE_TAG#v}" --working-dir "${WORKING_DIRECTORY:?}" \
             --maven-cli-opts '--batch-mode --no-transfer-progress --errors --fail-at-end -Dstyle.color=always'
@@ -574,7 +574,7 @@ jobs:
           digest=$(sha256sum -- "${handoff}/version-bump.patch")
           digest=${digest%% *}
           # shellcheck source=/dev/null
-          source ./.forge-ci-helpers/.forgejo/bin/lib-forge-ci.sh
+          source ./.forge-ci-helpers/.engine/bin/lib-forge-ci.sh
           run_forge_ci artifact upload \
             --name release-version-bump --dir "${handoff}" \
             --retention-days 1 --if-no-files error
@@ -634,7 +634,7 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null
-          source ./.forge-ci-helpers/.forgejo/bin/lib-forge-ci.sh
+          source ./.forge-ci-helpers/.engine/bin/lib-forge-ci.sh
           fetch_forge_ci
 
       - name: Checkout consumer repository at release request tag
@@ -643,7 +643,7 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null
-          source ./.forge-ci-helpers/.forgejo/bin/lib-forge-ci.sh
+          source ./.forge-ci-helpers/.engine/bin/lib-forge-ci.sh
           run_forge_ci platform checkout --fetch-all-refs
 
       - name: Reject non-stable release request
@@ -657,7 +657,7 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null
-          source ./.forge-ci-helpers/.forgejo/bin/lib-forge-ci.sh
+          source ./.forge-ci-helpers/.engine/bin/lib-forge-ci.sh
           run_forge_ci validate tag commit \
             --tag "${RELEASE_REQUEST:?}" \
             --branch "${TARGET_BRANCH:?}" \
@@ -672,7 +672,7 @@ jobs:
           # a renderer-supplied Git config, hook, helper or startup script.
           handoff=$(mktemp -d "${RUNNER_TEMP:?}/release-changelog.XXXXXX")
           # shellcheck source=/dev/null
-          source ./.forge-ci-helpers/.forgejo/bin/lib-forge-ci.sh
+          source ./.forge-ci-helpers/.engine/bin/lib-forge-ci.sh
           run_forge_ci artifact download --name release-changelog --dir "${handoff}"
           git -c core.hooksPath=/dev/null checkout -b "${TARGET_BRANCH:?}"
           for file in CHANGELOG.md commit-msg.txt; do
@@ -701,7 +701,7 @@ jobs:
           handoff=$(mktemp -d "${RUNNER_TEMP:?}/release-version-bump.XXXXXX")
           paths_file=$(mktemp "${RUNNER_TEMP:?}/release-version-bump-paths.XXXXXX")
           # shellcheck source=/dev/null
-          source ./.forge-ci-helpers/.forgejo/bin/lib-forge-ci.sh
+          source ./.forge-ci-helpers/.engine/bin/lib-forge-ci.sh
           run_forge_ci artifact download --name release-version-bump --dir "${handoff}"
           if [ ! -f "${handoff}/version-bump.patch" ] || [ -L "${handoff}/version-bump.patch" ]; then
             echo "ERROR: version-bump artifact must contain a regular version-bump.patch" >&2

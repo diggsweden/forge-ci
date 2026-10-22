@@ -68,11 +68,11 @@ jobs:
       - name: nanolinter verify (full plan from nanolinter.toml)
         run: just lint
   test:
-    # Fail fast on stale Forgejo binary checksums before spending minutes
-    # on the full integration suite. The forgejo-layer-binary job runs the
+    # Fail fast on stale engine binary checksums before spending minutes
+    # on the full integration suite. The engine-binary job runs the
     # same check in ~2 min; without this dependency the test job would
     # also fail, but only after the whole suite ran.
-    needs: forgejo-layer-binary
+    needs: engine-binary
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -108,16 +108,16 @@ jobs:
         run: go run ./cmd/forge-ci validate workflow input-defaults
       - name: Run tests
         run: just test
-  forgejo-layer-binary:
-    # The Forgejo layer tracks the checksums of its binary, not the binary:
-    # .forgejo/bin/forge-ci-linux-<arch>.sha256, by which every job downloads it.
+  engine-binary:
+    # The engine layer tracks the checksums of its binary, not the binary:
+    # .engine/bin/forge-ci-linux-<arch>.sha256, by which every job downloads it.
     # TestRecordedEngineChecksumIsABuildOfThisTree is the one check that ties
     # that line to the sources beside it. The test needs exactly the Go
     # release go.mod names (another one writes other bytes); without it the
     # test reports "not proven" and passes, which is right on a workstation
     # and wrong for a gate. This job gives it that release and runs it in the
     # strict profile, where "not proven" is a failure.
-    name: Forgejo layer binary (the checksum is a build of this tree)
+    name: Engine binary (the checksum is a build of this tree)
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     permissions:

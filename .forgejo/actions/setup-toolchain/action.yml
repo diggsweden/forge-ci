@@ -65,8 +65,8 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         run_forge_ci toolchain setup-go-env \
           --path-file "${FORGEJO_PATH:?}" \
           --env-file "${FORGEJO_ENV:-${GITHUB_ENV:-}}"
@@ -99,8 +99,8 @@ runs:
         set -euo pipefail
         # The selected tool subset must be part of the cache key; forge-ci
         # owns the exact discriminator so cache policy cannot drift from tests.
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         run_forge_ci toolchain cache-discriminator \
           --tools "${TOOLSET_TOOLS}" \
           --install-dev-tools "${TOOLSET_INSTALL_DEV_TOOLS}" \
@@ -139,8 +139,8 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         run_forge_ci toolchain install-system-dependencies \
           --packages 'gettext libxml2-utils' \
           --skip-if-missing-apt
@@ -156,8 +156,8 @@ runs:
         set -euo pipefail
         # shellcheck source=/dev/null
         source "${GITHUB_ACTION_PATH}/versions.env"
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         run_forge_ci toolchain install-mise \
           --version "${MISE_VERSION:?}" \
           --linux-x64-sha256 "${MISE_LINUX_X64_MUSL_TAR_GZ_SHA256:?}" \
@@ -171,8 +171,8 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         run_forge_ci toolchain trust-mise-config \
           --mise-bin "$HOME/.local/bin/mise"
 
@@ -189,8 +189,8 @@ runs:
           github_token_present=true
         fi
         unset MISE_GITHUB_TOKEN
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         run_forge_ci toolchain validate-mise-install \
           --tools "${TOOLS_SUBSET}" \
           --locked "${MISE_LOCKED_INSTALL:?}" \
@@ -212,8 +212,8 @@ runs:
         GITEA_TOKEN: ''
       run: |
         set -euo pipefail
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         run_forge_ci toolchain install-mise-tools \
           --locked "${MISE_LOCKED_INSTALL:?}" \
           --tools "${TOOLS_SUBSET}" \
@@ -231,8 +231,8 @@ runs:
       run: |
         set -euo pipefail
         export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         run_forge_ci toolchain expose-mise-tools \
           --path-file "${FORGEJO_PATH:?}" \
           --locked "${MISE_LOCKED_INSTALL:?}"

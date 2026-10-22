@@ -40,8 +40,8 @@ runs:
         UPLOAD_DIST_PRUNE: ${{ inputs.prune-dirs }}
       run: |
         set -euo pipefail
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         FORGE_CI_PROVIDER=forgejo run_forge_ci release prepare-dist \
           --path "${UPLOAD_DIST_PATH}" \
           --prune-dirs "${UPLOAD_DIST_PRUNE}"
@@ -54,8 +54,8 @@ runs:
         UPLOAD_DIST_RETENTION_DAYS: ${{ inputs.retention-days }}
       run: |
         set -euo pipefail
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         FORGE_CI_PROVIDER=forgejo run_forge_ci artifact upload \
           --name "${UPLOAD_DIST_ARTIFACT_NAME}" \
           --dir "${UPLOAD_DIST_PATH}" \

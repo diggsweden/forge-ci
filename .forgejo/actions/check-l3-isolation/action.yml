@@ -52,8 +52,8 @@ runs:
         ISOLATION_SINGLE_PIN_SUBJECT: ${{ inputs.single-pin-subject }}
       run: |
         set -euo pipefail
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         # The runner sets GITHUB_ACTION_REPOSITORY to the owner/repository of
         # the `uses:` reference it resolved for this action. An empty subject
         # would switch the pin check off, so it is refused here.

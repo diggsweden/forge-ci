@@ -44,7 +44,7 @@ immutable release request
 |---|---|
 | `.forgejo/workflows/` | Five reusable workflows; see [Reusable workflows](#reusable-workflows). |
 | `.forgejo/actions/` | Nineteen composite actions; see [Composite actions](#composite-actions). |
-| `.forgejo/bin/` | The resolver `lib-forge-ci.sh`, and the checksum of the `forge-ci` binary the layer runs. The binary is not in the tree: a job downloads it by that checksum. See [The binary in the layer](#the-binary-in-the-layer). |
+| `.engine/bin/` | The resolver `lib-forge-ci.sh` and the engine binary checksums, shared with the GitLab layer. The binary is not in the tree: a job downloads it by its checksum. See [The binary in the layer](#the-binary-in-the-layer). |
 | `.forgejo/scripts/verify-signer-toolchain.sh` | The check every privileged job runs first, and the signer image runs at build time. |
 | `containers/signer/Containerfile` | The definition of the signer image. No image is published; see [The signer image](#the-signer-image). |
 | `examples/<ecosystem>/forgejo/` | A pull-request and a release workflow to start from, for [Go CLI](../examples/go-cli/forgejo/), [Go service](../examples/go-service/forgejo/), [Cargo](../examples/cargo-app/forgejo/) and [Maven](../examples/maven-app/forgejo/). |
@@ -459,8 +459,8 @@ start, which is after the prepare job has pushed the final tag.
 
 The actions and workflows run one build of this repository's own CLI per
 architecture, linux/amd64 and linux/arm64. The tree does not hold them. It
-holds one line per architecture, `.forgejo/bin/forge-ci-linux-amd64.sha256`
-and `.forgejo/bin/forge-ci-linux-arm64.sha256`: the SHA-256 of the binary
+holds one line per architecture, `.engine/bin/forge-ci-linux-amd64.sha256`
+and `.engine/bin/forge-ci-linux-arm64.sha256`: the SHA-256 of the binary
 that belongs to that commit. Every job gets the binary of its host's
 architecture by that architecture's line.
 
@@ -485,7 +485,9 @@ architecture by that architecture's line.
   destination.
 - **Verified before it exists.** The file is moved into place only when its
   SHA-256 is the recorded one for the host's architecture. `lib-forge-ci.sh`
-  checks it against the same line again before every use, a version probe included.
+  checks it against the same line before the first use in a shell, a version
+  probe included, and caches successful verification for that binary path
+  within the shell.
 - **To where.** In a job that checked the layer out, beside the checksum in
   that checkout. In an action fetched by URL, whose directory the runner
   discards after the step, a directory named by the digest in the job's
@@ -513,7 +515,7 @@ before the toolchain check and before any secret; see
 on first use.
 
 **The build is reproducible, within limits.**
-[`scripts/ci/forgejo-binary.sh`](../scripts/ci/forgejo-binary.sh) is its one
+[`scripts/ci/engine-binary.sh`](../scripts/ci/engine-binary.sh) is its one
 definition: no cgo, trimmed paths, no VCS stamp, one constant version string,
 modules from the local cache only. The bytes depend on the build inputs
 (`cmd/`, `internal/`, `go.mod`, `go.sum`) and on the Go toolchain, and on no
@@ -536,23 +538,24 @@ two commits, in two directories with separate caches, and in a clean
   any host records and rebuilds both without emulation. Each runs only on a
   native host of its architecture. Nothing is promised for other platforms.
 
-`forge-ci --version` of this binary answers `forgejo-layer` at every
+`forge-ci --version` of this binary answers `engine-layer` at every
 commit. `setup-forge-ci` prints the SHA-256 beside it, and the digest is
 what identifies a build.
 
-**Beside the GitHub and GitLab layers.** All three download a binary and
-verify it before they run it. What the verification rests on differs, and the
-three are not the same guarantee:
+**Beside the GitHub and GitLab layers.** Forgejo and the GitLab jobs that use
+the shared engine resolver select a build by the checksum in their pinned
+checkout. Jobs that select an upstream release use a different trust anchor:
 
-| Layer | Downloads | Verified against | Anchor |
+| Delivery path | Downloads | Verified against | Anchor |
 |---|---|---|---|
-| GitHub, GitLab | A tagged release from GitHub Releases, or the runtime image that carries it. | `checksums.txt` and its Sigstore bundle. | The identity of the workflow that built and signed the release. |
-| Forgejo | The build a commit names, from the serving instance's packages. | The SHA-256 recorded in the pinned commit. | The commit pin. Nothing says who built the bytes; the recorded line says which bytes, and the rebuild above ties them to the sources. |
+| Upstream release installer | A tagged release from GitHub Releases. | `checksums.txt` and its Sigstore bundle. | The identity of the workflow that built and signed the release. |
+| Shared engine resolver (Forgejo and GitLab) | The build a commit names, from the serving instance's generic package registry. | The SHA-256 recorded in the pinned commit. | The commit pin. Nothing says who built the bytes; the recorded line says which bytes, and the rebuild above ties them to the sources. |
 
 The upstream GitHub release has a Sigstore-verified binary installer,
 `.github/actions/install-forge-ci`, for jobs that select that release. The
-Forgejo layer uses its separately recorded build and instance-local package;
-an upstream release archive does not replace that checksum-bound package.
+shared engine resolver uses its separately recorded build and instance-local
+package; an upstream release archive does not replace that checksum-bound
+package. See [GitLab](gitlab.md) for the GitLab bootstrap and registry setup.
 
 `FORGE_CI_BIN` names another binary to run. It is a test and development
 seam: under `SIGNER_STRICT=1`, which the signer jobs set, an override must
@@ -994,7 +997,7 @@ reviewed as one set.
   can. Signing does not move back into shell, and not onto a runner without
   the signer container.
 - **Two pins, two subjects.** `forge-ci-sha` identifies the revision;
-  `.forgejo/bin/forge-ci-linux-<arch>.sha256` identifies the executable inside it. They
+  `.engine/bin/forge-ci-linux-<arch>.sha256` identifies the executable inside it. They
   are never merged.
 - **The request is bound.** Each privileged job re-validates the release tag
   and, through `release-request-sha` from the caller's event context, its
@@ -1174,7 +1177,7 @@ release:
    verifies that a clone is the pinned commit; it cannot tell you the commit is
    the right one.
 3. **If your copy changes Go code**, record the new build as
-   [Development](DEVELOPMENT.md#the-forgejo-layers-engine-binary) describes,
+   [Development](DEVELOPMENT.md#the-engine-layers-engine-binary) describes,
    before you pin: a commit whose checksum is not a build of its tree is
    refused by the binary job of the next step. `just test-forgejo`, with the
    Go release `go.mod` names, rebuilds the CLI and compares it with the
@@ -1195,7 +1198,7 @@ release:
    still identify the authenticated engine checkout.
    - Its first job builds the CLI of the pinned commit for both
      architectures from modules it downloads itself, stops unless each build
-     is the one the commit's `.forgejo/bin/forge-ci-linux-<arch>.sha256`
+     is the one the commit's `.engine/bin/forge-ci-linux-<arch>.sha256`
      names, and uploads both to the generic packages of the owner of your
      copy. Until that has run, every job of the
      layer at that commit fails in its first step that needs the CLI, with the

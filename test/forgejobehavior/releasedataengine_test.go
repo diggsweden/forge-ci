@@ -34,7 +34,7 @@ func TestOptionalLedgerStepsThroughTheEngine(t *testing.T) {
 	t.Parallel()
 
 	engine := forgeCIEngine(t)
-	lib := string(reporoot.ReadFile(t, ".forgejo/bin/lib-forge-ci.sh"))
+	lib := string(reporoot.ReadFile(t, ".engine/bin/lib-forge-ci.sh"))
 
 	const (
 		ledger   = "dist/release-images.json"
@@ -88,7 +88,7 @@ func TestOptionalLedgerStepsThroughTheEngine(t *testing.T) {
 				box := newSandbox(t, "sign-and-publish-release")
 				// The real resolver runs the built engine as a non-strict
 				// override.
-				box.write(".forgejo/bin/lib-forge-ci.sh", lib, 0o600)
+				box.write(".engine/bin/lib-forge-ci.sh", lib, 0o600)
 				box.write("dist/.keep", "", 0o600)
 
 				if test.written {
@@ -132,7 +132,7 @@ func TestUnsignedHandOffStepThroughTheEngine(t *testing.T) {
 	t.Parallel()
 
 	engine := forgeCIEngine(t)
-	lib := string(reporoot.ReadFile(t, ".forgejo/bin/lib-forge-ci.sh"))
+	lib := string(reporoot.ReadFile(t, ".engine/bin/lib-forge-ci.sh"))
 
 	const manifest = `{"version":1,` +
 		`"assets":[{"path":"dist/app.tar.gz","name":"app.tar.gz","source":"producer"},` +
@@ -150,7 +150,7 @@ func TestUnsignedHandOffStepThroughTheEngine(t *testing.T) {
 			t.Parallel()
 
 			box := newSandbox(t, "sign-and-publish-release")
-			box.write(".forgejo/bin/lib-forge-ci.sh", lib, 0o600)
+			box.write(".engine/bin/lib-forge-ci.sh", lib, 0o600)
 			box.write("dist/app.tar.gz", "archive\n", 0o600)
 			box.write("dist/checksums.txt", "not read by this step\n", 0o600)
 			box.write("dist/release-files.json", manifest, 0o600)
@@ -256,7 +256,7 @@ func TestBaseImageSigningThroughTheEngine(t *testing.T) {
 				releaseImageDigest + `"}]`
 
 			box := newSandbox(t, "sign-container-images")
-			box.write(".forgejo/bin/forge-ci", passthroughEngine, 0o700)
+			box.write(".engine/bin/forge-ci", passthroughEngine, 0o700)
 			calls := filepath.Join(box.root, "calls")
 
 			got := box.run(workflowStep(t, "sign-container-images.yml", "sign-container-images", "Sign and attest images").Run,

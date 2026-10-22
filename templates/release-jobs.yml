@@ -140,7 +140,7 @@ stages: [check, prepare, build, sign, publish]
       GIT_TERMINAL_PROMPT=0 git "${git_options[@]}" -C "${RC_HELPERS_DIR}" fetch --quiet --depth=1 --no-tags origin "${expected}"
       git "${git_options[@]}" -C "${RC_HELPERS_DIR}" checkout --quiet --detach "${expected}"
       test "$(git -C "${RC_HELPERS_DIR}" rev-parse HEAD)" = "${expected}"
-      source "${RC_HELPERS_DIR}/.forgejo/bin/lib-forge-ci.sh"
+      source "${RC_HELPERS_DIR}/.engine/bin/lib-forge-ci.sh"
       fetch_forge_ci
       SIGNER_STRICT=1 verify_forge_ci
       export FORGE_CI_BIN="${HELPERS_ENGINE_VERIFIED}"

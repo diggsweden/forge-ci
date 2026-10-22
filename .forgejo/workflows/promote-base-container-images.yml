@@ -263,8 +263,8 @@ jobs:
       - name: Fetch engine binary
         run: |
           set -euo pipefail
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           fetch_forge_ci
 
       - name: Verify signer toolchain
@@ -277,8 +277,8 @@ jobs:
           CHECKOUT_REF: ${{ inputs.release-sha }}
         run: |
           set -euo pipefail
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           FORGEJO_WORKSPACE="${CONSUMER_WORKSPACE:?}" \
             FORGE_CI_PROVIDER=forgejo \
             run_forge_ci platform checkout --ref "${CHECKOUT_REF}"
@@ -317,8 +317,8 @@ jobs:
           registry_token="${REGISTRY_TOKEN:?}"
           registry_user="${REGISTRY_USER:?}"
           unset REGISTRY_TOKEN REGISTRY_USER
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           forge_ci_mark_external_registry "${BASE_IMAGE_REPOSITORY:-}" "${FORGEJO_SERVER:-}"
           printf '%s' "${registry_token}" | FORGE_CI_PROVIDER=forgejo run_forge_ci container base-images promote \
             --expected-repository "${BASE_IMAGE_REPOSITORY}" \

@@ -241,7 +241,7 @@ gone or no longer holds its group's name as a string literal. Missing `version`
 live coverage and eight other group-specific gaps remain visible; a gap entry
 is debt, not evidence of live parity.
 
-### The Forgejo layer tier
+### The engine layer tier
 
 The workflows and actions under `.forgejo/` are YAML with shell in it, and the
 shell is what a release runs. Two packages test it, both in the default
@@ -257,7 +257,7 @@ shell is what a release runs. Two packages test it, both in the default
   assert the argv, the environment and the status handling.
 
 The **engine tier** is the part of `test/forgejobehavior` that puts the real
-CLI there instead: `scripts/ci/forgejo-binary.sh build` builds it from the tree
+CLI there instead: `scripts/ci/engine-binary.sh build` builds it from the tree
 once per test binary, and the step's own shell runs against it. A renamed verb
 or flag, a refusal the workflow relies on, or a manifest the signer step would
 finalize differently fails here and not inside a release job
@@ -276,17 +276,17 @@ host.
 
 The same builds are the reference for the binaries the layer runs, which are
 not in the tree: a job downloads the one of its host's architecture by the
-checksum in `.forgejo/bin/forge-ci-linux-<amd64|arm64>.sha256`.
+checksum in `.engine/bin/forge-ci-linux-<amd64|arm64>.sha256`.
 `TestRecordedEngineChecksumIsABuildOfThisTree` fails when a line is not
 the digest of its build, which is what happens after a change to Go source,
-`go.mod` or `go.sum` until `just refresh-forgejo-binary` is run, and its
+`go.mod` or `go.sum` until `just refresh-engine-binary` is run, and its
 message prints the line to record. The build names no commit, so the test
 needs no Git history and follows the working tree as it is. It is not
 proven, through `evidence.NotProvenf`, in one case: the local Go toolchain is
 not the release `go.mod` pins. The strict profile turns that into a failure.
 
 A workstation keeps that allowance. This repository's gates do not: the
-pull-request workflow has a job, `forgejo-layer-binary`, that sets up exactly
+pull-request workflow has a job, `engine-binary`, that sets up exactly
 the Go of `go.mod` and runs the test with `FORGE_CI_TEST_PROFILE=strict`,
 so a checksum that is not a build of the tree fails every pull request.
 `TestSelfGatesProveTheForgejoLayerBinary` holds the job. The release gate
@@ -295,7 +295,7 @@ runs the whole tier strictly.
 The download itself is tested against a local HTTPS server standing in for
 the package registry: the address per context, the choice of binary by a
 faked `uname -m` and the refusal of other architectures, the refusals, the
-strict mode, and `forgejo-binary.sh publish`.
+strict mode, and `engine-binary.sh publish`.
 
 What this tier cannot show is the runner: how Forgejo expands a called
 workflow, resolves `vars`, or schedules the jobs. That is acceptance on a real
@@ -611,7 +611,7 @@ that fixture; manifest data grants no mutation authority.
 pushes HEAD's tree to a branch of its scratch repository and pins that commit
 in a fixture under `internal/livetest/conformance/testdata/layer`. A job
 runs the binary that commit's checksum names, downloaded as the layer
-delivers it: `just test-live` builds it with `scripts/ci/forgejo-binary.sh`,
+delivers it: `just test-live` builds it with `scripts/ci/engine-binary.sh`,
 and the scenario uploads it to the scratch owner's generic packages and
 deletes it afterwards. A tree whose checksum is not that build is refused
 before anything is pushed. Uncommitted changes under `.forgejo/` are refused; the
@@ -904,7 +904,7 @@ just test-live-forgejo-consumer /absolute/nanolinter-clone release RELEASE_PLATF
 ```
 
 The layer is served from `HEAD`. After a change to Go source, `go.mod` or
-`go.sum`, run `just refresh-forgejo-binary` and commit before a trial; it
+`go.sum`, run `just refresh-engine-binary` and commit before a trial; it
 refuses a checksum that is not this tree's build and a `.forgejo/` that differs
 from `HEAD`.
 

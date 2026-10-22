@@ -15,7 +15,7 @@ import (
 	"testing"
 )
 
-// .forgejo/bin/lib-forge-ci.sh runs a binary only after it matches the one recorded
+// .engine/bin/lib-forge-ci.sh runs a binary only after it matches the one recorded
 // checksum line, and in strict signer mode holds an override to the same pin.
 // A non-strict override is the development seam and skips the pin. A verified
 // binary runs once per call with the caller's argv and status, with no probe
@@ -26,7 +26,7 @@ func TestForgeCIResolver(t *testing.T) {
 	const (
 		body = `printf '%s\n' "$*" >>"${FAKE_ARGV_LOG:?}"
 [ "${1:-}" != fail ] || exit 23`
-		calls = `source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+		calls = `source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
 run_forge_ci intended invocation
 run_forge_ci fail
 `
@@ -126,7 +126,7 @@ func TestForgeCIResolverSelectsTheHostArchitecture(t *testing.T) {
 
 			s.write("fake-bin/uname", "#!/bin/sh\nprintf '%s\\n' '"+machine+"'\n", 0o700)
 
-			got := s.run(`source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"`+"\nrun_forge_ci sign\n",
+			got := s.run(`source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"`+"\nrun_forge_ci sign\n",
 				"PATH="+filepath.Join(s.root, "fake-bin")+":"+os.Getenv("PATH"))
 
 			switch {

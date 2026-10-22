@@ -17,7 +17,7 @@
 # development seam. The check runs once per shell; the binary then runs in
 # place. See "The binary in the layer" in docs/forgejo.md.
 
-# The layer root, .forgejo/ of this checkout. Paths in messages and in the
+# The engine root, .engine/ of this checkout. Paths in messages and in the
 # checksum file are relative to it. Resolved ONCE at source time: BASH_SOURCE
 # may be a relative path, so it must be anchored while the sourcing shell is
 # still in the repo. Callers may change directories before invoking a helper.
@@ -183,7 +183,7 @@ download_forge_ci() {
 		rm -f -- "${partial}"
 		echo "ERROR: cannot download the forge-ci binary (curl exit ${status}): ${url}" >&2
 		if [ "${FORGE_CI_PACKAGE_PROVIDER:-forgejo}" = gitlab ]; then
-			echo "  Publish the recorded build to the engine project's public generic package registry with scripts/ci/forgejo-binary.sh publish and FORGE_CI_PACKAGE_PROVIDER=gitlab; see docs/gitlab.md." >&2
+			echo "  Publish the recorded build to the engine project's public generic package registry with scripts/ci/engine-binary.sh publish and FORGE_CI_PACKAGE_PROVIDER=gitlab; see docs/gitlab.md." >&2
 		else
 			echo "  The binary is a generic package of the owner of the repository that serves the layer, named by the sha256 the pinned commit records, and must be readable without credentials." >&2
 			echo "  That owner's signer-image workflow (examples/forgejo/signer-image.yml) publishes it: its first job builds the binary of the commit it pins and uploads it. Run it at this commit, then run this job again." >&2

@@ -45,8 +45,8 @@ runs:
         CONTAINER_STORAGE_SUMMARY: ${{ inputs.summary }}
       run: |
         set -euo pipefail
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         run_forge_ci container setup-buildah \
           --install-packages="${SETUP_BUILDAH_INSTALL_PACKAGES:-true}" \
           --probe-build="${SETUP_BUILDAH_PROBE_BUILD:-true}" \

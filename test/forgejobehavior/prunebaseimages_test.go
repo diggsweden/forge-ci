@@ -76,7 +76,7 @@ func TestPruneBaseImages(t *testing.T) {
 			t.Parallel()
 
 			box := newSandbox(t, "prune-base-images")
-			box.write(".forgejo/bin/forge-ci",
+			box.write(".engine/bin/forge-ci",
 				"#!/usr/bin/env bash\nprintf 'seen=%s\\n' \"${FORGE_CI_COSIGN_TRANSPARENCY-unset}\" >>\"${FORGEJO_OUTPUT:?}\"\n", 0o700)
 
 			if got := box.run(script, env("INPUT_TRANSPARENCY_LOG="+value)...); got.status != 0 || box.output() != "seen="+value+"\n" {

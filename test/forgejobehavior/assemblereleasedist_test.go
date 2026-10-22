@@ -88,7 +88,7 @@ func TestAssembleReleaseDist(t *testing.T) {
 			t.Parallel()
 
 			s := newSandbox(t, "assemble-release-dist")
-			s.write(".forgejo/bin/forge-ci", assembleFakeEngine, 0o700)
+			s.write(".engine/bin/forge-ci", assembleFakeEngine, 0o700)
 
 			got := s.run(test.script, test.env...)
 			if got.status != test.want || !slices.Equal(s.argv(), test.argv) {

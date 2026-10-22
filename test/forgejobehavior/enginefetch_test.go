@@ -89,9 +89,9 @@ func fetchSandbox(t *testing.T) (*sandbox, string, string) {
 	t.Helper()
 
 	box, digest, _ := setupForgeCISandbox(t, `printf 'ran %s\n' "$*"`)
-	engine := readSandboxFile(t, box, ".forgejo/bin/forge-ci")
+	engine := readSandboxFile(t, box, ".engine/bin/forge-ci")
 
-	if err := os.Remove(filepath.Join(box.root, ".forgejo", "bin", "forge-ci")); err != nil {
+	if err := os.Remove(filepath.Join(box.root, ".engine", "bin", "forge-ci")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -99,7 +99,7 @@ func fetchSandbox(t *testing.T) (*sandbox, string, string) {
 }
 
 const (
-	sourceResolver = `source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"` + "\n"
+	sourceResolver = `source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"` + "\n"
 	packagePath    = "/generic/forge-ci/"
 )
 
@@ -130,14 +130,14 @@ func TestResolverDownloadsTheBinaryByItsRecordedChecksum(t *testing.T) {
 			env: func(forge string) []string {
 				return []string{"FORGE_CI_REPOSITORY_URL=" + forge + "/acme/delivery.git"}
 			},
-			wantPath: "/api/packages/acme", lands: ".forgejo/bin/forge-ci",
+			wantPath: "/api/packages/acme", lands: ".engine/bin/forge-ci",
 		},
 		{
 			name: "a forge under a path, and a repository named without .git",
 			env: func(forge string) []string {
 				return []string{"FORGE_CI_REPOSITORY_URL=" + forge + "/code/acme/delivery/"}
 			},
-			wantPath: "/code/api/packages/acme", lands: ".forgejo/bin/forge-ci",
+			wantPath: "/code/api/packages/acme", lands: ".engine/bin/forge-ci",
 		},
 		{
 			name: "an action fetched by URL: the runner's repository, into the job's temporary directory",
@@ -156,7 +156,7 @@ func TestResolverDownloadsTheBinaryByItsRecordedChecksum(t *testing.T) {
 				return []string{"FORGE_CI_PACKAGE_PROVIDER=gitlab", "CI_SERVER_URL=" + forge,
 					"FORGE_CI_REPOSITORY_URL=" + forge + "/acme/team/delivery.git", "CI_JOB_TOKEN=not-for-downloads"}
 			},
-			wantPath: "/api/v4/projects/acme%2Fteam%2Fdelivery/packages", lands: ".forgejo/bin/forge-ci",
+			wantPath: "/api/v4/projects/acme%2Fteam%2Fdelivery/packages", lands: ".engine/bin/forge-ci",
 		},
 		{
 			name: "GitLab under a relative URL root",
@@ -164,7 +164,7 @@ func TestResolverDownloadsTheBinaryByItsRecordedChecksum(t *testing.T) {
 				return []string{"FORGE_CI_PACKAGE_PROVIDER=gitlab", "CI_SERVER_URL=" + forge + "/code",
 					"FORGE_CI_REPOSITORY_URL=" + forge + "/code/acme/delivery.git"}
 			},
-			wantPath: "/code/api/v4/projects/acme%2Fdelivery/packages", lands: ".forgejo/bin/forge-ci",
+			wantPath: "/code/api/v4/projects/acme%2Fdelivery/packages", lands: ".engine/bin/forge-ci",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -340,7 +340,7 @@ func TestResolverRefusesWhatItCannotVerify(t *testing.T) {
 				t.Errorf("the forge was asked: %t, want %t (%q)", asked, test.asked, forge.seen())
 			}
 
-			if entries, _ := filepath.Glob(filepath.Join(box.root, ".forgejo", "bin", "*forge-ci")); len(entries) != 0 {
+			if entries, _ := filepath.Glob(filepath.Join(box.root, ".engine", "bin", "*forge-ci")); len(entries) != 0 {
 				t.Errorf("a refused download left %q in place", entries)
 			}
 		})
@@ -383,7 +383,7 @@ func TestStrictModeDownloadsOnlyInTheFetchStep(t *testing.T) {
 	}
 }
 
-// publishScript runs `forgejo-binary.sh publish` on a file of arch, against
+// publishScript runs `engine-binary.sh publish` on a file of arch, against
 // a forge.
 func publishScript(t *testing.T, forge *packageForge, arch, binary string, env ...string) (int, string) {
 	t.Helper()

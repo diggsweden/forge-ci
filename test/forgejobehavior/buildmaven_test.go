@@ -37,7 +37,7 @@ func mavenSandbox(t *testing.T, engine bool) (*sandbox, []string) {
 		box, env = engineSandbox(t, buildMaven, map[string]string{"mvn": fakeMvn})
 	} else {
 		box = newSandbox(t, buildMaven)
-		box.write(".forgejo/bin/forge-ci", fakeEngineCalls, 0o700)
+		box.write(".engine/bin/forge-ci", fakeEngineCalls, 0o700)
 	}
 
 	box.write(".forgejo/actions/build-maven/versions.env", string(reporoot.ReadFile(t, ".forgejo/actions/build-maven/versions.env")), 0o600)

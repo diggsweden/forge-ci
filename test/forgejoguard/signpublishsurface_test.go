@@ -428,7 +428,7 @@ func TestOptionalLedgerStepsLeaveTheLedgerQuestionToTheEngine(t *testing.T) {
 func TestImageStepsLeaveTheEngineNoFallbackCredential(t *testing.T) {
 	t.Parallel()
 
-	const resolver = `source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"`
+	const resolver = `source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"`
 
 	//nolint:gosec // G101: variable names and shell text, no values.
 	registry := map[string]string{"REGISTRY_TOKEN": `"${registry_token}"`, "REGISTRY_PASSWORD": ""}

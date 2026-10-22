@@ -100,7 +100,7 @@ func TestVerifyForgejoToken(t *testing.T) {
 
 			box := verifyTokenSandbox(t)
 			if test.engine != "" {
-				box.write(".forgejo/bin/forge-ci", test.engine, 0o700)
+				box.write(".engine/bin/forge-ci", test.engine, 0o700)
 			}
 
 			env := []string{
@@ -109,7 +109,7 @@ func TestVerifyForgejoToken(t *testing.T) {
 				"FAKE_STDIN_LOG=" + filepath.Join(box.root, "stdin"), "FAKE_ENV_LOG=" + filepath.Join(box.root, "env"),
 			}
 			if test.realResolver {
-				box.write(".forgejo/bin/lib-forge-ci.sh", string(reporoot.ReadFile(t, ".forgejo/bin/lib-forge-ci.sh")), 0o600)
+				box.write(".engine/bin/lib-forge-ci.sh", string(reporoot.ReadFile(t, ".engine/bin/lib-forge-ci.sh")), 0o600)
 				env = append(env, "FORGE_CI_BIN="+filepath.Join(box.root, "missing-forge-ci"))
 			}
 
@@ -192,7 +192,7 @@ func verifyTokenSandbox(t *testing.T) *sandbox {
 	s := newSandbox(t, "verify-forgejo-token")
 	s.write(".forgejo/actions/verify-forgejo-token/verify-forgejo-token.sh",
 		string(reporoot.ReadFile(t, ".forgejo/actions/verify-forgejo-token/verify-forgejo-token.sh")), 0o600)
-	s.write(".forgejo/bin/forge-ci", verifyTokenFakeEngine, 0o700)
+	s.write(".engine/bin/forge-ci", verifyTokenFakeEngine, 0o700)
 
 	return s
 }

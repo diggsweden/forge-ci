@@ -27,9 +27,9 @@ Thumbs.db
 # Transient: prebuilt forge-ci binary injected into the image build (CLI_SOURCE=prebuilt)
 cli-prebuilt/
 
-# The Forgejo layer's binary. The tree tracks its checksum beside it; a job
-# downloads the binary by that checksum (docs/forgejo.md).
-/.forgejo/bin/forge-ci
+# The engine binary. The tree tracks its checksum beside it; a job
+# downloads the binary by that checksum (docs/forgejo.md, docs/gitlab.md).
+/.engine/bin/forge-ci
 
 # Runtime CI output (ManifestSink stage-result manifests; $CI_RESULTS_DIR)
 .ci-results/

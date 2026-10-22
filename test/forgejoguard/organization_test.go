@@ -162,7 +162,7 @@ func TestLayerFilesNameNoOrganization(t *testing.T) {
 
 			// A downloaded or locally built binary, which Git ignores, embeds its
 			// module path.
-			if relative == filepath.Join(".forgejo", "bin", "forge-ci") {
+			if relative == filepath.Join(".engine", "bin", "forge-ci") {
 				return nil
 			}
 

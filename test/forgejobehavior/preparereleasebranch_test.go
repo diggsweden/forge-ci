@@ -78,7 +78,7 @@ func TestPrepareReleaseRequiresTheRequestAtTheHeadOfTheReleaseBranch(t *testing.
 			t.Parallel()
 			box, env := engineSandbox(t, "prepare-release", nil)
 			// The job reads the resolver from its helper checkout.
-			box.write(".forge-ci-helpers/.forgejo/bin/lib-forge-ci.sh", readSandboxFile(t, box, ".forgejo/bin/lib-forge-ci.sh"), 0o600)
+			box.write(".forge-ci-helpers/.engine/bin/lib-forge-ci.sh", readSandboxFile(t, box, ".engine/bin/lib-forge-ci.sh"), 0o600)
 
 			for _, arguments := range append([]string{"init --quiet --initial-branch stable", "commit --quiet --allow-empty -m first"}, test.arrange...) {
 				arguments = "-c user.name=fixture -c user.email=fixture@example.invalid -c commit.gpgsign=false -c tag.gpgsign=false " + arguments

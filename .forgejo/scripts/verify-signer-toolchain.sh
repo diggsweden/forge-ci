@@ -78,7 +78,7 @@ if [ "${SIGNER_STRICT:-0}" = "1" ]; then
 	path_forge_ci_bin="$(command -v forge-ci 2>/dev/null || true)"
 	[ -z "${path_forge_ci_bin}" ] || forge_ci_bins+=("${path_forge_ci_bin}")
 	script_dir=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-	layer_forge_ci_bin="${script_dir}/../bin/forge-ci"
+	layer_forge_ci_bin="${script_dir}/../../.engine/bin/forge-ci"
 	case "$(uname -m)" in
 	x86_64 | amd64) forge_ci_arch=amd64 ;;
 	aarch64 | arm64) forge_ci_arch=arm64 ;;
@@ -87,7 +87,7 @@ if [ "${SIGNER_STRICT:-0}" = "1" ]; then
 		exit 1
 		;;
 	esac
-	forge_ci_pin_file="${script_dir}/../bin/forge-ci-linux-${forge_ci_arch}.sha256"
+	forge_ci_pin_file="${script_dir}/../../.engine/bin/forge-ci-linux-${forge_ci_arch}.sha256"
 	if [ -e "${layer_forge_ci_bin}" ] || [ -L "${layer_forge_ci_bin}" ]; then
 		forge_ci_bins+=("${layer_forge_ci_bin}")
 	elif [ -e "${forge_ci_pin_file}" ] || [ -L "${forge_ci_pin_file}" ]; then

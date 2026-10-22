@@ -412,12 +412,12 @@ For a change under `.forgejo/`, or to a verb a Forgejo workflow or action
 calls, run `just test-forgejo` as well: it holds the layer's structure and runs
 its shell against the CLI built from your tree.
 
-## The Forgejo layer's engine binary
+## The engine binary
 
 The workflows and actions under `.forgejo/` run this repository's CLI, built
 for linux/amd64 and linux/arm64. The tree tracks their SHA-256 and not the
-binaries: `.forgejo/bin/forge-ci-linux-amd64.sha256` and
-`.forgejo/bin/forge-ci-linux-arm64.sha256` are one line each, and a job
+binaries: `.engine/bin/forge-ci-linux-amd64.sha256` and
+`.engine/bin/forge-ci-linux-arm64.sha256` are one line each, and a job
 downloads the binary of its host's architecture by its line from the generic
 packages of the forge that serves the layer, then verifies it.
 [The binary in the layer](forgejo.md#the-binary-in-the-layer) describes the
@@ -426,13 +426,13 @@ download; this section is about the lines.
 One recipe writes them, and nothing else may:
 
 ```bash
-just refresh-forgejo-binary
-git add .forgejo/bin/forge-ci-linux-amd64.sha256 .forgejo/bin/forge-ci-linux-arm64.sha256
+just refresh-engine-binary
+git add .engine/bin/forge-ci-linux-amd64.sha256 .engine/bin/forge-ci-linux-arm64.sha256
 ```
 
 It refuses a toolchain other than the Go release `go.mod` pins, builds the
 CLI of your tree for both architectures as
-[`scripts/ci/forgejo-binary.sh`](../scripts/ci/forgejo-binary.sh) defines
+[`scripts/ci/engine-binary.sh`](../scripts/ci/engine-binary.sh) defines
 (cross-compiled, so any host records both), and records the digests. Run it after a change to a build input (`cmd/`,
 `internal/`, `go.mod`, `go.sum`); a change to documentation, workflows or
 tests names the same binary and needs nothing.
@@ -441,10 +441,10 @@ Before pushing, verify the lines are fresh with a read-only check that builds
 both architectures and compares, without writing anything:
 
 ```bash
-just check-forgejo-binary
+just check-engine-binary
 ```
 
-It fails with the same digests `refresh-forgejo-binary` would record, so you
+It fails with the same digests `refresh-engine-binary` would record, so you
 can see what changed without running the write. CI runs this check as a fast
 gate before the integration suite in both the pull-request and release
 workflows.
@@ -461,10 +461,10 @@ prints the line to write. It needs no Git history. Under another Go release than
 `go.mod` names it cannot reproduce the build and says "not proven"; the
 pull-request gate runs it with that release and in the strict profile, where
 it can only pass or fail.
-[Testing conventions](testing.md#the-forgejo-layer-tier) has the details.
+[Testing conventions](testing.md#the-engine-layer-tier) has the details.
 
 The build names no commit and no date: `forge-ci --version` answers
-`forgejo-layer`, and the digest identifies the build. The same sources
+`engine-layer`, and the digest identifies the build. The same sources
 therefore build the same bytes at any commit, in any directory. The limits
 are the toolchain, which must be the pinned Go release as the Go project
 distributes it, and your module cache, which the build reads with the proxy
@@ -472,15 +472,15 @@ and the checksum database off. The second is why a forge does not take the
 lines on trust: the job that publishes the binaries downloads the modules
 itself and publishes only builds that match.
 
-`scripts/ci/forgejo-binary.sh build <amd64|arm64> <output>` writes a binary
+`scripts/ci/engine-binary.sh build <amd64|arm64> <output>` writes a binary
 for local use, and the tests of `test/forgejobehavior` build theirs the same way. A
-binary at `.forgejo/bin/forge-ci` is ignored by Git.
+binary at `.engine/bin/forge-ci` is ignored by Git.
 
 **Publishing.** A forge serves a commit of the layer once the binaries that
 commit names are in the generic packages of the serving repository's owner.
 The first job of
 [`examples/forgejo/signer-image.yml`](../examples/forgejo/signer-image.yml)
-does it, with `scripts/ci/forgejo-binary.sh publish`; the live tier does the
+does it, with `scripts/ci/engine-binary.sh publish`; the live tier does the
 same for its scratch owner on the lab. Nothing is published from a
 workstation.
 

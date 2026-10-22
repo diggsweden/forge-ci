@@ -142,10 +142,10 @@ jobs:
         run: go test -tags=blackbox -count=1 -timeout 45m ./tests/blackbox/...
 
   checksums:
-    # Fast gate: fail in ~2 min if the recorded Forgejo binary checksums are
+    # Fast gate: fail in ~2 min if the recorded engine binary checksums are
     # stale, instead of discovering it 12+ min into the evidence job. Mirrors
-    # the forgejo-layer-binary job in the pull-request workflow.
-    name: Forgejo binary checksums are fresh
+    # the engine-binary job in the pull-request workflow.
+    name: Engine binary checksums are fresh
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
@@ -160,7 +160,7 @@ jobs:
       - name: Fill the module cache
         run: go build -o /dev/null ./cmd/forge-ci
       - name: Check recorded checksums match this tree
-        run: bash scripts/ci/forgejo-binary.sh check
+        run: bash scripts/ci/engine-binary.sh check
 
   evidence:
     # The release-time shape of `just test`. The pull-request gate runs the

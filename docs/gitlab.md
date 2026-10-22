@@ -272,10 +272,10 @@ describes its contents and a manual `buildah build`.
 
 The delivery binary has one build definition and one checksum per
 architecture, shared with Forgejo. The established paths remain
-`scripts/ci/forgejo-binary.sh` and
-`.forgejo/bin/forge-ci-linux-<amd64|arm64>.sha256`; do not maintain a second
-GitLab build or checksum copy. The script is named for the layer it was
-written for first; its `build` and `refresh` know no forge, and `publish`
+`scripts/ci/engine-binary.sh` and
+`.engine/bin/forge-ci-linux-<amd64|arm64>.sha256`; do not maintain a second
+GitLab build or checksum copy. The script and directory are named for the engine,
+shared by all delivery layers; its `build` and `refresh` know no forge, and `publish`
 uploads to GitLab when `FORGE_CI_PACKAGE_PROVIDER=gitlab`, as shown below.
 
 Checksum-bound check/release jobs use the **Linux** delivery binary of the
@@ -308,8 +308,8 @@ toolchain and cached dependencies, for each architecture:
 
 ```bash
 for arch in amd64 arm64; do
-  bash scripts/ci/forgejo-binary.sh build "$arch" "/absolute/private/staging/forge-ci-$arch"
-  bash scripts/ci/forgejo-binary.sh publish "$arch" "/absolute/private/staging/forge-ci-$arch"
+  bash scripts/ci/engine-binary.sh build "$arch" "/absolute/private/staging/forge-ci-$arch"
+  bash scripts/ci/engine-binary.sh publish "$arch" "/absolute/private/staging/forge-ci-$arch"
 done
 ```
 
@@ -327,7 +327,7 @@ For publication from the engine project's own job, once per architecture:
 ```bash
 FORGE_CI_PACKAGE_TOKEN_TYPE=job \
   FORGE_CI_PACKAGE_TOKEN="${CI_JOB_TOKEN:?}" \
-  bash scripts/ci/forgejo-binary.sh publish "$arch" "/absolute/private/staging/forge-ci-$arch"
+  bash scripts/ci/engine-binary.sh publish "$arch" "/absolute/private/staging/forge-ci-$arch"
 ```
 
 The publisher rejects a binary that differs from the checkout's recorded
@@ -879,7 +879,7 @@ package, images, keys and bot.
    branch approves the pin, and only release administrators push the
    protected `release-request/v*` tag that starts a release from it.
 3. **If your copy changes Go code**, record the new build as
-   [Development](DEVELOPMENT.md#the-forgejo-layers-engine-binary) describes.
+   [Development](DEVELOPMENT.md#the-engine-layers-engine-binary) describes.
 4. **Publish the binary** for that commit to your project's generic packages;
    see [Publish the recorded build](#publish-the-recorded-build).
 5. **Build your signer image** and pin its digest; see

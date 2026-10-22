@@ -39,8 +39,8 @@ func TestPrepareSignerImageAvailability(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			box := newSandbox(t, "prepare-release")
-			box.write(".forge-ci-helpers/.forgejo/bin/lib-forge-ci.sh", fakeResolver, 0o600)
-			box.write(".forge-ci-helpers/.forgejo/bin/forge-ci", fakeEngine, 0o700)
+			box.write(".forge-ci-helpers/.engine/bin/lib-forge-ci.sh", fakeResolver, 0o600)
+			box.write(".forge-ci-helpers/.engine/bin/forge-ci", fakeEngine, 0o700)
 
 			admitted := box.run(coordinates.Run, "HELPERS_REPOSITORY_INPUT=owner/engine",
 				"SERVER_URL=https://forge.example", "SIGNER_IMAGE_INPUT="+tc.image)

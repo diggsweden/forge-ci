@@ -33,7 +33,7 @@ const liveCommandBound = 2 * time.Minute
 
 const fakeGoScript = `#!/usr/bin/env bash
 set -euo pipefail
-# The layer build comes through scripts/ci/forgejo-binary.sh, which runs go
+# The layer build comes through scripts/ci/engine-binary.sh, which runs go
 # in a closed environment and from the repository root: it is played, and
 # not recorded.
 if [[ -n "${FAKE_GO_ARGV:-}" ]]; then printf '%s\n' "$*" >>"$FAKE_GO_ARGV"; fi

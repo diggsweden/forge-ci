@@ -32,8 +32,8 @@ runs:
         RELEASE_CONTEXT_REF: ${{ inputs.forgejo-ref-name }}
       run: |
         set -euo pipefail
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         run_forge_ci version derive-release \
           --ref-name "${RELEASE_CONTEXT_REF:?}" \
           --require-release-request \
@@ -67,8 +67,8 @@ runs:
             exit 1
             ;;
         esac
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         run_forge_ci toolchain install-changelog-renderer \
           --changelog-creator "${CHANGELOG_CREATOR}" \
           --version "${version}" \
@@ -89,8 +89,8 @@ runs:
       run: |
         set -euo pipefail
         unset SSH_SIGNING_KEY
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         # --branch matches the head check in prepare-release.yml; left out,
         # the engine reads RELEASE_BRANCH or BRANCH from the environment.
         run_forge_ci version render-changelog \

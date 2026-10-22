@@ -72,8 +72,8 @@ runs:
         FORGEJO_TOKEN: ${{ inputs.token }}
       run: |
         set -euo pipefail
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         # Anything but the two values would reach the CLI as "unset", which
         # it reads as public.
         case "${INPUT_TRANSPARENCY_LOG}" in

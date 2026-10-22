@@ -260,8 +260,8 @@ jobs:
       - name: Fetch engine binary
         run: |
           set -euo pipefail
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           fetch_forge_ci
 
       - name: Verify signer toolchain
@@ -277,8 +277,8 @@ jobs:
           TRUSTED_KEY_SHA256_INPUT: ${{ inputs['cosign-public-key-sha256'] }}
         run: |
           set -euo pipefail
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           # The caller supplies the trust root; the layer ships none. The
           # engine refuses an empty key, an empty digest and a mismatch.
           trusted_key="${SIGNER_WORKSPACE:?}/cosign.pub"
@@ -316,8 +316,8 @@ jobs:
           registry_token="${REGISTRY_TOKEN:?}"
           registry_user="${REGISTRY_USER:?}"
           unset COSIGN_KEY COSIGN_PASSWORD REGISTRY_TOKEN REGISTRY_USER
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           # LEDGER CONTRACT: each entry's sbom path is rooted under
           # premade-sboms/, so the premade SBOM artifact must land in exactly
           # that directory under the signer work dir. Keep the path and the

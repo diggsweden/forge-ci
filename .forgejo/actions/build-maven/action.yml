@@ -60,8 +60,8 @@ runs:
         BUILD_MAVEN_BUILD_SBOM: ${{ inputs.enable-build-sbom }}
       run: |
         set -euo pipefail
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         version=${BUILD_MAVEN_VERSION#v}
         if [ -n "${version}" ]; then
           export FORGE_CI_VERSION=${version}

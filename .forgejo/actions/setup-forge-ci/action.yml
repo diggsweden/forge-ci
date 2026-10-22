@@ -38,5 +38,5 @@ runs:
         ADD_TO_PATH: ${{ inputs.add-to-path }}
       run: |
         set -euo pipefail
-        layer_root=$(CDPATH='' cd -- "${GITHUB_ACTION_PATH}/../.." && pwd)
-        "${GITHUB_ACTION_PATH}/setup-forge-ci.sh" "${layer_root}"
+        engine_root=$(CDPATH='' cd -- "${GITHUB_ACTION_PATH}/../../../.engine" && pwd)
+        "${GITHUB_ACTION_PATH}/setup-forge-ci.sh" "${engine_root}"

@@ -197,7 +197,7 @@ exit "${FAKE_SIGNER_STATUS:-0}"
 	t.Run("signing step runs the verified executable with a scrubbed environment", func(t *testing.T) {
 		t.Parallel()
 		box := newSandbox(t, "prepare-release")
-		got := box.run(loadAction(t, "prepare-release").script(t, sign), signEnv(box, box.write(".forgejo/bin/signer", signer, 0o700), "0")...)
+		got := box.run(loadAction(t, "prepare-release").script(t, sign), signEnv(box, box.write(".engine/bin/signer", signer, 0o700), "0")...)
 
 		want := []string{"version", "commit-changelog-release", "--tag", "v1.2.3", "--branch", "stable", "--repository", "owner/repo",
 			"--git-url", "ssh://git@forgejo.invalid/owner/repo.git"}
@@ -235,7 +235,7 @@ exit "${FAKE_SIGNER_STATUS:-0}"
 		t.Parallel()
 		s := newSandbox(t, "prepare-release")
 
-		got := s.run(loadAction(t, "prepare-release").script(t, sign), signEnv(s, s.write(".forgejo/bin/signer", signer, 0o700), "42")...)
+		got := s.run(loadAction(t, "prepare-release").script(t, sign), signEnv(s, s.write(".engine/bin/signer", signer, 0o700), "42")...)
 		if got.status != 42 {
 			t.Fatalf("status %d, want 42; stderr %s", got.status, got.stderr)
 		}
@@ -399,7 +399,7 @@ func TestPrepareReleaseRevalidatesRequestTag(t *testing.T) {
 func TestPrepareReleaseVerifiesTheSigningExecutable(t *testing.T) {
 	t.Parallel()
 	box := newSandbox(t, "prepare-release")
-	box.write(".forgejo/bin/lib-forge-ci.sh", `verify_forge_ci() {
+	box.write(".engine/bin/lib-forge-ci.sh", `verify_forge_ci() {
   HELPERS_ENGINE_VERIFIED=/verified/forge-ci
 }
 `, 0o600)
@@ -673,7 +673,7 @@ func TestPrepareReleaseSigningPassesTheVersionBumpPaths(t *testing.T) {
 
 	for _, paths := range []string{"", "/runner/temp/bump-paths"} {
 		box := newSandbox(t, "prepare-release")
-		signer := box.write(".forgejo/bin/signer", "#!/usr/bin/env bash\nprintf '%s\\0' \"$@\" >\"${FAKE_ARGV_LOG:?}\"\n", 0o700)
+		signer := box.write(".engine/bin/signer", "#!/usr/bin/env bash\nprintf '%s\\0' \"$@\" >\"${FAKE_ARGV_LOG:?}\"\n", 0o700)
 		got := box.run(loadAction(t, "prepare-release").script(t, "Sign changelog commit and create release tag"),
 			"SIGNING_EXECUTABLE="+signer, "SSH_SIGNING_KEY=fixture-key", "FORGEJO_REF_NAME=v1.2.3", "FORGEJO_REPO=owner/repo",
 			"TARGET_BRANCH=main", "RELEASE_GIT_URL=ssh://git@forgejo.invalid/owner/repo.git", "INCLUDE_PATHS_FILE="+paths)

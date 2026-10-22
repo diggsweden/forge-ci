@@ -37,7 +37,7 @@ func versionBumpCheckout(t *testing.T) *sandbox {
 	t.Helper()
 
 	box := newSandbox(t, "prepare-release")
-	box.write(".forge-ci-helpers/.forgejo/bin/lib-forge-ci.sh", versionBumpLib, 0o600)
+	box.write(".forge-ci-helpers/.engine/bin/lib-forge-ci.sh", versionBumpLib, 0o600)
 	box.write("pom.xml", strings.ReplaceAll(versionBumpPOM, "%s", "0.1.9"), 0o600)
 
 	for _, arguments := range [][]string{

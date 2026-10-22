@@ -96,7 +96,7 @@ func TestConsumerTemplatesPassReleaseIsolation(t *testing.T) {
 	t.Parallel()
 	action := loadAction(t, "check-l3-isolation")
 	s := newSandbox(t, "check-l3-isolation")
-	s.write(".forgejo/bin/lib-forge-ci.sh", string(reporoot.ReadFile(t, ".forgejo/bin/lib-forge-ci.sh")), 0o600)
+	s.write(".engine/bin/lib-forge-ci.sh", string(reporoot.ReadFile(t, ".engine/bin/lib-forge-ci.sh")), 0o600)
 	// A fetched action comes with its layer checkout. The gate reads its actual
 	// declarations rather than a consumer-maintained copy of the input lists.
 	for _, pattern := range []string{".forgejo/actions/*/action.yml", ".forgejo/workflows/*.yml"} {
@@ -227,7 +227,7 @@ func TestCallerCosignTrustRootThroughTheEngine(t *testing.T) {
 			t.Parallel()
 
 			s := newSandbox(t, "trust-root")
-			s.write(".forgejo/bin/lib-forge-ci.sh", string(reporoot.ReadFile(t, ".forgejo/bin/lib-forge-ci.sh")), 0o600)
+			s.write(".engine/bin/lib-forge-ci.sh", string(reporoot.ReadFile(t, ".engine/bin/lib-forge-ci.sh")), 0o600)
 			s.write("tools/cosign", "#!/usr/bin/env bash\ncat -- '"+s.write("derived.pub", key, 0o600)+"'\n", 0o700)
 			private := filepath.Join(s.root, "private")
 

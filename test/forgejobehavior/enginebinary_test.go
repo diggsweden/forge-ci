@@ -30,7 +30,7 @@ import (
 
 const (
 	// binaryScript is the one definition of how the layer's binary is built.
-	binaryScript = "scripts/ci/forgejo-binary.sh"
+	binaryScript = "scripts/ci/engine-binary.sh"
 )
 
 // engineArchitectures are the architectures the layer's binary is built and
@@ -40,7 +40,7 @@ func engineArchitectures() []string { return []string{"amd64", "arm64"} }
 // trackedChecksum names the binary the layer runs on arch: the tree tracks
 // this one line and a job of that architecture downloads the binary by it.
 func trackedChecksum(arch string) string {
-	return ".forgejo/bin/forge-ci-linux-" + arch + ".sha256"
+	return ".engine/bin/forge-ci-linux-" + arch + ".sha256"
 }
 
 // builtEngine is the CLI of this tree for one architecture, built once per
@@ -219,7 +219,7 @@ func recordedChecksum(t *testing.T, arch string) string {
 
 	digest, name, found := strings.Cut(strings.TrimSuffix(string(reporoot.ReadFile(t, trackedChecksum(arch))), "\n"), "  ")
 	if !found || name != "bin/forge-ci" || len(digest) != sha256.Size*2 || strings.ContainsAny(digest, "\n ") {
-		t.Fatalf("%s is not one `<sha256>  bin/forge-ci` line; rewrite it with `just refresh-forgejo-binary`", trackedChecksum(arch))
+		t.Fatalf("%s is not one `<sha256>  bin/forge-ci` line; rewrite it with `just refresh-engine-binary`", trackedChecksum(arch))
 	}
 
 	return digest
@@ -251,7 +251,7 @@ func TestRecordedEngineChecksumIsABuildOfThisTree(t *testing.T) {
 			recorded := recordedChecksum(t, arch)
 			if built := fileSHA256(t, engineBuild(t, arch)); built != recorded {
 				t.Fatalf("%s does not record the build of this tree: recorded %s, built %s.\n"+
-					"A build input changed since it was recorded. Run `just refresh-forgejo-binary`, or write this line to the file, and commit it:\n%s  bin/forge-ci",
+					"A build input changed since it was recorded. Run `just refresh-engine-binary`, or write this line to the file, and commit it:\n%s  bin/forge-ci",
 					trackedChecksum(arch), recorded, built, built)
 			}
 		})

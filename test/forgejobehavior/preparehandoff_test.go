@@ -21,7 +21,7 @@ func TestPrepareReleaseImportsOnlyRegularRenderedData(t *testing.T) {
 		t.Run(map[bool]string{false: "data only", true: "linked data refused"}[linked], func(t *testing.T) {
 			t.Parallel()
 			box := newSandbox(t, "prepare-release")
-			box.write(".forge-ci-helpers/.forgejo/bin/lib-forge-ci.sh", `run_forge_ci() {
+			box.write(".forge-ci-helpers/.engine/bin/lib-forge-ci.sh", `run_forge_ci() {
   cp -a -- "${FIXTURE:?}/." "${6:?}/"
 }
 `, 0o600)

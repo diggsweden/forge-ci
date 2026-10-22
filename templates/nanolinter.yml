@@ -150,8 +150,8 @@ spec:
             fetch --quiet --depth=1 --no-tags --no-recurse-submodules origin "${expected}"
           git "${git_options[@]}" -C "${helpers}" checkout --quiet --detach "${expected}"
           test "$(git -C "${helpers}" rev-parse HEAD)" = "${expected}"
-          # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-          source "${helpers}/.forgejo/bin/lib-forge-ci.sh"
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${helpers}/.engine/bin/lib-forge-ci.sh"
           fetch_forge_ci
           SIGNER_STRICT=1 verify_forge_ci
           run_forge_ci security report to-gitlab-sast --input "$SARIF_FILE" --output "$GL_SAST_FILE"

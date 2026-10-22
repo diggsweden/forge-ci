@@ -164,9 +164,9 @@ jobs:
           for arch in amd64 arm64; do
             GOFLAGS=-mod=readonly CGO_ENABLED=0 GOOS=linux GOARCH="${arch}" go list -deps ./cmd/forge-ci >/dev/null
             # The one definition of the build; it reads that cache and no network.
-            bash scripts/ci/forgejo-binary.sh build "${arch}" "${RUNNER_TEMP:?}/engine-${arch}/bin/forge-ci"
-            if ! (cd "${RUNNER_TEMP:?}/engine-${arch}" && sha256sum --check --quiet "${GITHUB_WORKSPACE:?}/.forgejo/bin/forge-ci-linux-${arch}.sha256"); then
-              echo "ERROR: the linux/${arch} build of ${FORGE_CI_COMMIT_SHA:?} is not the binary its .forgejo/bin/forge-ci-linux-${arch}.sha256 records, so nothing is published. Pin a commit whose checksums are builds of its tree." >&2
+            bash scripts/ci/engine-binary.sh build "${arch}" "${RUNNER_TEMP:?}/engine-${arch}/bin/forge-ci"
+            if ! (cd "${RUNNER_TEMP:?}/engine-${arch}" && sha256sum --check --quiet "${GITHUB_WORKSPACE:?}/.engine/bin/forge-ci-linux-${arch}.sha256"); then
+              echo "ERROR: the linux/${arch} build of ${FORGE_CI_COMMIT_SHA:?} is not the binary its .engine/bin/forge-ci-linux-${arch}.sha256 records, so nothing is published. Pin a commit whose checksums are builds of its tree." >&2
               sha256sum "${RUNNER_TEMP:?}/engine-${arch}/bin/forge-ci" >&2
               exit 1
             fi
@@ -178,7 +178,7 @@ jobs:
         run: |
           set -euo pipefail
           for arch in amd64 arm64; do
-            bash scripts/ci/forgejo-binary.sh publish "${arch}" "${RUNNER_TEMP:?}/engine-${arch}/bin/forge-ci"
+            bash scripts/ci/engine-binary.sh publish "${arch}" "${RUNNER_TEMP:?}/engine-${arch}/bin/forge-ci"
           done
 
   build-signer-arch:
@@ -245,7 +245,7 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null # the resolver of the engine checkout
-          source .forgejo/bin/lib-forge-ci.sh
+          source .engine/bin/lib-forge-ci.sh
           # Bound the recipe prefix so SHA-256 engine commits also fit OCI tags.
           : "${SIGNER_RECIPE_COMMIT_SHA:?}"
           FORGE_CI_PROVIDER=forgejo run_forge_ci container multiarch-image build-arch \
@@ -268,7 +268,7 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null # the resolver of the engine checkout
-          source .forgejo/bin/lib-forge-ci.sh
+          source .engine/bin/lib-forge-ci.sh
           FORGE_CI_PROVIDER=forgejo run_forge_ci artifact upload \
             --name "signer-image-arch-${SIGNER_ARCH}" \
             --dir "signer-image-arch-${SIGNER_ARCH}/" \
@@ -337,7 +337,7 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null # the resolver of the engine checkout
-          source .forgejo/bin/lib-forge-ci.sh
+          source .engine/bin/lib-forge-ci.sh
           FORGE_CI_PROVIDER=forgejo run_forge_ci artifact download \
             --name signer-image-arch-amd64 \
             --dir signer-image-arch-amd64/
@@ -346,7 +346,7 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null # the resolver of the engine checkout
-          source .forgejo/bin/lib-forge-ci.sh
+          source .engine/bin/lib-forge-ci.sh
           FORGE_CI_PROVIDER=forgejo run_forge_ci artifact download \
             --name signer-image-arch-arm64 \
             --dir signer-image-arch-arm64/
@@ -356,7 +356,7 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null # the resolver of the engine checkout
-          source .forgejo/bin/lib-forge-ci.sh
+          source .engine/bin/lib-forge-ci.sh
           : "${SIGNER_RECIPE_COMMIT_SHA:?}"
           FORGE_CI_PROVIDER=forgejo run_forge_ci container multiarch-image assemble \
             --from-layouts \
@@ -373,7 +373,7 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null # the resolver of the engine checkout
-          source .forgejo/bin/lib-forge-ci.sh
+          source .engine/bin/lib-forge-ci.sh
           FORGE_CI_PROVIDER=forgejo run_forge_ci artifact upload \
             --name signer-image-dist \
             --dir signer-image-dist/ \

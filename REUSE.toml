@@ -93,11 +93,11 @@ precedence = "override"
 SPDX-FileCopyrightText = "2026 Digg - Agency for Digital Government"
 SPDX-License-Identifier = "CC0-1.0"
 
-# The checksums of the Forgejo layer's engine binary, one per architecture:
-# each one fixed-format line, written by scripts/ci/forgejo-binary.sh. The
+# The checksums of the engine binary, one per architecture:
+# each one fixed-format line, written by scripts/ci/engine-binary.sh. The
 # binaries themselves are not tracked.
 [[annotations]]
-path = [".forgejo/bin/forge-ci-linux-amd64.sha256", ".forgejo/bin/forge-ci-linux-arm64.sha256"]
+path = [".engine/bin/forge-ci-linux-amd64.sha256", ".engine/bin/forge-ci-linux-arm64.sha256"]
 SPDX-FileCopyrightText = "2026 Digg - Agency for Digital Government"
 SPDX-License-Identifier = "CC0-1.0"
 

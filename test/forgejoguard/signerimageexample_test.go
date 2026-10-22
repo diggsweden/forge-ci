@@ -26,7 +26,7 @@ const (
 	// publishBinaryJob is the job of the example that publishes the engine
 	// binary, and binaryScriptPath the script it builds and uploads with.
 	publishBinaryJob = "publish-engine-binary"
-	binaryScriptPath = "scripts/ci/forgejo-binary.sh"
+	binaryScriptPath = "scripts/ci/engine-binary.sh"
 
 	// signerBuildArchJob builds each architecture on a native runner of that
 	// architecture: the build executes the image's steps, never under emulation.
@@ -158,7 +158,7 @@ func TestSignerImageExamplePublishesTheEngineBinaryFirst(t *testing.T) {
 		"for arch in amd64 arm64; do",
 		`GOARCH="${arch}" go list -deps ./cmd/forge-ci`,
 		binaryScriptPath + ` build "${arch}" "${RUNNER_TEMP:?}/engine-${arch}/bin/forge-ci"`,
-		`sha256sum --check --quiet "${GITHUB_WORKSPACE:?}/.forgejo/bin/forge-ci-linux-${arch}.sha256"`,
+		`sha256sum --check --quiet "${GITHUB_WORKSPACE:?}/.engine/bin/forge-ci-linux-${arch}.sha256"`,
 		"exit 1",
 	})
 

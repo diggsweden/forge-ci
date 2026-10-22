@@ -183,7 +183,7 @@ const fakeResolver = `run_forge_ci() {
 func libFunction(t *testing.T, name string) string {
 	t.Helper()
 
-	lib := string(reporoot.ReadFile(t, ".forgejo/bin/lib-forge-ci.sh"))
+	lib := string(reporoot.ReadFile(t, ".engine/bin/lib-forge-ci.sh"))
 
 	start := strings.Index(lib, "\n"+name+"() {\n")
 	if start < 0 {
@@ -206,14 +206,14 @@ func newSandbox(t *testing.T, action string) *sandbox {
 		t: t, root: root, actionDir: filepath.Join(root, ".forgejo", "actions", action),
 		outputs: filepath.Join(root, "outputs"), argvLog: filepath.Join(root, "argv"),
 	}
-	for _, directory := range []string{box.actionDir, filepath.Join(root, ".forgejo", "bin"), filepath.Join(root, "home")} {
+	for _, directory := range []string{box.actionDir, filepath.Join(root, ".engine", "bin"), filepath.Join(root, "home")} {
 		if err := os.MkdirAll(directory, 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	box.write(".forgejo/bin/lib-forge-ci.sh", fakeResolver+libFunction(t, "forge_ci_mark_external_registry"), 0o600)
-	box.write(".forgejo/bin/forge-ci", fakeEngine, 0o700)
+	box.write(".engine/bin/lib-forge-ci.sh", fakeResolver+libFunction(t, "forge_ci_mark_external_registry"), 0o600)
+	box.write(".engine/bin/forge-ci", fakeEngine, 0o700)
 
 	return box
 }
@@ -329,7 +329,7 @@ func engineSandbox(t *testing.T, action string, tools map[string]string) (*sandb
 
 	engine := forgeCIEngine(t)
 	box := newSandbox(t, action)
-	box.write(".forgejo/bin/lib-forge-ci.sh", string(reporoot.ReadFile(t, ".forgejo/bin/lib-forge-ci.sh")), 0o600)
+	box.write(".engine/bin/lib-forge-ci.sh", string(reporoot.ReadFile(t, ".engine/bin/lib-forge-ci.sh")), 0o600)
 	box.write("tools/forge-ci", "#!/usr/bin/env bash\nexec '"+engine+"' \"$@\"\n", 0o700)
 
 	for name, body := range tools {

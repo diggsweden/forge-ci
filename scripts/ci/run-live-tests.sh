@@ -114,7 +114,7 @@ trap 'rm -rf -- "$state"' EXIT
 	# The Forgejo layer's binary, as its jobs download it: the build of the
 	# runners' architecture that the tree's checksum names, which the layer
 	# scenarios publish to the lab.
-	bash scripts/ci/forgejo-binary.sh build "$runner_arch" "$state/forge-ci-layer"
+	bash scripts/ci/engine-binary.sh build "$runner_arch" "$state/forge-ci-layer"
 	chmod 500 "$state/forge-ci-host" "$state/forge-ci-runner" "$state/credential-proxy" "$state/probe-json"
 	"$state/forge-ci-host" --version >/dev/null
 	# Run the compiled suites directly: the go test driver's signal handling

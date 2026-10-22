@@ -69,8 +69,8 @@ runs:
         if [ -z "${release_images_path}" ]; then
           release_images_path="${DIST_DIR%/}/release-images.json"
         fi
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         FORGE_CI_PROVIDER=forgejo run_forge_ci release assemble-dist \
           --artifact-transfer-plan-json "${ARTIFACT_TRANSFER_PLAN_JSON}" \
           --artifact-names "${ARTIFACT_NAMES}" \
@@ -88,8 +88,8 @@ runs:
         ASSEMBLE_UPLOAD_RETENTION_DAYS: ${{ inputs.retention-days }}
       run: |
         set -euo pipefail
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         FORGE_CI_PROVIDER=forgejo run_forge_ci artifact upload \
           --name "${ASSEMBLE_UPLOAD_ARTIFACT_NAME}" \
           --dir "${ASSEMBLE_UPLOAD_PATH}" \

@@ -88,7 +88,7 @@ func baseRepositoryEngineArgs(t *testing.T, name, job, stepName, repository stri
 	}
 
 	got := box.run(selected.Run,
-		"PATH="+filepath.Join(box.root, ".forgejo", "bin")+":/usr/bin:/bin",
+		"PATH="+filepath.Join(box.root, ".engine", "bin")+":/usr/bin:/bin",
 		"HELPERS_DIR="+box.root, "SIGNER_WORK_DIR="+box.root, "SIGNER_WORKSPACE="+private,
 		"CONSUMER_WORKSPACE="+box.root, "FORGEJO_SERVER=https://forgejo.invalid",
 		"FORGEJO_REPO=Owner/Project", "REPOSITORY_SUFFIX=-base", "BASE_IMAGE_REPOSITORY="+repository,

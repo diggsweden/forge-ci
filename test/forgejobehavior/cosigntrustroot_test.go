@@ -112,7 +112,7 @@ func seenTrustRoot(t *testing.T, run, keyInput, digestInput string) (string, str
 	t.Helper()
 
 	box := newSandbox(t, "trust-root")
-	box.write(".forgejo/bin/forge-ci", trustRootEngine, 0o700)
+	box.write(".engine/bin/forge-ci", trustRootEngine, 0o700)
 	// A key in the helper checkout, where Release CI kept one, must not be
 	// read.
 	box.write("keys/cosign.pub", "helper key\n", 0o600)

@@ -76,8 +76,8 @@ runs:
         registry_login_token=${REGISTRY_LOGIN_TOKEN}
         export -n registry_login_token
         unset REGISTRY_LOGIN_TOKEN
-        # shellcheck source=.forgejo/bin/lib-forge-ci.sh
-        source "${GITHUB_ACTION_PATH}/../../bin/lib-forge-ci.sh"
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         printf '%s' "${registry_login_token}" | FORGE_CI_PROVIDER=forgejo run_forge_ci container login \
           --registry "${REGISTRY_LOGIN_REGISTRY}" \
           --server-url "${REGISTRY_LOGIN_SERVER}" \
