@@ -196,7 +196,7 @@ artifacts:
     project-type: meta
     require-authorization: true
 `, map[string]string{
-		".forge-ci/allowed_signers": "user@example.com ssh-ed25519 dGVzdA==\n",
+		".forge-ci/allowed_signers": "user@example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFKw6+NIKWOtsi2O+WmFbxgYTmak1rpcEPrvx23EQ3yJ\n", // gitleaks:allow — throwaway test key
 	})
 
 	checks, err := doctor.Run(doctor.Input{Root: root})
@@ -487,7 +487,7 @@ artifacts:
 git-signing:
   method: ssh
 `, map[string]string{
-		".forge-ci/allowed_signers": "bot@org.example ssh-ed25519 dGVzdA==\n",
+		".forge-ci/allowed_signers": "bot@org.example ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFKw6+NIKWOtsi2O+WmFbxgYTmak1rpcEPrvx23EQ3yJ\n", // gitleaks:allow — throwaway test key
 	})
 
 	checks, err := doctor.Run(doctor.Input{Root: root})
@@ -532,7 +532,7 @@ git-signing:
 `, map[string]string{
 		// Missing principal — the exact bug that caused CI to reject
 		// the tag signature with "signer is not in allowed_signers".
-		".forge-ci/allowed_signers": "ssh-ed25519 dGVzdA== josef.andersson@digg.se\n",
+		".forge-ci/allowed_signers": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFKw6+NIKWOtsi2O+WmFbxgYTmak1rpcEPrvx23EQ3yJ josef.andersson@digg.se\n", // gitleaks:allow — throwaway test key
 	})
 
 	checks, err := doctor.Run(doctor.Input{Root: root})

@@ -11,16 +11,23 @@ import (
 	"github.com/diggsweden/forge-ci/internal/app/validate"
 )
 
-func TestValidateGPGKeysFormat(t *testing.T) {
-	t.Parallel()
+// realArmorBlock is a real GPG armored public key block (ed25519,
+// generated with gpg --batch --gen-key for testing; not a real
+// credential). The test file is allowlisted in
+// development/gitleaks/gitleaks.toml.
+const realArmorBlock = `-----BEGIN PGP PUBLIC KEY BLOCK-----
 
-	// Minimal PGP armor block with low-entropy base64 body.
-	const validBlock = `-----BEGIN PGP PUBLIC KEY BLOCK-----
-
-dGVzdA==
-=dGVzdA==
+mDMEatoqQhYJKwYBBAHaRw8BAQdA6J7V7z1+yuqChs73KDn8BIltMjNxBpRABQXC
+3zs77T60IFRlc3QgT25seSA8dGVzdEBpbnZhbGlkLmV4YW1wbGU+iJAEExYKADgW
+IQQe8FYTZb8zfMG+P3EKGLsvKLyF+AUCatoqQgIbIwULCQgHAgYVCgkICwIEFgID
+AQIeAQIXgAAKCRAKGLsvKLyF+MEeAP986g5tE4yd2dHnGbuArWAEKt4xCuyrFJr5
+NzCxpoGdRAEApxaVECJ9f4HppYsGU0o62pqjiYCF3aJoX8L81zmJGgI=
+=513Q
 -----END PGP PUBLIC KEY BLOCK-----
 `
+
+func TestValidateGPGKeysFormat(t *testing.T) {
+	t.Parallel()
 
 	tests := []struct {
 		name    string
@@ -29,28 +36,13 @@ dGVzdA==
 	}{
 		{
 			name:    "valid single block",
-			content: validBlock,
+			content: realArmorBlock,
 			wantErr: 0,
 		},
 		{
-			name: "valid multiple blocks",
-			content: validBlock + "\n" + validBlock,
+			name:    "valid multiple blocks",
+			content: realArmorBlock + "\n" + realArmorBlock,
 			wantErr: 0,
-		},
-		{
-			name:    "missing begin marker",
-			content: "dGVzdA==\n=dGVzdA==\n-----END PGP PUBLIC KEY BLOCK-----\n",
-			wantErr: 1,
-		},
-		{
-			name:    "missing end marker",
-			content: "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\ndGVzdA==\n=dGVzdA==\n",
-			wantErr: 1,
-		},
-		{
-			name:    "empty body",
-			content: "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n-----END PGP PUBLIC KEY BLOCK-----\n",
-			wantErr: 1,
 		},
 		{
 			name:    "empty file",
@@ -58,13 +50,23 @@ dGVzdA==
 			wantErr: 1,
 		},
 		{
-			name:    "second block truncated",
-			content: validBlock + "\n-----BEGIN PGP PUBLIC KEY BLOCK-----\n\ndGVzdA==\n",
+			name:    "only comments no armor",
+			content: "# just a comment\n",
 			wantErr: 1,
 		},
 		{
-			name:    "only comments no armor",
-			content: "# just a comment\n",
+			name:    "truncated — missing end marker",
+			content: "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nmDMEatoqQhYJKwYBBAHaRw8BAQdA\n",
+			wantErr: 1,
+		},
+		{
+			name:    "wrong block type",
+			content: "-----BEGIN PGP SIGNATURE-----\n\ndGVzdA==\n=dGVzdA==\n-----END PGP SIGNATURE-----\n",
+			wantErr: 1,
+		},
+		{
+			name:    "corrupted base64 body",
+			content: "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n!!!not-base64!!!\n=dGVzdA==\n-----END PGP PUBLIC KEY BLOCK-----\n",
 			wantErr: 1,
 		},
 	}

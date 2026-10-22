@@ -76,4 +76,8 @@ paths = [
   # heuristic.
   '''internal/app/validate/allowedsigners_test\.go''',
   '''internal/app/validate/gpgkeys_test\.go''',
+
+  # Doctor allowlist tests. Uses a real (throwaway) ed25519 public key
+  # body so ssh.ParsePublicKey accepts it; not a real credential.
+  '''internal/app/doctor/doctor_test\.go''',
 ]

@@ -11,9 +11,15 @@ import (
 	"github.com/diggsweden/forge-ci/internal/app/validate"
 )
 
-// fakeKeyB64 is valid base64 but not a real SSH key — safe for tests
-// and does not trip gitleaks.
-const fakeKeyB64 = "dGVzdA=="
+// realKeyB64 is a real ed25519 SSH public key body (base64 wire format,
+// RFC 4253 §6.6). Generated with ssh-keygen for testing; not a real
+// credential. The test file is allowlisted in development/gitleaks/
+// gitleaks.toml.
+const realKeyB64 = "AAAAC3NzaC1lZDI1NTE5AAAAIFKw6+NIKWOtsi2O+WmFbxgYTmak1rpcEPrvx23EQ3yJ" // gitleaks:allow — throwaway test key
+
+// invalidKeyB64 is valid base64 but NOT a valid SSH public key wire
+// blob — decodes to bytes that ssh.ParsePublicKey rejects.
+const invalidKeyB64 = "dGVzdA=="
 
 func TestValidateAllowedSignersFormat(t *testing.T) {
 	t.Parallel()
@@ -25,52 +31,52 @@ func TestValidateAllowedSignersFormat(t *testing.T) {
 	}{
 		{
 			name:    "valid single entry",
-			content: "alice@example.com ssh-ed25519 " + fakeKeyB64 + "\n",
+			content: "alice@example.com ssh-ed25519 " + realKeyB64 + "\n",
 			wantErr: 0,
 		},
 		{
 			name:    "valid cert key type",
-			content: "alice@example.com ssh-ed25519-cert-v01@openssh.com " + fakeKeyB64 + "\n",
+			content: "alice@example.com ssh-ed25519-cert-v01@openssh.com " + realKeyB64 + "\n",
 			wantErr: 0,
 		},
 		{
 			name:    "valid sk key type",
-			content: "alice@example.com sk-ssh-ed25519@openssh.com " + fakeKeyB64 + "\n",
+			content: "alice@example.com sk-ssh-ed25519@openssh.com " + realKeyB64 + "\n",
 			wantErr: 0,
 		},
 		{
 			name:    "valid multiple principals",
-			content: "alice@example.com,bob@example.com ssh-rsa " + fakeKeyB64 + "\n",
+			content: "alice@example.com,bob@example.com ssh-rsa " + realKeyB64 + "\n",
 			wantErr: 0,
 		},
 		{
 			name:    "valid wildcard principal",
-			content: "*@example.com ssh-ed25519 " + fakeKeyB64 + "\n",
+			content: "*@example.com ssh-ed25519 " + realKeyB64 + "\n",
 			wantErr: 0,
 		},
 		{
 			name:    "valid multiple entries with comments and blanks",
-			content: "# comment\n\nalice@example.com ssh-ed25519 " + fakeKeyB64 + "\nbob@example.com ssh-rsa " + fakeKeyB64 + " bob's key\n",
+			content: "# comment\n\nalice@example.com ssh-ed25519 " + realKeyB64 + "\nbob@example.com ssh-rsa " + realKeyB64 + " bob's key\n",
 			wantErr: 0,
 		},
 		{
 			name:    "valid entry with options",
-			content: `alice@example.com valid-before="20270101Z" ssh-ed25519 ` + fakeKeyB64 + "\n",
+			content: `alice@example.com valid-before="20270101Z" ssh-ed25519 ` + realKeyB64 + "\n",
 			wantErr: 0,
 		},
 		{
 			name:    "valid entry with cert-authority option",
-			content: "*@example.com cert-authority ssh-ed25519 " + fakeKeyB64 + "\n",
+			content: "*@example.com cert-authority ssh-ed25519 " + realKeyB64 + "\n",
 			wantErr: 0,
 		},
 		{
 			name:    "valid entry with namespaces option",
-			content: `alice@example.com namespaces="file,git" ssh-ed25519 ` + fakeKeyB64 + "\n",
+			content: `alice@example.com namespaces="file,git" ssh-ed25519 ` + realKeyB64 + "\n",
 			wantErr: 0,
 		},
 		{
 			name:    "missing principal — fields shifted right",
-			content: "ssh-ed25519 " + fakeKeyB64 + " josef.andersson@digg.se\n",
+			content: "ssh-ed25519 " + realKeyB64 + " josef.andersson@digg.se\n",
 			wantErr: 1, // no recognised key type found (base64 and email are not key types)
 		},
 		{
@@ -80,7 +86,7 @@ func TestValidateAllowedSignersFormat(t *testing.T) {
 		},
 		{
 			name:    "unknown key type",
-			content: "alice@example.com foo-bar " + fakeKeyB64 + "\n",
+			content: "alice@example.com foo-bar " + realKeyB64 + "\n",
 			wantErr: 1,
 		},
 		{
@@ -89,8 +95,13 @@ func TestValidateAllowedSignersFormat(t *testing.T) {
 			wantErr: 1,
 		},
 		{
+			name:    "valid base64 but not an SSH key",
+			content: "alice@example.com ssh-ed25519 " + invalidKeyB64 + "\n",
+			wantErr: 1, // ssh.ParsePublicKey rejects "test" bytes
+		},
+		{
 			name:    "multiple errors across lines",
-			content: "ssh-ed25519 " + fakeKeyB64 + " alice@example.com\nalice@example.com foo-bar " + fakeKeyB64 + "\n",
+			content: "ssh-ed25519 " + realKeyB64 + " alice@example.com\nalice@example.com foo-bar " + realKeyB64 + "\n",
 			wantErr: 2, // line 1: no key type; line 2: no key type
 		},
 		{
@@ -130,7 +141,7 @@ func TestValidateAllowedSignersFormat_MissingPrincipalMessage(t *testing.T) {
 	// remaining fields looking for a key-type and finds none — the
 	// base64 blob and the email are not recognised key types.
 	path := filepath.Join(t.TempDir(), "allowed_signers")
-	content := "ssh-ed25519 " + fakeKeyB64 + " josef.andersson@digg.se\n"
+	content := "ssh-ed25519 " + realKeyB64 + " josef.andersson@digg.se\n"
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}

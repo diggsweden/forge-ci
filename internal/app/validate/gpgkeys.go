@@ -3,27 +3,26 @@
 package validate
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"strings"
-)
 
-// PGP armor markers per RFC 4880 section 6 (ASCII Armor).
-const (
-	pgpPublicKeyBegin = "-----BEGIN PGP PUBLIC KEY BLOCK-----"
-	pgpPublicKeyEnd   = "-----END PGP PUBLIC KEY BLOCK-----"
+	"github.com/ProtonMail/go-crypto/openpgp/armor"
 )
 
 // ValidateGPGKeysFormat reads an armored GPG public-key bundle
 // (.forge-ci/allowed_gpg_keys.asc) and returns one human-readable
-// error per structural problem. An empty slice means the file has
-// at least one well-formed PGP PUBLIC KEY BLOCK.
+// error per structural problem. An empty slice means the file
+// contains at least one well-formed PGP PUBLIC KEY BLOCK.
 //
-// The check is deliberately structural — it verifies that BEGIN/END
-// markers are present and correctly ordered, and that there is
-// content between them. It does NOT parse the OpenPGP packet
-// structure or verify the CRC24 checksum; that is the job of
-// `git verify-tag` at release time.
+// Two layers of validation:
+//  1. Marker balance — every BEGIN must have a matching END.
+//     armor.Decode is lenient about missing END markers (it
+//     returns a partial block at EOF), so we check explicitly.
+//  2. armor.Decode — validates the base64 body and CRC24
+//     checksum using ProtonMail/go-crypto's RFC 4880 parser.
 func ValidateGPGKeysFormat(path string) []string {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -34,56 +33,61 @@ func ValidateGPGKeysFormat(path string) []string {
 
 	var errs []string
 
-	beginIdx := strings.Index(content, pgpPublicKeyBegin)
-	if beginIdx == -1 {
+	// Layer 1: marker balance.
+	const (
+		beginMarker = "-----BEGIN PGP PUBLIC KEY BLOCK-----"
+		endMarker   = "-----END PGP PUBLIC KEY BLOCK-----"
+	)
+
+	beginCount := strings.Count(content, beginMarker)
+	endCount := strings.Count(content, endMarker)
+
+	if beginCount == 0 {
 		return []string{fmt.Sprintf(
 			"no %q marker found — the file must contain at least one "+
-				"armored PGP public key block (RFC 4880 section 6)", pgpPublicKeyBegin)}
+				"armored PGP public key block (RFC 4880 section 6)", beginMarker)}
 	}
 
-	// Find the END marker after the first BEGIN.
-	rest := content[beginIdx+len(pgpPublicKeyBegin):]
-	endIdx := strings.Index(rest, pgpPublicKeyEnd)
-	if endIdx == -1 {
+	if beginCount != endCount {
 		errs = append(errs, fmt.Sprintf(
-			"missing %q marker — the armor block is truncated", pgpPublicKeyEnd))
-
-		return errs
+			"BEGIN/END marker mismatch: %d BEGIN, %d END — a block is truncated",
+			beginCount, endCount))
 	}
 
-	// Content between BEGIN and END must be non-empty (base64 body
-	// plus optional Comment: headers and a =checksum line).
-	body := strings.TrimSpace(rest[:endIdx])
-	if body == "" {
-		errs = append(errs, "armor block body is empty — expected base64-encoded key data")
-	}
-
-	// Check for additional BEGIN markers after the first END (multiple
-	// concatenated blocks are valid; each must have its own END).
-	afterFirst := rest[endIdx+len(pgpPublicKeyEnd):]
+	// Layer 2: armor.Decode for body validation (base64, CRC24).
+	reader := bufio.NewReader(strings.NewReader(content))
+	blockCount := 0
 
 	for {
-		nextBegin := strings.Index(afterFirst, pgpPublicKeyBegin)
-		if nextBegin == -1 {
+		block, err := armor.Decode(reader)
+		if err == io.EOF {
 			break
 		}
 
-		afterBegin := afterFirst[nextBegin+len(pgpPublicKeyBegin):]
-		nextEnd := strings.Index(afterBegin, pgpPublicKeyEnd)
-		if nextEnd == -1 {
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("armor block %d: %v", blockCount+1, err))
+
+			break
+		}
+
+		if block.Type != "PGP PUBLIC KEY BLOCK" {
 			errs = append(errs, fmt.Sprintf(
-				"additional %q block is missing its %q marker — truncated",
-				pgpPublicKeyBegin, pgpPublicKeyEnd))
-
-			break
+				"block %d: unexpected armor type %q, expected \"PGP PUBLIC KEY BLOCK\"",
+				blockCount+1, block.Type))
 		}
 
-		body := strings.TrimSpace(afterBegin[:nextEnd])
-		if body == "" {
-			errs = append(errs, "armor block body is empty — expected base64-encoded key data")
+		// Drain the body — base64 decode errors surface here, not
+		// in Decode itself.
+		if _, err := io.Copy(io.Discard, block.Body); err != nil {
+			errs = append(errs, fmt.Sprintf(
+				"block %d: body is not valid base64: %v", blockCount+1, err))
 		}
 
-		afterFirst = afterBegin[nextEnd+len(pgpPublicKeyEnd):]
+		blockCount++
+	}
+
+	if blockCount == 0 && len(errs) == 0 {
+		errs = append(errs, "no PGP PUBLIC KEY BLOCK found — the file must contain at least one armored public key (RFC 4880 section 6)")
 	}
 
 	return errs

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"golang.org/x/crypto/ssh"
 )
 
 // sshKeyTypes is the set of SSH public-key algorithm names accepted in
@@ -108,9 +110,19 @@ func ValidateAllowedSignersFormat(path string) []string {
 		}
 
 		keyB64 := fields[keyTypeIdx+1]
-		if _, err := base64.StdEncoding.DecodeString(keyB64); err != nil {
+		keyBytes, err := base64.StdEncoding.DecodeString(keyB64)
+		if err != nil {
 			errs = append(errs, fmt.Sprintf(
 				"line %d: key field is not valid base64: %v", lineNo, err))
+
+			continue
+		}
+
+		// Validate the key is a well-formed SSH public key (wire
+		// format per RFC 4253 §6.6), not just valid base64.
+		if _, err := ssh.ParsePublicKey(keyBytes); err != nil {
+			errs = append(errs, fmt.Sprintf(
+				"line %d: key is not a valid SSH public key: %v", lineNo, err))
 		}
 	}
 
