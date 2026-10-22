@@ -254,10 +254,22 @@ func checkGitSigningSSHAllowlist(root string, cfg *config.Config) (Check, bool) 
 		}, true
 	}
 
+	if formatErrs := ValidateAllowedSignersFormat(allowedSigners); len(formatErrs) > 0 {
+		return Check{
+			Name:     name,
+			Severity: SeverityFail,
+			Message: fmt.Sprintf(".forge-ci/allowed_signers has %d format error(s): %s",
+				len(formatErrs), strings.Join(formatErrs, "; ")),
+			Remediation: "fix the entries above — each line must be " +
+				"'principal [options] key-type base64-key'; " +
+				"see docs/verification.md#release-authorisation",
+		}, true
+	}
+
 	return Check{
 		Name:     name,
 		Severity: SeverityOK,
-		Message: ".forge-ci/allowed_signers present — ensure it lists the release signing public key " +
+		Message: ".forge-ci/allowed_signers present and well-formed — ensure it lists the release signing public key " +
 			"under the intended signer principal",
 	}, true
 }

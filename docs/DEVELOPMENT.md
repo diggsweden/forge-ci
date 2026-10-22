@@ -512,6 +512,10 @@ are internal-use only.
    maintainer@example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... your key
    ```
 
+   Each line must follow the OpenSSH allowed_signers format:
+   `principal [options] key-type base64-key`. Run `forge-ci doctor`
+   to validate the file before committing.
+
    Commit and push to `main`.
 
 2. **Request the release.** Create a signed annotated tag and push it:

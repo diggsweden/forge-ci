@@ -487,7 +487,7 @@ artifacts:
 git-signing:
   method: ssh
 `, map[string]string{
-		".forge-ci/allowed_signers": "bot@org.example ssh-ed25519 AAAAC3Nz...\n",
+		".forge-ci/allowed_signers": "bot@org.example ssh-ed25519 dGVzdA==\n",
 	})
 
 	checks, err := doctor.Run(doctor.Input{Root: root})
@@ -517,5 +517,35 @@ artifacts:
 
 	if findCheck(checks, sshAllowlistCheck) != nil {
 		t.Error("no ssh-allowlist check expected for the gpg default")
+	}
+}
+
+func TestRun_SSHGitSigning_FailsWhenAllowedSignersMalformed(t *testing.T) {
+	t.Parallel()
+
+	root := writeRepo(t, `
+artifacts:
+  - name: my-app
+    project-type: meta
+git-signing:
+  method: ssh
+`, map[string]string{
+		// Missing principal — the exact bug that caused CI to reject
+		// the tag signature with "signer is not in allowed_signers".
+		".forge-ci/allowed_signers": "ssh-ed25519 dGVzdA== josef.andersson@digg.se\n",
+	})
+
+	checks, err := doctor.Run(doctor.Input{Root: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c := findCheck(checks, sshAllowlistCheck)
+	if c == nil || c.Severity != doctor.SeverityFail {
+		t.Fatalf("malformed allowed_signers should FAIL; got %+v", c)
+	}
+
+	if c.Remediation == "" {
+		t.Error("FAIL check should carry a remediation")
 	}
 }
