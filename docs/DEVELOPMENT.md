@@ -499,3 +499,34 @@ Serving the workflows from a fork is adopter documentation, in each forge's
 guide: [GitHub](github.md#forks), with the repository variables a fork sets
 and the one-time `v0.90.0-pre` release provisioning;
 [GitLab](gitlab.md#forks); and [Forgejo](forgejo.md#using-the-layer-from-a-fork).
+
+## Releasing forge-ci
+
+The self-release pipelines (`self-release.yml`, `self-runtime-container.yml`)
+are internal-use only.
+
+1. **Authorise your signing key.** Add your SSH public key to
+   `.forge-ci/allowed_signers` under a principal (typically your email):
+
+   ```text
+   maintainer@example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... your key
+   ```
+
+   Commit and push to `main`.
+
+2. **Request the release.** Create a signed annotated tag and push it:
+
+   ```bash
+   git tag -s release-request/vX.Y.Z -m "Release vX.Y.Z"
+   git push origin release-request/vX.Y.Z
+   ```
+
+   The tag must be signed with a key listed in `.forge-ci/allowed_signers`.
+
+3. **CI does the rest.** The tag push triggers `self-runtime-container.yml`
+   (builds runtime images, 30-60 min) and `self-release.yml` (runs black-box
+   tests, evidence gates, waits for images, creates the final `vX.Y.Z` tag,
+   builds signed CLI archives, publishes the GitHub release).
+
+For recovery from a failed release, see
+[Failed Release Recovery](failed-release-recovery.md).

@@ -61,7 +61,7 @@ Current architectural decisions and the constraints future changes must retain.
 
 ## Maintainer Docs
 
-- [Development](DEVELOPMENT.md) - Local development, testing, and branch verification for this repository.
+- [Development](DEVELOPMENT.md) - Local development, testing, branch verification, and releasing forge-ci itself.
 - [Testing](testing.md) - Go test helpers and testing conventions.
 - [Consumer Migration Handoff](consumer-migration-handoff.md) - DiggSweden trial results, fix ownership, remaining acceptance, cleanup and upstream adoption checklist.
 - [Consumer Validation Lessons](consumer-validation-lessons.md) - Reusable invariants and regressions from native consumer trials.
