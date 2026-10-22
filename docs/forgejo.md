@@ -205,8 +205,15 @@ the steps are these.
    so one command fills them:
 
    ```bash
-   sed -i 's|FORGE_HOST|forgejo.example.org|g; s|OWNER|myorg|g; s|PIN_FORGE_CI_SHA|<commit>|g; s|PIN_SIGNER_IMAGE_DIGEST|<digest>|g; s|PIN_COSIGN_PUBLIC_KEY_SHA256|<sha256>|g' pullrequest.yml release.yml
+   sed -i \
+     -e 's|FORGE_HOST|forgejo.example.org|g' \
+     -e 's|OWNER|myorg|g' \
+     -e 's|PIN_FORGE_CI_SHA|<commit>|g' \
+     -e 's|PIN_SIGNER_IMAGE_DIGEST|<digest>|g' \
+     -e 's|PIN_COSIGN_PUBLIC_KEY_SHA256|<sha256>|g' \
+     pullrequest.yml release.yml
    ```
+
 3. **Fill in every `FIXME`**: the bot identity and the name of your binary in
    `release.yml`, and in the Go service example the image title. For an
    ecosystem without an example, keep the hand-off the build job ends with.
@@ -431,7 +438,8 @@ revision, and update pinned caller workflows together with their engine binary.
 By hand, for one architecture:
 
 ```bash
-buildah build --file containers/signer/Containerfile --tag <registry>/<owner>/<name> .
+buildah build --file containers/signer/Containerfile \
+  --tag <registry>/<owner>/<name> .
 ```
 
 The build context is the repository root, cut down to the one file the image
@@ -618,7 +626,9 @@ checks. A direct push bypasses them.
 
 ## Builds
 
-Container builds run their `RUN` steps on the job's own network (`--network host`), so they resolve and reach what the job's steps do, the host's loopback services included; a build is trusted like the job.
+Container builds run their `RUN` steps on the job's own network
+(`--network host`), so they resolve and reach what the job's steps do, the
+host's loopback services included; a build is trusted like the job.
 
 ### Build and checks
 
@@ -751,7 +761,8 @@ Recovery](failed-release-recovery.md) covers the rest.
 ### Old releases' files
 
 Each release adds its archives, binaries and packages, and a forge's storage
-quota fills. With `release-asset-retention: <N>` on `sign-and-publish-release.yml` the release keeps every file
+quota fills. With `release-asset-retention: <N>` on
+`sign-and-publish-release.yml` the release keeps every file
 of the newest N published releases. After it publishes, each older release
 keeps its checksum manifests, signatures, bundles and SBOMs, and loses the
 rest; the releases, their notes and their tags stay. Empty, the default,
@@ -837,7 +848,8 @@ defaults the GitLab `release` component has.
 The workflow keeps the boundaries a hand-composed job has to get right itself:
 every secret is checked for presence before any checkout, no token enters the
 job that holds the SSH signing key, and the request is admitted only at the
-head of the release branch. Project-controlled changelog configuration runs only in the
+head of the release branch. Project-controlled changelog configuration runs
+only in the
 `render` job, which receives secret-presence booleans but no signing secret.
 Git-cliff 2.10.0's `replace_command` hooks execute shell commands; unsetting a
 key before rendering would not prevent a hook leaving code for a later step.
@@ -997,8 +1009,8 @@ reviewed as one set.
   can. Signing does not move back into shell, and not onto a runner without
   the signer container.
 - **Two pins, two subjects.** `forge-ci-sha` identifies the revision;
-  `.engine/bin/forge-ci-linux-<arch>.sha256` identifies the executable inside it. They
-  are never merged.
+  `.engine/bin/forge-ci-linux-<arch>.sha256` identifies the executable inside
+  it. They are never merged.
 - **The request is bound.** Each privileged job re-validates the release tag
   and, through `release-request-sha` from the caller's event context, its
   lineage: the release commit must be the single child of the commit the
@@ -1159,14 +1171,21 @@ release:
    instances, so create an empty repository and push this history to it.
    - Object format **SHA-1**: this history is SHA-1, and a SHA-256 repository
      cannot receive it.
+     If you deliberately migrate to SHA-256 history, verify the migration
+     separately and record the new full commit IDs. Pin validation accepts
+     exactly 40 lowercase hex characters for SHA-1 or 64 for SHA-256; do not
+     use shortened SHA-256 IDs to work around older validators. Select the
+     actual object format in checkout steps. An ordinary push is not a
+     history-conversion procedure.
    - **Readable without credentials** by your runners: public, or readable
      anonymously on an instance that allows it.
    - Protect the branch against force-push and deletion, and protect tags.
      Consumers pin commits, and a pinned commit must stay reachable from a
      branch or a tag: each job fetches the commit directly and falls back to
      the advertised branches and tags.
-   - Nothing in it runs on its own. Every file under `.forgejo/workflows/`
-     starts only when another workflow calls it, and Forgejo reads that
+   - In an unchanged upstream copy, nothing runs on its own. Every file under
+     `.forgejo/workflows/` starts only when another workflow calls it, and
+     Forgejo reads that
      directory in place of `.github/workflows/`.
    - Push upstream's commits unchanged if you can. A pushed commit keeps its
      ID, so a commit you authenticated upstream is the same commit in your
@@ -1237,6 +1256,93 @@ is the repository the runner fetched the action from. So does the binary: an
 action downloads it from the owner of the repository the runner fetched the
 action from, and a workflow from the owner of the repository it cloned.
 
+### Maintaining your own CI and release configuration
+
+A fork can add its own Forgejo workflows alongside the reusable layer. Register
+each exact path and its permitted trigger names in
+`test/forgejoguard/selfci_test.go`, for example:
+
+```go
+func selfCIEvents() map[string][]string {
+    return map[string][]string{
+        ".forgejo/workflows/pullrequest.yml": {"pull_request"},
+        ".forgejo/workflows/release.yml":     {"push"},
+    }
+}
+```
+
+The registry is empty upstream. Registration must accompany the workflow file;
+missing files, wildcard exemptions, reusable layer paths and `workflow_call`
+events are rejected. Self-CI runs on `${{ vars.CI_RUNNER_LABEL }}` or passes that
+variable as `runner-label` to a reusable workflow. Its actual trigger keys must
+match its registration exactly. Other discovered workflows still receive the
+reusable-layer checks. Strict YAML checks and the checks against unlisted signer
+containers and coordinate inputs cover self-CI too.
+
+Only self-CI may contain your organization's repository, signer-image and trust
+coordinates; keep the reusable layer organization-neutral. The actionlint
+configuration accepts Forgejo full-URL action references only in Forgejo
+workflow files. Use the consumer release examples for the build/sign separation
+and run `check-l3-isolation` against the fork's release workflow as well.
+
+The runner and permissions remain deployment responsibilities. Forgejo does
+not enforce GitHub's `permissions:` field: configure the actual repository-token
+permissions. Untrusted pull-request code must not share persistent writable
+runner/tool state with release jobs or receive release credentials. For
+token-bearing release tool installation, use `setup-toolchain` with
+`cache: 'false'`, which isolates mise state as well as disabling cache restores.
+
+When selecting a `setup-toolchain` tool subset for a Go repository, include its
+declared Go runtime, for example `tools: go aqua:goreleaser/goreleaser
+aqua:anchore/syft`. Declaring Go in mise disables the separate setup-go action;
+the setup now refuses a subset that would omit Go before writing runner env
+files. An explicitly selected `go:` tool also selects its declared Go runtime.
+Tool subsets still need all tools the job actually invokes; this check does not
+infer project build dependencies. Locked installs need a committed `mise.lock`;
+an unlocked install must supply the dependency token required by the action.
+
+### Updating pins and checking a migration
+
+Treat a pin update as one reviewed change:
+
+1. Authenticate the engine commit and build it with the compiler in `go.mod`.
+   If build inputs changed, run `just refresh-engine-binary` and commit the
+   `.engine/bin/forge-ci-linux-{amd64,arm64}.sha256` recordings first.
+2. Publish and verify the recorded binaries of the commit you will pin.
+   A newer checkout's checksum cannot be paired with an older action pin.
+3. Update all engine `uses:` references, `forge-ci-sha` inputs and explicit
+   `expected-sha256` values together. Match the expected checksum to the runner
+   architecture. Keep signer-image digests and the Cosign trust-root digest
+   explicit and reviewed too.
+4. Run `just check-engine-binary`, the workflow guards, and release-isolation
+   validation. Then verify a hosted pull request before the first release.
+   Local tests alone do not prove the runner image, registry access or secrets.
+
+`forge-ci init https://forge.example/fixture/delivery-engine` can initialize a
+consumer from a renamed fork. The fork's pinned
+`.forge-ci/consumer-defaults.yml` selects the forge and organization-owned
+images/trust settings; repository and commit coordinates come from the source
+URL and resolved tag. Review the reported remaining placeholders before use.
+The source-coordinate tests exercise renamed GitHub, GitLab and Forgejo
+repositories, including full SHA-256 Forgejo pins.
+
+The companion suite is a separate repository. Engine self-CI can select its
+location with `FORGE_CI_TESTSUITE_REPOSITORY`; keep its checkout commit pinned.
+The companion's drift workflow accepts `FORGE_CI_REPOSITORY` and `FORGE_CI_REF`
+as defaults and explicit repository/ref inputs for manual runs. The local
+checkout directory may remain `forge-ci` even when the remote repository has a
+different name. A prebuilt candidate can instead be selected with
+`FORGE_CI_TEST_BINARY`.
+
+Avoid a global organization-name replacement. Upstream links and provenance
+build-type URLs identify origins and formats, while repository/image defaults
+are deployment coordinates. GitHub and GitLab runtime-image defaults may still
+refer to upstream registries: supply your own published images through their
+existing inputs if you want to operate those layers independently. Inert test
+fixtures should use neutral identities such as `fixture/integration`,
+`@fixture/npm-lib` and `org.example.fixture`, so a new hosting organization does
+not need to rewrite test data or weaken assertions.
+
 The GitHub and GitLab lint workflows select Nanolinter images from
 `ghcr.io/itiquette/nanolinter`. Verify the chosen image is published and readable
 and pass its digest through `nanolinter-image`; see
@@ -1253,7 +1359,8 @@ your copy at the commit, with a disposable lab that meets
 [the live tier's contract](testing.md#running-it):
 
 ```text
-just test-live-forgejo-consumer /path/to/consumer pull-request CI_JOB_IMAGE=<image on the lab>
+just test-live-forgejo-consumer /path/to/consumer pull-request \
+  CI_JOB_IMAGE=<image-on-the-lab>
 just test-live-forgejo-consumer /path/to/consumer release
 ```
 

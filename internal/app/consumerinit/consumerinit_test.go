@@ -25,11 +25,16 @@ import (
 type fakeRemote struct {
 	tags     []string
 	defaults string // empty: the mirror has no defaults file
+	commit   string // empty: use the default SHA-1 fixture
 }
 
 func (f fakeRemote) VersionTags(context.Context, string) ([]string, error) { return f.tags, nil }
 
-func (fakeRemote) TagCommit(context.Context, string, string) (string, error) {
+func (f fakeRemote) TagCommit(context.Context, string, string) (string, error) {
+	if f.commit != "" {
+		return f.commit, nil
+	}
+
 	return strings.Repeat("ab", 20), nil
 }
 
@@ -55,15 +60,15 @@ func (f fakeRemote) Export(_ context.Context, _, _, dest string, _ []string) ([]
 const repoExamples = "../../../examples"
 
 const fullDefaults = `forge: %s
-signer-image: codefloe.com/acme/forge-ci-signer@sha256:` + "1111111111111111111111111111111111111111111111111111111111111111" + `
+signer-image: registry.example/fixture/signer@sha256:` + "1111111111111111111111111111111111111111111111111111111111111111" + `
 cosign-public-key-sha256: 2222222222222222222222222222222222222222222222222222222222222222
-check-image: registry.acme.se/ci/check@sha256:3333333333333333333333333333333333333333333333333333333333333333
+check-image: registry.example/fixture/check@sha256:3333333333333333333333333333333333333333333333333333333333333333
 nanolinter-images:
-  go: ghcr.io/itiquette/nanolinter:go@sha256:4444444444444444444444444444444444444444444444444444444444444444
-  java: ghcr.io/itiquette/nanolinter:java@sha256:5555555555555555555555555555555555555555555555555555555555555555
-  kotlin: ghcr.io/itiquette/nanolinter:kotlin@sha256:6666666666666666666666666666666666666666666666666666666666666666
-  rust: ghcr.io/itiquette/nanolinter:rust@sha256:7777777777777777777777777777777777777777777777777777777777777777
-  javascript-typescript: ghcr.io/itiquette/nanolinter:javascript-typescript@sha256:8888888888888888888888888888888888888888888888888888888888888888
+  go: registry.example/fixture/lint:go@sha256:4444444444444444444444444444444444444444444444444444444444444444
+  java: registry.example/fixture/lint:java@sha256:5555555555555555555555555555555555555555555555555555555555555555
+  kotlin: registry.example/fixture/lint:kotlin@sha256:6666666666666666666666666666666666666666666666666666666666666666
+  rust: registry.example/fixture/lint:rust@sha256:7777777777777777777777777777777777777777777777777777777777777777
+  javascript-typescript: registry.example/fixture/lint:javascript-typescript@sha256:8888888888888888888888888888888888888888888888888888888888888888
 `
 
 // With a complete defaults file, every example of every forge is written
@@ -74,9 +79,9 @@ func TestRunLeavesOnlyThePersonsChoices(t *testing.T) {
 	t.Parallel()
 
 	mirrors := map[provider.ForgeAPI]string{
-		provider.ForgeGitHub:  "https://github.com/diggsweden/forge-ci",
-		provider.ForgeForgejo: "https://codefloe.com/itiquette/forge-ci",
-		provider.ForgeGitLab:  "https://gitlab.acme.se/ci/forge-ci",
+		provider.ForgeGitHub:  "https://github.com/fixture/delivery-engine",
+		provider.ForgeForgejo: "https://forge.example/fixture/delivery-engine",
+		provider.ForgeGitLab:  "https://gitlab.example/fixture/delivery-engine",
 	}
 
 	for forge, mirror := range mirrors {
@@ -130,6 +135,51 @@ func checkFilled(t *testing.T, forge provider.ForgeAPI, mirror, example string) 
 		if !found {
 			t.Fatal("generated Go build names and paths must be reported for customization")
 		}
+	}
+}
+
+func TestRunFromRenamedForgejoForkPreservesFullPins(t *testing.T) {
+	t.Parallel()
+
+	for _, commit := range []string{strings.Repeat("a", 40), strings.Repeat("b", 64)} {
+		t.Run(commit, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+			remote := fakeRemote{
+				tags: []string{"v1.2.3"}, commit: commit,
+				defaults: strings.Replace(fullDefaults, "%s", "forgejo", 1),
+			}
+
+			result, err := appinit.Run(t.Context(), appinit.Input{
+				Remote: remote, URL: "https://forge.example/fixture/delivery-engine", Dir: dir, Example: "go-cli",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if result.Source.Repository != "fixture/delivery-engine" || result.Source.Commit != commit {
+				t.Fatalf("source identity changed: %+v", result.Source)
+			}
+
+			for _, name := range []string{"release.yml", "pullrequest.yml"} {
+				body, readErr := os.ReadFile(filepath.Join(dir, ".forgejo", "workflows", name))
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+
+				text := string(body)
+				if !strings.Contains(text, "fixture/delivery-engine/.forgejo/") || !strings.Contains(text, "@"+commit) {
+					t.Fatalf("%s lost the renamed repository or full pin", name)
+				}
+
+				for _, stale := range []string{"OWNER/forge-ci", "PIN_FORGE_CI_SHA", "FORGE_HOST", "diggsweden/forge-ci"} {
+					if strings.Contains(text, stale) {
+						t.Errorf("%s retains source placeholder %q", name, stale)
+					}
+				}
+			}
+		})
 	}
 }
 
