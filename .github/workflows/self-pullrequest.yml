@@ -162,7 +162,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ vars.FORGE_CI_TESTSUITE_REPOSITORY || 'diggsweden/forge-ci-blackbox-tests' }}
-          ref: ef0800311d3345ad62e5a57987335ca424d05f03
+          ref: 9dad88b306bda7fdc94f51ccfdb5cc101c0fb77d
           path: forge-ci-blackbox-tests
           persist-credentials: false
       - name: Set up Go
