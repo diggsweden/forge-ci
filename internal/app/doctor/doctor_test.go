@@ -196,7 +196,7 @@ artifacts:
     project-type: meta
     require-authorization: true
 `, map[string]string{
-		".forge-ci/allowed_signers": "user@example.com ssh-ed25519 AAAA...\n",
+		".forge-ci/allowed_signers": "user@example.com ssh-ed25519 dGVzdA==\n",
 	})
 
 	checks, err := doctor.Run(doctor.Input{Root: root})

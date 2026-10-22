@@ -4334,6 +4334,27 @@ EXAMPLE:
 | `--event-name` | trigger event being checked; read from $FORGEJO_EVENT_NAME / $GITHUB_EVENT_NAME, or from the detected CI provider's event context (GitLab: normalized CI_PIPELINE_SOURCE) when unset | string | `""` | `$EVENT_NAME`, `$FORGEJO_EVENT_NAME`, `$GITHUB_EVENT_NAME` |
 | `--allowed-events` | comma/space/newline-separated allowlist override (default: push,workflow_dispatch,release,schedule,workflow_run,merge_group) | string | `""` | `$ALLOWED_EVENTS` |
 
+### `forge-ci validate gpg-keys`
+
+validate the armored GPG public-key bundle format
+
+```
+Checks .forge-ci/allowed_gpg_keys.asc for well-formed
+RFC 4880 ASCII armor: at least one PGP PUBLIC KEY BLOCK with
+matching BEGIN/END markers and non-empty body.
+
+Exits non-zero with errors if the file is malformed. Useful as
+a pre-commit hook or CI pre-flight gate.
+
+EXAMPLE:
+   forge-ci validate gpg-keys
+   forge-ci validate gpg-keys --path .forge-ci/allowed_gpg_keys.asc
+```
+
+| Flag | Description | Type | Default | Env vars |
+|------|-------------|------|---------|----------|
+| `--path` | path to the armored GPG public-key bundle (default: .forge-ci/allowed_gpg_keys.asc) | string | `".forge-ci/allowed_gpg_keys.asc"` | `$ALLOWED_GPG_KEYS_PATH` |
+
 ### `forge-ci validate isolation`
 
 check static release isolation (build job has no signing secrets; checkouts don't persist credentials)

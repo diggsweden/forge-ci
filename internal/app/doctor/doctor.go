@@ -521,7 +521,32 @@ func checkAllowedSignersIfRequired(root string, artifacts []config.Artifact) Che
 	ssh := filepath.Join(root, ".forge-ci", "allowed_signers")
 	gpg := filepath.Join(root, ".forge-ci", "allowed_gpg_keys.asc")
 
-	if regularFileExists(ssh) || regularFileExists(gpg) {
+	sshExists := regularFileExists(ssh)
+	gpgExists := regularFileExists(gpg)
+
+	if sshExists || gpgExists {
+		var formatErrs []string
+
+		if sshExists {
+			formatErrs = append(formatErrs, appvalidate.ValidateAllowedSignersFormat(ssh)...)
+		}
+
+		if gpgExists {
+			formatErrs = append(formatErrs, appvalidate.ValidateGPGKeysFormat(gpg)...)
+		}
+
+		if len(formatErrs) > 0 {
+			return Check{
+				Name:     "release-authorization allowlist present",
+				Severity: SeverityFail,
+				Message: fmt.Sprintf("allowlist file(s) have %d format error(s): %s",
+					len(formatErrs), strings.Join(formatErrs, "; ")),
+				Remediation: "fix the entries above — SSH: 'principal [options] key-type base64-key'; " +
+					"GPG: RFC 4880 ASCII armor with PGP PUBLIC KEY BLOCK markers; " +
+					"see docs/verification.md#release-authorisation",
+			}
+		}
+
 		return Check{
 			Name:     "release-authorization allowlist present",
 			Severity: SeverityOK,
