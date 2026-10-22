@@ -69,11 +69,10 @@ paths = [
   # PRIVATE KEY markers to check the decoded key is written owner-only.
   '''internal/app/publish/appstore_test\.go''',
 
-  # Allowlist format validators. The test tables use low-entropy base64
-  # placeholders (dGVzdA==) that are structurally valid for format checks
-  # but are not real keys. Allowlisted so future test additions with
-  # more realistic-looking key material don't trip the generic-api-key
-  # heuristic.
+  # Allowlist format validators. Tests use real (throwaway) keys
+  # generated with ssh-keygen and gpg so library parsers accept them.
+  # Allowlisted so future test additions with more realistic-looking
+  # key material don't trip the generic-api-key heuristic.
   '''internal/app/validate/allowedsigners_test\.go''',
   '''internal/app/validate/gpgkeys_test\.go''',
 
