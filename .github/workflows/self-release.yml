@@ -112,6 +112,10 @@ jobs:
           mise trust .mise.toml
           mise install maven
           mise bin-paths maven >>"$GITHUB_PATH"
+      - name: Set default Rust toolchain
+        # ubuntu-26.04 ships rustup without a default toolchain; cargo is a
+        # proxy that fails until one is set.
+        run: rustup default stable
       - name: Install cargo-cyclonedx
         run: cargo install --locked cargo-cyclonedx --version 0.5.9
       - name: Install cyclonedx-gomod
@@ -173,6 +177,10 @@ jobs:
           dirname "$(command -v mise)" >>"$GITHUB_PATH"
       - name: Install buildah and podman
         run: bash scripts/bootstrap/install-buildah.sh
+      - name: Set default Rust toolchain
+        # ubuntu-26.04 ships rustup without a default toolchain; the cargo
+        # integration test needs a working cargo, not just one on PATH.
+        run: rustup default stable
       - name: Run the integration tier, refusing to skip evidence
         run: just test-integration-strict
 

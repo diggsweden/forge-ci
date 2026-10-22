@@ -89,6 +89,10 @@ jobs:
           # Expose mise-managed binaries to subsequent steps.
           printf '%s\n' "${MISE_DATA_DIR:-$HOME/.local/share/mise}/shims" >>"$GITHUB_PATH"
           dirname "$(command -v mise)" >>"$GITHUB_PATH"
+      - name: Set default Rust toolchain
+        # ubuntu-26.04 ships rustup without a default toolchain; cargo is a
+        # proxy that fails until one is set.
+        run: rustup default stable
       - name: Validate reusable workflow input defaults
         run: go run ./cmd/forge-ci validate workflow input-defaults
       - name: Run tests
@@ -180,6 +184,11 @@ jobs:
           mise trust .mise.toml
           mise install maven
           mise bin-paths maven >>"$GITHUB_PATH"
+
+      - name: Set default Rust toolchain
+        # ubuntu-26.04 ships rustup without a default toolchain; cargo is a
+        # proxy that fails until one is set.
+        run: rustup default stable
 
       - name: Install cargo-cyclonedx
         run: cargo install --locked cargo-cyclonedx --version 0.5.9
