@@ -90,11 +90,14 @@ jobs:
           printf '%s\n' "${MISE_DATA_DIR:-$HOME/.local/share/mise}/shims" >>"$GITHUB_PATH"
           dirname "$(command -v mise)" >>"$GITHUB_PATH"
       - name: Install Rust
-        # ubuntu-26.04 ships rustup without a default toolchain; the cargo
-        # proxy is unreliable. Install the distro rustc/cargo directly.
+        # ubuntu-26.04 ships rustup without a default toolchain. Its proxy
+        # shims at ~/.cargo/bin shadow /usr/bin even after apt installs the
+        # distro cargo. Install via apt, then remove the shims so the real
+        # binary is found.
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq rustc cargo
+          rm -f "$HOME/.cargo/bin/cargo" "$HOME/.cargo/bin/rustc"
           cargo --version
       - name: Validate reusable workflow input defaults
         run: go run ./cmd/forge-ci validate workflow input-defaults
@@ -189,11 +192,14 @@ jobs:
           mise bin-paths maven >>"$GITHUB_PATH"
 
       - name: Install Rust
-        # ubuntu-26.04 ships rustup without a default toolchain; the cargo
-        # proxy is unreliable. Install the distro rustc/cargo directly.
+        # ubuntu-26.04 ships rustup without a default toolchain. Its proxy
+        # shims at ~/.cargo/bin shadow /usr/bin even after apt installs the
+        # distro cargo. Install via apt, then remove the shims so the real
+        # binary is found.
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq rustc cargo
+          rm -f "$HOME/.cargo/bin/cargo" "$HOME/.cargo/bin/rustc"
           cargo --version
 
       - name: Install cargo-cyclonedx
