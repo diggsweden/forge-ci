@@ -149,7 +149,7 @@ func TestSignerJobsBootstrapBeforeSecretsOrEngine(t *testing.T) {
 func TestNoUnlistedWorkflowRunsInTheSignerImage(t *testing.T) {
 	t.Parallel()
 
-	for _, relative := range layerWorkflows(t) {
+	for _, relative := range allWorkflows(t) {
 		if _, known := signerWorkflows()[relative]; known {
 			continue
 		}

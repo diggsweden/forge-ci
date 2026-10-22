@@ -148,7 +148,7 @@ func TestCoordinateInputsAreSeparateFromTheExactSHA(t *testing.T) {
 func TestNoUnlistedWorkflowTakesACoordinateInput(t *testing.T) {
 	t.Parallel()
 
-	for _, relative := range layerWorkflows(t) {
+	for _, relative := range allWorkflows(t) {
 		if _, known := coordinateWorkflows()[relative]; known {
 			continue
 		}
@@ -516,12 +516,16 @@ func TestLayerPinsNoSignerImage(t *testing.T) {
 				return err
 			}
 
-			files++
-
 			relative, err := filepath.Rel(root, path)
 			if err != nil {
 				return err
 			}
+
+			if isSelfCIWorkflow(filepath.ToSlash(relative)) {
+				return nil
+			}
+
+			files++
 
 			if pin := signerPin.FindString(string(reporoot.ReadFile(t, relative))); pin != "" {
 				t.Errorf("%s pins an image by digest (%s); the signer image is the caller's input", relative, pin)

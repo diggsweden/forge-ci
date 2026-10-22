@@ -6,10 +6,13 @@
 # workflows under .forgejo/workflows. It does not model Forgejo's `forgejo`
 # context, which those workflows use; the ignore is scoped to them so a
 # misspelled context in a GitHub workflow is still reported.
+# Forgejo resolves full-URL action references; GitHub's shorthand-only rule
+# does not apply to these workflow files.
 paths:
   .forgejo/workflows/**/*.yml:
     ignore:
       - 'undefined variable "forgejo"'
+      - 'specifying action "https://[^"]+" in invalid format'
 
 # GitHub's Ubuntu 26.04 hosted images (generally available 2026-09-17) are
 # newer than actionlint 1.7.12's label list. Drop these once a pinned

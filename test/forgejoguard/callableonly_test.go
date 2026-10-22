@@ -10,9 +10,9 @@ import (
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
-// layerWorkflows lists the workflows a Forgejo instance discovers in this
+// allWorkflows lists the workflows a Forgejo instance discovers in this
 // repository, as repository-relative paths.
-func layerWorkflows(t *testing.T) []string {
+func allWorkflows(t *testing.T) []string {
 	t.Helper()
 
 	var paths []string
@@ -29,6 +29,25 @@ func layerWorkflows(t *testing.T) []string {
 
 	if len(paths) == 0 {
 		t.Fatal("found no Forgejo workflows to inspect")
+	}
+
+	return paths
+}
+
+// layerWorkflows excludes only explicitly registered repository self-CI.
+func layerWorkflows(t *testing.T) []string {
+	t.Helper()
+
+	var paths []string
+
+	for _, path := range allWorkflows(t) {
+		if !isSelfCIWorkflow(path) {
+			paths = append(paths, path)
+		}
+	}
+
+	if len(paths) == 0 {
+		t.Fatal("found no reusable Forgejo workflows to inspect")
 	}
 
 	return paths
@@ -51,11 +70,11 @@ func callableOnlyViolation(data []byte) string {
 
 // A Forgejo instance that hosts this repository runs whatever it discovers
 // under .forgejo/workflows, and prefers that directory over .github/workflows.
-// Every file there is a reusable workflow for consumers: it starts only when
+// Every layer file is a reusable workflow for consumers: it starts only when
 // another workflow calls it, so a push, a pull request or a schedule in this
 // repository starts none of them, and none can reach a signing secret of the
-// hosting organization. The repository's own CI on Forgejo is a later step and
-// will need its event stated here on purpose.
+// hosting organization. Fork self-CI must register its path and events in
+// selfCIEvents, whose contract is checked separately.
 func TestLayerWorkflowsStartOnlyWhenCalled(t *testing.T) {
 	t.Parallel()
 

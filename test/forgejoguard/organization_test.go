@@ -160,6 +160,10 @@ func TestLayerFilesNameNoOrganization(t *testing.T) {
 				return err
 			}
 
+			if isSelfCIWorkflow(filepath.ToSlash(relative)) {
+				return nil
+			}
+
 			// A downloaded or locally built binary, which Git ignores, embeds its
 			// module path.
 			if relative == filepath.Join(".engine", "bin", "forge-ci") {
