@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Resolve parent-directory aliases before checking manifest snapshot collisions,
+  and reject stdout destinations for manifest snapshots and index BOM files.
+- Apply `IMAGE_ARCHS` consistently to multi-architecture assembly and verification.
+  Read-only verification no longer exposes unused push-retry flags.
 - Reject duplicate requested architectures before staged image publication.
 
 >>>>>>> 12224bd (feat: add checked image indexes and index SBOMs)

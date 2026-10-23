@@ -68,6 +68,10 @@ func multiarchImageParamFlags() []cli.Flag {
 	}
 }
 
+func multiarchImageArchsFlag() cli.Flag {
+	return &cli.StringFlag{Name: "archs", Value: "amd64\narm64", Sources: cli.EnvVars("IMAGE_ARCHS"), Usage: "newline-separated architectures to include"}
+}
+
 func signerImageBuildArchCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "build-arch",
@@ -127,9 +131,9 @@ the multi-arch manifest, and emits image-ref, image-digest, and image-tag
 outputs.`,
 		Flags: append(append(signerImageCommonFlags(), multiarchImageParamFlags()...),
 			&cli.BoolFlag{Name: "from-layouts", Usage: "verify all staged architecture layouts before any upload, then publish and assemble; requires a successful whole-matrix dependency"},
-			&cli.StringFlag{Name: "archs", Value: "amd64\narm64", Sources: cli.EnvVars("IMAGE_ARCHS"), Usage: "newline-separated architectures to include"},
+			multiarchImageArchsFlag(),
 			&cli.StringSliceFlag{Name: flagRequireLabel, Usage: "required child config label as key=value (repeatable); checked before any upload"},
-			&cli.StringFlag{Name: flagManifestOutput, Usage: "optional file for the exact verified index bytes, suitable for sbom index --index-file"},
+			&cli.StringFlag{Name: flagManifestOutput, Usage: "optional file for exact verified index bytes, suitable for sbom index --index-file; '-' is not supported"},
 			&cli.StringFlag{Name: "metadata-dir", Sources: cli.EnvVars("IMAGE_METADATA_DIR"), Usage: "directory for <name>.json (default <name>-dist)"},
 		),
 		Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -181,13 +185,18 @@ func (signerImageTool) RawManifest(ctx context.Context, authFile, image string, 
 }
 
 func signerImageCommonFlags() []cli.Flag {
+	return append(signerImageSourceFlags(),
+		&cli.IntFlag{Name: flagRetryAttempts, Value: 3, Sources: cli.EnvVars("IMAGE_RETRY_ATTEMPTS"), Usage: "registry push attempts"},
+		&cli.IntFlag{Name: flagRetryDelaySeconds, Value: 10, Sources: cli.EnvVars("IMAGE_RETRY_DELAY_SECONDS"), Usage: "base delay between registry push retries"},
+	)
+}
+
+func signerImageSourceFlags() []cli.Flag {
 	return []cli.Flag{
 		regflags.AuthFile(regflags.AuthFileOpts{Env: "FORGE_CI_IMAGE_AUTH_FILE", Usage: "registry auth file used by buildah and the registry client"}),
 		&cli.StringFlag{Name: flagSourceSHA, Sources: cli.EnvVars("SOURCE_SHA"), Usage: "git commit SHA for the OCI revision label and default tag naming"},
 		&cli.StringFlag{Name: flagServerURL, Sources: cienv.ServerURL(), Usage: "forge server URL used to derive the registry/repository"},
 		&cli.StringFlag{Name: flagRepository, Sources: cienv.Repository(), Usage: "owner/repo used to derive the image repository"},
-		&cli.IntFlag{Name: flagRetryAttempts, Value: 3, Sources: cli.EnvVars("IMAGE_RETRY_ATTEMPTS"), Usage: "registry push attempts"},
-		&cli.IntFlag{Name: flagRetryDelaySeconds, Value: 10, Sources: cli.EnvVars("IMAGE_RETRY_DELAY_SECONDS"), Usage: "base delay between registry push retries"},
 	}
 }
 

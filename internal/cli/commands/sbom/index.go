@@ -32,7 +32,7 @@ or the accuracy of the producer's package inventory. URLs are never fetched.`,
 			&cli.StringFlag{Name: "root", Value: ".", Usage: "root directory of all input files"},
 			&cli.StringFlag{Name: "index-file", Required: true, Usage: "raw OCI index JSON, relative to root"},
 			&cli.StringFlag{Name: "platform-sboms", Required: true, Usage: "version-1 platform SBOM record manifest, relative to root"},
-			&cli.StringFlag{Name: "output", Required: true, Usage: "output CycloneDX file, relative to the working directory"},
+			&cli.StringFlag{Name: "output", Required: true, Usage: "output CycloneDX file, relative to the working directory; '-' is not supported"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return deps.FromCmd(ctx, cmd, func(dep *deps.Deps) error {

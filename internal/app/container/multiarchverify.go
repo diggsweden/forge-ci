@@ -5,7 +5,9 @@ package container
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -201,6 +203,10 @@ func validateIndexSnapshotPath(path, authFile string, derived signerImageManifes
 		return nil
 	}
 
+	if path == cliio.StdSentinel {
+		return fmt.Errorf("manifest-output requires a file; stdout (-) is not supported: %w", errs.ErrUsage)
+	}
+
 	if err := requireSingleLine(path, "manifest-output"); err != nil {
 		return err
 	}
@@ -225,7 +231,7 @@ func validateIndexSnapshotPath(path, authFile string, derived signerImageManifes
 }
 
 func refuseSnapshotAliases(output string, protected []string) error {
-	absoluteOutput, err := filepath.Abs(output)
+	absoluteOutput, err := canonicalSnapshotPath(output)
 	if err != nil {
 		return err
 	}
@@ -233,7 +239,7 @@ func refuseSnapshotAliases(output string, protected []string) error {
 	outputInfo, _ := os.Stat(output)
 
 	for _, path := range protected {
-		absolutePath, absErr := filepath.Abs(path)
+		absolutePath, absErr := canonicalSnapshotPath(path)
 		if absErr != nil {
 			return absErr
 		}
@@ -245,4 +251,46 @@ func refuseSnapshotAliases(output string, protected []string) error {
 	}
 
 	return nil
+}
+
+// Resolve existing components with the standard library and retain a missing
+// suffix: the generated metadata file may not exist yet. A dangling link is
+// not a missing directory; refusing it avoids aliases that become live when
+// the assembly job creates its output directory. This is a static preflight,
+// not protection against another process changing the workspace during a run.
+func canonicalSnapshotPath(path string) (string, error) {
+	candidate, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+
+	suffix := ""
+
+	for {
+		resolved, resolveErr := filepath.EvalSymlinks(candidate)
+		if resolveErr == nil {
+			return filepath.Join(resolved, suffix), nil
+		}
+
+		if !errors.Is(resolveErr, fs.ErrNotExist) {
+			return "", resolveErr
+		}
+
+		info, statErr := os.Lstat(candidate)
+		if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
+			return "", statErr
+		}
+
+		if statErr == nil && info.Mode()&fs.ModeSymlink != 0 {
+			return "", fmt.Errorf("snapshot path contains an unresolved link: %w", errs.ErrUsage)
+		}
+
+		parent := filepath.Dir(candidate)
+		if parent == candidate {
+			return "", resolveErr
+		}
+
+		suffix = filepath.Join(filepath.Base(candidate), suffix)
+		candidate = parent
+	}
 }

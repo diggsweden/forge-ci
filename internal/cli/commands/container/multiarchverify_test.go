@@ -29,3 +29,22 @@ func TestMultiarchCommandRejectsConflictingTagAndMalformedLabelsBeforeIO(t *test
 	err := containercmd.New().Run(t.Context(), []string{"container", "multiarch-image", "verify", "--ref", "registry.invalid/acme/widget:mutable"})
 	require.ErrorIs(t, err, errs.ErrUsage)
 }
+
+func TestMultiarchCommandsRejectStdoutSnapshotsBeforeReadingMetadata(t *testing.T) {
+	auth := filepath.Join(t.TempDir(), "auth.json")
+	require.NoError(t, os.WriteFile(auth, []byte(`{"auths":{}}`), 0o600))
+
+	for _, command := range []string{"assemble", "verify"} {
+		args := []string{"container", "multiarch-image", command, "--auth-file", auth,
+			"--source-sha", strings.Repeat("a", 40), "--server-url", "https://forge.invalid",
+			"--repository", "acme/widget", "--image-repository", "registry.invalid/acme/widget",
+			"--manifest-output", "-"}
+		if command == "verify" {
+			args = append(args, "--ref", "registry.invalid/acme/widget@sha256:"+strings.Repeat("1", 64))
+		}
+
+		err := containercmd.New().Run(t.Context(), args)
+		require.ErrorIs(t, err, errs.ErrUsage)
+		require.Contains(t, err.Error(), "stdout (-) is not supported")
+	}
+}

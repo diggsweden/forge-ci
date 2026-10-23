@@ -62,7 +62,9 @@ the repository. The served index digest must equal the locally constructed
 index's digest. `--manifest-output` retains the exact checked bytes, without
 JSON re-encoding or an added newline, for the offline SBOM step.
 The snapshot path must not alias authentication inputs, architecture metadata,
-or the generated image metadata file; directory and symlink outputs are refused.
+or the generated image metadata file. Parent-directory aliases are resolved even
+when the destination file does not yet exist. Directory outputs, final-component
+symlinks and unresolved links are refused.
 
 ## Verify a reused index
 
@@ -75,6 +77,8 @@ platform/child set. Missing, extra, repeated and substituted children fail.
 A single-image manifest is accepted only when its bytes are the sole expected
 child. `--manifest-output` is optional; without it no metadata file is written.
 The operation emits `image-ref` and `image-digest` CI outputs after validation.
+Assembly and verification both read `IMAGE_ARCHS`; an explicit `--archs` value
+takes precedence. Push-retry flags belong to the publishing commands only.
 
 The current native build/assembly interface supports Linux AMD64 and ARM64.
 Index verification does not execute either architecture's code.
@@ -139,6 +143,10 @@ The command prints the index BOM checksum and emits `sbom-path`, `sbom-sha256`
 and `evidence-files` CI outputs. Pass the output path and checksum to
 `container ledger add --sbom ... --sbom-sha256 ...`. The existing signer then
 attests those exact bytes instead of regenerating a host-selected inventory.
+
+Both `--manifest-output` and `sbom index --output` require file destinations.
+The stdout sentinel `-` is rejected before any output is written. Stdout remains
+the machine-readable reference or checksum channel, separate from artifact bytes.
 
 ## Verification scope
 

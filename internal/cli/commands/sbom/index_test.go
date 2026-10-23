@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	sbomcmd "github.com/diggsweden/forge-ci/internal/cli/commands/sbom"
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
 func TestIndexCommandIsOfflineAndBindsProducerDocuments(t *testing.T) {
@@ -37,4 +38,13 @@ func TestIndexCommandIsOfflineAndBindsProducerDocuments(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(root, "native.json"), []byte(`{}`), 0o600))
 	require.Error(t, sbomcmd.New().Run(t.Context(), args))
 	require.NoFileExists(t, out)
+}
+
+func TestIndexCommandRejectsStdoutBeforeReadingInputs(t *testing.T) {
+	err := sbomcmd.New().Run(t.Context(), []string{"sbom", "index",
+		"--root", filepath.Join(t.TempDir(), "missing"), "--index-file", "index.json",
+		"--platform-sboms", "parts.json", "--image-ref", "registry.invalid/acme/widget@sha256:" + strings.Repeat("1", 64),
+		"--output", "-"})
+	require.ErrorIs(t, err, errs.ErrUsage)
+	require.Contains(t, err.Error(), "stdout (-) is not supported")
 }

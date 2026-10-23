@@ -19,11 +19,11 @@ func multiarchImageVerifyCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "verify",
 		Usage: "verify an existing digest-pinned index against the complete architecture metadata set without publishing",
-		Flags: append(append(signerImageCommonFlags(), multiarchImageParamFlags()...),
+		Flags: append(append(signerImageSourceFlags(), multiarchImageParamFlags()...),
 			&cli.StringFlag{Name: "ref", Required: true, Usage: "tag-free digest-pinned index reference"},
-			&cli.StringFlag{Name: "archs", Value: "amd64\narm64", Usage: "newline-separated expected architectures"},
+			multiarchImageArchsFlag(),
 			&cli.StringSliceFlag{Name: flagRequireLabel, Usage: "required child config label as key=value (repeatable)"},
-			&cli.StringFlag{Name: flagManifestOutput, Usage: "optional file for the exact verified index bytes; no registry writes"},
+			&cli.StringFlag{Name: flagManifestOutput, Usage: "optional file for exact verified index bytes; '-' is not supported; no registry writes"},
 		),
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return deps.FromCmd(ctx, cmd, func(dep *deps.Deps) error {

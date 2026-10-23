@@ -50,6 +50,10 @@ type IndexBOMOutput struct {
 // ComposeIndex reads all inputs and validates their digest/subject bindings
 // before writing an index BOM. Input documents are never rewritten.
 func ComposeIndex(in IndexBOMInput) (*IndexBOMOutput, error) {
+	if in.Output == cliio.StdSentinel {
+		return nil, fmt.Errorf("index SBOM output requires a file; stdout (-) is not supported: %w", errs.ErrUsage)
+	}
+
 	if in.Root == "" || in.Output == "" || strings.ContainsAny(in.Root+in.Output, "\r\n") {
 		return nil, fmt.Errorf("index SBOM root and output paths must be nonempty and single-line: %w", errs.ErrUsage)
 	}

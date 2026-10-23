@@ -140,7 +140,7 @@ func TestMultiarchExplicitTagRejectsConflictsBeforeRegistryAccess(t *testing.T) 
 }
 
 func TestMultiarchSnapshotCannotClobberInputsOrMetadata(t *testing.T) {
-	for _, path := range []string{"auth.json", "widget-arch-amd64/widget-amd64.json", "widget-dist/widget.json", "widget-dist"} {
+	for _, path := range []string{"-", "auth.json", "widget-arch-amd64/widget-amd64.json", "widget-dist/widget.json", "widget-dist"} {
 		t.Run(path, func(t *testing.T) {
 			in, registry := checkedIndexFixture(t)
 			in.ManifestOutput = path
@@ -157,4 +157,53 @@ func TestMultiarchSnapshotCannotClobberInputsOrMetadata(t *testing.T) {
 	_, err := appcontainer.AssembleSignerImageManifest(t.Context(), registry, nil, nil, io.Discard, in)
 	require.Error(t, err)
 	require.Empty(t, registry.events)
+}
+
+func TestMultiarchSnapshotRejectsAliasedMetadataParentsBeforePublication(t *testing.T) {
+	for _, existing := range []bool{true, false} {
+		t.Run(fmt.Sprintf("existing-parent=%t", existing), func(t *testing.T) {
+			in, registry := checkedIndexFixture(t)
+			if existing {
+				require.NoError(t, os.Mkdir("widget-dist", 0o700))
+				require.NoError(t, os.WriteFile("widget-dist/keep", []byte("previous evidence"), 0o600))
+			}
+
+			require.NoError(t, os.Symlink("widget-dist", "alias"))
+
+			in.ManifestOutput = "alias/widget.json"
+			_, err := appcontainer.AssembleSignerImageManifest(t.Context(), registry, nil, nil, io.Discard, in)
+			require.Error(t, err)
+			require.Empty(t, registry.events)
+			require.NoFileExists(t, "widget-dist/widget.json")
+
+			if existing {
+				body, readErr := os.ReadFile("widget-dist/keep")
+				require.NoError(t, readErr)
+				require.Equal(t, "previous evidence", string(body))
+			}
+		})
+	}
+}
+
+func TestMultiarchSnapshotSupportsNoncollidingParents(t *testing.T) {
+	for _, linked := range []bool{true, false} {
+		t.Run(fmt.Sprintf("linked-parent=%t", linked), func(t *testing.T) {
+			in, registry := checkedIndexFixture(t)
+			if linked {
+				require.NoError(t, os.Mkdir("snapshots", 0o700))
+				require.NoError(t, os.Symlink("snapshots", "alias"))
+
+				in.ManifestOutput = "alias/index.json"
+			} else {
+				in.MetadataDir = "artifacts/widget-dist"
+				in.ManifestOutput = "artifacts/widget-dist/index.json"
+			}
+
+			_, err := appcontainer.AssembleSignerImageManifest(t.Context(), registry, nil, nil, io.Discard, in)
+			require.NoError(t, err)
+			body, err := os.ReadFile(in.ManifestOutput)
+			require.NoError(t, err)
+			require.Equal(t, registry.raw, body)
+		})
+	}
 }

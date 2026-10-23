@@ -1541,7 +1541,7 @@ outputs.
 | `--from-layouts` | verify all staged architecture layouts before any upload, then publish and assemble; requires a successful whole-matrix dependency | bool | `false` | n/a |
 | `--archs` | newline-separated architectures to include | string | `"amd64\narm64"` | `$IMAGE_ARCHS` |
 | `--require-label` | required child config label as key=value (repeatable); checked before any upload | string | `""` | n/a |
-| `--manifest-output` | optional file for the exact verified index bytes, suitable for sbom index --index-file | string | `""` | n/a |
+| `--manifest-output` | optional file for exact verified index bytes, suitable for sbom index --index-file; '-' is not supported | string | `""` | n/a |
 | `--metadata-dir` | directory for <name>.json (default <name>-dist) | string | `""` | `$IMAGE_METADATA_DIR` |
 
 #### `forge-ci container multiarch-image build-arch`
@@ -1585,17 +1585,15 @@ verify an existing digest-pinned index against the complete architecture metadat
 | `--source-sha` | git commit SHA for the OCI revision label and default tag naming | string | `""` | `$SOURCE_SHA` |
 | `--server-url` | forge server URL used to derive the registry/repository | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive the image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
-| `--retry-attempts` | registry push attempts | int | `3` | `$IMAGE_RETRY_ATTEMPTS` |
-| `--retry-delay-seconds` | base delay between registry push retries | int | `10` | `$IMAGE_RETRY_DELAY_SECONDS` |
 | `--repository-suffix` | suffix for the derived image repository (e.g. -signer); unused with --image-repository | string | `""` | `$IMAGE_REPOSITORY_SUFFIX` |
 | `--image-repository` | full destination OCI repository without a tag or digest; overrides the derived destination, preserving source labels | string | `""` | `$IMAGE_REPOSITORY` |
 | `--tag-prefix` | prefix prepended to the source-SHA image and manifest tags (e.g. signer-) | string | `""` | `$IMAGE_TAG_PREFIX` |
 | `--tag` | explicit index tag name instead of tag-prefix + source-sha; architecture tags append -<arch>; mutually exclusive with tag-prefix | string | `""` | n/a |
 | `--name` | basename for the per-arch/manifest metadata files and dirs shared across the two phases | string | `"image"` | `$IMAGE_METADATA_NAME` |
 | `--ref` | tag-free digest-pinned index reference (required) | string | `""` | n/a |
-| `--archs` | newline-separated expected architectures | string | `"amd64\narm64"` | n/a |
+| `--archs` | newline-separated architectures to include | string | `"amd64\narm64"` | `$IMAGE_ARCHS` |
 | `--require-label` | required child config label as key=value (repeatable) | string | `""` | n/a |
-| `--manifest-output` | optional file for the exact verified index bytes; no registry writes | string | `""` | n/a |
+| `--manifest-output` | optional file for exact verified index bytes; '-' is not supported; no registry writes | string | `""` | n/a |
 
 ### `forge-ci container package-retention`
 
@@ -3901,7 +3899,7 @@ or the accuracy of the producer's package inventory. URLs are never fetched.
 | `--root` | root directory of all input files | string | `"."` | n/a |
 | `--index-file` | raw OCI index JSON, relative to root (required) | string | `""` | n/a |
 | `--platform-sboms` | version-1 platform SBOM record manifest, relative to root (required) | string | `""` | n/a |
-| `--output` | output CycloneDX file, relative to the working directory (required) | string | `""` | n/a |
+| `--output` | output CycloneDX file, relative to the working directory; '-' is not supported (required) | string | `""` | n/a |
 
 ## `forge-ci security`
 
