@@ -48,6 +48,7 @@ upload. Without these flags the existing immediate-publish behavior is retained.
 		Commands: []*cli.Command{
 			signerImageBuildArchCmd(),
 			signerImageAssembleCmd(),
+			multiarchImageVerifyCmd(),
 		},
 	}
 }
@@ -62,6 +63,7 @@ func multiarchImageParamFlags() []cli.Flag {
 		&cli.StringFlag{Name: "repository-suffix", Sources: cli.EnvVars("IMAGE_REPOSITORY_SUFFIX"), Usage: "suffix for the derived image repository (e.g. -signer); unused with --image-repository"},
 		&cli.StringFlag{Name: "image-repository", Sources: cli.EnvVars("IMAGE_REPOSITORY"), Usage: "full destination OCI repository without a tag or digest; overrides the derived destination, preserving source labels"},
 		&cli.StringFlag{Name: "tag-prefix", Sources: cli.EnvVars("IMAGE_TAG_PREFIX"), Usage: "prefix prepended to the source-SHA image and manifest tags (e.g. signer-)"},
+		&cli.StringFlag{Name: "tag", Usage: "explicit index tag name instead of tag-prefix + source-sha; architecture tags append -<arch>; mutually exclusive with tag-prefix"},
 		&cli.StringFlag{Name: "name", Value: "image", Sources: cli.EnvVars("IMAGE_METADATA_NAME"), Usage: "basename for the per-arch/manifest metadata files and dirs shared across the two phases"},
 	}
 }
@@ -93,6 +95,7 @@ architecture builds on a native runner, never under CPU emulation.`,
 				RepositorySuffix: cmd.String("repository-suffix"),
 				ImageRepository:  cmd.String("image-repository"),
 				TagPrefix:        cmd.String("tag-prefix"),
+				TagName:          cmd.String("tag"),
 				Name:             cmd.String("name"),
 				Title:            cmd.String("title"),
 				Containerfile:    cmd.String(flagContainerfile),
@@ -125,6 +128,8 @@ outputs.`,
 		Flags: append(append(signerImageCommonFlags(), multiarchImageParamFlags()...),
 			&cli.BoolFlag{Name: "from-layouts", Usage: "verify all staged architecture layouts before any upload, then publish and assemble; requires a successful whole-matrix dependency"},
 			&cli.StringFlag{Name: "archs", Value: "amd64\narm64", Sources: cli.EnvVars("IMAGE_ARCHS"), Usage: "newline-separated architectures to include"},
+			&cli.StringSliceFlag{Name: flagRequireLabel, Usage: "required child config label as key=value (repeatable); checked before any upload"},
+			&cli.StringFlag{Name: flagManifestOutput, Usage: "optional file for the exact verified index bytes, suitable for sbom index --index-file"},
 			&cli.StringFlag{Name: "metadata-dir", Sources: cli.EnvVars("IMAGE_METADATA_DIR"), Usage: "directory for <name>.json (default <name>-dist)"},
 		),
 		Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -137,6 +142,9 @@ outputs.`,
 					RepositorySuffix: cmd.String("repository-suffix"),
 					ImageRepository:  cmd.String("image-repository"),
 					TagPrefix:        cmd.String("tag-prefix"),
+					TagName:          cmd.String("tag"),
+					RequiredLabels:   cmd.StringSlice(flagRequireLabel),
+					ManifestOutput:   cmd.String(flagManifestOutput),
 					Name:             cmd.String("name"),
 					Archs:            splitSignerLines(cmd.String("archs")),
 					MetadataDir:      cmd.String("metadata-dir"),
@@ -175,7 +183,7 @@ func (signerImageTool) RawManifest(ctx context.Context, authFile, image string, 
 func signerImageCommonFlags() []cli.Flag {
 	return []cli.Flag{
 		regflags.AuthFile(regflags.AuthFileOpts{Env: "FORGE_CI_IMAGE_AUTH_FILE", Usage: "registry auth file used by buildah and the registry client"}),
-		&cli.StringFlag{Name: flagSourceSHA, Sources: cli.EnvVars("SOURCE_SHA"), Usage: "git commit SHA used in image tags and the OCI revision label"},
+		&cli.StringFlag{Name: flagSourceSHA, Sources: cli.EnvVars("SOURCE_SHA"), Usage: "git commit SHA for the OCI revision label and default tag naming"},
 		&cli.StringFlag{Name: flagServerURL, Sources: cienv.ServerURL(), Usage: "forge server URL used to derive the registry/repository"},
 		&cli.StringFlag{Name: flagRepository, Sources: cienv.Repository(), Usage: "owner/repo used to derive the image repository"},
 		&cli.IntFlag{Name: flagRetryAttempts, Value: 3, Sources: cli.EnvVars("IMAGE_RETRY_ATTEMPTS"), Usage: "registry push attempts"},

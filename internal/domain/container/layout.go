@@ -8,4 +8,5 @@ type LayoutImage struct {
 	Digest   string
 	Platform string
 	Revision string
+	Labels   map[string]string
 }

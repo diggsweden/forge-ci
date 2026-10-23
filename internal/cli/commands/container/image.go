@@ -82,7 +82,7 @@ non-matching or missing image exits non-zero and prints no digest.`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: flagRef, Required: true, Sources: cli.EnvVars("IMAGE_USABLE_DIGEST_REF"), Usage: "registry image ref to inspect, e.g. registry.example/owner/app:staging-amd64"},
 			&cli.StringFlag{Name: flagArch, Required: true, Sources: cli.EnvVars("IMAGE_USABLE_DIGEST_ARCH"), Usage: "required image architecture, e.g. amd64 or arm64"},
-			&cli.StringSliceFlag{Name: "require-label", Sources: cli.EnvVars("IMAGE_USABLE_DIGEST_REQUIRE_LABELS"), Usage: "required image config label as key=value (repeatable)"},
+			&cli.StringSliceFlag{Name: flagRequireLabel, Sources: cli.EnvVars("IMAGE_USABLE_DIGEST_REQUIRE_LABELS"), Usage: "required image config label as key=value (repeatable)"},
 			regflags.AuthFile(regflags.AuthFileOpts{Usage: "registry auth file for digest/metadata inspection"}),
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -92,7 +92,7 @@ non-matching or missing image exits non-zero and prints no digest.`,
 				result, err := appcontainer.UsableImageDigest(ctx, registry, dep.OutputSink, appcontainer.UsableImageDigestInput{
 					Ref:            cmd.String(flagRef),
 					Arch:           cmd.String(flagArch),
-					RequiredLabels: cmd.StringSlice("require-label"),
+					RequiredLabels: cmd.StringSlice(flagRequireLabel),
 				})
 				if err != nil {
 					return err

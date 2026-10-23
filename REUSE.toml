@@ -39,6 +39,7 @@ path = [
   "docs/components.md",
   "docs/ecosystems.md",
   "docs/gradle-publishing.md",
+  "docs/multiarch-images.md",
   "docs/private-dependencies.md",
   "docs/quickstart-setup-secrets.md",
   "docs/publishing.md",

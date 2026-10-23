@@ -26,6 +26,8 @@ Solve a specific task.
 - [Runtime Images](runtime-images.md) - Override runtime images for reproducibility, mirroring, or branch testing.
 - [Verification](verification.md) - Verify release assets, checksums, signatures, attestations, and SBOMs.
 - [SBOM](sbom.md) - Configure SBOM layers and understand release/snapshot defaults.
+- [Checked multi-architecture images](multiarch-images.md) - Assemble and verify
+  exact platform sets, then compose checksum-bound index SBOMs.
 - [GitHub](github.md) - The GitHub reusable workflows: adoption, inputs, secrets, runtime images, PR gates, releases and promotion, snapshots, signing, Code Scanning, forks, troubleshooting and limits.
 - [GitLab](gitlab.md) - The GitLab components, in the same section order: Catalog and checksum-bound components, the native release policy, signing, SAST reports, forks, troubleshooting, limits and live acceptance.
 - [Forgejo](forgejo.md) - The Forgejo delivery layer, in the same section order: calling it, the signer image and engine binary, the signing boundary, using it from a fork, limits; and the CLI on a Forgejo runner.

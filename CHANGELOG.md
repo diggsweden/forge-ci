@@ -5,11 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+<<<<<<< HEAD
 ## [0.91.10] - 2026-10-22
 
 ### Fixed
 
 - Install goreleaser regression
+||||||| parent of 12224bd (feat: add checked image indexes and index SBOMs)
+=======
+## [Unreleased]
+
+### Added
+
+- Explicit multi-architecture candidate tags, pre-publication child-label checks,
+  and read-only verification of exact platform/digest sets.
+- Offline CycloneDX index BOM composition with checksum-bound references to
+  unchanged platform SBOMs and an output pin for image-ledger signing.
+
+### Fixed
+
+- Reject duplicate requested architectures before staged image publication.
+
+>>>>>>> 12224bd (feat: add checked image indexes and index SBOMs)
 ## [0.91.9] - 2026-10-22
 
 ### Added

@@ -380,6 +380,11 @@ says where the build job's tools come from.
 
 ### The signer image
 
+For consumer images with native platform jobs, explicit candidate tags, exact
+index reuse and per-platform SBOMs, see [Checked multi-architecture
+images](multiarch-images.md). The consumer owns the job graph and product checks;
+the engine provides the registry and evidence operations.
+
 The four signer workflows run their privileged jobs in one image, which the
 calling organization builds and publishes.
 [`examples/forgejo/signer-image.yml`](../examples/forgejo/signer-image.yml) is

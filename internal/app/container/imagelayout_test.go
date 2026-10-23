@@ -67,8 +67,8 @@ func TestSignerStagingDefersAllRegistryOperations(t *testing.T) {
 }
 
 func TestStagedSignerAssemblyPreservesContractAndRejectsBadSibling(t *testing.T) {
-	for _, corrupt := range []bool{false, true} {
-		t.Run(map[bool]string{false: "valid", true: "bad sibling"}[corrupt], func(t *testing.T) {
+	for _, scenario := range []string{"valid", "bad sibling", "required label", "duplicate architecture"} {
+		t.Run(scenario, func(t *testing.T) {
 			t.Chdir(t.TempDir()) // existing signer artifact convention.
 
 			var writes atomic.Int32
@@ -92,16 +92,26 @@ func TestStagedSignerAssemblyPreservesContractAndRejectsBadSibling(t *testing.T)
 				writeSignerArchMetadata(t, arch, repo, digest.Hex)
 			}
 
-			if corrupt {
+			if scenario == "bad sibling" {
 				require.NoError(t, os.WriteFile("signer-image-arch-arm64/layout/oci-layout", []byte("bad"), 0o600))
 			}
 
 			sink := fakeoutputsink.New(t)
 
-			metadata, err := appcontainer.PublishAndAssembleSignerImage(t.Context(), ociregistry.WithAuthFile("auth.json"), sink, nil, io.Discard, appcontainer.SignerImageAssembleInput{
+			input := appcontainer.SignerImageAssembleInput{
 				AuthFile: "auth.json", SourceSHA: strings.Repeat("b", 40), ServerURL: server.URL, Repository: "org/repo", RepositorySuffix: "-signer", TagPrefix: "signer-", Name: "signer-image", RetryAttempts: 1,
-			})
-			if corrupt {
+				RequiredLabels: []string{"org.opencontainers.image.revision=" + strings.Repeat("b", 40)},
+			}
+			if scenario == "required label" {
+				input.RequiredLabels = []string{"org.example.missing=required"}
+			}
+
+			if scenario == "duplicate architecture" {
+				input.Archs = []string{"amd64", "amd64"}
+			}
+
+			metadata, err := appcontainer.PublishAndAssembleSignerImage(t.Context(), ociregistry.WithAuthFile("auth.json"), sink, nil, io.Discard, input)
+			if scenario != "valid" {
 				require.Error(t, err)
 				require.Zero(t, writes.Load())
 				require.Empty(t, sink.Keys())

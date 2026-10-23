@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/registry"
@@ -34,6 +35,9 @@ func TestSignerAssemblyUsesAuthenticatedRegistryWithoutBuildah(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 
 	handler := registry.New(registry.Logger(log.New(io.Discard, "", 0)))
+
+	var writes atomic.Int32
+
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		username, password, ok := request.BasicAuth()
 		if !ok || username != "publisher" || password != "fixture-password" {
@@ -41,6 +45,10 @@ func TestSignerAssemblyUsesAuthenticatedRegistryWithoutBuildah(t *testing.T) {
 			writer.WriteHeader(http.StatusUnauthorized)
 
 			return
+		}
+
+		if request.Method != http.MethodGet && request.Method != http.MethodHead {
+			writes.Add(1)
 		}
 
 		handler.ServeHTTP(writer, request)
@@ -57,7 +65,7 @@ func TestSignerAssemblyUsesAuthenticatedRegistryWithoutBuildah(t *testing.T) {
 	want := make(map[string]string)
 
 	for _, arch := range []string{"amd64", "arm64"} {
-		image, err := mutate.ConfigFile(empty.Image, &v1.ConfigFile{OS: "linux", Architecture: arch})
+		image, err := mutate.ConfigFile(empty.Image, &v1.ConfigFile{OS: "linux", Architecture: arch, Config: v1.Config{Labels: map[string]string{"org.example.revision": strings.Repeat("b", 40)}}})
 		require.NoError(t, err)
 
 		directory := t.TempDir()
@@ -74,16 +82,27 @@ func TestSignerAssemblyUsesAuthenticatedRegistryWithoutBuildah(t *testing.T) {
 	}
 
 	sink := fakeoutputsink.New(t)
-	metadata, err := appcontainer.AssembleSignerImageManifest(t.Context(), publisher, sink, nil, io.Discard, appcontainer.SignerImageAssembleInput{
+	input := appcontainer.SignerImageAssembleInput{
 		AuthFile: "auth.json", SourceSHA: strings.Repeat("b", 40), ServerURL: "https://source.example",
 		Repository: "org/repo", ImageRepository: repository, TagPrefix: "signer-", Name: "signer-image", RetryAttempts: 1,
-	})
+		RequiredLabels: []string{"org.example.revision=" + strings.Repeat("b", 40)}, ManifestOutput: "index.json",
+	}
+	metadata, err := appcontainer.AssembleSignerImageManifest(t.Context(), publisher, sink, nil, io.Discard, input)
 	require.NoError(t, err)
 
 	raw, err := publisher.Manifest(t.Context(), metadata.Tag)
 	require.NoError(t, err)
 	require.Equal(t, fmt.Sprintf("sha256:%x", sha256.Sum256(raw)), metadata.Digest)
 	require.Equal(t, metadata.Ref, sink.Single("image-ref"))
+
+	snapshot, err := os.ReadFile("index.json")
+	require.NoError(t, err)
+	require.Equal(t, raw, snapshot)
+
+	before := writes.Load()
+	input.ManifestOutput = "verified-index.json"
+	require.NoError(t, appcontainer.VerifyMultiarchImageManifest(t.Context(), publisher, nil, metadata.Ref, input))
+	require.Equal(t, before, writes.Load(), "verification must not write to the registry")
 
 	var index v1.IndexManifest
 	require.NoError(t, json.Unmarshal(raw, &index))

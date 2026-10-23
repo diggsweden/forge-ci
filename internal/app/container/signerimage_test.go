@@ -41,6 +41,7 @@ type fakeSignerImageTool struct {
 	mergeFails   int
 	platformOS   string
 	platformArch string
+	labels       map[string]map[string]string
 }
 
 var errSignerStep = errors.New("signer tool step failed")
@@ -113,6 +114,14 @@ func (f *fakeSignerImageTool) ImagePlatform(_ context.Context, ref string) (stri
 	}
 
 	return "linux", "amd64", nil
+}
+
+func (f *fakeSignerImageTool) Labels(_ context.Context, ref string) (map[string]string, error) {
+	if err := f.step("labels"); err != nil {
+		return nil, err
+	}
+
+	return f.labels[ref], nil
 }
 
 func (f *fakeSignerImageTool) MergeManifestWithDigest(_ context.Context, image string, digests, tags []string) (string, error) {

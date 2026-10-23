@@ -51,7 +51,7 @@ func (*Adapter) InspectLayout(ctx context.Context, directory string) (domaincont
 		platform += "/" + config.Variant
 	}
 
-	return domaincontainer.LayoutImage{Digest: descriptor.Digest.String(), Platform: platform, Revision: config.Config.Labels["org.opencontainers.image.revision"]}, nil
+	return domaincontainer.LayoutImage{Digest: descriptor.Digest.String(), Platform: platform, Revision: config.Config.Labels["org.opencontainers.image.revision"], Labels: config.Config.Labels}, nil
 }
 
 func layoutImageDescriptor(root *os.Root) (v1.Descriptor, error) {

@@ -35,11 +35,14 @@ func New() *cli.Command {
               --image-name …   multi-artifact analyzed-container SBOM (CI).
    build      GENERATE just the build-layer bom.json with the native tool
               (go/cargo) — the toolchain-runner generate tier ` + "`sbom assemble`" + ` harvests.
+   index      COMPOSE an offline index BOM linking unchanged platform SBOMs by
+              checksum; the caller publishes those documents as release evidence.
 
 Related, outside this group: ` + "`release sbom-zip`" + ` bundles assembled layers into a release zip.`,
 		Commands: []*cli.Command{
 			assembleCmd(),
 			buildCmd(),
+			indexCmd(),
 		},
 	}
 }

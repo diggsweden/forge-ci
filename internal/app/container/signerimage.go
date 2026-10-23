@@ -51,6 +51,7 @@ type SignerManifestRegistry interface {
 	RawManifestRegistry
 	MergeManifestWithDigest(ctx context.Context, image string, digests, tags []string) (string, error)
 	ImagePlatform(ctx context.Context, ref string) (string, string, error)
+	Labels(ctx context.Context, ref string) (map[string]string, error)
 }
 
 // SignerImageBuildArchInput drives one architecture build of the signer image.
@@ -67,6 +68,7 @@ type SignerImageBuildArchInput struct {
 	RepositorySuffix string // appended to lower(repository) to form the image repo (e.g. "-signer")
 	ImageRepository  string // optional full OCI repository; overrides the derived image destination, not source labels
 	TagPrefix        string // prepended to the source-SHA image tag (e.g. "signer-")
+	TagName          string // explicit index tag; mutually exclusive with TagPrefix
 	Name             string // metadata basename shared with assemble; empty defaults to "image"
 	Title            string // org.opencontainers.image.title label; empty omits the label
 	Containerfile    string
@@ -85,6 +87,9 @@ type SignerImageAssembleInput struct {
 	RepositorySuffix string
 	ImageRepository  string
 	TagPrefix        string
+	TagName          string
+	RequiredLabels   []string
+	ManifestOutput   string
 	Name             string
 	Archs            []string
 	MetadataDir      string
@@ -222,6 +227,10 @@ func PublishAndAssembleSignerImage(ctx context.Context, registry StagedSignerReg
 			return nil, fmt.Errorf("architecture metadata differs from staged layout: %w", errs.ErrValidation)
 		}
 
+		if err := matchStagedMultiarchLabels(ctx, registry, directory, record.Digest, in.RequiredLabels); err != nil {
+			return nil, err
+		}
+
 		inputs = append(inputs, LayoutRecordInput{Directory: directory, ImageRef: tag, Platform: "linux/" + arch, SourceSHA: in.SourceSHA})
 	}
 
@@ -234,36 +243,10 @@ func PublishAndAssembleSignerImage(ctx context.Context, registry StagedSignerReg
 
 // AssembleSignerImageManifest assembles the per-arch signer images into the
 // final multi-arch manifest, writes signer-image.json, and emits CI outputs.
-func AssembleSignerImageManifest(ctx context.Context, registry SignerManifestRegistry, sink ci.OutputSink, summary ci.SummarySink, out io.Writer, in SignerImageAssembleInput) (*SignerImageMetadata, error) { //nolint:cyclop // complete metadata/platform preflight precedes the linear merge/output phases.
-	derived, err := deriveSignerImageManifest(in)
+func AssembleSignerImageManifest(ctx context.Context, registry SignerManifestRegistry, sink ci.OutputSink, summary ci.SummarySink, out io.Writer, in SignerImageAssembleInput) (*SignerImageMetadata, error) {
+	derived, err := prepareSignerImageManifest(ctx, registry, in)
 	if err != nil {
 		return nil, err
-	}
-
-	seen := make(map[string]bool, len(derived.Archs))
-	for _, arch := range derived.Archs {
-		ref, refErr := signerArchRef(arch, derived.ImageRepository, derived.Name, derived.ManifestTag+"-"+arch)
-		if refErr != nil {
-			return nil, refErr
-		}
-
-		if seen[ref] {
-			return nil, fmt.Errorf("signer architectures must identify distinct image digests: %w", errs.ErrValidation)
-		}
-
-		seen[ref] = true
-		derived.Digests = append(derived.Digests, strings.TrimPrefix(ref, derived.ImageRepository+"@sha256:"))
-	}
-
-	for index, arch := range derived.Archs {
-		osName, actualArch, platformErr := registry.ImagePlatform(ctx, derived.ImageRepository+"@sha256:"+derived.Digests[index])
-		if platformErr != nil {
-			return nil, platformErr
-		}
-
-		if osName != "linux" || actualArch != arch {
-			return nil, fmt.Errorf("signer image must have platform linux/%s, got %s/%s: %w", arch, osName, actualArch, errs.ErrValidation)
-		}
 	}
 
 	if err = recreateSignerMetadataDir(derived.MetadataDir); err != nil {
@@ -289,6 +272,10 @@ func AssembleSignerImageManifest(ctx context.Context, registry SignerManifestReg
 
 	if digest != mergedDigest {
 		return nil, fmt.Errorf("merged signer index does not match the registry manifest: %w", errs.ErrValidation)
+	}
+
+	if err = writeVerifiedIndex(in.ManifestOutput, raw); err != nil {
+		return nil, err
 	}
 
 	meta := &SignerImageMetadata{
@@ -421,9 +408,14 @@ func deriveSignerImageArch(in SignerImageBuildArchInput) (signerImageArchDerived
 	contextDir := defaultSignerString(in.Context, defaultSignerImageContext)
 	metadataDir := defaultSignerString(in.MetadataDir, name+"-arch-"+in.Arch)
 
+	tag, err := multiarchImageTag(imageRepo, in.SourceSHA, in.TagPrefix, in.TagName)
+	if err != nil {
+		return signerImageArchDerived{}, err
+	}
+
 	return signerImageArchDerived{
 		ImageRepository: imageRepo,
-		ImageTag:        fmt.Sprintf("%s:%s%s-%s", imageRepo, in.TagPrefix, in.SourceSHA, in.Arch),
+		ImageTag:        tag + "-" + in.Arch,
 		LocalImage:      fmt.Sprintf("%s:%s-%s", localScratchImage(name), in.SourceSHA, in.Arch),
 		MetadataDir:     metadataDir,
 		Name:            name,
@@ -448,10 +440,17 @@ func deriveSignerImageManifest(in SignerImageAssembleInput) (signerImageManifest
 		archs = []string{domaincontainer.ArchAMD64, domaincontainer.ArchARM64}
 	}
 
+	seen := make(map[string]bool, len(archs))
 	for _, arch := range archs {
 		if err := validateSignerArch(arch); err != nil {
 			return signerImageManifestDerived{}, err
 		}
+
+		if seen[arch] {
+			return signerImageManifestDerived{}, fmt.Errorf("duplicate requested architecture %s: %w", arch, errs.ErrValidation)
+		}
+
+		seen[arch] = true
 	}
 
 	imageRepo, err := signerImageRepository(in.ServerURL, in.Repository, in.RepositorySuffix, in.ImageRepository)
@@ -461,13 +460,27 @@ func deriveSignerImageManifest(in SignerImageAssembleInput) (signerImageManifest
 
 	name := defaultSignerString(in.Name, defaultMultiarchImageName)
 
-	return signerImageManifestDerived{
+	tag, err := multiarchImageTag(imageRepo, in.SourceSHA, in.TagPrefix, in.TagName)
+	if err != nil {
+		return signerImageManifestDerived{}, err
+	}
+
+	if _, err = parseRequiredImageLabels(in.RequiredLabels); err != nil {
+		return signerImageManifestDerived{}, err
+	}
+
+	derived := signerImageManifestDerived{
 		ImageRepository: imageRepo,
-		ManifestTag:     fmt.Sprintf("%s:%s%s", imageRepo, in.TagPrefix, in.SourceSHA),
+		ManifestTag:     tag,
 		MetadataDir:     defaultSignerString(in.MetadataDir, name+"-dist"),
 		Name:            name,
 		Archs:           archs,
-	}, nil
+	}
+	if err = validateIndexSnapshotPath(in.ManifestOutput, in.AuthFile, derived); err != nil {
+		return signerImageManifestDerived{}, err
+	}
+
+	return derived, nil
 }
 
 func validateSignerImageCommon(authFile, sourceSHA, serverURL, repository string) error {

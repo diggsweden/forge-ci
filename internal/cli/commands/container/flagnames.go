@@ -32,10 +32,12 @@ const (
 	flagImage                   = "image"
 	flagImageName               = "image-name"
 	flagLedger                  = "ledger"
+	flagManifestOutput          = "manifest-output"
 	flagName                    = "name"
 	flagPlatform                = "platform"
 	flagProvenanceEnvelope      = "provenance-envelope"
 	flagRecursive               = "recursive"
+	flagRequireLabel            = "require-label"
 	flagRef                     = "ref"
 	flagRegistryPasswordFile    = regflags.FlagPasswordFile
 	flagRegistryUsername        = regflags.FlagUsername
