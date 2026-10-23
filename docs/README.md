@@ -12,6 +12,8 @@ target the 0.90.0 Go-backed workflow contract.
 
 Learn by starting from a working setup.
 
+- [Release signing secrets](quickstart-setup-secrets.md) - Linux key setup and
+  hardware-backed/keyless signing guidance.
 - [Examples](../examples/README.md) - Start from a working Maven, NPM, Gradle, Android, Go, Cargo, or monorepo setup.
 
 ## How-To Guides

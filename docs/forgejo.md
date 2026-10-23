@@ -325,6 +325,11 @@ CLI input by accident.
 
 ## Secrets and tokens
 
+For Linux key generation and the stronger hardware-backed/keyless alternatives,
+see [Set up release signing secrets](quickstart-setup-secrets.md). That guide
+distinguishes the current key-based Forgejo workflow contract from integrations
+that require different signing infrastructure.
+
 Every secret the layer reads is named `RELEASE_<what>`. The caller passes each
 one by name; the workflows hand it to the CLI under the CLI's own variable
 names, which are not these.
