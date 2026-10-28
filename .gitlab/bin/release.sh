@@ -75,7 +75,8 @@ rc_release_context() {
 		echo "ERROR: release branch is not a valid branch name: ${RC_RELEASE_BRANCH}" >&2
 		return 1
 	fi
-	rc_engine version derive-release --ref-name "${CI_COMMIT_TAG}" --require-release-request --require-stable
+	export RELEASE_POLICY="${RC_RELEASE_POLICY:-stable}"
+	rc_engine version derive-release --ref-name "${CI_COMMIT_TAG}" --require-release-request
 }
 
 rc_checkout() {
@@ -177,12 +178,17 @@ rc_prepare_release() {
 			rc_require_regular_file "${bump}/${file}"
 		done
 		patch_digest=$(head -c 64 -- "${bump}/digest")
-		rc_engine version apply-bump --project-type "${RC_VERSION_BUMP}" --version "${RELEASE_TAG}" --working-dir . \
+		rc_engine version apply-bump --release-policy "${RELEASE_POLICY:?}" --project-type "${RC_VERSION_BUMP}" --version "${RELEASE_TAG}" --working-dir . \
 			--patch "${bump}/version-bump.patch" --sha256 "${patch_digest}" --paths-file "${RC_WORK:?}/bump-paths"
 		include=(--include-paths-file "${RC_WORK}/bump-paths")
 	fi
+	# Left out, the engine pushes to this project on the web host.
+	local git_url=()
+	if [[ -n "${RC_GIT_URL:-}" ]]; then
+		git_url=(--git-url "${RC_GIT_URL}")
+	fi
 	SSH_SIGNING_KEY="${RELEASE_SSH_SIGNING_KEY:?}" rc_engine version commit-changelog-release \
-		--tag "${RELEASE_TAG}" --branch "${RC_RELEASE_BRANCH}" --repository "${CI_PROJECT_PATH}" --git-url "${RC_GIT_URL:?}" \
+		--tag "${RELEASE_TAG}" --branch "${RC_RELEASE_BRANCH}" --repository "${CI_PROJECT_PATH}" "${git_url[@]}" \
 		--host-key-fingerprint "${RC_GIT_HOST_KEY:?}" --author-name "${RC_BOT_NAME:?}" --author-email "${RC_BOT_EMAIL:?}" \
 		"${include[@]}"
 }

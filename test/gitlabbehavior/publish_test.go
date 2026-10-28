@@ -68,7 +68,7 @@ func TestPublishOutputsAreDataAndOnlyKnownNamesAreImported(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 
-			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", readers.String()) //nolint:gosec // Executes only the actual template's data readers in an isolated fixture.
+			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", readers.String())
 			command.Dir = dir
 
 			command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + dir, "CI_OUTPUT=" + output, "EXPECTED=" + payload}
@@ -83,7 +83,7 @@ func TestPublishOutputsAreDataAndOnlyKnownNamesAreImported(t *testing.T) {
 			// The job creates its output file away from artifact extraction, so
 			// old artifact contents cannot be appended to and then imported.
 			initScript := scripts[0] + "\ntest \"$CI_OUTPUT\" != \"$OLD_OUTPUT\" && test ! -s \"$CI_OUTPUT\"\n"
-			init := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", initScript) //nolint:gosec // Reviewed template initializer; all paths are in t.TempDir.
+			init := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", initScript)
 			init.Dir = dir
 
 			init.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + dir, "TMPDIR=" + dir, "CI_OUTPUT=" + output, "OLD_OUTPUT=" + output}

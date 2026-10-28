@@ -45,7 +45,7 @@ func TestComponentWorkingDirectoryIsLiteralData(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 
-			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", changeDirectory+"\ntest \"$PWD\" = \"$EXPECTED\"") //nolint:gosec // Actual template directory selection, isolated from all build and publication commands.
+			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", changeDirectory+"\ntest \"$PWD\" = \"$EXPECTED\"")
 			command.Dir = root
 			command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + root, "RC_PROJECT_DIRECTORY=" + directory, "EXPECTED=" + path}
 			output, err := command.CombinedOutput()

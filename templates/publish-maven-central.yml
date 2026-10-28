@@ -35,6 +35,10 @@
 #         profile: central-release
 spec:
   inputs:
+    release-policy:
+      default: stable
+      options: [stable, stable-prerelease]
+      description: Accepted signed release versions; snapshots remain a separate mode.
     stage:
       default: publish
       description: Pipeline stage the publish runs in.
@@ -104,13 +108,15 @@ spec:
   script:
     - |
       set -eu
+      readonly RELEASE_POLICY='$[[ inputs.release-policy ]]'
+      export RELEASE_POLICY
       CI_OUTPUT=$(mktemp "${TMPDIR:-/tmp}/forge-ci-output.XXXXXXXX")
       export CI_OUTPUT
       trap 'rm -f -- "$CI_OUTPUT"' EXIT
     # Defense-in-depth: refuse PR-context triggers — Maven Central + GPG
     # credentials are in this job's env and must never run with MR-HEAD code.
     - forge-ci validate event-context
-    - if [ "$MAVEN_SNAPSHOT" != "true" ]; then forge-ci publish maven-central authorize; fi
+    - if [ "$MAVEN_SNAPSHOT" != "true" ]; then forge-ci publish maven-central authorize --release-policy "$RELEASE_POLICY"; fi
     - cd -- "$RC_PROJECT_DIRECTORY"
     - |
       if [ "$PUBLICATION_TYPE" != "maven" ]; then

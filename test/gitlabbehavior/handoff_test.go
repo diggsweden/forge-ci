@@ -124,7 +124,7 @@ func runReleaseAfterScript(t *testing.T, workspace, job string) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
-	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", script) //nolint:gosec // Actual component hook, with only owned fixture paths and no provider access.
+	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", script)
 	command.Dir = workspace
 	command.Env = []string{"PATH=" + componentTools(t), "HOME=" + workspace, "CI_PROJECT_DIR=" + workspace, "CI_JOB_NAME=" + job, "CI_JOB_STATUS=failed"}
 

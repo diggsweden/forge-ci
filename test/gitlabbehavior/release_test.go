@@ -41,7 +41,7 @@ func TestReleaseJobRejectsCredentialsOutsideItsRole(t *testing.T) {
 			defer cancel()
 
 			script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
-			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", `source "$1"; rc_engine() { echo engine-called; }; rc_release_context`, "release-guard", script) //nolint:gosec // Reviewed script, isolated environment and an inert CLI function.
+			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", `source "$1"; rc_engine() { echo engine-called; }; rc_release_context`, "release-guard", script)
 			command.Dir = t.TempDir()
 			command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + command.Dir, "CI_JOB_NAME=" + pair[0], pair[1] + "=inert-canary-value"}
 
@@ -69,7 +69,7 @@ func TestReleaseHandoffNeverSourcesItsDigestAsShell(t *testing.T) {
 
 	const invocation = `set -eu; source "$1"; engine_status=$3; rc_engine() { echo engine-called; return "$engine_status"; }; if rc_read_handoff "$2"; then exit 0; else exit $?; fi`
 
-	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", invocation, "handoff-guard", script, dir, "0") //nolint:gosec // Reviewed script and inert CLI. Conditional invocation proves refusal does not depend on errexit.
+	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", invocation, "handoff-guard", script, dir, "0")
 	command.Dir = dir
 	command.Env = []string{"PATH=" + componentTools(t), "HOME=" + dir}
 
@@ -91,7 +91,7 @@ func TestReleaseHandoffNeverSourcesItsDigestAsShell(t *testing.T) {
 	}
 
 	for _, status := range []string{"17", "0"} {
-		control := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", invocation, "handoff-guard", script, dir, status) //nolint:gosec // Same inert fixture with a valid digest and explicit engine status.
+		control := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", invocation, "handoff-guard", script, dir, status)
 		control.Dir, control.Env = t.TempDir(), command.Env
 
 		output, err := control.CombinedOutput()
@@ -134,7 +134,7 @@ func TestBaseSigningRequiresExplicitPolicyOptIn(t *testing.T) {
 	defer cancel()
 
 	script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
-	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", //nolint:gosec // Actual trusted shell with an inert engine and owned artifacts only.
+	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c",
 		`source "$1"; rc_engine() { echo engine-called; }; rc_sign_bases`, "base-policy", script)
 	command.Dir = dir
 	command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + dir, "DIST_DIR=" + dir, "RC_BASE_IMAGES=false"}
@@ -166,7 +166,7 @@ func TestPublicationRegistryBelongsToTheSeparateProject(t *testing.T) {
 			defer cancel()
 
 			script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
-			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", `source "$1"; rc_publication_scope`, "publication-scope", script) //nolint:gosec // Actual scope guard, closed environment and no external commands.
+			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", `source "$1"; rc_publication_scope`, "publication-scope", script)
 
 			command.Env = []string{"PATH=/usr/bin:/bin", "CI_REGISTRY=registry.invalid", "CI_PROJECT_PATH=owner/source",
 				"RC_PUBLICATION_PROJECT=" + tc.project, "RC_PUBLICATION_IMAGE_REPOSITORY=" + tc.image}
@@ -189,7 +189,7 @@ func TestReleaseBranchIsNotTakenFromTheEnvironment(t *testing.T) {
 
 	script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
 
-	body, err := os.ReadFile(script) //nolint:gosec // repository contract fixture.
+	body, err := os.ReadFile(script)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +235,7 @@ func TestReleaseBranchInputMustBeABranchName(t *testing.T) {
 	defer cancel()
 
 	script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
-	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", //nolint:gosec // Reviewed script with an inert engine.
+	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c",
 		`set -eu; source "$1"; rc_engine() { printf 'engine %s\n' "$*"; }; rc_release_context`, "branch-name", script)
 	command.Env = []string{
 		"PATH=/usr/bin:/bin", "HOME=" + t.TempDir(), "CI_JOB_NAME=Prepare: release commit and tag",
@@ -273,7 +273,7 @@ func runReleasePrepareIn(t *testing.T, dir, script, input string, extraEnv ...st
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
-	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", //nolint:gosec // Reviewed script with inert engine and git functions.
+	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c",
 		`set -eu; source "$1"; rc_engine() { printf 'engine %s\n' "$*"; }; git() { printf 'git %s\n' "$*"; }; rc_release_context; rc_request_checkout() { rc_engine validate tag commit --branch "${RC_RELEASE_BRANCH}"; }; rc_prepare_release`,
 		"branch-guard", script)
 	command.Dir = dir
@@ -289,6 +289,24 @@ func runReleasePrepareIn(t *testing.T, dir, script, input string, extraEnv ...st
 	output, err := command.CombinedOutput()
 
 	return string(output), err
+}
+
+// An empty release-git-url leaves --git-url out, so the engine pushes to this
+// project on the GitLab web host; a given one is passed as written.
+func TestReleasePreparePassesTheGitURLOnlyWhenGiven(t *testing.T) {
+	t.Parallel()
+
+	script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
+
+	for url, want := range map[string]string{
+		"ssh://git@gitlab.invalid:2222/team/app.git": "--git-url ssh://git@gitlab.invalid:2222/team/app.git --host-key-fingerprint",
+		"": "--repository team/app --host-key-fingerprint",
+	} {
+		output, err := runReleasePrepareIn(t, t.TempDir(), script, "", "RC_GIT_URL="+url)
+		if err != nil || !strings.Contains(output, "engine version commit-changelog-release") || !strings.Contains(output, want) {
+			t.Errorf("RC_GIT_URL %q: err %v, want %q in\n%s", url, err, want, output)
+		}
+	}
 }
 
 // With a version bump, release-prepare runs no build tool: it hands the patch
@@ -321,7 +339,7 @@ func TestReleasePrepareAppliesOnlyAVerifiedVersionBump(t *testing.T) {
 		}
 
 		for _, want := range []string{
-			"engine version apply-bump --project-type maven --version v1.2.3 --working-dir . --patch " + dir + "/_release-bump/version-bump.patch --sha256 " + digest + " --paths-file " + work + "/bump-paths",
+			"engine version apply-bump --release-policy stable --project-type maven --version v1.2.3 --working-dir . --patch " + dir + "/_release-bump/version-bump.patch --sha256 " + digest + " --paths-file " + work + "/bump-paths",
 			"--include-paths-file " + work + "/bump-paths",
 		} {
 			if !strings.Contains(output, want) {
@@ -384,7 +402,7 @@ func TestReleasePathGuardsStopTheJob(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 
-			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", //nolint:gosec // Reviewed script with an inert engine.
+			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c",
 				`set -euo pipefail; source "$1"; rc_engine() { :; }; `+setup+`; `+test.call+`; echo went-on`, "guards", script)
 			command.Dir = t.TempDir()
 			command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + command.Dir}
@@ -421,7 +439,7 @@ func TestReleaseJobKeepsTheCredentialsOfItsRole(t *testing.T) {
 			defer cancel()
 
 			script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
-			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", //nolint:gosec // Reviewed script, isolated environment and an inert CLI function.
+			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c",
 				`source "$1"; rc_engine() { :; }; rc_release_context`, "release-guard", script)
 			command.Dir = t.TempDir()
 			command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + command.Dir, "CI_JOB_NAME=" + pair[0], pair[1] + "=inert-canary-value",

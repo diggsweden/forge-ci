@@ -6,6 +6,10 @@
 spec:
   component: [sha, reference]
   inputs:
+    release-policy:
+      description: Accepted release versions; classification comes from the signed tag.
+      default: stable
+      options: [stable, stable-prerelease]
     forge-ci-repository:
       regex: '^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)+$'
     consumer-project:
@@ -26,6 +30,7 @@ spec:
       regex: '^[0-9a-f]{64}$'
     release-git-url:
       type: string
+      default: ''
     release-git-host-key-fingerprint:
       type: string
     request-allowed-signers:
@@ -38,6 +43,11 @@ spec:
       type: array
     build:
       type: array
+    build-runner-tags:
+      description: >-
+        Runner tags for the build job alone, for example [privileged] where only a tagged runner lets an image build enter user namespaces. Every other job, the signer's included, stays on untagged runners. Empty, the default, leaves the build job untagged.
+      type: array
+      default: []
     changelog-creator:
       default: git-cliff
       options: [git-chglog, git-cliff]
@@ -82,7 +92,7 @@ release:
   inherit:
     variables: false
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_TAG =~ /^release-request\/v[0-9]+\.[0-9]+\.[0-9]+$/'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_TAG =~ /^release-request\/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$/'
   trigger:
     strategy: mirror
     forward:
@@ -93,6 +103,7 @@ release:
         ref: $[[ component.sha ]]
         file: /templates/release-jobs.yml
         inputs:
+          release-policy: $[[ inputs.release-policy ]]
           engine-sha: $[[ component.sha ]]
           engine-reference: $[[ component.reference ]]
           forge-ci-repository: $[[ inputs.forge-ci-repository ]]
@@ -110,6 +121,7 @@ release:
           bot-email: $[[ inputs.bot-email ]]
           checks: $[[ inputs.checks ]]
           build: $[[ inputs.build ]]
+          build-runner-tags: $[[ inputs.build-runner-tags ]]
           changelog-creator: $[[ inputs.changelog-creator ]]
           changelog-config: $[[ inputs.changelog-config ]]
           commit-body-config: $[[ inputs.commit-body-config ]]

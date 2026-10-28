@@ -7,6 +7,7 @@ package gitlabbehavior
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -51,7 +52,7 @@ func TestNanolinterFetchesTheMergeRequestTarget(t *testing.T) {
 
 	stub := "#!/bin/sh\nset -e\ngit rev-parse --verify --quiet refs/remotes/origin/main >/dev/null\n" +
 		"test \"$(git rev-list --count origin/main..HEAD)\" = 2\n"
-	if err := os.WriteFile(filepath.Join(dir, "nanolinter"), []byte(stub), 0o700); err != nil { //nolint:gosec // Owner-only executable fixture in t.TempDir.
+	if err := os.WriteFile(filepath.Join(dir, "nanolinter"), []byte(stub), 0o700); err != nil {
 		t.Fatal(err)
 	}
 
@@ -70,6 +71,7 @@ func TestNanolinterFetchesTheMergeRequestTarget(t *testing.T) {
 func TestNanolinterUsesUTF8AndPreservesScannerFailure(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
+
 	stub := `#!/bin/sh
 test "$LANG" = C.UTF-8 && test "$LC_ALL" = C.UTF-8 || exit 97
 printf 'UTF-8 scanner environment verified\n'
@@ -78,10 +80,14 @@ exit 3
 	if err := os.WriteFile(filepath.Join(dir, "nanolinter"), []byte(stub), 0o700); err != nil {
 		t.Fatal(err)
 	}
+
 	output, err := runNanolinterScript(t, dir, dir, "LANG=C", "LC_ALL=C")
-	if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != 3 {
+
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 3 {
 		t.Fatalf("scanner failure must remain blocking: %v\n%s", err, output)
 	}
+
 	if !strings.Contains(output, "UTF-8 scanner environment verified") || !strings.Contains(output, "tool/runtime failure") {
 		t.Fatalf("missing environment/remediation evidence: %s", output)
 	}
@@ -113,7 +119,7 @@ func runNanolinterScript(t *testing.T, dir, workspace string, env ...string) (st
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
-	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", script[0]) //nolint:gosec // Reviewed component shell against local fixtures.
+	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", script[0])
 	command.Dir = workspace
 
 	command.Env = append([]string{
@@ -131,7 +137,7 @@ func runNanolinterScript(t *testing.T, dir, workspace string, env ...string) (st
 func gitIn(t *testing.T, dir string, args ...string) {
 	t.Helper()
 
-	command := exec.CommandContext(t.Context(), "git", append([]string{ //nolint:gosec // git with the test's own fixture arguments.
+	command := exec.CommandContext(t.Context(), "git", append([]string{
 		"-c", "user.name=test", "-c", "user.email=test@invalid", "-c", "commit.gpgsign=false", "-c", "protocol.file.allow=always",
 	}, args...)...)
 	command.Dir = dir

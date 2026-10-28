@@ -4,6 +4,9 @@
 # CI configuration. Consumer-owned YAML is not a signing-policy boundary.
 spec:
   inputs:
+    release-policy:
+      default: stable
+      options: [stable, stable-prerelease]
     engine-sha:
       regex: '^([0-9a-f]{40}|[0-9a-f]{64})$'
     engine-reference:
@@ -25,9 +28,10 @@ spec:
     cosign-public-key-sha256:
       regex: '^[0-9a-f]{64}$'
     release-git-url:
-      description: Repository SSH write URL; the prepare key must be a scoped deploy key.
+      description: Repository SSH write URL; the prepare key must be a scoped deploy key. Empty is this project on the GitLab web host, port 22.
+      default: ''
     release-git-host-key-fingerprint:
-      description: Independently supplied SSH host key fingerprint.
+      description: Independently supplied SSH host key fingerprint, SHA256:<base64> alone.
     request-allowed-signers:
       description: Trusted OpenSSH allowed-signers text for human release-request tags; supplied by the external policy.
     bot-name:
@@ -40,6 +44,10 @@ spec:
     build:
       type: array
       description: Consumer build commands producing dist/release-files.json and release-notes.md.
+    build-runner-tags:
+      type: array
+      default: []
+      description: Runner tags of the build job alone; empty leaves it untagged.
     changelog-creator:
       options: [git-chglog, git-cliff]
     changelog-config:
@@ -95,6 +103,8 @@ stages: [check, prepare, build, sign, publish]
     - |
       set -euo pipefail
       umask 077
+      export RC_RELEASE_POLICY='$[[ inputs.release-policy ]]'
+      readonly RC_RELEASE_POLICY
       expected='$[[ inputs.engine-sha ]]'
       reference='$[[ inputs.engine-reference ]]'
       test "${reference}" = "${expected}"
@@ -244,6 +254,7 @@ stages: [check, prepare, build, sign, publish]
 "Build: release files":
   extends: .forge-ci-release
   stage: build
+  tags: $[[ inputs.build-runner-tags ]]
   image:
     name: $[[ inputs.build-image ]]
     entrypoint: [""]
