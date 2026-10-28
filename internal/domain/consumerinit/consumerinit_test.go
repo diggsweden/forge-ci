@@ -23,7 +23,7 @@ func TestRemainingSkipsCommentsAndReportsEachTokenOnce(t *testing.T) {
 
 	got := consumerinit.Remaining(content)
 	want := []consumerinit.Placeholder{
-		{Token: "FORGE_HOST", Line: 2}, {Token: "OWNER/forge-ci", Line: 2}, {Token: "PIN_FORGE_CI_SHA", Line: 2}, //nolint:gosec // G101: placeholder names, no credential.
+		{Token: "FORGE_HOST", Line: 2}, {Token: "OWNER/forge-ci", Line: 2}, {Token: "PIN_FORGE_CI_SHA", Line: 2},
 		{Token: "FIXME", Line: 3},
 	}
 

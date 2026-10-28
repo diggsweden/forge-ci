@@ -19,8 +19,8 @@ signing, SLSA provenance and pinned third-party actions yourself.
 
 ## Quick Start
 
-Install the CLI, then add two workflows — one for pull-request checks, one
-for releases. The same two flows work on GitHub, GitLab and Forgejo.
+Install the CLI, then add pull/merge-request checks and release configuration
+for your forge. GitHub, GitLab and Forgejo use their own CI syntax.
 
 ### Install
 
@@ -34,9 +34,63 @@ go install github.com/diggsweden/forge-ci/cmd/forge-ci@v0.90.0
 ```
 
 `forge-ci init <repo-url>` writes a project's first CI files;
-`forge-ci doctor` checks the setup.
+`forge-ci doctor` checks local configuration.
 
-### Pull-request checks
+### Choose your forge and preview initialization
+
+The URL is the **Forge CI template repository**, not your application's remote.
+It also determines the generated CI layout: `init` does not infer the forge from
+your application's Git remote or a global `--provider` selection.
+
+| Your forge | Template source | Generated CI location |
+|---|---|---|
+| GitHub | A Forge CI repository on `github.com` | `.github/workflows/` |
+| GitLab | Your instance's Forge CI mirror, declaring `forge: gitlab` | `.gitlab-ci.yml` |
+| Forgejo | Your instance's Forge CI mirror, declaring `forge: forgejo` | `.forgejo/workflows/` |
+
+Outside `github.com`, the mirror's operator must put that `forge` value in
+`.forge-ci/consumer-defaults.yml` at the selected release tag.
+Without it, initialization refuses rather than guessing from the hostname.
+
+From your project directory, choose **one** of the following previews.
+Replace the example URL with the published template repository your organization uses:
+
+```bash
+# GitHub
+forge-ci init https://github.com/YOUR-ORG/forge-ci --dry-run
+
+# GitLab — mirror defaults must declare forge: gitlab
+forge-ci init https://gitlab.example.com/team/forge-ci --dry-run
+
+# Forgejo — mirror defaults must declare forge: forgejo
+forge-ci init https://forgejo.example.com/team/forge-ci --dry-run
+```
+
+The preview reports the target directory, resolved release and commit, selected
+example, proposed files, existing-file conflicts, and remaining placeholders.
+Check that its reported forge and proposed file locations match your project.
+It fetches templates into temporary storage but writes no project files.
+Conflicts return a nonzero status; existing files are never replaced.
+Use `--example` to choose an example and `--ref` to select an available release.
+After review, repeat without `--dry-run`, retaining the reported release and example.
+Preview and generation fetch the source independently; preview is not a saved execution plan.
+
+Linter configuration files are optional customizations: init does not create
+or modify Nanolinter or MegaLinter configs. The `lint-engine` input selects the
+engine (Nanolinter by default in the GitHub PR workflow); without a config file,
+the selected engine uses its defaults and the workflow's required lint floor
+still applies. The [examples](examples/README.md) include configs you can copy
+to customize those defaults.
+Nanolinter performs its own lookup: root `nanolinter.toml`, then
+`development/nanolinter.toml`, then built-in defaults.
+
+### GitHub: Pull-request checks
+
+The following manual examples are for GitHub only.
+Use the [GitLab guide](docs/gitlab.md#getting-started) or
+[Forgejo guide](docs/forgejo.md#getting-started) for those CI systems.
+Replace `diggsweden/forge-ci` in the GitHub examples with your selected template
+repository and pin an available release consistently.
 
 One caller workflow runs lint and security scans on every PR. Add your
 own test job alongside it:
@@ -58,7 +112,7 @@ jobs:
       project-type: go  # maven, npm, gradle, cargo, ...
 ```
 
-### Release
+### GitHub: Release
 
 Push a signed tag — the flow builds, signs, publishes and creates the
 final version tag:

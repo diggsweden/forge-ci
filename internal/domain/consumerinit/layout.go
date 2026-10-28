@@ -40,7 +40,8 @@ func ResolveForge(host string, defaults Defaults) (provider.ForgeAPI, error) {
 // Plan lists the files a forge takes from an example. Entries are the
 // file names the example holds in its forge directory.
 func Plan(forge provider.ForgeAPI, example string, forgeEntries []string) []FileCopy {
-	plan := []FileCopy{{From: path.Join(example, "nanolinter.toml"), To: "nanolinter.toml"}}
+	// Linter configuration belongs to the consumer, not CI initialization.
+	var plan []FileCopy
 
 	switch forge {
 	case provider.ForgeGitHub:

@@ -60,8 +60,6 @@ type Source struct {
 }
 
 // examplesByType names the example each detected project type starts from.
-//
-//nolint:gochecknoglobals // static, read-only table.
 var examplesByType = map[projecttype.Type]string{
 	projecttype.Go:            "go-cli",
 	projecttype.Cargo:         "cargo-app",
@@ -72,8 +70,6 @@ var examplesByType = map[projecttype.Type]string{
 }
 
 // typesByExample is the reverse, for the nanolinter flavour of an example.
-//
-//nolint:gochecknoglobals // static, read-only table.
 var typesByExample = map[string]projecttype.Type{
 	"go-cli": projecttype.Go, "go-service": projecttype.Go, "cargo-app": projecttype.Cargo,
 	"maven-app": projecttype.Maven, "gradle-app": projecttype.Gradle,

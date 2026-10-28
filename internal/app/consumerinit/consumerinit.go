@@ -21,7 +21,6 @@ import (
 	domain "github.com/diggsweden/forge-ci/internal/domain/consumerinit"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
-	"github.com/diggsweden/forge-ci/internal/domain/version"
 )
 
 // examplesDir is where a Forge CI release keeps its consumer examples.
@@ -40,23 +39,29 @@ type Remote interface {
 type Input struct {
 	Remote  Remote
 	URL     string // the Forge CI mirror, https://host/owner/repo
-	Ref     string // release tag to pin; empty takes the highest vX.Y.Z
+	Ref     string // release tag to pin; empty takes the highest stable X.Y.Z or vX.Y.Z
 	Dir     string // the consumer's root
 	Example string // example to start from, e.g. go-cli
+	DryRun  bool   // render and inspect destinations without writing project files
 }
 
-// Result says what was pinned and written, and what a person still fills in.
+// Result says what was pinned, proposed and written, and what still needs review.
 type Result struct {
+	Directory string
+	DryRun    bool
 	Forge     provider.ForgeAPI
 	Source    domain.Source
 	Defaults  bool // the mirror has a defaults file at the pinned tag
 	Written   []string
+	Proposed  []string
+	Conflicts []string
 	Remaining map[string][]domain.Placeholder
 }
 
 // Run pins the mirror's release, reads its examples and defaults at that
 // release, and writes the example's files for the consumer's forge. It
-// writes nothing when any target already exists.
+// writes nothing in dry-run mode or when any target already exists. Dry runs
+// still acquire the remote templates in temporary storage.
 func Run(ctx context.Context, in Input) (Result, error) {
 	repoURL, src, err := parseURL(in.URL)
 	if err != nil {
@@ -85,32 +90,79 @@ func Run(ctx context.Context, in Input) (Result, error) {
 	}
 
 	examples := os.DirFS(filepath.Join(snapshot, examplesDir))
+	result := Result{DryRun: in.DryRun, Forge: forge, Source: src, Defaults: found, Remaining: map[string][]domain.Placeholder{}}
 
-	plan, err := planFiles(examples, forge, in.Example, in.Dir)
+	return initializeFiles(examples, in, defaults, result)
+}
+
+func initializeFiles(examples fs.FS, in Input, defaults domain.Defaults, result Result) (Result, error) {
+	plan, err := planFiles(examples, result.Forge, in.Example)
 	if err != nil {
 		return Result{}, err
 	}
 
-	result := Result{Forge: forge, Source: src, Defaults: found, Remaining: map[string][]domain.Placeholder{}}
-	err = write(examples, plan, domain.Replacements(forge, in.Example, src, defaults), in.Dir, &result)
+	directory, err := filepath.Abs(in.Dir)
+	if err != nil {
+		return Result{}, err
+	}
+
+	result.Directory = directory
+
+	files, err := render(examples, plan, domain.Replacements(result.Forge, in.Example, result.Source, defaults), &result)
+	if err != nil {
+		return Result{}, err
+	}
+
+	result.Conflicts, err = existingDestinations(directory, result.Proposed)
+	if err != nil {
+		return Result{}, err
+	}
+
+	if len(result.Conflicts) > 0 {
+		return result, fmt.Errorf("existing destinations prevent initialization: %s; init writes only new files: %w", strings.Join(result.Conflicts, ", "), errs.ErrUsage)
+	}
+
+	if in.DryRun {
+		return result, nil
+	}
+
+	err = write(files, directory, &result)
 
 	return result, err
+}
+
+func existingDestinations(dir string, proposed []string) ([]string, error) {
+	var conflicts []string
+
+	for _, file := range proposed {
+		_, err := os.Lstat(filepath.Join(dir, filepath.FromSlash(file)))
+		if err == nil {
+			conflicts = append(conflicts, file)
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return nil, err
+		}
+	}
+
+	return conflicts, nil
 }
 
 // parseURL splits https://host/owner/repo into the URL git fetches from and
 // the host and repository path the examples are pinned to.
 func parseURL(raw string) (string, domain.Source, error) {
 	parsed, err := url.Parse(raw)
-	repository := strings.TrimSuffix(strings.Trim(parsed.Path, "/"), ".git")
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+		return "", domain.Source{}, fmt.Errorf("the Forge CI URL must be https://<host>/<owner>/<repository>, got %q: %w", raw, errs.ErrUsage)
+	}
 
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || !strings.Contains(repository, "/") {
+	repository := strings.TrimSuffix(strings.Trim(parsed.Path, "/"), ".git")
+	if !strings.Contains(repository, "/") {
 		return "", domain.Source{}, fmt.Errorf("the Forge CI URL must be https://<host>/<owner>/<repository>, got %q: %w", raw, errs.ErrUsage)
 	}
 
 	return strings.TrimSuffix(raw, "/"), domain.Source{Host: parsed.Host, Repository: repository}, nil
 }
 
-// pin returns the release tag, the given one or the highest vX.Y.Z, and
+// pin returns the release tag, the given one or the highest stable version, and
 // the commit it names on the mirror.
 func pin(ctx context.Context, remote Remote, repoURL, ref string) (string, string, error) {
 	tag := ref
@@ -120,8 +172,8 @@ func pin(ctx context.Context, remote Remote, repoURL, ref string) (string, strin
 			return "", "", err
 		}
 
-		if tag = version.LatestSemverTag(tags); tag == "" {
-			return "", "", fmt.Errorf("%s has no vX.Y.Z release tag; pass --ref: %w", repoURL, errs.ErrUsage)
+		if tag = domain.LatestReleaseTag(tags); tag == "" {
+			return "", "", fmt.Errorf("%s has no stable X.Y.Z or vX.Y.Z release tag; pass --ref: %w", repoURL, errs.ErrUsage)
 		}
 	}
 
@@ -156,8 +208,8 @@ func readRelease(ctx context.Context, remote Remote, repoURL, tag, snapshot stri
 	return defaults, err == nil, err
 }
 
-// planFiles lists the files to write and refuses when any already exists.
-func planFiles(examples fs.FS, forge provider.ForgeAPI, example, dir string) ([]domain.FileCopy, error) {
+// planFiles lists the available initialization files of the selected example.
+func planFiles(examples fs.FS, forge provider.ForgeAPI, example string) ([]domain.FileCopy, error) {
 	entries, err := fs.ReadDir(examples, path.Join(example, domain.ForgeDir(forge)))
 	if err != nil {
 		return nil, fmt.Errorf("this release has no %s files for example %s; choose another with --example: %w", forge, example, errs.ErrUsage)
@@ -170,54 +222,63 @@ func planFiles(examples fs.FS, forge provider.ForgeAPI, example, dir string) ([]
 		}
 	}
 
-	// An older release lacks files newer examples have, such as
-	// nanolinter.toml; init writes what the pinned release holds.
+	// An older release may lack files newer examples have;
+	// init writes what the pinned release holds.
 	var plan []domain.FileCopy
 
 	for _, c := range domain.Plan(forge, example, names) {
 		if _, statErr := fs.Stat(examples, c.From); statErr == nil {
 			plan = append(plan, c)
+		} else if !errors.Is(statErr, fs.ErrNotExist) {
+			return nil, statErr
 		}
 	}
 
-	for _, c := range plan {
-		_, statErr := os.Lstat(filepath.Join(dir, filepath.FromSlash(c.To)))
-		if statErr == nil {
-			return nil, fmt.Errorf("%s already exists; init writes only new files: %w", c.To, errs.ErrUsage)
-		}
-
-		if !errors.Is(statErr, fs.ErrNotExist) {
-			return nil, statErr
-		}
+	if len(plan) == 0 {
+		return nil, fmt.Errorf("this release has no initialization files for %s example %s: %w", forge, example, errs.ErrUsage)
 	}
 
 	return plan, nil
 }
 
-// write substitutes and writes each planned file, and records what it
-// still holds for a person to fill in.
-func write(examples fs.FS, plan []domain.FileCopy, replacements []domain.Replacement, dir string, result *Result) error {
+type renderedFile struct {
+	path    string
+	content []byte
+}
+
+// render is shared by previews and writes, including placeholder reporting.
+func render(examples fs.FS, plan []domain.FileCopy, replacements []domain.Replacement, result *Result) ([]renderedFile, error) {
+	files := make([]renderedFile, 0, len(plan))
 	for _, file := range plan {
 		body, err := fs.ReadFile(examples, file.From)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		content := domain.Apply(string(body), replacements)
-		target := filepath.Join(dir, filepath.FromSlash(file.To))
+		files = append(files, renderedFile{path: file.To, content: []byte(content)})
+		result.Proposed = append(result.Proposed, file.To)
 
-		if err = os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
-			return err
-		}
-
-		if err = os.WriteFile(target, []byte(content), 0o644); err != nil { //nolint:gosec // repository files, world-readable by design.
-			return err
-		}
-
-		result.Written = append(result.Written, file.To)
 		if left := domain.Remaining(content); len(left) > 0 {
 			result.Remaining[file.To] = left
 		}
+	}
+
+	return files, nil
+}
+
+func write(files []renderedFile, dir string, result *Result) error {
+	for _, file := range files {
+		target := filepath.Join(dir, filepath.FromSlash(file.path))
+		if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
+			return err
+		}
+
+		if err := os.WriteFile(target, file.content, 0o644); err != nil { //nolint:gosec // repository files, world-readable by design.
+			return err
+		}
+
+		result.Written = append(result.Written, file.path)
 	}
 
 	return nil

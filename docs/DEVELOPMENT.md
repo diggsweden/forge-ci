@@ -32,6 +32,11 @@ copy examples from your local checkout. For pre-release workflow evaluation,
 follow [Branch Testing](runtime-images.md#branch-testing) with the reviewed
 pre-release images, rather than substituting a moving ref into production.
 
+`forge-ci init <mirror URL> --dry-run` uses that same remote-release source and
+temporary storage, but renders a proposal without writing project files.
+Initializer unit tests inject an inert remote and use temporary project trees
+to check generation parity, conflicts, and unchanged files; they need no provider.
+
 The bootstrap installer takes the same path for a branch or SHA
 `forge-ci-binary-ref`; release tags install the signed archive instead. See
 [CLI binary channels](runtime-images.md#cli-binary-channels).
@@ -250,7 +255,7 @@ direction, not by nesting. Two rules cover most decisions:
 - **Adapters never import `app` or `cli`,** and `domain` imports neither
   those nor `adapters`.
 
-The depguard `layer-*` rules in `.golangci.yml` enforce this in `just lint`
+The depguard `layer-*` rules in `development/golangci-lint/golangci.yml` enforce this in `just lint`
 and name the fix when it fails. The full rule, including why `platform` is an
 adapter and why pure OpenPGP verification lives in `internal/pgp` rather than
 an exempt adapter, is in [ADR 0004](adr/0004-package-layering.md).

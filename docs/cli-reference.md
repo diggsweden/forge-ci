@@ -2089,17 +2089,29 @@ The examples and the values its operator records in .forge-ci/consumer-defaults.
 are read from that repository at that tag, so the files match the release
 they pin. github.com is GitHub; any other host is the forge that file
 names. Existing files are never overwritten. The report lists what is
-still left to fill in.
+still left to fill in. Linter configuration is not generated.
+
+With --dry-run, render the same proposal and report existing-file conflicts
+without writing project files. Templates are still fetched into temporary
+storage. Conflicts return a nonzero status; unresolved placeholders are
+reported for review, not treated as proof that the workflows are ready to run.
+
+Automatic selection accepts stable X.Y.Z and vX.Y.Z tags, excludes prereleases
+and build metadata, and keeps the exact tag name. If both spellings exist for
+the highest version, vX.Y.Z wins; use --ref to select the other explicitly.
 
 EXAMPLES:
    # GitHub, from the published Forge CI:
    forge-ci init https://github.com/diggsweden/forge-ci
 
    # Forgejo or GitLab, from your organization's mirror:
-   forge-ci init https://codefloe.com/itiquette/forge-ci
+   forge-ci init https://github.com/diggsweden/forge-ci
+
+   # Preview without writing project files:
+   forge-ci init https://github.com/diggsweden/forge-ci --example go-service --ref v0.90.0 --dry-run
 
    # Another directory, a chosen example and tag:
-   forge-ci init https://codefloe.com/itiquette/forge-ci ../hello --example go-service --ref v0.90.0
+   forge-ci init https://github.com/diggsweden/forge-ci ../hello --example go-service --ref v0.90.0
 ```
 
 **Usage:** `forge-ci init <forge-ci URL> [directory]`
@@ -2107,7 +2119,8 @@ EXAMPLES:
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
 | `--example` | example to start from, one of android-app, cargo-app, go-cli, go-service, gradle-app, maven-app, npm-app (default: from the repository's build files) | string | `""` | n/a |
-| `--ref` | release tag to pin (default: the newest vX.Y.Z tag of the Forge CI repository) | string | `""` | n/a |
+| `--ref` | release tag to pin (default: the newest stable X.Y.Z or vX.Y.Z tag; v-prefixed wins ties) | string | `""` | n/a |
+| `--dry-run` | preview files, conflicts and remaining placeholders without writing project files; still fetches templates | bool | `false` | n/a |
 
 ## `forge-ci lint`
 

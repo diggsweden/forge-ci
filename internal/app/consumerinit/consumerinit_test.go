@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -26,6 +27,7 @@ type fakeRemote struct {
 	tags     []string
 	defaults string // empty: the mirror has no defaults file
 	commit   string // empty: use the default SHA-1 fixture
+	fetchErr error
 }
 
 func (f fakeRemote) VersionTags(context.Context, string) ([]string, error) { return f.tags, nil }
@@ -39,6 +41,10 @@ func (f fakeRemote) TagCommit(context.Context, string, string) (string, error) {
 }
 
 func (f fakeRemote) Export(_ context.Context, _, _, dest string, _ []string) ([]string, error) {
+	if f.fetchErr != nil {
+		return nil, f.fetchErr
+	}
+
 	if err := os.CopyFS(filepath.Join(dest, "examples"), os.DirFS(repoExamples)); err != nil {
 		return nil, err
 	}
@@ -106,9 +112,17 @@ func checkFilled(t *testing.T, forge provider.ForgeAPI, mirror, example string) 
 		remote.defaults = strings.Replace(fullDefaults, "%s", string(forge), 1)
 	}
 
-	result, err := appinit.Run(t.Context(), appinit.Input{Remote: remote, URL: mirror, Dir: t.TempDir(), Example: example})
+	dir := t.TempDir()
+
+	result, err := appinit.Run(t.Context(), appinit.Input{Remote: remote, URL: mirror, Dir: dir, Example: example})
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	for _, name := range []string{"nanolinter.toml", ".mega-linter.yml", ".mega-linter.yaml"} {
+		if _, statErr := os.Stat(filepath.Join(dir, name)); !errors.Is(statErr, fs.ErrNotExist) {
+			t.Errorf("init generated linter config %s: %v", name, statErr)
+		}
 	}
 
 	if result.Forge != forge || result.Source.Tag != "v0.91.0" {
@@ -187,7 +201,11 @@ func TestRunWritesNothingWhenATargetExists(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "nanolinter.toml"), []byte("# mine\n"), 0o600); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, ".forge-ci"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, ".forge-ci", "artifacts.yml"), []byte("# mine\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -204,6 +222,40 @@ func TestRunWritesNothingWhenATargetExists(t *testing.T) {
 	}
 }
 
+func TestRunPreservesConsumerLinterConfigs(t *testing.T) {
+	t.Parallel()
+
+	for _, forge := range []string{"github", "gitlab", "forgejo"} {
+		t.Run(forge, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+			configs := []string{"nanolinter.toml", ".mega-linter.yml", ".mega-linter.yaml"}
+
+			for _, name := range configs {
+				if err := os.WriteFile(filepath.Join(dir, name), []byte("# consumer-owned "+name+"\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			_, err := appinit.Run(t.Context(), appinit.Input{
+				Remote: fakeRemote{tags: []string{"v0.90.0"}, defaults: strings.Replace(fullDefaults, "%s", forge, 1)},
+				URL:    "https://" + forge + ".com/fixture/forge-ci", Dir: dir, Example: "go-cli",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			for _, name := range configs {
+				body, readErr := os.ReadFile(filepath.Join(dir, name))
+				if readErr != nil || string(body) != "# consumer-owned "+name+"\n" {
+					t.Errorf("consumer config %s changed: %q, %v", name, body, readErr)
+				}
+			}
+		})
+	}
+}
+
 func TestResolveSourceRefusesWhatItCannotPin(t *testing.T) {
 	t.Parallel()
 
@@ -212,6 +264,7 @@ func TestResolveSourceRefusesWhatItCannotPin(t *testing.T) {
 		remote fakeRemote
 	}{
 		"not https":                 {url: "http://github.com/diggsweden/forge-ci", remote: fakeRemote{tags: []string{"v1.0.0"}}},
+		"malformed URL":             {url: "https://%", remote: fakeRemote{tags: []string{"v1.0.0"}}},
 		"no repository path":        {url: "https://github.com/forge-ci", remote: fakeRemote{tags: []string{"v1.0.0"}}},
 		"no release tag":            {url: "https://github.com/diggsweden/forge-ci", remote: fakeRemote{tags: []string{"v1.0.0-rc.1"}}},
 		"mirror without forge":      {url: "https://codefloe.com/itiquette/forge-ci", remote: fakeRemote{tags: []string{"v1.0.0"}}},
@@ -220,9 +273,202 @@ func TestResolveSourceRefusesWhatItCannotPin(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			if _, err := appinit.Run(t.Context(), appinit.Input{Remote: tc.remote, URL: tc.url, Dir: t.TempDir(), Example: "go-cli"}); err == nil {
-				t.Fatal("resolved, want a refusal")
+			for _, dryRun := range []bool{false, true} {
+				if _, err := appinit.Run(t.Context(), appinit.Input{Remote: tc.remote, URL: tc.url, Dir: t.TempDir(), Example: "go-cli", DryRun: dryRun}); err == nil {
+					t.Fatalf("dry-run=%t: resolved, want a refusal", dryRun)
+				}
 			}
 		})
 	}
+}
+
+func TestRunDryRunMatchesGeneratedProposal(t *testing.T) {
+	t.Parallel()
+
+	for _, forge := range []string{"github", "gitlab", "forgejo"} {
+		t.Run(forge, func(t *testing.T) {
+			t.Parallel()
+
+			dir := filepath.Join(t.TempDir(), "new project")
+			input := appinit.Input{
+				Remote: fakeRemote{tags: []string{"v1.2.3"}, defaults: strings.Replace(fullDefaults, "%s", forge, 1)},
+				URL:    "https://" + forge + ".com/fixture/forge-ci", Dir: dir, Example: "go-cli", DryRun: true,
+			}
+
+			preview, err := appinit.Run(t.Context(), input)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if !preview.DryRun || preview.Directory != dir || len(preview.Proposed) == 0 || len(preview.Written) != 0 || len(preview.Conflicts) != 0 {
+				t.Fatalf("unexpected preview: %+v", preview)
+			}
+
+			if _, statErr := os.Lstat(dir); !errors.Is(statErr, fs.ErrNotExist) {
+				t.Fatalf("preview created the project directory: %v", statErr)
+			}
+
+			input.DryRun = false
+
+			written, err := appinit.Run(t.Context(), input)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if written.DryRun || !slices.Equal(preview.Proposed, written.Written) || preview.Source != written.Source || !reflect.DeepEqual(preview.Remaining, written.Remaining) {
+				t.Fatalf("preview and generation differ: preview=%+v written=%+v", preview, written)
+			}
+
+			for _, file := range preview.Proposed {
+				body, readErr := os.ReadFile(filepath.Join(dir, file))
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+
+				if !reflect.DeepEqual(domain.Remaining(string(body)), preview.Remaining[file]) {
+					t.Errorf("preview placeholders differ from written content: %s", file)
+				}
+			}
+		})
+	}
+}
+
+func TestRunDryRunReportsAllConflictsWithoutChangingFiles(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	workflow := ".github/workflows/pullrequest-workflow.yml"
+
+	for _, name := range []string{".forge-ci/artifacts.yml", workflow, "nanolinter.toml", ".mega-linter.yml", "KEEP"} {
+		file := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(file), 0o750); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := os.WriteFile(file, []byte("original: "+name), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	before := snapshotProject(t, dir)
+
+	result, err := appinit.Run(t.Context(), appinit.Input{
+		Remote: fakeRemote{tags: []string{"v1.2.3"}}, URL: "https://github.com/fixture/forge-ci",
+		Dir: dir, Example: "go-cli", DryRun: true,
+	})
+	if !errors.Is(err, errs.ErrUsage) {
+		t.Fatalf("err=%v, want existing-file refusal", err)
+	}
+
+	if !slices.Equal(result.Conflicts, []string{".forge-ci/artifacts.yml", workflow}) || len(result.Proposed) <= len(result.Conflicts) || len(result.Written) != 0 {
+		t.Fatalf("incomplete conflict/proposal report: %+v", result)
+	}
+
+	if len(result.Remaining) == 0 {
+		t.Fatal("conflicts must not hide remaining placeholders")
+	}
+
+	if after := snapshotProject(t, dir); !reflect.DeepEqual(before, after) {
+		t.Fatalf("preview changed the project: before=%v after=%v", before, after)
+	}
+}
+
+func TestRunDryRunErrorsDoNotLookLikeEmptySuccess(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name, example string
+		remote        fakeRemote
+	}{
+		{name: "fetch_failure", example: "go-cli", remote: fakeRemote{tags: []string{"v1.2.3"}, fetchErr: fs.ErrPermission}},
+		{name: "missing_example", example: "missing-example", remote: fakeRemote{tags: []string{"v1.2.3"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+			before := snapshotProject(t, dir)
+
+			result, err := appinit.Run(t.Context(), appinit.Input{
+				Remote: tc.remote, URL: "https://github.com/fixture/forge-ci", Dir: dir, Example: tc.example, DryRun: true,
+			})
+			if err == nil || len(result.Written) != 0 || len(result.Proposed) != 0 {
+				t.Fatalf("failed preview returned success/proposed files: %+v, %v", result, err)
+			}
+
+			if after := snapshotProject(t, dir); !reflect.DeepEqual(before, after) {
+				t.Fatal("failed preview changed the project")
+			}
+		})
+	}
+}
+
+type projectEntry struct {
+	mode fs.FileMode
+	body string
+}
+
+type emptyRelease struct{ fakeRemote }
+
+func (emptyRelease) Export(_ context.Context, _, _, dest string, _ []string) ([]string, error) {
+	if err := os.MkdirAll(filepath.Join(dest, "examples", "go-cli", "github"), 0o750); err != nil {
+		return nil, err
+	}
+
+	return []string{domain.DefaultsFile}, nil
+}
+
+func TestRunDryRunRefusesEmptyExample(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	result, err := appinit.Run(t.Context(), appinit.Input{
+		Remote: emptyRelease{fakeRemote{tags: []string{"v1.2.3"}}}, URL: "https://github.com/fixture/forge-ci",
+		Dir: dir, Example: "go-cli", DryRun: true,
+	})
+	if !errors.Is(err, errs.ErrUsage) || !strings.Contains(err.Error(), "no initialization files") || len(result.Written) != 0 {
+		t.Fatalf("empty release must be refused: %+v, %v", result, err)
+	}
+
+	entries, readErr := os.ReadDir(dir)
+	if readErr != nil || len(entries) != 0 {
+		t.Fatalf("failed preview changed target: %v, %v", entries, readErr)
+	}
+}
+
+func snapshotProject(t *testing.T, dir string) map[string]projectEntry {
+	t.Helper()
+
+	entries := map[string]projectEntry{}
+	project := os.DirFS(dir)
+
+	err := fs.WalkDir(project, ".", func(file string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+
+		var body []byte
+
+		if !entry.IsDir() {
+			body, err = fs.ReadFile(project, file)
+			if err != nil {
+				return err
+			}
+		}
+
+		entries[file] = projectEntry{mode: info.Mode(), body: string(body)}
+
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return entries
 }

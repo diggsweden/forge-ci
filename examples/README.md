@@ -42,7 +42,11 @@ a separate policy project, as the [GitLab guide](../docs/gitlab.md#releases-and-
 describes. The Forgejo pair puts your build job between the layer's prepare
 and signer workflows; it reads no `artifacts.yml`, because the workflow is the
 plan. The [Forgejo signer-image workflow](forgejo/) is for the organization
-that serves the layer, not for a consumer.
+that serves the layer, not for a consumer. The
+[runner lender](runner-lender/github-actions/lend-runner.yml) is for an
+installation whose Forgejo runner pool denies the user namespaces rootless
+Buildah needs: a public GitHub repository lends a VM for one container-build
+job at a time; see [Runners and runner lending](../docs/runners.md).
 
 ### By signing backend: [`signing/`](signing/)
 
