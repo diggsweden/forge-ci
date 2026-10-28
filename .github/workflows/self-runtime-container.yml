@@ -29,6 +29,8 @@ on:
       - scripts/bootstrap/install-mise.sh
       - scripts/bootstrap/install-publiccode-parser.sh
       - scripts/bootstrap/install-forge-ci.sh
+      - scripts/ci/runtime-smoke.sh
+      - containers/runtime/images.json
       - cmd/forge-ci/**
       - internal/**
       - go.mod
@@ -71,35 +73,9 @@ jobs:
           - name: forge-ci-runtime-base
             target: base
             local-tag: forge-ci-runtime-base:verify
-            smoke-test: |
-              bash --version
-              git --version
-              gpg --version
-              jq --version
-              yq --version
-              zip -v >/dev/null
-              git-cliff --version
-              gh --version
-              glab --version
-              forge-ci --version
-              test -d /opt/forge-ci/scripts/bootstrap
-              test -f /opt/forge-ci/templates/gitcliff/default.toml
           - name: forge-ci-runtime
             target: full
             local-tag: forge-ci-runtime:verify
-            smoke-test: |
-              bash --version
-              git --version
-              gpg --version
-              jq --version
-              yq --version
-              git-cliff --version
-              gh --version
-              glab --version
-              syft version
-              trivy --version
-              forge-ci --version
-              test -f /opt/forge-ci/templates/gitcliff/default.toml
           # Toolchain images are named with the release line they target
           # (rust-stable, go-1.27, node-24, java-25, android-35). Changing a line
           # requires explicit Containerfile and matrix updates;
@@ -107,69 +83,18 @@ jobs:
           - name: forge-ci-runtime-rust-stable
             target: rust
             local-tag: forge-ci-runtime-rust-stable:verify
-            smoke-test: |
-              bash --version
-              git --version
-              jq --version
-              yq --version
-              rustc --version
-              cargo --version
-              cargo cyclonedx --version
-              forge-ci --version
-              test -d /opt/forge-ci/scripts/bootstrap
           - name: forge-ci-runtime-go-1.27
             target: go
             local-tag: forge-ci-runtime-go-1.27:verify
-            smoke-test: |
-              bash --version
-              git --version
-              jq --version
-              yq --version
-              go version
-              go env GOROOT GOPATH
-              cyclonedx-gomod version
-              forge-ci --version
-              test -d /opt/forge-ci/scripts/bootstrap
           - name: forge-ci-runtime-node-24
             target: node
             local-tag: forge-ci-runtime-node-24:verify
-            smoke-test: |
-              bash --version
-              git --version
-              jq --version
-              yq --version
-              node --version
-              ldconfig -p | grep -F libatomic.so.1
-              npm --version
-              corepack --version
-              forge-ci --version
-              test -d /opt/forge-ci/scripts/bootstrap
           - name: forge-ci-runtime-java-25
             target: java
             local-tag: forge-ci-runtime-java-25:verify
-            smoke-test: |
-              bash --version
-              git --version
-              jq --version
-              yq --version
-              java -version 2>&1
-              mvn -version
-              gradle --version
-              forge-ci --version
-              test -d /opt/forge-ci/scripts/bootstrap
           - name: forge-ci-runtime-android-35
             target: android
             local-tag: forge-ci-runtime-android-35:verify
-            smoke-test: |
-              bash --version
-              git --version
-              java -version 2>&1
-              gradle --version
-              sdkmanager --version
-              adb --version
-              forge-ci --version
-              test -d /opt/android-sdk/platforms
-              test -d /opt/android-sdk/build-tools
     permissions:
       contents: read
       packages: read # read-only import of the forge-neutral build cache (publish-arch writes it)
@@ -212,7 +137,7 @@ jobs:
         if: ${{ github.event_name != 'pull_request' }}
         env:
           CONTAINER_REGISTRY: ghcr.io
-          REGISTRY_USERNAME: ${{ github.actor }}
+          REGISTRY_USER: ${{ github.actor }}
           REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: ./cli-prebuilt/forge-ci container login
       # Build into local container storage with buildah (daemonless, node-less,
@@ -236,11 +161,13 @@ jobs:
       - name: Smoke-test runtime image
         # podman reads buildah's container storage (no docker daemon), so the
         # image built above runs without a load into dockerd.
+        env:
+          RUNTIME_TAG: ${{ matrix.runtime.local-tag }}
+          RUNTIME_TARGET: ${{ matrix.runtime.target }}
         run: |
-          podman run --rm localhost/${{ matrix.runtime.local-tag }} bash -c '
-            set -euo pipefail
-            ${{ matrix.runtime.smoke-test }}
-          '
+          set -euo pipefail
+          go_version=$(sed -n 's/^ARG GO_VERSION=//p' containers/runtime/Containerfile)
+          podman run --rm -i "localhost/$RUNTIME_TAG" bash -s -- "$RUNTIME_TARGET" "$go_version" < scripts/ci/runtime-smoke.sh
       - name: Verify baked forge-ci runs
         # The image's CLI is the build-once binary; assert it executes and
         # reports the expected build-cli version.
@@ -281,8 +208,8 @@ jobs:
       sign: ${{ github.event_name != 'pull_request' && github.ref_type != 'tag' }}
 
   # The runtime images' platforms, declared once in RUNTIME_PLATFORMS and
-  # selected by the RELEASE_PLATFORMS repository variable: unset builds
-  # linux/amd64, and linux/amd64,linux/arm64 publishes both. The engine refuses an
+  # selected by the RELEASE_PLATFORMS repository variable: unset builds both
+  # declared architectures; a repository may select just one. The engine refuses an
   # undeclared, duplicated or malformed entry before anything is built, and
   # names each leg's suffix, so the jobs below name no architecture.
   platforms:
@@ -311,9 +238,8 @@ jobs:
         env:
           VERSION: ${{ needs.build-cli.outputs.version }}
           RUNTIME_PLATFORMS: linux/amd64,linux/arm64
-          # Unset builds linux/amd64 only; a repository that publishes both
-          # architectures states linux/amd64,linux/arm64.
-          RELEASE_PLATFORMS: ${{ vars.RELEASE_PLATFORMS || 'linux/amd64' }}
+          # Empty selects the declared set; an explicit value narrows it.
+          RELEASE_PLATFORMS: ${{ vars.RELEASE_PLATFORMS }}
         run: |
           set -euo pipefail
           tarball="$(find cli-dist -name "forge-ci_${VERSION}_linux_amd64.tar.gz" | head -1)"
@@ -431,7 +357,7 @@ jobs:
       - name: Log in to GHCR
         env:
           CONTAINER_REGISTRY: ghcr.io
-          REGISTRY_USERNAME: ${{ github.actor }}
+          REGISTRY_USER: ${{ github.actor }}
           REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: forge-ci container login
       - name: Ensure buildah + podman
@@ -642,7 +568,7 @@ jobs:
       - name: Log in to GHCR
         env:
           CONTAINER_REGISTRY: ghcr.io
-          REGISTRY_USERNAME: ${{ github.actor }}
+          REGISTRY_USER: ${{ github.actor }}
           REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: forge-ci container login
       - name: Compute build stamp

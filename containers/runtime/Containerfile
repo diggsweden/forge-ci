@@ -15,8 +15,8 @@
 #   full    — base + syft + trivy. Used by security and SBOM jobs.
 #   rust    — base + Rust stable toolchain + cargo-cyclonedx. Used by
 #             build-cargo and sbom-cargo.
-#   go      — base + Go 1.27 toolchain + cyclonedx-gomod. Used by build-go
-#             and sbom-go.
+#   go      — base + Go 1.27 toolchain, cyclonedx-gomod, GCC, libc headers
+#             and gettext. Used by Go build, race-test and translation jobs.
 #   node    — base + Node 24 LTS + npm + corepack. Used by build-npm,
 #             publish-snapshot-npm.
 #   java    — base + Eclipse Temurin JDK 25 LTS + Maven + Gradle. Used by
@@ -177,13 +177,21 @@ ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
 FROM base AS go
 
 # renovate: datasource=golang-version depName=go
-ARG GO_VERSION=1.27.2
+ARG GO_VERSION=1.27.3
 # renovate: datasource=github-releases depName=CycloneDX/cyclonedx-gomod
 ARG CYCLONEDX_GOMOD_VERSION=v1.10.0
 
 ENV GOROOT=/usr/local/go \
     GOPATH=/go \
     PATH=/usr/local/go/bin:/go/bin:$PATH
+
+# CGO and the race detector require a C compiler and libc development headers.
+# gettext supplies msgmerge, msgen, msgattrib and msgfmt for catalog checks.
+# Keep these in the shared Go flavour rather than consumer-specific images.
+# hadolint ignore=DL3008
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends gcc libc6-dev gettext \
+  && rm -rf /var/lib/apt/lists/*
 
 # Every download in this file retries transient failures, a refused connection
 # or a brief 404 from a mirror among them: one image build makes a dozen of

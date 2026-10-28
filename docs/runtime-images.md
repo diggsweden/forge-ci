@@ -10,12 +10,17 @@ GitHub workflows and GitLab CI components use these images to select their
 execution tools. An image digest pins image content for a selected platform;
 it does not pin the runner environment or dependencies fetched during a job.
 
-> **Unpublished 0.90.0:** `@v0.90.0` and `:v0.90.0` examples below are prospective.
-> Consumers wait for the tag and its images. Maintainers test unreleased
-> changes with the `sha-*` images of the pre-release branch; see
-> [Branch Testing](#branch-testing).
+> **Current source versus release pins:** `v0.90.0` examples identify a historical
+> baseline, not the current source revision. Confirm matching workflows, CLI
+> assets and runtime images before adoption. Maintainers test unreleased changes
+> with reviewed source and its published images; see [Branch Testing](#branch-testing).
 
 ## Image roster
+
+For a configurable Forgejo-to-GHCR example, see
+[Forgejo runtime publication](#forgejo-runtime-publication). The GitHub
+workflow below is the upstream publication path; another forge does not execute
+`.github/workflows/`.
 
 Toolchain names identify their intended release line (e.g. `runtime-java-25`,
 `runtime-node-24`). The current build targets and exact tool pins live in the
@@ -27,7 +32,7 @@ the table below summarizes the shipped families.
 | `forge-ci-runtime-base` | `debian:13-slim` (Trixie) | `forge-ci`, `bash`, `ca-certificates`, `curl`, `git`, `gnupg`, `gzip`, `jq`, `openssh-client` (`ssh-keygen` verifies SSH-signed tags), `tar`, `unzip`, `xz`, `zip`, `yq`, `git-cliff`, `gh`, `glab`, `mise`, `publiccode-parser`, `cosign`, `templates/`, bootstrap installers |
 | `forge-ci-runtime` (full) | `runtime-base` | `syft`, `trivy` |
 | `forge-ci-runtime-rust-stable` | `runtime-base` | Pinned Rust stable release + `cargo-cyclonedx` |
-| `forge-ci-runtime-go-1.27` | `runtime-base` | Go 1.27 toolchain + `cyclonedx-gomod` |
+| `forge-ci-runtime-go-1.27` | `runtime-base` | Go 1.27.3, `cyclonedx-gomod`, GCC, libc development headers and gettext |
 | `forge-ci-runtime-java-25` | `runtime-base` | Eclipse Temurin JDK 25 LTS + Maven 3.9.x + Gradle 8.x |
 | `forge-ci-runtime-android-35` | `runtime-java-25` | Android cmdline-tools + platform-tools + build-tools 35 + android-35, no NDK |
 | `forge-ci-runtime-node-24` | `runtime-base` | Node 24 LTS + npm + corepack |
@@ -43,7 +48,7 @@ debian:13-slim
 └── runtime-base
     ├── runtime                  (security/SBOM tools)
     ├── runtime-rust-stable      (Rust toolchain)
-    ├── runtime-go-1.27          (Go toolchain + cyclonedx-gomod)
+    ├── runtime-go-1.27          (Go, cyclonedx-gomod, CGO/race tools, gettext)
     ├── runtime-java-25          (JDK 25 LTS + Maven + Gradle)
     │   └── runtime-android-35   (Android SDK platform 35, no NDK)
     └── runtime-node-24          (Node 24 LTS + npm + corepack)
@@ -71,6 +76,160 @@ installation recipe. Layer reuse depends on matching platform, inputs and cache.
 | `publish-container` | host + Buildah and OCI registry adapter | The CLI builds and pushes on the host; this workflow does not use a runtime job container |
 | `security-openssf-scorecard` | host + third-party Docker action | The workflow selects a hosted runner for the Scorecard action |
 | `build-xcode-ios`, `publish-apple-appstore` | macOS host + bootstrap installer from `forge-ci-binary-ref` | Tagged releases use verified archives; branch/SHA refs use source installation, subject to the [current module restriction](DEVELOPMENT.md#source-checkout) |
+
+## Forgejo runtime publication
+
+The opt-in [`runtime-images.yml`](../examples/forgejo/runtime-images.yml) example
+uses the same Containerfile and smoke checks as the GitHub publisher. Copy it
+into a Forge CI mirror's `.forgejo/workflows/`, replace the `forge.example/owner`
+URL and `FORGE_CI_COMMIT` with a published immutable layer revision, and configure
+the settings below. Registry location does not determine the source forge.
+Once installed, it runs on relevant `main` pushes, a weekly schedule and manual
+dispatch from `main`. It does not run on pull requests or publish a CLI release.
+
+### Configuration
+
+| Setting | Purpose |
+|---|---|
+| `RUNTIME_IMAGE_NAMESPACE` | Reviewed GHCR destination, for example `ghcr.io/owner` |
+| `CI_SIGNER_IMAGE` | Published trusted signer image pinned by digest; never a candidate |
+| `CI_GO_BUILD_IMAGE` | Digest-pinned Go build image matching the release in `go.mod` |
+| `CI_RUNNER_LABEL` | JSON labels for ordinary jobs and native amd64 smoke jobs |
+| `CI_RUNNER_LABEL_ARM64` | Preferred ordinary native arm64 pool; when absent, smoke jobs use `CI_RUNNER_LABEL_CONTAINER_ARM64` and request fresh lent runners if lending is configured |
+| `RELEASE_PLATFORMS` | Both `linux/amd64,linux/arm64` by default; optionally select just `linux/amd64` or `linux/arm64`. The existing engine planner validates the selection |
+| `CI_IMAGE_BUILDER` | Existing builder selector: `buildah` or `kaniko` |
+| `CI_IMAGE_BUILDER_JOB_IMAGE` | Digest-pinned kaniko job image on restricted pools |
+| `CI_RUNNER_LABEL_CONTAINER`, `CI_RUNNER_LABEL_CONTAINER_ARM64` | Optional architecture-specific build pools; otherwise use the ordinary native pools |
+| `CI_RUNNER_LENDER`, `CI_RUNNER_LENDER_REPOSITORY` | Optional existing runner-lending configuration; one request per native build leg |
+| `RELEASE_REGISTRY_USER` | GHCR account paired with the registry token |
+| `COSIGN_PUBLIC_KEY`, `COSIGN_PUBLIC_KEY_SHA256` | Organization public key and independently reviewed SHA-256 digest of its newline-terminated file |
+
+Secrets: `RELEASE_REGISTRY_TOKEN` for GHCR writes; `RELEASE_COSIGN_PRIVATE_KEY`
+and `RELEASE_COSIGN_PASSPHRASE` for the isolated signer; optionally
+`CI_RUNNER_LENDER_TOKEN` for runner lending. The lender token reaches only
+the requester, and signing keys reach only the signer. GHCR pull credentials
+in the smoke job's `container.credentials` belong to the runner, not the
+candidate's process environment. Keep the forge's automatic job token
+read-default. Forks change their namespace, helper pin, signer digest and public
+key digest in the self-workflow, not in the reusable layer or runtime scripts.
+
+Private runtime packages are supported: candidate pulls and publication
+verification use the registry credential. Source checkouts and the final
+current-branch lookup use the forge's own job token, so the source repository
+can be private too. These credentials remain separate and are not placed in
+Git URLs or command arguments.
+
+The shared planner selects each architecture separately. The runtime roster
+omits Android for arm64-only runs because Android's Linux SDK is amd64-only.
+The build runner is native to its leg. Buildah capability, kaniko selection
+and runner lending remain independent of the platform selection. A kaniko
+build does not imply that the runner can execute nested Podman tests.
+
+### Publication sequence and evidence
+
+1. Rebuild the CLI from the exact source commit with the Go release in
+   `go.mod`, fresh module/build caches and the existing engine-binary recipe.
+   Require each architecture's bytes to match its recorded checksum.
+   These are the Forgejo layer's `engine-layer` binaries, identified by their
+   checksums; runtime publication does not create versioned CLI release archives.
+2. Build each selected runtime/platform through the existing builder adapter.
+   Publish uniquely run/attempt-scoped architecture candidates to GHCR and
+   transfer only their digest metadata through Forgejo artifacts.
+3. Start each exact candidate digest as a native job container and run the
+   shared smoke script. Its installed-CLI checksum check is diagnostic only.
+   This needs no nested container engine or user namespaces.
+   If ARM64 uses only a container/lender pool, request new single-use smoke
+   runners after the builds; the build runners have already been consumed.
+4. After **all** smoke jobs pass, pull each child digest into an OCI layout
+   in the trusted utility job, extract its CLI with the existing engine
+   extractor and compare its bytes with the recorded source checksum. No
+   candidate executable or hashing tool participates in this independent gate.
+   Scan every child digest, generate its CycloneDX SBOM and assemble the
+   complete index. Vulnerability findings
+   remain advisory, matching the existing GitHub runtime workflow; scanner
+   failures block. Retain the reports with the native digest metadata.
+5. In the pinned trusted signer, with no source checkout or tool installation,
+   verify index/platform/source binding and the organization's signing key.
+   Sign the index and children, attest each child's SBOM and attest the
+   index's SLSA provenance. Forgejo uses the organization's key with no public
+   transparency log, rather than GitHub's OIDC identity.
+6. After **all** signing jobs pass, independently verify signatures and
+   attestations, reject a stale `main`, and copy the unchanged signed index to
+   `sha-<full-source-commit>`. Record the digest reference consumers must pin.
+
+The final availability check reads the promoted tag with the configured
+registry credential and requires its exact manifest digest to match the signed
+candidate. This works for both private and public packages. Private consumers
+need registry read access; for anonymous distribution, make the packages public
+and additionally verify anonymous access. Visibility changes are an operator
+choice, not a prerequisite for smoke testing. Candidate tags are not consumer pins.
+
+Assembly reads each uploaded evidence bundle back into a fresh temporary
+directory and verifies the file inventory and SHA-256 checksums against the
+local originals. A successful upload response alone is insufficient: unreadable,
+missing, changed or extra files fail assembly before signing. This adds one
+evidence download per flavour; it does not repair server storage or guarantee
+that the artifact remains available later.
+
+The Forgejo artifact client opts GET/HEAD requests into bounded HTTP 500 retries
+using the shared transport: at most four attempts with exponential backoff and
+jitter, within the existing request timeout and delay budgets. Upload and
+finalization requests are not automatically replayed. A recovered read must
+still pass the same content checks; persistent errors fail the handoff with
+artifact/file context. This client behavior requires a published engine
+containing the retry change and a helper pin selecting that engine.
+
+Each successful smoke job uploads a `runtime-smoke-<flavour>-<architecture>`
+receipt for its exact container digest and source commit. Assembly checks these
+receipts against all architecture candidates before scanning or creating an
+index. Rebuilding a candidate does not reuse a green smoke result for different
+bytes: rerun collection and the smoke jobs for the rebuilt digests. A receipt
+is current-run workflow evidence, not a replacement for isolated signing or
+independent inspection of the candidate's embedded CLI.
+
+The final digest is authoritative: rebuilding the same source can incorporate
+updated distribution packages and change `sha-<commit>`. The example does not
+move upstream's rolling CLI release or manufacture semver runtime tags before
+a corresponding release exists. Product releases, checksum-addressed engine
+packages and trusted signer publication require their own configured workflows.
+Signing/promotion is gated across the matrix, but multiple registry tag writes
+are not an atomic transaction. Failed runs may leave staging images. Registry
+retention is a separate reviewed operation; protect pinned digests and their
+signatures/evidence when using the existing package-retention tooling.
+
+The opt-in [`package-retention.yml`](../examples/forgejo/package-retention.yml)
+example runs a weekly/manual **preview only** after being installed and configured.
+Replace its forge URL and engine revision, set `RUNTIME_IMAGE_NAMESPACE`, and
+provide `PACKAGE_RETENTION_MATRIX` as an `include` matrix of package names and
+reviewed consumer digests.
+The preview uses the pinned published engine; it needs no Forge CI source
+checkout or Go compiler in the consumer repository.
+Its reviewed matrix is the retention policy: release tags remain, the ten newest
+commit-tagged versions remain, and each listed consumer digest remains regardless
+of age, together with its platforms and signing evidence. Update that matrix
+when supported consumers move pins. The preview reuses the publisher's existing
+`RELEASE_REGISTRY_USER` and `RELEASE_REGISTRY_TOKEN`; that token must be able to
+read package versions and manifests. The workflow never applies deletion.
+
+After reviewing a complete pin set and the preview, an operator can apply the
+same rule with the existing command:
+
+```bash
+forge-ci container package-retention --repository ghcr.io/owner/runtime \
+  --keep-digest sha256:REVIEWED_CONSUMER_DIGEST --recent-count 10 --max-delete 100 \
+  --registry-username PUBLISHER_USER
+```
+
+Repeat `--keep-digest` for every supported consumer pin. A missing protected
+digest stops the pass. The command is dry-run by default; `--dry-run=false`
+applies the reviewed rule with package-deletion credentials. Release-file and
+base-image retention keep their existing separate commands and policies.
+
+Local guard and orchestration tests establish structure, refusal paths and
+platform selection. Activation still requires a successful destination-forge publication
+run, native smoke results, verified GHCR signatures and consumer access with
+the intended credentials (or anonymously for public distribution).
+See [Forge migration review](forge-migration.md) for the cross-provider checks.
 
 ## Why some images aren't built
 
@@ -167,6 +326,13 @@ the install. Source installation is used only for non-release refs or when
 After the required images have been published, use runtime overrides for digest
 pinning, mirrors or branch testing. This is an input-override fragment for an
 existing release caller; retain its [permissions and secret bindings](reference.md):
+
+Treat the workflow revision, runtime image digests, plain-runner CLI ref and
+artifacts schema as one reviewed selection. A newer workflow does not update a
+binary baked into an older image. Obtain the schema from that same selected
+source revision, as described in [the schema guide](artifacts-reference.md#json-schema).
+The version labels below illustrate the selection; replace them with verified
+coordinates for the revision you intend to run.
 
 ```yaml
 # .github/workflows/release.yml in a consumer repo
@@ -327,10 +493,10 @@ git tag -s release-request/v0.0.1 -m "Test configuration"
 git push origin release-request/v0.0.1
 ```
 
-Production accepts stable `vMAJOR.MINOR.PATCH` requests only. Prerelease
-requests such as `release-request/v0.0.1-rc.1` are rejected before release
-planning or repository mutation. Use the unsigned branch-only snapshot when
-no permanent release is wanted.
+The default release policy accepts stable requests only. Consumers selecting
+`release-policy: stable-prerelease` can request a complete signed beta/RC
+release. Use the unsigned branch-only snapshot when no permanent release is
+wanted; see [release policy](workflows.md#stable-and-prerelease-policy).
 
 ## Releasing new image versions
 
