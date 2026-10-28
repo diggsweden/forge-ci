@@ -11,7 +11,73 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
+
+func TestGoJobInstallsOnlyPinnedJustBeforeRunningItsRecipes(t *testing.T) {
+	t.Parallel()
+
+	file := ".github/workflows/self-pullrequest.yml"
+
+	var workflow struct {
+		Jobs map[string]struct {
+			Steps []step `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	loadYAML(t, file, &workflow)
+
+	installed, recipes := false, 0
+
+	for _, step := range workflow.Jobs["go"].Steps {
+		if step.Name == "Install pinned Just" {
+			installed = true
+		}
+
+		if step.Run == "just test-smoke" || step.Run == "just test-fuzz" {
+			recipes++
+
+			if !installed {
+				t.Fatal("Go test recipes require Just to be installed first")
+			}
+		}
+	}
+
+	if recipes != 2 {
+		t.Fatal("Go CI must retain both smoke and fuzz-seed recipes")
+	}
+
+	setup := jobStep(t, file, "go", "Install pinned Just")
+	box := newSandbox(t, "just-setup")
+
+	for _, name := range []string{"install-mise.sh", "install-common.sh"} {
+		path := "scripts/bootstrap/" + name
+		box.write(path, string(reporoot.ReadFile(t, path)), 0o600)
+	}
+
+	box.write("bin/mise", `#!/bin/sh
+set -eu
+case "$*" in
+  --version) printf 'fixture mise\n' ;;
+  'install aqua:casey/just') printf installed >"$INSTALL_MARKER" ;;
+  'bin-paths aqua:casey/just') test -f "$INSTALL_MARKER"; printf '%s\n' "$PINNED_JUST_BIN" ;;
+  *) printf 'unexpected tool request: %s\n' "$*" >&2; exit 98 ;;
+esac
+`, 0o700)
+	path := filepath.Join(box.root, "github-path")
+	just := filepath.Join(box.root, "pinned-just-bin")
+
+	result := box.run(setup.Run, "PATH="+filepath.Join(box.root, "bin")+":/usr/bin:/bin",
+		"GITHUB_PATH="+path, "PINNED_JUST_BIN="+just, "INSTALL_MARKER="+filepath.Join(box.root, "installed"))
+	if result.status != 0 {
+		t.Fatalf("Just-only bootstrap failed: %s", result.stderr)
+	}
+
+	contents, err := os.ReadFile(path)
+	if err != nil || string(contents) != just+"\n" {
+		t.Fatalf("pinned Just binary directory was not exposed to later steps: %q: %v", contents, err)
+	}
+}
 
 func TestCompanionUsesFreshBinaryFromTheExactPRCheckout(t *testing.T) {
 	t.Parallel()

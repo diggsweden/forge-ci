@@ -254,6 +254,15 @@ jobs:
         with:
           go-version-file: go.mod
           check-latest: true
+      - name: Install pinned Just
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          source scripts/bootstrap/install-mise.sh
+          install_mise
+          mise install aqua:casey/just
+          mise bin-paths aqua:casey/just >>"${GITHUB_PATH:?}"
       - name: go build
         run: go build -o /tmp/forge-ci ./cmd/forge-ci
       - name: go test
