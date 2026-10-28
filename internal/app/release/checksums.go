@@ -56,8 +56,6 @@ func withChecksumDiscoveryDefaults(in ChecksumsInput) ChecksumsInput {
 // assembly path created the output directory, so --output some/dir/file worked
 // under --assembly and failed without it. Owning creation, the line format,
 // the count and the summary in one place is what keeps those in step.
-//
-//nolint:cyclop // emits checksum file + uploads + summary entry per artifact.
 type checksumManifest struct {
 	file  io.WriteCloser
 	path  string
@@ -67,7 +65,7 @@ type checksumManifest struct {
 // newChecksumManifest creates the manifest file, and any directory it needs.
 func newChecksumManifest(outputFile string) (*checksumManifest, error) {
 	if dir := filepath.Dir(outputFile); outputFile != cliio.StdSentinel && dir != "" && dir != "." {
-		if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec,mnd // public release staging dir.
+		if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // public release staging dir.
 			return nil, fmt.Errorf("create checksum dir for %q: %w", outputFile, err)
 		}
 	}
@@ -183,7 +181,6 @@ func Checksums(out io.Writer, in ChecksumsInput) (int, error) {
 	return manifest.finish(out)
 }
 
-//nolint:cyclop // sequential: read assembly → resolve output path → ensure dir → hash each entry → write manifest. Phases, not nested logic.
 func checksumsFromAssembly(out io.Writer, in ChecksumsInput) (int, error) {
 	asm, err := readAssembly(in.AssemblyFile)
 	if err != nil {
@@ -314,7 +311,7 @@ func checksumReleaseArtifacts(dir string, out io.Writer, write func(absPath, lab
 
 	_, _ = fmt.Fprintf(out, "→ Checksumming release artifacts from %s\n", dir)
 
-	for _, e := range entries { //nolint:varnamelen // idiomatic loop var for os.DirEntry.
+	for _, e := range entries {
 		if e.IsDir() {
 			continue
 		}
@@ -405,8 +402,6 @@ func sha256File(path string) (string, error) {
 // and invokes write(absPath, manifestLabel) for every match that exists
 // and is a regular file. No-op when patterns is empty. skip excludes
 // the output manifest when a glob accidentally matches it.
-//
-//nolint:cyclop // CSV → globs → stat → filter → write — one branch per phase.
 func checksumAttachArtifacts(patterns string, out io.Writer, write func(absPath, label string) error, skip func(string) bool) error {
 	if patterns == "" {
 		return nil
@@ -425,7 +420,7 @@ func checksumAttachArtifacts(patterns string, out io.Writer, write func(absPath,
 			return fmt.Errorf("glob %q: %w", pattern, err)
 		}
 
-		for _, m := range matches { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+		for _, m := range matches {
 			info, statErr := os.Lstat(m)
 			if statErr != nil || info.IsDir() {
 				continue

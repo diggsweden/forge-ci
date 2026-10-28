@@ -91,7 +91,7 @@ func writePrepareDistFile(t *testing.T, path, body string) {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil { //nolint:gosec // test-owned path.
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

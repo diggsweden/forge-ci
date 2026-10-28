@@ -126,7 +126,7 @@ func runRerunPrerequisites(t *testing.T, repo *historyGit, mutate func(*appvalid
 		UserAccessible: true, RepoAccessible: true, BranchesAccessible: true,
 	})
 
-	in := appvalidate.PrerequisitesInput{ //nolint:gosec // synthetic token and key markers; nothing real is read.
+	in := appvalidate.PrerequisitesInput{
 		RefType:             "tag",
 		Tag:                 rerunRequestTag,
 		Ref:                 "refs/tags/" + rerunRequestTag,
@@ -299,7 +299,7 @@ func TestPrerequisites_EachEnabledPolicyRunsItsOwnCheck(t *testing.T) {
 				UserAccessible: true, RepoAccessible: true, BranchesAccessible: true,
 			})
 
-			in := appvalidate.PrerequisitesInput{ //nolint:gosec // synthetic token and key markers; nothing real is read.
+			in := appvalidate.PrerequisitesInput{
 				RefType: "tag", Tag: rerunRequestTag, Ref: "refs/tags/" + rerunRequestTag, Branch: "main",
 				ReleaseToken: "github_pat_AAAA", Repository: "owner/repo", ReleaseGPGPublicKey: "test-key",
 			}

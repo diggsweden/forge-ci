@@ -271,7 +271,7 @@ func parseAssemblyTransferPlan(raw string) (pipeline.ArtifactTransferPlan, error
 	return plan, nil
 }
 
-//nolint:cyclop,varnamelen // one directory walk with sequential skip/classify guards; c is the collector threaded through every collect* helper.
+//nolint:varnamelen // one directory walk with sequential skip/classify guards; c is the collector threaded through every collect* helper.
 func collectReleaseAssets(c *assemblyCollector, cfg pipeline.ConfigPlan, transfer pipeline.ArtifactTransferPlan, dir string) error {
 	if _, err := os.Stat(dir); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -350,7 +350,6 @@ func collectAttachmentAssets(c *assemblyCollector, patterns string) error {
 	return nil
 }
 
-//nolint:varnamelen // c is the assembly collector threaded through every collect* helper; a longer name only adds noise.
 func collectAssemblySBOMs(c *assemblyCollector, cfg pipeline.ConfigPlan, sbomDir string) error {
 	roots := plannedSBOMRoots(cfg)
 	for _, root := range roots {
@@ -517,7 +516,6 @@ func plannedSBOMRoots(cfg pipeline.ConfigPlan) []string {
 	return roots
 }
 
-//nolint:cyclop // a flat switch of independent skip predicates (dotfiles, checksums, sigs, …); each case is one rule, not nested logic.
 func skipAssemblyReleaseFile(path, rel string) bool {
 	base := filepath.Base(path)
 	switch {
@@ -695,12 +693,12 @@ func writeAssembly(path string, asm *domainrelease.Assembly) error {
 	body = append(body, '\n')
 
 	if path != cliio.StdSentinel {
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec,mnd // metadata dir under workspace.
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec // metadata dir under workspace.
 			return fmt.Errorf("mkdir %q: %w", filepath.Dir(path), err)
 		}
 	}
 
-	return cliio.WriteFile(path, body, 0o644) //nolint:gosec // manifest is public release metadata.
+	return cliio.WriteFile(path, body, 0o644)
 }
 
 func readAssembly(path string) (domainrelease.Assembly, error) {

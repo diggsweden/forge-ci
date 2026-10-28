@@ -38,18 +38,18 @@ type packageServer struct {
 func (s *packageServer) start(t *testing.T, versionsPath, body string) *Packages {
 	t.Helper()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		switch {
-		case r.Method == http.MethodGet && r.URL.EscapedPath() == versionsPath:
-			_, _ = w.Write([]byte(body))
-		case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.EscapedPath(), versionsPath+"/"):
+		case request.Method == http.MethodGet && request.URL.EscapedPath() == versionsPath:
+			_, _ = response.Write([]byte(body))
+		case request.Method == http.MethodDelete && strings.HasPrefix(request.URL.EscapedPath(), versionsPath+"/"):
 			s.mu.Lock()
-			s.deleted = append(s.deleted, strings.TrimPrefix(r.URL.EscapedPath(), versionsPath+"/"))
+			s.deleted = append(s.deleted, strings.TrimPrefix(request.URL.EscapedPath(), versionsPath+"/"))
 			s.mu.Unlock()
-			w.WriteHeader(s.deleteStatus)
+			response.WriteHeader(s.deleteStatus)
 		default:
-			w.WriteHeader(http.StatusNotFound)
-			_, _ = w.Write([]byte(`{"message":"Not Found"}`))
+			response.WriteHeader(http.StatusNotFound)
+			_, _ = response.Write([]byte(`{"message":"Not Found"}`))
 		}
 	}))
 	t.Cleanup(server.Close)

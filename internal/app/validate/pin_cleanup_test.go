@@ -5,14 +5,15 @@ package validate_test
 
 import (
 	"context"
-	appvalidate "github.com/diggsweden/forge-ci/internal/app/validate"
-	"github.com/diggsweden/forge-ci/internal/domain/errs"
-	"github.com/stretchr/testify/require"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	appvalidate "github.com/diggsweden/forge-ci/internal/app/validate"
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/stretchr/testify/require"
 )
 
 type failedPinClone struct{ dir string }

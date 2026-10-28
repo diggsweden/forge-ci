@@ -18,7 +18,8 @@ import (
 )
 
 type fakeChangelogRenderGit struct {
-	status string
+	status       string
+	objectFormat string
 
 	checkedOut  []string
 	credentials []runcontext.Credential
@@ -38,6 +39,14 @@ func (f *fakeChangelogRenderGit) Checkout(_ context.Context, ref string) error {
 
 func (f *fakeChangelogRenderGit) StatusPorcelain(_ context.Context, _ string) (string, error) {
 	return f.status, nil
+}
+
+func (f *fakeChangelogRenderGit) ObjectFormat(context.Context) (string, error) {
+	if f.objectFormat == "" {
+		return "sha1", nil
+	}
+
+	return f.objectFormat, nil
 }
 
 type fakeChangelogRenderer struct {
@@ -66,8 +75,11 @@ func (f *fakeChangelogRenderer) RenderBody(_ context.Context, _, _, tag, reposit
 func TestChangelogRender_GitChglogRendersCommitMessage(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
+	writeChangelogConfigs(t, ".chglog/full.yml", ".chglog/body.yml")
 
-	gitr := &fakeChangelogRenderGit{status: " M CHANGELOG.md"}
+	// git-chglog reads history through the git command line, so a SHA-256
+	// repository is accepted.
+	gitr := &fakeChangelogRenderGit{status: " M CHANGELOG.md", objectFormat: "sha256"}
 	renderer := &fakeChangelogRenderer{}
 
 	var out bytes.Buffer
@@ -158,6 +170,64 @@ func TestChangelogRender_RejectsInvalidRepositoryURL(t *testing.T) {
 		})
 		if err == nil {
 			t.Errorf("repository URL %q was accepted", repositoryURL)
+		}
+	}
+}
+
+func TestChangelogRender_RefusesGitCliffOnSHA256(t *testing.T) {
+	t.Parallel()
+
+	gitr := &fakeChangelogRenderGit{objectFormat: "sha256"}
+
+	err := appversion.ChangelogRender(context.Background(), gitr, &fakeChangelogRenderer{}, &bytes.Buffer{}, appversion.ChangelogRenderInput{
+		Tag:              "v1.2.3",
+		RepositoryURL:    "https://forgejo.example/itiquette/consumer",
+		ChangelogConfig:  "full",
+		CommitBodyConfig: "body",
+	})
+	if !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "git-chglog") {
+		t.Fatalf("err = %v, want a validation error naming git-chglog", err)
+	}
+
+	if len(gitr.credentials) != 0 {
+		t.Fatal("refused render still fetched")
+	}
+}
+
+// git-cliff renders with its built-in config when the named one is missing,
+// so a typo would otherwise publish a changelog in the wrong format.
+func TestChangelogRender_RefusesMissingConfig(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeChangelogConfigs(t, "full.toml")
+
+	renderer := &fakeChangelogRenderer{}
+
+	err := appversion.ChangelogRender(context.Background(), &fakeChangelogRenderGit{}, renderer, &bytes.Buffer{}, appversion.ChangelogRenderInput{
+		Tag:              "v1.2.3",
+		RepositoryURL:    "https://forgejo.example/itiquette/consumer",
+		ChangelogConfig:  "full.toml",
+		CommitBodyConfig: "body.toml",
+	})
+	if !errors.Is(err, errs.ErrMissingInput) || !strings.Contains(err.Error(), "body.toml") {
+		t.Fatalf("err = %v, want a missing-input error naming body.toml", err)
+	}
+
+	if renderer.backend != "" {
+		t.Fatal("renderer ran with a missing config")
+	}
+}
+
+func writeChangelogConfigs(t *testing.T, paths ...string) {
+	t.Helper()
+
+	for _, path := range paths {
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := os.WriteFile(path, []byte("config\n"), 0o600); err != nil {
+			t.Fatal(err)
 		}
 	}
 }

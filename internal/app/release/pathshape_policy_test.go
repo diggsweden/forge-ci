@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -102,7 +103,7 @@ func TestReleasePathShapes_PolicyPerConsumer(t *testing.T) {
 
 				switch shape {
 				case "directory":
-					if err := os.Mkdir(path, 0o755); err != nil { //nolint:gosec // owned temp fixture.
+					if err := os.Mkdir(path, 0o755); err != nil {
 						t.Fatal(err)
 					}
 				case "fifo":
@@ -135,9 +136,7 @@ func merge[V any](parts ...map[string]V) map[string]V {
 	out := map[string]V{}
 
 	for _, part := range parts {
-		for key, value := range part {
-			out[key] = value
-		}
+		maps.Copy(out, part)
 	}
 
 	return out

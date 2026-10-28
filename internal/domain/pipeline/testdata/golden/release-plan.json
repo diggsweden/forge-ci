@@ -14,6 +14,7 @@
     "create_draft_release": false,
     "sboms": "build,analyzed-container",
     "make_latest": true,
+    "prerelease": false,
     "has_containers": true
   },
   "stages": {

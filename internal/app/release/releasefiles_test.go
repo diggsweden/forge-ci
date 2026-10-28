@@ -189,7 +189,7 @@ func TestValidateReleaseChecksums_HashesNestedManifestPath(t *testing.T) {
 	writeReleaseFilesTestFile(t, manifestPath, string(body))
 
 	input := apprelease.ValidateReleaseChecksumsInput{
-		FilesInput:    apprelease.FilesInput{DistDir: "dist", ManifestFile: manifestPath},
+		DistDir: "dist", ManifestFile: manifestPath,
 		ChecksumsFile: checksumPath,
 	}
 	if err := apprelease.ValidateReleaseChecksums(input); err != nil {
@@ -264,7 +264,7 @@ func TestWriteReleaseFileManifest_PreservesExplicitEvidence(t *testing.T) {
 	writeReleaseFilesTestFile(t, "dist/release-files.json", string(body))
 
 	manifest, err := apprelease.WriteReleaseFileManifest(apprelease.WriteReleaseFileManifestInput{
-		FilesInput: apprelease.FilesInput{DistDir: "dist", ManifestFile: "dist/release-files.json"},
+		DistDir: "dist", ManifestFile: "dist/release-files.json",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -284,13 +284,13 @@ func TestWriteReleaseFileManifest_PreservesExplicitEvidence(t *testing.T) {
 		t.Fatalf("doctor.json source = %q, want explicit", source)
 	}
 
-	if err := apprelease.ValidateReleaseFileManifest(apprelease.ValidateReleaseFileManifestInput{FilesInput: apprelease.FilesInput{DistDir: "dist", ManifestFile: "dist/release-files.json"}}); err != nil {
+	if err := apprelease.ValidateReleaseFileManifest(apprelease.ValidateReleaseFileManifestInput{DistDir: "dist", ManifestFile: "dist/release-files.json"}); err != nil {
 		t.Fatalf("validate finalized manifest: %v", err)
 	}
 
 	firstWrite := readFile(t, "dist/release-files.json")
 	if _, err := apprelease.WriteReleaseFileManifest(apprelease.WriteReleaseFileManifestInput{
-		FilesInput: apprelease.FilesInput{DistDir: "dist", ManifestFile: "dist/release-files.json"},
+		DistDir: "dist", ManifestFile: "dist/release-files.json",
 	}); err != nil {
 		t.Fatalf("repeat manifest finalization: %v", err)
 	}
@@ -329,7 +329,7 @@ func TestWriteReleaseFileManifest_RejectsParentSymlink(t *testing.T) {
 	writeReleaseFilesTestFile(t, "dist/release-files.json", string(body))
 
 	_, err = apprelease.WriteReleaseFileManifest(apprelease.WriteReleaseFileManifestInput{
-		FilesInput: apprelease.FilesInput{DistDir: "dist", ManifestFile: "dist/release-files.json"},
+		DistDir: "dist", ManifestFile: "dist/release-files.json",
 	})
 	if !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "dist/link") || !strings.Contains(err.Error(), "not a real directory") {
 		t.Fatalf("err = %v, want parent symlink refusal", err)
@@ -354,7 +354,7 @@ func TestReleaseFileManifest_RejectsDuplicateSectionPath(t *testing.T) {
 
 	writeReleaseFilesTestFile(t, "dist/release-files.json", string(body))
 
-	err = apprelease.ValidateReleaseFileManifest(apprelease.ValidateReleaseFileManifestInput{FilesInput: apprelease.FilesInput{DistDir: "dist", ManifestFile: "dist/release-files.json"}})
+	err = apprelease.ValidateReleaseFileManifest(apprelease.ValidateReleaseFileManifestInput{DistDir: "dist", ManifestFile: "dist/release-files.json"})
 	if !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "checksums contains duplicate path dist/checksums.txt") {
 		t.Fatalf("err = %v, want duplicate checksum path refusal", err)
 	}
@@ -401,7 +401,7 @@ func TestReleaseFileManifest_RefusesAManifestThatIsNotOneReleaseSet(t *testing.T
 
 			writeReleaseFilesTestFile(t, "dist/release-files.json", string(body))
 
-			err = apprelease.ValidateReleaseFileManifest(apprelease.ValidateReleaseFileManifestInput{FilesInput: apprelease.FilesInput{DistDir: "dist", ManifestFile: "dist/release-files.json"}})
+			err = apprelease.ValidateReleaseFileManifest(apprelease.ValidateReleaseFileManifestInput{DistDir: "dist", ManifestFile: "dist/release-files.json"})
 			if testCase.want == "" {
 				if err != nil {
 					t.Fatalf("the release set was refused: %v", err)
@@ -458,7 +458,7 @@ func TestReleaseFileManifest_RejectsNonFilePathSpelling(t *testing.T) {
 
 			writeReleaseFilesTestFile(t, testCase.manifestPath, string(body))
 
-			err = apprelease.ValidateReleaseFileManifest(apprelease.ValidateReleaseFileManifestInput{FilesInput: apprelease.FilesInput{DistDir: testCase.distDir, ManifestFile: testCase.manifestPath}})
+			err = apprelease.ValidateReleaseFileManifest(apprelease.ValidateReleaseFileManifestInput{DistDir: testCase.distDir, ManifestFile: testCase.manifestPath})
 			if !errors.Is(err, errs.ErrMissingInput) {
 				t.Fatalf("err = %v, want non-file path refusal", err)
 			}
@@ -486,7 +486,7 @@ func TestReleaseFileManifest_RejectsImageLedger(t *testing.T) {
 
 	writeReleaseFilesTestFile(t, "dist/forgejo-ci-release-files.json", string(body))
 
-	if err := apprelease.ValidateReleaseFileManifest(apprelease.ValidateReleaseFileManifestInput{FilesInput: apprelease.FilesInput{ManifestFile: "dist/forgejo-ci-release-files.json"}}); !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "release image ledger") {
+	if err := apprelease.ValidateReleaseFileManifest(apprelease.ValidateReleaseFileManifestInput{ManifestFile: "dist/forgejo-ci-release-files.json"}); !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "release image ledger") {
 		t.Fatalf("err = %v", err)
 	}
 }

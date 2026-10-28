@@ -22,7 +22,7 @@ type GooglePlayCheckCredentialsInput struct {
 // GooglePlayCheckCredentials checks service-account JSON and RSA private-key
 // shape before upload. It does not authenticate the account or establish that
 // Google accepts the credential.
-func GooglePlayCheckCredentials(_ context.Context, w io.Writer, in GooglePlayCheckCredentialsInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func GooglePlayCheckCredentials(_ context.Context, out io.Writer, in GooglePlayCheckCredentialsInput) error {
 	if in.ServiceAccountJSON == "" {
 		return fmt.Errorf("google Play service account JSON is required: %w", errs.ErrMissingInput)
 	}
@@ -31,7 +31,7 @@ func GooglePlayCheckCredentials(_ context.Context, w io.Writer, in GooglePlayChe
 		return fmt.Errorf("service account: %w: %w", err, errs.ErrValidation)
 	}
 
-	_, _ = fmt.Fprintln(w, "Service account secret is configured")
+	_, _ = fmt.Fprintln(out, "Service account secret is configured")
 
 	return nil
 }

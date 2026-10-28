@@ -11,6 +11,7 @@ import (
 
 	apprelease "github.com/diggsweden/forge-ci/internal/app/release"
 	"github.com/diggsweden/forge-ci/internal/cli/cienv"
+	"github.com/diggsweden/forge-ci/internal/cli/commonflags"
 )
 
 func signPublishContextCmd() *cli.Command {
@@ -18,19 +19,21 @@ func signPublishContextCmd() *cli.Command {
 		Name:  "sign-publish-context",
 		Usage: "export the sign-and-publish workflow env contract",
 		Flags: []cli.Flag{
+			commonflags.ReleasePolicy(),
 			&cli.StringFlag{Name: flagReleaseSHA, Required: true, Sources: cli.EnvVars("RELEASE_SHA"), Usage: "prepared release commit SHA"},
-			&cli.StringFlag{Name: flagTag, Required: true, Sources: cienv.Tag(), Usage: "stable release tag"},
+			&cli.StringFlag{Name: flagTag, Required: true, Sources: cienv.Tag(), Usage: "release tag permitted by release-policy"},
 			&cli.StringFlag{Name: "artifact-path", Value: defaultDistPath, Sources: cli.EnvVars("ARTIFACT_PATH"), Usage: "artifact extraction path whose normalized value becomes DIST_DIR"},
 			&cli.StringFlag{Name: "env-file", Required: true, Sources: cli.EnvVars("FORGEJO_ENV", "GITHUB_ENV"), Usage: "runner env file receiving RELEASE_*, DIST_DIR, and state-dir entries"},
 			&cli.StringFlag{Name: "temp-dir", Sources: cienv.TempDir(), Usage: "scratch directory for the sign-and-publish state dir"},
 		},
 		Action: func(_ context.Context, cmd *cli.Command) error {
 			return apprelease.SignPublishContext(os.Stderr, apprelease.SignPublishContextInput{
-				ReleaseSHA:   cmd.String(flagReleaseSHA),
-				ReleaseTag:   cmd.String(flagTag),
-				ArtifactPath: cmd.String("artifact-path"),
-				EnvFile:      cmd.String("env-file"),
-				RunnerTemp:   cmd.String("temp-dir"),
+				ReleasePolicy: cmd.String("release-policy"),
+				ReleaseSHA:    cmd.String(flagReleaseSHA),
+				ReleaseTag:    cmd.String(flagTag),
+				ArtifactPath:  cmd.String("artifact-path"),
+				EnvFile:       cmd.String("env-file"),
+				RunnerTemp:    cmd.String("temp-dir"),
 			})
 		},
 	}

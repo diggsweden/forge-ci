@@ -136,7 +136,6 @@ type npmPackedMetadata struct {
 	} `json:"publishConfig"`
 }
 
-//nolint:gochecknoglobals // immutable package-spec grammar, not a registry query expression.
 var npmPackageNamePattern = regexp.MustCompile(`^(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$`)
 
 func packedNPMMetadata(tarball string) (npmPackedMetadata, error) {
@@ -174,15 +173,9 @@ func checkNPMTagBinding(ctx context.Context, ops NPMPublishOps, dir string, conf
 		return fmt.Errorf("read npm distribution tags before publishing: %w", err)
 	}
 
-	tags := make(map[string]string)
-	for _, line := range strings.Split(strings.TrimSpace(stdout.String()), "\n") {
-		name, version, ok := strings.Cut(line, ": ")
-		_, duplicate := tags[name]
-		_, versionErr := domainpublish.NPMRegistryVersion(version)
-		if !ok || name == "" || strings.ContainsAny(name, " \t\r:") || duplicate || versionErr != nil {
-			return fmt.Errorf("npm registry returned invalid distribution tags: %w", errs.ErrMalformedInput)
-		}
-		tags[name] = version
+	tags, err := parseNPMDistTags(stdout.String())
+	if err != nil {
+		return err
 	}
 
 	if version, exists := tags[tag]; exists && version != meta.Version {
@@ -192,15 +185,34 @@ func checkNPMTagBinding(ctx context.Context, ops NPMPublishOps, dir string, conf
 	return nil
 }
 
+func parseNPMDistTags(output string) (map[string]string, error) {
+	tags := make(map[string]string)
+
+	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
+		name, version, ok := strings.Cut(line, ": ")
+		_, duplicate := tags[name]
+
+		_, versionErr := domainpublish.NPMRegistryVersion(version)
+		if !ok || name == "" || strings.ContainsAny(name, " \t\r:") || duplicate || versionErr != nil {
+			return nil, fmt.Errorf("npm registry returned invalid distribution tags: %w", errs.ErrMalformedInput)
+		}
+
+		tags[name] = version
+	}
+
+	return tags, nil
+}
+
 // Some registries return an empty tag map for a new package rather than 404.
 // npm reports that specific successful registry response as a command error.
 func npmHasNoDistTags(stderr, name string) bool {
-	for _, line := range strings.Split(stderr, "\n") {
+	for line := range strings.SplitSeq(stderr, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "npm error No dist-tags found for "+name || line == "npm ERR! No dist-tags found for "+name {
 			return true
 		}
 	}
+
 	return false
 }
 

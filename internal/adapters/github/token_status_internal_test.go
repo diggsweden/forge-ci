@@ -5,10 +5,11 @@ package github
 
 import (
 	"errors"
-	"github.com/diggsweden/forge-ci/internal/domain/errs"
-	"github.com/stretchr/testify/require"
 	"net/http"
 	"testing"
+
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTokenStatusBoundary_DoesNotReclassifyOutages(t *testing.T) {

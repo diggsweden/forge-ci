@@ -14,11 +14,11 @@ import (
 	"github.com/diggsweden/forge-ci/internal/adapters/osfs"
 	apprelease "github.com/diggsweden/forge-ci/internal/app/release"
 	"github.com/diggsweden/forge-ci/internal/cli/cienv"
+	"github.com/diggsweden/forge-ci/internal/cli/commonflags"
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
 	"github.com/diggsweden/forge-ci/internal/cli/dryrun"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
-	domainrelease "github.com/diggsweden/forge-ci/internal/domain/release"
 )
 
 const (
@@ -28,7 +28,8 @@ const (
 
 func publishCmd() *cli.Command {
 	flags := append([]cli.Flag{
-		&cli.StringFlag{Name: "strategy", Value: strategyReconcile, Sources: cli.EnvVars("RELEASE_STRATEGY"), Usage: "reconcile updates the release and its assets in place; recreate deletes and recreates it"},
+		commonflags.ReleasePolicy(),
+		&cli.StringFlag{Name: "strategy", Value: strategyReconcile, Sources: cli.EnvVars("RELEASE_STRATEGY"), Usage: "reconcile publishes manifest/assets; recreate publishes an assembly; published versions are never replaced"},
 		&cli.StringFlag{Name: flagTag, Required: true, Sources: cienv.Tag(), Usage: "tag the release is created from (e.g. v1.2.3)"},
 		&cli.StringFlag{Name: flagRepository, Required: true, Sources: cienv.Repository(), Usage: "\"owner/repo\" release repository"},
 		&cli.StringFlag{Name: "release-name", Sources: cli.EnvVars("RELEASE_NAME"), Usage: "human-readable release title (defaults to the tag)"},
@@ -45,10 +46,10 @@ func publishCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "publish",
 		Usage: "create or update a release and its assets on the detected platform",
-		Description: `The default --strategy=reconcile creates the release if missing and
-updates it and its assets in place. --strategy=recreate deletes any
-existing release first and recreates it with exactly the assets of the
-release assembly named by --assembly, which it requires.
+		Description: `The default --strategy=reconcile publishes files from a finalized manifest
+or explicit --asset values. --strategy=recreate publishes exactly the assets
+of --assembly. Both verify existing published versions without replacing them;
+only unpublished drafts may be replaced while completing a release.
 
 EXAMPLES:
    # Publish assets listed in the finalized release file manifest
@@ -59,7 +60,7 @@ EXAMPLES:
    forge-ci release publish --tag=v1.2.3 --repository=examplescope/myapp \
        --release-notes-file=dist/release-notes.md --asset=dist/myapp.tar.gz --asset=dist/checksums.txt
 
-   # Delete-and-recreate with assets from an assembly manifest
+   # Publish assets from an assembly manifest
    forge-ci release publish --strategy=recreate --tag=v1.2.3 \
        --repository=examplescope/myapp --assembly=.forge-ci/release-assembly.json`,
 		Flags: flags,
@@ -93,13 +94,13 @@ func runPublishReconcile(ctx context.Context, cmd *cli.Command) error {
 		}
 
 		return apprelease.PublishRelease(ctx, publisher, os.Stderr, apprelease.PublishReleaseInput{
+			ReleasePolicy:             cmd.String("release-policy"),
 			Tag:                       cmd.String(flagTag),
 			Repository:                cmd.String(flagRepository),
 			ReleaseName:               cmd.String("release-name"),
 			ReleaseNameFromRepository: cmd.Bool("release-name-from-repository"),
 			ReleaseNotesFile:          cmd.String("release-notes-file"),
 			Draft:                     cmd.Bool("draft"),
-			Prerelease:                domainrelease.IsPrereleaseTag(cmd.String(flagTag)),
 			Assets:                    assets,
 		})
 	})
@@ -115,6 +116,7 @@ func runPublishRecreate(ctx context.Context, cmd *cli.Command) error {
 		}
 
 		return apprelease.CreateRelease(ctx, creator, osfs.New(), os.Stderr, apprelease.CreateReleaseInput{
+			ReleasePolicy:    cmd.String("release-policy"),
 			Tag:              cmd.String(flagTag),
 			Repository:       cmd.String(flagRepository),
 			ReleaseName:      cmd.String("release-name"),
@@ -130,7 +132,7 @@ func runPublishRecreate(ctx context.Context, cmd *cli.Command) error {
 // the narrating preview decorator, which needs no forge (mirroring the
 // ledger's dry-run registry). App-layer validation and asset/manifest
 // resolution run unchanged either way, so config errors still surface.
-func publishReconcilePublisher(d *deps.Deps, dryRun bool) (provider.ReleasePublisher, error) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func publishReconcilePublisher(d *deps.Deps, dryRun bool) (provider.ReleasePublisher, error) {
 	if dryRun {
 		return dryRunReleaseForge{out: os.Stderr}, nil
 	}
@@ -140,7 +142,7 @@ func publishReconcilePublisher(d *deps.Deps, dryRun bool) (provider.ReleasePubli
 
 // publishRecreateCreator is the recreate-strategy counterpart of
 // publishReconcilePublisher.
-func publishRecreateCreator(d *deps.Deps, dryRun bool) (provider.ReleaseCreator, error) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func publishRecreateCreator(d *deps.Deps, dryRun bool) (provider.ReleaseCreator, error) {
 	if dryRun {
 		return dryRunReleaseForge{out: os.Stderr}, nil
 	}
@@ -158,7 +160,11 @@ type dryRunReleaseForge struct {
 	out io.Writer
 }
 
-func (f dryRunReleaseForge) PublishRelease(_ context.Context, repo string, spec provider.ReleaseSpec) error {
+func (f dryRunReleaseForge) PublishRelease(ctx context.Context, repo string, spec provider.ReleaseSpec) error {
+	if spec.Immutable {
+		return f.CreateRelease(ctx, repo, spec)
+	}
+
 	_, _ = fmt.Fprintf(f.out, "[dry-run] would create or update release %s (%q, draft=%t, prerelease=%t) on %s and reconcile its assets\n",
 		spec.Tag, spec.Name, spec.Draft, spec.Prerelease, repo)
 	f.narrateAssetUploads(spec.Assets)
@@ -167,7 +173,12 @@ func (f dryRunReleaseForge) PublishRelease(_ context.Context, repo string, spec 
 }
 
 func (f dryRunReleaseForge) CreateRelease(_ context.Context, repo string, spec provider.ReleaseSpec) error {
-	_, _ = fmt.Fprintf(f.out, "[dry-run] would delete any existing release for tag %s on %s\n", spec.Tag, repo)
+	if spec.Immutable {
+		_, _ = fmt.Fprintf(f.out, "[dry-run] would verify existing published content for %s on %s; create/upload below applies only when unpublished\n", spec.Tag, repo)
+	} else {
+		_, _ = fmt.Fprintf(f.out, "[dry-run] would delete any existing release for tag %s on %s\n", spec.Tag, repo)
+	}
+
 	_, _ = fmt.Fprintf(f.out, "[dry-run] would create release %s (%q, draft=%t, prerelease=%t, make-latest=%s) on %s\n",
 		spec.Tag, spec.Name, spec.Draft, spec.Prerelease, spec.MakeLatest, repo)
 	f.narrateAssetUploads(spec.Assets)

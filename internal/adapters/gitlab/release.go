@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
+	domainrelease "github.com/diggsweden/forge-ci/internal/domain/release"
 	"github.com/diggsweden/forge-ci/internal/pathsafe"
 )
 
@@ -41,24 +43,9 @@ func releasePayload(spec provider.ReleaseSpec, desc string, includeTag bool) map
 	return payload
 }
 
-// CreateRelease creates a GitLab release via REST API. Two-stage:
-//
-//  1. POST /api/v4/projects/{enc}/releases — create the release at the
-//     given tag with description (= notes file body).
-//  2. For each asset path: POST /projects/{enc}/uploads, then link the returned
-//     project upload URL via POST /releases/{tag}/assets/links.
-//
-// An existing release for the tag is deleted first, so a re-run publishes
-// cleanly (the tag itself is kept) — the same cleanup the github and forgejo
-// adapters perform, and what `release publish --strategy recreate` promises:
-// "recreate deletes and recreates it". Without it a second call to the same tag
-// got HTTP 409 "Release already exists" here and nowhere else, which is a
-// difference a caller is not supposed to be able to see. Found by the live
-// conformance tier (PAR-REL-3); `--strategy reconcile` remains the in-place
-// upsert for callers who want the release object preserved.
-//
-//nolint:cyclop // REST flow: delete-if-exists → create release → upload + link each asset.
-func (p *Provider) CreateRelease(ctx context.Context, repo string, spec provider.ReleaseSpec) error {
+// checkCreateRelease is the local preflight both release creators run before
+// any request.
+func (p *Provider) checkCreateRelease(repo string, spec provider.ReleaseSpec) error {
 	if err := validateReleaseSpec(spec); err != nil {
 		return err
 	}
@@ -76,9 +63,34 @@ func (p *Provider) CreateRelease(ctx context.Context, repo string, spec provider
 	}
 
 	if len(spec.Assets) > 0 {
-		if err := p.requireReleaseAssetUploadToken("CreateRelease"); err != nil {
-			return err
-		}
+		return p.requireReleaseAssetUploadToken("CreateRelease")
+	}
+
+	return nil
+}
+
+// CreateRelease creates a GitLab release via REST API. Two-stage:
+//
+//  1. POST /api/v4/projects/{enc}/releases — create the release at the
+//     given tag with description (= notes file body).
+//  2. For each asset path: POST /projects/{enc}/uploads, then link the returned
+//     project upload URL via POST /releases/{tag}/assets/links.
+//
+// An existing release for the tag is deleted first, so a re-run publishes
+// cleanly (the tag itself is kept) — the same cleanup the github and forgejo
+// adapters perform, and what `release publish --strategy recreate` promises:
+// "recreate deletes and recreates it". Without it a second call to the same tag
+// got HTTP 409 "Release already exists" here and nowhere else, which is a
+// difference a caller is not supposed to be able to see. Found by the live
+// conformance tier (PAR-REL-3); `--strategy reconcile` remains the in-place
+// upsert for callers who want the release object preserved.
+func (p *Provider) CreateRelease(ctx context.Context, repo string, spec provider.ReleaseSpec) error {
+	if spec.Immutable {
+		return p.createImmutableRelease(ctx, repo, spec)
+	}
+
+	if err := p.checkCreateRelease(repo, spec); err != nil {
+		return err
 	}
 
 	apiBase, headers := p.apiContext()
@@ -130,6 +142,10 @@ func (p *Provider) CreateRelease(ctx context.Context, repo string, spec provider
 // assets are uploaded and linked, and links no longer in spec.Assets are
 // removed. It satisfies the provider.ReleasePublisher role.
 func (p *Provider) PublishRelease(ctx context.Context, repo string, spec provider.ReleaseSpec) error {
+	if spec.Immutable {
+		return p.createImmutableRelease(ctx, repo, spec)
+	}
+
 	if err := validateReleaseSpec(spec); err != nil {
 		return err
 	}
@@ -170,7 +186,7 @@ func (p *Provider) PublishRelease(ctx context.Context, repo string, spec provide
 }
 
 func validateReleaseSpec(spec provider.ReleaseSpec) error {
-	if spec.Draft || spec.Prerelease {
+	if spec.Draft || (spec.Prerelease && !domainrelease.IsPrereleaseTag(spec.Tag)) {
 		return fmt.Errorf("GitLab releases do not support draft or prerelease flags: %w", errs.ErrUnsupported)
 	}
 
@@ -214,9 +230,7 @@ func (p *Provider) upsertRelease(ctx context.Context, apiBase, encoded string, s
 	releasesEndpoint := strings.TrimRight(apiBase, "/") + "/api/v4/projects/" + encoded + "/releases"
 
 	jsonHeaders := make(map[string]string, len(headers)+1)
-	for key, value := range headers {
-		jsonHeaders[key] = value
-	}
+	maps.Copy(jsonHeaders, headers)
 
 	jsonHeaders["Content-Type"] = contentTypeJSON
 
@@ -348,7 +362,7 @@ func (p *Provider) uploadAndLinkReleaseAsset(ctx context.Context, apiBase, encod
 }
 
 type gitlabReleaseLink struct {
-	ID   int    `json:"id"`
+	ID   int    `json:"id,omitempty"`
 	Name string `json:"name"`
 	URL  string `json:"url"`
 }
@@ -459,15 +473,13 @@ func (p *Provider) linkReleaseAsset(ctx context.Context, apiBase, encodedProject
 		return err
 	}
 
-	linkPayload, err := json.Marshal(map[string]any{"name": name, "url": assetURL})
+	linkPayload, err := json.Marshal(gitlabReleaseLink{Name: name, URL: assetURL})
 	if err != nil {
 		return fmt.Errorf("gitlab marshal release asset link %q: %w", name, err)
 	}
 
 	linkHeaders := make(map[string]string, len(headers)+1)
-	for key, value := range headers {
-		linkHeaders[key] = value
-	}
+	maps.Copy(linkHeaders, headers)
 
 	linkHeaders["Content-Type"] = contentTypeJSON
 
@@ -585,14 +597,19 @@ func readMultipartResponse(resp *http.Response) ([]byte, error) {
 // name. An unreadable notes file is an error, as it is for GitHub and
 // Forgejo: a release must not ship with its name as the body.
 func releaseDescription(spec provider.ReleaseSpec) (string, error) {
-	if spec.NotesFile == "" {
-		return spec.Name, nil
+	note := spec.Name
+	if spec.NotesFile != "" {
+		body, err := os.ReadFile(spec.NotesFile)
+		if err != nil {
+			return "", fmt.Errorf("read release notes %q: %w", spec.NotesFile, err)
+		}
+
+		note = string(body)
 	}
 
-	body, err := os.ReadFile(spec.NotesFile) //nolint:gosec // release notes path is a CLI-flag value.
-	if err != nil {
-		return "", fmt.Errorf("read release notes %q: %w", spec.NotesFile, err)
+	if spec.Prerelease {
+		note = "> **Pre-release.** GitLab has no native prerelease flag; its latest-release permalink is date-based. Use version-specific download links.\n\n" + note
 	}
 
-	return string(body), nil
+	return note, nil
 }

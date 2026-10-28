@@ -108,10 +108,9 @@ func (f *fakeGitHub) releaseSnapshot(tag string) *recordedRelease {
 	return &snapshot
 }
 
-//nolint:gocognit,maintidx // test fixture mux dispatches every method/path the GitHub adapter touches — one flat route table, deliberately in one place so the fake reads as the API surface it stands in for.
 func (f *fakeGitHub) handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/repos/owner/repo/releases/tags/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/repos/owner/repo/releases/tags/", func(response http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		f.record(r, string(body))
 		tag := strings.TrimPrefix(r.URL.Path, "/repos/owner/repo/releases/tags/")
@@ -121,18 +120,18 @@ func (f *fakeGitHub) handler() http.Handler {
 		f.mu.Unlock()
 
 		if rel == nil || rel.Draft {
-			http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
+			http.Error(response, `{"message":"Not Found"}`, http.StatusNotFound)
 
 			return
 		}
 
-		writeRelease(w, rel)
+		writeRelease(response, rel)
 	})
-	mux.HandleFunc("/repos/owner/repo/releases", func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		f.record(r, string(body))
+	mux.HandleFunc("/repos/owner/repo/releases", func(response http.ResponseWriter, request *http.Request) {
+		body, _ := io.ReadAll(request.Body)
+		f.record(request, string(body))
 
-		if r.Method == http.MethodGet {
+		if request.Method == http.MethodGet {
 			f.mu.Lock()
 
 			releases := make([]map[string]any, 0, len(f.releases))
@@ -140,14 +139,14 @@ func (f *fakeGitHub) handler() http.Handler {
 				releases = append(releases, releaseToWire(rel))
 			}
 			f.mu.Unlock()
-			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(releases)
+			response.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(response).Encode(releases)
 
 			return
 		}
 
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		if request.Method != http.MethodPost {
+			http.Error(response, "method not allowed", http.StatusMethodNotAllowed)
 
 			return
 		}
@@ -176,13 +175,13 @@ func (f *fakeGitHub) handler() http.Handler {
 		}
 		f.releases[in.TagName] = rel
 		f.mu.Unlock()
-		writeRelease(w, rel)
+		writeRelease(response, rel)
 	})
-	mux.HandleFunc("/repos/owner/repo/releases/", func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		f.record(r, string(body))
+	mux.HandleFunc("/repos/owner/repo/releases/", func(response http.ResponseWriter, request *http.Request) {
+		body, _ := io.ReadAll(request.Body)
+		f.record(request, string(body))
 
-		path := strings.TrimPrefix(r.URL.Path, "/repos/owner/repo/releases/")
+		path := strings.TrimPrefix(request.URL.Path, "/repos/owner/repo/releases/")
 		switch {
 		case strings.HasSuffix(path, "/assets"):
 			f.mu.Lock()
@@ -198,9 +197,9 @@ func (f *fakeGitHub) handler() http.Handler {
 				}
 			}
 			f.mu.Unlock()
-			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(assetsToWire(assets))
-		case strings.HasPrefix(path, "assets/") && r.Method == http.MethodDelete:
+			response.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(response).Encode(assetsToWire(assets))
+		case strings.HasPrefix(path, "assets/") && request.Method == http.MethodDelete:
 			var id int64
 
 			_, _ = fmt.Sscanf(strings.TrimPrefix(path, "assets/"), "%d", &id)
@@ -212,8 +211,8 @@ func (f *fakeGitHub) handler() http.Handler {
 			}
 
 			f.mu.Unlock()
-			w.WriteHeader(http.StatusNoContent)
-		case strings.HasPrefix(path, "assets/") && r.Method == http.MethodPatch:
+			response.WriteHeader(http.StatusNoContent)
+		case strings.HasPrefix(path, "assets/") && request.Method == http.MethodPatch:
 			var id int64
 
 			_, _ = fmt.Sscanf(strings.TrimPrefix(path, "assets/"), "%d", &id)
@@ -231,15 +230,15 @@ func (f *fakeGitHub) handler() http.Handler {
 						asset.Name = in.Name
 						f.mu.Unlock()
 
-						_ = json.NewEncoder(w).Encode(assetToWire(asset))
+						_ = json.NewEncoder(response).Encode(assetToWire(asset))
 
 						return
 					}
 				}
 			}
 			f.mu.Unlock()
-			http.Error(w, "not found", http.StatusNotFound)
-		case r.Method == http.MethodPatch:
+			http.Error(response, "not found", http.StatusNotFound)
+		case request.Method == http.MethodPatch:
 			id := releaseIDFromPath(path)
 
 			var in struct {
@@ -259,7 +258,7 @@ func (f *fakeGitHub) handler() http.Handler {
 			if f.failPatchRemaining > 0 {
 				f.failPatchRemaining--
 				f.mu.Unlock()
-				http.Error(w, "bad gateway", http.StatusBadGateway)
+				http.Error(response, "bad gateway", http.StatusBadGateway)
 
 				return
 			}
@@ -278,21 +277,21 @@ func (f *fakeGitHub) handler() http.Handler {
 					f.mu.Unlock()
 
 					if failAfterCommit {
-						w.WriteHeader(http.StatusOK)
-						_, _ = w.Write([]byte(`{"id":`))
+						response.WriteHeader(http.StatusOK)
+						_, _ = response.Write([]byte(`{"id":`))
 
 						return
 					}
 
-					writeRelease(w, rel)
+					writeRelease(response, rel)
 
 					return
 				}
 			}
 
 			f.mu.Unlock()
-			http.Error(w, "not found", http.StatusNotFound)
-		case r.Method == http.MethodGet:
+			http.Error(response, "not found", http.StatusNotFound)
+		case request.Method == http.MethodGet:
 			id := releaseIDFromPath(path)
 
 			f.mu.Lock()
@@ -309,13 +308,13 @@ func (f *fakeGitHub) handler() http.Handler {
 			f.mu.Unlock()
 
 			if found == nil {
-				http.Error(w, "not found", http.StatusNotFound)
+				http.Error(response, "not found", http.StatusNotFound)
 
 				return
 			}
 
-			writeRelease(w, found)
-		case r.Method == http.MethodDelete:
+			writeRelease(response, found)
+		case request.Method == http.MethodDelete:
 			id := releaseIDFromPath(path)
 
 			f.mu.Lock()
@@ -329,9 +328,9 @@ func (f *fakeGitHub) handler() http.Handler {
 			}
 
 			f.mu.Unlock()
-			w.WriteHeader(http.StatusNoContent)
+			response.WriteHeader(http.StatusNoContent)
 		default:
-			http.Error(w, "not found", http.StatusNotFound)
+			http.Error(response, "not found", http.StatusNotFound)
 		}
 	})
 
@@ -342,49 +341,49 @@ func (f *fakeGitHub) handler() http.Handler {
 // separate host in production but on the same httptest server here.
 func (f *fakeGitHub) uploadHandler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/repos/owner/repo/releases/", func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		f.record(r, string(body))
+	mux.HandleFunc("/repos/owner/repo/releases/", func(response http.ResponseWriter, request *http.Request) {
+		body, _ := io.ReadAll(request.Body)
+		f.record(request, string(body))
 
-		path := strings.TrimPrefix(r.URL.Path, "/repos/owner/repo/releases/")
-		if !strings.HasSuffix(path, "/assets") || r.Method != http.MethodPost {
-			http.Error(w, "not found", http.StatusNotFound)
+		path := strings.TrimPrefix(request.URL.Path, "/repos/owner/repo/releases/")
+		if !strings.HasSuffix(path, "/assets") || request.Method != http.MethodPost {
+			http.Error(response, "not found", http.StatusNotFound)
 
 			return
 		}
 
 		releaseID := releaseIDFromPath(path)
-		name := r.URL.Query().Get("name")
+		name := request.URL.Query().Get("name")
 
 		f.mu.Lock()
 		if (name == f.failUploadName || strings.HasPrefix(name, f.failUploadName+".forge-ci-upload-")) && f.failUploadRemaining > 0 {
 			f.failUploadRemaining--
 			f.mu.Unlock()
-			http.Error(w, "injected upload failure", http.StatusInternalServerError)
+			http.Error(response, "injected upload failure", http.StatusInternalServerError)
 
 			return
 		}
 
 		f.nextID++
 
-		a := &recordedAsset{ID: f.nextID, Name: name, Body: string(body)}
+		asset := &recordedAsset{ID: f.nextID, Name: name, Body: string(body)}
 		for _, rel := range f.releases {
 			if rel.ID == releaseID {
-				rel.Assets = append(rel.Assets, a)
+				rel.Assets = append(rel.Assets, asset)
 
 				break
 			}
 		}
 
 		f.mu.Unlock()
-		w.WriteHeader(http.StatusCreated)
+		response.WriteHeader(http.StatusCreated)
 
-		wire := assetToWire(a)
+		wire := assetToWire(asset)
 		if f.omitUploadDigest {
 			delete(wire, "digest")
 		}
 
-		_ = json.NewEncoder(w).Encode(wire)
+		_ = json.NewEncoder(response).Encode(wire)
 	})
 
 	return mux
@@ -467,14 +466,14 @@ func combinedHandler(f *fakeGitHub) http.Handler {
 	apiH := f.handler()
 	uploadH := f.uploadHandler()
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/assets") {
-			uploadH.ServeHTTP(w, r)
+	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Method == http.MethodPost && strings.Contains(request.URL.Path, "/assets") {
+			uploadH.ServeHTTP(response, request)
 
 			return
 		}
 
-		apiH.ServeHTTP(w, r)
+		apiH.ServeHTTP(response, request)
 	})
 }
 
@@ -592,12 +591,12 @@ func TestCreateRelease_PublishesOnlyAfterEveryAssetAndRetryRecovers(t *testing.T
 
 	second := filepath.Join(dir, "second.tgz")
 	for path, content := range map[string]string{first: "first", second: "second"} {
-		if err := os.WriteFile(path, []byte(content), 0o644); err != nil { //nolint:gosec // test fixture
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	p := providerForFake(srv)
+	githubProvider := providerForFake(srv)
 
 	spec := provider.ReleaseSpec{
 		Tag:        "v1.0.0",
@@ -605,7 +604,7 @@ func TestCreateRelease_PublishesOnlyAfterEveryAssetAndRetryRecovers(t *testing.T
 		MakeLatest: provider.MakeLatestTrue,
 		Assets:     []string{first, second},
 	}
-	if err := p.CreateRelease(context.Background(), "owner/repo", spec); err == nil {
+	if err := githubProvider.CreateRelease(context.Background(), "owner/repo", spec); err == nil {
 		t.Fatal("CreateRelease succeeded despite injected second-asset failure")
 	}
 
@@ -627,7 +626,7 @@ func TestCreateRelease_PublishesOnlyAfterEveryAssetAndRetryRecovers(t *testing.T
 
 	retryStart := len(failedCalls)
 
-	if err := p.CreateRelease(context.Background(), "owner/repo", spec); err != nil {
+	if err := githubProvider.CreateRelease(context.Background(), "owner/repo", spec); err != nil {
 		t.Fatalf("retry CreateRelease: %v", err)
 	}
 
@@ -639,13 +638,13 @@ func TestCreateRelease_PublishesOnlyAfterEveryAssetAndRetryRecovers(t *testing.T
 	patchIndex := -1
 	lastUploadIndex := -1
 
-	for i, call := range retryCalls {
+	for index, call := range retryCalls {
 		if call.Method == http.MethodPost && strings.HasSuffix(call.Path, "/assets") {
-			lastUploadIndex = i
+			lastUploadIndex = index
 		}
 
 		if call.Method == http.MethodPatch {
-			patchIndex = i
+			patchIndex = index
 		}
 	}
 
@@ -953,16 +952,16 @@ func TestCreateRelease_ForwardsNotesFileBody(t *testing.T) {
 	srv := httptest.NewServer(fake.handler())
 	defer srv.Close()
 
-	p := providerForFake(srv)
+	githubProvider := providerForFake(srv)
 
 	dir := t.TempDir()
 
 	notesPath := filepath.Join(dir, "notes.md")
-	if err := os.WriteFile(notesPath, []byte("# Release notes\n\nfoo"), 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(notesPath, []byte("# Release notes\n\nfoo"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := p.CreateRelease(context.Background(), "owner/repo", provider.ReleaseSpec{
+	if err := githubProvider.CreateRelease(context.Background(), "owner/repo", provider.ReleaseSpec{
 		Tag:        "v3.0.0",
 		Name:       "v3.0.0",
 		NotesFile:  notesPath,
@@ -1028,16 +1027,16 @@ func TestPublishRelease_UpdatesInPlaceAndReconcilesAssets(t *testing.T) {
 	srv := httptest.NewServer(combinedHandler(fake))
 	defer srv.Close()
 
-	p := providerForFake(srv)
+	githubProvider := providerForFake(srv)
 
 	dir := t.TempDir()
 
 	asset := filepath.Join(dir, "new.tgz")
-	if err := os.WriteFile(asset, []byte("payload"), 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(asset, []byte("payload"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := p.PublishRelease(context.Background(), "owner/repo", provider.ReleaseSpec{
+	if err := githubProvider.PublishRelease(context.Background(), "owner/repo", provider.ReleaseSpec{
 		Tag:    "v1.0.0",
 		Name:   "renamed",
 		Assets: []string{asset},
@@ -1117,16 +1116,16 @@ func TestUploadReleaseAsset_NewAssetUploadsDirectly(t *testing.T) {
 	srv := httptest.NewServer(combinedHandler(fake))
 	defer srv.Close()
 
-	p := providerForFake(srv)
+	githubProvider := providerForFake(srv)
 
 	dir := t.TempDir()
 
 	asset := filepath.Join(dir, "binary.tgz")
-	if err := os.WriteFile(asset, []byte("payload"), 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(asset, []byte("payload"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := p.UploadReleaseAsset(context.Background(), "v1.0.0", asset); err != nil {
+	if err := githubProvider.UploadReleaseAsset(context.Background(), "v1.0.0", asset); err != nil {
 		t.Fatalf("UploadReleaseAsset: %v", err)
 	}
 
@@ -1173,16 +1172,16 @@ func TestUploadReleaseAsset_ClobbersExistingAsset(t *testing.T) {
 	srv := httptest.NewServer(combinedHandler(fake))
 	defer srv.Close()
 
-	p := providerForFake(srv)
+	githubProvider := providerForFake(srv)
 
 	dir := t.TempDir()
 
 	asset := filepath.Join(dir, "binary.tgz")
-	if err := os.WriteFile(asset, []byte("new"), 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(asset, []byte("new"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := p.UploadReleaseAsset(context.Background(), "v1.0.0", asset); err != nil {
+	if err := githubProvider.UploadReleaseAsset(context.Background(), "v1.0.0", asset); err != nil {
 		t.Fatalf("UploadReleaseAsset: %v", err)
 	}
 
@@ -1197,14 +1196,14 @@ func TestUploadReleaseAsset_ClobbersExistingAsset(t *testing.T) {
 
 	post, firstPatch, firstDelete := -1, -1, -1
 
-	for i, call := range fake.Calls() {
+	for index, call := range fake.Calls() {
 		switch {
 		case call.Method == http.MethodPost && strings.HasSuffix(call.Path, "/assets"):
-			post = i
+			post = index
 		case call.Method == http.MethodPatch && firstPatch < 0:
-			firstPatch = i
+			firstPatch = index
 		case call.Method == http.MethodDelete && firstDelete < 0:
-			firstDelete = i
+			firstDelete = index
 		}
 	}
 
@@ -1249,16 +1248,16 @@ func TestUploadReleaseAsset_MissingReleaseSurfaces404Class(t *testing.T) {
 	srv := httptest.NewServer(combinedHandler(fake))
 	defer srv.Close()
 
-	p := providerForFake(srv)
+	githubProvider := providerForFake(srv)
 
 	dir := t.TempDir()
 
 	asset := filepath.Join(dir, "x.tgz")
-	if err := os.WriteFile(asset, []byte("x"), 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(asset, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	err := p.UploadReleaseAsset(context.Background(), "v9.9.9", asset)
+	err := githubProvider.UploadReleaseAsset(context.Background(), "v9.9.9", asset)
 	if !errors.Is(err, errs.ErrMissingInput) {
 		t.Fatalf("err = %v, want ErrMissingInput from typed 404 mapping", err)
 	}

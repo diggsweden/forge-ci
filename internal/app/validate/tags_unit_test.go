@@ -102,7 +102,7 @@ func (f *fakeTagGit) VerifyTagSSHAgainstAllowedSigners(_ context.Context, ref, s
 
 // errUnexpectedSSHAllowlistCheck marks the stub being asked something the
 // fixture did not configure it to answer.
-var errUnexpectedSSHAllowlistCheck = errors.New("fakeTagGit: SSH allowed_signers verification was not configured by this fixture") //nolint:err113 // test fixture sentinel.
+var errUnexpectedSSHAllowlistCheck = errors.New("fakeTagGit: SSH allowed_signers verification was not configured by this fixture")
 
 func (f *fakeTagGit) TaggerInfo(_ context.Context, ref string) (git.TaggerInfo, error) {
 	f.record("TaggerInfo", ref)

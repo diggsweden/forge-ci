@@ -50,8 +50,6 @@ type Signer struct {
 // Wrong passphrase → ErrPermissionDenied.
 // Multiple entities in the armor → the first is used (matches gpg's
 // `--default-key` precedence when only one fingerprint is configured).
-//
-//nolint:cyclop // keyring parse + key-type + passphrase + identity dispatch.
 func NewSignerFromArmor(armor []byte, passphrase string) (*Signer, error) {
 	armor = bytes.TrimSpace(armor)
 	if len(armor) == 0 {

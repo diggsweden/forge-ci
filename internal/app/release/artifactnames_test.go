@@ -32,20 +32,20 @@ func TestResolveArtifactNames_PrintsOutputPairs(t *testing.T) {
 		{"Maven", "", "build-artifacts", "build-sbom"},
 		{"NPM", "", "build-artifacts", "build-sbom"},
 	}
-	for _, c := range cases {
-		t.Run(c.projType+"/"+c.artifact, func(t *testing.T) {
+	for _, cfg := range cases {
+		t.Run(cfg.projType+"/"+cfg.artifact, func(t *testing.T) {
 			t.Parallel()
 
 			var buf bytes.Buffer
 			if err := apprelease.ResolveArtifactNames(context.Background(), &buf, apprelease.ResolveArtifactNamesInput{
-				ProjectType: c.projType, ArtifactName: c.artifact,
+				ProjectType: cfg.projType, ArtifactName: cfg.artifact,
 			}); err != nil {
 				t.Fatal(err)
 			}
 
 			// The whole document, so the two lines, their order and their
 			// exact content are all one assertion.
-			want := "name=" + c.wantName + "\nsbom-name=" + c.wantSBOM + "\n"
+			want := "name=" + cfg.wantName + "\nsbom-name=" + cfg.wantSBOM + "\n"
 			if buf.String() != want {
 				t.Errorf("got  %q\nwant %q", buf.String(), want)
 			}

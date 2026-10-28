@@ -40,10 +40,10 @@ type JobGraphInput struct {
 // skipped producer" hazard (a reusable-call job reading a skippable producer's
 // outputs) and fails if any unacknowledged edge exists. Violations are emitted
 // as error annotations; the call returns a wrapped errs.ErrValidation.
-func JobGraph(w io.Writer, annot output.Annotator, in JobGraphInput) error { //nolint:varnamelen // idiomatic short name.
+func JobGraph(out io.Writer, annot output.Annotator, in JobGraphInput) error {
 	if len(in.Workflows) > 0 {
 		if in.FS != nil {
-			return jobGraphFiles(w, annot, workflowFilesForFS(in.Workflows), func(file string) ([]byte, error) {
+			return jobGraphFiles(out, annot, workflowFilesForFS(in.Workflows), func(file string) ([]byte, error) {
 				return fs.ReadFile(in.FS, file)
 			})
 		}
@@ -53,7 +53,7 @@ func JobGraph(w io.Writer, annot output.Annotator, in JobGraphInput) error { //n
 			files = append(files, filepath.ToSlash(filepath.Clean(file)))
 		}
 
-		return jobGraphFiles(w, annot, files, func(file string) ([]byte, error) {
+		return jobGraphFiles(out, annot, files, func(file string) ([]byte, error) {
 			diskPath := filepath.FromSlash(file)
 			if !filepath.IsAbs(diskPath) {
 				diskPath = filepath.Join(in.Root, diskPath)
@@ -73,7 +73,7 @@ func JobGraph(w io.Writer, annot output.Annotator, in JobGraphInput) error { //n
 		return workflowReadError(workflowsDir, err)
 	}
 
-	return jobGraphFiles(w, annot, collectWorkflowFiles(entries, workflowsDir), func(file string) ([]byte, error) {
+	return jobGraphFiles(out, annot, collectWorkflowFiles(entries, workflowsDir), func(file string) ([]byte, error) {
 		return fs.ReadFile(fsys, file)
 	})
 }
@@ -90,7 +90,7 @@ func workflowFilesForFS(files []string) []string {
 // jobGraphFiles checks every file in order and reports every violation. A file
 // that cannot be read or parsed stops the run with its own class: the result
 // could no longer claim to cover the requested workflows.
-func jobGraphFiles(w io.Writer, annot output.Annotator, files []string, read func(string) ([]byte, error)) error { //nolint:varnamelen // idiomatic short name.
+func jobGraphFiles(out io.Writer, annot output.Annotator, files []string, read func(string) ([]byte, error)) error {
 	failures := 0
 
 	for _, file := range files {
@@ -111,7 +111,7 @@ func jobGraphFiles(w io.Writer, annot output.Annotator, files []string, read fun
 		return fmt.Errorf("job-graph masking validation failed: %w", errs.ErrValidation)
 	}
 
-	_, _ = fmt.Fprintln(w, "No reusable-consumer job-graph masking risks.")
+	_, _ = fmt.Fprintln(out, "No reusable-consumer job-graph masking risks.")
 
 	return nil
 }

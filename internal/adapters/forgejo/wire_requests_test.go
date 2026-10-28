@@ -322,7 +322,7 @@ func TestListContainerPackageVersions_RefusesANextPageThatDoesNotAdvance(t *test
 
 	serve := func(ignorePage bool) (*forgejo.Provider, *int) {
 		requests := 0
-		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler := http.HandlerFunc(func(response http.ResponseWriter, r *http.Request) {
 			requests++
 
 			page := r.URL.Query().Get("page")
@@ -330,30 +330,30 @@ func TestListContainerPackageVersions_RefusesANextPageThatDoesNotAdvance(t *test
 				page = "1"
 			}
 
-			w.Header().Set("Content-Type", "application/json")
+			response.Header().Set("Content-Type", "application/json")
 
 			switch page {
 			case "2":
-				_, _ = w.Write([]byte(`[{"id":2,"type":"container","name":"img","version":"v2"}]`))
+				_, _ = response.Write([]byte(`[{"id":2,"type":"container","name":"img","version":"v2"}]`))
 			default:
-				w.Header().Set("Link", `<https://forgejo.invalid/api/v1/packages/owner?page=2&limit=50>; rel="next"`)
-				_, _ = w.Write([]byte(`[{"id":1,"type":"container","name":"img","version":"v1"}]`))
+				response.Header().Set("Link", `<https://forgejo.invalid/api/v1/packages/owner?page=2&limit=50>; rel="next"`)
+				_, _ = response.Write([]byte(`[{"id":1,"type":"container","name":"img","version":"v1"}]`))
 			}
 		})
 
 		return &forgejo.Provider{Env: envMap(map[string]string{"FORGEJO_TOKEN": "tok"}), HTTPClient: inMemoryClient(handler), APIBaseOverride: "https://forgejo.invalid"}, &requests
 	}
 
-	p, requests := serve(false)
+	forgejoProvider, requests := serve(false)
 
-	versions, err := p.ListContainerPackageVersions(t.Context(), "owner", "img")
+	versions, err := forgejoProvider.ListContainerPackageVersions(t.Context(), "owner", "img")
 	if err != nil || !slices.Equal(versions, []string{"v1", "v2"}) || *requests != 2 {
 		t.Fatalf("paging server: versions=%v requests=%d err=%v", versions, *requests, err)
 	}
 
-	p, requests = serve(true)
+	forgejoProvider, requests = serve(true)
 
-	versions, err = p.ListContainerPackageVersions(t.Context(), "owner", "img")
+	versions, err = forgejoProvider.ListContainerPackageVersions(t.Context(), "owner", "img")
 	if !errors.Is(err, errs.ErrMalformedInput) || versions != nil || *requests != 2 {
 		t.Fatalf("page-ignoring server: versions=%v requests=%d err=%v, want a malformed refusal after the second page", versions, *requests, err)
 	}

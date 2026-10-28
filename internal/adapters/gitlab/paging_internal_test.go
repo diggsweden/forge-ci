@@ -41,14 +41,14 @@ func TestListings_RefuseAServerThatIgnoresThePageParameter(t *testing.T) {
 	serve := func(pages map[string]string, ignorePage bool) (*Provider, *int) {
 		requests := 0
 
-		return &Provider{APIBaseOverride: "https://gl.invalid", HTTPClient: &http.Client{Transport: pagingTransport(func(r *http.Request) (*http.Response, error) {
+		return &Provider{APIBaseOverride: "https://gl.invalid", HTTPClient: &http.Client{Transport: pagingTransport(func(request *http.Request) (*http.Response, error) {
 			requests++
 			// A listing that never stops is cut off here, not by the test's timeout.
 			if requests > 5 {
 				return nil, fmt.Errorf("request %d: the listing did not stop: %w", requests, errs.ErrDependencyUnavailable)
 			}
 
-			page := r.URL.Query().Get("page")
+			page := request.URL.Query().Get("page")
 			if ignorePage {
 				page = "1"
 			}
@@ -58,7 +58,7 @@ func TestListings_RefuseAServerThatIgnoresThePageParameter(t *testing.T) {
 				body = "[]"
 			}
 
-			return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+			return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(body)), Request: request}, nil
 		})}}, &requests
 	}
 
@@ -84,16 +84,16 @@ func TestListings_RefuseAServerThatIgnoresThePageParameter(t *testing.T) {
 
 			pages := map[string]string{"1": fullPage("a"), "2": `[{"id":999,"name":"last","path":"group/project/last"}]`}
 
-			p, requests := serve(pages, false)
+			provider, requests := serve(pages, false)
 
-			count, err := list(p)
+			count, err := list(provider)
 			if err != nil || count != gitlabPageSize+1 || *requests != 2 {
 				t.Fatalf("paging server: count=%d requests=%d err=%v, want every item once over two requests", count, *requests, err)
 			}
 
-			p, requests = serve(pages, true)
+			provider, requests = serve(pages, true)
 
-			count, err = list(p)
+			count, err = list(provider)
 			if !errors.Is(err, errs.ErrMalformedInput) || count != 0 || *requests != 2 {
 				t.Fatalf("page-ignoring server: count=%d requests=%d err=%v, want a malformed refusal after the repeated page", count, *requests, err)
 			}
@@ -107,9 +107,9 @@ func TestListings_RefuseAServerThatIgnoresThePageParameter(t *testing.T) {
 				gitlabPageSize + 1: "[" + shifted + `,{"id":999,"name":"last","path":"group/project/last"}]`,
 				gitlabPageSize:     "[" + shifted + "]",
 			} {
-				p, requests = serve(map[string]string{"1": fullPage("a"), "2": second}, false)
+				provider, requests = serve(map[string]string{"1": fullPage("a"), "2": second}, false)
 
-				count, err = list(p)
+				count, err = list(provider)
 				if err != nil || count != want || *requests != 2 {
 					t.Fatalf("an item shifted onto the next page: count=%d requests=%d err=%v, want %d items, each once", count, *requests, err, want)
 				}

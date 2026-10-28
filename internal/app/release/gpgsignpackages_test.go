@@ -23,8 +23,6 @@ var (
 )
 
 // testPGPKeyArmor is an empty PGP armor test fixture, not a real key.
-//
-//nolint:gosec // G101 false positive: empty armor test fixture, not a real credential.
 const testPGPKeyArmor = "-----BEGIN PGP PRIVATE KEY BLOCK-----\n-----END PGP PRIVATE KEY BLOCK-----"
 
 type fakeGPGPackageSigner struct {
@@ -134,6 +132,8 @@ func TestGPGSignPackages_SignsOnlyDistroPackages(t *testing.T) {
 }
 
 func TestGPGSignPackages_RequiresFreshNonEmptyRegularSidecars(t *testing.T) {
+	t.Parallel()
+
 	for _, mode := range []string{"silent", "empty", "directory", "link"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()

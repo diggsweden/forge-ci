@@ -9,11 +9,12 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"github.com/diggsweden/forge-ci/internal/domain/errs"
-	"github.com/diggsweden/forge-ci/internal/domain/summary"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/summary"
 )
 
 // ValidateGooglePlayServiceAccount reports whether body parses as a
@@ -26,7 +27,7 @@ import (
 //   - "type": "service_account"
 //   - "client_email": non-empty
 //   - "private_key": non-empty
-func ValidateGooglePlayServiceAccount(body []byte) error { //nolint:cyclop // JSON fields, PEM framing, key parsing and RSA validity are separate credential checks.
+func ValidateGooglePlayServiceAccount(body []byte) error {
 	if len(body) == 0 {
 		return fmt.Errorf("service account JSON is empty"+": %w", errs.ErrUsage)
 	}
@@ -93,52 +94,52 @@ func RenderGooglePlayUploadSummary(in GooglePlayUploadInput, now time.Time) stri
 		percentage = fmt.Sprintf("%.0f%%", in.UserFraction*100)
 	}
 
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var builder strings.Builder
 
-	_, _ = fmt.Fprintf(&b, "## Google Play Upload Summary\n\n")
-	_, _ = fmt.Fprintf(&b, "### Upload Details\n")
-	_, _ = fmt.Fprintf(&b, "| Property | Value |\n")
-	_, _ = fmt.Fprintf(&b, "|----------|-------|\n")
-	_, _ = fmt.Fprintf(&b, "| **AAB File** | %s |\n", summary.InlineCode(filepath.Base(in.AABFile)))
-	_, _ = fmt.Fprintf(&b, "| **Package** | %s |\n", summary.InlineCode(in.PackageName))
-	_, _ = fmt.Fprintf(&b, "| **Track** | %s |\n", summary.LiteralText(in.Track))
-	_, _ = fmt.Fprintf(&b, "| **Status** | %s |\n", summary.LiteralText(in.Status))
+	_, _ = fmt.Fprintf(&builder, "## Google Play Upload Summary\n\n")
+	_, _ = fmt.Fprintf(&builder, "### Upload Details\n")
+	_, _ = fmt.Fprintf(&builder, "| Property | Value |\n")
+	_, _ = fmt.Fprintf(&builder, "|----------|-------|\n")
+	_, _ = fmt.Fprintf(&builder, "| **AAB File** | %s |\n", summary.InlineCode(filepath.Base(in.AABFile)))
+	_, _ = fmt.Fprintf(&builder, "| **Package** | %s |\n", summary.InlineCode(in.PackageName))
+	_, _ = fmt.Fprintf(&builder, "| **Track** | %s |\n", summary.LiteralText(in.Track))
+	_, _ = fmt.Fprintf(&builder, "| **Status** | %s |\n", summary.LiteralText(in.Status))
 
 	if in.ReleaseName != "" {
-		_, _ = fmt.Fprintf(&b, "| **Release Name** | %s |\n", summary.LiteralText(in.ReleaseName))
+		_, _ = fmt.Fprintf(&builder, "| **Release Name** | %s |\n", summary.LiteralText(in.ReleaseName))
 	}
 
 	if in.UserFractionSet {
-		_, _ = fmt.Fprintf(&b, "| **Staged Rollout** | %s |\n", percentage)
+		_, _ = fmt.Fprintf(&builder, "| **Staged Rollout** | %s |\n", percentage)
 	}
 
 	if in.Priority != 0 {
-		_, _ = fmt.Fprintf(&b, "| **Update Priority** | %d |\n", in.Priority)
+		_, _ = fmt.Fprintf(&builder, "| **Update Priority** | %d |\n", in.Priority)
 	}
 
-	_, _ = fmt.Fprintf(&b, "| **Upload Status** | Uploaded |\n")
+	_, _ = fmt.Fprintf(&builder, "| **Upload Status** | Uploaded |\n")
 
-	_, _ = fmt.Fprintf(&b, "\n### Next Steps\n")
-	_, _ = fmt.Fprintf(&b, "1. Check [Google Play Console](https://play.google.com/console) for upload status\n")
+	_, _ = fmt.Fprintf(&builder, "\n### Next Steps\n")
+	_, _ = fmt.Fprintf(&builder, "1. Check [Google Play Console](https://play.google.com/console) for upload status\n")
 
 	switch in.Track {
 	case "internal":
-		_, _ = fmt.Fprintf(&b, "2. Build will be available to internal testers within minutes\n")
+		_, _ = fmt.Fprintf(&builder, "2. Build will be available to internal testers within minutes\n")
 	case "alpha", "beta":
-		_, _ = fmt.Fprintf(&b, "2. Build will be available to %s testers after review\n", summary.LiteralText(in.Track))
+		_, _ = fmt.Fprintf(&builder, "2. Build will be available to %s testers after review\n", summary.LiteralText(in.Track))
 	case "production":
 		if percentage != "" {
-			_, _ = fmt.Fprintf(&b, "2. Staged rollout to %s of users will begin after review\n", percentage)
+			_, _ = fmt.Fprintf(&builder, "2. Staged rollout to %s of users will begin after review\n", percentage)
 		} else {
-			_, _ = fmt.Fprintf(&b, "2. Full production release will begin after review\n")
+			_, _ = fmt.Fprintf(&builder, "2. Full production release will begin after review\n")
 		}
 	}
 
 	if in.Status == "draft" {
-		_, _ = fmt.Fprintf(&b, "3. Release is saved as draft - manually publish from Play Console when ready\n")
+		_, _ = fmt.Fprintf(&builder, "3. Release is saved as draft - manually publish from Play Console when ready\n")
 	}
 
-	_, _ = fmt.Fprintf(&b, "\n*Upload completed at %s*\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
+	_, _ = fmt.Fprintf(&builder, "\n*Upload completed at %s*\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
 
-	return b.String()
+	return builder.String()
 }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"golang.org/x/crypto/ssh"
@@ -45,10 +46,8 @@ func checkAllowedSignerEntry(line string) error {
 		return fmt.Errorf("expected principal [options] key-type base64-key: %w", errs.ErrMalformedInput)
 	}
 
-	for _, principal := range strings.Split(line[:separator], ",") {
-		if principal == "" {
-			return fmt.Errorf("empty principal in pattern list: %w", errs.ErrMalformedInput)
-		}
+	if slices.Contains(strings.Split(line[:separator], ","), "") {
+		return fmt.Errorf("empty principal in pattern list: %w", errs.ErrMalformedInput)
 	}
 
 	// The key/options suffix shares authorized_keys syntax. The library checks

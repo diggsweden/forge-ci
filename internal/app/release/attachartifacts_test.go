@@ -19,11 +19,11 @@ func TestAttachArtifacts_AppendsBinariesGlobWhenFilesExist(t *testing.T) {
 	dir := t.TempDir()
 
 	binaries := filepath.Join(dir, "release-artifacts", "binaries")
-	if err := os.MkdirAll(binaries, 0o755); err != nil { //nolint:gosec // test fixture
+	if err := os.MkdirAll(binaries, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(filepath.Join(binaries, "tool"), []byte("x"), 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(filepath.Join(binaries, "tool"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -69,11 +69,11 @@ func TestAttachArtifacts_DoesNotDuplicateBinariesGlob(t *testing.T) {
 	dir := t.TempDir()
 
 	binaries := filepath.Join(dir, "release-artifacts", "binaries")
-	if err := os.MkdirAll(binaries, 0o755); err != nil { //nolint:gosec // test fixture
+	if err := os.MkdirAll(binaries, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(filepath.Join(binaries, "tool"), []byte("x"), 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(filepath.Join(binaries, "tool"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

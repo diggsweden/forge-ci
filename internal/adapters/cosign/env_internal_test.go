@@ -110,16 +110,16 @@ func TestNewIsolated_KeepsTheAllowedKeyAndDropsTheRest(t *testing.T) {
 	t.Setenv("COSIGN_KEY", "k")
 	t.Setenv("SOME_OTHER_SECRET", "s")
 
-	a := NewIsolated("COSIGN_KEY")
-	if a.Env == nil {
+	adapter := NewIsolated("COSIGN_KEY")
+	if adapter.Env == nil {
 		t.Fatal("NewIsolated should set Env")
 	}
 
-	if !slices.Contains(a.Env, "COSIGN_KEY=k") {
-		t.Errorf("the allowed key did not survive isolation, so cosign has nothing to sign with: %v", a.Env)
+	if !slices.Contains(adapter.Env, "COSIGN_KEY=k") {
+		t.Errorf("the allowed key did not survive isolation, so cosign has nothing to sign with: %v", adapter.Env)
 	}
 
-	for _, kv := range a.Env {
+	for _, kv := range adapter.Env {
 		if kv == "SOME_OTHER_SECRET=s" {
 			t.Errorf("non-allowed secret present in isolated env: %q", kv)
 		}

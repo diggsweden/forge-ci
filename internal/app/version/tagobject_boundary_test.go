@@ -16,7 +16,7 @@ import (
 
 var errTagBoundary = errors.New("owned tag dependency failure")
 
-func TestTagObjectBoundary_AnnotatedInBothModes(t *testing.T) { //nolint:gocognit // positive and negative object types independently cover signed and unsigned reruns.
+func TestTagObjectBoundary_AnnotatedInBothModes(t *testing.T) {
 	t.Parallel()
 
 	for _, signed := range []bool{false, true} {
@@ -39,7 +39,7 @@ func TestTagObjectBoundary_AnnotatedInBothModes(t *testing.T) { //nolint:gocogni
 				t.Fatalf("type lookup=%v", repo.typeRefs)
 			}
 
-			if kind == "tag" { //nolint:nestif // the successful type has distinct signature expectations in each mode.
+			if kind == "tag" {
 				if err != nil || repo.pushed != "v3.5.7" || repo.created != "" {
 					t.Fatalf("annotated rerun err=%v repo=%+v", err, repo)
 				}

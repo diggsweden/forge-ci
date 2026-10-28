@@ -63,7 +63,7 @@ type distWorkspace interface {
 
 // AssembleDist performs the release dist/ hand-off assembly formerly owned by
 // forgejo-ci's assemble-release-dist.sh.
-func AssembleDist(ctx context.Context, dl provider.RunArtifactDownloader, workspace distWorkspace, sink domainci.OutputSink, stderr io.Writer, in AssembleDistInput) (AssembleDistResult, error) { //nolint:cyclop // linear hand-off pipeline: validate, download, merge, prune, digest.
+func AssembleDist(ctx context.Context, dl provider.RunArtifactDownloader, workspace distWorkspace, sink domainci.OutputSink, stderr io.Writer, in AssembleDistInput) (AssembleDistResult, error) {
 	path := defaultIfEmpty(in.Path, "dist/")
 	releaseImagesPath := defaultIfEmpty(in.ReleaseImagesPath, defaultReleaseImagesPath)
 
@@ -307,11 +307,11 @@ func writeMergedReleaseLedger(out io.Writer, files []string, releaseImagesPath s
 // writeReleaseLedger creates the ledger's directory and writes the ledger. It
 // runs only after the merge is accepted, so a refused merge leaves nothing behind.
 func writeReleaseLedger(path string, body []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec,mnd // public release metadata path under workspace.
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec // public release metadata path under workspace.
 		return fmt.Errorf("create release image ledger directory: %w", err)
 	}
 
-	if err := cliio.WriteFile(path, body, 0o644); err != nil { //nolint:mnd // public release metadata.
+	if err := cliio.WriteFile(path, body, 0o644); err != nil {
 		return fmt.Errorf("write release image ledger %s: %w", path, err)
 	}
 

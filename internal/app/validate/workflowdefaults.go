@@ -53,13 +53,13 @@ type workflowInputDefaultsFSInput struct {
 // defaults are literal values, not GitHub expression blocks (which
 // silently degrade to the empty string when callers don't override
 // them).
-func WorkflowInputDefaults(w io.Writer, annot output.Annotator, in WorkflowInputDefaultsInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func WorkflowInputDefaults(out io.Writer, annot output.Annotator, in WorkflowInputDefaultsInput) error {
 	fsys, workflowsDir, err := workflowScanDir(in.Root, in.WorkflowsDir, in.FS)
 	if err != nil {
 		return err
 	}
 
-	return workflowInputDefaultsInFS(w, annot, workflowInputDefaultsFSInput{
+	return workflowInputDefaultsInFS(out, annot, workflowInputDefaultsFSInput{
 		workflowsDir: workflowsDir,
 		fsys:         fsys,
 	})
@@ -102,7 +102,7 @@ func workflowScanDir(root, workflowsDir string, fsys fs.FS) (fs.FS, string, erro
 	return os.DirFS(absRoot), filepath.ToSlash(rel), nil
 }
 
-func workflowInputDefaultsInFS(w io.Writer, annot output.Annotator, in workflowInputDefaultsFSInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func workflowInputDefaultsInFS(out io.Writer, annot output.Annotator, in workflowInputDefaultsFSInput) error {
 	entries, err := fs.ReadDir(in.fsys, in.workflowsDir)
 	if err != nil {
 		return workflowReadError(in.workflowsDir, err)
@@ -123,7 +123,7 @@ func workflowInputDefaultsInFS(w io.Writer, annot output.Annotator, in workflowI
 		return fmt.Errorf("workflow input defaults validation failed: %w", errs.ErrValidation)
 	}
 
-	_, _ = fmt.Fprintln(w, "Workflow input defaults look valid.")
+	_, _ = fmt.Fprintln(out, "Workflow input defaults look valid.")
 
 	return nil
 }

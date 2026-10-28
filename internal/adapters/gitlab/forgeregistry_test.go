@@ -77,14 +77,14 @@ func TestResolveForgeRegistries_GitLab_MissingContext(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			p := &gitlab.Provider{Env: func(k string) string { return env[k] }}
+			gitlabProvider := &gitlab.Provider{Env: func(k string) string { return env[k] }}
 
-			maven, err := p.ResolveForgeMavenRegistry()
+			maven, err := gitlabProvider.ResolveForgeMavenRegistry()
 			if !errors.Is(err, errs.ErrUsage) || maven != (provider.ForgeMavenRegistry{}) {
 				t.Errorf("maven = (%+v, %v), want the zero registry and ErrUsage", maven, err)
 			}
 
-			npm, err := p.ResolveForgeNPMRegistry()
+			npm, err := gitlabProvider.ResolveForgeNPMRegistry()
 			if !errors.Is(err, errs.ErrUsage) || npm != (provider.ForgeNPMRegistry{}) {
 				t.Errorf("npm = (%+v, %v), want the zero registry and ErrUsage", npm, err)
 			}
@@ -102,11 +102,11 @@ func TestResolveForgeRegistries_GitLab_MissingContext(t *testing.T) {
 func TestResolveForgeRegistries_GitLab_EmptyTokenPassesThrough(t *testing.T) {
 	t.Parallel()
 
-	p := &gitlab.Provider{Env: func(k string) string {
+	gitlabProvider := &gitlab.Provider{Env: func(k string) string {
 		return map[string]string{"CI_API_V4_URL": "https://gl.example.com/api/v4", "CI_PROJECT_ID": "42"}[k]
 	}}
 
-	maven, err := p.ResolveForgeMavenRegistry()
+	maven, err := gitlabProvider.ResolveForgeMavenRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestResolveForgeRegistries_GitLab_EmptyTokenPassesThrough(t *testing.T) {
 		t.Errorf("maven = %+v, want %+v", maven, wantMaven)
 	}
 
-	npm, err := p.ResolveForgeNPMRegistry()
+	npm, err := gitlabProvider.ResolveForgeNPMRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -45,11 +45,11 @@ func (d *assembleDistDownloader) DownloadRunArtifact(_ context.Context, in provi
 		return provider.RunArtifactInfo{}, err
 	}
 
-	if err := os.MkdirAll(in.Dir, 0o755); err != nil { //nolint:gosec,mnd // test fixture.
+	if err := os.MkdirAll(in.Dir, 0o755); err != nil {
 		return provider.RunArtifactInfo{}, err
 	}
 
-	if err := os.WriteFile(filepath.Join(in.Dir, in.Name+".txt"), []byte(in.Name+"\n"), 0o644); err != nil { //nolint:gosec,mnd // test fixture.
+	if err := os.WriteFile(filepath.Join(in.Dir, in.Name+".txt"), []byte(in.Name+"\n"), 0o644); err != nil {
 		return provider.RunArtifactInfo{}, err
 	}
 
@@ -87,7 +87,7 @@ func TestAssembleDist_DownloadsNamedArtifactsAndWritesDigest(t *testing.T) {
 func TestAssembleDist_DownloadsTransferPlanAndWarnsForOptionalFailures(t *testing.T) {
 	chdirTempForAssembleDist(t)
 
-	dl := &assembleDistDownloader{fail: map[string]error{"missing-123": errors.New("not found")}} //nolint:err113 // test mock error.
+	dl := &assembleDistDownloader{fail: map[string]error{"missing-123": errors.New("not found")}}
 
 	var stderr bytes.Buffer
 
@@ -505,11 +505,11 @@ func chdirTempForAssembleDist(t *testing.T) {
 func writeFileForAssembleDist(t *testing.T, path, body string) {
 	t.Helper()
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec,mnd // test fixture.
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil { //nolint:gosec,mnd // test fixture.
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -517,7 +517,7 @@ func writeFileForAssembleDist(t *testing.T, path, body string) {
 func readFileForAssembleDist(t *testing.T, path string) string {
 	t.Helper()
 
-	body, err := os.ReadFile(path) //nolint:gosec // test fixture.
+	body, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}

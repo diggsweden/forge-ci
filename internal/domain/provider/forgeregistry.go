@@ -11,8 +11,6 @@ import (
 // Compiled string replacers reused across renders. strings.Replacer is
 // immutable and safe for concurrent use, so building each one once avoids
 // re-allocating its internal trie on every escape call.
-//
-//nolint:gochecknoglobals // read-only, concurrency-safe replacers.
 var (
 	xmlEscaper = strings.NewReplacer(
 		"&", "&amp;",
@@ -84,14 +82,14 @@ func (r ForgeNPMRegistry) RenderNPMRC() string {
 	// Maven path's XML-escaping has the same intent.
 	token := stripNewlines(r.Token)
 
-	var b strings.Builder //nolint:varnamelen // idiomatic short name for a strings.Builder.
+	var builder strings.Builder
 
-	fmt.Fprintf(&b, "%s:_authToken=%s\n", authKey, token)
+	fmt.Fprintf(&builder, "%s:_authToken=%s\n", authKey, token)
 
 	if r.Scope != "" {
-		fmt.Fprintf(&b, "%s:registry=%s\n", r.Scope, r.Registry)
+		fmt.Fprintf(&builder, "%s:registry=%s\n", r.Scope, r.Registry)
 	} else {
-		fmt.Fprintf(&b, "registry=%s\n", r.Registry)
+		fmt.Fprintf(&builder, "registry=%s\n", r.Registry)
 	}
 
 	// No always-auth. npm removed it from the CLI in 2021 (7.11.1); npm 6 was
@@ -100,7 +98,7 @@ func (r ForgeNPMRegistry) RenderNPMRC() string {
 	// A path-scoped _authToken is sent on every request to that path anyway, so
 	// the line bought nothing and cost a warning on every publish.
 
-	return b.String()
+	return builder.String()
 }
 
 func stripScheme(url string) string {

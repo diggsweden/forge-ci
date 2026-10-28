@@ -23,8 +23,6 @@ type DownloadArtifactsInput struct {
 }
 
 // DownloadArtifacts downloads release artifacts from an explicit transfer plan.
-//
-//nolint:cyclop // download flow: list → per-artifact filter + unzip + place.
 func DownloadArtifacts(ctx context.Context, dl provider.RunArtifactDownloader, stderr io.Writer, in DownloadArtifactsInput) error {
 	if strings.TrimSpace(in.ArtifactTransferPlanJSON) == "" {
 		return fmt.Errorf("artifact-transfer-plan-json is required: %w", errs.ErrUsage)

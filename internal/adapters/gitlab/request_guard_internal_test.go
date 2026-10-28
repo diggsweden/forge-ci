@@ -134,7 +134,7 @@ func TestReleaseLocalPreflight_StopsBeforeGitLabRequests(t *testing.T) {
 	require.NoError(t, os.Symlink(good, linked))
 
 	calls := 0
-	p := &Provider{APIBaseOverride: "https://gitlab.invalid", HTTPClient: &http.Client{Transport: guardTransport(func(*http.Request) (*http.Response, error) {
+	gitlabProvider := &Provider{APIBaseOverride: "https://gitlab.invalid", HTTPClient: &http.Client{Transport: guardTransport(func(*http.Request) (*http.Response, error) {
 		calls++
 
 		return nil, errs.ErrDependencyUnavailable
@@ -147,8 +147,12 @@ func TestReleaseLocalPreflight_StopsBeforeGitLabRequests(t *testing.T) {
 	}}
 
 	for _, run := range []func(provider.ReleaseSpec) error{
-		func(spec provider.ReleaseSpec) error { return p.CreateRelease(t.Context(), "owner/repo", spec) },
-		func(spec provider.ReleaseSpec) error { return p.PublishRelease(t.Context(), "owner/repo", spec) },
+		func(spec provider.ReleaseSpec) error {
+			return gitlabProvider.CreateRelease(t.Context(), "owner/repo", spec)
+		},
+		func(spec provider.ReleaseSpec) error {
+			return gitlabProvider.PublishRelease(t.Context(), "owner/repo", spec)
+		},
 	} {
 		require.ErrorIs(t, run(provider.ReleaseSpec{Tag: "v1.2.3", Assets: []string{good, filepath.Join(root, "missing")}}), os.ErrNotExist)
 		// A link is not the file a release names: what it points at can
@@ -166,7 +170,7 @@ func TestReleaseReplacement_UploadFailureKeepsOldLinks(t *testing.T) {
 
 	var calls []string
 
-	p := &Provider{HTTPClient: &http.Client{Transport: guardTransport(func(req *http.Request) (*http.Response, error) {
+	gitlabProvider := &Provider{HTTPClient: &http.Client{Transport: guardTransport(func(req *http.Request) (*http.Response, error) {
 		calls = append(calls, req.Method+" "+req.URL.Path)
 		if req.Body != nil {
 			_, _ = io.Copy(io.Discard, req.Body)
@@ -174,7 +178,7 @@ func TestReleaseReplacement_UploadFailureKeepsOldLinks(t *testing.T) {
 
 		return &http.Response{StatusCode: http.StatusForbidden, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("refused")), Request: req}, nil
 	})}}
-	err := p.uploadAndLinkReleaseAsset(t.Context(), "https://gitlab.invalid", "1", "owner/repo", "v1", file, map[string]string{})
+	err := gitlabProvider.uploadAndLinkReleaseAsset(t.Context(), "https://gitlab.invalid", "1", "owner/repo", "v1", file, map[string]string{})
 	require.ErrorIs(t, err, errs.ErrPermissionDenied)
 	require.Equal(t, []string{"POST /api/v4/projects/1/uploads"}, calls)
 }

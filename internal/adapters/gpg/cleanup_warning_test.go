@@ -100,13 +100,13 @@ func TestCleanupRunsTheRightOperationsInOrder(t *testing.T) {
 		{name: "gpg", args: []string{"--batch", "--yes", "--delete-keys", fingerprint}},
 		{name: "gpg-connect-agent", args: []string{"KILLAGENT", "/bye"}},
 	}
-	for i, w := range want {
-		if got[i].Name != w.name {
-			t.Errorf("command %d was %q, want %q", i, got[i].Name, w.name)
+	for index, expected := range want {
+		if got[index].Name != expected.name {
+			t.Errorf("command %d was %q, want %q", index, got[index].Name, expected.name)
 		}
 
-		if !slices.Equal(got[i].Args, w.args) {
-			t.Errorf("command %d argv = %q, want %q", i, got[i].Args, w.args)
+		if !slices.Equal(got[index].Args, expected.args) {
+			t.Errorf("command %d argv = %q, want %q", index, got[index].Args, expected.args)
 		}
 	}
 }

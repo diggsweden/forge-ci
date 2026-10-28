@@ -30,7 +30,7 @@ func TestDescribe_GitLab_SaaSDefault(t *testing.T) {
 func TestDescribe_GitLab_SelfHostedIssuer(t *testing.T) {
 	t.Parallel()
 
-	p := &gitlab.Provider{Env: func(k string) string {
+	gitlabProvider := &gitlab.Provider{Env: func(k string) string {
 		if k == "CI_SERVER_URL" {
 			return "https://gitlab.diggsweden.internal"
 		}
@@ -38,7 +38,7 @@ func TestDescribe_GitLab_SelfHostedIssuer(t *testing.T) {
 		return ""
 	}}
 
-	if got := p.Describe().OIDCIssuer; got != "https://gitlab.diggsweden.internal" {
+	if got := gitlabProvider.Describe().OIDCIssuer; got != "https://gitlab.diggsweden.internal" {
 		t.Errorf("OIDCIssuer = %q, want CI_SERVER_URL value", got)
 	}
 }
@@ -57,7 +57,7 @@ func TestDescribe_GitLab_SelfHostedIssuer(t *testing.T) {
 func TestCapabilities_GitLab(t *testing.T) {
 	t.Parallel()
 
-	p := &gitlab.Provider{Env: func(string) string { return "" }}
+	gitlabProvider := &gitlab.Provider{Env: func(string) string { return "" }}
 
 	want := provider.Capabilities{
 		// Derived from the roles this adapter implements.
@@ -78,7 +78,7 @@ func TestCapabilities_GitLab(t *testing.T) {
 		Attestation:  false,
 		RunArtifacts: false,
 	}
-	if got := p.Capabilities(); got != want {
+	if got := gitlabProvider.Capabilities(); got != want {
 		t.Errorf("Capabilities = %+v\nwant                %+v", got, want)
 	}
 }
@@ -90,7 +90,7 @@ func TestCapabilities_GitLab(t *testing.T) {
 func TestCapabilities_GitLab_SelfHostedIsNotPublicFulcioTrusted(t *testing.T) {
 	t.Parallel()
 
-	p := &gitlab.Provider{Env: func(k string) string {
+	gitlabProvider := &gitlab.Provider{Env: func(k string) string {
 		if k == "CI_SERVER_URL" {
 			return "https://gitlab.diggsweden.internal"
 		}
@@ -98,7 +98,7 @@ func TestCapabilities_GitLab_SelfHostedIsNotPublicFulcioTrusted(t *testing.T) {
 		return ""
 	}}
 
-	caps := p.Capabilities()
+	caps := gitlabProvider.Capabilities()
 	if caps.PublicFulcioTrusted {
 		t.Error("a self-hosted GitLab issuer is not one public Fulcio trusts")
 	}

@@ -43,7 +43,8 @@ func declaredInputViolations(in IsolationInput) []validate.IsolationViolation {
 		var document struct {
 			Jobs map[string]struct {
 				isolationCall `yaml:",inline"`
-				Steps         []isolationCall `yaml:"steps"`
+
+				Steps []isolationCall `yaml:"steps"`
 			} `yaml:"jobs"`
 		}
 		if err := yaml.Unmarshal([]byte(body), &document); err != nil {

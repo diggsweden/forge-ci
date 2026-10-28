@@ -156,7 +156,7 @@ func emitMetadataToSink(ctx context.Context, sink ci.OutputSink, md domaingpg.Me
 		{"name", md.Name},
 		{"email", md.Email},
 	}
-	for _, f := range fields { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	for _, f := range fields {
 		if err := sink.Set(ctx, f.key, f.value); err != nil {
 			return fmt.Errorf("emit %s: %w", f.key, err)
 		}

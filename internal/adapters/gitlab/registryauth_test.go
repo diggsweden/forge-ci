@@ -15,14 +15,14 @@ import (
 func TestResolveRegistryAuth_GitLab(t *testing.T) {
 	t.Parallel()
 
-	p := &gitlab.Provider{Env: func(k string) string {
+	gitlabProvider := &gitlab.Provider{Env: func(k string) string {
 		return map[string]string{
 			"CI_REGISTRY":          "registry.gitlab.com",
 			"CI_REGISTRY_PASSWORD": "jobtok",
 		}[k]
 	}}
 
-	auth, err := p.ResolveRegistryAuth()
+	auth, err := gitlabProvider.ResolveRegistryAuth()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestResolveRegistryAuth_GitLab_NoCreds(t *testing.T) {
 func TestResolveRegistryAuth_GitLab_ExplicitUser(t *testing.T) {
 	t.Parallel()
 
-	p := &gitlab.Provider{Env: func(k string) string {
+	gitlabProvider := &gitlab.Provider{Env: func(k string) string {
 		return map[string]string{
 			"CI_REGISTRY":          "registry.gitlab.com",
 			"CI_REGISTRY_USER":     "  deploy-bot  ",
@@ -87,7 +87,7 @@ func TestResolveRegistryAuth_GitLab_ExplicitUser(t *testing.T) {
 		}[k]
 	}}
 
-	auth, err := p.ResolveRegistryAuth()
+	auth, err := gitlabProvider.ResolveRegistryAuth()
 	if err != nil {
 		t.Fatal(err)
 	}

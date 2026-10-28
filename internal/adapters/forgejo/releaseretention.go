@@ -90,7 +90,7 @@ func (p *Provider) DeleteReleaseAsset(ctx context.Context, repo string, release 
 }
 
 func listReleases(client *gitea.Client, owner, repo string) ([]*gitea.Release, error) {
-	opt := gitea.ListReleasesOptions{ListOptions: gitea.ListOptions{Page: 1, PageSize: 50}}
+	opt := gitea.ListReleasesOptions{Page: 1, PageSize: 50}
 
 	var all []*gitea.Release
 

@@ -20,6 +20,7 @@ import (
 
 type publicationGit struct {
 	fakeTagGit
+
 	refs map[string]string
 }
 
@@ -46,7 +47,7 @@ func TestPublicationRequestRechecksExactReleaseAndSigner(t *testing.T) {
 				require.NoError(t, os.WriteFile(filepath.Join(root, ".forge-ci", "allowed_gpg_keys.asc"), key, 0o600))
 			}
 
-			repo := &publicationGit{fakeTagGit: fakeTagGit{body: gpgSignedTagBody, verifySigOK: name != "unverified signer", verifySigFingerprint: fingerprint}, refs: map[string]string{
+			repo := &publicationGit{body: gpgSignedTagBody, verifySigOK: name != "unverified signer", verifySigFingerprint: fingerprint, refs: map[string]string{
 				"HEAD": release, "refs/tags/v1.2.3^{commit}": release,
 				"refs/tags/release-request/v1.2.3^{commit}": request, "refs/tags/v1.2.3^{commit}^": request,
 			}}

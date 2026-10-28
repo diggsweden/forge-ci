@@ -25,7 +25,6 @@ func TestToken_GitHub_FineGrainedAPISucceeds(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	//nolint:gosec // fake token literal — not a real credential.
 	err := appvalidate.Token(context.Background(), prov, &buf, appvalidate.TokenInput{
 		Token:      "github_pat_AAAA",
 		Repository: "owner/repo",
@@ -123,7 +122,6 @@ func TestToken_EmptyRepositoryUsage(t *testing.T) {
 	t.Parallel()
 	prov := fakeprovider.New(t).WithPlatform(provider.ForgeGitHub)
 
-	//nolint:gosec // fake token literal — not a real credential.
 	err := appvalidate.Token(context.Background(), prov, &bytes.Buffer{}, appvalidate.TokenInput{
 		Token: "github_pat_AAAA",
 	})
@@ -160,7 +158,6 @@ func TestToken_APIRejection(t *testing.T) {
 	prov := fakeprovider.New(t).WithPlatform(provider.ForgeGitHub).
 		WithValidateTokenError(fmt.Errorf("HTTP 401: %w", errs.ErrPermissionDenied))
 
-	//nolint:gosec // fake token literal — not a real credential.
 	err := appvalidate.Token(context.Background(), prov, &bytes.Buffer{}, appvalidate.TokenInput{
 		Token:      "github_pat_AAAA",
 		Repository: "owner/repo",

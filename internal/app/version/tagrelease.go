@@ -36,11 +36,12 @@ type tagReleaseOps interface {
 // TagReleaseInput configures TagRelease. Signed defaults to true in
 // production; tests set Signed=false to avoid the GPG dependency.
 type TagReleaseInput struct {
-	Tag    string // final release tag, e.g. "v3.5.7"
-	Signed bool
-	Remote string                // empty defaults to origin; other remotes are unsupported
-	Token  runcontext.Credential // optional; authenticates the tag push when the checkout did not persist credentials
-	DryRun bool                  // preview: narrate the tag create/push instead of performing them; validation still runs
+	ReleasePolicy string
+	Tag           string // final release tag, e.g. "v3.5.7"
+	Signed        bool
+	Remote        string                // empty defaults to origin; other remotes are unsupported
+	Token         runcontext.Credential // optional; authenticates the tag push when the checkout did not persist credentials
+	DryRun        bool                  // preview: narrate the tag create/push instead of performing them; validation still runs
 }
 
 // TagReleaseOutput is emitted as release-sha=<hash> on the OutputSink.
@@ -64,9 +65,7 @@ type TagReleaseOutput struct {
 // DryRun runs every validation (input shape, local/remote tag-exists) and
 // then narrates the create/push instead of performing them. The release-sha
 // output is still emitted — it is HEAD, the commit the tag would point at.
-//
-//nolint:cyclop // Sequential destination, tag, publication and output boundaries.
-func TagRelease(ctx context.Context, repo tagReleaseOps, in TagReleaseInput, sink ci.OutputSink, w io.Writer) (*TagReleaseOutput, error) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func TagRelease(ctx context.Context, repo tagReleaseOps, in TagReleaseInput, sink ci.OutputSink, out io.Writer) (*TagReleaseOutput, error) {
 	if err := validateTagReleaseInput(in); err != nil {
 		return nil, err
 	}
@@ -86,7 +85,7 @@ func TagRelease(ctx context.Context, repo tagReleaseOps, in TagReleaseInput, sin
 	}
 
 	if !remoteExists {
-		if err := createAndPushReleaseTag(ctx, repo, in, remote, releaseSHA, !localExists, w); err != nil {
+		if err := createAndPushReleaseTag(ctx, repo, in, remote, releaseSHA, !localExists, out); err != nil {
 			return nil, err
 		}
 	}
@@ -98,9 +97,9 @@ func TagRelease(ctx context.Context, repo tagReleaseOps, in TagReleaseInput, sin
 	}
 
 	if remoteExists {
-		_, _ = fmt.Fprintf(w, "Release tag %s already exists at %s; rerun is a no-op\n", in.Tag, releaseSHA)
+		_, _ = fmt.Fprintf(out, "Release tag %s already exists at %s; rerun is a no-op\n", in.Tag, releaseSHA)
 	} else if !in.DryRun {
-		_, _ = fmt.Fprintf(w, "Release tag %s created at %s\n", in.Tag, releaseSHA)
+		_, _ = fmt.Fprintf(out, "Release tag %s created at %s\n", in.Tag, releaseSHA)
 	}
 
 	return &TagReleaseOutput{Tag: in.Tag, ReleaseSHA: releaseSHA}, nil
@@ -110,13 +109,13 @@ func TagRelease(ctx context.Context, repo tagReleaseOps, in TagReleaseInput, sin
 // push) — or, in dry-run, narrates and skips them — and returns the SHA the
 // tag points (or would point) at. The branch sits here, right at the adapter
 // calls, so the validation/planning path above it is never duplicated.
-func createAndPushReleaseTag(ctx context.Context, repo tagReleaseOps, in TagReleaseInput, remote, releaseSHA string, create bool, w io.Writer) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func createAndPushReleaseTag(ctx context.Context, repo tagReleaseOps, in TagReleaseInput, remote, releaseSHA string, create bool, out io.Writer) error {
 	if in.DryRun {
 		if create {
-			_, _ = fmt.Fprintf(w, "[dry-run] would create %s %s at HEAD (%s)\n", tagKind(in.Signed), in.Tag, releaseSHA)
+			_, _ = fmt.Fprintf(out, "[dry-run] would create %s %s at HEAD (%s)\n", tagKind(in.Signed), in.Tag, releaseSHA)
 		}
 
-		_, _ = fmt.Fprintf(w, "[dry-run] would push tag %s to %s (no force)\n", in.Tag, remote)
+		_, _ = fmt.Fprintf(out, "[dry-run] would push tag %s to %s (no force)\n", in.Tag, remote)
 
 		return nil
 	}
@@ -143,7 +142,7 @@ func tagKind(signed bool) string {
 	return "annotated tag"
 }
 
-// validateTagReleaseInput rejects missing, multi-line, or non-stable-semver tags.
+// validateTagReleaseInput admits only literal tags permitted by ReleasePolicy.
 func validateTagReleaseInput(in TagReleaseInput) error {
 	if in.Remote != "" && in.Remote != defaultRemoteName {
 		return fmt.Errorf("tag-release: only origin is supported as the publication remote: %w", errs.ErrUsage)
@@ -157,14 +156,14 @@ func validateTagReleaseInput(in TagReleaseInput) error {
 		return fmt.Errorf("tag-release: release tag must be a single-line value: %w", errs.ErrValidation)
 	}
 
-	if !domainversion.IsStableSemverTag(in.Tag) {
-		return fmt.Errorf("tag-release: release tag must look like stable vMAJOR.MINOR.PATCH: %s: %w", in.Tag, errs.ErrValidation)
+	if _, err := domainversion.ValidateReleaseTag(in.Tag, in.ReleasePolicy); err != nil {
+		return fmt.Errorf("tag-release: %w", err)
 	}
 
 	return nil
 }
 
-//nolint:cyclop,nestif // inspect local and remote create-once invariants before mutation; not an atomic transaction.
+//nolint:cyclop // inspect local and remote create-once invariants before mutation; not an atomic transaction.
 func inspectReleaseTag(ctx context.Context, repo tagReleaseOps, remote string, in TagReleaseInput) (string, bool, bool, error) {
 	headSHA, err := repo.RevParse(ctx, "HEAD")
 	if err != nil {

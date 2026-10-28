@@ -71,6 +71,7 @@ func TestChangelogRender_EachBackendAndPathWritesExactFiles(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				dir := t.TempDir()
 				t.Chdir(dir)
+				writeChangelogConfigs(t, ".chglog/full.yml", ".chglog/body.yml")
 
 				in := appversion.ChangelogRenderInput{
 					Backend: backend, Tag: "v1.2.3", RepositoryURL: renderRepositoryURL,
@@ -133,6 +134,7 @@ func TestChangelogRender_UnchangedOrFailedRenderWritesNoCommitFiles(t *testing.T
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Chdir(t.TempDir())
+			writeChangelogConfigs(t, "full", "body")
 
 			renderer := &recordingChangelogRenderer{failOn: tc.failOn}
 			err := appversion.ChangelogRender(t.Context(), &fakeChangelogRenderGit{status: tc.status}, renderer, &bytes.Buffer{}, appversion.ChangelogRenderInput{
@@ -168,6 +170,7 @@ func TestChangelogRender_UnchangedOrFailedRenderWritesNoCommitFiles(t *testing.T
 func TestChangelogRender_ReplacesASymlinkedCommitMessageInsteadOfFollowingIt(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
+	writeChangelogConfigs(t, "full", "body")
 
 	outside := filepath.Join(t.TempDir(), "outside.txt")
 	require.NoError(t, os.WriteFile(outside, []byte("untouched\n"), 0o600))

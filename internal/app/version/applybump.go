@@ -33,12 +33,13 @@ type applyBumpOps interface {
 
 // ApplyBumpInput drives `forge-ci version apply-bump`.
 type ApplyBumpInput struct {
-	PatchPath   string           // patch the key-free bump job uploaded
-	SHA256      string           // digest that job reported, lowercase hex
-	ProjectType projecttype.Type // ecosystem whose project files the patch may touch
-	Version     string           // release version, with or without a leading v
-	WorkingDir  string           // repository-relative directory of the root project file
-	PathsFile   string           // where the changed paths are written, one per line
+	ReleasePolicy string
+	PatchPath     string           // patch the key-free bump job uploaded
+	SHA256        string           // digest that job reported, lowercase hex
+	ProjectType   projecttype.Type // ecosystem whose project files the patch may touch
+	Version       string           // release version, with or without a leading v
+	WorkingDir    string           // repository-relative directory of the root project file
+	PathsFile     string           // where the changed paths are written, one per line
 }
 
 // ApplyBump applies a version bump made in another job, after proving it is
@@ -56,12 +57,13 @@ func ApplyBump(ctx context.Context, ops applyBumpOps, out io.Writer, in ApplyBum
 	files, supported := domainversion.BumpPatchFiles(in.ProjectType)
 	release := strings.TrimPrefix(in.Version, "v")
 	workingDir := path.Clean(in.WorkingDir)
+	_, versionErr := domainversion.ValidateReleaseTag("v"+release, in.ReleasePolicy)
 
 	switch {
 	case !supported:
 		return none, fmt.Errorf("apply-bump: project type %q has no isolated version bump: %w", in.ProjectType, errs.ErrUsage)
-	case !domainversion.IsStableSemverTag("v" + release):
-		return none, fmt.Errorf("apply-bump: version %q is not a stable MAJOR.MINOR.PATCH: %w", in.Version, errs.ErrValidation)
+	case versionErr != nil:
+		return none, fmt.Errorf("apply-bump: %w", versionErr)
 	case !container.ValidSHA256Hex(in.SHA256):
 		return none, fmt.Errorf("apply-bump: sha256 must be 64 lowercase hex characters: %w", errs.ErrUsage)
 	case in.PatchPath == "" || in.PathsFile == "":
@@ -95,25 +97,29 @@ func ApplyBump(ctx context.Context, ops applyBumpOps, out io.Writer, in ApplyBum
 	for _, lockfile := range files[1:] {
 		lockfile = path.Join(workingDir, lockfile)
 		if in.ProjectType == projecttype.NPM && path.Base(lockfile) == "package-lock.json" {
-			if _, err := os.Lstat(path.Join(workingDir, "npm-shrinkwrap.json")); err == nil {
+			if _, err = os.Lstat(path.Join(workingDir, "npm-shrinkwrap.json")); err == nil {
 				continue // npm gives shrinkwrap precedence over package-lock.
 			}
 		}
+
 		info, statErr := os.Lstat(lockfile)
 		if errors.Is(statErr, os.ErrNotExist) {
 			continue
 		}
+
 		if statErr != nil {
 			return none, statErr
 		}
+
 		if !info.Mode().IsRegular() || !slices.Contains(result.Paths, lockfile) {
 			return none, fmt.Errorf("apply-bump: existing lockfile %s must participate in the version update: %w", lockfile, errs.ErrValidation)
 		}
 	}
 
-	if err := requireProjectVersion(root, result.OldVersion); err != nil {
+	if err = requireProjectVersion(root, result.OldVersion); err != nil {
 		return none, fmt.Errorf("apply-bump: before the bump: %w", err)
 	}
+
 	before, err := captureIsolatedBumpFiles(in.ProjectType, workingDir, result.Paths)
 	if err != nil {
 		return none, err
@@ -130,6 +136,7 @@ func ApplyBump(ctx context.Context, ops applyBumpOps, out io.Writer, in ApplyBum
 	if err := requireProjectVersion(root, release); err != nil {
 		return none, fmt.Errorf("apply-bump: after the bump: %w", err)
 	}
+
 	if err := verifyIsolatedBumpContent(in.ProjectType, workingDir, before, result.OldVersion, release); err != nil {
 		return none, err
 	}
@@ -161,6 +168,7 @@ func requireProjectVersion(file, want string) error {
 	if err != nil {
 		return fmt.Errorf("parse %s: %w", file, err)
 	}
+
 	if declared != want {
 		return fmt.Errorf("%s declares version %q, want %q: %w", file, declared, want, errs.ErrValidation)
 	}
@@ -172,16 +180,18 @@ func bumpProjectVersion(file string, body []byte) (string, error) {
 	switch path.Base(file) {
 	case "pom.xml":
 		pom, err := build.ParsePOM(body)
+
 		return pom.Version, err
-	case "package.json":
+	case npmManifestName:
 		var manifest struct {
 			Version string `json:"version"`
 		}
 		if err := json.Unmarshal(body, &manifest); err != nil {
 			return "", fmt.Errorf("parse package.json version: %w: %w", err, errs.ErrMalformedInput)
 		}
+
 		return manifest.Version, nil
-	case "Cargo.toml":
+	case cargoManifestName:
 		var manifest struct {
 			Package struct {
 				Version any `toml:"version"`
@@ -195,10 +205,13 @@ func bumpProjectVersion(file string, body []byte) (string, error) {
 		if err := toml.Unmarshal(body, &manifest); err != nil {
 			return "", fmt.Errorf("parse Cargo.toml version: %w: %w", err, errs.ErrMalformedInput)
 		}
+
 		if manifest.Workspace.Package.Version != "" {
 			return manifest.Workspace.Package.Version, nil
 		}
+
 		version, _ := manifest.Package.Version.(string)
+
 		return version, nil
 	default:
 		return "", fmt.Errorf("unsupported version-of-record file: %w", errs.ErrUsage)

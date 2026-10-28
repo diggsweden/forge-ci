@@ -66,7 +66,7 @@ func authTokenCmd() *cli.Command {
 				return errs.CredentialRequired(errs.Credential{What: "release-bot token", Flag: "token-file", Env: "RELEASE_TOKEN"})
 			}
 
-			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error {
 				tv, err := d.RequireTokenValidator()
 				if err != nil {
 					return err

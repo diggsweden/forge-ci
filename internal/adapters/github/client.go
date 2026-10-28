@@ -83,7 +83,7 @@ func (p *Provider) releaseClient(_ context.Context) (*gogithub.Client, error) {
 		if base != "" && strings.TrimRight(base, "/") != defaultAPIBase {
 			withSlash := strings.TrimRight(base, "/") + "/"
 
-			u, err := url.Parse(withSlash) //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+			u, err := url.Parse(withSlash)
 			if err != nil {
 				p.ghErr = fmt.Errorf("configure GitHub API base %q: %w", base, err)
 
@@ -102,8 +102,8 @@ func (p *Provider) releaseClient(_ context.Context) (*gogithub.Client, error) {
 
 func githubUploadURL(apiURL *url.URL) *url.URL {
 	upload := *apiURL
-	if strings.HasSuffix(upload.Path, "/api/v3/") {
-		upload.Path = strings.TrimSuffix(upload.Path, "/api/v3/") + "/api/uploads/"
+	if before, ok := strings.CutSuffix(upload.Path, "/api/v3/"); ok {
+		upload.Path = before + "/api/uploads/"
 	}
 
 	return &upload

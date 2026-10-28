@@ -5,11 +5,12 @@ package release
 
 import (
 	"fmt"
-	"github.com/diggsweden/forge-ci/internal/cliio"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/diggsweden/forge-ci/internal/cliio"
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/git"
@@ -18,11 +19,12 @@ import (
 
 // SignPublishContextInput drives `release sign-publish-context`.
 type SignPublishContextInput struct {
-	ReleaseSHA   string
-	ReleaseTag   string
-	ArtifactPath string
-	EnvFile      string
-	RunnerTemp   string
+	ReleasePolicy string
+	ReleaseSHA    string
+	ReleaseTag    string
+	ArtifactPath  string
+	EnvFile       string
+	RunnerTemp    string
 }
 
 // SignPublishContext validates the release hand-off inputs, creates the
@@ -35,8 +37,8 @@ func SignPublishContext(out io.Writer, in SignPublishContextInput) error {
 	}
 
 	releaseTag := strings.TrimSpace(in.ReleaseTag)
-	if !version.IsStableSemverTag(releaseTag) {
-		return fmt.Errorf("sign-publish-context: release-tag must be stable vMAJOR.MINOR.PATCH: %w", errs.ErrUsage)
+	if _, err := version.ValidateReleaseTag(releaseTag, in.ReleasePolicy); err != nil {
+		return fmt.Errorf("sign-publish-context: release-tag must be stable or an explicitly permitted prerelease: %w: %w", err, errs.ErrUsage)
 	}
 
 	distDir := strings.TrimRight(strings.TrimSpace(in.ArtifactPath), "/")
@@ -95,7 +97,7 @@ func defaultReleaseRunnerTemp(value string) string {
 }
 
 func appendReleaseEnvFile(path string, entries ...string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec,mnd // CI runner env file directory chosen by caller.
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec // CI runner env file directory chosen by caller.
 		return fmt.Errorf("sign-publish-context: create env file dir %s: %w", filepath.Dir(path), err)
 	}
 

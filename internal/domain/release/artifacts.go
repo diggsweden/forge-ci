@@ -13,8 +13,6 @@ import (
 
 // ReleaseArtifactExtensions is the set of file extensions considered
 // release artifacts. Mirrors `ci_find_release_artifacts` in.
-//
-//nolint:gochecknoglobals // canonical extension list — read-only.
 var ReleaseArtifactExtensions = []string{
 	".jar", ".aar", ".tgz", ".tar.gz", ".zip", ".war",
 }
@@ -40,8 +38,6 @@ func IsReleaseArtifact(path string) bool {
 
 // SBOMFilePatterns is the list of glob patterns the SBOM zip + checksum
 // flows look for in the working directory.
-//
-//nolint:gochecknoglobals // canonical pattern list — read-only.
 var SBOMFilePatterns = []string{
 	"*-sbom.spdx.json",
 	"*-sbom.cyclonedx.json",

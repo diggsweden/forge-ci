@@ -46,25 +46,25 @@ func (f releaseAssetTransport) RoundTrip(req *http.Request) (*http.Response, err
 func newAssetUploadClient(t *testing.T, rec *assetUpload) *http.Client {
 	t.Helper()
 
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		switch {
-		case strings.Contains(r.URL.Path, "/releases/tags/"):
-			rec.releasePath = r.URL.Path
+		case strings.Contains(request.URL.Path, "/releases/tags/"):
+			rec.releasePath = request.URL.Path
 
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = io.WriteString(w, `{"id":42,"tag_name":"v1.0.0"}`)
+			response.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(response, `{"id":42,"tag_name":"v1.0.0"}`)
 
-		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/assets"):
-			_, _ = io.WriteString(w, `[]`)
-		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/assets"):
-			rec.uploadPath = r.URL.Path
+		case request.Method == http.MethodGet && strings.HasSuffix(request.URL.Path, "/assets"):
+			_, _ = io.WriteString(response, `[]`)
+		case request.Method == http.MethodPost && strings.Contains(request.URL.Path, "/assets"):
+			rec.uploadPath = request.URL.Path
 
-			if raw, err := io.ReadAll(r.Body); err == nil {
+			if raw, err := io.ReadAll(request.Body); err == nil {
 				rec.rawBody = string(raw)
-				r.Body = io.NopCloser(strings.NewReader(rec.rawBody))
+				request.Body = io.NopCloser(strings.NewReader(rec.rawBody))
 			}
 
-			if file, header, err := r.FormFile("attachment"); err == nil {
+			if file, header, err := request.FormFile("attachment"); err == nil {
 				rec.filename = header.Filename
 
 				body, _ := io.ReadAll(file)
@@ -73,11 +73,11 @@ func newAssetUploadClient(t *testing.T, rec *assetUpload) *http.Client {
 				_ = file.Close()
 			}
 
-			w.WriteHeader(http.StatusCreated)
-			_, _ = io.WriteString(w, `{"id":1,"name":"asset"}`)
+			response.WriteHeader(http.StatusCreated)
+			_, _ = io.WriteString(response, `{"id":1,"name":"asset"}`)
 
 		default:
-			http.Error(w, "unexpected "+r.Method+" "+r.URL.Path, http.StatusNotFound)
+			http.Error(response, "unexpected "+request.Method+" "+request.URL.Path, http.StatusNotFound)
 		}
 	})
 

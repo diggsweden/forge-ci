@@ -14,6 +14,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/adapters/maven"
 	apppublish "github.com/diggsweden/forge-ci/internal/app/publish"
 	appvalidate "github.com/diggsweden/forge-ci/internal/app/validate"
+	"github.com/diggsweden/forge-ci/internal/cli/commonflags"
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
 	"github.com/diggsweden/forge-ci/internal/domain/version"
 )
@@ -37,6 +38,7 @@ func mavenCentralCmd() *cli.Command {
 
 func publicationAuthorizationFlags() []cli.Flag {
 	return []cli.Flag{
+		commonflags.ReleasePolicy(),
 		&cli.StringFlag{Name: "request-tag", Sources: cli.EnvVars("RELEASE_REQUEST_TAG"), Usage: "signed human release-request/vMAJOR.MINOR.PATCH tag"},
 		&cli.StringFlag{Name: "release-sha", Sources: cli.EnvVars("RELEASE_SHA"), Usage: "full prepared release commit SHA"},
 		&cli.StringFlag{Name: "authorization-dir", Value: ".", Sources: cli.EnvVars("FORGE_CI_AUTHORIZATION_DIR"), Usage: "reviewed checkout root holding .forge-ci signer allowlists"},
@@ -48,7 +50,8 @@ func authorizePublication(ctx context.Context, cmd *cli.Command) error {
 	dir := cmd.String("authorization-dir")
 
 	return appvalidate.PublicationRequest(ctx, &gitadapter.Repo{Dir: dir}, os.Stderr, deps.Annotator(cmd), appvalidate.PublicationRequestInput{
-		RequestTag: cmd.String("request-tag"), ReleaseSHA: cmd.String("release-sha"), AuthorizationDir: dir, ReleaseGPGPublicKey: cmd.String("release-gpg-public-key"),
+		ReleasePolicy: cmd.String("release-policy"),
+		RequestTag:    cmd.String("request-tag"), ReleaseSHA: cmd.String("release-sha"), AuthorizationDir: dir, ReleaseGPGPublicKey: cmd.String("release-gpg-public-key"),
 	})
 }
 

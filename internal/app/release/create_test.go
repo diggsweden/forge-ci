@@ -96,9 +96,10 @@ func TestCreateRelease_MarksOnlyPrereleaseTagsAsPrerelease(t *testing.T) {
 			prov := fakeprovider.New(t)
 
 			err := apprelease.CreateRelease(context.Background(), prov, &fakeFS{Files: map[string]bool{}}, &bytes.Buffer{}, apprelease.CreateReleaseInput{
-				Tag:          tag,
-				Repository:   "owner/repo",
-				AssemblyFile: emptyAssembly(t),
+				ReleasePolicy: "stable-prerelease",
+				Tag:           tag,
+				Repository:    "owner/repo",
+				AssemblyFile:  emptyAssembly(t),
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -189,6 +190,8 @@ func TestCreateRelease_SkipsMissingOrEmptyNotesFile(t *testing.T) {
 	}
 	for name, fs := range tests {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
 			prov := fakeprovider.New(t)
 			if err := apprelease.CreateRelease(context.Background(), prov, fs, &bytes.Buffer{}, apprelease.CreateReleaseInput{
 				Tag:              "v1.0.0",

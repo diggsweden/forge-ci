@@ -19,6 +19,7 @@ var errPublicationBoundary = errors.New("owned output failure")
 
 type patternSink struct {
 	*fakeoutputsink.Sink
+
 	events *[]string
 	fail   bool
 }
@@ -34,6 +35,7 @@ func (s *patternSink) Set(ctx context.Context, key, value string) error {
 
 type patternWriter struct {
 	bytes.Buffer
+
 	events *[]string
 	fail   bool
 }
@@ -47,7 +49,7 @@ func (w *patternWriter) Write(body []byte) (int, error) {
 	return w.Buffer.Write(body)
 }
 
-func TestPatternPublicationBoundary_PreflightAndCommitOrder(t *testing.T) { //nolint:gocognit // each output mode is tested at both failure boundaries and with a successful control.
+func TestPatternPublicationBoundary_PreflightAndCommitOrder(t *testing.T) {
 	t.Parallel()
 
 	for _, format := range []output.Format{output.FormatText, output.FormatJSON, output.FormatGitHub, output.FormatGitLab} {

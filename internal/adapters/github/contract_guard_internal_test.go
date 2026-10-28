@@ -91,14 +91,14 @@ func TestReleaseRollback_ReportsRetainedRecoveryObjects(t *testing.T) {
 
 			oldName, stageName := "app.bin", ""
 			renames, deletes := 0, 0
-			p := &Provider{APIBaseOverride: "https://github.invalid", Env: func(key string) string {
+			provider := &Provider{APIBaseOverride: "https://github.invalid", Env: func(key string) string {
 				if key == "GITHUB_REPOSITORY" {
 					return "o/r"
 				}
 
 				return ""
 			}}
-			p.HTTPClient = &http.Client{Transport: contractTransport(func(req *http.Request) (*http.Response, error) {
+			provider.HTTPClient = &http.Client{Transport: contractTransport(func(req *http.Request) (*http.Response, error) {
 				switch req.Method + " " + req.URL.Path {
 				case "GET /repos/o/r/releases/tags/v1":
 					return contractResponse(req, 200, `{"id":42}`), nil
@@ -136,7 +136,7 @@ func TestReleaseRollback_ReportsRetainedRecoveryObjects(t *testing.T) {
 					return contractResponse(req, 400, `{}`), nil
 				}
 			})}
-			err := p.UploadReleaseAsset(t.Context(), "v1", file)
+			err := provider.UploadReleaseAsset(t.Context(), "v1", file)
 			require.ErrorIs(t, err, errs.ErrDependencyUnavailable)
 			require.Equal(t, 2, renames)
 

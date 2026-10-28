@@ -136,6 +136,8 @@ func TestNewSignerFromArmor_EncryptedKeySignsWithPassphrase(t *testing.T) {
 
 	for _, key := range []string{"primary", "signing subkey"} {
 		t.Run(key, func(t *testing.T) {
+			t.Parallel()
+
 			entity := mintTestEntity(t)
 			if key == "signing subkey" {
 				require.NoError(t, entity.AddSigningSubkey(nil))
@@ -159,6 +161,8 @@ func TestNewSignerFromArmor_EncryptedKeySignsWithPassphrase(t *testing.T) {
 				}},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
+					t.Parallel()
+
 					signer, err := tc.new()
 					require.NoError(t, err)
 
@@ -243,7 +247,7 @@ func TestSignFile_ProducesVerifiableSignature(t *testing.T) {
 	dir := t.TempDir()
 
 	artifact := filepath.Join(dir, "artifact.bin")
-	if err := os.WriteFile(artifact, []byte("hello world"), 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(artifact, []byte("hello world"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -252,7 +256,7 @@ func TestSignFile_ProducesVerifiableSignature(t *testing.T) {
 	}
 
 	// The signature must verify against the entity's public half.
-	sigBody, err := os.ReadFile(artifact + ".asc") //nolint:gosec // test fixture
+	sigBody, err := os.ReadFile(artifact + ".asc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +268,7 @@ func TestSignFile_ProducesVerifiableSignature(t *testing.T) {
 	// Verify via go-crypto.
 	pubKeyRing := gocrypto.EntityList{entity}
 
-	signedReader, err := os.Open(artifact) //nolint:gosec // test fixture
+	signedReader, err := os.Open(artifact)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,6 +290,8 @@ func TestSignFile_RefusesUnsafeSidecarWithoutChangingFiles(t *testing.T) {
 		wantEntries int
 	}{{"sidecar link", false, 2}, {"parent link", true, 1}} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			parentLink := tc.parentLink
 			root, outside := t.TempDir(), t.TempDir()
 
@@ -378,7 +384,7 @@ func TestSignFile_ReplacesStaleSidecarWithExactSignature(t *testing.T) {
 
 	require.NoError(t, signer.SignFile(context.Background(), artifact))
 
-	body, err := os.ReadFile(artifact + ".asc") //nolint:gosec // test fixture
+	body, err := os.ReadFile(artifact + ".asc")
 	require.NoError(t, err)
 
 	_, err = gocrypto.CheckArmoredDetachedSignature(pubKeyRing, strings.NewReader(payload), bytes.NewReader(body), verifyConfig)
@@ -447,6 +453,8 @@ func TestSigner_FixedCreationTimeMatchesRequestAndIsByteStable(t *testing.T) {
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			signer, err := tc.new()
 			require.NoError(t, err)
 
@@ -464,6 +472,8 @@ func TestSigner_FixedCreationTimeMatchesRequestAndIsByteStable(t *testing.T) {
 				body []byte
 			}{{"writer", first.Bytes()}, {"writer repeat", second.Bytes()}, {"file", fileSig}} {
 				t.Run(output.name, func(t *testing.T) {
+					t.Parallel()
+
 					if !bytes.Equal(first.Bytes(), output.body) {
 						t.Error("fixed-time OpenPGP signatures differ")
 					}
@@ -738,13 +748,13 @@ func TestPrimaryFingerprints_ReadsEveryKeyInTheBundle(t *testing.T) {
 		t.Fatalf("fingerprints = %v, want %v", got, want)
 	}
 
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("fingerprint %d = %q, want %q", i, got[i], want[i])
+	for index := range want {
+		if got[index] != want[index] {
+			t.Errorf("fingerprint %d = %q, want %q", index, got[index], want[index])
 		}
 
-		if len(got[i]) != 40 {
-			t.Errorf("fingerprint %d is %d characters, want the 40-char form gpg --with-colons prints", i, len(got[i]))
+		if len(got[index]) != 40 {
+			t.Errorf("fingerprint %d is %d characters, want the 40-char form gpg --with-colons prints", index, len(got[index]))
 		}
 	}
 }

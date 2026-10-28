@@ -12,19 +12,20 @@ import (
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
+	"github.com/diggsweden/forge-ci/internal/domain/version"
 	"github.com/diggsweden/forge-ci/internal/pathsafe"
 )
 
 // PublishReleaseInput drives `release publish`: an in-place release
 // create/update with exact asset reconciliation.
 type PublishReleaseInput struct {
+	ReleasePolicy             string
 	Tag                       string
 	Repository                string
 	ReleaseName               string
 	ReleaseNameFromRepository bool
 	ReleaseNotesFile          string
 	Draft                     bool
-	Prerelease                bool
 	Assets                    []string
 }
 
@@ -32,7 +33,7 @@ type PublishReleaseInput struct {
 // the provider to create/update the release. This keeps filesystem/path policy
 // outside adapters and ensures provider mutations never start when the desired
 // asset set is malformed.
-func PublishRelease(ctx context.Context, pub provider.ReleasePublisher, out io.Writer, in PublishReleaseInput) error { //nolint:varnamelen // provider role name is intentionally short at call sites.
+func PublishRelease(ctx context.Context, pub provider.ReleasePublisher, out io.Writer, in PublishReleaseInput) error {
 	if pub == nil {
 		return fmt.Errorf("release publisher is required: %w", errs.ErrUsage)
 	}
@@ -40,6 +41,11 @@ func PublishRelease(ctx context.Context, pub provider.ReleasePublisher, out io.W
 	tag := strings.TrimSpace(in.Tag)
 	if tag == "" {
 		return fmt.Errorf("tag is required: pass --tag <name> or set $TAG_NAME: %w", errs.ErrUsage)
+	}
+
+	parsed, err := version.ValidateReleaseTag(tag, in.ReleasePolicy)
+	if err != nil {
+		return err
 	}
 
 	repo := strings.TrimSpace(in.Repository)
@@ -72,12 +78,19 @@ func PublishRelease(ctx context.Context, pub provider.ReleasePublisher, out io.W
 
 	_, _ = fmt.Fprintf(out, "Publishing release %s with %d asset(s)\n", tag, len(assets))
 
+	latest := provider.MakeLatestTrue
+	if parsed.Prerelease != "" {
+		latest = provider.MakeLatestFalse
+	}
+
 	return pub.PublishRelease(ctx, repo, provider.ReleaseSpec{
+		Immutable:  true,
 		Tag:        tag,
 		Name:       releaseName,
 		NotesFile:  notesFile,
 		Draft:      in.Draft,
-		Prerelease: in.Prerelease,
+		Prerelease: parsed.Prerelease != "",
+		MakeLatest: latest,
 		Assets:     assets,
 	})
 }

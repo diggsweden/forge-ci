@@ -15,8 +15,15 @@ import (
 // ValidateMavenVersion keeps snapshot publication distinct from immutable releases.
 func ValidateMavenVersion(value string, snapshot bool) error {
 	base := value
+	policy := version.ReleasePolicyStablePrerelease
+
+	if !snapshot && strings.HasSuffix(value, "-SNAPSHOT") {
+		return fmt.Errorf("immutable publication cannot use a -SNAPSHOT version: %w", errs.ErrValidation)
+	}
 
 	if snapshot {
+		policy = version.ReleasePolicyStable
+
 		var ok bool
 
 		base, ok = strings.CutSuffix(value, "-SNAPSHOT")
@@ -25,7 +32,7 @@ func ValidateMavenVersion(value string, snapshot bool) error {
 		}
 	}
 
-	if !version.IsStableSemverTag("v" + base) {
+	if _, err := version.ValidateReleaseTag("v"+base, policy); err != nil {
 		return fmt.Errorf("publication requires MAJOR.MINOR.PATCH, with -SNAPSHOT only in snapshot mode: %w", errs.ErrValidation)
 	}
 

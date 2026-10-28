@@ -18,6 +18,8 @@ func TestMavenReactorPublicationPolicy(t *testing.T) {
 		snapshot, valid      bool
 	}{
 		{"release", `<project><version>1.2.3</version></project>`, "1.2.3", false, true},
+		{"beta release", `<project><version>1.2.3-beta.2</version></project>`, "1.2.3-beta.2", false, true},
+		{"snapshot cannot use immutable gate", `<project><version>1.2.3-SNAPSHOT</version></project>`, "1.2.3-SNAPSHOT", false, false},
 		{"wrong authorized version", `<project><version>1.2.4</version></project>`, "1.2.3", false, false},
 		{"snapshot", `<project><version>1.2.3-SNAPSHOT</version></project>`, "", true, true},
 		{"stable cannot use snapshot gate", `<project><version>1.2.3</version></project>`, "", true, false},
@@ -29,6 +31,8 @@ func TestMavenReactorPublicationPolicy(t *testing.T) {
 		{"not a model", `<settings/>`, "", true, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := publish.ValidateMavenReactorVersions([]byte(test.body), test.snapshot, test.expected)
 			if test.valid {
 				require.NoError(t, err)

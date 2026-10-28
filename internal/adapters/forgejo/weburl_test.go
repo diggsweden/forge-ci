@@ -12,14 +12,14 @@ import (
 func TestWebURLs_PointAtTheForgeSpecificPaths(t *testing.T) {
 	t.Parallel()
 
-	p := forgejo.New()
+	provider := forgejo.New()
 
-	if got := p.ReleaseWebURL("https://codeberg.org", "owner/repo", "v1.0.0"); got != "https://codeberg.org/owner/repo/releases/tag/v1.0.0" {
+	if got := provider.ReleaseWebURL("https://codeberg.org", "owner/repo", "v1.0.0"); got != "https://codeberg.org/owner/repo/releases/tag/v1.0.0" {
 		t.Errorf("ReleaseWebURL = %q", got)
 	}
 
 	// Forgejo packages hang off the owner, not the repository.
-	if got := p.PackagesWebURL("https://codeberg.org", "owner/repo"); got != "https://codeberg.org/owner/-/packages" {
+	if got := provider.PackagesWebURL("https://codeberg.org", "owner/repo"); got != "https://codeberg.org/owner/-/packages" {
 		t.Errorf("PackagesWebURL = %q", got)
 	}
 }

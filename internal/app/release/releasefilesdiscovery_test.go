@@ -29,8 +29,8 @@ func listSection(t *testing.T, section string) ([]string, error) {
 	t.Helper()
 
 	return apprelease.ListReleaseFiles(apprelease.ListReleaseFilesInput{
-		FilesInput: apprelease.FilesInput{ManifestFile: filepath.Join(t.TempDir(), "absent.json")},
-		Section:    section,
+		ManifestFile: filepath.Join(t.TempDir(), "absent.json"),
+		Section:      section,
 	})
 }
 

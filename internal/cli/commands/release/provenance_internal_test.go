@@ -6,6 +6,7 @@ package release
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	apprelease "github.com/diggsweden/forge-ci/internal/app/release"
@@ -232,10 +233,8 @@ func TestProvenanceCommand_ExposesExternalParametersFlag(t *testing.T) {
 	t.Parallel()
 
 	for _, flag := range provenanceCmd().Flags {
-		for _, name := range flag.Names() {
-			if name == flagExternalParametersJSON {
-				return
-			}
+		if slices.Contains(flag.Names(), flagExternalParametersJSON) {
+			return
 		}
 	}
 

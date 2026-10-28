@@ -13,6 +13,7 @@ import (
 	apprelease "github.com/diggsweden/forge-ci/internal/app/release"
 	"github.com/diggsweden/forge-ci/internal/cli/cienv"
 	"github.com/diggsweden/forge-ci/internal/cli/clitoken"
+	"github.com/diggsweden/forge-ci/internal/cli/commonflags"
 )
 
 // verifyRequestCmd is the Go port of forgejo-ci's verify-release-request.sh:
@@ -28,8 +29,9 @@ func verifyRequestCmd() *cli.Command {
 		Description: `EXAMPLE:
    forge-ci release validate-request --release-request release-request/v1.2.3 --tag v1.2.3 --allowed-signers-file .forgejo/release-request.allowed_signers`,
 		Flags: []cli.Flag{
+			commonflags.ReleasePolicy(),
 			&cli.StringFlag{Name: "release-request", Required: true, Sources: cli.EnvVars("RELEASE_REQUEST"), Usage: "release request tag (release-request/vMAJOR.MINOR.PATCH)"},
-			&cli.StringFlag{Name: flagTag, Required: true, Sources: cienv.Tag(), Usage: "final stable release tag (vMAJOR.MINOR.PATCH)"},
+			&cli.StringFlag{Name: flagTag, Required: true, Sources: cienv.Tag(), Usage: "final release tag permitted by release-policy"},
 			&cli.StringFlag{Name: "allowed-signers-file", Sources: cli.EnvVars("RELEASE_REQUEST_ALLOWED_SIGNERS"), Usage: "OpenSSH allowed_signers file for release-request SSH signatures (required unless --skip-signature)"},
 			&cli.StringFlag{Name: "remote", Value: "origin", Usage: "git remote queried for request/final tags"},
 			&cli.StringFlag{Name: "expected-commit", Sources: cli.EnvVars("RELEASE_REQUEST_SHA"), Usage: "commit the request tag and the checkout must both be at, bound by the caller from the trusted event context"},
@@ -43,6 +45,7 @@ func verifyRequestCmd() *cli.Command {
 			}
 
 			return apprelease.VerifyReleaseRequest(ctx, git.New(), os.Stdout, apprelease.VerifyReleaseRequestInput{
+				ReleasePolicy:      cmd.String("release-policy"),
 				ReleaseRequest:     cmd.String("release-request"),
 				ReleaseTag:         cmd.String(flagTag),
 				AllowedSignersPath: cmd.String("allowed-signers-file"),

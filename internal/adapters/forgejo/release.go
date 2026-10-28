@@ -24,8 +24,6 @@ import (
 // uploads the declared assets. Create-or-replace: an existing release at
 // the same tag is deleted first so a re-run publishes cleanly (the tag
 // itself is kept), mirroring the github adapter's cleanup.
-//
-//nolint:cyclop // local preflight, release lookup, replacement, creation and uploads have independent errors.
 func (p *Provider) CreateRelease(ctx context.Context, repo string, spec provider.ReleaseSpec) error {
 	if err := validateLocalReleaseAssets(spec.Assets); err != nil {
 		return err
@@ -54,7 +52,16 @@ func (p *Provider) CreateRelease(ctx context.Context, repo string, spec provider
 		return err
 	}
 
-	if err = replaceExistingRelease(client, owner, name, spec.Tag); err != nil {
+	if spec.Immutable {
+		published, err := p.publishedImmutableRelease(ctx, client, owner, name, spec, opt)
+		if err != nil || published {
+			return err
+		}
+
+		opt.IsDraft = true // Publish only after the complete asset set exists.
+	}
+
+	if err = replaceExistingRelease(client, owner, name, spec.Tag, spec.Immutable); err != nil {
 		return err
 	}
 
@@ -67,10 +74,48 @@ func (p *Provider) CreateRelease(ctx context.Context, repo string, spec provider
 		return fmt.Errorf("created release response did not include a valid id: %w", errs.ErrMalformedInput)
 	}
 
+	return attachAndPublish(client, owner, name, rel.ID, spec)
+}
+
+// publishedImmutableRelease reports whether an immutable release is already
+// published; it is accepted only when it matches the spec exactly.
+func (p *Provider) publishedImmutableRelease(ctx context.Context, client *gitea.Client, owner, name string, spec provider.ReleaseSpec, opt gitea.CreateReleaseOption) (bool, error) {
+	existing, resp, err := client.GetReleaseByTag(owner, name, spec.Tag)
+	if responseStatus(resp) == http.StatusNotFound {
+		return false, nil
+	}
+
+	if err != nil {
+		return false, fmt.Errorf("inspect immutable release: %w", classifyErr(resp, err))
+	}
+
+	if existing == nil || existing.IsDraft {
+		return false, nil
+	}
+
+	return true, p.matchPublishedRelease(ctx, client, owner, name, existing, spec, opt)
+}
+
+// attachAndPublish uploads the assets to a created release and, for an
+// immutable release, publishes the staged draft once they all exist.
+func attachAndPublish(client *gitea.Client, owner, name string, releaseID int64, spec provider.ReleaseSpec) error {
 	for _, asset := range spec.Assets {
-		if err := uploadAttachment(client, owner, name, rel.ID, asset); err != nil {
+		if err := uploadAttachment(client, owner, name, releaseID, asset); err != nil {
 			return err
 		}
+	}
+
+	if !spec.Immutable || spec.Draft {
+		return nil
+	}
+
+	edit, err := editReleaseOption(spec)
+	if err != nil {
+		return err
+	}
+
+	if _, resp, err := client.EditRelease(owner, name, releaseID, edit); err != nil {
+		return fmt.Errorf("publish staged release: %w", classifyErr(resp, err))
 	}
 
 	return nil
@@ -84,7 +129,11 @@ func (p *Provider) CreateRelease(ctx context.Context, repo string, spec provider
 // previous description in place rather than announcing artifacts that never
 // arrived. None of this is atomic: Forgejo has no transaction, so the order is
 // chosen for which half-applied outcome is least misleading.
-func (p *Provider) PublishRelease(ctx context.Context, repo string, spec provider.ReleaseSpec) error { //nolint:cyclop // release upsert + asset reconciliation is one API transaction shape.
+func (p *Provider) PublishRelease(ctx context.Context, repo string, spec provider.ReleaseSpec) error {
+	if spec.Immutable {
+		return p.CreateRelease(ctx, repo, spec)
+	}
+
 	if err := validateLocalReleaseAssets(spec.Assets); err != nil {
 		return err
 	}
@@ -217,7 +266,7 @@ func createReleaseWithAssets(client *gitea.Client, owner, name string, spec prov
 // replaceExistingRelease deletes a release already present at the tag so
 // a re-run publishes cleanly (the tag itself is kept). A missing release
 // is not an error — there is simply nothing to replace.
-func replaceExistingRelease(client *gitea.Client, owner, repo, tag string) error {
+func replaceExistingRelease(client *gitea.Client, owner, repo, tag string, immutable bool) error {
 	existing, resp, err := client.GetReleaseByTag(owner, repo, tag)
 	if err != nil {
 		// Only an absent release means there is nothing to replace. Any other
@@ -231,6 +280,10 @@ func replaceExistingRelease(client *gitea.Client, owner, repo, tag string) error
 
 	if existing == nil || existing.ID <= 0 {
 		return fmt.Errorf("existing release response did not include a valid id: %w", errs.ErrMalformedInput)
+	}
+
+	if immutable && !existing.IsDraft {
+		return fmt.Errorf("release %s became published; refusing to replace it: %w", tag, errs.ErrValidation)
 	}
 
 	if delResp, delErr := client.DeleteRelease(owner, repo, existing.ID); delErr != nil {
@@ -279,7 +332,7 @@ func releaseNoteBody(spec provider.ReleaseSpec) (string, error) {
 		return note, nil
 	}
 
-	body, err := os.ReadFile(spec.NotesFile) //nolint:gosec // release notes path is validated by the use case before provider mutation.
+	body, err := os.ReadFile(spec.NotesFile)
 	if err != nil {
 		return "", fmt.Errorf("read release notes %q: %w", spec.NotesFile, classifyReleaseFileError(err))
 	}
@@ -353,7 +406,7 @@ func replaceReleaseAttachment(client *gitea.Client, owner, name string, releaseI
 
 // uploadAttachment streams one file to a release as an attachment.
 func uploadAttachment(client *gitea.Client, owner, repo string, releaseID int64, file string) error {
-	//nolint:gosec,varnamelen // G304: asset path is an operator-supplied release artifact, not attacker-controlled; f is an idiomatic file handle.
+	//nolint:gosec // G304: asset path is an operator-supplied release artifact, not attacker-controlled.
 	f, err := os.Open(file)
 	if err != nil {
 		return fmt.Errorf("open asset %q: %w", file, classifyReleaseFileError(err))
@@ -374,7 +427,7 @@ func uploadAttachment(client *gitea.Client, owner, repo string, releaseID int64,
 }
 
 func listReleaseAttachments(client *gitea.Client, owner, repo string, releaseID int64) ([]*gitea.Attachment, error) {
-	opt := gitea.ListReleaseAttachmentsOptions{ListOptions: gitea.ListOptions{Page: 1, PageSize: 100}}
+	opt := gitea.ListReleaseAttachmentsOptions{Page: 1, PageSize: 100}
 
 	var all []*gitea.Attachment
 

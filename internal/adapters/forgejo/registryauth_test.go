@@ -14,7 +14,7 @@ import (
 func TestResolveRegistryAuth_Forgejo(t *testing.T) {
 	t.Parallel()
 
-	p := &forgejo.Provider{Env: func(k string) string {
+	provider := &forgejo.Provider{Env: func(k string) string {
 		return map[string]string{
 			"FORGEJO_SERVER_URL": "https://codeberg.org",
 			"FORGEJO_TOKEN":      "ftok",
@@ -22,7 +22,7 @@ func TestResolveRegistryAuth_Forgejo(t *testing.T) {
 		}[k]
 	}}
 
-	auth, err := p.ResolveRegistryAuth()
+	auth, err := provider.ResolveRegistryAuth()
 	if err != nil {
 		t.Fatal(err)
 	}

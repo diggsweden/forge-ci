@@ -36,8 +36,6 @@ import (
 // Publishing a staged prerelease intentionally emits GitHub's "published"
 // release event rather than exposing incomplete assets for a "prereleased"
 // event.
-//
-//nolint:cyclop // REST flow: ensure tag → cleanup existing → create draft → upload assets → publish.
 func (p *Provider) CreateRelease(ctx context.Context, repo string, spec provider.ReleaseSpec) error {
 	if err := validateReleaseAssets(spec.Assets); err != nil {
 		return err
@@ -113,14 +111,14 @@ func releaseRequest(spec provider.ReleaseSpec, body string) *gogithub.Repository
 	}
 
 	req := &gogithub.RepositoryRelease{
-		TagName:    gogithub.Ptr(spec.Tag),
-		Name:       gogithub.Ptr(name),
-		Draft:      gogithub.Ptr(spec.Draft),
-		Prerelease: gogithub.Ptr(spec.Prerelease),
-		MakeLatest: gogithub.Ptr(makeLatest),
+		TagName:    new(spec.Tag),
+		Name:       new(name),
+		Draft:      new(spec.Draft),
+		Prerelease: new(spec.Prerelease),
+		MakeLatest: new(makeLatest),
 	}
 	if body != "" {
-		req.Body = gogithub.Ptr(body)
+		req.Body = new(body)
 	}
 
 	return req
@@ -136,6 +134,10 @@ func releaseRequest(spec provider.ReleaseSpec, body string) *gogithub.Repository
 // notes and visibility rather than publishing a draft without its artifacts.
 // It satisfies the provider.ReleasePublisher role.
 func (p *Provider) PublishRelease(ctx context.Context, repo string, spec provider.ReleaseSpec) error {
+	if spec.Immutable {
+		return p.CreateRelease(ctx, repo, spec)
+	}
+
 	if err := validateReleaseAssets(spec.Assets); err != nil {
 		return err
 	}
@@ -336,8 +338,6 @@ func (p *Provider) UploadReleaseAsset(ctx context.Context, tag, file string) err
 // uploadAsset replaces a same-named asset without deleting the known-good
 // object first. A colliding upload is staged under a unique name, verified,
 // promoted, and only then is the renamed backup removed.
-//
-//nolint:cyclop // verified direct upload and staged replacement share one transaction.
 func (p *Provider) uploadAsset(ctx context.Context, client *gogithub.Client, owner, repo string, releaseID int64, file string) error {
 	name := filepath.Base(file)
 
@@ -386,7 +386,7 @@ func (p *Provider) uploadAsset(ctx context.Context, client *gogithub.Client, own
 		return err
 	}
 
-	if _, _, err := client.Repositories.EditReleaseAsset(ctx, owner, repo, existing.GetID(), &gogithub.ReleaseAsset{Name: gogithub.Ptr(backupName)}); err != nil {
+	if _, _, err := client.Repositories.EditReleaseAsset(ctx, owner, repo, existing.GetID(), &gogithub.ReleaseAsset{Name: new(backupName)}); err != nil {
 		if _, cleanupErr := client.Repositories.DeleteReleaseAsset(ctx, owner, repo, staged.GetID()); cleanupErr != nil {
 			return fmt.Errorf("stage existing asset %q as backup: %w; cleanup failed: %w; known-good asset id %d may be named %q or %q; staged asset id %d at %q remains", name, classifyGitHubError(err), classifyGitHubError(cleanupErr), existing.GetID(), name, backupName, staged.GetID(), stagedName)
 		}
@@ -394,8 +394,8 @@ func (p *Provider) uploadAsset(ctx context.Context, client *gogithub.Client, own
 		return fmt.Errorf("stage existing asset %q as backup: %w; known-good asset id %d may be named %q or %q", name, classifyGitHubError(err), existing.GetID(), name, backupName)
 	}
 
-	if _, _, err := client.Repositories.EditReleaseAsset(ctx, owner, repo, staged.GetID(), &gogithub.ReleaseAsset{Name: gogithub.Ptr(name)}); err != nil {
-		_, _, restoreErr := client.Repositories.EditReleaseAsset(ctx, owner, repo, existing.GetID(), &gogithub.ReleaseAsset{Name: gogithub.Ptr(name)})
+	if _, _, err := client.Repositories.EditReleaseAsset(ctx, owner, repo, staged.GetID(), &gogithub.ReleaseAsset{Name: new(name)}); err != nil {
+		_, _, restoreErr := client.Repositories.EditReleaseAsset(ctx, owner, repo, existing.GetID(), &gogithub.ReleaseAsset{Name: new(name)})
 		if restoreErr != nil {
 			return fmt.Errorf("promote staged asset %q: %w; restore failed: %w; retained known-good asset id %d (last confirmed name %q) and staged asset id %d (last confirmed name %q) for recovery; rename outcomes are unconfirmed", name, classifyGitHubError(err), classifyGitHubError(restoreErr), existing.GetID(), backupName, staged.GetID(), stagedName)
 		}
@@ -533,7 +533,7 @@ func (p *Provider) cleanupExistingRelease(ctx context.Context, client *gogithub.
 			continue
 		}
 
-		if !release.GetDraft() && !release.GetPrerelease() {
+		if !release.GetDraft() && (spec.Immutable || !release.GetPrerelease()) {
 			if err := exactStableReleaseMatches(ctx, client, owner, repo, release, spec, body); err != nil {
 				return false, err
 			}
@@ -553,7 +553,6 @@ func (p *Provider) cleanupExistingRelease(ctx context.Context, client *gogithub.
 	return false, nil
 }
 
-//nolint:cyclop // stable-release immutability checks metadata and every exact asset.
 func exactStableReleaseMatches(
 	ctx context.Context,
 	client *gogithub.Client,

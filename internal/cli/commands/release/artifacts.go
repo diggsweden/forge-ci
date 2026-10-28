@@ -478,7 +478,7 @@ func checksumsCmd() *cli.Command {
 			&cli.StringFlag{Name: flagSBOMDir, Sources: cli.EnvVars("SBOM_DIR"), Usage: "directory of SBOM layer files to include in the manifest"},
 		},
 		Action: func(_ context.Context, cmd *cli.Command) error {
-			n, err := apprelease.Checksums(os.Stderr, apprelease.ChecksumsInput{ //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+			n, err := apprelease.Checksums(os.Stderr, apprelease.ChecksumsInput{
 				OutputFile:          cmd.String(flagOutput),
 				ReleaseArtifactsDir: cmd.String(flagReleaseArtifactsDir),
 				AttachArtifacts:     cmd.String(flagAttachArtifacts),

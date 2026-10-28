@@ -82,7 +82,7 @@ func TestCargoPrerequisites_SkipsWhenTargetDoesNotRun(t *testing.T) {
 
 	var out, stderr bytes.Buffer
 
-	err := appvalidate.CargoPrerequisites(context.Background(), fakeCargoTool{err: errors.New("should not run")}, &out, output.NewAnnotator(&stderr, output.FormatGitHub), appvalidate.CargoPrerequisitesInput{ //nolint:err113 // test mock error
+	err := appvalidate.CargoPrerequisites(context.Background(), fakeCargoTool{err: errors.New("should not run")}, &out, output.NewAnnotator(&stderr, output.FormatGitHub), appvalidate.CargoPrerequisitesInput{
 		PublishStagePlanJSON: `{"version":1,"stage":"publish","targets":{"cargo_container_first":{"runs":false,"items":[{"name":"api","project_type":"cargo","working_directory":"missing"}]}}}`,
 	})
 	if err != nil {

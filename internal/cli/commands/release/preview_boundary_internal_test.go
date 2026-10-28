@@ -5,14 +5,16 @@ package release
 
 import (
 	"context"
+	"testing"
+
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 type previewMutationRecorder struct {
 	provider.Provider
+
 	calls int
 }
 

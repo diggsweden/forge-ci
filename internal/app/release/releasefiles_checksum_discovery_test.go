@@ -36,7 +36,7 @@ func TestReleaseFiles_ChecksumDiscoveryErrorsReachAssetConsumers(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				t.Cleanup(func() { _ = os.Chmod("dist/extra", 0o700) }) //nolint:gosec // restore only the owned fixture directory.
+				t.Cleanup(func() { _ = os.Chmod("dist/extra", 0o700) })
 
 				want, message = fs.ErrPermission, "discover checksums"
 			}

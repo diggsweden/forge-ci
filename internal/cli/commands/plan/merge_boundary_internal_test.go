@@ -5,6 +5,10 @@ package plan
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"testing"
+
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
 	"github.com/diggsweden/forge-ci/internal/cli/planfile"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
@@ -12,9 +16,6 @@ import (
 	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v3"
-	"os"
-	"path/filepath"
-	"testing"
 )
 
 func TestPlanMergeBoundary_RejectsNullAndPreservesNumbers(t *testing.T) {

@@ -20,6 +20,7 @@ import (
 // prepared release commit. AuthorizationDir is the reviewed checkout root,
 // which also holds the committed signer allowlists for monorepo publications.
 type PublicationRequestInput struct {
+	ReleasePolicy       string
 	RequestTag          string
 	ReleaseSHA          string
 	AuthorizationDir    string
@@ -33,7 +34,9 @@ func PublicationRequest(ctx context.Context, repo gitOps, out io.Writer, annot o
 	request := strings.TrimPrefix(in.RequestTag, "refs/tags/")
 
 	final, ok := version.ReleaseRequestVersion(request)
-	if !ok || !version.IsStableSemverTag(final) {
+
+	_, policyErr := version.ValidateReleaseTag(final, in.ReleasePolicy)
+	if !ok || policyErr != nil {
 		return fmt.Errorf("publication requires a signed release-request/vMAJOR.MINOR.PATCH tag; snapshot triggers cannot authorize a permanent release: %w", errs.ErrPermissionDenied)
 	}
 

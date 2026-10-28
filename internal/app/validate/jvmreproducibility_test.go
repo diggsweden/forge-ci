@@ -106,6 +106,7 @@ func TestJVMReproducibility_MavenMissingTimestampFails(t *testing.T) {
 	if !strings.Contains(out, "<project.build.outputTimestamp>") {
 		t.Errorf("expected actionable fix snippet in stdout, got:\n%s", out)
 	}
+
 	if strings.Contains(stderr, "will not be byte-identical") || !strings.Contains(out, "parent POM") || !strings.Contains(out, "Maven 3.10+") {
 		t.Errorf("missing declarations must not be reported as byte-reproducibility proof:\n%s\n%s", out, stderr)
 	}
@@ -206,6 +207,7 @@ func TestJVMReproducibility_GradleNoSettingsFails(t *testing.T) {
 	if !strings.Contains(stderr, "neither preserveFileTimestamps") {
 		t.Errorf("expected 'neither …' error, got:\n%s", stderr)
 	}
+
 	if strings.Contains(stderr, "will not be byte-identical") || !strings.Contains(out, "Gradle 9+") || !strings.Contains(out, "convention plugins") {
 		t.Errorf("missing text must distinguish Gradle defaults/inheritance from this policy:\n%s\n%s", out, stderr)
 	}

@@ -27,8 +27,8 @@ func prerequisitesCmd() *cli.Command {
 		Description: `EXAMPLE:
    forge-ci validate prerequisites --tag v1.2.3 --ref-type tag --repository org/app`,
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "tag", Sources: cienv.Tag(), Usage: "tag being released (e.g. v1.2.3)"},                          //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
-			&cli.StringFlag{Name: "ref-type", Sources: cienv.RefType(), Usage: "trigger ref type (\"tag\" required for releases)"}, //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
+			&cli.StringFlag{Name: "tag", Sources: cienv.Tag(), Usage: "tag being released (e.g. v1.2.3)"}, //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
+			&cli.StringFlag{Name: "ref-type", Sources: cienv.RefType(), Usage: "trigger ref type (\"tag\" required for releases)"},
 			&cli.StringFlag{Name: "ref", Sources: cienv.Ref(), Usage: "fully-qualified ref (refs/tags/X) for prefix verification"},
 			&cli.StringFlag{Name: "target-branch", Sources: cli.EnvVars("TARGET_BRANCH", "BRANCH"), Usage: "branch the tag commit must be reachable from"},
 			&cli.StringFlag{Name: "repository", Sources: cienv.Repository(), Usage: "\"owner/repo\" on GitHub; \"group/project[/sub]\" on GitLab"}, //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
@@ -41,10 +41,10 @@ func prerequisitesCmd() *cli.Command {
 			&cli.BoolFlag{Name: "has-jvm-target", Sources: cli.EnvVars("HAS_JVM_TARGET"), Usage: "the plan includes a Maven/Gradle/Gradle-Android artifact (enables JVM reproducibility check)"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+			return deps.FromCmd(ctx, cmd, func(dependencies *deps.Deps) error {
 				annot := deps.Annotator(cmd)
 
-				tv, err := d.RequireTokenValidator()
+				tv, err := dependencies.RequireTokenValidator()
 				if err != nil {
 					return err
 				}
@@ -80,7 +80,7 @@ func prerequisitesCmd() *cli.Command {
 					PublishStagePlanJSON: os.Getenv("PUBLISH_STAGE_PLAN_JSON"),
 					ConfigPlanJSON:       os.Getenv("CONFIG_PLAN_JSON"),
 				})
-				if writeErr := appvalidate.WritePrerequisitesSummary(ctx, d.SummarySink, result); writeErr != nil && runErr == nil {
+				if writeErr := appvalidate.WritePrerequisitesSummary(ctx, dependencies.SummarySink, result); writeErr != nil && runErr == nil {
 					return writeErr
 				}
 
@@ -88,7 +88,7 @@ func prerequisitesCmd() *cli.Command {
 					return runErr
 				}
 
-				return d.OutputSink.Set(ctx, "existing-release-sha", result.ExistingReleaseSHA)
+				return dependencies.OutputSink.Set(ctx, "existing-release-sha", result.ExistingReleaseSHA)
 			})
 		},
 	}

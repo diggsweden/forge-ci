@@ -30,6 +30,7 @@ type releaseRequestGit interface {
 
 // VerifyReleaseRequestInput drives VerifyReleaseRequest.
 type VerifyReleaseRequestInput struct {
+	ReleasePolicy      string
 	ReleaseRequest     string // release-request/vMAJOR.MINOR.PATCH
 	ReleaseTag         string // vMAJOR.MINOR.PATCH
 	AllowedSignersPath string // OpenSSH allowed_signers file
@@ -44,7 +45,7 @@ type VerifyReleaseRequestInput struct {
 // VerifyReleaseRequest verifies the signed human authorisation tag that asks CI
 // to create a final immutable release tag. It is the Go port of
 // forgejo-ci's verify-release-request.sh and preserves that boundary:
-// stable request/tag names only, local request object must match origin, the
+// policy-admitted request/tag names, local request object must match origin, the
 // final tag must not already exist, and the request tag must be annotated and
 // SSH-signed by an allowed signer.
 //
@@ -156,12 +157,12 @@ func validateRequestInputs(in VerifyReleaseRequestInput) error {
 	}
 
 	requestTag, ok := version.ReleaseRequestVersion(in.ReleaseRequest)
-	if !ok || in.ReleaseRequest != version.ReleaseRequestPrefix+requestTag || !version.IsStableSemverTag(requestTag) {
+	if !ok || in.ReleaseRequest != version.ReleaseRequestPrefix+requestTag {
 		return fmt.Errorf("verify-release-request: release request must look like release-request/vMAJOR.MINOR.PATCH: %s: %w", in.ReleaseRequest, errs.ErrValidation)
 	}
 
-	if !version.IsStableSemverTag(in.ReleaseTag) {
-		return fmt.Errorf("verify-release-request: release tag must look like stable vMAJOR.MINOR.PATCH: %s: %w", in.ReleaseTag, errs.ErrValidation)
+	if _, err := version.ValidateReleaseTag(in.ReleaseTag, in.ReleasePolicy); err != nil {
+		return fmt.Errorf("verify-release-request: %w", err)
 	}
 
 	if requestTag != in.ReleaseTag {

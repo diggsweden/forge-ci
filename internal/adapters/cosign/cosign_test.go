@@ -148,7 +148,7 @@ exit %d
 				t.Fatal(readErr)
 			}
 
-			if _, statErr := os.Stat(string(used)); !os.IsNotExist(statErr) { //nolint:gosec // G703: the inert child records only this test's temporary config path.
+			if _, statErr := os.Stat(string(used)); !os.IsNotExist(statErr) {
 				t.Fatalf("private auth config remains after child exit: %v", statErr)
 			}
 
@@ -162,13 +162,13 @@ exit %d
 func TestCopyImage_RejectsEmptyRefs(t *testing.T) {
 	t.Parallel()
 
-	a := refusingAdapter(t)
+	adapter := refusingAdapter(t)
 
-	if err := a.CopyImage(context.Background(), cosign.CopyImageInput{Dest: "ghcr.io/o/r:release"}, nil); err == nil {
+	if err := adapter.CopyImage(context.Background(), cosign.CopyImageInput{Dest: "ghcr.io/o/r:release"}, nil); err == nil {
 		t.Error("empty source must be rejected")
 	}
 
-	if err := a.CopyImage(context.Background(), cosign.CopyImageInput{Source: "codeberg.org/o/r:v1"}, nil); err == nil {
+	if err := adapter.CopyImage(context.Background(), cosign.CopyImageInput{Source: "codeberg.org/o/r:v1"}, nil); err == nil {
 		t.Error("empty dest must be rejected")
 	}
 }

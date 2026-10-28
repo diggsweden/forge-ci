@@ -12,13 +12,13 @@ import (
 func TestWebURLs_PointAtTheForgeSpecificPaths(t *testing.T) {
 	t.Parallel()
 
-	p := github.New()
+	provider := github.New()
 
-	if got := p.ReleaseWebURL("https://github.com", "owner/repo", "v1.0.0"); got != "https://github.com/owner/repo/releases/tag/v1.0.0" {
+	if got := provider.ReleaseWebURL("https://github.com", "owner/repo", "v1.0.0"); got != "https://github.com/owner/repo/releases/tag/v1.0.0" {
 		t.Errorf("ReleaseWebURL = %q", got)
 	}
 
-	if got := p.PackagesWebURL("https://github.com", "owner/repo"); got != "https://github.com/owner/repo/packages" {
+	if got := provider.PackagesWebURL("https://github.com", "owner/repo"); got != "https://github.com/owner/repo/packages" {
 		t.Errorf("PackagesWebURL = %q", got)
 	}
 }

@@ -293,10 +293,10 @@ func writeJSON(path string, value any) error {
 	body = append(body, '\n')
 
 	if path != cliio.StdSentinel {
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec,mnd // public release metadata under workspace.
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec // public release metadata under workspace.
 			return fmt.Errorf("create output directory: %w", err)
 		}
 	}
 
-	return cliio.WriteFile(path, body, 0o644) //nolint:gosec // public release metadata.
+	return cliio.WriteFile(path, body, 0o644)
 }

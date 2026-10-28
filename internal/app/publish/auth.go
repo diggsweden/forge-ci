@@ -19,7 +19,7 @@ import (
 // the format-aware annotator (::warning:: on GitHub, a plain Warning: line
 // elsewhere incl. Forgejo), and returns an error when the configuration is
 // invalid.
-func RegistryAuth(_ context.Context, w, stderr io.Writer, annot output.Annotator, in publish.RegistryAuthInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func RegistryAuth(_ context.Context, out, stderr io.Writer, annot output.Annotator, in publish.RegistryAuthInput) error {
 	res := publish.ValidateRegistryAuth(in)
 	for _, warning := range res.Warnings {
 		annot.Warningf("%s", warning)
@@ -33,7 +33,7 @@ func RegistryAuth(_ context.Context, w, stderr io.Writer, annot output.Annotator
 		return fmt.Errorf("%s: %w", res.Errors[0], errs.ErrPermissionDenied)
 	}
 
-	_, _ = fmt.Fprintf(w, "%s Registry authentication configuration is valid\n", clicolor.Check(w))
+	_, _ = fmt.Fprintf(out, "%s Registry authentication configuration is valid\n", clicolor.Check(out))
 
 	return nil
 }

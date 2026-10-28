@@ -28,6 +28,7 @@ type changelogRenderGit interface {
 	FetchBranch(ctx context.Context, remote, branch string, cred runcontext.Credential) error
 	Checkout(ctx context.Context, ref string) error
 	StatusPorcelain(ctx context.Context, pathspec string) (string, error)
+	ObjectFormat(ctx context.Context) (string, error)
 }
 
 type changelogRenderer interface {
@@ -37,8 +38,9 @@ type changelogRenderer interface {
 
 // ChangelogRenderInput drives `forge-ci version render-changelog`.
 type ChangelogRenderInput struct {
+	ReleasePolicy     string
 	Backend           string // git-cliff or git-chglog; empty defaults to git-cliff
-	Tag               string // final stable release tag
+	Tag               string // final release tag admitted by ReleasePolicy
 	RepositoryURL     string // canonical HTTPS web URL used in generated changelog links
 	Remote            string // empty defaults to origin
 	Branch            string // empty defaults to main
@@ -62,6 +64,10 @@ func ChangelogRender(ctx context.Context, repo changelogRenderGit, renderer chan
 
 	in = withChangelogRenderDefaults(in)
 
+	if err := requireBackendReadsRepository(ctx, repo, in.Backend); err != nil {
+		return err
+	}
+
 	if err := repo.FetchBranch(ctx, in.Remote, in.Branch, in.Token); err != nil {
 		return fmt.Errorf("render-changelog: fetch %s %s: %w", in.Remote, in.Branch, err)
 	}
@@ -70,11 +76,53 @@ func ChangelogRender(ctx context.Context, repo changelogRenderGit, renderer chan
 		return fmt.Errorf("render-changelog: checkout %s: %w", in.Branch, err)
 	}
 
+	if err := requireConfigFiles(in.ChangelogConfig, in.CommitBodyConfig); err != nil {
+		return err
+	}
+
 	if err := renderChangelogFull(ctx, renderer, out, in); err != nil {
 		return err
 	}
 
 	return finalizeChangelogCommitFiles(ctx, repo, renderer, out, in)
+}
+
+// requireBackendReadsRepository refuses git-cliff on a SHA-256 repository:
+// its libgit2 cannot open one, while git-chglog reads history through the
+// git command line and can.
+func requireBackendReadsRepository(ctx context.Context, repo changelogRenderGit, backend string) error {
+	if backend != backendGitCliff {
+		return nil
+	}
+
+	format, err := repo.ObjectFormat(ctx)
+	if err != nil {
+		return fmt.Errorf("render-changelog: read object format: %w", err)
+	}
+
+	if format == "sha256" {
+		return fmt.Errorf("render-changelog: git-cliff cannot read a SHA-256 repository; select git-chglog with its own configs: %w", errs.ErrValidation)
+	}
+
+	return nil
+}
+
+// requireConfigFiles refuses a missing renderer config before rendering:
+// git-cliff silently falls back to its built-in config when the named file
+// does not exist.
+func requireConfigFiles(paths ...string) error {
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err != nil {
+			return fmt.Errorf("render-changelog: config: %w: %w", err, errs.ErrMissingInput)
+		}
+
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("render-changelog: config %s is not a regular file: %w", path, errs.ErrValidation)
+		}
+	}
+
+	return nil
 }
 
 // finalizeChangelogCommitFiles writes the commit-message files when the
@@ -153,11 +201,12 @@ func validateChangelogRenderInput(in ChangelogRenderInput) error {
 // requiredChangelogRenderFields checks the inputs that must be present and
 // well-formed before any of the rendering decisions matter.
 func requiredChangelogRenderFields(in ChangelogRenderInput) error {
+	_, tagErr := domainversion.ValidateReleaseTag(in.Tag, in.ReleasePolicy)
 	switch {
 	case in.Tag == "":
 		return fmt.Errorf("render-changelog: tag is required: %w", errs.ErrUsage)
-	case strings.ContainsAny(in.Tag, "\n\r") || !domainversion.IsStableSemverTag(in.Tag):
-		return fmt.Errorf("render-changelog: tag must look like stable vMAJOR.MINOR.PATCH: %s: %w", in.Tag, errs.ErrValidation)
+	case tagErr != nil:
+		return fmt.Errorf("render-changelog: %w", tagErr)
 	case in.RepositoryURL == "":
 		return fmt.Errorf("render-changelog: repository URL is required: %w", errs.ErrUsage)
 	case in.ChangelogConfig == "":

@@ -178,7 +178,7 @@ func (f *lockWritingOps) RunInherit(_ context.Context, _ string, _, _ io.Writer,
 	f.writes++
 
 	if err := os.WriteFile(filepath.Join(f.root, f.path), []byte(f.body), 0o600); err != nil {
-		return errors.New("fixture could not write " + f.path) //nolint:err113 // test fixture.
+		return errors.New("fixture could not write " + f.path)
 	}
 
 	return nil
@@ -187,7 +187,7 @@ func (f *lockWritingOps) RunInherit(_ context.Context, _ string, _, _ io.Writer,
 func readTreeFile(t *testing.T, root, rel string) string {
 	t.Helper()
 
-	body, err := os.ReadFile(filepath.Join(root, rel)) //nolint:gosec // owned temporary tree.
+	body, err := os.ReadFile(filepath.Join(root, rel))
 	require.NoError(t, err)
 
 	return string(body)

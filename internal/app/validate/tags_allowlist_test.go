@@ -60,7 +60,7 @@ func armoredPublicKey(t *testing.T) ([]byte, string) {
 // armoredPublicKeyRing returns one armor block holding n public keys --
 // the shape `gpg --armor --export A B` writes -- with their fingerprints
 // in the same order.
-func armoredPublicKeyRing(t *testing.T, n int) ([]byte, []string) {
+func armoredPublicKeyRing(t *testing.T, index int) ([]byte, []string) {
 	t.Helper()
 
 	var buf bytes.Buffer
@@ -70,7 +70,7 @@ func armoredPublicKeyRing(t *testing.T, n int) ([]byte, []string) {
 		t.Fatalf("armor.Encode: %v", err)
 	}
 
-	for i := range n {
+	for i := range index {
 		entity, entityErr := gocrypto.NewEntity(fmt.Sprintf("Allowed Signer %d", i), "ci", "signer@example.com", nil)
 		if entityErr != nil {
 			t.Fatalf("NewEntity: %v", entityErr)
@@ -84,8 +84,8 @@ func armoredPublicKeyRing(t *testing.T, n int) ([]byte, []string) {
 	_ = writer.Close()
 
 	fps, err := adapteropenpgp.PrimaryFingerprints(buf.Bytes())
-	if err != nil || len(fps) != n {
-		t.Fatalf("PrimaryFingerprints: %v (n=%d, want %d)", err, len(fps), n)
+	if err != nil || len(fps) != index {
+		t.Fatalf("PrimaryFingerprints: %v (n=%d, want %d)", err, len(fps), index)
 	}
 
 	return buf.Bytes(), fps

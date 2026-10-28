@@ -64,12 +64,15 @@ type BumpOps struct {
 	Maven MavenOps
 	NPM   NPMOps
 	Cargo CargoOps
+	// Git is used only to apply verified patches prepared in a key-free job.
+	Git applyBumpOps
 }
 
 // bumpTarget keeps the engine-owned filename identical during preflight, writes
 // and path reporting. Native Maven/npm target selection is deliberately absent.
 type bumpTarget struct {
 	BumpInput
+
 	file string
 }
 
@@ -92,7 +95,7 @@ func normalizeBumpTarget(in BumpInput) (bumpTarget, error) { //nolint:cyclop // 
 			file = "versions.xcconfig"
 		}
 	case projecttype.Cargo:
-		file = "Cargo.toml"
+		file = cargoManifestName
 	case projecttype.Go, projecttype.Meta, projecttype.Maven, projecttype.NPM:
 	default:
 		return bumpTarget{}, fmt.Errorf("unknown project type: %s: %w", in.ProjectType, errs.ErrUsage)
@@ -136,9 +139,7 @@ func normalizeBumpTarget(in BumpInput) (bumpTarget, error) { //nolint:cyclop // 
 // Bump rewrites the version-of-record for a project per its
 // project-type, optionally invoking maven/npm/cargo to refresh
 // dependent files.
-//
-//nolint:cyclop // version-bump flow: read manifest → compute next → write per project type.
-func Bump(ctx context.Context, ops BumpOps, w, stderr io.Writer, annot output.Annotator, in BumpInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func Bump(ctx context.Context, ops BumpOps, out, stderr io.Writer, annot output.Annotator, in BumpInput) error {
 	target, err := normalizeBumpTarget(in)
 	if err != nil {
 		return err
@@ -154,37 +155,37 @@ func Bump(ctx context.Context, ops BumpOps, w, stderr io.Writer, annot output.An
 		}
 	}
 
-	_, _ = fmt.Fprintf(w, "Bumping version to %s for %s project in %s\n", in.Version, in.ProjectType, dir)
+	_, _ = fmt.Fprintf(out, "Bumping version to %s for %s project in %s\n", in.Version, in.ProjectType, dir)
 
 	switch in.ProjectType {
 	case projecttype.Maven:
-		return bumpMaven(ctx, ops.Maven, dir, in.MavenCLIOpts, in.Version, w, stderr)
+		return bumpMaven(ctx, ops.Maven, dir, in.MavenCLIOpts, in.Version, out, stderr)
 	case projecttype.NPM:
-		return bumpNPM(ctx, ops.NPM, dir, in.Version, w, stderr)
+		return bumpNPM(ctx, ops.NPM, dir, in.Version, out, stderr)
 	case projecttype.Gradle:
 		return withVersionRoot(dir, target.file, func(root *os.Root, relative, display string) error {
-			return bumpGradleJVM(root, relative, display, in.Version, w, annot)
+			return bumpGradleJVM(root, relative, display, in.Version, out, annot)
 		})
 	case projecttype.GradleAndroid:
 		return withVersionRoot(dir, target.file, func(root *os.Root, relative, display string) error {
-			return bumpGradleAndroid(root, relative, display, in.Version, w, annot)
+			return bumpGradleAndroid(root, relative, display, in.Version, out, annot)
 		})
 	case projecttype.XcodeIOS:
 		return withVersionRoot(dir, target.file, func(root *os.Root, relative, display string) error {
-			return bumpXcodeIOS(root, relative, display, in.Version, w)
+			return bumpXcodeIOS(root, relative, display, in.Version, out)
 		})
 	case projecttype.Go:
-		_, _ = fmt.Fprintln(w, "Go project type - no version file to update")
-		_, _ = fmt.Fprintf(w, "%s Version %s will be supplied by the release tag/build ldflags\n", clicolor.Check(w), in.Version)
+		_, _ = fmt.Fprintln(out, "Go project type - no version file to update")
+		_, _ = fmt.Fprintf(out, "%s Version %s will be supplied by the release tag/build ldflags\n", clicolor.Check(out), in.Version)
 
 		return nil
 	case projecttype.Cargo:
 		return withVersionRoot(dir, target.file, func(root *os.Root, relative, display string) error {
-			return bumpCargo(ctx, ops.Cargo, root, relative, display, dir, in.Version, w, stderr, annot)
+			return bumpCargo(ctx, ops.Cargo, root, relative, display, dir, in.Version, out, stderr, annot)
 		})
 	case projecttype.Meta:
-		_, _ = fmt.Fprintln(w, "Meta project type - no version file to update")
-		_, _ = fmt.Fprintf(w, "%s Version %s recorded for changelog generation only\n", clicolor.Check(w), in.Version)
+		_, _ = fmt.Fprintln(out, "Meta project type - no version file to update")
+		_, _ = fmt.Fprintf(out, "%s Version %s recorded for changelog generation only\n", clicolor.Check(out), in.Version)
 
 		return nil
 	default:
@@ -206,12 +207,12 @@ func withVersionRoot(dir, relative string, run func(*os.Root, string, string) er
 	return run(root, filepath.Clean(relative), filepath.Join(dir, relative))
 }
 
-func bumpMaven(ctx context.Context, ops MavenOps, dir string, cliOpts []string, ver string, w, stderr io.Writer) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func bumpMaven(ctx context.Context, ops MavenOps, dir string, cliOpts []string, ver string, out, stderr io.Writer) error {
 	if ops == nil {
 		return fmt.Errorf("maven adapter not provided"+": %w", errs.ErrUsage)
 	}
 
-	_, _ = fmt.Fprintf(w, "Updating Maven version to %s\n", ver)
+	_, _ = fmt.Fprintf(out, "Updating Maven version to %s\n", ver)
 
 	args := make([]string, 0, len(cliOpts)+5)
 	args = append(args, cliOpts...)
@@ -225,28 +226,28 @@ func bumpMaven(ctx context.Context, ops MavenOps, dir string, cliOpts []string, 
 	)
 	// Adapter already labels its error with the binary + subcommand;
 	// wrapping again here would double-prefix.
-	if err := ops.RunInheritIn(ctx, dir, w, stderr, args...); err != nil {
+	if err := ops.RunInheritIn(ctx, dir, out, stderr, args...); err != nil {
 		return err
 	}
 
-	_, _ = fmt.Fprintf(w, "%s Maven version updated (including all sub-modules)\n", clicolor.Check(w))
+	_, _ = fmt.Fprintf(out, "%s Maven version updated (including all sub-modules)\n", clicolor.Check(out))
 
 	return nil
 }
 
-func bumpNPM(ctx context.Context, ops NPMOps, dir, ver string, w, stderr io.Writer) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func bumpNPM(ctx context.Context, ops NPMOps, dir, ver string, out, stderr io.Writer) error {
 	if ops == nil {
 		return fmt.Errorf("npm adapter not provided"+": %w", errs.ErrUsage)
 	}
 
-	_, _ = fmt.Fprintf(w, "Updating NPM version to %s\n", ver)
+	_, _ = fmt.Fprintf(out, "Updating NPM version to %s\n", ver)
 
-	if err := ops.RunInherit(ctx, dir, w, stderr,
+	if err := ops.RunInherit(ctx, dir, out, stderr,
 		"version", ver, "--no-git-tag-version", "--allow-same-version"); err != nil {
 		return fmt.Errorf("npm version: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(w, "%s NPM version updated\n", clicolor.Check(w))
+	_, _ = fmt.Fprintf(out, "%s NPM version updated\n", clicolor.Check(out))
 
 	return nil
 }
@@ -294,7 +295,7 @@ func readVersionFile(root *os.Root, relative, display, label string, annot outpu
 	return nil, fmt.Errorf("read %s: %w: %w", display, err, errs.ErrValidation)
 }
 
-func bumpGradleJVM(root *os.Root, relative, display, ver string, w io.Writer, annot output.Annotator) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func bumpGradleJVM(root *os.Root, relative, display, ver string, writer io.Writer, annot output.Annotator) error {
 	body, err := readVersionFile(root, relative, display, "Gradle version file", annot)
 	if err != nil {
 		return err
@@ -302,22 +303,22 @@ func bumpGradleJVM(root *os.Root, relative, display, ver string, w io.Writer, an
 
 	out, res := version.UpdateGradleJVMVersion(string(body), ver)
 	if res == version.UpdatePropertyUpdated {
-		_, _ = fmt.Fprintf(w, "Updated version to %s\n", ver)
+		_, _ = fmt.Fprintf(writer, "Updated version to %s\n", ver)
 	} else {
-		_, _ = fmt.Fprintf(w, "Added version=%s\n", ver)
+		_, _ = fmt.Fprintf(writer, "Added version=%s\n", ver)
 	}
 
 	if err := root.WriteFile(relative, []byte(out), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", display, err)
 	}
 
-	_, _ = fmt.Fprintf(w, "%s Gradle JVM version updated\n", clicolor.Check(w))
-	_, _ = fmt.Fprint(w, out)
+	_, _ = fmt.Fprintf(writer, "%s Gradle JVM version updated\n", clicolor.Check(writer))
+	_, _ = fmt.Fprint(writer, out)
 
 	return nil
 }
 
-func bumpGradleAndroid(root *os.Root, relative, display, ver string, w io.Writer, annot output.Annotator) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func bumpGradleAndroid(root *os.Root, relative, display, ver string, writer io.Writer, annot output.Annotator) error {
 	body, err := readVersionFile(root, relative, display, "Gradle version file", annot)
 	if err != nil {
 		return err
@@ -326,9 +327,9 @@ func bumpGradleAndroid(root *os.Root, relative, display, ver string, w io.Writer
 	// Properties interpret backslashes as escapes, including line continuation.
 	out, res := version.UpdateOrAddProperty(string(body), "versionName", strings.ReplaceAll(ver, `\`, `\\`), "=")
 	if res == version.UpdatePropertyUpdated {
-		_, _ = fmt.Fprintf(w, "Updated versionName to %s\n", ver)
+		_, _ = fmt.Fprintf(writer, "Updated versionName to %s\n", ver)
 	} else {
-		_, _ = fmt.Fprintf(w, "Added versionName=%s\n", ver)
+		_, _ = fmt.Fprintf(writer, "Added versionName=%s\n", ver)
 	}
 
 	res2 := version.IncrementVersionCode(out)
@@ -339,22 +340,22 @@ func bumpGradleAndroid(root *os.Root, relative, display, ver string, w io.Writer
 
 	out = res2.Body
 	if res2.Added {
-		_, _ = fmt.Fprintln(w, "Added versionCode=1")
+		_, _ = fmt.Fprintln(writer, "Added versionCode=1")
 	} else {
-		_, _ = fmt.Fprintf(w, "Incremented versionCode: %d → %d\n", res2.Old, res2.New)
+		_, _ = fmt.Fprintf(writer, "Incremented versionCode: %d → %d\n", res2.Old, res2.New)
 	}
 
 	if err := root.WriteFile(relative, []byte(out), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", display, err)
 	}
 
-	_, _ = fmt.Fprintf(w, "%s Gradle Android version updated\n", clicolor.Check(w))
-	_, _ = fmt.Fprint(w, out)
+	_, _ = fmt.Fprintf(writer, "%s Gradle Android version updated\n", clicolor.Check(writer))
+	_, _ = fmt.Fprint(writer, out)
 
 	return nil
 }
 
-func bumpXcodeIOS(root *os.Root, relative, display, ver string, w io.Writer) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func bumpXcodeIOS(root *os.Root, relative, display, ver string, writer io.Writer) error {
 	body, err := readVersionFile(root, relative, display, "Xcode version file", output.Annotator{})
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
@@ -362,37 +363,37 @@ func bumpXcodeIOS(root *os.Root, relative, display, ver string, w io.Writer) err
 		}
 
 		// Bash creates the file with MARKETING_VERSION when missing.
-		_, _ = fmt.Fprintf(w, "Creating %s\n", display)
+		_, _ = fmt.Fprintf(writer, "Creating %s\n", display)
 
 		out := "MARKETING_VERSION = " + ver + "\n"
 		if werr := root.WriteFile(relative, []byte(out), 0o644); werr != nil {
 			return fmt.Errorf("create %s: %w", display, werr)
 		}
 
-		_, _ = fmt.Fprintf(w, "%s Created %s with MARKETING_VERSION = %s\n", clicolor.Check(w), display, ver)
+		_, _ = fmt.Fprintf(writer, "%s Created %s with MARKETING_VERSION = %s\n", clicolor.Check(writer), display, ver)
 
 		return nil
 	}
 
 	out, res := version.UpdateXcodeMarketingVersion(string(body), ver)
 	if res == version.UpdatePropertyUpdated {
-		_, _ = fmt.Fprintf(w, "Updated MARKETING_VERSION to %s\n", ver)
+		_, _ = fmt.Fprintf(writer, "Updated MARKETING_VERSION to %s\n", ver)
 	} else {
-		_, _ = fmt.Fprintf(w, "Added MARKETING_VERSION = %s\n", ver)
+		_, _ = fmt.Fprintf(writer, "Added MARKETING_VERSION = %s\n", ver)
 	}
 
 	if err := root.WriteFile(relative, []byte(out), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", display, err)
 	}
 
-	_, _ = fmt.Fprintf(w, "%s Xcode version updated\n", clicolor.Check(w))
-	_, _ = fmt.Fprint(w, out)
+	_, _ = fmt.Fprintf(writer, "%s Xcode version updated\n", clicolor.Check(writer))
+	_, _ = fmt.Fprint(writer, out)
 
 	return nil
 }
 
-func bumpCargo(ctx context.Context, ops CargoOps, root *os.Root, relative, display, dir, ver string, w, stderr io.Writer, annot output.Annotator) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
-	body, err := readVersionFile(root, relative, display, "Cargo.toml", annot)
+func bumpCargo(ctx context.Context, ops CargoOps, root *os.Root, relative, display, dir, ver string, writer, stderr io.Writer, annot output.Annotator) error {
+	body, err := readVersionFile(root, relative, display, cargoManifestName, annot)
 	if err != nil {
 		return err
 	}
@@ -410,17 +411,17 @@ func bumpCargo(ctx context.Context, ops CargoOps, root *os.Root, relative, displ
 
 	switch sec {
 	case version.CargoSectionWorkspacePackage:
-		_, _ = fmt.Fprintf(w, "Updated [workspace.package].version to %s\n", ver)
+		_, _ = fmt.Fprintf(writer, "Updated [workspace.package].version to %s\n", ver)
 	case version.CargoSectionPackage:
-		_, _ = fmt.Fprintf(w, "Updated [package].version to %s\n", ver)
+		_, _ = fmt.Fprintf(writer, "Updated [package].version to %s\n", ver)
 	case version.CargoSectionNone:
 		// Unreachable in practice — BumpCargoVersion above returns an
 		// error before we get here when no version line was found.
 	}
 
-	refreshCargoLock(ctx, ops, root, dir, w, stderr)
+	refreshCargoLock(ctx, ops, root, dir, writer, stderr)
 
-	_, _ = fmt.Fprintf(w, "%s Rust version updated\n", clicolor.Check(w))
+	_, _ = fmt.Fprintf(writer, "%s Rust version updated\n", clicolor.Check(writer))
 
 	return nil
 }
@@ -428,22 +429,22 @@ func bumpCargo(ctx context.Context, ops CargoOps, root *os.Root, relative, displ
 // refreshCargoLock re-resolves Cargo.lock after a version bump if it
 // exists and cargo is available. Failures are warnings — cargo will
 // regenerate the lockfile on the next real invocation.
-func refreshCargoLock(ctx context.Context, ops CargoOps, root *os.Root, dir string, w, stderr io.Writer) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func refreshCargoLock(ctx context.Context, ops CargoOps, root *os.Root, dir string, out, stderr io.Writer) {
 	if _, err := root.Stat("Cargo.lock"); err != nil {
 		return
 	}
 
 	if ops == nil || !ops.Available() {
-		_, _ = fmt.Fprintln(w, "Warning: cargo not found; Cargo.lock not refreshed (will self-heal on next cargo invocation)")
+		_, _ = fmt.Fprintln(out, "Warning: cargo not found; Cargo.lock not refreshed (will self-heal on next cargo invocation)")
 
 		return
 	}
 
-	if err := ops.RunInherit(ctx, dir, w, stderr, "update", "--workspace", "--offline"); err == nil {
+	if err := ops.RunInherit(ctx, dir, out, stderr, "update", "--workspace", "--offline"); err == nil {
 		return
 	}
 	// Try without --offline.
-	if err := ops.RunInherit(ctx, dir, w, stderr, "update", "--workspace"); err != nil {
-		_, _ = fmt.Fprintln(w, "Warning: failed to refresh Cargo.lock; will be regenerated on next cargo invocation")
+	if err := ops.RunInherit(ctx, dir, out, stderr, "update", "--workspace"); err != nil {
+		_, _ = fmt.Fprintln(out, "Warning: failed to refresh Cargo.lock; will be regenerated on next cargo invocation")
 	}
 }

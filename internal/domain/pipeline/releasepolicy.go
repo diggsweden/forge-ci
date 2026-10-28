@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/diggsweden/forge-ci/internal/domain/config"
-	"github.com/diggsweden/forge-ci/internal/domain/validate"
+	"github.com/diggsweden/forge-ci/internal/domain/version"
 )
 
 // SBOMsNone is the sboms input spelling for "no SBOM layers": what an empty
@@ -18,7 +18,7 @@ const SBOMsNone = "none"
 // resolver reads from. Unexported: it is an internal helper input shape
 // for resolveReleasePolicy; public callers use ReleasePlanInput.
 type releasePolicyInputs struct {
-	ReleaseType                     string // "stable" | "" | …
+	ReleasePolicy                   string // stable (default) | stable-prerelease
 	ReleasePublisher                string // "github-cli" | "" | …
 	ReleaseRequireAllowlistedSigner bool
 	ReleaseDraft                    bool
@@ -35,18 +35,33 @@ type releasePolicyInputs struct {
 // resolveReleasePolicy computes the typed release policy from workflow
 // and config-plan inputs. Pure: no env, no logging, no warnings.
 //
-// Returns an error only on malformed SBOM input (ExpandSBOMs failures).
-// All other inputs are accepted as-is — empty strings collapse to
-// sensible defaults matching the bash.
+// Invalid policies, supplied versions and SBOM selections return errors.
+// An empty policy preserves the stable-only default.
 func resolveReleasePolicy(in releasePolicyInputs) (ReleasePolicy, error) {
+	if err := version.ValidateReleasePolicy(in.ReleasePolicy); err != nil {
+		return ReleasePolicy{}, err
+	}
+
+	var parsed version.Semver
+
+	if in.RefName != "" {
+		var err error
+
+		parsed, err = version.ValidateReleaseTag(in.RefName, in.ReleasePolicy)
+		if err != nil {
+			return ReleasePolicy{}, err
+		}
+	}
+
 	policy := ReleasePolicy{
 		HasContainers:            in.HasContainers,
 		SignArtifacts:            in.ReleaseSignArtifacts,
 		CreateRelease:            in.ReleasePublisher == "github-cli",
 		RequireAllowlistedSigner: in.AnyRequireAuthorization || in.ReleaseRequireAllowlistedSigner,
-		RunVersionBump:           !in.ChangelogSkipVersionBump && in.ChangelogCreator == "git-cliff", //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
-		MakeLatest:               isStableRelease(in.ReleaseType, in.RefName),
-		CreateDraftRelease:       in.ReleaseDraft || isDraftRelease(in.RefName),
+		RunVersionBump:           !in.ChangelogSkipVersionBump && in.ChangelogCreator == "git-cliff",
+		MakeLatest:               parsed.Prerelease == "",
+		Prerelease:               parsed.Prerelease != "",
+		CreateDraftRelease:       in.ReleaseDraft,
 	}
 
 	effective, conflict, err := computeEffectiveSBOMs(in.ReleaseSBOMs, in.PipelineSBOMs)
@@ -58,38 +73,6 @@ func resolveReleasePolicy(in releasePolicyInputs) (ReleasePolicy, error) {
 	policy.SBOMConflict = conflict
 
 	return policy, nil
-}
-
-// isStableRelease classifies a release by its declared type and tag:
-//
-//	release_type == "stable"  → stable
-//	release_type empty AND tag has no '-' suffix → stable
-//	otherwise → not stable
-func isStableRelease(releaseType, refName string) bool {
-	if releaseType == "stable" {
-		return true
-	}
-
-	if releaseType == "" && !strings.Contains(refName, "-") {
-		return true
-	}
-
-	return false
-}
-
-// isDraftRelease draft on:
-//   - SNAPSHOT tags
-//   - non-semver tags (e.g. arbitrary string pushed as a tag)
-func isDraftRelease(refName string) bool {
-	if validate.IsSnapshot(refName) {
-		return true
-	}
-
-	if _, err := validate.ParseTagFormat(refName); err != nil {
-		return true
-	}
-
-	return false
 }
 
 // computeEffectiveSBOMs intersects release-cap with pipeline-union. Both

@@ -126,13 +126,13 @@ func TestUploadReleaseAsset_DeletesTheReplacedUpload(t *testing.T) {
 		return fakegitserver.Response{Status: 204}
 	})
 
-	p := &gitlab.Provider{
+	gitlabProvider := &gitlab.Provider{
 		Env:             envFunc(map[string]string{"GITLAB_TOKEN": "glpat_test", "CI_PROJECT_PATH": "group/project"}),
 		APIBaseOverride: srv.URL(),
 		HTTPClient:      srv.Client(),
 	}
 
-	if err := p.UploadReleaseAsset(t.Context(), "v1.2.3", asset); err != nil {
+	if err := gitlabProvider.UploadReleaseAsset(t.Context(), "v1.2.3", asset); err != nil {
 		t.Fatal(err)
 	}
 

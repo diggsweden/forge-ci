@@ -173,7 +173,7 @@ func TestToken_NeverEchoesTheTokenBody(t *testing.T) {
 }
 
 // errUpstreamRejected stands in for a provider error that quotes the request.
-var errUpstreamRejected = errors.New("upstream rejected the credential") //nolint:err113 // test fixture sentinel.
+var errUpstreamRejected = errors.New("upstream rejected the credential")
 
 // TestPrerequisites_NeverEchoesSecretsOnAnySurface runs the whole aggregate
 // with canary secrets and then renders the operator-facing summary from its
@@ -202,7 +202,7 @@ func TestPrerequisites_NeverEchoesSecretsOnAnySurface(t *testing.T) {
 		GitRepo:  stubGit{verifyOK: true, tagSHA: "abc1234"},
 		Provider: prov,
 	}, &out, output.NewAnnotator(&annotations, output.FormatGitHub),
-		appvalidate.PrerequisitesInput{ //nolint:gosec // synthetic canaries passed only to in-process fakes.
+		appvalidate.PrerequisitesInput{
 			RefType:               "tag",
 			Tag:                   "v1.0.0",
 			Ref:                   "refs/tags/v1.0.0",

@@ -119,7 +119,7 @@ func StripVPrefix(tag string) string {
 func LatestSemverTag(tags []string) string {
 	var best string
 
-	for _, t := range tags { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	for _, t := range tags {
 		if !IsStableSemverTag(t) {
 			continue
 		}

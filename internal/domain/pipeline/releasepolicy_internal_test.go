@@ -46,7 +46,7 @@ func TestResolveReleasePolicy_StableTagInfersMakeLatest(t *testing.T) {
 
 	in := baseInputs()
 	in.RefName = "v1.0.0"
-	in.ReleaseType = ""
+	in.ReleasePolicy = "stable"
 
 	got := resolve(t, in)
 
@@ -60,6 +60,7 @@ func TestResolveReleasePolicy_PrereleaseTagNotStable(t *testing.T) {
 
 	in := baseInputs()
 	in.RefName = "v1.0.0-rc.1"
+	in.ReleasePolicy = "stable-prerelease"
 
 	got := resolve(t, in)
 	if got.MakeLatest {
@@ -71,16 +72,15 @@ func TestResolveReleasePolicy_PrereleaseTagNotStable(t *testing.T) {
 	}
 }
 
-func TestResolveReleasePolicy_ExplicitStableOverridesTagShape(t *testing.T) {
+func TestResolveReleasePolicy_StableRejectsPrerelease(t *testing.T) {
 	t.Parallel()
 
 	in := baseInputs()
-	in.ReleaseType = "stable"
+	in.ReleasePolicy = "stable"
 	in.RefName = "v1.0.0-rc.1"
 
-	got := resolve(t, in)
-	if !got.MakeLatest {
-		t.Errorf("release_type=stable wins over tag shape")
+	if _, err := resolveReleasePolicy(in); !errors.Is(err, errs.ErrValidation) {
+		t.Fatalf("stable policy accepted prerelease: %v", err)
 	}
 }
 
@@ -94,7 +94,6 @@ func TestResolveReleasePolicy_DraftReleaseDecisions(t *testing.T) {
 	}{
 		{name: "uppercase_snapshot", refName: "v1.0.0-SNAPSHOT"},
 		{name: "lowercase_snapshot", refName: "v1.0.0-snapshot"},
-		{name: "non_semver", refName: "weird-tag"},
 		{name: "explicit_draft_flag", refName: "v1.0.0", releaseDraft: true},
 	}
 	for _, testCase := range tests {
@@ -103,11 +102,12 @@ func TestResolveReleasePolicy_DraftReleaseDecisions(t *testing.T) {
 
 			in := baseInputs()
 			in.RefName = testCase.refName
+			in.ReleasePolicy = "stable-prerelease"
 			in.ReleaseDraft = testCase.releaseDraft
 
 			got := resolve(t, in)
-			if !got.CreateDraftRelease {
-				t.Errorf("ref=%q release_draft=%v should create draft", testCase.refName, testCase.releaseDraft)
+			if got.CreateDraftRelease != testCase.releaseDraft {
+				t.Errorf("draft must be explicit: ref=%q got=%v", testCase.refName, got.CreateDraftRelease)
 			}
 		})
 	}
@@ -143,14 +143,14 @@ func TestResolveReleasePolicy_AuthorizationDisjunction(t *testing.T) {
 		{false, true, true},
 		{true, true, true},
 	}
-	for _, c := range cases {
+	for _, cfg := range cases {
 		in := baseInputs()
-		in.AnyRequireAuthorization = c.any
-		in.ReleaseRequireAllowlistedSigner = c.release
+		in.AnyRequireAuthorization = cfg.any
+		in.ReleaseRequireAllowlistedSigner = cfg.release
 
 		got := resolve(t, in)
-		if got.RequireAllowlistedSigner != c.want {
-			t.Errorf("any=%v release=%v → %v, want %v", c.any, c.release, got.RequireAllowlistedSigner, c.want)
+		if got.RequireAllowlistedSigner != cfg.want {
+			t.Errorf("any=%v release=%v → %v, want %v", cfg.any, cfg.release, got.RequireAllowlistedSigner, cfg.want)
 		}
 	}
 }
@@ -168,14 +168,14 @@ func TestResolveReleasePolicy_VersionBumpRequiresGitCliffAndNotSkipped(t *testin
 		{"", false, false},
 		{"changie", false, false},
 	}
-	for _, c := range cases {
+	for _, cfg := range cases {
 		in := baseInputs()
-		in.ChangelogCreator = c.creator
-		in.ChangelogSkipVersionBump = c.skip
+		in.ChangelogCreator = cfg.creator
+		in.ChangelogSkipVersionBump = cfg.skip
 
 		got := resolve(t, in)
-		if got.RunVersionBump != c.want {
-			t.Errorf("creator=%q skip=%v → %v, want %v", c.creator, c.skip, got.RunVersionBump, c.want)
+		if got.RunVersionBump != cfg.want {
+			t.Errorf("creator=%q skip=%v → %v, want %v", cfg.creator, cfg.skip, got.RunVersionBump, cfg.want)
 		}
 	}
 }
@@ -267,18 +267,14 @@ func TestResolveReleasePolicy_BadSBOMValueErrors(t *testing.T) {
 	}
 }
 
-// TestResolveReleasePolicy_ExplicitNonStableTypeIsNotLatest is the other
-// half of the explicit override: a declared release_type wins over the tag's
-// shape in both directions, so "prerelease" on a plain tag must not become
-// the forge's latest release.
-func TestResolveReleasePolicy_ExplicitNonStableTypeIsNotLatest(t *testing.T) {
+func TestResolveReleasePolicy_RejectsUnknownPolicy(t *testing.T) {
 	t.Parallel()
 
 	in := baseInputs()
-	in.ReleaseType = "prerelease"
+	in.ReleasePolicy = "auto"
 	in.RefName = "v2.0.0"
 
-	if got := resolve(t, in); got.MakeLatest {
-		t.Errorf("release_type=prerelease on a plain tag resolved MakeLatest=true: %+v", got)
+	if _, err := resolveReleasePolicy(in); !errors.Is(err, errs.ErrUsage) {
+		t.Fatalf("unknown policy accepted: %v", err)
 	}
 }

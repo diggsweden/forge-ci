@@ -6,14 +6,16 @@ package validate
 import (
 	"bytes"
 	"context"
+	"testing"
+
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/output"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 type unreadableTag struct {
 	gitOps
+
 	cause error
 }
 

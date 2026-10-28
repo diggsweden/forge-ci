@@ -55,7 +55,7 @@ func (r *recordingVerifier) VerifyBlob(ctx context.Context, in cosign.VerifyBlob
 func touch(t *testing.T, path string) {
 	t.Helper()
 
-	if err := os.WriteFile(path, []byte("x"), 0o644); err != nil { //nolint:gosec // test fixture.
+	if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
 		t.Fatalf("touch %s: %v", path, err)
 	}
 }
@@ -66,9 +66,9 @@ func TestVerifyArtifactSignature_DetectsKMSWhenBundleAndKeyRef(t *testing.T) {
 	touch(t, art)
 	touch(t, art+".bundle")
 
-	v := &recordingVerifier{}
+	verifier := &recordingVerifier{}
 
-	err := appvalidate.VerifyArtifactSignature(context.Background(), v, &bytes.Buffer{}, appvalidate.ArtifactSignatureInput{
+	err := appvalidate.VerifyArtifactSignature(context.Background(), verifier, &bytes.Buffer{}, appvalidate.ArtifactSignatureInput{
 		Artifact: art,
 		KeyRef:   "./pubkey.pem",
 	})
@@ -76,16 +76,16 @@ func TestVerifyArtifactSignature_DetectsKMSWhenBundleAndKeyRef(t *testing.T) {
 		t.Fatalf("VerifyArtifactSignature: %v", err)
 	}
 
-	if v.got.Keyless {
-		t.Errorf("KeyRef-driven dispatch must NOT trigger keyless verify; got %+v", v.got)
+	if verifier.got.Keyless {
+		t.Errorf("KeyRef-driven dispatch must NOT trigger keyless verify; got %+v", verifier.got)
 	}
 
-	if v.got.KeyRef != "./pubkey.pem" {
-		t.Errorf("KeyRef not propagated; got %q", v.got.KeyRef)
+	if verifier.got.KeyRef != "./pubkey.pem" {
+		t.Errorf("KeyRef not propagated; got %q", verifier.got.KeyRef)
 	}
 
-	if v.got.BundlePath != art+".bundle" {
-		t.Errorf("BundlePath = %q, want %s.bundle", v.got.BundlePath, art)
+	if verifier.got.BundlePath != art+".bundle" {
+		t.Errorf("BundlePath = %q, want %s.bundle", verifier.got.BundlePath, art)
 	}
 }
 
@@ -95,9 +95,9 @@ func TestVerifyArtifactSignature_DetectsSigstoreWhenBundleAndIdentity(t *testing
 	touch(t, art)
 	touch(t, art+".bundle")
 
-	v := &recordingVerifier{}
+	verifier := &recordingVerifier{}
 
-	err := appvalidate.VerifyArtifactSignature(context.Background(), v, &bytes.Buffer{}, appvalidate.ArtifactSignatureInput{
+	err := appvalidate.VerifyArtifactSignature(context.Background(), verifier, &bytes.Buffer{}, appvalidate.ArtifactSignatureInput{
 		Artifact:           art,
 		CertIdentityRegexp: "^https://github.com/diggsweden/",
 		CertOIDCIssuer:     "https://token.actions.githubusercontent.com",
@@ -106,26 +106,26 @@ func TestVerifyArtifactSignature_DetectsSigstoreWhenBundleAndIdentity(t *testing
 		t.Fatalf("VerifyArtifactSignature: %v", err)
 	}
 
-	if !v.got.Keyless {
-		t.Errorf("identity-driven dispatch must trigger keyless verify; got %+v", v.got)
+	if !verifier.got.Keyless {
+		t.Errorf("identity-driven dispatch must trigger keyless verify; got %+v", verifier.got)
 	}
 
-	if v.got.CertIdentityRegexp != "^https://github.com/diggsweden/" {
-		t.Errorf("CertIdentityRegexp not propagated; got %q", v.got.CertIdentityRegexp)
+	if verifier.got.CertIdentityRegexp != "^https://github.com/diggsweden/" {
+		t.Errorf("CertIdentityRegexp not propagated; got %q", verifier.got.CertIdentityRegexp)
 	}
 
 	// The issuer is the other half of the keyless trust anchor, and was
 	// supplied by this test without ever being asserted. Dropping it
 	// leaves cosign accepting a certificate from any issuer at all whose
 	// subject happens to match the identity regexp.
-	if v.got.CertOIDCIssuer != "https://token.actions.githubusercontent.com" {
-		t.Errorf("CertOIDCIssuer not propagated; got %q", v.got.CertOIDCIssuer)
+	if verifier.got.CertOIDCIssuer != "https://token.actions.githubusercontent.com" {
+		t.Errorf("CertOIDCIssuer not propagated; got %q", verifier.got.CertOIDCIssuer)
 	}
 
 	// A keyless verify must not also carry a key: that combination is
 	// what the KMS branch is for, and cosign would take the key path.
-	if v.got.KeyRef != "" {
-		t.Errorf("keyless verify carried a KeyRef: %q", v.got.KeyRef)
+	if verifier.got.KeyRef != "" {
+		t.Errorf("keyless verify carried a KeyRef: %q", verifier.got.KeyRef)
 	}
 }
 
@@ -243,14 +243,14 @@ func TestVerifyArtifactSignature_GPGRoundtripVerifies(t *testing.T) {
 	art := filepath.Join(dir, "app.tgz")
 
 	payload := []byte("hello world")
-	if err = os.WriteFile(art, payload, 0o644); err != nil { //nolint:gosec // test fixture.
+	if err = os.WriteFile(art, payload, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	// Produce a detached signature into <art>.asc.
 	sigPath := art + ".asc"
 
-	sigFile, err := os.Create(sigPath) //nolint:gosec // test fixture; sigPath is t.TempDir-based.
+	sigFile, err := os.Create(sigPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,16 +266,16 @@ func TestVerifyArtifactSignature_GPGRoundtripVerifies(t *testing.T) {
 	// Serialise the public half for the verifier.
 	var pubArmor bytes.Buffer
 
-	w, err := armor.Encode(&pubArmor, "PGP PUBLIC KEY BLOCK", nil)
+	out, err := armor.Encode(&pubArmor, "PGP PUBLIC KEY BLOCK", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err = entity.Serialize(w); err != nil {
+	if err = entity.Serialize(out); err != nil {
 		t.Fatal(err)
 	}
 
-	if err = w.Close(); err != nil {
+	if err = out.Close(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -298,11 +298,11 @@ func TestVerifyArtifactSignature_GPGTamperedArtifactFails(t *testing.T) {
 	art := filepath.Join(dir, "app.tgz")
 	sigPath := art + ".asc"
 
-	if err = os.WriteFile(art, []byte("original"), 0o644); err != nil { //nolint:gosec // test fixture.
+	if err = os.WriteFile(art, []byte("original"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	sigFile, err := os.Create(sigPath) //nolint:gosec // test fixture.
+	sigFile, err := os.Create(sigPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,22 +317,22 @@ func TestVerifyArtifactSignature_GPGTamperedArtifactFails(t *testing.T) {
 
 	// Tamper: overwrite artifact with different content; sig is now
 	// for a hash that doesn't match.
-	if err = os.WriteFile(art, []byte("tampered"), 0o644); err != nil { //nolint:gosec // test fixture.
+	if err = os.WriteFile(art, []byte("tampered"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	var pubArmor bytes.Buffer
 
-	w, err := armor.Encode(&pubArmor, "PGP PUBLIC KEY BLOCK", nil)
+	out, err := armor.Encode(&pubArmor, "PGP PUBLIC KEY BLOCK", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err = entity.Serialize(w); err != nil {
+	if err = entity.Serialize(out); err != nil {
 		t.Fatal(err)
 	}
 
-	if err = w.Close(); err != nil {
+	if err = out.Close(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -371,9 +371,9 @@ func TestVerifyArtifactSignature_ExplicitMethodOverridesDetection(t *testing.T) 
 				touch(t, signature)
 			}
 
-			v := &recordingVerifier{returnEr: nil}
+			verifier := &recordingVerifier{returnEr: nil}
 
-			err := appvalidate.VerifyArtifactSignature(context.Background(), v, &bytes.Buffer{}, appvalidate.ArtifactSignatureInput{
+			err := appvalidate.VerifyArtifactSignature(context.Background(), verifier, &bytes.Buffer{}, appvalidate.ArtifactSignatureInput{
 				Artifact:           art,
 				Method:             domainrelease.SignMethodSigstore,
 				SignaturePath:      signature,
@@ -389,8 +389,8 @@ func TestVerifyArtifactSignature_ExplicitMethodOverridesDetection(t *testing.T) 
 			}
 
 			want := domainrelease.BlobVerifyRequest{Artifact: art, BundlePath: signature, Keyless: true, CertIdentityRegexp: "^x", CertOIDCIssuer: "https://x"}
-			if v.calls != 1 || !reflect.DeepEqual(v.got, want) {
-				t.Fatalf("calls=%d request=%+v want=%+v", v.calls, v.got, want)
+			if verifier.calls != 1 || !reflect.DeepEqual(verifier.got, want) {
+				t.Fatalf("calls=%d request=%+v want=%+v", verifier.calls, verifier.got, want)
 			}
 		})
 	}
@@ -431,9 +431,9 @@ func TestVerifyArtifactSignature_ContradictoryTrustInputsAreRefused(t *testing.T
 			in := tc.in
 			in.Artifact = art
 
-			v := &recordingVerifier{}
+			verifier := &recordingVerifier{}
 
-			err := appvalidate.VerifyArtifactSignature(context.Background(), v, &bytes.Buffer{}, in)
+			err := appvalidate.VerifyArtifactSignature(context.Background(), verifier, &bytes.Buffer{}, in)
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("err = %v, want %v", err, tc.want)
 			}
@@ -442,8 +442,8 @@ func TestVerifyArtifactSignature_ContradictoryTrustInputsAreRefused(t *testing.T
 				t.Errorf("a refused request is not a signature mismatch: %v", err)
 			}
 
-			if v.calls != 0 {
-				t.Errorf("verifier called %d times for a refused request: %+v", v.calls, v.all)
+			if verifier.calls != 0 {
+				t.Errorf("verifier called %d times for a refused request: %+v", verifier.calls, verifier.all)
 			}
 		})
 	}
@@ -460,15 +460,15 @@ func TestVerifyArtifactSignature_InfrastructureFailureIsNotAMismatch(t *testing.
 			touch(t, art)
 			touch(t, art+".bundle")
 
-			v := &recordingVerifier{returnEr: fmt.Errorf("run cosign: %w", cause)}
+			verifier := &recordingVerifier{returnEr: fmt.Errorf("run cosign: %w", cause)}
 
-			err := appvalidate.VerifyArtifactSignature(context.Background(), v, &bytes.Buffer{}, appvalidate.ArtifactSignatureInput{Artifact: art, KeyRef: "./pubkey.pem"})
+			err := appvalidate.VerifyArtifactSignature(context.Background(), verifier, &bytes.Buffer{}, appvalidate.ArtifactSignatureInput{Artifact: art, KeyRef: "./pubkey.pem"})
 			if !errors.Is(err, cause) || errors.Is(err, errs.ErrValidation) {
 				t.Fatalf("err = %v, want %v without ErrValidation", err, cause)
 			}
 
-			if v.calls != 1 {
-				t.Errorf("verifier called %d times, want 1", v.calls)
+			if verifier.calls != 1 {
+				t.Errorf("verifier called %d times, want 1", verifier.calls)
 			}
 		})
 	}

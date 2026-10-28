@@ -114,7 +114,7 @@ func TestBumpPlan_ANewVersionStillIncrementsTheAndroidVersionCode(t *testing.T) 
 func readFileAt(t *testing.T, dir, rel string) string {
 	t.Helper()
 
-	body, err := os.ReadFile(filepath.Join(dir, rel)) //nolint:gosec // owned temporary tree.
+	body, err := os.ReadFile(filepath.Join(dir, rel))
 	require.NoError(t, err)
 
 	return string(body)

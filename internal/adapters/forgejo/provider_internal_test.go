@@ -19,23 +19,23 @@ import (
 func TestHTTPClient_DefaultIsBounded(t *testing.T) {
 	t.Parallel()
 
-	c := New().httpClient()
-	if c.Timeout <= 0 {
-		t.Fatalf("default forgejo client has no timeout (got %v): a hung server would stall forever", c.Timeout)
+	client := New().httpClient()
+	if client.Timeout <= 0 {
+		t.Fatalf("default forgejo client has no timeout (got %v): a hung server would stall forever", client.Timeout)
 	}
 
 	// The timeout is the shared one, compared against the same process
 	// environment the client read, so FORGE_CI_HTTP_TIMEOUT being set or
 	// not on the machine running the suite cannot change the outcome.
-	if want := httpretry.ClientTimeout(); c.Timeout != want {
-		t.Errorf("default forgejo client timeout = %v, want the shared httpretry timeout %v", c.Timeout, want)
+	if want := httpretry.ClientTimeout(); client.Timeout != want {
+		t.Errorf("default forgejo client timeout = %v, want the shared httpretry timeout %v", client.Timeout, want)
 	}
 
 	// Not merely a non-nil transport: http.DefaultTransport is non-nil too,
 	// and a client built on it would lose every retry and backoff bound the
 	// github and gitlab adapters apply.
-	if _, ok := c.Transport.(*httpretry.Transport); !ok {
-		t.Errorf("default forgejo client transport = %T, want *httpretry.Transport", c.Transport)
+	if _, ok := client.Transport.(*httpretry.Transport); !ok {
+		t.Errorf("default forgejo client transport = %T, want *httpretry.Transport", client.Transport)
 	}
 }
 

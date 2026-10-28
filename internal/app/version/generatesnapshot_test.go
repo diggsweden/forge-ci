@@ -101,7 +101,7 @@ func TestGenerateSnapshotVersion_NoTagsFallsBackToZero(t *testing.T) {
 
 func TestGenerateSnapshotVersion_FetchFailureIgnored(t *testing.T) {
 	ops := &fakeGit{
-		runErr:      errors.New("offline"), //nolint:err113 // test mock error
+		runErr:      errors.New("offline"),
 		tags:        []string{"v1.0.0"},
 		shortSHAOut: "1234567",
 	}
@@ -125,7 +125,7 @@ func TestGenerateSnapshotVersion_FetchFailureIgnored(t *testing.T) {
 }
 
 func TestGenerateSnapshotVersion_ShortSHAErrorBubbles(t *testing.T) {
-	notARepo := errors.New("not a git repo") //nolint:err113 // test mock error
+	notARepo := errors.New("not a git repo")
 	ops := &fakeGit{
 		tags:        []string{"v1.0.0"},
 		shortSHAErr: notARepo,
@@ -245,8 +245,8 @@ func TestGenerateSnapshotVersion_GitHubFormatEmitsOutput(t *testing.T) {
 func TestGenerateSnapshotVersion_EveryFailureWritesNothing(t *testing.T) {
 	t.Parallel()
 
-	errListFailed := errors.New("list tags failed")   //nolint:err113 // a unique value to find in the chain.
-	errSinkClosed := errors.New("output file closed") //nolint:err113 // a unique value to find in the chain.
+	errListFailed := errors.New("list tags failed")
+	errSinkClosed := errors.New("output file closed")
 
 	for name, tc := range map[string]struct {
 		ops      *fakeGit

@@ -30,7 +30,7 @@ type ReleasePlanInput struct {
 	Branch                          string
 	RefName                         string
 	FilePattern                     string
-	ReleaseType                     string
+	ReleasePolicy                   string
 	ReleasePublisher                string
 	ReleaseRequireAllowlistedSigner bool
 	ReleaseDraft                    bool
@@ -54,7 +54,7 @@ type ReleaseContext struct {
 	Branch           string `json:"branch"`
 	RefName          string `json:"ref_name"`
 	FilePattern      string `json:"file_pattern,omitempty"`
-	ReleaseType      string `json:"release_type,omitempty"`
+	ReleasePolicy    string `json:"release_policy,omitempty"`
 	ReleasePublisher string `json:"release_publisher,omitempty"`
 	ChangelogCreator string `json:"changelog_creator,omitempty"`
 }
@@ -68,6 +68,7 @@ type ReleasePolicy struct {
 	CreateDraftRelease       bool                 `json:"create_draft_release"`
 	SBOMs                    string               `json:"sboms"`
 	MakeLatest               bool                 `json:"make_latest"`
+	Prerelease               bool                 `json:"prerelease"`
 	HasContainers            bool                 `json:"has_containers"`
 	SBOMConflict             *ReleaseSBOMConflict `json:"sbom_conflict,omitempty"`
 }
@@ -254,7 +255,7 @@ func NewReleasePlan(in ReleasePlanInput) (ReleasePlan, error) {
 	}
 
 	policy, err := resolveReleasePolicy(releasePolicyInputs{
-		ReleaseType:      in.ReleaseType,
+		ReleasePolicy:    in.ReleasePolicy,
 		ReleasePublisher: in.ReleasePublisher,
 		// A Central release is permanent. Its destination requires a signed,
 		// allowlisted request even when no artifact opted into the general gate.
@@ -271,6 +272,12 @@ func NewReleasePlan(in ReleasePlanInput) (ReleasePlan, error) {
 	})
 	if err != nil {
 		return ReleasePlan{}, err
+	}
+
+	if policy.Prerelease {
+		if err := validatePrereleasePublications(in.ConfigPlan, in.RefName); err != nil {
+			return ReleasePlan{}, err
+		}
 	}
 
 	if signingErr := validateContainerSigning(in.ConfigPlan, policy); signingErr != nil {
@@ -293,7 +300,7 @@ func NewReleasePlan(in ReleasePlanInput) (ReleasePlan, error) {
 			Branch:           in.Branch,
 			RefName:          in.RefName,
 			FilePattern:      in.FilePattern,
-			ReleaseType:      in.ReleaseType,
+			ReleasePolicy:    in.ReleasePolicy,
 			ReleasePublisher: in.ReleasePublisher,
 			ChangelogCreator: in.ChangelogCreator,
 		},
@@ -338,7 +345,7 @@ func newReleaseBuildStagePlan(configPlan ConfigPlan) ReleaseBuildStagePlan {
 
 	return ReleaseBuildStagePlan{
 		Version: ReleasePlanVersion,
-		Stage:   "build", //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
+		Stage:   "build",
 		Targets: ReleaseBuildTargets{
 			Maven:         newTargetPlan(artifacts.Maven),
 			NPM:           newTargetPlan(artifacts.NPM),
@@ -383,8 +390,6 @@ func newReleasePublishStagePlan(configPlan ConfigPlan, buildSBOM bool) ReleasePu
 
 // newReleaseArtifactTransferPlan builds the release-create artifact download
 // plan without wildcard artifact names.
-//
-//nolint:cyclop // plans transfers with one branch per artifact category.
 func newReleaseArtifactTransferPlan(configPlan ConfigPlan, policy ReleasePolicy) ArtifactTransferPlan {
 	items := make([]ArtifactTransfer, 0)
 

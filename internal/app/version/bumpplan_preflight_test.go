@@ -52,7 +52,7 @@ func bumpOwnedTree(t *testing.T, root string) map[string]bumpFileState {
 		item := bumpFileState{mode: info.Mode()}
 		switch {
 		case info.Mode().IsRegular():
-			body, readErr := os.ReadFile(path) //nolint:gosec // snapshot only this test's owned tree; links are recorded, never followed, and no concurrent writer exists.
+			body, readErr := os.ReadFile(path)
 			if readErr != nil {
 				return readErr
 			}

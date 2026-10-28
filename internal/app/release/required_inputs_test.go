@@ -35,7 +35,7 @@ func (s *advertisingSigner) SignFile(_ context.Context, file string) error {
 	return os.WriteFile(file+s.extensions[0], []byte("sig"), 0o600)
 }
 
-var errSignerBackend = errors.New("signer backend refused") //nolint:err113 // fixture sentinel.
+var errSignerBackend = errors.New("signer backend refused")
 
 // TestGPGSignPackages_EachRequiredInputIsRefusedAlone removes one required
 // input at a time from an otherwise valid request over a real package: each is

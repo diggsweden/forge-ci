@@ -34,13 +34,13 @@ func TestListContainerPackageVersions_FiltersContainerPackageVersions(t *testing
 ]`))
 	})
 
-	p := &forgejo.Provider{
+	provider := &forgejo.Provider{
 		Env:             envMap(map[string]string{"FORGEJO_TOKEN": "tok"}),
 		HTTPClient:      inMemoryClient(handler),
 		APIBaseOverride: "https://forgejo.invalid",
 	}
 
-	got, err := p.ListContainerPackageVersions(context.Background(), "itiquette", "nanolinter-base")
+	got, err := provider.ListContainerPackageVersions(context.Background(), "itiquette", "nanolinter-base")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -19,8 +19,6 @@ type ArtifactNamePair struct {
 // ResolveArtifactNames returns the canonical upload-artifact name pair
 // for a project type. The optional artifactName is the logical artifact name
 // from artifacts.yml; matrix-safe upload names append the ecosystem suffix.
-//
-//nolint:cyclop // name resolution: one branch per project type's filename convention.
 func ResolveArtifactNames(pt projecttype.Type, artifactName string) ArtifactNamePair {
 	switch pt {
 	case projecttype.Maven:

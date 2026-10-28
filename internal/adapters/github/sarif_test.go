@@ -37,7 +37,7 @@ type sarifRequest struct {
 func newSARIFServer(t *testing.T, rec *sarifRequest, status int) *httptest.Server {
 	t.Helper()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, r *http.Request) {
 		rec.path = r.URL.Path
 		rec.auth = r.Header.Get("Authorization")
 		rec.accept = r.Header.Get("Accept")
@@ -45,8 +45,8 @@ func newSARIFServer(t *testing.T, rec *sarifRequest, status int) *httptest.Serve
 		raw, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(raw, &rec.body)
 
-		w.WriteHeader(status)
-		_, _ = io.WriteString(w, `{"id":"1"}`)
+		response.WriteHeader(status)
+		_, _ = io.WriteString(response, `{"id":"1"}`)
 	}))
 
 	t.Cleanup(srv.Close)

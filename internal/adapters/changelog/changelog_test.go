@@ -16,19 +16,19 @@ import (
 )
 
 func TestRenderer_GitChglogArgsAndSecretScrub(t *testing.T) {
-	m := mockbinary.New(t)
-	m.OnPath()
-	m.Add("git-chglog", `
+	mock := mockbinary.New(t)
+	mock.OnPath()
+	mock.Add("git-chglog", `
 set -euo pipefail
 if [ -n "${SSH_SIGNING_KEY:-}" ] || [ -n "${FORGEJO_TOKEN:-}" ]; then
   echo "secret leaked to git-chglog" >&2
   exit 1
 fi
 case "$*" in
-  '--config full.yml --repository-url https://forgejo.example/owner/repository --next-tag v1.2.3 --output CHANGELOG.md')
+  '--config full.yml --repository-url https://forgejo.example/owner/repository --tag-filter-pattern ^v[0-9]+\.[0-9]+\.[0-9]+$ --next-tag v1.2.3 --output CHANGELOG.md')
     printf '# changelog\n' >CHANGELOG.md
     ;;
-  '--config body.yml --repository-url https://forgejo.example/owner/repository --next-tag v1.2.3 v1.2.3')
+  '--config body.yml --repository-url https://forgejo.example/owner/repository --tag-filter-pattern ^v[0-9]+\.[0-9]+\.[0-9]+$ --next-tag v1.2.3 v1.2.3')
     printf 'body\n'
     ;;
   *)
@@ -43,13 +43,13 @@ esac
 	dir := t.TempDir()
 	t.Chdir(dir)
 
-	r := &changelog.Renderer{UnsetEnv: []string{"SSH_SIGNING_KEY", "FORGEJO_TOKEN"}}
+	renderer := &changelog.Renderer{UnsetEnv: []string{"SSH_SIGNING_KEY", "FORGEJO_TOKEN"}}
 
-	if err := r.RenderFull(context.Background(), "git-chglog", "full.yml", "v1.2.3", "CHANGELOG.md", "https://forgejo.example/owner/repository"); err != nil {
+	if err := renderer.RenderFull(context.Background(), "git-chglog", "full.yml", "v1.2.3", "CHANGELOG.md", "https://forgejo.example/owner/repository"); err != nil {
 		t.Fatal(err)
 	}
 
-	body, err := r.RenderBody(context.Background(), "git-chglog", "body.yml", "v1.2.3", "https://forgejo.example/owner/repository")
+	body, err := renderer.RenderBody(context.Background(), "git-chglog", "body.yml", "v1.2.3", "https://forgejo.example/owner/repository")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,15 +62,15 @@ esac
 		t.Fatal(err)
 	}
 
-	if len(m.Invocations("git-chglog")) != 2 {
-		t.Fatalf("git-chglog invocations = %d, want 2", len(m.Invocations("git-chglog")))
+	if len(mock.Invocations("git-chglog")) != 2 {
+		t.Fatalf("git-chglog invocations = %d, want 2", len(mock.Invocations("git-chglog")))
 	}
 }
 
 func TestRenderer_GitCliffArgs(t *testing.T) {
-	m := mockbinary.New(t)
-	m.OnPath()
-	m.Add("git-cliff", `
+	mock := mockbinary.New(t)
+	mock.OnPath()
+	mock.Add("git-cliff", `
 set -euo pipefail
 case "$*" in
   '--offline --config cliff.toml --tag-pattern ^v[0-9]+\.[0-9]+\.[0-9]+$ --unreleased --tag v1.2.3 --output CHANGELOG.md')
@@ -102,7 +102,7 @@ esac
 		t.Fatalf("body = %q", body)
 	}
 
-	invocations := m.Invocations("git-cliff")
+	invocations := mock.Invocations("git-cliff")
 	if len(invocations) != 2 {
 		t.Fatalf("git-cliff invocations = %d, want 2", len(invocations))
 	}
@@ -119,19 +119,19 @@ esac
 func TestRenderer_BodyIsStdoutAlone(t *testing.T) {
 	t.Parallel()
 
-	m := mockbinary.New(t)
-	m.Add("git-cliff", `printf ' WARN  git_cliff_core::changelog > No releases found\n' >&2; printf 'feat: body\n'`)
+	mock := mockbinary.New(t)
+	mock.Add("git-cliff", `printf ' WARN  git_cliff_core::changelog > No releases found\n' >&2; printf 'feat: body\n'`)
 
-	r := &changelog.Renderer{GitCliffBin: m.Path("git-cliff")}
+	renderer := &changelog.Renderer{GitCliffBin: mock.Path("git-cliff")}
 
-	body, err := r.RenderBody(context.Background(), "git-cliff", "cliff.toml", "v1.2.3", "")
+	body, err := renderer.RenderBody(context.Background(), "git-cliff", "cliff.toml", "v1.2.3", "")
 	if err != nil || body != "feat: body" {
 		t.Fatalf("body = %q, %v; want stdout alone", body, err)
 	}
 
-	m.Add("git-cliff", `printf 'config error\n' >&2; exit 1`)
+	mock.Add("git-cliff", `printf 'config error\n' >&2; exit 1`)
 
-	if _, err := r.RenderBody(context.Background(), "git-cliff", "cliff.toml", "v1.2.3", ""); err == nil || !strings.Contains(err.Error(), "config error") {
+	if _, err := renderer.RenderBody(context.Background(), "git-cliff", "cliff.toml", "v1.2.3", ""); err == nil || !strings.Contains(err.Error(), "config error") {
 		t.Fatalf("a failing renderer's stderr did not reach the error: %v", err)
 	}
 }

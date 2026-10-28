@@ -14,6 +14,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
 	"github.com/diggsweden/forge-ci/internal/domain/release"
+	"github.com/diggsweden/forge-ci/internal/domain/version"
 )
 
 // fsOps is the slice of filesystem queries the use case needs. Tests
@@ -26,6 +27,7 @@ type fsOps interface {
 
 // CreateReleaseInput drives `release publish --strategy=recreate`.
 type CreateReleaseInput struct {
+	ReleasePolicy    string
 	Tag              string
 	Repository       string
 	ReleaseName      string // defaults to Tag
@@ -50,6 +52,11 @@ func CreateRelease(
 		return fmt.Errorf("tag is required: pass --tag <name> or set $TAG_NAME: %w", errs.ErrUsage)
 	}
 
+	parsed, err := version.ValidateReleaseTag(in.Tag, in.ReleasePolicy)
+	if err != nil {
+		return err
+	}
+
 	if in.Repository == "" {
 		return fmt.Errorf("repository is required: pass --repository <owner/repo> or set $REPOSITORY: %w", errs.ErrUsage)
 	}
@@ -66,6 +73,10 @@ func CreateRelease(
 		return err
 	}
 
+	if parsed.Prerelease != "" {
+		makeLatest = provider.MakeLatestFalse
+	}
+
 	specNotesFile := ""
 	if fs.FileNonEmpty(notesFile) {
 		specNotesFile = notesFile
@@ -77,6 +88,7 @@ func CreateRelease(
 	}
 
 	spec := provider.ReleaseSpec{
+		Immutable:  true,
 		Tag:        in.Tag,
 		Name:       releaseName,
 		NotesFile:  specNotesFile,

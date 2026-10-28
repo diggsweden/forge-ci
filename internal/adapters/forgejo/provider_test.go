@@ -35,7 +35,7 @@ func TestName_IsForgejo(t *testing.T) {
 func TestResolveContext_PrefersForgejoEnvWithGitHubFallback(t *testing.T) {
 	t.Parallel()
 
-	p := &forgejo.Provider{Env: envMap(map[string]string{
+	forgejoProvider := &forgejo.Provider{Env: envMap(map[string]string{
 		"FORGEJO_SHA":        "0123456789abcdef",
 		"FORGEJO_REF_NAME":   "v1.2.3",
 		"FORGEJO_REF_TYPE":   "tag",
@@ -46,7 +46,7 @@ func TestResolveContext_PrefersForgejoEnvWithGitHubFallback(t *testing.T) {
 		"GITHUB_SHA": "should-not-win",
 	})}
 
-	ctx, err := p.ResolveContext(context.Background())
+	ctx, err := forgejoProvider.ResolveContext(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,14 +71,14 @@ func TestResolveContext_PrefersForgejoEnvWithGitHubFallback(t *testing.T) {
 func TestResolveContext_GitHubFallback(t *testing.T) {
 	t.Parallel()
 
-	p := &forgejo.Provider{Env: envMap(map[string]string{
+	forgejoProvider := &forgejo.Provider{Env: envMap(map[string]string{
 		"GITHUB_SHA":        "abc",
 		"GITHUB_REF_NAME":   "main",
 		"GITHUB_REF_TYPE":   "branch",
 		"GITHUB_REPOSITORY": "owner/repo",
 	})}
 
-	ctx, err := p.ResolveContext(context.Background())
+	ctx, err := forgejoProvider.ResolveContext(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,14 +152,14 @@ func inMemoryClient(handler http.Handler) *http.Client {
 func TestValidateToken_OK(t *testing.T) {
 	t.Parallel()
 
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(response http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v1/repos/itiquette/repo" {
-			_, _ = w.Write([]byte(`{"description":"d","html_url":"https://codeberg.org/itiquette/repo"}`))
+			_, _ = response.Write([]byte(`{"description":"d","html_url":"https://codeberg.org/itiquette/repo"}`))
 
 			return
 		}
 
-		http.Error(w, "unexpected", http.StatusNotFound)
+		http.Error(response, "unexpected", http.StatusNotFound)
 	})
 
 	if err := newProvider(handler).ValidateToken(context.Background(), "tok", "itiquette/repo"); err != nil {
@@ -251,23 +251,23 @@ func TestCreateRelease_CreatesAndUploadsAssets(t *testing.T) {
 		uploadedAsset  bool
 	)
 
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		switch {
 		// No existing release at this tag.
-		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/releases/tags/"):
-			http.Error(w, "not found", http.StatusNotFound)
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/releases"):
+		case request.Method == http.MethodGet && strings.Contains(request.URL.Path, "/releases/tags/"):
+			http.Error(response, "not found", http.StatusNotFound)
+		case request.Method == http.MethodPost && strings.HasSuffix(request.URL.Path, "/releases"):
 			createdRelease = true
 
-			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(`{"id":42,"tag_name":"v1.0.0"}`))
-		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/releases/42/assets"):
+			response.WriteHeader(http.StatusCreated)
+			_, _ = response.Write([]byte(`{"id":42,"tag_name":"v1.0.0"}`))
+		case request.Method == http.MethodPost && strings.Contains(request.URL.Path, "/releases/42/assets"):
 			uploadedAsset = true
 
-			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(`{"id":7,"name":"checksums.txt"}`))
+			response.WriteHeader(http.StatusCreated)
+			_, _ = response.Write([]byte(`{"id":7,"name":"checksums.txt"}`))
 		default:
-			http.Error(w, "unexpected "+r.Method+" "+r.URL.Path, http.StatusNotFound)
+			http.Error(response, "unexpected "+request.Method+" "+request.URL.Path, http.StatusNotFound)
 		}
 	})
 
@@ -309,15 +309,15 @@ func TestPublishRelease_UpdatesExistingReleaseAndReconcilesAssets(t *testing.T) 
 
 	var calls []string
 
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls = append(calls, r.Method+" "+r.URL.Path)
+	handler := http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		calls = append(calls, request.Method+" "+request.URL.Path)
 
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/repos/itiquette/repo/releases/tags/v1.2.3":
-			_, _ = w.Write([]byte(`{"id":99,"tag_name":"v1.2.3","assets":[{"id":1,"name":"asset.tgz"},{"id":2,"name":"stale.txt"}]}`))
-		case r.Method == http.MethodPatch && r.URL.Path == "/api/v1/repos/itiquette/repo/releases/99":
+		case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/tags/v1.2.3":
+			_, _ = response.Write([]byte(`{"id":99,"tag_name":"v1.2.3","assets":[{"id":1,"name":"asset.tgz"},{"id":2,"name":"stale.txt"}]}`))
+		case request.Method == http.MethodPatch && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99":
 			var payload map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
 				t.Fatalf("decode patch payload: %v", err)
 			}
 
@@ -325,18 +325,18 @@ func TestPublishRelease_UpdatesExistingReleaseAndReconcilesAssets(t *testing.T) 
 				t.Fatalf("patch payload = %#v", payload)
 			}
 
-			_, _ = w.Write([]byte(`{"id":99,"tag_name":"v1.2.3"}`))
-		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets":
-			_, _ = w.Write([]byte(`[{"id":1,"name":"asset.tgz"},{"id":2,"name":"stale.txt"}]`))
-		case r.Method == http.MethodDelete && r.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets/1":
-			w.WriteHeader(http.StatusNoContent)
-		case r.Method == http.MethodDelete && r.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets/2":
-			w.WriteHeader(http.StatusNoContent)
-		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets":
-			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(`{"id":7,"name":"asset.tgz"}`))
+			_, _ = response.Write([]byte(`{"id":99,"tag_name":"v1.2.3"}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets":
+			_, _ = response.Write([]byte(`[{"id":1,"name":"asset.tgz"},{"id":2,"name":"stale.txt"}]`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets/1":
+			response.WriteHeader(http.StatusNoContent)
+		case request.Method == http.MethodDelete && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets/2":
+			response.WriteHeader(http.StatusNoContent)
+		case request.Method == http.MethodPost && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets":
+			response.WriteHeader(http.StatusCreated)
+			_, _ = response.Write([]byte(`{"id":7,"name":"asset.tgz"}`))
 		default:
-			http.Error(w, "unexpected "+r.Method+" "+r.URL.String(), http.StatusNotFound)
+			http.Error(response, "unexpected "+request.Method+" "+request.URL.String(), http.StatusNotFound)
 		}
 	})
 
@@ -387,15 +387,15 @@ func TestPublishRelease_CreatesMissingRelease(t *testing.T) {
 
 	var calls []string
 
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls = append(calls, r.Method+" "+r.URL.Path)
+	handler := http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		calls = append(calls, request.Method+" "+request.URL.Path)
 
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/repos/itiquette/repo/releases/tags/v1.2.3":
-			http.Error(w, "not found", http.StatusNotFound)
-		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/repos/itiquette/repo/releases":
+		case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/tags/v1.2.3":
+			http.Error(response, "not found", http.StatusNotFound)
+		case request.Method == http.MethodPost && request.URL.Path == "/api/v1/repos/itiquette/repo/releases":
 			var payload map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
 				t.Fatalf("decode create payload: %v", err)
 			}
 
@@ -403,13 +403,13 @@ func TestPublishRelease_CreatesMissingRelease(t *testing.T) {
 				t.Fatalf("create payload = %#v", payload)
 			}
 
-			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(`{"id":42,"tag_name":"v1.2.3"}`))
-		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/repos/itiquette/repo/releases/42/assets":
-			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(`{"id":7,"name":"asset.tgz"}`))
+			response.WriteHeader(http.StatusCreated)
+			_, _ = response.Write([]byte(`{"id":42,"tag_name":"v1.2.3"}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/42/assets":
+			response.WriteHeader(http.StatusCreated)
+			_, _ = response.Write([]byte(`{"id":7,"name":"asset.tgz"}`))
 		default:
-			http.Error(w, "unexpected "+r.Method+" "+r.URL.String(), http.StatusNotFound)
+			http.Error(response, "unexpected "+request.Method+" "+request.URL.String(), http.StatusNotFound)
 		}
 	})
 
@@ -501,17 +501,17 @@ func TestCreateRelease_LookupFailureIsNotTreatedAsAbsent(t *testing.T) {
 
 	created := false
 
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		switch {
-		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/releases/tags/"):
-			http.Error(w, "forbidden", http.StatusForbidden)
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/releases"):
+		case request.Method == http.MethodGet && strings.Contains(request.URL.Path, "/releases/tags/"):
+			http.Error(response, "forbidden", http.StatusForbidden)
+		case request.Method == http.MethodPost && strings.HasSuffix(request.URL.Path, "/releases"):
 			created = true
 
-			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(`{"id":42,"tag_name":"v1.0.0"}`))
+			response.WriteHeader(http.StatusCreated)
+			_, _ = response.Write([]byte(`{"id":42,"tag_name":"v1.0.0"}`))
 		default:
-			http.Error(w, "unexpected "+r.Method+" "+r.URL.Path, http.StatusNotFound)
+			http.Error(response, "unexpected "+request.Method+" "+request.URL.Path, http.StatusNotFound)
 		}
 	})
 

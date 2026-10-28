@@ -60,7 +60,7 @@ func VerifySigningKey(ctx context.Context, cosign publicKeyDeriver, out io.Write
 		return fmt.Errorf("validate signing-key: key and trusted public key are required: %w", errs.ErrUsage)
 	}
 
-	trusted, err := os.ReadFile(in.TrustedPublicKeyPath) //nolint:gosec // caller-pinned trust anchor path.
+	trusted, err := os.ReadFile(in.TrustedPublicKeyPath)
 	if err != nil {
 		return fmt.Errorf("validate signing-key: read trusted public key: %w", err)
 	}

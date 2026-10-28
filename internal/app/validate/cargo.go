@@ -43,7 +43,7 @@ type CargoPrerequisitesInput struct {
 // reported and no cargo call. A missing file is a configuration failure; a
 // cargo that cannot report its version keeps its own class, so a runner
 // without cargo is not reported as a broken project.
-func CargoPrerequisites(ctx context.Context, cargo CargoTool, w io.Writer, annot output.Annotator, in CargoPrerequisitesInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func CargoPrerequisites(ctx context.Context, cargo CargoTool, out io.Writer, annot output.Annotator, in CargoPrerequisitesInput) error {
 	artifacts, err := plannedCargoArtifacts(in.ConfigPlanJSON, in.PublishStagePlanJSON)
 	if err != nil {
 		return err
@@ -71,8 +71,8 @@ func CargoPrerequisites(ctx context.Context, cargo CargoTool, w io.Writer, annot
 		annot.Errorf("cargo is not usable on the runner: %v", err)
 
 		failures = append(failures, err)
-	} else if version != "" && w != nil {
-		_, _ = fmt.Fprintln(w, version)
+	} else if version != "" && out != nil {
+		_, _ = fmt.Fprintln(out, version)
 	}
 
 	if len(failures) > 0 {

@@ -20,24 +20,24 @@ import (
 func TestResolveKeylessIdentity_Forgejo(t *testing.T) {
 	t.Parallel()
 
-	p := &forgejo.Provider{Env: func(k string) string {
+	forgejoProvider := &forgejo.Provider{Env: func(key string) string {
 		return map[string]string{
 			"GITHUB_ACTIONS":     "true",
 			"FORGEJO_ACTIONS":    "true",
 			"FORGEJO_SERVER_URL": "https://codeberg.org",
 			"FORGEJO_REPOSITORY": "acme/app",
-		}[k]
+		}[key]
 	}}
 
-	if !p.SupportsKeyless() {
+	if !forgejoProvider.SupportsKeyless() {
 		t.Error("Forgejo mints OIDC id-tokens, so the signing-identity role must support keyless")
 	}
 
-	if p.Capabilities().PublicFulcioTrusted {
+	if forgejoProvider.Capabilities().PublicFulcioTrusted {
 		t.Error("no public Fulcio trusts a Forgejo issuer, so keyless must not be the default")
 	}
 
-	id, err := p.ResolveKeylessIdentity()
+	id, err := forgejoProvider.ResolveKeylessIdentity()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,16 +58,16 @@ func TestResolveKeylessIdentity_Forgejo_GitHubEnvFallback(t *testing.T) {
 	// anchor falls back to them -- but only because the runner markers below
 	// say we are ON a Forgejo runner. Without them these names would mean
 	// GitHub's repository, which must never anchor a Forgejo verification.
-	p := &forgejo.Provider{Env: func(k string) string {
+	forgejoProvider := &forgejo.Provider{Env: func(key string) string {
 		return map[string]string{
 			"GITHUB_ACTIONS":    "true",
 			"FORGEJO_ACTIONS":   "true",
 			"GITHUB_SERVER_URL": "https://git.example.org",
 			"GITHUB_REPOSITORY": "team/svc",
-		}[k]
+		}[key]
 	}}
 
-	id, err := p.ResolveKeylessIdentity()
+	id, err := forgejoProvider.ResolveKeylessIdentity()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestResolveKeylessIdentity_Forgejo_MissingRepo(t *testing.T) {
 func TestResolveKeylessIdentity_AnchorIgnoresOrchestrationValues(t *testing.T) {
 	t.Parallel()
 
-	p := &forgejo.Provider{Env: func(k string) string {
+	forgejoProvider := &forgejo.Provider{Env: func(key string) string {
 		return map[string]string{
 			"GITHUB_ACTIONS":  "true",
 			"FORGEJO_ACTIONS": "true",
@@ -111,10 +111,10 @@ func TestResolveKeylessIdentity_AnchorIgnoresOrchestrationValues(t *testing.T) {
 			"REPOSITORY":    "other/repo",
 			"CI_REPO":       "other/repo",
 			"FORGEJO_REPO":  "other/repo",
-		}[k]
+		}[key]
 	}}
 
-	id, err := p.ResolveKeylessIdentity()
+	id, err := forgejoProvider.ResolveKeylessIdentity()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestResolveKeylessIdentity_AnchorIgnoresOrchestrationValues(t *testing.T) {
 func TestResolveKeylessIdentity_GithubAliasNeedsForgejoRunner(t *testing.T) {
 	t.Parallel()
 
-	p := &forgejo.Provider{Env: func(k string) string {
+	forgejoProvider := &forgejo.Provider{Env: func(key string) string {
 		return map[string]string{
 			"GITHUB_ACTIONS":     "true", // a GitHub runner...
 			"FORGEJO_SERVER_URL": "https://third-party.example",
@@ -145,10 +145,10 @@ func TestResolveKeylessIdentity_GithubAliasNeedsForgejoRunner(t *testing.T) {
 			// that -- deleting the gate left this test green).
 			"GITHUB_SERVER_URL": "https://github.com",
 			"GITHUB_REPOSITORY": "github-owner/github-repo",
-		}[k]
+		}[key]
 	}}
 
-	id, err := p.ResolveKeylessIdentity()
+	id, err := forgejoProvider.ResolveKeylessIdentity()
 	if !errors.Is(err, errs.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage: $GITHUB_REPOSITORY on a GitHub runner names"+
 			" GitHub's repository and must not anchor a Forgejo verification", err)
@@ -234,7 +234,7 @@ func TestResolveKeylessIdentity_EachMissingPrerequisiteRefusesOnItsOwn(t *testin
 func TestResolveKeylessIdentity_PinsEveryIdentityField(t *testing.T) {
 	t.Parallel()
 
-	p := &forgejo.Provider{Env: func(k string) string {
+	forgejoProvider := &forgejo.Provider{Env: func(key string) string {
 		// act_runner sets the GitHub names as compatibility aliases, so a
 		// Forgejo runner is recognised by both markers being present.
 		return map[string]string{
@@ -242,10 +242,10 @@ func TestResolveKeylessIdentity_PinsEveryIdentityField(t *testing.T) {
 			"FORGEJO_ACTIONS":    "true",
 			"FORGEJO_SERVER_URL": "https://codeberg.org",
 			"FORGEJO_REPOSITORY": "acme/app",
-		}[k]
+		}[key]
 	}}
 
-	got, err := p.ResolveKeylessIdentity()
+	got, err := forgejoProvider.ResolveKeylessIdentity()
 	if err != nil {
 		t.Fatal(err)
 	}

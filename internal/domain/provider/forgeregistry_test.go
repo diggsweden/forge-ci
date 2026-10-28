@@ -64,7 +64,7 @@ func TestForgeMavenRegistry_RenderSettingsXML_EscapesToken(t *testing.T) {
 func TestForgeNPMRegistry_RenderNPMRC_StripsNewlinesFromToken(t *testing.T) {
 	t.Parallel()
 
-	reg := provider.ForgeNPMRegistry{Registry: "https://r/", Token: "good\n//evil/:_authToken=x"} //nolint:gosec // G101 false positive: synthetic newline-injection test fixture, not a real credential.
+	reg := provider.ForgeNPMRegistry{Registry: "https://r/", Token: "good\n//evil/:_authToken=x"}
 
 	rc := reg.RenderNPMRC()
 

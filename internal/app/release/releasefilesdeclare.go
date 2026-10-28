@@ -27,6 +27,7 @@ const (
 // paths or glob patterns of files under the dist directory.
 type DeclareReleaseFilesInput struct {
 	FilesInput
+
 	Assets        []string
 	SBOMs         []string
 	EvidenceFiles []string
@@ -224,7 +225,7 @@ func writeProducerChecksums(path string, subjects []FileEntry) error {
 		lines.WriteString(digest + "  " + subject.Name + "\n")
 	}
 
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644) //nolint:gosec,mnd // G302/G304: a public release file at the path the caller named.
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644) //nolint:gosec // G302/G304: a public release file at the path the caller named.
 	if err != nil {
 		return fmt.Errorf("create checksums file %s: %w", path, err)
 	}

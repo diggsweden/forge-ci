@@ -7,15 +7,16 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
-	"github.com/diggsweden/forge-ci/internal/domain/errs"
-	"github.com/diggsweden/forge-ci/internal/domain/provider"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/provider"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGitHubPreflight_DuplicateAssetsBeforeAnyRequest(t *testing.T) {
@@ -47,6 +48,8 @@ func TestGitHubPreflight_PatternsAndAllMatchedDestinations(t *testing.T) {
 
 	for _, kind := range []string{"syntax", "later-name", "later-path", "empty", "success"} {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+
 			root := t.TempDir()
 			require.NoError(t, os.WriteFile(filepath.Join(root, "canary"), []byte("old"), 0o600))
 
@@ -72,7 +75,7 @@ func TestGitHubPreflight_PatternsAndAllMatchedDestinations(t *testing.T) {
 
 			calls := 0
 			credentials := 0
-			p := &Provider{APIBaseOverride: "https://github.invalid", Env: func(key string) string {
+			githubProvider := &Provider{APIBaseOverride: "https://github.invalid", Env: func(key string) string {
 				if key == "GH_TOKEN" || key == "GITHUB_TOKEN" {
 					credentials++
 				}
@@ -100,7 +103,7 @@ func TestGitHubPreflight_PatternsAndAllMatchedDestinations(t *testing.T) {
 				pattern = "["
 			}
 
-			_, err = p.DownloadRunArtifact(t.Context(), provider.RunArtifactDownload{Repository: "o/r", RunID: "1", Pattern: pattern, Dir: root})
+			_, err = githubProvider.DownloadRunArtifact(t.Context(), provider.RunArtifactDownload{Repository: "o/r", RunID: "1", Pattern: pattern, Dir: root})
 
 			switch kind {
 			case "empty":
@@ -145,7 +148,7 @@ func TestGitHubArtifactStatus_ClassifiesListAndDownloadURL(t *testing.T) {
 				want   error
 			}{{401, errs.ErrPermissionDenied}, {403, errs.ErrPermissionDenied}, {404, errs.ErrMissingInput}, {429, errs.ErrRateLimited}, {500, errs.ErrDependencyUnavailable}} {
 				calls := 0
-				p := &Provider{APIBaseOverride: "https://github.invalid", Env: func(string) string { return "" }, HTTPClient: &http.Client{Transport: contractTransport(func(req *http.Request) (*http.Response, error) {
+				githubProvider := &Provider{APIBaseOverride: "https://github.invalid", Env: func(string) string { return "" }, HTTPClient: &http.Client{Transport: contractTransport(func(req *http.Request) (*http.Response, error) {
 					calls++
 
 					if stage == "url" && strings.HasSuffix(req.URL.Path, "/artifacts") {
@@ -154,7 +157,7 @@ func TestGitHubArtifactStatus_ClassifiesListAndDownloadURL(t *testing.T) {
 
 					return contractResponse(req, tc.status, `{"message":"fixture"}`), nil
 				})}}
-				_, err := p.DownloadRunArtifact(t.Context(), provider.RunArtifactDownload{Repository: "o/r", RunID: "1", Name: "wanted", Pattern: pattern, Dir: t.TempDir()})
+				_, err := githubProvider.DownloadRunArtifact(t.Context(), provider.RunArtifactDownload{Repository: "o/r", RunID: "1", Name: "wanted", Pattern: pattern, Dir: t.TempDir()})
 				require.ErrorIs(t, err, tc.want)
 
 				wantCalls := 1

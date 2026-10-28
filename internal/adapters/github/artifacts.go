@@ -159,8 +159,6 @@ func (p *Provider) downloadMatchingArtifacts(ctx context.Context, runIDStr strin
 // downloadRunArtifact is the shared REST flow: list-by-name → choose the
 // matching artifact → resolve the presigned URL → unzip into dir. The ZIP
 // is extracted through the shared domain/artifact safety guards.
-//
-//nolint:cyclop // linear REST flow: parse → resolve repo → client → find → url → mkdir → extract.
 func (p *Provider) downloadRunArtifact(ctx context.Context, runIDStr, repository, name, dir string) (provider.RunArtifactInfo, error) {
 	if runIDStr == "" || name == "" || dir == "" {
 		return provider.RunArtifactInfo{}, fmt.Errorf("run-id, name and dir are required: %w", errs.ErrUsage)
@@ -299,8 +297,6 @@ func findArtifactID(ctx context.Context, client *gogithub.Client, owner, repo st
 // downloadAndExtractZip GETs the presigned URL and unzips into dir.
 // The body is streamed to a temp file so the ZIP reader (which needs
 // io.ReaderAt) doesn't materialise the whole archive in memory.
-//
-//nolint:cyclop // linear response validation, bounded spool, then extraction.
 func downloadAndExtractZip(ctx context.Context, client *http.Client, url, dir string, maxBytes int64, maxFiles int) (int64, int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -380,8 +376,6 @@ func downloadAndExtractZip(ctx context.Context, client *http.Client, url, dir st
 // bytes and file count. Path safety (traversal, escape, backslash, abs) is
 // the shared domain/artifact.SafeJoin guard — the same one the Forgejo
 // per-file path uses. Symlink entries are rejected outright.
-//
-//nolint:cyclop // each branch is a distinct archive-entry safety check.
 func extractZipInto(zr *zip.ReadCloser, root *os.Root, maxBytes int64, maxFiles int) (int64, int, error) {
 	var (
 		totalBytes int64
@@ -423,17 +417,17 @@ func extractZipInto(zr *zip.ReadCloser, root *os.Root, maxBytes int64, maxFiles 
 			return 0, 0, fmt.Errorf("zip exceeds remaining artifact byte budget: %w", errs.ErrValidation)
 		}
 
-		remainingLimit := uint64(remainingBytes) //nolint:gosec // non-negative check above makes the conversion exact.
+		remainingLimit := uint64(remainingBytes)
 		if f.UncompressedSize64 > uint64(domainartifact.MaxFileBytes) || f.UncompressedSize64 > remainingLimit {
 			return 0, 0, fmt.Errorf("zip entry %q exceeds extraction limits: %w", f.Name, errs.ErrValidation)
 		}
 
-		declaredBytes := int64(f.UncompressedSize64) //nolint:gosec // bounds above prove the value fits in int64.
+		declaredBytes := int64(f.UncompressedSize64)
 		if totalErr := domainartifact.ValidateTotals(totalBytes, count, declaredBytes); totalErr != nil {
 			return 0, 0, fmt.Errorf("zip entry %q: %w", f.Name, totalErr)
 		}
 
-		if mkErr := root.MkdirAll(filepath.Dir(dest), 0o755); mkErr != nil { //nolint:gosec // os.Root contains artifact dirs.
+		if mkErr := root.MkdirAll(filepath.Dir(dest), 0o755); mkErr != nil {
 			return 0, 0, fmt.Errorf("mkdir parent of %q: %w", dest, mkErr)
 		}
 
@@ -451,7 +445,7 @@ func extractZipInto(zr *zip.ReadCloser, root *os.Root, maxBytes int64, maxFiles 
 	return totalBytes, count, nil
 }
 
-func writeZipFile(root *os.Root, f *zip.File, dest string, maxBytes int64) (int64, error) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func writeZipFile(root *os.Root, f *zip.File, dest string, maxBytes int64) (int64, error) {
 	in, err := f.Open()
 	if err != nil {
 		return 0, fmt.Errorf("open zip entry %q: %w", f.Name, err)
@@ -464,7 +458,7 @@ func writeZipFile(root *os.Root, f *zip.File, dest string, maxBytes int64) (int6
 	}
 
 	// Perm drops setuid, setgid and sticky bits an archive entry may carry.
-	out, err := root.OpenFile(dest, os.O_CREATE|os.O_EXCL|os.O_WRONLY, f.Mode().Perm()|0o600) //nolint:gosec // os.Root contains dest.
+	out, err := root.OpenFile(dest, os.O_CREATE|os.O_EXCL|os.O_WRONLY, f.Mode().Perm()|0o600)
 	if err != nil {
 		return 0, fmt.Errorf("create %q: %w", dest, err)
 	}

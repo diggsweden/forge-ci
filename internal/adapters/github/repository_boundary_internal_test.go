@@ -17,8 +17,10 @@ func TestGitHubRepositoryBoundary_RefusesBeforeCredentialsOrRequests(t *testing.
 
 	for _, repo := range []string{"owner/repo/extra", "owner/..", "./repo", "owner/repo?x=y", "owner/repo#frag", "owner/%2fescape", "owner/repo\\path", "owner/ repo", " owner/repo", "owner/repo\n", "owner//repo"} {
 		t.Run(repo, func(t *testing.T) {
+			t.Parallel()
+
 			reads, requests := 0, 0
-			p := &Provider{Env: func(key string) string {
+			githubProvider := &Provider{Env: func(key string) string {
 				if strings.Contains(key, "TOKEN") {
 					reads++
 
@@ -39,18 +41,18 @@ func TestGitHubRepositoryBoundary_RefusesBeforeCredentialsOrRequests(t *testing.
 
 				return contractResponse(req, 200, `{}`), nil
 			})}}
-			require.ErrorIs(t, p.CreateRelease(t.Context(), repo, provider.ReleaseSpec{Tag: "v1"}), errs.ErrUsage)
-			_, err := p.FetchRepoMetadata(t.Context(), repo)
+			require.ErrorIs(t, githubProvider.CreateRelease(t.Context(), repo, provider.ReleaseSpec{Tag: "v1"}), errs.ErrUsage)
+			_, err := githubProvider.FetchRepoMetadata(t.Context(), repo)
 			require.ErrorIs(t, err, errs.ErrUsage)
-			require.ErrorIs(t, p.ValidateToken(t.Context(), "synthetic", repo), errs.ErrUsage)
-			_, err = p.ValidateBotPermissions(t.Context(), repo)
+			require.ErrorIs(t, githubProvider.ValidateToken(t.Context(), "synthetic", repo), errs.ErrUsage)
+			_, err = githubProvider.ValidateBotPermissions(t.Context(), repo)
 			require.ErrorIs(t, err, errs.ErrUsage)
-			require.ErrorIs(t, p.UploadSARIF(t.Context(), provider.SARIFUpload{Repository: repo, Token: "synthetic", SARIF: []byte(`{}`)}), errs.ErrUsage)
-			_, err = p.DownloadRunArtifact(t.Context(), provider.RunArtifactDownload{Repository: repo, RunID: "1", Name: "artifact", Dir: t.TempDir()})
+			require.ErrorIs(t, githubProvider.UploadSARIF(t.Context(), provider.SARIFUpload{Repository: repo, Token: "synthetic", SARIF: []byte(`{}`)}), errs.ErrUsage)
+			_, err = githubProvider.DownloadRunArtifact(t.Context(), provider.RunArtifactDownload{Repository: repo, RunID: "1", Name: "artifact", Dir: t.TempDir()})
 			require.ErrorIs(t, err, errs.ErrUsage)
-			_, err = p.ResolveForgeMavenRegistry()
+			_, err = githubProvider.ResolveForgeMavenRegistry()
 			require.ErrorIs(t, err, errs.ErrUsage)
-			_, err = p.ResolveForgeNPMRegistry()
+			_, err = githubProvider.ResolveForgeNPMRegistry()
 			require.ErrorIs(t, err, errs.ErrUsage)
 			require.Zero(t, reads)
 			require.Zero(t, requests)

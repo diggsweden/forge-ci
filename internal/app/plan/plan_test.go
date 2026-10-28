@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -177,6 +178,48 @@ func TestPlanPR_EmitsTypedPlanOutputs(t *testing.T) {
 
 	if out := sink.Single("quality-stage-plan-json"); !strings.Contains(out, `"stage":"pr-quality"`) || !strings.Contains(out, `"nanolinter":{"runs":true`) {
 		t.Errorf("quality-stage-plan-json = %s", out)
+	}
+}
+
+func TestPlanPR_LintEngineSelectionAndWarning(t *testing.T) {
+	// Serial: capture the process logger used by normal PR plan execution.
+	previous := slog.Default()
+
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	for _, engine := range []string{"nanolinter", "megalinter", "none", ""} {
+		t.Run("engine_"+engine, func(t *testing.T) {
+			var logs bytes.Buffer
+			slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+			sink := fakeoutputsink.New(t)
+
+			got, err := appplan.PR(t.Context(), sink, appplan.PRInput{
+				ProjectType: "go", LintEngine: engine, SwiftLint: true,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var stage pipeline.PRQualityStagePlan
+			if err := json.Unmarshal([]byte(sink.Single("quality-stage-plan-json")), &stage); err != nil {
+				t.Fatal(err)
+			}
+
+			if stage.Targets.Nanolinter.Runs != (engine == "nanolinter") ||
+				stage.Targets.Megalinter.Runs != (engine == "megalinter") || !stage.Targets.Swift.Runs {
+				t.Errorf("unexpected stage targets: %+v", stage.Targets)
+			}
+
+			disabled := engine == "none" || engine == ""
+			if disabled {
+				if got.Policy.Engine != pipeline.LintEngineNone || !strings.Contains(logs.String(), "level=WARN") ||
+					!strings.Contains(logs.String(), "no supported lint engine is enabled") {
+					t.Errorf("disabled engine must warn: policy=%+v logs=%s", got.Policy, logs.String())
+				}
+			} else if logs.Len() != 0 {
+				t.Errorf("selected engine unexpectedly warned: %s", logs.String())
+			}
+		})
 	}
 }
 

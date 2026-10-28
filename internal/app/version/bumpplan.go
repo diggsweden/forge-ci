@@ -32,6 +32,10 @@ type BumpPlanInput struct {
 	ChangelogFile string
 	MavenCLIOpts  []string
 	XcconfigFile  string
+	// PatchPath selects prepared native-tool bumps instead of running those tools.
+	PatchPath     string
+	PatchSHA256   string
+	ReleasePolicy string
 }
 
 // defaultChangelogFile is the path the changelog verbs assume when the caller
@@ -53,8 +57,8 @@ func BumpPlan(ctx context.Context, ops BumpOps, sink ci.OutputSink, out, stderr 
 		return fmt.Errorf("unsupported prepare-stage plan version/stage %d/%q: %w", plan.Version, plan.Stage, errs.ErrInvalidConfig)
 	}
 
-	if strings.TrimSpace(in.Version) == "" {
-		return fmt.Errorf("version is required: %w", errs.ErrUsage)
+	if err := validateBumpPlanInput(in); err != nil {
+		return err
 	}
 
 	if !plan.Targets.VersionBump.Runs {
@@ -107,7 +111,7 @@ func BumpPlan(ctx context.Context, ops BumpOps, sink ci.OutputSink, out, stderr 
 			return fmt.Errorf("preflight artifact %q: version file cannot be represented by file-pattern: %w", artifact.Name, errs.ErrUsage)
 		}
 
-		if err := preflightPlanBump(ops, bump); err != nil {
+		if err := preflightPlanBump(ops, bump, in.PatchPath != ""); err != nil {
 			return fmt.Errorf("preflight artifact %q: %w", artifact.Name, err)
 		}
 
@@ -116,6 +120,12 @@ func BumpPlan(ctx context.Context, ops BumpOps, sink ci.OutputSink, out, stderr 
 
 	if err := validatePlanBumpAliases(inputs, changelogPath); err != nil {
 		return err
+	}
+
+	if in.PatchPath != "" {
+		if err := applyPlannedNativeBumps(ctx, ops.Git, inputs, in, out); err != nil {
+			return err
+		}
 	}
 
 	pathspecs := make([]string, 0, len(plan.Targets.VersionBump.Items)*3)
@@ -129,8 +139,10 @@ func BumpPlan(ctx context.Context, ops BumpOps, sink ci.OutputSink, out, stderr 
 			return fmt.Errorf("artifact %q: %w", artifact.Name, err)
 		}
 
-		if err := Bump(ctx, ops, out, stderr, annot, bump.BumpInput); err != nil {
-			return fmt.Errorf("bump artifact %q: %w", artifact.Name, err)
+		if in.PatchPath == "" || !nativeBump(bump.ProjectType) {
+			if err := Bump(ctx, ops, out, stderr, annot, bump.BumpInput); err != nil {
+				return fmt.Errorf("bump artifact %q: %w", artifact.Name, err)
+			}
 		}
 
 		patterns := strings.Fields(domainversion.FilePattern(artifact.ProjectType))
@@ -149,7 +161,7 @@ func BumpPlan(ctx context.Context, ops BumpOps, sink ci.OutputSink, out, stderr 
 		}
 	}
 
-	for _, pathspec := range strings.Fields(plan.FilePattern) {
+	for pathspec := range strings.FieldsSeq(plan.FilePattern) {
 		if _, exists := seen[pathspec]; !exists {
 			seen[pathspec] = struct{}{}
 			pathspecs = append(pathspecs, pathspec)
@@ -157,6 +169,18 @@ func BumpPlan(ctx context.Context, ops BumpOps, sink ci.OutputSink, out, stderr 
 	}
 
 	return setBumpPlanPattern(ctx, sink, strings.Join(pathspecs, " "))
+}
+
+func validateBumpPlanInput(in BumpPlanInput) error {
+	if strings.TrimSpace(in.Version) == "" {
+		return fmt.Errorf("version is required: %w", errs.ErrUsage)
+	}
+
+	if (in.PatchPath == "") != (in.PatchSHA256 == "") {
+		return fmt.Errorf("prepared version bumps require both patch and patch-sha256: %w", errs.ErrUsage)
+	}
+
+	return nil
 }
 
 // Compare the changelog source and engine-owned destinations, not native outputs.
@@ -234,8 +258,16 @@ func validatePlanBumpAliases(inputs []bumpTarget, changelogPath string) error {
 	return nil
 }
 
-func preflightPlanBump(ops BumpOps, in bumpTarget) error {
+func preflightPlanBump(ops BumpOps, in bumpTarget, prepared bool) error {
 	if _, err := readPlanBumpFile(in.WorkingDir, defaultChangelogFile, true); err != nil {
+		return err
+	}
+	// Prepared patches skip native-tool admission, never destination admission.
+	// Cargo's existing file/content preflight below is already tool-free.
+	if prepared && (in.ProjectType == projecttype.Maven || in.ProjectType == projecttype.NPM) {
+		files, _ := domainversion.BumpPatchFiles(in.ProjectType)
+		_, err := readPlanBumpFile(in.WorkingDir, files[0], false)
+
 		return err
 	}
 

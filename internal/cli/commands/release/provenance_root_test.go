@@ -242,10 +242,10 @@ func provenanceRootEnv(t *testing.T, runner string) *testenv.Env {
 
 	stdout, stderr, logger := os.Stdout, os.Stderr, slog.Default()
 	standardWriter, standardFlags := log.Writer(), log.Flags()
-	os.Stdout, os.Stderr = logFile, logFile //nolint:reassign // capture the real root command's process streams in this serial test.
+	os.Stdout, os.Stderr = logFile, logFile
 
 	t.Cleanup(func() {
-		os.Stdout, os.Stderr = stdout, stderr //nolint:reassign // restore process streams before closing the owned file.
+		os.Stdout, os.Stderr = stdout, stderr
 
 		slog.SetDefault(logger)
 		// SetDefault can rewire the standard logger, so restore it last.
@@ -503,7 +503,7 @@ func TestProvenanceRoot_EnvKeySigningHidesOtherSecretsFromCosign(t *testing.T) {
 	env := provenanceRootEnv(t, "forgejo")
 	checksumFile := provenanceManifestDist(t, env, fmt.Sprintf("%x", sha256.Sum256([]byte("archive"))))
 
-	require.NoError(t, os.WriteFile(env.Path("empty-path", "cosign"), []byte(envKeyCosign), 0o700)) //nolint:gosec // G306: the fake signer must be executable.
+	require.NoError(t, os.WriteFile(env.Path("empty-path", "cosign"), []byte(envKeyCosign), 0o700))
 
 	t.Setenv("PROVENANCE_KEY", "key-material")
 	t.Setenv("FORGEJO_TOKEN", "forge-job-token")

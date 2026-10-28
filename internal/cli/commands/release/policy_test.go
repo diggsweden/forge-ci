@@ -37,7 +37,7 @@ func TestPublishCmd_StrategiesPreserveReleasePolicy(t *testing.T) {
 
 					t.Cleanup(func() { os.Stderr = previous; _ = log.Close() })
 
-					args := []string{"release", "publish", "--dry-run", "--strategy", strategy, "--tag", tag, "--repository", "fixture/repo", fmt.Sprintf("--draft=%t", draft), "--assembly", "release-assembly.json", "--asset", "dist/app.tgz"}
+					args := []string{"release", "publish", "--dry-run", "--release-policy", "stable-prerelease", "--strategy", strategy, "--tag", tag, "--repository", "fixture/repo", fmt.Sprintf("--draft=%t", draft), "--assembly", "release-assembly.json", "--asset", "dist/app.tgz"}
 					if runErr := releasecmd.New().Run(t.Context(), args); runErr != nil {
 						t.Fatal(runErr)
 					}

@@ -25,7 +25,7 @@ type AttachArtifactsInput struct {
 }
 
 // AttachArtifacts emits the effective release attachment glob list.
-func AttachArtifacts(ctx context.Context, sink ci.OutputSink, w io.Writer, in AttachArtifactsInput) (string, error) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func AttachArtifacts(ctx context.Context, sink ci.OutputSink, out io.Writer, in AttachArtifactsInput) (string, error) {
 	binariesDir := in.BinariesDir
 	if binariesDir == "" {
 		binariesDir = domainrelease.DefaultReleaseBinariesDir
@@ -48,8 +48,8 @@ func AttachArtifacts(ctx context.Context, sink ci.OutputSink, w io.Writer, in At
 		return "", err
 	}
 
-	if w != nil {
-		_, _ = fmt.Fprintln(w, effective)
+	if out != nil {
+		_, _ = fmt.Fprintln(out, effective)
 	}
 
 	return effective, nil

@@ -203,7 +203,7 @@ const agentStopTimeout = 10 * time.Second
 func withEphemeralGNUPGHome(ctx context.Context, fn func() error) error {
 	base := runcontext.TempRoot(os.Getenv)
 
-	if info, err := os.Stat(base); err != nil || !info.IsDir() { //nolint:gosec // G703 false positive: RUNNER_TEMP is trusted CI runner configuration, not request input.
+	if info, err := os.Stat(base); err != nil || !info.IsDir() {
 		base = os.TempDir()
 	}
 
@@ -213,14 +213,14 @@ func withEphemeralGNUPGHome(ctx context.Context, fn func() error) error {
 	}
 
 	if err := os.Chmod(home, 0o700); err != nil { //nolint:gosec // G302 false positive: 0o700 is the intentionally private mode gpg requires for GNUPGHOME.
-		_ = os.RemoveAll(home) //nolint:gosec // G703 false positive: home comes from os.MkdirTemp above.
+		_ = os.RemoveAll(home)
 
 		return fmt.Errorf("chmod temporary GNUPGHOME: %w", err)
 	}
 
 	restoreGNUPGHome, setErr := cienv.SetTemporarily("GNUPGHOME", home)
 	if setErr != nil {
-		_ = os.RemoveAll(home) //nolint:gosec // G703 false positive: home comes from os.MkdirTemp above.
+		_ = os.RemoveAll(home)
 
 		return setErr
 	}
@@ -236,7 +236,7 @@ func withEphemeralGNUPGHome(ctx context.Context, fn func() error) error {
 
 		restoreGNUPGHome()
 
-		_ = os.RemoveAll(home) //nolint:gosec // G703 false positive: home comes from os.MkdirTemp above.
+		_ = os.RemoveAll(home)
 	}()
 
 	return fn()

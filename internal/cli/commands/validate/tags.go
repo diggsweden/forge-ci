@@ -12,6 +12,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/adapters/git"
 	appvalidate "github.com/diggsweden/forge-ci/internal/app/validate"
 	"github.com/diggsweden/forge-ci/internal/cli/cienv"
+	"github.com/diggsweden/forge-ci/internal/cli/commonflags"
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
 )
 
@@ -35,10 +36,11 @@ func tagGroup() *cli.Command {
 func tagReleaseGuardCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "release-guard",
-		Usage: "validate a stable release tag or release-request tag and emit normalized outputs",
+		Usage: "validate release-policy for a final or release-request tag and emit normalized outputs",
 		Description: `EXAMPLE:
    forge-ci validate tag release-guard --tag release-request/v1.2.3`,
 		Flags: []cli.Flag{
+			commonflags.ReleasePolicy(),
 			&cli.StringFlag{
 				Name:     "tag",
 				Required: true,
@@ -48,14 +50,15 @@ func tagReleaseGuardCmd() *cli.Command {
 			&cli.StringFlag{
 				Name:    "pattern",
 				Sources: cli.EnvVars("RELEASE_TAG_PATTERN"),
-				Usage:   "optional anchored regex override; the default accepts only stable vMAJOR.MINOR.PATCH tags",
+				Usage:   "optional additional anchored regex restriction; cannot widen release-policy",
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error {
 				return appvalidate.ReleaseTagGuard(ctx, d.OutputSink, os.Stderr, appvalidate.ReleaseTagGuardInput{
-					Tag:     cmd.String("tag"),
-					Pattern: cmd.String("pattern"),
+					ReleasePolicy: cmd.String("release-policy"),
+					Tag:           cmd.String("tag"),
+					Pattern:       cmd.String("pattern"),
 				})
 			})
 		},

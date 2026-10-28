@@ -62,7 +62,7 @@ func (p *Packages) PackageVersions(ctx context.Context, owner, name string) ([]c
 	var versions []container.PackageVersion
 
 	for page := 1; page != 0; {
-		options := &gogithub.PackageListOptions{ListOptions: gogithub.ListOptions{Page: page, PerPage: 100}}
+		options := &gogithub.PackageListOptions{Page: page, PerPage: 100}
 
 		batch, response, err := p.client.Organizations.PackageGetAllVersions(ctx, owner, containerPackageType, name, options)
 		if isNotFound(err) {
@@ -97,8 +97,8 @@ func (p *Packages) ContainerPackages(ctx context.Context, owner, prefix string) 
 
 	for page := 1; page != 0; {
 		options := &gogithub.PackageListOptions{
-			PackageType: gogithub.Ptr(containerPackageType),
-			ListOptions: gogithub.ListOptions{Page: page, PerPage: 100},
+			PackageType: new(containerPackageType),
+			Page:        page, PerPage: 100,
 		}
 
 		batch, response, err := p.client.Organizations.ListPackages(ctx, owner, options)

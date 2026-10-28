@@ -53,7 +53,7 @@ func TestArtifactTransferDiagnostics_OmitSignedURLs(t *testing.T) {
 				require.NoError(t, os.WriteFile(upload, archive.Bytes(), 0o600))
 
 				transport := &artifactDiagnosticTransport{t: t, signedURL: signedURL, archive: archive.Bytes(), cause: cause}
-				p := &Provider{
+				githubProvider := &Provider{
 					APIBaseOverride: "https://github.invalid",
 					Env:             func(string) string { return "" },
 					HTTPClient:      &http.Client{Transport: httpretry.NewTransport(httpretry.Config{Inner: transport, MaxAttempts: 1})},
@@ -61,14 +61,14 @@ func TestArtifactTransferDiagnostics_OmitSignedURLs(t *testing.T) {
 				destination := filepath.Join(root, "download")
 
 				if mode == "upload" {
-					_, err = p.runV4Upload(t.Context(), uploadContext{resultsURL: "https://results.invalid", token: "runtime-fixture", runID: "1", jobID: "2"}, "wanted", 1, zipArchive{path: upload, zipSize: int64(archive.Len())})
+					_, err = githubProvider.runV4Upload(t.Context(), uploadContext{resultsURL: "https://results.invalid", token: "runtime-fixture", runID: "1", jobID: "2"}, "wanted", 1, zipArchive{path: upload, zipSize: int64(archive.Len())})
 				} else {
 					input := provider.RunArtifactDownload{Repository: "o/r", RunID: "1", Name: "wanted", Dir: destination, MergeMultiple: true}
 					if mode == "pattern" {
 						input.Pattern = "*"
 					}
 
-					_, err = p.DownloadRunArtifact(t.Context(), input)
+					_, err = githubProvider.DownloadRunArtifact(t.Context(), input)
 				}
 
 				require.Equal(t, 1, transport.blobCalls)

@@ -31,8 +31,6 @@ type PrepareNotesInput struct {
 //     plus "Release created from commit ABC" when ReleaseCommit is set.
 //  3. otherwise → create the target file empty, truncating an existing one so
 //     it cannot carry a previous run's notes into this release.
-//
-//nolint:cyclop // notes generation: choose source (file/CHANGELOG/git-log) and format.
 func PrepareNotes(_ context.Context, out io.Writer, in PrepareNotesInput) error {
 	src := in.SourceFile
 	if src == "" {
@@ -137,7 +135,7 @@ func VerifyChangelog(_ context.Context, out io.Writer, in VerifyChangelogInput) 
 
 // head returns the first n newline-separated lines (or the whole input
 // when fewer). Trailing newline is preserved.
-func head(s string, n int) string { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func head(s string, n int) string {
 	count := 0
 
 	for i := range len(s) {

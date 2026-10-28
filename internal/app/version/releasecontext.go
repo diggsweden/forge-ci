@@ -30,7 +30,7 @@ type ReleaseContextInput struct {
 	ResolveReleaseRequest bool   // resolve the sole release-request/v* tag at Revision
 	Revision              string // defaults to HEAD only in ResolveReleaseRequest mode
 	RequireReleaseRequest bool   // reject refs outside release-request/
-	RequireStable         bool   // reject non-vMAJOR.MINOR.PATCH final tags
+	ReleasePolicy         string
 	TrailerMode           string // default or coauthor-only
 }
 
@@ -49,7 +49,7 @@ type ReleaseContextInput struct {
 // the original (human) tagger of the immutable, signed request tag — for the
 // bot's release commit; the request tag itself remains the cryptographic
 // anchor.
-func ReleaseContext(ctx context.Context, repo releaseContextOps, in ReleaseContextInput, sink ci.OutputSink, manifest ci.ManifestSink, w io.Writer) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func ReleaseContext(ctx context.Context, repo releaseContextOps, in ReleaseContextInput, sink ci.OutputSink, manifest ci.ManifestSink, out io.Writer) error {
 	ref, err := resolveReleaseContextRef(ctx, repo, in)
 	if err != nil {
 		return err
@@ -83,7 +83,7 @@ func ReleaseContext(ctx context.Context, repo releaseContextOps, in ReleaseConte
 		return err
 	}
 
-	_, _ = fmt.Fprintf(w, "%s Release tag %s (version %s)\n", clicolor.Check(w), releaseTag, releaseVersion)
+	_, _ = fmt.Fprintf(out, "%s Release tag %s (version %s)\n", clicolor.Check(out), releaseTag, releaseVersion)
 
 	return nil
 }
@@ -152,7 +152,7 @@ func normalizeTrailerMode(mode string) (string, error) {
 }
 
 // deriveReleaseIdentity resolves the release tag and (optional) request ref
-// from the pushed ref, enforcing the require-request/require-stable policies.
+// from the pushed ref, enforcing request identity and the release policy.
 func deriveReleaseIdentity(in ReleaseContextInput) (string, string, error) {
 	releaseTag := in.Ref
 	requestRef := ""
@@ -164,8 +164,8 @@ func deriveReleaseIdentity(in ReleaseContextInput) (string, string, error) {
 		return "", "", fmt.Errorf("release-context: ref must be %svMAJOR.MINOR.PATCH (got %q): %w", version.ReleaseRequestPrefix, in.Ref, errs.ErrValidation)
 	}
 
-	if in.RequireStable && !version.IsStableSemverTag(releaseTag) {
-		return "", "", fmt.Errorf("release-context: release request must target stable vMAJOR.MINOR.PATCH (got %q): %w", in.Ref, errs.ErrValidation)
+	if _, err := version.ValidateReleaseTag(releaseTag, in.ReleasePolicy); err != nil {
+		return "", "", fmt.Errorf("release-context: %w", err)
 	}
 
 	return releaseTag, requestRef, nil

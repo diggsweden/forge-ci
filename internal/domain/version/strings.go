@@ -21,23 +21,23 @@ func SanitizePathToken(in string) string {
 		return ""
 	}
 
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
-	b.Grow(len(in))
+	var builder strings.Builder
+	builder.Grow(len(in))
 
 	for i := range len(in) {
-		c := in[i] //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+		c := in[i]
 		switch {
 		case c >= 'a' && c <= 'z',
 			c >= 'A' && c <= 'Z',
 			c >= '0' && c <= '9',
 			c == '.', c == '_', c == '-':
-			b.WriteByte(c)
+			builder.WriteByte(c)
 		default:
-			b.WriteByte('-')
+			builder.WriteByte('-')
 		}
 	}
 
-	out := b.String()
+	out := builder.String()
 	out = strings.TrimLeft(out, "-")
 	out = strings.TrimRight(out, "-")
 

@@ -52,39 +52,39 @@ type uploadV4Recorder struct {
 func uploadV4Server(t *testing.T, rec *uploadV4Recorder, token string) *httptest.Server {
 	t.Helper()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/blob" && r.Header.Get("Authorization") != "Bearer "+token {
-			w.WriteHeader(http.StatusUnauthorized)
+	srv := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/blob" && request.Header.Get("Authorization") != "Bearer "+token {
+			response.WriteHeader(http.StatusUnauthorized)
 
 			return
 		}
 
-		body, _ := io.ReadAll(r.Body)
+		body, _ := io.ReadAll(request.Body)
 
 		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/twirp/github.actions.results.api.v1.ArtifactService/CreateArtifact":
+		case request.Method == http.MethodPost && request.URL.Path == "/twirp/github.actions.results.api.v1.ArtifactService/CreateArtifact":
 			rec.mu.Lock()
 			_ = json.Unmarshal(body, &rec.createReq)
 			rec.mu.Unlock()
 
-			_, _ = fmt.Fprintf(w, `{"ok":true,"signedUploadUrl":%q}`, "http://"+r.Host+"/blob?sig=x") //nolint:gosec // test fixture: r.Host is the test server, response is JSON not HTML.
+			_, _ = fmt.Fprintf(response, `{"ok":true,"signedUploadUrl":%q}`, "http://"+request.Host+"/blob?sig=x")
 
-		case r.Method == http.MethodPut && r.URL.Path == "/blob":
+		case request.Method == http.MethodPut && request.URL.Path == "/blob":
 			rec.mu.Lock()
 			rec.blobBody = body
 			rec.mu.Unlock()
 
-			w.WriteHeader(http.StatusCreated)
+			response.WriteHeader(http.StatusCreated)
 
-		case r.Method == http.MethodPost && r.URL.Path == "/twirp/github.actions.results.api.v1.ArtifactService/FinalizeArtifact":
+		case request.Method == http.MethodPost && request.URL.Path == "/twirp/github.actions.results.api.v1.ArtifactService/FinalizeArtifact":
 			rec.mu.Lock()
 			_ = json.Unmarshal(body, &rec.finalizeReq)
 			rec.mu.Unlock()
 
-			_, _ = w.Write([]byte(`{"ok":true,"artifactId":"99"}`))
+			_, _ = response.Write([]byte(`{"ok":true,"artifactId":"99"}`))
 
 		default:
-			w.WriteHeader(http.StatusNotFound)
+			response.WriteHeader(http.StatusNotFound)
 		}
 	}))
 	t.Cleanup(srv.Close)
@@ -105,7 +105,7 @@ func TestUploadRunArtifact_V4RoundTrip(t *testing.T) {
 
 	srv := uploadV4Server(t, &rec, token)
 
-	p := &github.Provider{
+	githubProvider := &github.Provider{
 		Env: envFunc(map[string]string{
 			"ACTIONS_RESULTS_URL":   srv.URL,
 			"ACTIONS_RUNTIME_TOKEN": token,
@@ -113,7 +113,7 @@ func TestUploadRunArtifact_V4RoundTrip(t *testing.T) {
 		HTTPClient: srv.Client(),
 	}
 
-	info, err := p.UploadRunArtifact(context.Background(), provider.RunArtifactUpload{Name: "dist", Dir: dir})
+	info, err := githubProvider.UploadRunArtifact(context.Background(), provider.RunArtifactUpload{Name: "dist", Dir: dir})
 	if err != nil {
 		t.Fatalf("UploadRunArtifact: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestUploadRunArtifact_V4RoundTrip(t *testing.T) {
 		t.Errorf("finalize hash = %v, want %v", rec.finalizeReq["hash"], wantHash)
 	}
 
-	if int64(rec.finalizeReq["size"].(float64)) != int64(len(rec.blobBody)) { //nolint:forcetypeassert // JSON number.
+	if int64(rec.finalizeReq["size"].(float64)) != int64(len(rec.blobBody)) {
 		t.Errorf("finalize size = %v, want %d", rec.finalizeReq["size"], len(rec.blobBody))
 	}
 }
@@ -210,7 +210,7 @@ func TestUploadRunArtifact_RetentionBecomesTheCreateExpiry(t *testing.T) {
 func TestUploadRunArtifact_RejectsTokenWithoutActionsResultsScope(t *testing.T) {
 	t.Parallel()
 
-	p := &github.Provider{
+	githubProvider := &github.Provider{
 		Env: envFunc(map[string]string{
 			"ACTIONS_RESULTS_URL":   "https://example.invalid",
 			"ACTIONS_RUNTIME_TOKEN": "eyJhbGciOiJub25lIn0." + base64.RawURLEncoding.EncodeToString([]byte(`{"scp":"Other:x"}`)) + ".sig",
@@ -220,7 +220,7 @@ func TestUploadRunArtifact_RejectsTokenWithoutActionsResultsScope(t *testing.T) 
 	dir := t.TempDir()
 	mustWriteFile(t, filepath.Join(dir, "f.txt"), "x")
 
-	_, err := p.UploadRunArtifact(context.Background(), provider.RunArtifactUpload{Name: "dist", Dir: dir})
+	_, err := githubProvider.UploadRunArtifact(context.Background(), provider.RunArtifactUpload{Name: "dist", Dir: dir})
 	if !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("err = %v, want ErrValidation (no Actions.Results scope)", err)
 	}
@@ -288,19 +288,19 @@ func TestUploadRunArtifact_IfNoFiles(t *testing.T) {
 
 // recordingEnv returns an env accessor over m plus a reader for the keys it
 // was asked about, in order.
-func recordingEnv(m map[string]string) (func(string) string, func() []string) {
+func recordingEnv(values map[string]string) (func(string) string, func() []string) {
 	var (
 		mu   sync.Mutex
 		keys []string
 	)
 
-	return func(k string) string {
+	return func(value string) string {
 			mu.Lock()
 			defer mu.Unlock()
 
-			keys = append(keys, k)
+			keys = append(keys, value)
 
-			return m[k]
+			return values[value]
 		}, func() []string {
 			mu.Lock()
 			defer mu.Unlock()
@@ -353,15 +353,15 @@ func assertZipHas(t *testing.T, body []byte, want map[string]string) {
 
 	got := map[string]string{}
 
-	for _, f := range zr.File {
-		rc, err := f.Open()
+	for _, file := range zr.File {
+		rc, err := file.Open()
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		data, _ := io.ReadAll(rc)
 		_ = rc.Close()
-		got[f.Name] = string(data)
+		got[file.Name] = string(data)
 	}
 
 	for name, content := range want {
@@ -454,7 +454,7 @@ func TestUploadRunArtifact_KeepsTheTokenAndTheArtifactOnTheirOwnChannels(t *test
 			},
 		},
 		"https downgraded to http": {resultsURL: results, signedURL: "http://blob.example.invalid/c/dist.zip?sig=x", wantErr: errs.ErrValidation},
-		"credentials in the url":   {resultsURL: results, signedURL: "https://user:secret@blob.example.invalid/c?sig=x", wantErr: errs.ErrValidation}, //nolint:gosec // synthetic userinfo that must be refused.
+		"credentials in the url":   {resultsURL: results, signedURL: "https://user:secret@blob.example.invalid/c?sig=x", wantErr: errs.ErrValidation},
 		"no host":                  {resultsURL: results, signedURL: "https:///c/dist.zip", wantErr: errs.ErrValidation},
 		"another scheme":           {resultsURL: results, signedURL: "ftp://blob.example.invalid/c", wantErr: errs.ErrValidation},
 	} {

@@ -39,7 +39,7 @@ func (a *pagedAPI) RoundTrip(req *http.Request) (*http.Response, error) {
 	if raw := req.URL.Query().Get("page"); raw != "" {
 		parsed, err := strconv.Atoi(raw)
 		if err != nil || parsed < 1 || parsed > len(pages) {
-			return nil, fmt.Errorf("paged api: no page %q for %s", raw, req.URL.Path) //nolint:err113 // test double refusal.
+			return nil, fmt.Errorf("paged api: no page %q for %s", raw, req.URL.Path)
 		}
 
 		page = parsed

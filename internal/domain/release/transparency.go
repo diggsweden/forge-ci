@@ -72,8 +72,6 @@ const DefaultTransparency = TransparencyPublic
 // the single definition of the set: ParseTransparency accepts exactly
 // these values and the generated artifacts.yml JSON Schema renders its
 // sign.transparency enum from this slice.
-//
-//nolint:gochecknoglobals // schema enumeration — read-only and ordered.
 var ValidTransparencies = []Transparency{
 	TransparencyPublic,
 	TransparencyNone,

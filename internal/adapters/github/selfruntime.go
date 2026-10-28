@@ -88,7 +88,7 @@ func (p *Provider) PublishSelfRuntimeCLI(ctx context.Context, policy domainrelea
 	// consumers may see a mixed set, but the old checksum (or no checksum while
 	// it is directly replaced) makes verification fail closed.
 	req := releaseRequest(spec, body)
-	req.TargetCommitish = gogithub.Ptr(targetSHA)
+	req.TargetCommitish = new(targetSHA)
 
 	if freshErr := fresh(); freshErr != nil {
 		return freshErr
@@ -333,7 +333,7 @@ func moveGitHubTag(ctx context.Context, client *gogithub.Client, owner, repo, ta
 		return err
 	}
 
-	if _, _, err := client.Git.UpdateRef(ctx, owner, repo, "tags/"+tag, gogithub.UpdateRef{SHA: targetSHA, Force: gogithub.Ptr(true)}); err != nil {
+	if _, _, err := client.Git.UpdateRef(ctx, owner, repo, "tags/"+tag, gogithub.UpdateRef{SHA: targetSHA, Force: new(true)}); err != nil {
 		return fmt.Errorf("move self-runtime tag %q: %w", tag, classifyGitHubError(err))
 	}
 

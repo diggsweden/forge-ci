@@ -42,7 +42,7 @@ func (f *fakeSBOMSigner) Extensions() []string { return []string{".asc"} }
 func (f *fakeSBOMSigner) SignFile(_ context.Context, file string) error {
 	f.signed = append(f.signed, file)
 
-	return os.WriteFile(file+".asc", []byte("sig"), 0o644) //nolint:gosec // test fixture
+	return os.WriteFile(file+".asc", []byte("sig"), 0o644)
 }
 
 func TestCreateSBOMZip_NoSBOMsIsNoOp(t *testing.T) {

@@ -13,7 +13,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
-var errForgejoTransport = errors.New("forgejo test: transport failure") //nolint:err113 // test fixture sentinel.
+var errForgejoTransport = errors.New("forgejo test: transport failure")
 
 // classifyErr turns a Forgejo API failure into one of the project's sentinels,
 // and every verb in this package routes its errors through it — so the sentinel

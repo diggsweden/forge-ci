@@ -79,7 +79,7 @@ var versionCodeLine = regexp.MustCompile(`(?m)^[ \t]*versionCode[ \t]*=[ \t]*([^
 // is treated as 0 (the bash's `tr -d ' '` + arithmetic would fail on
 // non-numerics; this is a stricter, defined behaviour).
 func IncrementVersionCode(body string) IncrementVersionCodeResult {
-	m := versionCodeLine.FindStringSubmatchIndex(body) //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	m := versionCodeLine.FindStringSubmatchIndex(body)
 	if m == nil {
 		// Append.
 		out, _ := UpdateOrAddProperty(body, "versionCode", "1", "=")
@@ -144,8 +144,6 @@ const (
 // cargoVersionLine matches a top-level `version = ...` line in Cargo.toml.
 // Regex pattern stored as a package var rather than rebuilt per call so
 // MustCompile runs once at init; the value is read-only.
-//
-//nolint:gochecknoglobals // precompiled regex is the idiomatic shape.
 var cargoVersionLine = regexp.MustCompile(`(?m)^version[[:space:]]*=.*`)
 
 // UpdateCargoVersion finds the active version section ([workspace.package]
@@ -155,8 +153,6 @@ var cargoVersionLine = regexp.MustCompile(`(?m)^version[[:space:]]*=.*`)
 //
 // Returns the section that was rewritten (NotFound when neither header
 // is present) and the new body.
-//
-//nolint:cyclop // manifest section selection and exact replacement are one parser.
 func UpdateCargoVersion(body, version string) (string, CargoSection, error) {
 	if !utf8.ValidString(version) {
 		return body, CargoSectionNone, fmt.Errorf("cargo version must be valid UTF-8: %w", errs.ErrValidation)

@@ -214,8 +214,6 @@ func NewSnapshotReleasePlan(in SnapshotReleasePlanInput) (SnapshotReleasePlan, e
 // newSnapshotReleaseArtifactTransferPlan lists exact artifact downloads needed by
 // the dev SBOM aggregation job. Dev transfers are optional because skipped
 // stage legs should not fail the aggregation job.
-//
-//nolint:cyclop // plans transfers with one branch per artifact category.
 func newSnapshotReleaseArtifactTransferPlan(configPlan ConfigPlan, policy SnapshotReleasePolicy) ArtifactTransferPlan {
 	items := make([]ArtifactTransfer, 0)
 	includeBuild := policyIncludesSBOMLayer(policy.SBOMs, config.SBOMLayerBuild)
@@ -327,7 +325,6 @@ func newDevPublishInputs(targets DevPublishTargets, artifacts []PlannedArtifact,
 	return out
 }
 
-//nolint:cyclop // names artifacts with one branch per project type.
 func devArtifactName(targets DevPublishTargets, artifacts []PlannedArtifact, projectType projecttype.Type) string {
 	if projectType == projecttype.Go && len(targets.GoArtifactFirst.Items) > 0 {
 		return targets.GoArtifactFirst.Items[0].Name
@@ -368,10 +365,8 @@ func hasSBOMLayer(value string, layer config.SBOMLayer) (bool, error) {
 		return false, err
 	}
 
-	for _, got := range layers {
-		if got == layer {
-			return true, nil
-		}
+	if slices.Contains(layers, layer) {
+		return true, nil
 	}
 
 	return false, nil

@@ -85,7 +85,7 @@ func TagUniqueness(ctx context.Context, repo gitOps, out io.Writer, in TagUnique
 	})
 
 	if len(others) > 0 {
-		var b []byte //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+		var b []byte
 
 		b = fmt.Appendf(b, "Tag '%s' points to the same commit as other tag(s)\n\n", in.Tag)
 
@@ -260,8 +260,6 @@ const (
 // It applies the requested verification and signer-allowlist policy: optional
 // GPG verification may warn, while required checks and allowlist rejection fail.
 // Errors reading the tag or its policy files also propagate.
-//
-//nolint:cyclop // tag-signature validation: present → annotated → key-source → verify → render.
 func TagSignature(ctx context.Context, gitr gitOps, out io.Writer, annot output.Annotator, in TagSignatureInput) error {
 	if in.Tag == "" {
 		return fmt.Errorf("usage: validate tag-signature <tag-name> [repository]: %w", errs.ErrUsage)
@@ -379,7 +377,7 @@ func TagSignature(ctx context.Context, gitr gitOps, out io.Writer, annot output.
 //   - signer fingerprint in the set → pass
 //   - signer fingerprint NOT in the set → ErrPermissionDenied (the
 //     allowlist exists, so it is authoritative regardless of require)
-func checkGPGSignerAllowlist(ctx context.Context, gitr gitOps, out io.Writer, annot output.Annotator, in TagSignatureInput, allowedKeysPath string) error { //nolint:cyclop // explicit policy matrix keeps fail-closed cases auditable.
+func checkGPGSignerAllowlist(ctx context.Context, gitr gitOps, out io.Writer, annot output.Annotator, in TagSignatureInput, allowedKeysPath string) error {
 	allowedKeys, _, err := readOptionalFile(allowedKeysPath)
 	if err != nil {
 		return err
@@ -524,11 +522,11 @@ func buildGPGAllowlist(allowedKeys []byte) (validate.AllowedFingerprintSet, erro
 // WritePrerequisitesSummary into the summary's warning callout.
 func warnNoAllowlist(out io.Writer, annot output.Annotator, method, paths string) {
 	annot.WarningAt(output.Annotation{Title: "No release signer allowlist"},
-		"%s release ran with NO signer allowlist — any valid signature was accepted. Commit %s to authorise specific signers.",
+		"%s release has NO signer allowlist — allowlist enforcement was skipped and signature verification was not required. Commit %s to authorise specific signers.",
 		method, paths)
 
 	_, _ = fmt.Fprintf(out,
-		"⚠️ No %s signer allowlist present (%s) — enforcement skipped (require-authorization=false)\n",
+		"⚠️ No %s signer allowlist present (%s) — enforcement skipped (require-authorization=false); signature verification was not required\n",
 		method, paths)
 }
 

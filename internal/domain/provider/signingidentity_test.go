@@ -23,7 +23,7 @@ import (
 func attested(t *testing.T, url string) runcontext.Attested {
 	t.Helper()
 
-	a, _ := runcontext.ServerURL().ResolveAttested(func(key string) string {
+	art, _ := runcontext.ServerURL().ResolveAttested(func(key string) string {
 		switch key {
 		case "GITHUB_ACTIONS":
 			return "true"
@@ -34,7 +34,7 @@ func attested(t *testing.T, url string) runcontext.Attested {
 		}
 	})
 
-	return a
+	return art
 }
 
 func TestAnchorIdentity_BuildsAnAnchoredRepoPattern(t *testing.T) {

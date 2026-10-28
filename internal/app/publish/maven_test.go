@@ -223,7 +223,7 @@ func TestMavenCentralDeploy_RequiresProfile(t *testing.T) {
 func TestMavenCentralDeploy_ReturnsTheMavenFailureUnchanged(t *testing.T) {
 	t.Parallel()
 
-	errDeployRejected := errors.New("sonatype rejected the staging repository") //nolint:err113 // a unique value to find in the chain.
+	errDeployRejected := errors.New("sonatype rejected the staging repository")
 	ops := &fakePublishMaven{runErr: errDeployRejected}
 
 	var out, stderr bytes.Buffer

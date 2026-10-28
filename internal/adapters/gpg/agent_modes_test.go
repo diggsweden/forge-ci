@@ -35,10 +35,10 @@ func TestConfigureAgent_EnforcesModesAndReloadsOnce(t *testing.T) {
 
 	home := filepath.Join(t.TempDir(), "gnupg")
 	require.NoError(t, os.Mkdir(home, 0o750))
-	require.NoError(t, os.Chmod(home, 0o750)) //nolint:gosec // an owned temp directory made deliberately too open.
+	require.NoError(t, os.Chmod(home, 0o750))
 
 	elsewhere := filepath.Join(t.TempDir(), "elsewhere.conf")
-	require.NoError(t, os.WriteFile(elsewhere, []byte("keep\n"), 0o644)) //nolint:gosec // an owned fixture made deliberately world-readable.
+	require.NoError(t, os.WriteFile(elsewhere, []byte("keep\n"), 0o644))
 	require.NoError(t, os.Symlink(elsewhere, filepath.Join(home, "gpg-agent.conf")))
 	t.Setenv("GNUPGHOME", home)
 
@@ -100,8 +100,6 @@ func TestConfigureAgent_FailuresAreDistinct(t *testing.T) {
 // logs only the public warning; the other deletion still runs.
 //
 // Not parallel: swaps the default logger.
-//
-//nolint:paralleltest // swaps the process-wide default logger.
 func TestDelete_EachHalfReportsItsOwnFailure(t *testing.T) {
 	const fingerprint = "DEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF"
 
@@ -153,7 +151,7 @@ func TestImportKey_ErrorNeverEchoesInput(t *testing.T) {
 	bins := mockbinary.New(t)
 	bins.Add("gpg", "cat >&2; exit 2")
 
-	payload := "-----BEGIN PGP PRIVATE KEY BLOCK-----\nsecret-armor-payload-line\n-----END PGP PRIVATE KEY BLOCK-----\n" //nolint:gosec // synthetic armor with no key material.
+	payload := "-----BEGIN PGP PRIVATE KEY BLOCK-----\nsecret-armor-payload-line\n-----END PGP PRIVATE KEY BLOCK-----\n"
 
 	err := (&adaptergpg.Adapter{GPGBin: bins.Path("gpg")}).ImportKey(context.Background(), []byte(payload))
 	require.ErrorIs(t, err, errs.ErrValidation)

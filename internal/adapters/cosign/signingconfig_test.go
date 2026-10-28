@@ -100,6 +100,8 @@ func TestEveryWriteVerbSuppressesTheLog(t *testing.T) {
 
 	for _, verb := range writeVerbs() {
 		t.Run(verb.name, func(t *testing.T) {
+			t.Parallel()
+
 			bins, captured := captureSigningConfig(t)
 
 			a := &cosign.Adapter{Bin: bins.Path("cosign"), Transparency: domainrelease.TransparencyNone}
@@ -143,6 +145,8 @@ func TestEveryWriteVerbUsesLocalTrustWithoutLog(t *testing.T) {
 
 	for _, verb := range writeVerbs() {
 		t.Run(verb.name, func(t *testing.T) {
+			t.Parallel()
+
 			bins, captured := captureSigningConfig(t)
 
 			a := &cosign.Adapter{Bin: bins.Path("cosign"), Transparency: domainrelease.TransparencyNone}
@@ -301,6 +305,8 @@ func TestEveryVerifyVerbHonoursTheTlogPolicy(t *testing.T) {
 
 	for _, verb := range verifyVerbs() {
 		t.Run(verb.name, func(t *testing.T) {
+			t.Parallel()
+
 			bins := mockbinary.New(t)
 			bins.Add("cosign", ":")
 
@@ -327,6 +333,8 @@ func TestTlogPolicyDefaultsToFullyChecked(t *testing.T) {
 
 	for _, verb := range verifyVerbs() {
 		t.Run(verb.name, func(t *testing.T) {
+			t.Parallel()
+
 			bins := mockbinary.New(t)
 			bins.Add("cosign", ":")
 
@@ -353,6 +361,8 @@ func TestSignAndVerifyCannotDisagree(t *testing.T) {
 
 	for _, transparency := range domainrelease.ValidTransparencies {
 		t.Run(string(transparency), func(t *testing.T) {
+			t.Parallel()
+
 			suppressed := func(verbs []signWrite, flag string) bool {
 				bins, _ := captureSigningConfig(t)
 				a := &cosign.Adapter{Bin: bins.Path("cosign"), Transparency: transparency}
@@ -497,12 +507,12 @@ func TestEverySigningVerbOnTheAdapterIsCovered(t *testing.T) {
 		"VerifyAttestationOutput": "verify-attestation",
 	}
 
-	adapterType := reflect.TypeOf(&cosign.Adapter{})
+	adapterType := reflect.TypeFor[*cosign.Adapter]()
 
 	var uncovered []string
 
-	for i := range adapterType.NumMethod() {
-		name := adapterType.Method(i).Name
+	for method := range adapterType.Methods() {
+		name := method.Name
 		if !strings.HasPrefix(name, "Sign") && !strings.HasPrefix(name, "Verify") && !strings.HasPrefix(name, "Attest") {
 			continue
 		}

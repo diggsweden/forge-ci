@@ -40,8 +40,7 @@ type RefTypeInput struct {
 // script printed to stderr.
 func RefType(out io.Writer, in RefTypeInput) error {
 	if err := validate.RequireTagRefType(in.RefType, in.Ref); err != nil {
-		var rte *validate.RefTypeError
-		if errors.As(err, &rte) {
+		if rte, ok := errors.AsType[*validate.RefTypeError](err); ok {
 			return fmt.Errorf(
 				"release workflow must be triggered by pushing a tag\n"+
 					"Current trigger: %s (%s)\n"+
@@ -104,14 +103,23 @@ func TagFormat(out io.Writer, in TagFormatInput) error {
 
 // ReleaseTagGuardInput drives ReleaseTagGuard.
 type ReleaseTagGuardInput struct {
-	Tag     string
-	Pattern string
+	ReleasePolicy string
+	Tag           string
+	Pattern       string
 }
 
 // ReleaseTagGuard validates a stable final release tag or release-request tag and emits normalized outputs.
 func ReleaseTagGuard(ctx context.Context, sink ci.OutputSink, out io.Writer, in ReleaseTagGuardInput) error {
-	matches := version.IsStableSemverTag
-	expected := "stable vMAJOR.MINOR.PATCH"
+	if err := version.ValidateReleasePolicy(in.ReleasePolicy); err != nil {
+		return err
+	}
+
+	matches := func(tag string) bool {
+		_, err := version.ValidateReleaseTag(tag, in.ReleasePolicy)
+
+		return err == nil
+	}
+	expected := "vMAJOR.MINOR.PATCH permitted by release-policy " + in.ReleasePolicy
 
 	if in.Pattern != "" {
 		if !strings.HasPrefix(in.Pattern, "^") || !strings.HasSuffix(in.Pattern, "$") {
@@ -129,6 +137,10 @@ func ReleaseTagGuard(ctx context.Context, sink ci.OutputSink, out io.Writer, in 
 
 	releaseTag, releaseRequest, err := normalizeReleaseTag(matches, expected, in.Tag)
 	if err != nil {
+		return err
+	}
+
+	if _, err := version.ValidateReleaseTag(releaseTag, in.ReleasePolicy); err != nil {
 		return err
 	}
 
@@ -239,7 +251,7 @@ func splitLinesPreservingTrailing(raw []byte) []string {
 		return nil
 	}
 
-	s := string(raw) //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	s := string(raw)
 	if s[len(s)-1] == '\n' {
 		s = s[:len(s)-1]
 	}

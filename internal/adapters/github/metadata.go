@@ -50,7 +50,7 @@ func (p *Provider) FetchRepoMetadata(ctx context.Context, repo string) (*provide
 		License     ghLicense `json:"license"`
 	}
 
-	var r ghRepo //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var r ghRepo
 	if err := json.Unmarshal(body, &r); err != nil {
 		return nil, fmt.Errorf("github decode repo response: %w", err)
 	}

@@ -66,7 +66,7 @@ func googlePlayFindAABCmd() *cli.Command {
 		Description: `EXAMPLE:
    forge-ci publish google-play find-aab --artifact-dir artifacts`,
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "artifact-dir", Value: "artifacts", Sources: cli.EnvVars("ARTIFACT_DIR"), Usage: "directory scanned for an .aab artifact"}, //nolint:goconst // shared flag name across artifact-consuming commands.
+			&cli.StringFlag{Name: "artifact-dir", Value: "artifacts", Sources: cli.EnvVars("ARTIFACT_DIR"), Usage: "directory scanned for an .aab artifact"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error {

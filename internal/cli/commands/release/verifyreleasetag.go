@@ -14,6 +14,7 @@ import (
 	apprelease "github.com/diggsweden/forge-ci/internal/app/release"
 	"github.com/diggsweden/forge-ci/internal/cli/cienv"
 	"github.com/diggsweden/forge-ci/internal/cli/clitoken"
+	"github.com/diggsweden/forge-ci/internal/cli/commonflags"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/projecttype"
 )
@@ -29,6 +30,7 @@ func verifyTagCmd() *cli.Command {
 		Description: `EXAMPLE:
    forge-ci release validate-tag --tag v1.2.3 --release-sha abc... --repo-url https://github.com/org/app`,
 		Flags: []cli.Flag{
+			commonflags.ReleasePolicy(),
 			&cli.StringFlag{Name: flagReleaseSHA, Sources: cli.EnvVars("RELEASE_SHA"), Usage: "commit the release is built from"},
 			&cli.StringFlag{Name: flagTag, Sources: cienv.Tag(), Usage: "release tag (e.g. v1.2.3)"},
 			&cli.StringFlag{Name: "repo-url", Sources: cli.EnvVars("REPO_URL"), Usage: "remote repository URL for ls-remote (defaults to origin)"},
@@ -48,6 +50,7 @@ func verifyTagCmd() *cli.Command {
 			}
 
 			return apprelease.VerifyReleaseTag(ctx, git.New(), os.Stderr, apprelease.VerifyReleaseTagInput{
+				ReleasePolicy:  cmd.String("release-policy"),
 				ReleaseSHA:     cmd.String(flagReleaseSHA),
 				Tag:            cmd.String(flagTag),
 				RepoURL:        cmd.String("repo-url"),

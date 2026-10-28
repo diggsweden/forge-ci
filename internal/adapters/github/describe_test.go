@@ -67,8 +67,8 @@ func TestCapabilities_GitHub(t *testing.T) {
 func TestDescribe_GHESUsesInstanceIssuer(t *testing.T) {
 	t.Parallel()
 
-	p := github.New()
-	p.Env = func(key string) string {
+	githubProvider := github.New()
+	githubProvider.Env = func(key string) string {
 		if key == "GITHUB_SERVER_URL" {
 			return "https://github.acme.example"
 		}
@@ -76,15 +76,15 @@ func TestDescribe_GHESUsesInstanceIssuer(t *testing.T) {
 		return ""
 	}
 
-	if got, want := p.Describe().OIDCIssuer, "https://github.acme.example/_services/token"; got != want {
+	if got, want := githubProvider.Describe().OIDCIssuer, "https://github.acme.example/_services/token"; got != want {
 		t.Fatalf("OIDCIssuer = %q, want %q", got, want)
 	}
 
-	if p.Capabilities().PublicFulcioTrusted {
+	if githubProvider.Capabilities().PublicFulcioTrusted {
 		t.Fatal("GHES issuer must not be reported as trusted by public Fulcio")
 	}
 
-	if !p.Capabilities().MintsOIDCToken {
+	if !githubProvider.Capabilities().MintsOIDCToken {
 		t.Fatal("GHES still mints OIDC tokens for an explicitly configured Fulcio")
 	}
 }

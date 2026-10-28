@@ -194,7 +194,7 @@ func backendIDsFromToken(token string) (string, string, error) {
 		return "", "", fmt.Errorf("parse runtime token claims: %w", errs.ErrValidation)
 	}
 
-	for _, scope := range strings.Fields(claims.Scp) {
+	for scope := range strings.FieldsSeq(claims.Scp) {
 		rest, ok := strings.CutPrefix(scope, "Actions.Results:")
 		if !ok {
 			continue
@@ -284,7 +284,7 @@ func writeZipEntry(zw *zip.Writer, entry domainartifact.UploadEntry) (int64, err
 // hashAndSize fills the archive's zipSize and sha256Hex by reading the
 // written file once.
 func hashAndSize(out *zipArchive) error {
-	file, err := os.Open(out.path) //nolint:gosec // out.path is our own CreateTemp file.
+	file, err := os.Open(out.path)
 	if err != nil {
 		return fmt.Errorf("reopen zip: %w", err)
 	}
@@ -328,6 +328,7 @@ func (p *Provider) artifactExpiry(retentionDays int, now time.Time) string {
 func (p *Provider) createArtifact(ctx context.Context, rt uploadContext, name, expiresAt string) (string, error) {
 	req := struct {
 		backendIDs
+
 		Name      string `json:"name"`
 		Version   int    `json:"version"`
 		ExpiresAt string `json:"expiresAt,omitempty"`
@@ -374,6 +375,7 @@ func usableSignedUploadURL(signedURL, resultsURL string) bool {
 func (p *Provider) finalizeArtifact(ctx context.Context, rt uploadContext, name string, archive zipArchive) (string, error) {
 	req := struct {
 		backendIDs
+
 		Name string `json:"name"`
 		Size int64  `json:"size"`
 		Hash string `json:"hash"`
@@ -458,7 +460,7 @@ func twirpError(method string, status int, body []byte) error {
 
 // uploadZipBlob PUTs the zip to the Azure SAS URL as a single block blob.
 func (p *Provider) uploadZipBlob(ctx context.Context, signedURL string, archive zipArchive) error {
-	file, err := os.Open(archive.path) //nolint:gosec // our own temp zip.
+	file, err := os.Open(archive.path)
 	if err != nil {
 		return fmt.Errorf("open zip for upload: %w", err)
 	}

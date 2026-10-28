@@ -46,6 +46,7 @@ func ForgePackagesDeploy(ctx context.Context, ops MavenOps, resolver provider.Fo
 
 	args := make([]string, 0, len(in.CLIOpts)+4)
 	args = append(args, in.CLIOpts...)
+
 	args = append(args, "deploy", "-DskipTests",
 		"--settings", settingsPath,
 		"-DaltDeploymentRepository="+reg.AltDeploymentRepository())

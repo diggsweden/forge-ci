@@ -292,11 +292,20 @@ func selectExactSignFiles(files []string) ([]string, error) {
 
 // signChecksumsIfPresent signs the checksums file when it exists and
 // is non-empty. Missing or empty files are silently skipped — the
-// release flow upstream decides whether to create one.
+// release flow upstream decides whether to create one. Any other stat
+// failure refuses, so an unreadable manifest never ships unsigned.
 func signChecksumsIfPresent(ctx context.Context, signer Signer, checksumsFile string, out io.Writer) error {
 	info, err := os.Stat(checksumsFile)
-	if err != nil || info.Size() == 0 {
-		return nil //nolint:nilerr // missing checksums is a valid state.
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+
+	if err != nil {
+		return fmt.Errorf("checksums file %s: %w", checksumsFile, err)
+	}
+
+	if info.Size() == 0 {
+		return nil
 	}
 
 	_, _ = fmt.Fprintf(out, "Signing %s\n", checksumsFile)
@@ -373,8 +382,6 @@ func signerExtensions(signer Signer) ([]string, error) {
 // signFileWithSidecars removes stale outputs, invokes the backend, and proves
 // that every advertised sidecar was freshly produced as a non-empty regular
 // file before the release flow may continue.
-//
-//nolint:cyclop // preflight, stale-output removal and each produced sidecar fail independently.
 func signFileWithSidecars(ctx context.Context, signer Signer, file string) error {
 	if err := validateReleasePathComponents(file); err != nil {
 		return err
@@ -408,8 +415,6 @@ func signFileWithSidecars(ctx context.Context, signer Signer, file string) error
 // signReleaseArtifactsDir signs every regular file in dir that
 // IsReleaseArtifact accepts. A missing directory is a valid state
 // (attach globs may still match) and is silently skipped.
-//
-//nolint:cyclop // stat + branch on dir state + walk + count signed/skipped — phases of one operation.
 func signReleaseArtifactsDir(dir string, signAsset func(string) error, out io.Writer) error {
 	info, err := os.Stat(dir)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -488,7 +493,7 @@ func signAttachArtifacts(patterns string, out io.Writer, sign func(path string) 
 			return fmt.Errorf("glob %q: %w", pattern, err)
 		}
 
-		for _, m := range matches { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+		for _, m := range matches {
 			info, statErr := os.Stat(m)
 			if statErr != nil || info.IsDir() {
 				continue

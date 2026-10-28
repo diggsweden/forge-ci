@@ -95,8 +95,8 @@ func changelogSectionBounds(lines []string, version string) (int, int, error) {
 
 func changelogVersionHeading(heading, version string) bool {
 	heading = strings.TrimSpace(heading)
-	if strings.HasPrefix(heading, "[") {
-		label, _, found := strings.Cut(strings.TrimPrefix(heading, "["), "]")
+	if after, ok := strings.CutPrefix(heading, "["); ok {
+		label, _, found := strings.Cut(after, "]")
 
 		return found && strings.TrimPrefix(label, "v") == version
 	}

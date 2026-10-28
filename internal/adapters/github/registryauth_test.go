@@ -14,7 +14,7 @@ import (
 func TestResolveRegistryAuth_GitHub(t *testing.T) {
 	t.Parallel()
 
-	p := &github.Provider{Env: func(k string) string {
+	provider := &github.Provider{Env: func(k string) string {
 		return map[string]string{
 			"GITHUB_TOKEN":      "ght",
 			"GITHUB_ACTOR":      "ci-bot",
@@ -22,7 +22,7 @@ func TestResolveRegistryAuth_GitHub(t *testing.T) {
 		}[k]
 	}}
 
-	auth, err := p.ResolveRegistryAuth()
+	auth, err := provider.ResolveRegistryAuth()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,8 +40,8 @@ func TestResolveRegistryAuth_GHESRefusesPublicEndpoint(t *testing.T) {
 	t.Parallel()
 
 	tokenRead := false
-	p := &github.Provider{Env: func(k string) string {
-		if k == "GITHUB_TOKEN" {
+	provider := &github.Provider{Env: func(key string) string {
+		if key == "GITHUB_TOKEN" {
 			tokenRead = true
 		}
 
@@ -49,10 +49,10 @@ func TestResolveRegistryAuth_GHESRefusesPublicEndpoint(t *testing.T) {
 			"GITHUB_TOKEN":      "ghes-token",
 			"GITHUB_ACTOR":      "ci-bot",
 			"GITHUB_SERVER_URL": "https://github.acme.example",
-		}[k]
+		}[key]
 	}}
 
-	if _, err := p.ResolveRegistryAuth(); !errors.Is(err, errs.ErrUnsupported) {
+	if _, err := provider.ResolveRegistryAuth(); !errors.Is(err, errs.ErrUnsupported) {
 		t.Errorf("GHES registry resolution should be ErrUnsupported, got %v", err)
 	}
 

@@ -40,7 +40,7 @@ type AppStorePrepareCredentialsInput struct {
 // PrepareAppStoreCredentials decodes the App Store Connect API private key
 // from a base64 secret and writes it to `<Dir>/AuthKey_<KEY_ID>.p8` with mode
 // 0600 — what xcrun altool expects.
-func PrepareAppStoreCredentials(_ context.Context, w io.Writer, in AppStorePrepareCredentialsInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func PrepareAppStoreCredentials(_ context.Context, out io.Writer, in AppStorePrepareCredentialsInput) error {
 	if in.KeyID == "" {
 		return fmt.Errorf("app store API key ID is required: %w", errs.ErrMissingInput)
 	}
@@ -76,7 +76,7 @@ func PrepareAppStoreCredentials(_ context.Context, w io.Writer, in AppStorePrepa
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 
-	_, _ = fmt.Fprintf(w, "%s App Store Connect API configured\n", clicolor.Check(w))
+	_, _ = fmt.Fprintf(out, "%s App Store Connect API configured\n", clicolor.Check(out))
 
 	return nil
 }
@@ -89,7 +89,7 @@ type AppStoreUploadResultInput struct {
 // EmitAppStoreUploadResult reads altool's upload-result JSON, emits
 // request-id when present, and mirrors the old workflow behavior of doing
 // nothing when the file is absent.
-func EmitAppStoreUploadResult(ctx context.Context, sink ci.OutputSink, w io.Writer, in AppStoreUploadResultInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func EmitAppStoreUploadResult(ctx context.Context, sink ci.OutputSink, out io.Writer, in AppStoreUploadResultInput) error {
 	path := in.Path
 	if path == "" {
 		path = "upload-result.json"
@@ -113,7 +113,7 @@ func EmitAppStoreUploadResult(ctx context.Context, sink ci.OutputSink, w io.Writ
 		return fmt.Errorf("set request-id: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(w, "Upload Request ID: %s\n", requestID)
+	_, _ = fmt.Fprintf(out, "Upload Request ID: %s\n", requestID)
 
 	return nil
 }

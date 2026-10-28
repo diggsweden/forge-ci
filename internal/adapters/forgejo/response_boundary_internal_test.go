@@ -30,7 +30,7 @@ func TestForgejoResponseBoundary_RejectsMalformedJSONAndIDs(t *testing.T) {
 		require.NoError(t, os.WriteFile(file, []byte("owned"), 0o600))
 
 		calls := 0
-		p := &Provider{APIBaseOverride: "https://forgejo.invalid", Env: func(key string) string {
+		forgejoProvider := &Provider{APIBaseOverride: "https://forgejo.invalid", Env: func(key string) string {
 			if key == "FORGEJO_REPOSITORY" {
 				return "o/r"
 			}
@@ -45,21 +45,21 @@ func TestForgejoResponseBoundary_RejectsMalformedJSONAndIDs(t *testing.T) {
 		if body != "{" {
 			var err error
 
-			require.NotPanics(t, func() { err = p.UploadReleaseAsset(t.Context(), "v1", file) })
+			require.NotPanics(t, func() { err = forgejoProvider.UploadReleaseAsset(t.Context(), "v1", file) })
 			require.ErrorIs(t, err, errs.ErrMalformedInput)
 			require.Equal(t, 1, calls)
 
 			spec := provider.ReleaseSpec{Tag: "v1", Assets: []string{file}}
-			require.ErrorIs(t, p.CreateRelease(t.Context(), "o/r", spec), errs.ErrMalformedInput)
-			require.ErrorIs(t, p.PublishRelease(t.Context(), "o/r", spec), errs.ErrMalformedInput)
+			require.ErrorIs(t, forgejoProvider.CreateRelease(t.Context(), "o/r", spec), errs.ErrMalformedInput)
+			require.ErrorIs(t, forgejoProvider.PublishRelease(t.Context(), "o/r", spec), errs.ErrMalformedInput)
 			require.Equal(t, 3, calls)
 		} else {
 			var output map[string]any
 
-			err := p.getRuntimeJSON(t.Context(), "https://runtime.invalid/list", "synthetic", &output)
+			err := forgejoProvider.getRuntimeJSON(t.Context(), "https://runtime.invalid/list", "synthetic", &output)
 			require.ErrorIs(t, err, errs.ErrMalformedInput)
 			require.EqualValues(t, 65, errs.ExitCodeFromError(err))
-			_, err = p.createContainer(t.Context(), runtimeUploadCreds{url: "https://runtime.invalid", token: "synthetic", runID: "1"}, "artifact", 1)
+			_, err = forgejoProvider.createContainer(t.Context(), runtimeUploadCreds{url: "https://runtime.invalid", token: "synthetic", runID: "1"}, "artifact", 1)
 			require.ErrorIs(t, err, errs.ErrMalformedInput)
 			require.EqualValues(t, 65, errs.ExitCodeFromError(err))
 			require.Equal(t, 2, calls)
@@ -72,26 +72,26 @@ func TestForgejoPreflight_MissingFilesAndMalformedPatterns(t *testing.T) {
 
 	calls := 0
 	env := map[string]string{"FORGEJO_REPOSITORY": "o/r", "FORGEJO_RUN_ID": "1", "ACTIONS_RUNTIME_URL": "https://runtime.invalid", "ACTIONS_RUNTIME_TOKEN": "synthetic"}
-	p := &Provider{APIBaseOverride: "https://forgejo.invalid", Env: func(key string) string { return env[key] }, HTTPClient: &http.Client{Transport: responseBoundaryTransport(func(req *http.Request) (*http.Response, error) {
+	forgejoProvider := &Provider{APIBaseOverride: "https://forgejo.invalid", Env: func(key string) string { return env[key] }, HTTPClient: &http.Client{Transport: responseBoundaryTransport(func(req *http.Request) (*http.Response, error) {
 		calls++
 
 		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"value":[]}`)), Request: req}, nil
 	})}}
 	root := t.TempDir()
-	_, err := p.DownloadRunArtifact(t.Context(), provider.RunArtifactDownload{Pattern: "[", Dir: root})
+	_, err := forgejoProvider.DownloadRunArtifact(t.Context(), provider.RunArtifactDownload{Pattern: "[", Dir: root})
 	require.ErrorIs(t, err, errs.ErrUsage)
 	require.Zero(t, calls)
 
 	file := filepath.Join(root, "missing", "asset")
 
 	spec := provider.ReleaseSpec{Tag: "v1", Assets: []string{file}}
-	for _, err := range []error{p.UploadReleaseAsset(t.Context(), "v1", file), p.CreateRelease(t.Context(), "o/r", spec), p.PublishRelease(t.Context(), "o/r", spec)} {
+	for _, err := range []error{forgejoProvider.UploadReleaseAsset(t.Context(), "v1", file), forgejoProvider.CreateRelease(t.Context(), "o/r", spec), forgejoProvider.PublishRelease(t.Context(), "o/r", spec)} {
 		require.ErrorIs(t, err, errs.ErrMissingInput)
 		require.EqualValues(t, 66, errs.ExitCodeFromError(err))
 	}
 
 	require.Zero(t, calls)
-	_, err = p.DownloadRunArtifact(t.Context(), provider.RunArtifactDownload{Pattern: "*", Dir: root})
+	_, err = forgejoProvider.DownloadRunArtifact(t.Context(), provider.RunArtifactDownload{Pattern: "*", Dir: root})
 	require.NoError(t, err)
 	require.Equal(t, 1, calls)
 }

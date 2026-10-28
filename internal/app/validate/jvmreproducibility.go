@@ -230,8 +230,6 @@ func failMavenMissing(dir, reason string, out io.Writer, annot output.Annotator)
 // considers a build script. The first existing file wins — Gradle
 // itself follows the same precedence (Kotlin DSL preferred over
 // Groovy when both exist, but in practice projects pick one).
-//
-//nolint:gochecknoglobals // ordered enumeration of well-known filenames.
 var gradleBuildScripts = []string{
 	"build.gradle.kts",
 	"build.gradle",

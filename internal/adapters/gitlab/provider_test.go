@@ -33,7 +33,7 @@ func TestProvider_Name(t *testing.T) {
 func TestResolveContext_BranchPush(t *testing.T) {
 	t.Parallel()
 
-	p := &gitlab.Provider{Env: envFunc(map[string]string{
+	gitlabProvider := &gitlab.Provider{Env: envFunc(map[string]string{
 		"CI_COMMIT_REF_NAME":  "main",
 		"CI_COMMIT_BRANCH":    "main",
 		"CI_COMMIT_SHA":       "abcdef0123456789abcdef0123456789abcdef01",
@@ -43,7 +43,7 @@ func TestResolveContext_BranchPush(t *testing.T) {
 		"CI_PROJECT_URL":      "https://gitlab.com/group/project",
 	})}
 
-	evt, err := p.ResolveContext(context.Background())
+	evt, err := gitlabProvider.ResolveContext(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,14 +64,14 @@ func TestResolveContext_BranchPush(t *testing.T) {
 func TestResolveContext_TagPush(t *testing.T) {
 	t.Parallel()
 
-	p := &gitlab.Provider{Env: envFunc(map[string]string{
+	gitlabProvider := &gitlab.Provider{Env: envFunc(map[string]string{
 		"CI_COMMIT_REF_NAME": "v1.2.3",
 		"CI_COMMIT_TAG":      "v1.2.3",
 		"CI_PIPELINE_SOURCE": "push",
 		"CI_COMMIT_SHA":      "abcdef0123456789",
 	})}
 
-	evt, err := p.ResolveContext(context.Background())
+	evt, err := gitlabProvider.ResolveContext(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestResolveContext_TagPush(t *testing.T) {
 func TestResolveContext_MergeRequest(t *testing.T) {
 	t.Parallel()
 
-	p := &gitlab.Provider{Env: envFunc(map[string]string{
+	gitlabProvider := &gitlab.Provider{Env: envFunc(map[string]string{
 		"CI_COMMIT_REF_NAME":                  "feat-x",
 		"CI_PIPELINE_SOURCE":                  "merge_request_event",
 		"CI_MERGE_REQUEST_IID":                "42",
@@ -96,7 +96,7 @@ func TestResolveContext_MergeRequest(t *testing.T) {
 		"CI_MERGE_REQUEST_TARGET_BRANCH_NAME": "main",
 	})}
 
-	evt, err := p.ResolveContext(context.Background())
+	evt, err := gitlabProvider.ResolveContext(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,13 +209,13 @@ func TestResolveContext_MRTrumpsTag(t *testing.T) {
 	t.Parallel()
 	// CI_PIPELINE_SOURCE=merge_request_event always wins; tags should
 	// not be possible during an MR pipeline but be defensive.
-	p := &gitlab.Provider{Env: envFunc(map[string]string{
+	gitlabProvider := &gitlab.Provider{Env: envFunc(map[string]string{
 		"CI_PIPELINE_SOURCE":   "merge_request_event",
 		"CI_COMMIT_TAG":        "v1.0.0",
 		"CI_MERGE_REQUEST_IID": "1",
 	})}
 
-	evt, err := p.ResolveContext(context.Background())
+	evt, err := gitlabProvider.ResolveContext(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func TestFetchRepoMetadata_HappyPath(t *testing.T) {
 			Body: `{"description":"a test project","web_url":"https://gitlab.com/group/sub/project","license":{"key":"apache-2.0","nickname":"Apache 2.0"},"repository_object_format":"sha256"}`,
 		}
 	})
-	p := &gitlab.Provider{
+	gitlabProvider := &gitlab.Provider{
 		Env: envFunc(map[string]string{
 			"GITLAB_TOKEN": "glpat_test",
 			"CI_JOB_TOKEN": "must-not-win",
@@ -251,7 +251,7 @@ func TestFetchRepoMetadata_HappyPath(t *testing.T) {
 		HTTPClient:      srv.Client(),
 	}
 
-	md, err := p.FetchRepoMetadata(context.Background(), "group/sub/project")
+	md, err := gitlabProvider.FetchRepoMetadata(context.Background(), "group/sub/project")
 	if err != nil {
 		t.Fatalf("FetchRepoMetadata: %v", err)
 	}
@@ -288,14 +288,14 @@ func TestFetchRepoMetadata_FallsBackToCIJobToken(t *testing.T) {
 		return fakegitserver.Response{Body: `{}`}
 	})
 
-	p := &gitlab.Provider{
+	gitlabProvider := &gitlab.Provider{
 		Env: envFunc(map[string]string{
 			"CI_JOB_TOKEN": "ci-job-token-abc",
 		}),
 		APIBaseOverride: srv.URL(),
 		HTTPClient:      srv.Client(),
 	}
-	if _, err := p.FetchRepoMetadata(context.Background(), "group/project"); err != nil {
+	if _, err := gitlabProvider.FetchRepoMetadata(context.Background(), "group/project"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -406,13 +406,13 @@ func TestValidateBotPermissions_AllProbesPass(t *testing.T) {
 		})
 	}
 
-	p := &gitlab.Provider{
+	gitlabProvider := &gitlab.Provider{
 		Env:             envFunc(map[string]string{"GITLAB_TOKEN": "glpat_test"}),
 		APIBaseOverride: srv.URL(),
 		HTTPClient:      srv.Client(),
 	}
 
-	bp, err := p.ValidateBotPermissions(context.Background(), "group/project")
+	bp, err := gitlabProvider.ValidateBotPermissions(context.Background(), "group/project")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -426,13 +426,13 @@ func TestValidateBotPermissions_RequiresGitLabTokenForUserAPI(t *testing.T) {
 	t.Parallel()
 	srv := fakegitserver.NewGitLab(t)
 
-	p := &gitlab.Provider{
+	gitlabProvider := &gitlab.Provider{
 		Env:             envFunc(map[string]string{"CI_JOB_TOKEN": "ci-job-tok"}),
 		APIBaseOverride: srv.URL(),
 		HTTPClient:      srv.Client(),
 	}
 
-	_, err := p.ValidateBotPermissions(context.Background(), "g/p")
+	_, err := gitlabProvider.ValidateBotPermissions(context.Background(), "g/p")
 	if !errors.Is(err, errs.ErrPermissionDenied) || !strings.Contains(err.Error(), "GITLAB_TOKEN") {
 		t.Fatalf("err = %v, want GITLAB_TOKEN permission error", err)
 	}
@@ -484,13 +484,13 @@ func TestCreateRelease_PostsRelease(t *testing.T) {
 
 		return fakegitserver.Response{Status: 201, Body: `{}`}
 	})
-	p := &gitlab.Provider{
+	gitlabProvider := &gitlab.Provider{
 		Env:             envFunc(map[string]string{"GITLAB_TOKEN": "glpat_test"}),
 		APIBaseOverride: srv.URL(),
 		HTTPClient:      srv.Client(),
 	}
 
-	err := p.CreateRelease(context.Background(), "group/project", provider.ReleaseSpec{
+	err := gitlabProvider.CreateRelease(context.Background(), "group/project", provider.ReleaseSpec{
 		Tag:    "v1.0.0",
 		Name:   "Release v1.0.0",
 		Assets: []string{asset},
@@ -541,7 +541,7 @@ func TestUploadReleaseAsset_UploadsProjectFileAndLinksRelease(t *testing.T) {
 		return fakegitserver.Response{Status: 201, Body: `{}`}
 	})
 
-	p := &gitlab.Provider{
+	gitlabProvider := &gitlab.Provider{
 		Env: envFunc(map[string]string{
 			"GITLAB_TOKEN":    "glpat_test",
 			"CI_JOB_TOKEN":    "must-not-win",
@@ -551,7 +551,7 @@ func TestUploadReleaseAsset_UploadsProjectFileAndLinksRelease(t *testing.T) {
 		HTTPClient:      srv.Client(),
 	}
 
-	if err := p.UploadReleaseAsset(context.Background(), "v1.2.3", asset); err != nil {
+	if err := gitlabProvider.UploadReleaseAsset(context.Background(), "v1.2.3", asset); err != nil {
 		t.Fatalf("UploadReleaseAsset: %v", err)
 	}
 }
@@ -560,7 +560,7 @@ func TestUploadReleaseAsset_RejectsCIJobTokenBeforeRequest(t *testing.T) {
 	t.Parallel()
 
 	srv := fakegitserver.NewGitLab(t)
-	p := &gitlab.Provider{
+	gitlabProvider := &gitlab.Provider{
 		Env: envFunc(map[string]string{
 			"CI_JOB_TOKEN":    "ci-job-token",
 			"CI_PROJECT_PATH": "group/project",
@@ -569,7 +569,7 @@ func TestUploadReleaseAsset_RejectsCIJobTokenBeforeRequest(t *testing.T) {
 		HTTPClient:      srv.Client(),
 	}
 
-	err := p.UploadReleaseAsset(context.Background(), "v1.2.3", "artifact.tar.gz")
+	err := gitlabProvider.UploadReleaseAsset(context.Background(), "v1.2.3", "artifact.tar.gz")
 	if !errors.Is(err, errs.ErrPermissionDenied) || !strings.Contains(err.Error(), "GITLAB_TOKEN") {
 		t.Fatalf("err = %v, want GITLAB_TOKEN permission error", err)
 	}
@@ -601,7 +601,7 @@ func TestUploadReleaseAsset_ClobbersExistingLink(t *testing.T) {
 		return fakegitserver.Response{Status: 201, Body: `{"full_path":"/group/project/uploads/def/artifact.tar.gz"}`}
 	})
 
-	p := &gitlab.Provider{
+	gitlabProvider := &gitlab.Provider{
 		Env: envFunc(map[string]string{
 			"GITLAB_TOKEN":    "glpat_test",
 			"CI_PROJECT_PATH": "group/project",
@@ -610,7 +610,7 @@ func TestUploadReleaseAsset_ClobbersExistingLink(t *testing.T) {
 		HTTPClient:      srv.Client(),
 	}
 
-	if err := p.UploadReleaseAsset(context.Background(), "v1.2.3", asset); err != nil {
+	if err := gitlabProvider.UploadReleaseAsset(context.Background(), "v1.2.3", asset); err != nil {
 		t.Fatalf("UploadReleaseAsset: %v", err)
 	}
 

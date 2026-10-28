@@ -22,9 +22,8 @@ import (
 // a single %v anywhere in the login path would have put a registry token in the
 // build log.
 
-var errLoginRefused = errors.New("registry login refused") //nolint:err113 // fixture cause.
+var errLoginRefused = errors.New("registry login refused")
 
-//nolint:gosec // G101: a deliberately recognisable fixture value, not a credential.
 const registryTokenCanary = "glpat-OWNED-SYNTHETIC-CANARY"
 
 func TestRegistryAuth_FormattingNeverPrintsTheToken(t *testing.T) {

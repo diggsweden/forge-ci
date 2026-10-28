@@ -35,6 +35,8 @@ func TestUpdateCargoVersion_EncodesVersionString(t *testing.T) {
 
 	for _, ver := range []string{`2.0.0" # injected`, `quote'and"triple"""`, `release-\path\n`, "2.0.0\nINJECTED=true", "2.0.0\r\nINJECTED=true", "2.0.0\x00\a\v\t\x7f", "2.0.0+\u00e5"} {
 		t.Run(ver, func(t *testing.T) {
+			t.Parallel()
+
 			const (
 				prefix = "[package]\nversion = \"child-canary\"\n\n[workspace.package]\n"
 				suffix = "\nkeep = true\n\n[dependencies]\nserde = \"1\"\n"

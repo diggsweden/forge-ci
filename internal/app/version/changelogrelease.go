@@ -40,7 +40,8 @@ type changelogReleaseOps interface {
 
 // ChangelogReleaseInput drives `forge-ci version commit-changelog-release`.
 type ChangelogReleaseInput struct {
-	Tag               string   // final stable release tag, e.g. v1.2.3
+	ReleasePolicy     string
+	Tag               string   // final release tag, e.g. v1.2.3 or v1.2.3-beta.2
 	Repository        string   // owner/name, validated against the SSH origin URL path
 	GitURL            string   // required: exact ssh://git@host[:port]/owner/name.git origin URL
 	RemoteName        string   // empty defaults to origin; other remotes are unsupported
@@ -100,7 +101,7 @@ func ChangelogRelease(ctx context.Context, repo changelogReleaseOps, sink ci.Out
 		} else if exists {
 			return nil, fmt.Errorf("local release tag already exists: %w", errs.ErrValidation)
 		}
-	} else if _, _, _, tagErr := inspectReleaseTag(ctx, repo, in.GitURL, TagReleaseInput{Tag: in.Tag, Signed: in.TagSigned, Token: in.Token}); tagErr != nil {
+	} else if _, _, _, tagErr := inspectReleaseTag(ctx, repo, in.GitURL, TagReleaseInput{ReleasePolicy: in.ReleasePolicy, Tag: in.Tag, Signed: in.TagSigned, Token: in.Token}); tagErr != nil {
 		return nil, tagErr
 	}
 
@@ -116,7 +117,7 @@ func ChangelogRelease(ctx context.Context, repo changelogReleaseOps, sink ci.Out
 		return nil, err
 	}
 
-	res, err := TagRelease(ctx, repo, TagReleaseInput{Tag: in.Tag, Signed: in.TagSigned, Remote: in.RemoteName, Token: in.Token, DryRun: in.DryRun}, sink, out)
+	res, err := TagRelease(ctx, repo, TagReleaseInput{ReleasePolicy: in.ReleasePolicy, Tag: in.Tag, Signed: in.TagSigned, Remote: in.RemoteName, Token: in.Token, DryRun: in.DryRun}, sink, out)
 	if err != nil {
 		return nil, err
 	}
@@ -217,6 +218,7 @@ func validateChangelogSubject(in ChangelogReleaseInput) error {
 
 //nolint:cyclop // Flat fail-fast validation keeps each workflow-facing input error specific.
 func validateChangelogReleaseInput(in ChangelogReleaseInput) error {
+	_, tagErr := domainversion.ValidateReleaseTag(in.Tag, in.ReleasePolicy)
 	switch {
 	case in.RemoteName != "" && in.RemoteName != defaultRemoteName:
 		return fmt.Errorf("commit-changelog: only origin is supported as the publication remote: %w", errs.ErrUsage)
@@ -224,8 +226,8 @@ func validateChangelogReleaseInput(in ChangelogReleaseInput) error {
 		return fmt.Errorf("commit-changelog: branch must be a literal branch name: %w", errs.ErrUsage)
 	case in.Tag == "":
 		return fmt.Errorf("commit-changelog: tag is required: %w", errs.ErrUsage)
-	case strings.ContainsAny(in.Tag, "\n\r") || !domainversion.IsStableSemverTag(in.Tag):
-		return fmt.Errorf("commit-changelog: version tag must look like stable vMAJOR.MINOR.PATCH: %s: %w", in.Tag, errs.ErrValidation)
+	case tagErr != nil:
+		return fmt.Errorf("commit-changelog: %w", tagErr)
 	case in.Repository == "":
 		return fmt.Errorf("commit-changelog: repository is required: %w", errs.ErrUsage)
 	case strings.ContainsAny(in.Repository, "\n\r"):
@@ -237,11 +239,16 @@ func validateChangelogReleaseInput(in ChangelogReleaseInput) error {
 	}
 
 	// Org identity has no default: a three-forge engine must not assume one
-	// forge's host or ship one org's release identity. Each must be supplied
-	// by the caller/shell, and we fail loudly (with the flag + env) when it is
-	// not — see the Tier A coherence track and ADR-0001.
+	// forge's host or ship one org's release identity. The git URL defaults
+	// to the forge the job runs on (DefaultChangelogReleaseGitURL), never to
+	// a host of the engine's; the author must be supplied by the caller/shell,
+	// and we fail loudly (with the flag + env) when it is not — see the Tier A
+	// coherence track and ADR-0001.
+	if in.GitURL == "" {
+		return fmt.Errorf("commit-changelog: git URL is required (set --git-url or $RELEASE_GIT_URL, or --server-url for the repository on that host): %w", errs.ErrUsage)
+	}
+
 	required := []struct{ name, value, flag, env string }{
-		{"git URL", in.GitURL, "--git-url", "$RELEASE_GIT_URL"},
 		{"author name", in.AuthorName, "--author-name", "$GIT_USER_NAME"},
 		{"author email", in.AuthorEmail, "--author-email", "$GIT_USER_EMAIL"},
 	}
@@ -256,6 +263,24 @@ func validateChangelogReleaseInput(in ChangelogReleaseInput) error {
 	}
 
 	return nil
+}
+
+// DefaultChangelogReleaseGitURL is the release push URL when none is given:
+// the repository over SSH on the host of the forge's web URL, as user git on
+// port 22. Where SSH runs on another host or port, the caller sets the URL.
+// A wrong guess fails closed, at the pinned host key.
+func DefaultChangelogReleaseGitURL(serverURL, repository string) (string, error) {
+	parsed, err := url.Parse(serverURL)
+	if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Hostname() == "" {
+		return "", fmt.Errorf("commit-changelog: cannot derive the git URL from server URL %q; set --git-url: %w", serverURL, errs.ErrValidation)
+	}
+
+	host := parsed.Hostname()
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+
+	return "ssh://git@" + host + "/" + repository + ".git", nil
 }
 
 // ChangelogReleaseGitEndpoint is the host and effective port extracted from a
@@ -319,9 +344,10 @@ func ParseChangelogReleaseGitURL(rawURL, repository string) (ChangelogReleaseGit
 }
 
 // withChangelogReleaseDefaults fills only the forge-neutral operational
-// defaults. Org identity (git URL, author name/email) has no default and is
-// required by validateChangelogReleaseInput — a general engine must not ship
-// one org's release identity or SSH endpoint.
+// defaults. The author has no default and is required by
+// validateChangelogReleaseInput; the git URL is the caller's or derived from
+// the forge the job runs on (DefaultChangelogReleaseGitURL). A general engine
+// must not ship one org's release identity or SSH endpoint.
 func withChangelogReleaseDefaults(in ChangelogReleaseInput) ChangelogReleaseInput {
 	if in.RemoteName == "" {
 		in.RemoteName = defaultRemoteName

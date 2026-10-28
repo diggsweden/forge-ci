@@ -32,6 +32,7 @@ EXAMPLE:
    forge-ci version apply-bump --project-type maven --version 1.2.3 \
      --patch version-bump.patch --sha256 <hex> --paths-file bump-paths.txt`,
 		Flags: []cli.Flag{
+			&cli.StringFlag{Name: "release-policy", Value: "stable", Usage: "accepted release versions: stable or stable-prerelease"},
 			&cli.StringFlag{Name: "patch", Required: true, Usage: "git diff the bump job uploaded"},
 			&cli.StringFlag{Name: "sha256", Required: true, Usage: "sha256 the bump job reported for the patch"},
 			&cli.StringFlag{Name: flagProjectType, Required: true, Usage: "ecosystem whose project files the patch may change (maven/npm/cargo)"},
@@ -41,12 +42,13 @@ EXAMPLE:
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			_, err := appversion.ApplyBump(ctx, git.New(), os.Stderr, appversion.ApplyBumpInput{
-				PatchPath:   cmd.String("patch"),
-				SHA256:      cmd.String("sha256"),
-				ProjectType: projecttype.Type(cmd.String(flagProjectType)),
-				Version:     cmd.String(flagVersion),
-				WorkingDir:  cmd.String("working-dir"),
-				PathsFile:   cmd.String("paths-file"),
+				ReleasePolicy: cmd.String("release-policy"),
+				PatchPath:     cmd.String("patch"),
+				SHA256:        cmd.String("sha256"),
+				ProjectType:   projecttype.Type(cmd.String(flagProjectType)),
+				Version:       cmd.String(flagVersion),
+				WorkingDir:    cmd.String("working-dir"),
+				PathsFile:     cmd.String("paths-file"),
 			})
 
 			return err

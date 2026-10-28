@@ -112,7 +112,7 @@ func TestUploadSARIF_ResponsesAndTransportFailuresAreClassified(t *testing.T) {
 func TestUploadSARIF_RetriesAnUnavailableService(t *testing.T) {
 	t.Parallel()
 
-	p, sent := sarifProvider(t, func(req *http.Request, n int) (*http.Response, error) {
+	githubProvider, sent := sarifProvider(t, func(req *http.Request, n int) (*http.Response, error) {
 		if n < 3 {
 			return contractResponse(req, http.StatusBadGateway, `{"message":"Server Error"}`), nil
 		}
@@ -120,7 +120,7 @@ func TestUploadSARIF_RetriesAnUnavailableService(t *testing.T) {
 		return contractResponse(req, http.StatusAccepted, `{}`), nil
 	})
 
-	require.NoError(t, p.UploadSARIF(t.Context(), sarifUpload("owner/repo")))
+	require.NoError(t, githubProvider.UploadSARIF(t.Context(), sarifUpload("owner/repo")))
 	require.Len(t, *sent, 3)
 	require.Equal(t, (*sent)[0].body, (*sent)[2].body)
 }
@@ -133,7 +133,7 @@ func TestUploadSARIF_RetriesAnUnavailableService(t *testing.T) {
 func TestUploadSARIF_RedirectsStayOnTheAPIAuthority(t *testing.T) {
 	t.Parallel()
 
-	p, sent := sarifProvider(t, func(req *http.Request, n int) (*http.Response, error) {
+	githubProvider, sent := sarifProvider(t, func(req *http.Request, n int) (*http.Response, error) {
 		if n == 1 {
 			resp := contractResponse(req, http.StatusTemporaryRedirect, "")
 			resp.Header.Set("Location", "https://api.github.invalid/moved/sarifs")
@@ -144,7 +144,7 @@ func TestUploadSARIF_RedirectsStayOnTheAPIAuthority(t *testing.T) {
 		return contractResponse(req, http.StatusAccepted, `{}`), nil
 	})
 
-	require.NoError(t, p.UploadSARIF(t.Context(), sarifUpload("owner/repo")))
+	require.NoError(t, githubProvider.UploadSARIF(t.Context(), sarifUpload("owner/repo")))
 	require.Len(t, *sent, 2)
 	require.Equal(t, "POST https://api.github.invalid/moved/sarifs", (*sent)[1].target)
 	require.Equal(t, "token tok", (*sent)[1].auth)
@@ -158,14 +158,14 @@ func TestUploadSARIF_RedirectsStayOnTheAPIAuthority(t *testing.T) {
 		t.Run(location, func(t *testing.T) {
 			t.Parallel()
 
-			p, sent := sarifProvider(t, func(req *http.Request, _ int) (*http.Response, error) {
+			githubProvider, sent := sarifProvider(t, func(req *http.Request, _ int) (*http.Response, error) {
 				resp := contractResponse(req, http.StatusTemporaryRedirect, "")
 				resp.Header.Set("Location", location)
 
 				return resp, nil
 			})
 
-			err := p.UploadSARIF(t.Context(), sarifUpload("owner/repo"))
+			err := githubProvider.UploadSARIF(t.Context(), sarifUpload("owner/repo"))
 			require.ErrorIs(t, err, errs.ErrValidation)
 			require.Len(t, *sent, 1, "the report followed the redirect")
 		})

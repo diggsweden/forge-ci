@@ -18,24 +18,24 @@ func TestReleaseRetention_ListsAndDeletesAttachments(t *testing.T) {
 
 	var calls []string
 
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls = append(calls, r.Method+" "+r.URL.Path)
+	handler := http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		calls = append(calls, request.Method+" "+request.URL.Path)
 
-		switch r.Method + " " + r.URL.Path {
+		switch request.Method + " " + request.URL.Path {
 		case "GET /api/v1/repos/itiquette/repo/releases":
-			_, _ = w.Write([]byte(`[{"id":99,"tag_name":"v1.2.3","draft":false,"created_at":"2026-01-02T00:00:00Z"}]`))
+			_, _ = response.Write([]byte(`[{"id":99,"tag_name":"v1.2.3","draft":false,"created_at":"2026-01-02T00:00:00Z"}]`))
 		case "GET /api/v1/repos/itiquette/repo/releases/99/assets":
-			_, _ = w.Write([]byte(`[{"id":1,"name":"app.tar.gz","size":1000,"browser_download_url":"https://forgejo.invalid/a"}]`))
+			_, _ = response.Write([]byte(`[{"id":1,"name":"app.tar.gz","size":1000,"browser_download_url":"https://forgejo.invalid/a"}]`))
 		case "DELETE /api/v1/repos/itiquette/repo/releases/99/assets/1":
-			w.WriteHeader(http.StatusNoContent)
+			response.WriteHeader(http.StatusNoContent)
 		default:
-			http.Error(w, "unexpected "+r.Method+" "+r.URL.String(), http.StatusNotFound)
+			http.Error(response, "unexpected "+request.Method+" "+request.URL.String(), http.StatusNotFound)
 		}
 	})
 
-	p := newProvider(handler)
+	forgejoProvider := newProvider(handler)
 
-	releases, err := p.ListReleases(t.Context(), "itiquette/repo")
+	releases, err := forgejoProvider.ListReleases(t.Context(), "itiquette/repo")
 	require.NoError(t, err)
 	require.Len(t, releases, 1)
 	require.Equal(t, provider.ListedRelease{
@@ -44,6 +44,6 @@ func TestReleaseRetention_ListsAndDeletesAttachments(t *testing.T) {
 	}, releases[0])
 	require.Equal(t, 2, releases[0].Created.Day())
 
-	require.NoError(t, p.DeleteReleaseAsset(t.Context(), "itiquette/repo", releases[0], releases[0].Assets[0]))
+	require.NoError(t, forgejoProvider.DeleteReleaseAsset(t.Context(), "itiquette/repo", releases[0], releases[0].Assets[0]))
 	require.Equal(t, "DELETE /api/v1/repos/itiquette/repo/releases/99/assets/1", calls[len(calls)-1])
 }

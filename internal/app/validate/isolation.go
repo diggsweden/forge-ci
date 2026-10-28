@@ -71,7 +71,7 @@ type IsolationInput struct {
 // call returns a wrapped errs.ErrValidation. Sibling checks concern local header
 // and lexical input-reference hints only, never runtime digest verification or
 // signing order.
-func Isolation(out io.Writer, annot output.Annotator, in IsolationInput) error { //nolint:varnamelen // idiomatic short names.
+func Isolation(out io.Writer, annot output.Annotator, in IsolationInput) error {
 	literalInputs, err := subjectInputs(in)
 	if err != nil {
 		return err
@@ -144,7 +144,6 @@ func subjectInputs(in IsolationInput) ([]literalInput, error) {
 	return parseLiteralInputs(in.LiteralInputs)
 }
 
-//nolint:cyclop // Scans the two supported pin spellings and reports each independent consistency failure.
 func singlePinViolations(in IsolationInput) []validate.IsolationViolation {
 	if in.SinglePinSubject == "" {
 		return nil
@@ -375,7 +374,7 @@ func workflowDirYAMLFiles(in IsolationInput) ([]string, error) {
 			continue
 		}
 
-		data, err := os.ReadFile(filepath.Join(filepath.FromSlash(dir), entry.Name())) //nolint:gosec // workflow directory under caller-provided repo path.
+		data, err := os.ReadFile(filepath.Join(filepath.FromSlash(dir), entry.Name()))
 		if err != nil {
 			return nil, fmt.Errorf("read workflow file %s: %w", entry.Name(), err)
 		}
@@ -453,21 +452,21 @@ func signJobUses(workflowYAML []byte, signJob string) string {
 }
 
 func siblingWorkflowPath(workflow, uses string) string {
-	refIdx := strings.LastIndex(uses, "@")
-	if refIdx < 0 {
+	before, _, ok := strings.CutLast(uses, "@")
+	if !ok {
 		return ""
 	}
 
-	pathPart := uses[:refIdx]
+	pathPart := before
 	if schemeIdx := strings.Index(pathPart, "://"); schemeIdx >= 0 {
 		afterScheme := pathPart[schemeIdx+3:]
 
-		slashIdx := strings.Index(afterScheme, "/")
-		if slashIdx < 0 {
+		_, after, ok := strings.Cut(afterScheme, "/")
+		if !ok {
 			return ""
 		}
 
-		pathPart = afterScheme[slashIdx+1:]
+		pathPart = after
 	}
 
 	parts := strings.Split(pathPart, "/")
@@ -500,7 +499,7 @@ func secretsContractHeader(body string) map[string]struct{} {
 		}
 
 		declared := map[string]struct{}{}
-		for _, field := range strings.Fields(contract) {
+		for field := range strings.FieldsSeq(contract) {
 			declared[field] = struct{}{}
 		}
 

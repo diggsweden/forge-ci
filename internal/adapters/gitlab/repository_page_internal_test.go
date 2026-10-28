@@ -6,13 +6,14 @@ package gitlab
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/diggsweden/forge-ci/internal/domain/errs"
-	"github.com/diggsweden/forge-ci/internal/domain/provider"
-	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/provider"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRegistryPageBoundary_FindsExactSecondPageForListAndDelete(t *testing.T) {
@@ -21,7 +22,7 @@ func TestRegistryPageBoundary_FindsExactSecondPageForListAndDelete(t *testing.T)
 	for _, deleting := range []bool{false, true} {
 		var calls []string
 
-		p := &Provider{APIBaseOverride: "https://gitlab.invalid/api/v4", Env: func(string) string { return "" }, HTTPClient: &http.Client{Transport: guardTransport(func(req *http.Request) (*http.Response, error) {
+		gitlabProvider := &Provider{APIBaseOverride: "https://gitlab.invalid/api/v4", Env: func(string) string { return "" }, HTTPClient: &http.Client{Transport: guardTransport(func(req *http.Request) (*http.Response, error) {
 			calls = append(calls, req.Method+" "+req.URL.RequestURI())
 			body := `[]`
 
@@ -51,9 +52,9 @@ func TestRegistryPageBoundary_FindsExactSecondPageForListAndDelete(t *testing.T)
 			return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: req}, nil
 		})}}
 		if deleting {
-			require.NoError(t, p.DeleteTag(t.Context(), "registry.invalid/group/project:staging-v1"))
+			require.NoError(t, gitlabProvider.DeleteTag(t.Context(), "registry.invalid/group/project:staging-v1"))
 		} else {
-			versions, err := p.ListContainerPackageVersions(t.Context(), "group", "project")
+			versions, err := gitlabProvider.ListContainerPackageVersions(t.Context(), "group", "project")
 			require.NoError(t, err)
 			require.Equal(t, []string{"v1"}, versions)
 		}
@@ -68,7 +69,7 @@ func TestGitLabIdentityBoundary_RejectsBlankAttestedProject(t *testing.T) {
 	t.Parallel()
 
 	for _, url := range []string{" ", "\t", "\r\n"} {
-		p := &Provider{Env: func(key string) string {
+		gitlabProvider := &Provider{Env: func(key string) string {
 			switch key {
 			case "GITLAB_CI":
 				return "true"
@@ -80,7 +81,7 @@ func TestGitLabIdentityBoundary_RejectsBlankAttestedProject(t *testing.T) {
 
 			return ""
 		}}
-		id, err := p.ResolveKeylessIdentity()
+		id, err := gitlabProvider.ResolveKeylessIdentity()
 		require.ErrorIs(t, err, errs.ErrUsage)
 		require.Equal(t, provider.KeylessIdentity{}, id)
 	}

@@ -63,10 +63,12 @@ func TestValidateNPMTag(t *testing.T) {
 		for _, suffix := range []string{"{version}", "1.2.3", "1.2.3-rc.1"} {
 			require.NoError(t, publish.ValidateNPMTag(prefix+suffix))
 		}
+
 		for _, suffix := range []string{"", "latest", "next", "snapshot", "1", "1.2", "1.2.x", "v1.2.3", "01.2.3", "1.2.3+build.7", "1.2.3\n"} {
 			require.ErrorIs(t, publish.ValidateNPMTag(prefix+suffix), errs.ErrInvalidConfig, prefix+suffix)
 		}
 	}
+
 	for _, tag := range []string{"", "latest", "next", "snapshot", "stable", "1.2.3", "other.1.2.3", " release.1.2.3"} {
 		require.ErrorIs(t, publish.ValidateNPMTag(tag), errs.ErrInvalidConfig, tag)
 	}

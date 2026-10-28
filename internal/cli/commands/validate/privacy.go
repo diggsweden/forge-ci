@@ -6,6 +6,7 @@ package validate
 import (
 	"context"
 	"fmt"
+
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/release"
 	"github.com/urfave/cli/v3"

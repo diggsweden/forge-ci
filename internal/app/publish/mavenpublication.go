@@ -242,8 +242,8 @@ func ownedPublicationPayload(publications []domainpublish.MavenPublication, name
 
 func stripPublicationSidecar(name string) string {
 	for _, suffix := range []string{checksumMD5Extension, checksumSHA1Extension, checksumSHA256Extension, checksumSHA512Extension} {
-		if strings.HasSuffix(name, suffix) {
-			return strings.TrimSuffix(strings.TrimSuffix(name, suffix), ".asc")
+		if before, ok := strings.CutSuffix(name, suffix); ok {
+			return strings.TrimSuffix(before, ".asc")
 		}
 	}
 

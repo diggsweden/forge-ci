@@ -27,6 +27,8 @@ func TestConfigPlanBoundary_DuplicateConsumedMembers(t *testing.T) {
 	require.Contains(t, raw, member)
 
 	t.Run("duplicate", func(t *testing.T) {
+		t.Parallel()
+
 		assertDuplicatePlanRefusal(t, strings.Replace(raw, member, member+","+duplicate, 1), "config-plan.artifacts.all[1].maven.settings_path has duplicate consumed member")
 	})
 	// Duplicate diagnostics must precede semantic version/projection errors.

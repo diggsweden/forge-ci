@@ -442,11 +442,12 @@ const (
 // (gh release create supports passing them directly; the GitLab
 // adapter uploads them via /assets/links).
 type ReleaseSpec struct {
+	Immutable  bool // versioned release: never replace published content on retry
 	Tag        string
 	Name       string // display name (defaults to Tag at use-case layer)
 	NotesFile  string // path; empty → no --notes-file
 	Draft      bool   // unsupported true values must be refused before provider mutation
-	Prerelease bool   // unsupported true values must be refused before provider mutation
+	Prerelease bool   // version classification, represented natively or explicitly in notes
 	MakeLatest MakeLatestMode
 	Assets     []string // file paths to attach
 }
@@ -531,11 +532,9 @@ type ReleaseCreator interface {
 	CreateRelease(ctx context.Context, repo string, spec ReleaseSpec) error
 }
 
-// ReleasePublisher creates or updates a release and reconciles its assets to
-// match the supplied spec. Unlike ReleaseCreator, this role never deletes the
-// release object during an update; providers update release metadata in place,
-// replace colliding assets by basename, upload desired assets, and remove stale
-// assets no longer present in spec.Assets.
+// ReleasePublisher reconciles assets to match the supplied spec. Immutable
+// versioned releases use verified retries and may replace only unpublished
+// drafts; mutable callers reconcile metadata and assets in place.
 type ReleasePublisher interface {
 	PublishRelease(ctx context.Context, repo string, spec ReleaseSpec) error
 }

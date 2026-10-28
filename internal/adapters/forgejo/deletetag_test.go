@@ -19,27 +19,27 @@ func TestDeleteTag_DeletesContainerPackageVersion(t *testing.T) {
 
 	var deletedPath string
 
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete {
-			deletedPath = r.URL.Path
+	handler := http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Method == http.MethodDelete {
+			deletedPath = request.URL.Path
 
-			w.WriteHeader(http.StatusNoContent)
+			response.WriteHeader(http.StatusNoContent)
 
 			return
 		}
 
-		http.Error(w, "unexpected "+r.Method, http.StatusNotFound)
+		http.Error(response, "unexpected "+request.Method, http.StatusNotFound)
 	})
 
-	p := &forgejo.Provider{
+	provider := &forgejo.Provider{
 		Env:             envMap(map[string]string{"FORGEJO_TOKEN": "tok"}),
 		HTTPClient:      inMemoryClient(handler),
 		APIBaseOverride: "https://forgejo.invalid",
 	}
 
-	// A fully-qualified ref; the package API targets owner/name/version,
-	// not the ref's host.
-	if err := p.DeleteTag(context.Background(), "codeberg.org/itiquette/gommitlint:staging-v1.2.3"); err != nil {
+	// A fully-qualified ref on the server's registry; the package API targets
+	// owner/name/version.
+	if err := provider.DeleteTag(context.Background(), "forgejo.invalid/itiquette/gommitlint:staging-v1.2.3"); err != nil {
 		t.Fatalf("DeleteTag = %v", err)
 	}
 
@@ -52,23 +52,23 @@ func TestDeleteTag_DeletesContainerPackageVersion(t *testing.T) {
 func TestDeleteTag_TreatsMissingPackageVersionAsAlreadyAbsent(t *testing.T) {
 	t.Parallel()
 
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete {
-			http.Error(w, "not found", http.StatusNotFound)
+	handler := http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Method == http.MethodDelete {
+			http.Error(response, "not found", http.StatusNotFound)
 
 			return
 		}
 
-		http.Error(w, "unexpected "+r.Method, http.StatusNotFound)
+		http.Error(response, "unexpected "+request.Method, http.StatusNotFound)
 	})
 
-	p := &forgejo.Provider{
+	provider := &forgejo.Provider{
 		Env:             envMap(map[string]string{"FORGEJO_TOKEN": "tok"}),
 		HTTPClient:      inMemoryClient(handler),
 		APIBaseOverride: "https://forgejo.invalid",
 	}
 
-	if err := p.DeleteTag(context.Background(), "codeberg.org/itiquette/gommitlint:staging-v1.2.3"); err != nil {
+	if err := provider.DeleteTag(context.Background(), "forgejo.invalid/itiquette/gommitlint:staging-v1.2.3"); err != nil {
 		t.Fatalf("DeleteTag 404 should be idempotent, got %v", err)
 	}
 }
@@ -82,13 +82,13 @@ func TestDeleteTag_ReportsARefusedDelete(t *testing.T) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 	})
 
-	p := &forgejo.Provider{
+	provider := &forgejo.Provider{
 		Env:             envMap(map[string]string{"FORGEJO_TOKEN": "tok"}),
 		HTTPClient:      inMemoryClient(handler),
 		APIBaseOverride: "https://forgejo.invalid",
 	}
 
-	err := p.DeleteTag(t.Context(), "codeberg.org/itiquette/gommitlint:staging-v1.2.3")
+	err := provider.DeleteTag(t.Context(), "forgejo.invalid/itiquette/gommitlint:staging-v1.2.3")
 	if !errors.Is(err, errs.ErrPermissionDenied) {
 		t.Fatalf("a refused delete = %v, want ErrPermissionDenied", err)
 	}
@@ -115,7 +115,7 @@ func TestDeleteTag_RefusesARedirectThatLeavesTheServer(t *testing.T) {
 			t.Parallel()
 
 			requests := 0
-			p := &forgejo.Provider{
+			provider := &forgejo.Provider{
 				Env:             envMap(map[string]string{"FORGEJO_TOKEN": "tok"}),
 				APIBaseOverride: "https://forgejo.invalid",
 				HTTPClient: &http.Client{Transport: releaseAssetTransport(func(req *http.Request) (*http.Response, error) {
@@ -131,7 +131,7 @@ func TestDeleteTag_RefusesARedirectThatLeavesTheServer(t *testing.T) {
 				})},
 			}
 
-			err := p.DeleteTag(t.Context(), "codeberg.org/itiquette/gommitlint:staging-v1.2.3")
+			err := provider.DeleteTag(t.Context(), "forgejo.invalid/itiquette/gommitlint:staging-v1.2.3")
 			if !errors.Is(err, tc.want) || requests != tc.requests {
 				t.Fatalf("DeleteTag = %v after %d requests, want %v after %d", err, requests, tc.want, tc.requests)
 			}
@@ -147,6 +147,34 @@ func TestDeleteTag_RefusesARedirectThatLeavesTheServer(t *testing.T) {
 				t.Fatalf("DeleteTag = %v, want it to name both authorities", err)
 			}
 		})
+	}
+}
+
+// The package API knows a package by owner and name only, so a ref on another
+// registry would delete this server's same-named package tag. It is refused
+// before any request.
+func TestDeleteTag_RefusesAnImageOnAnotherRegistry(t *testing.T) {
+	t.Parallel()
+
+	requests := 0
+	provider := &forgejo.Provider{
+		Env:             envMap(map[string]string{"FORGEJO_TOKEN": "tok"}),
+		APIBaseOverride: "https://forgejo.invalid",
+		HTTPClient: inMemoryClient(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			requests++
+
+			w.WriteHeader(http.StatusNoContent)
+		})),
+	}
+
+	for _, ref := range []string{"ghcr.io/itiquette/gommitlint:staging-v1.2.3", "forgejo.invalid:8443/itiquette/gommitlint:staging-v1.2.3"} {
+		if err := provider.DeleteTag(t.Context(), ref); !errors.Is(err, errs.ErrUsage) {
+			t.Errorf("DeleteTag(%q) = %v, want ErrUsage", ref, err)
+		}
+	}
+
+	if requests != 0 {
+		t.Errorf("%d requests sent for a ref on another registry", requests)
 	}
 }
 

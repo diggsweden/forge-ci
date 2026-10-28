@@ -5,6 +5,7 @@ package release
 
 import (
 	"fmt"
+
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 

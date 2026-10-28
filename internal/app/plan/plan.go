@@ -30,7 +30,7 @@ type ReleaseInput struct {
 	Branch                          string
 	RefName                         string
 	FilePattern                     string
-	ReleaseType                     string
+	ReleasePolicy                   string
 	ReleasePublisher                string
 	ReleaseRequireAllowlistedSigner bool
 	ReleaseDraft                    bool
@@ -57,7 +57,7 @@ func Release(ctx context.Context, sink ci.OutputSink, summary ci.SummarySink, in
 		Branch:                          in.Branch,
 		RefName:                         in.RefName,
 		FilePattern:                     in.FilePattern,
-		ReleaseType:                     in.ReleaseType,
+		ReleasePolicy:                   in.ReleasePolicy,
 		ReleasePublisher:                in.ReleasePublisher,
 		ReleaseRequireAllowlistedSigner: in.ReleaseRequireAllowlistedSigner,
 		ReleaseDraft:                    in.ReleaseDraft,
@@ -220,6 +220,10 @@ func PR(ctx context.Context, sink ci.OutputSink, in PRInput) (*pipeline.PRPlan, 
 		return nil, err
 	}
 
+	if engine == pipeline.LintEngineNone {
+		slog.WarnContext(ctx, "no supported lint engine is enabled; PR general lint checks will not run (select nanolinter or megalinter with lint-engine)")
+	}
+
 	plan := pipeline.NewPRPlan(pipeline.PRPlanInput{
 		ProjectType:      pt,
 		BaseBranch:       in.BaseBranch,
@@ -251,7 +255,7 @@ type GetFilePatternInput struct {
 // GetFilePattern returns the pathspec for the project type's version-bump
 // commit. Custom override wins. Returns the resolved pattern + emits to
 // w (caller's writer) and optionally to the OutputSink.
-func GetFilePattern(ctx context.Context, sink ci.OutputSink, out io.Writer, in GetFilePatternInput) (string, error) { //nolint:cyclop // validate both output channels before the documented writer-then-sink commit order.
+func GetFilePattern(ctx context.Context, sink ci.OutputSink, out io.Writer, in GetFilePatternInput) (string, error) {
 	pattern, err := resolveFilePattern(in)
 	if err != nil {
 		return "", err

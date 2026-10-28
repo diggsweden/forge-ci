@@ -90,7 +90,7 @@ func TestPrepareAppStoreCredentials_WritesTheDecodedKeyOwnerOnly(t *testing.T) {
 
 	path := filepath.Join(dir, "AuthKey_ABCD1234EF.p8")
 
-	got, err := os.ReadFile(path) //nolint:gosec // test fixture path
+	got, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}

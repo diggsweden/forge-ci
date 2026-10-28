@@ -26,18 +26,18 @@ func writeDist(t *testing.T) string {
 	dir := t.TempDir()
 	dist := filepath.Join(dir, "dist")
 
-	for _, f := range []struct{ name, body string }{
+	for _, file := range []struct{ name, body string }{
 		{"app_linux_amd64.tar.gz", "amd64 bytes\n"},
 		{"app_linux_arm64.tar.gz", "arm64 bytes\n"},
 		{"checksums.txt", "deadbeef  app\n"},
 		{"nested/extra.txt", "nested\n"},
 	} {
-		p := filepath.Join(dist, f.name)
+		p := filepath.Join(dist, file.name)
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			t.Fatal(err)
 		}
 
-		if err := os.WriteFile(p, []byte(f.body), 0o600); err != nil {
+		if err := os.WriteFile(p, []byte(file.body), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -79,7 +79,7 @@ func shellDigest(t *testing.T, dir string) string {
 	// byte-sort). dir is passed as $1 so both Go and the shell hash the
 	// same paths.
 	script := `find "$1" -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}'`
-	cmd := exec.CommandContext(t.Context(), "bash", "-c", script, "bash", dir) //nolint:gosec // fixed script, test-only.
+	cmd := exec.CommandContext(t.Context(), "bash", "-c", script, "bash", dir)
 
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 
@@ -98,7 +98,7 @@ func shellDigestFromInside(t *testing.T, dir string) string {
 	// from inside the staging directory so both producer and verifier wrote
 	// ./<file> paths even though the outer artifact directory names differed.
 	script := `cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}'`
-	cmd := exec.CommandContext(t.Context(), "bash", "-c", script, "bash", dir) //nolint:gosec // fixed script, test-only.
+	cmd := exec.CommandContext(t.Context(), "bash", "-c", script, "bash", dir)
 
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 

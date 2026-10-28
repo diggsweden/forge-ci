@@ -92,6 +92,7 @@ type FilesInput struct {
 // ValidateReleaseFileManifestInput drives ValidateReleaseFileManifest.
 type ValidateReleaseFileManifestInput struct {
 	FilesInput
+
 	// Unsigned holds the manifest and its dist to the state a producer hands
 	// over, before any signing verb has run.
 	Unsigned bool
@@ -100,6 +101,7 @@ type ValidateReleaseFileManifestInput struct {
 // WriteReleaseFileManifestInput drives WriteReleaseFileManifest.
 type WriteReleaseFileManifestInput struct {
 	FilesInput
+
 	OutputFile     string
 	AssetsJSONFile string
 }
@@ -108,18 +110,21 @@ type WriteReleaseFileManifestInput struct {
 // the GoReleaser assets. Import happens before signing creates provenance.
 type ImportGoReleaserFileManifestInput struct {
 	FilesInput
+
 	EvidenceFiles []string
 }
 
 // ListReleaseFilesInput drives ListReleaseFiles.
 type ListReleaseFilesInput struct {
 	FilesInput
+
 	Section string
 }
 
 // ValidateReleaseChecksumsInput drives ValidateReleaseChecksums.
 type ValidateReleaseChecksumsInput struct {
 	FilesInput
+
 	ChecksumsFile string
 }
 
@@ -167,12 +172,12 @@ func writeReleaseFileManifest(ctx releaseFilesCtx, manifest *FileManifest, outpu
 	body = append(body, '\n')
 
 	if output != cliio.StdSentinel {
-		if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil { //nolint:gosec,mnd // release metadata under workspace.
+		if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil { //nolint:gosec // release metadata under workspace.
 			return nil, fmt.Errorf("create release file manifest directory: %w", err)
 		}
 	}
 
-	if err := cliio.WriteFile(output, body, 0o644); err != nil { //nolint:gosec // public release metadata.
+	if err := cliio.WriteFile(output, body, 0o644); err != nil {
 		return nil, fmt.Errorf("write release file manifest %s: %w", output, err)
 	}
 
@@ -899,7 +904,7 @@ type goReleaserArtifact struct {
 }
 
 func readGoReleaserArtifacts(ctx releaseFilesCtx) ([]goReleaserArtifact, error) {
-	body, err := os.ReadFile(ctx.artifactsJSONPath()) //nolint:gosec // release metadata path under workspace.
+	body, err := os.ReadFile(ctx.artifactsJSONPath())
 	if err != nil {
 		return nil, fmt.Errorf("read GoReleaser artifacts %s: %w", ctx.artifactsJSONPath(), err)
 	}
@@ -935,7 +940,7 @@ type releaseFileCollector struct {
 	names   map[string]string
 }
 
-func (c *releaseFileCollector) add(ctx releaseFilesCtx, path, source string) error { //nolint:varnamelen // collector receiver.
+func (c *releaseFileCollector) add(ctx releaseFilesCtx, path, source string) error {
 	if err := validateReleaseDistAsset(ctx, path); err != nil {
 		return err
 	}
@@ -1271,8 +1276,6 @@ func validateReleasePathComponents(path string) error {
 
 // openReleaseFile rejects linked parents and leaves, and binds file validation
 // to the descriptor used by readers rather than reopening it after a check.
-//
-//nolint:cyclop // each descriptor/type/identity failure independently refuses the file.
 func openReleaseFile(path string) (*os.File, error) {
 	if strings.HasSuffix(path, string(filepath.Separator)) {
 		return nil, fmt.Errorf("artifact path must name a regular file: %q: %w", path, errs.ErrMissingInput)

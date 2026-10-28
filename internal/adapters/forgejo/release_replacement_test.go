@@ -78,35 +78,35 @@ func TestPublishRelease_ReplacementFailureGuarantees(t *testing.T) {
 
 			var calls []string
 
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				calls = append(calls, r.Method+" "+r.URL.Path)
+			handler := http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+				calls = append(calls, request.Method+" "+request.URL.Path)
 
 				switch {
-				case r.Method == http.MethodGet && r.URL.Path == "/api/v1/repos/itiquette/repo/releases/tags/v1.2.3":
-					_, _ = w.Write([]byte(`{"id":99,"tag_name":"v1.2.3","assets":[{"id":1,"name":"asset.tgz"}]}`))
-				case r.Method == http.MethodPatch && r.URL.Path == "/api/v1/repos/itiquette/repo/releases/99":
-					_, _ = w.Write([]byte(`{"id":99,"tag_name":"v1.2.3"}`))
-				case r.Method == http.MethodGet && r.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets":
-					_, _ = w.Write([]byte(`[{"id":1,"name":"asset.tgz"}]`))
-				case r.Method == http.MethodPost && r.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets":
+				case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/tags/v1.2.3":
+					_, _ = response.Write([]byte(`{"id":99,"tag_name":"v1.2.3","assets":[{"id":1,"name":"asset.tgz"}]}`))
+				case request.Method == http.MethodPatch && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99":
+					_, _ = response.Write([]byte(`{"id":99,"tag_name":"v1.2.3"}`))
+				case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets":
+					_, _ = response.Write([]byte(`[{"id":1,"name":"asset.tgz"}]`))
+				case request.Method == http.MethodPost && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets":
 					if testCase.failUpload {
-						http.Error(w, "upload refused", http.StatusInsufficientStorage)
+						http.Error(response, "upload refused", http.StatusInsufficientStorage)
 
 						return
 					}
 
-					w.WriteHeader(http.StatusCreated)
-					_, _ = w.Write([]byte(`{"id":7,"name":"asset.tgz"}`))
-				case r.Method == http.MethodDelete && r.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets/1":
+					response.WriteHeader(http.StatusCreated)
+					_, _ = response.Write([]byte(`{"id":7,"name":"asset.tgz"}`))
+				case request.Method == http.MethodDelete && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets/1":
 					if testCase.failDelete {
-						http.Error(w, "delete refused", http.StatusConflict)
+						http.Error(response, "delete refused", http.StatusConflict)
 
 						return
 					}
 
-					w.WriteHeader(http.StatusNoContent)
+					response.WriteHeader(http.StatusNoContent)
 				default:
-					http.Error(w, "unexpected "+r.Method+" "+r.URL.String(), http.StatusNotFound)
+					http.Error(response, "unexpected "+request.Method+" "+request.URL.String(), http.StatusNotFound)
 				}
 			})
 
@@ -147,44 +147,44 @@ type storedAttachment struct {
 
 const storeAssets = "/api/v1/repos/itiquette/repo/releases/99/assets"
 
-func (store *attachmentStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (store *attachmentStore) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
 	switch {
-	case r.Method == http.MethodGet && r.URL.Path == "/api/v1/repos/itiquette/repo/releases/tags/v1.2.3",
-		r.Method == http.MethodPatch && r.URL.Path == "/api/v1/repos/itiquette/repo/releases/99":
-		_, _ = w.Write([]byte(`{"id":99,"tag_name":"v1.2.3"}`))
-	case r.Method == http.MethodGet && r.URL.Path == storeAssets:
-		writeJSON(w, store.stored)
-	case r.Method == http.MethodPost && r.URL.Path == storeAssets:
-		store.upload(w, r)
-	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, storeAssets+"/"):
-		store.delete(w, strings.TrimPrefix(r.URL.Path, storeAssets+"/"))
+	case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/tags/v1.2.3",
+		request.Method == http.MethodPatch && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99":
+		_, _ = response.Write([]byte(`{"id":99,"tag_name":"v1.2.3"}`))
+	case request.Method == http.MethodGet && request.URL.Path == storeAssets:
+		writeJSON(response, store.stored)
+	case request.Method == http.MethodPost && request.URL.Path == storeAssets:
+		store.upload(response, request)
+	case request.Method == http.MethodDelete && strings.HasPrefix(request.URL.Path, storeAssets+"/"):
+		store.delete(response, strings.TrimPrefix(request.URL.Path, storeAssets+"/"))
 	default:
-		http.Error(w, "unexpected "+r.Method+" "+r.URL.String(), http.StatusNotFound)
+		http.Error(response, "unexpected "+request.Method+" "+request.URL.String(), http.StatusNotFound)
 	}
 }
 
-func (store *attachmentStore) upload(w http.ResponseWriter, r *http.Request) {
+func (store *attachmentStore) upload(response http.ResponseWriter, request *http.Request) {
 	if store.failUpload {
 		store.failUpload = false
 
-		http.Error(w, "upload refused", http.StatusInsufficientStorage)
+		http.Error(response, "upload refused", http.StatusInsufficientStorage)
 
 		return
 	}
 
-	file, header, err := r.FormFile("attachment")
+	file, header, err := request.FormFile("attachment")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(response, err.Error(), http.StatusBadRequest)
 
 		return
 	}
 
 	content, err := io.ReadAll(file)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(response, err.Error(), http.StatusBadRequest)
 
 		return
 	}
@@ -193,15 +193,15 @@ func (store *attachmentStore) upload(w http.ResponseWriter, r *http.Request) {
 	uploaded := storedAttachment{ID: store.nextID, Name: header.Filename, content: string(content)}
 	store.stored = append(store.stored, uploaded)
 
-	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, uploaded)
+	response.WriteHeader(http.StatusCreated)
+	writeJSON(response, uploaded)
 }
 
-func (store *attachmentStore) delete(w http.ResponseWriter, rawID string) {
+func (store *attachmentStore) delete(response http.ResponseWriter, rawID string) {
 	if store.failDelete {
 		store.failDelete = false
 
-		http.Error(w, "delete refused", http.StatusConflict)
+		http.Error(response, "delete refused", http.StatusConflict)
 
 		return
 	}
@@ -210,14 +210,14 @@ func (store *attachmentStore) delete(w http.ResponseWriter, rawID string) {
 	index := slices.IndexFunc(store.stored, func(a storedAttachment) bool { return a.ID == id })
 
 	if err != nil || index < 0 {
-		http.Error(w, "no such asset", http.StatusNotFound)
+		http.Error(response, "no such asset", http.StatusNotFound)
 
 		return
 	}
 
 	store.stored = slices.Delete(store.stored, index, index+1)
 
-	w.WriteHeader(http.StatusNoContent)
+	response.WriteHeader(http.StatusNoContent)
 }
 
 // state describes each stored attachment as id:content, in upload order.

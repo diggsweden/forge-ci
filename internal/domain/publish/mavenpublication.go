@@ -47,7 +47,6 @@ type MavenPublication struct {
 	} `xml:"scm"`
 }
 
-//nolint:gochecknoglobals // immutable coordinate grammar; no paths or expressions.
 var mavenCoordinate = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*$`)
 
 // Directory is the Maven repository directory of this resolved publication.
@@ -79,9 +78,11 @@ func parseMavenPublication(body []byte, expectedVersion string, central, snapsho
 	if publication.Packaging == "" {
 		publication.Packaging = "jar"
 	}
+
 	if publication.GroupID == "" {
 		publication.GroupID = publication.Parent.GroupID
 	}
+
 	if publication.Version == "" {
 		publication.Version = publication.Parent.Version
 	}

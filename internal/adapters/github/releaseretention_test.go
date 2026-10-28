@@ -27,12 +27,12 @@ func TestReleaseRetention_ListsAndDeletesAssets(t *testing.T) {
 		return fakegitserver.Response{Status: 204}
 	})
 
-	p := &github.Provider{
+	provider := &github.Provider{
 		APIBaseOverride: srv.URL(), HTTPClient: srv.Client(),
 		Env: envFunc(map[string]string{"GITHUB_TOKEN": "test-token"}),
 	}
 
-	releases, err := p.ListReleases(t.Context(), "owner/repo")
+	releases, err := provider.ListReleases(t.Context(), "owner/repo")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestReleaseRetention_ListsAndDeletesAssets(t *testing.T) {
 		t.Fatalf("releases = %+v", releases)
 	}
 
-	if err := p.DeleteReleaseAsset(t.Context(), "owner/repo", releases[0], releases[0].Assets[0]); err != nil {
+	if err := provider.DeleteReleaseAsset(t.Context(), "owner/repo", releases[0], releases[0].Assets[0]); err != nil {
 		t.Fatal(err)
 	}
 

@@ -33,6 +33,7 @@ type npmTagProbe struct {
 // Only queries reach the inert registry; publication is recorded by the fixture.
 type localNPMTagProbe struct {
 	npmTagProbe
+
 	env []string
 }
 
@@ -40,9 +41,11 @@ func (p *localNPMTagProbe) RunInherit(ctx context.Context, dir string, stdout, s
 	if args[0] == "publish" {
 		return p.npmTagProbe.RunInherit(ctx, dir, stdout, stderr, args...)
 	}
+
 	p.calls = append(p.calls, args)
 	cmd := exec.CommandContext(ctx, "npm", args...)
 	cmd.Dir, cmd.Env, cmd.Stdout, cmd.Stderr = dir, p.env, stdout, stderr
+
 	return cmd.Run()
 }
 
@@ -50,6 +53,7 @@ func TestNPMPublishNativeQueryWithoutLatest(t *testing.T) {
 	if _, err := exec.LookPath("npm"); err != nil {
 		t.Skip("npm is not installed")
 	}
+
 	for _, tc := range []struct {
 		name     string
 		versions []string
@@ -63,26 +67,31 @@ func TestNPMPublishNativeQueryWithoutLatest(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tags := map[string]string{}
+
 			versions := map[string]any{}
 			for _, version := range tc.versions {
 				tags["release."+version] = version
 				versions[version] = map[string]string{"name": "@fixture/pkg", "version": version}
 			}
+
 			if tc.conflict {
 				tags["release.1.2.3"] = "0.1.0"
 			}
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
+
+			server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, r *http.Request) {
+				response.Header().Set("Content-Type", "application/json")
+
 				switch r.URL.Path {
 				case "/@fixture/pkg":
-					_ = json.NewEncoder(w).Encode(map[string]any{"name": "@fixture/pkg", "dist-tags": tags, "versions": versions})
+					_ = json.NewEncoder(response).Encode(map[string]any{"name": "@fixture/pkg", "dist-tags": tags, "versions": versions})
 				case "/-/package/@fixture/pkg/dist-tags":
-					_ = json.NewEncoder(w).Encode(tags)
+					_ = json.NewEncoder(response).Encode(tags)
 				default:
-					http.Error(w, "unexpected query", http.StatusBadRequest)
+					http.Error(response, "unexpected query", http.StatusBadRequest)
 				}
 			}))
 			defer server.Close()
+
 			dir := t.TempDir()
 			config := filepath.Join(dir, "npmrc")
 			require.NoError(t, os.WriteFile(config, nil, 0o600))
@@ -96,8 +105,10 @@ func TestNPMPublishNativeQueryWithoutLatest(t *testing.T) {
 			require.Empty(t, strings.TrimSpace(string(output)))
 
 			writeNPMPackage(t, filepath.Join(dir, "pkg.tgz"), "@fixture/pkg", "1.2.3")
+
 			probe := &localNPMTagProbe{env: env}
 			resolver := fakeNPMRegistryResolver{reg: provider.ForgeNPMRegistry{Registry: server.URL + "/", Token: "synthetic"}}
+
 			err = apppublish.ForgePackagesNPMPublish(t.Context(), probe, resolver, io.Discard, io.Discard, apppublish.ForgePackagesNPMPublishInput{WorkingDir: dir, Tag: "release.{version}"})
 			if tc.conflict {
 				require.ErrorIs(t, err, errs.ErrValidation)
@@ -122,6 +133,7 @@ func (p *npmTagProbe) RunInherit(_ context.Context, _ string, stdout, stderr io.
 		if _, err := io.WriteString(stdout, p.response); err != nil {
 			return err
 		}
+
 		_, _ = io.WriteString(stderr, p.viewStderr)
 
 		return p.viewErr
@@ -169,6 +181,7 @@ func TestNPMPublishChecksTagBeforeMutation(t *testing.T) {
 			err := apppublish.ForgePackagesNPMPublish(t.Context(), probe, resolver, io.Discard, io.Discard, apppublish.ForgePackagesNPMPublishInput{WorkingDir: dir, Tag: tc.setting})
 			require.ErrorIs(t, err, tc.wantError)
 			require.Len(t, probe.calls, tc.wantCalls)
+
 			if tc.wantCalls > 0 {
 				require.Equal(t, []string{"dist-tag", "ls", "@fixture/pkg", "--userconfig", probe.credential, "--registry", "https://registry.example/"}, probe.calls[0])
 			}
@@ -188,20 +201,25 @@ func TestNPMPublishChecksTagBeforeMutation(t *testing.T) {
 
 func TestNPMPublishDoesNotMistakeRegistryFailureForAbsence(t *testing.T) {
 	t.Parallel()
+
 	for _, code := range []string{"E503", "E401", "E403", "ECONNRESET", "E404", "No dist-tags found for other", "No dist-tags found for pkg", "npm ERR! No dist-tags found for other", "npm ERR! No dist-tags found for pkg"} {
 		t.Run(code, func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
 			writeNPMPackage(t, filepath.Join(dir, "pkg.tgz"), "pkg", "1.2.3")
+
 			stderr := "npm error code " + code
 			if strings.HasPrefix(code, "No dist-tags") {
 				stderr = "npm error " + code
 			}
+
 			if strings.HasPrefix(code, "npm ERR!") {
 				stderr = code
 			}
+
 			probe := &npmTagProbe{viewErr: errs.ErrDependencyUnavailable, viewStderr: stderr}
 			resolver := fakeNPMRegistryResolver{reg: provider.ForgeNPMRegistry{Registry: "https://registry.example/", Token: "synthetic"}}
+
 			err := apppublish.ForgePackagesNPMPublish(t.Context(), probe, resolver, io.Discard, io.Discard, apppublish.ForgePackagesNPMPublishInput{WorkingDir: dir, Tag: "release-{version}"})
 			if code == "E404" || code == "No dist-tags found for pkg" || code == "npm ERR! No dist-tags found for pkg" {
 				require.NoError(t, err)

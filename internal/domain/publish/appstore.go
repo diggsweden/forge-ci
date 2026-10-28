@@ -29,8 +29,6 @@ type AppStoreUploadInput struct {
 // 10-character mixed-case alphanumeric; this is the strictest check that
 // accepts every documented format while rejecting punctuation, path
 // separators, or anything that could escape a `AuthKey_<id>.p8` filename.
-//
-//nolint:cyclop // App Store key-ID validation: one branch per character-class rule.
 func IsAppStoreKeyID(s string) bool {
 	if s == "" || len(s) > 32 {
 		return false
@@ -82,41 +80,41 @@ func ParseAppStoreUploadRequestID(body []byte) (string, error) {
 // RenderAppStoreUploadSummary returns the markdown block written after App
 // Store Connect upload.
 func RenderAppStoreUploadSummary(in AppStoreUploadInput, now time.Time) string {
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var builder strings.Builder
 
-	_, _ = fmt.Fprintf(&b, "## App Store Connect Upload Summary 📱\n\n")
-	_, _ = fmt.Fprintf(&b, "### Upload Details\n")
-	_, _ = fmt.Fprintf(&b, "| Property | Value |\n")
-	_, _ = fmt.Fprintf(&b, "|----------|-------|\n")
-	_, _ = fmt.Fprintf(&b, "| **IPA File** | %s |\n", summary.InlineCode(filepath.Base(in.IPAFile)))
-	_, _ = fmt.Fprintf(&b, "| **Platform** | %s |\n", summary.LiteralText(in.Platform))
+	_, _ = fmt.Fprintf(&builder, "## App Store Connect Upload Summary 📱\n\n")
+	_, _ = fmt.Fprintf(&builder, "### Upload Details\n")
+	_, _ = fmt.Fprintf(&builder, "| Property | Value |\n")
+	_, _ = fmt.Fprintf(&builder, "|----------|-------|\n")
+	_, _ = fmt.Fprintf(&builder, "| **IPA File** | %s |\n", summary.InlineCode(filepath.Base(in.IPAFile)))
+	_, _ = fmt.Fprintf(&builder, "| **Platform** | %s |\n", summary.LiteralText(in.Platform))
 
 	if in.SkipValidation {
-		_, _ = fmt.Fprintf(&b, "| **Validation** | ⊘ Skipped |\n")
+		_, _ = fmt.Fprintf(&builder, "| **Validation** | ⊘ Skipped |\n")
 	} else {
-		_, _ = fmt.Fprintf(&b, "| **Validation** | ✓ Passed |\n")
+		_, _ = fmt.Fprintf(&builder, "| **Validation** | ✓ Passed |\n")
 	}
 
-	_, _ = fmt.Fprintf(&b, "| **Status** | ✓ Uploaded |\n")
+	_, _ = fmt.Fprintf(&builder, "| **Status** | ✓ Uploaded |\n")
 
 	if in.RequestID != "" {
 		// The request ID comes from altool's JSON, and when no product error
 		// carries one it is altool's free-text success message, so it is
 		// rendered through InlineCode like every other external value here.
-		_, _ = fmt.Fprintf(&b, "| **Request ID** | %s |\n", summary.InlineCode(in.RequestID))
+		_, _ = fmt.Fprintf(&builder, "| **Request ID** | %s |\n", summary.InlineCode(in.RequestID))
 	}
 
-	_, _ = fmt.Fprintf(&b, "\n### Next Steps\n")
-	_, _ = fmt.Fprintf(&b, "1. Check [App Store Connect](https://appstoreconnect.apple.com) for build processing status\n")
-	_, _ = fmt.Fprintf(&b, "2. Build will be available in TestFlight within 10-15 minutes after processing completes\n")
+	_, _ = fmt.Fprintf(&builder, "\n### Next Steps\n")
+	_, _ = fmt.Fprintf(&builder, "1. Check [App Store Connect](https://appstoreconnect.apple.com) for build processing status\n")
+	_, _ = fmt.Fprintf(&builder, "2. Build will be available in TestFlight within 10-15 minutes after processing completes\n")
 
 	if in.SubmitReview {
-		_, _ = fmt.Fprintf(&b, "3. Review submission was requested; submit the processed build manually from App Store Connect\n")
+		_, _ = fmt.Fprintf(&builder, "3. Review submission was requested; submit the processed build manually from App Store Connect\n")
 	} else {
-		_, _ = fmt.Fprintf(&b, "3. Manually submit for external testing or App Store review from App Store Connect\n")
+		_, _ = fmt.Fprintf(&builder, "3. Manually submit for external testing or App Store review from App Store Connect\n")
 	}
 
-	_, _ = fmt.Fprintf(&b, "\n*Upload completed at %s*\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
+	_, _ = fmt.Fprintf(&builder, "\n*Upload completed at %s*\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
 
-	return b.String()
+	return builder.String()
 }

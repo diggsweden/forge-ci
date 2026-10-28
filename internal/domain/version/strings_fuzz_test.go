@@ -49,15 +49,15 @@ func FuzzSanitizePathToken(f *testing.F) {
 		}
 
 		// Output must contain only path-safe ASCII.
-		for i, r := range got {
+		for index, char := range got {
 			switch {
-			case r >= 'a' && r <= 'z':
-			case r >= 'A' && r <= 'Z':
-			case r >= '0' && r <= '9':
-			case r == '.' || r == '_' || r == '-':
+			case char >= 'a' && char <= 'z':
+			case char >= 'A' && char <= 'Z':
+			case char >= '0' && char <= '9':
+			case char == '.' || char == '_' || char == '-':
 			default:
 				t.Errorf("byte %d (%U %q) violates [a-zA-Z0-9._-]; full output: %q",
-					i, r, r, got)
+					index, char, char, got)
 
 				return
 			}

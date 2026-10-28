@@ -151,8 +151,6 @@ type SignBlobInput = release.BlobSignRequest
 //     missing artifact, etc.).
 //   - cosign's exit-error otherwise; the underlying *exec.ExitError
 //     is preserved via %w so callers can extract the exit code.
-//
-//nolint:cyclop // input validation + argv build + run + classify — phases of one operation.
 func (a *Adapter) SignBlob(ctx context.Context, in SignBlobInput, errOut io.Writer) error {
 	if err := in.Validate(); err != nil {
 		return err
@@ -195,8 +193,6 @@ type VerifyBlobInput = release.BlobVerifyRequest
 // (Keyless vs. KeyRef) and providing the matching identity
 // constraints (certificate-identity-regexp + oidc-issuer for
 // keyless, pubkey for KMS).
-//
-//nolint:cyclop // input validation + argv build + run + classify — phases of one operation.
 func (a *Adapter) VerifyBlob(ctx context.Context, in VerifyBlobInput, errOut io.Writer) error {
 	if err := in.Validate(); err != nil {
 		return err

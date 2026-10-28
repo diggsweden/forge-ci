@@ -195,7 +195,7 @@ func TestPublishRelease_RefusesTwoReleasesOnOneTag(t *testing.T) {
 
 	var trace []string
 
-	p := &Provider{
+	githubProvider := &Provider{
 		APIBaseOverride: "https://github.invalid",
 		HTTPClient: &http.Client{Transport: contractTransport(func(req *http.Request) (*http.Response, error) {
 			trace = append(trace, req.Method+" "+req.URL.Path)
@@ -205,7 +205,7 @@ func TestPublishRelease_RefusesTwoReleasesOnOneTag(t *testing.T) {
 		})},
 	}
 
-	err := p.PublishRelease(t.Context(), "o/r", provider.ReleaseSpec{Tag: "v1"})
+	err := githubProvider.PublishRelease(t.Context(), "o/r", provider.ReleaseSpec{Tag: "v1"})
 	require.ErrorIs(t, err, errs.ErrValidation)
 	require.ErrorContains(t, err, `releases 1 and 3 both use tag "v1"`)
 	require.Equal(t, []string{"GET /repos/o/r/releases"}, trace)

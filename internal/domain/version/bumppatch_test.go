@@ -115,6 +115,7 @@ func TestBumpPatchFiles_OnlyVerifiedTypes(t *testing.T) {
 		_, ok := version.BumpPatchFiles(pt)
 		require.False(t, ok, pt)
 	}
+
 	for kind, expected := range map[projecttype.Type][]string{
 		projecttype.Maven: {"pom.xml"},
 		projecttype.NPM:   {"package.json", "package-lock.json", "npm-shrinkwrap.json"},

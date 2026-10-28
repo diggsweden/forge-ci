@@ -6,6 +6,7 @@ package forgejo_test
 import (
 	"context"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -31,7 +32,7 @@ import (
 func TestCredentialAuthority_EveryRoleSendsOnlyATokenIssuedForItsServer(t *testing.T) {
 	t.Parallel()
 
-	const jobToken = "synthetic-job-token-0123456789" //nolint:gosec // G101: synthetic fixture whose absence is asserted.
+	const jobToken = "synthetic-job-token-0123456789"
 
 	tests := []struct {
 		name     string
@@ -69,29 +70,30 @@ func TestCredentialAuthority_EveryRoleSendsOnlyATokenIssuedForItsServer(t *testi
 	file := filepath.Join(t.TempDir(), "app.tgz")
 	require.NoError(t, os.WriteFile(file, []byte("asset"), 0o600))
 
-	roles := map[string]func(context.Context, *forgejo.Provider) error{
-		"bot permissions": func(ctx context.Context, p *forgejo.Provider) error {
+	roles := map[string]func(context.Context, *forgejo.Provider, string) error{
+		"bot permissions": func(ctx context.Context, p *forgejo.Provider, _ string) error {
 			_, err := p.ValidateBotPermissions(ctx, "owner/repo")
 
 			return err
 		},
-		"repo metadata": func(ctx context.Context, p *forgejo.Provider) error {
+		"repo metadata": func(ctx context.Context, p *forgejo.Provider, _ string) error {
 			_, err := p.FetchRepoMetadata(ctx, "owner/repo")
 
 			return err
 		},
-		"delete tag": func(ctx context.Context, p *forgejo.Provider) error {
-			return p.DeleteTag(ctx, "forgejo.invalid/owner/img:old")
+		// The image is on the target's registry: the deleter refuses any other.
+		"delete tag": func(ctx context.Context, p *forgejo.Provider, host string) error {
+			return p.DeleteTag(ctx, host+"/owner/img:old")
 		},
-		"container versions": func(ctx context.Context, p *forgejo.Provider) error {
+		"container versions": func(ctx context.Context, p *forgejo.Provider, _ string) error {
 			_, err := p.ListContainerPackageVersions(ctx, "owner", "img")
 
 			return err
 		},
-		"upload release asset": func(ctx context.Context, p *forgejo.Provider) error {
+		"upload release asset": func(ctx context.Context, p *forgejo.Provider, _ string) error {
 			return p.UploadReleaseAsset(ctx, "v1", file)
 		},
-		"publish release": func(ctx context.Context, p *forgejo.Provider) error {
+		"publish release": func(ctx context.Context, p *forgejo.Provider, _ string) error {
 			return p.PublishRelease(ctx, "owner/repo", provider.ReleaseSpec{Tag: "v1"})
 		},
 	}
@@ -101,9 +103,7 @@ func TestCredentialAuthority_EveryRoleSendsOnlyATokenIssuedForItsServer(t *testi
 			t.Parallel()
 
 			env := map[string]string{"FORGEJO_REPOSITORY": "owner/repo", "FORGEJO_ACTOR": "bot"}
-			for key, value := range tc.env {
-				env[key] = value
-			}
+			maps.Copy(env, tc.env)
 
 			for role, run := range roles {
 				var (
@@ -111,7 +111,7 @@ func TestCredentialAuthority_EveryRoleSendsOnlyATokenIssuedForItsServer(t *testi
 					requests []*http.Request
 				)
 
-				p := &forgejo.Provider{Env: envMap(env), HTTPClient: &http.Client{Transport: releaseAssetTransport(func(req *http.Request) (*http.Response, error) {
+				forgejoProvider := &forgejo.Provider{Env: envMap(env), HTTPClient: &http.Client{Transport: releaseAssetTransport(func(req *http.Request) (*http.Response, error) {
 					mu.Lock()
 
 					requests = append(requests, req)
@@ -121,7 +121,7 @@ func TestCredentialAuthority_EveryRoleSendsOnlyATokenIssuedForItsServer(t *testi
 					return &http.Response{StatusCode: http.StatusForbidden, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"message":"refused"}`)), Request: req}, nil
 				})}}
 
-				_ = run(t.Context(), p)
+				_ = run(t.Context(), forgejoProvider, tc.host)
 
 				require.NotEmpty(t, requests, "%s sent nothing, so its credential was never exercised", role)
 
@@ -140,14 +140,14 @@ func TestCredentialAuthority_EveryRoleSendsOnlyATokenIssuedForItsServer(t *testi
 				}
 			}
 
-			p := &forgejo.Provider{Env: envMap(env)}
-			maven, err := p.ResolveForgeMavenRegistry()
+			forgejoProvider := &forgejo.Provider{Env: envMap(env)}
+			maven, err := forgejoProvider.ResolveForgeMavenRegistry()
 			require.NoError(t, err)
 
-			npm, err := p.ResolveForgeNPMRegistry()
+			npm, err := forgejoProvider.ResolveForgeNPMRegistry()
 			require.NoError(t, err)
 
-			auth, err := p.ResolveRegistryAuth()
+			auth, err := forgejoProvider.ResolveRegistryAuth()
 
 			if tc.wantSent {
 				require.NoError(t, err)

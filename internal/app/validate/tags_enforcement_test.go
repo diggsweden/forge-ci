@@ -123,7 +123,7 @@ func TestTagSignature_GPGEnforcementMatrix(t *testing.T) {
 	}
 }
 
-func checkGPGEnforcement(t *testing.T, c gpgCase, keyArmor []byte) {
+func checkGPGEnforcement(t *testing.T, gpg gpgCase, keyArmor []byte) {
 	t.Helper()
 
 	const tag = "v4.2.0-matrix"
@@ -131,28 +131,34 @@ func checkGPGEnforcement(t *testing.T, c gpgCase, keyArmor []byte) {
 	path := filepath.Join(t.TempDir(), "missing.asc")
 	keyring := []byte(nil)
 
-	switch c.allowlist {
+	switch gpg.allowlist {
 	case "present":
 		path, keyring = writeGPGKeysFile(t, keyArmor), bytes.TrimSpace(keyArmor)
 	case "malformed":
 		path = writeGPGKeysFile(t, []byte("-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nnot base64 at all\n-----END PGP PUBLIC KEY BLOCK-----\n"))
 	}
 
-	gitr := c.verifier
+	gitr := gpg.verifier
 	gitr.body = gpgSignedTagBody
 
 	var out, annot bytes.Buffer
 
 	err := appvalidate.TagSignature(context.Background(), &gitr, &out, output.NewAnnotator(&annot, output.FormatGitHub), appvalidate.TagSignatureInput{
 		Tag:                      tag,
-		RequireAllowlistedSigner: c.mode.allowlisted,
-		RequireValidSignature:    c.mode.valid,
+		RequireAllowlistedSigner: gpg.mode.allowlisted,
+		RequireValidSignature:    gpg.mode.valid,
 		AllowedGPGKeysPath:       path,
 	})
 
-	want := c.expect()
+	want := gpg.expect()
 	assertTagSignatureOutcome(t, err, want.err, out.String())
 	assertTagWarning(t, want.warning, out.String(), annot.String())
+
+	if gpg.allowlist == "absent" && !gpg.mode.any() {
+		if !strings.Contains(annot.String(), "signature verification was not required") || strings.Contains(annot.String(), "any valid signature was accepted") {
+			t.Errorf("permissive warning must not claim verification: %s", annot.String())
+		}
+	}
 
 	if gitr.verifySigCallCount != want.calls {
 		t.Fatalf("VerifyTagSignature calls = %d, want %d; calls = %v", gitr.verifySigCallCount, want.calls, gitr.methodsCalled())

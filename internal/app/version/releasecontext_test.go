@@ -46,7 +46,7 @@ func TestReleaseContext_DefaultModePreservesGenericOutputs(t *testing.T) {
 	var out bytes.Buffer
 
 	err := appversion.ReleaseContext(context.Background(), fakeReleaseContextRepo{
-		tagger: git.TaggerInfo{Tagger: "Ada Lovelace <ada@example.test>"},
+		tagger: git.TaggerInfo{Tagger: "Release Administrator <admin@example.test>"},
 	}, appversion.ReleaseContextInput{Ref: "release-request/v1.2.3"}, sink, nil, &out)
 	if err != nil {
 		t.Fatal(err)
@@ -58,8 +58,8 @@ func TestReleaseContext_DefaultModePreservesGenericOutputs(t *testing.T) {
 
 	wantTrailers := []string{
 		"Release-Request: release-request/v1.2.3",
-		"Release-Authorized-By: Ada Lovelace <ada@example.test>",
-		"Co-authored-by: Ada Lovelace <ada@example.test>",
+		"Release-Authorized-By: Release Administrator <admin@example.test>",
+		"Co-authored-by: Release Administrator <admin@example.test>",
 	}
 	if got := sink.Multiline("commit-trailers"); !slices.Equal(got, wantTrailers) {
 		t.Fatalf("commit-trailers = %#v, want %#v", got, wantTrailers)
@@ -76,11 +76,11 @@ func TestReleaseContext_ForgejoStrictModeMatchesLegacyShellContract(t *testing.T
 	sink := fakeoutputsink.New(t)
 
 	err := appversion.ReleaseContext(context.Background(), fakeReleaseContextRepo{
-		tagger: git.TaggerInfo{Tagger: "Ada Lovelace <ada@example.test>"},
+		tagger: git.TaggerInfo{Tagger: "Release Administrator <admin@example.test>"},
 	}, appversion.ReleaseContextInput{
 		Ref:                   "refs/tags/release-request/v1.2.3",
 		RequireReleaseRequest: true,
-		RequireStable:         true,
+		ReleasePolicy:         "stable",
 		TrailerMode:           "coauthor-only",
 	}, sink, nil, &bytes.Buffer{})
 	if err != nil {
@@ -93,7 +93,7 @@ func TestReleaseContext_ForgejoStrictModeMatchesLegacyShellContract(t *testing.T
 
 	wantTrailers := []string{
 		"Release-Request: release-request/v1.2.3",
-		"Co-authored-by: Ada Lovelace <ada@example.test>",
+		"Co-authored-by: Release Administrator <admin@example.test>",
 	}
 	if got := sink.Multiline("commit-trailers"); !slices.Equal(got, wantTrailers) {
 		t.Fatalf("commit-trailers = %#v, want %#v", got, wantTrailers)
@@ -106,11 +106,11 @@ func TestReleaseContext_ForgejoStrictModeSkipsIncompleteTagger(t *testing.T) {
 	sink := fakeoutputsink.New(t)
 
 	err := appversion.ReleaseContext(context.Background(), fakeReleaseContextRepo{
-		tagger: git.TaggerInfo{Tagger: "Ada Lovelace <>"},
+		tagger: git.TaggerInfo{Tagger: "Release Administrator <>"},
 	}, appversion.ReleaseContextInput{
 		Ref:                   "release-request/v1.2.3",
 		RequireReleaseRequest: true,
-		RequireStable:         true,
+		ReleasePolicy:         "stable",
 		TrailerMode:           "coauthor-only",
 	}, sink, nil, &bytes.Buffer{})
 	if err != nil {
@@ -127,10 +127,12 @@ func TestReleaseContext_StrictModeRejectsLegacyShellInvalidRefs(t *testing.T) {
 
 	for _, ref := range []string{"v1.2.3", "release-request/v1.2.3-rc1", "release-request/v1.2.3+build", "release-request/", "release-request/v1.2.3\n"} {
 		t.Run(ref, func(t *testing.T) {
+			t.Parallel()
+
 			err := appversion.ReleaseContext(context.Background(), fakeReleaseContextRepo{}, appversion.ReleaseContextInput{
 				Ref:                   ref,
 				RequireReleaseRequest: true,
-				RequireStable:         true,
+				ReleasePolicy:         "stable",
 				TrailerMode:           "coauthor-only",
 			}, fakeoutputsink.New(t), nil, &bytes.Buffer{})
 			if !errors.Is(err, errs.ErrValidation) {
@@ -165,7 +167,7 @@ func TestReleaseContext_ResolveReleaseRequestAtRevision(t *testing.T) {
 		{name: "one", tags: []string{"release-request/v1.2.3"}, wantTag: "v1.2.3"},
 		{name: "multiple", tags: []string{"release-request/v1.2.3", "release-request/not-selected", "release-request/v1.2.4"}, wantErr: true},
 		{name: "mixed", tags: []string{"v1.2.3", "release-request/1.2.3", "snapshot/test", "refs/tags/release-request/v1.2.3"}, wantTag: "v1.2.3"},
-		{name: "v wildcard is not a semver validator", tags: []string{"release-request/versioned"}, wantTag: "versioned"},
+		{name: "v wildcard is not a semver validator", tags: []string{"release-request/versioned"}, wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -258,7 +260,7 @@ func (r *recordingReleaseContextRepo) TaggerInfo(_ context.Context, tag string) 
 }
 
 func (r *recordingReleaseContextRepo) TagsPointingAt(context.Context, string) ([]string, error) {
-	return nil, errors.New("not expected") //nolint:err113 // test double refusal.
+	return nil, errors.New("not expected")
 }
 
 // noMultilineReleaseSink is a recording sink without multi-line support, like
@@ -298,7 +300,7 @@ func (m *countingReleaseManifest) Write(_ context.Context, stage string, result 
 }
 
 func (m *countingReleaseManifest) WriteJSON(context.Context, string, interface{ MarshalJSON() ([]byte, error) }) error {
-	return errors.New("not expected") //nolint:err113 // test double refusal.
+	return errors.New("not expected")
 }
 
 // TestReleaseContext_QueriesTheRequestTagAndDeliversInOrder pins the tagger
@@ -317,7 +319,7 @@ func TestReleaseContext_QueriesTheRequestTagAndDeliversInOrder(t *testing.T) {
 	t.Run("delivery", func(t *testing.T) {
 		t.Parallel()
 
-		repo := &recordingReleaseContextRepo{tagger: git.TaggerInfo{Tagger: "Ada Lovelace <ada@example.test>"}}
+		repo := &recordingReleaseContextRepo{tagger: git.TaggerInfo{Tagger: "Release Administrator <admin@example.test>"}}
 		sink := noMultilineReleaseSink{Sink: fakeoutputsink.New(t)}
 		manifest := &countingReleaseManifest{}
 
@@ -335,7 +337,7 @@ func TestReleaseContext_QueriesTheRequestTagAndDeliversInOrder(t *testing.T) {
 			t.Errorf("output order = %q", order)
 		}
 
-		want := []string{"Release-Request: release-request/v1.2.3", "Release-Authorized-By: Ada Lovelace <ada@example.test>", "Co-authored-by: Ada Lovelace <ada@example.test>"}
+		want := []string{"Release-Request: release-request/v1.2.3", "Release-Authorized-By: Release Administrator <admin@example.test>", "Co-authored-by: Release Administrator <admin@example.test>"}
 		if got, ok := manifest.result["commit-trailers"].([]string); manifest.writes != 1 || manifest.stage != "release-context" || len(manifest.result) != 1 || !ok || !slices.Equal(got, want) {
 			t.Errorf("manifest writes = %d, stage = %q, result = %v", manifest.writes, manifest.stage, manifest.result)
 		}
@@ -372,7 +374,7 @@ func TestReleaseContext_QueriesTheRequestTagAndDeliversInOrder(t *testing.T) {
 
 		sink := fakeoutputsink.New(t)
 
-		err := appversion.ReleaseContext(context.Background(), &recordingReleaseContextRepo{tagger: git.TaggerInfo{Tagger: "Ada Lovelace <>"}}, in, sink, nil, io.Discard)
+		err := appversion.ReleaseContext(context.Background(), &recordingReleaseContextRepo{tagger: git.TaggerInfo{Tagger: "Release Administrator <>"}}, in, sink, nil, io.Discard)
 		if err != nil || !slices.Equal(sink.Multiline("commit-trailers"), []string{"Release-Request: release-request/v1.2.3"}) {
 			t.Errorf("err = %v, trailers = %q; want only the request pointer", err, sink.Multiline("commit-trailers"))
 		}

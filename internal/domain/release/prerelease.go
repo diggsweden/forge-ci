@@ -14,8 +14,6 @@ import (
 // recognised across the project. Single source of truth — both the
 // "tag carries a prerelease marker?" check here and the canonical-suffix
 // classification in domain/validate use this list.
-//
-//nolint:gochecknoglobals // canonical prerelease identifier list.
 var PrereleaseIdentifiers = []string{"alpha", "beta", "rc", "dev", "snapshot", "SNAPSHOT"}
 
 // IsCanonicalPrerelease reports whether a validated SemVer prerelease is one

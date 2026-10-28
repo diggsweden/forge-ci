@@ -37,7 +37,7 @@ func TestValidators_BlankInputsAreMissing(t *testing.T) {
 			return appvalidate.Token(context.Background(), prov, out, appvalidate.TokenInput{Token: value, Repository: "owner/repo"})
 		}, errs.ErrPermissionDenied},
 		{"token repository", func(prov *fakeprovider.Fake, value string, out *bytes.Buffer) error {
-			return appvalidate.Token(context.Background(), prov, out, appvalidate.TokenInput{Token: "github_pat_AAAA", Repository: value}) //nolint:gosec // synthetic token.
+			return appvalidate.Token(context.Background(), prov, out, appvalidate.TokenInput{Token: "github_pat_AAAA", Repository: value})
 		}, errs.ErrUsage},
 		{"bot permissions repository", func(prov *fakeprovider.Fake, value string, out *bytes.Buffer) error {
 			return appvalidate.BotPermissions(context.Background(), prov, out, appvalidate.BotPermissionsInput{Repository: value})
@@ -83,7 +83,7 @@ func TestValidators_BlankInputsAreMissing(t *testing.T) {
 
 		prov := fakeprovider.New(t).WithPlatform(provider.ForgeGitHub)
 
-		if err := appvalidate.Token(context.Background(), prov, &bytes.Buffer{}, appvalidate.TokenInput{Token: " github_pat_AAAA ", Repository: "owner/repo"}); err != nil { //nolint:gosec // synthetic token.
+		if err := appvalidate.Token(context.Background(), prov, &bytes.Buffer{}, appvalidate.TokenInput{Token: " github_pat_AAAA ", Repository: "owner/repo"}); err != nil {
 			t.Fatal(err)
 		}
 

@@ -41,10 +41,8 @@ const stableTagPattern = `^v[0-9]+\.[0-9]+\.[0-9]+$`
 // would otherwise send it to the forge API for pull request metadata, which
 // the bundled templates never render.
 //
-// It also reads stable release tags only (stableTagPattern). A release is
-// always a stable vMAJOR.MINOR.PATCH tag, and any other tag would end the
-// unreleased range early: Forge CI's rolling v0.90.0-pre tag sits on main
-// HEAD, so git-cliff took it as the latest release and rendered 0.90.0 empty.
+// Both renderers use stable tags as history boundaries. A beta target gets
+// cumulative notes from the previous stable release, just like the final release.
 type Renderer struct {
 	GitChglogBin string
 	GitCliffBin  string
@@ -58,7 +56,7 @@ func New() *Renderer { return &Renderer{} }
 func (r *Renderer) RenderFull(ctx context.Context, backend, config, tag, outputPath, repositoryURL string) error {
 	switch backend {
 	case backendGitChglog:
-		_, err := r.run(ctx, r.gitChglogBin(), "--config", config, "--repository-url", repositoryURL, "--next-tag", tag, "--output", outputPath)
+		_, err := r.run(ctx, r.gitChglogBin(), "--config", config, "--repository-url", repositoryURL, "--tag-filter-pattern", stableTagPattern, "--next-tag", tag, "--output", outputPath)
 
 		return err
 	case backendGitCliff:
@@ -74,7 +72,7 @@ func (r *Renderer) RenderFull(ctx context.Context, backend, config, tag, outputP
 func (r *Renderer) RenderBody(ctx context.Context, backend, config, tag, repositoryURL string) (string, error) {
 	switch backend {
 	case backendGitChglog:
-		return r.run(ctx, r.gitChglogBin(), "--config", config, "--repository-url", repositoryURL, "--next-tag", tag, tag)
+		return r.run(ctx, r.gitChglogBin(), "--config", config, "--repository-url", repositoryURL, "--tag-filter-pattern", stableTagPattern, "--next-tag", tag, tag)
 	case backendGitCliff:
 		return r.run(ctx, r.gitCliffBin(), "--offline", "--config", config, "--tag-pattern", stableTagPattern, "--unreleased", "--tag", tag)
 	default:

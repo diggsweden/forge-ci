@@ -31,7 +31,7 @@ func TestProvider_Name(t *testing.T) {
 func TestResolveContext_BranchPush(t *testing.T) {
 	t.Parallel()
 
-	p := &github.Provider{Env: envFunc(map[string]string{
+	githubProvider := &github.Provider{Env: envFunc(map[string]string{
 		"GITHUB_REF":        "refs/heads/main",
 		"GITHUB_REF_NAME":   "main",
 		"GITHUB_REF_TYPE":   "branch",
@@ -41,7 +41,7 @@ func TestResolveContext_BranchPush(t *testing.T) {
 		"GITHUB_SERVER_URL": "https://github.com",
 	})}
 
-	evt, err := p.ResolveContext(context.Background())
+	evt, err := githubProvider.ResolveContext(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,14 +78,14 @@ func TestResolveContext_BranchPush(t *testing.T) {
 func TestResolveContext_TagPush(t *testing.T) {
 	t.Parallel()
 
-	p := &github.Provider{Env: envFunc(map[string]string{
+	githubProvider := &github.Provider{Env: envFunc(map[string]string{
 		"GITHUB_REF":        "refs/tags/v1.2.3",
 		"GITHUB_REF_NAME":   "v1.2.3",
 		"GITHUB_REF_TYPE":   "tag",
 		"GITHUB_EVENT_NAME": "push",
 	})}
 
-	evt, err := p.ResolveContext(context.Background())
+	evt, err := githubProvider.ResolveContext(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestResolveContext_TagPush(t *testing.T) {
 func TestResolveContext_PullRequest(t *testing.T) {
 	t.Parallel()
 
-	p := &github.Provider{Env: envFunc(map[string]string{
+	githubProvider := &github.Provider{Env: envFunc(map[string]string{
 		"GITHUB_REF":        "refs/pull/42/merge",
 		"GITHUB_REF_NAME":   "42/merge",
 		"GITHUB_REF_TYPE":   "branch", // GitHub reports branch even on PR
@@ -112,7 +112,7 @@ func TestResolveContext_PullRequest(t *testing.T) {
 		"GITHUB_REPOSITORY": "owner/repo",
 	})}
 
-	evt, err := p.ResolveContext(context.Background())
+	evt, err := githubProvider.ResolveContext(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,14 +267,14 @@ func TestFetchRepoMetadata_HappyPath(t *testing.T) {
 			Body: `{"description":"a test repo","html_url":"https://github.com/owner/repo","license":{"spdx_id":"Apache-2.0"}}`,
 		}
 	})
-	p := &github.Provider{
+	githubProvider := &github.Provider{
 		Env: envFunc(map[string]string{
 			"GITHUB_TOKEN": "ghs_test",
 		}),
 		APIBaseOverride: srv.URL(), HTTPClient: srv.Client(),
 	}
 
-	md, err := p.FetchRepoMetadata(context.Background(), "owner/repo")
+	md, err := githubProvider.FetchRepoMetadata(context.Background(), "owner/repo")
 	if err != nil {
 		t.Fatalf("FetchRepoMetadata: %v", err)
 	}

@@ -43,7 +43,7 @@ type GenerateSnapshotVersionInput struct {
 // to w. Best-effort `git fetch --tags` is attempted; failures are
 // ignored so the function still works on a shallow checkout that
 // already has the tags it needs.
-func GenerateSnapshotVersion(ctx context.Context, ops GenerateSnapshotOps, w io.Writer, in GenerateSnapshotVersionInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func GenerateSnapshotVersion(ctx context.Context, ops GenerateSnapshotOps, out io.Writer, in GenerateSnapshotVersionInput) error {
 	if in.RefName == "" {
 		return fmt.Errorf("ref-name is required: %w", errs.ErrUsage)
 	}
@@ -81,7 +81,7 @@ func GenerateSnapshotVersion(ctx context.Context, ops GenerateSnapshotOps, w io.
 		}
 	}
 
-	return writeSnapshotVersion(w, dev, in.Format)
+	return writeSnapshotVersion(out, dev, in.Format)
 }
 
 // abbreviatedHead returns HEAD's abbreviated commit. git lengthens an
@@ -103,7 +103,7 @@ func abbreviatedHead(ctx context.Context, ops GenerateSnapshotOps) (string, erro
 // writeSnapshotVersion renders dev according to format. The historical
 // shape is a bare line on w; FormatJSON wraps in a one-key
 // object. Unknown formats fall back to the bare line.
-func writeSnapshotVersion(w io.Writer, dev string, format output.Format) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func writeSnapshotVersion(out io.Writer, dev string, format output.Format) error {
 	if format == output.FormatJSON {
 		body, err := json.Marshal(struct {
 			Version string `json:"version"`
@@ -112,12 +112,12 @@ func writeSnapshotVersion(w io.Writer, dev string, format output.Format) error {
 			return fmt.Errorf("encode dev version json: %w", err)
 		}
 
-		_, err = fmt.Fprintln(w, string(body))
+		_, err = fmt.Fprintln(out, string(body))
 
 		return err
 	}
 
-	_, err := fmt.Fprintln(w, dev)
+	_, err := fmt.Fprintln(out, dev)
 
 	return err
 }

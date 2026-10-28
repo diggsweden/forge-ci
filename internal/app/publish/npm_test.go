@@ -43,7 +43,7 @@ func makeNPMTarball(t *testing.T, dir, name string, files map[string]string) {
 
 	path := filepath.Join(dir, name)
 
-	out, err := os.Create(path) //nolint:gosec // test fixture path
+	out, err := os.Create(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestNPMCheckVersion_NotFound(t *testing.T) {
 
 	sink := fakeoutputsink.New(t)
 
-	if err := apppublish.NPMCheckVersion(context.Background(), fakeNPMOps{stderr: "npm ERR! code E404", err: errors.New("not found")}, sink, io.Discard, output.Annotator{}, apppublish.NPMCheckVersionInput{ //nolint:err113 // test mock error
+	if err := apppublish.NPMCheckVersion(context.Background(), fakeNPMOps{stderr: "npm ERR! code E404", err: errors.New("not found")}, sink, io.Discard, output.Annotator{}, apppublish.NPMCheckVersionInput{
 		Dir:     fsys.Root,
 		Version: "1.2.3",
 	}); err != nil {

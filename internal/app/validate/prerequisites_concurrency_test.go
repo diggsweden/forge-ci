@@ -33,7 +33,7 @@ type overlapWriter struct {
 	buf bytes.Buffer
 }
 
-func (w *overlapWriter) Write(p []byte) (int, error) {
+func (w *overlapWriter) Write(data []byte) (int, error) {
 	if w.inFlight.Add(1) > 1 {
 		w.overlaps.Add(1)
 	}
@@ -41,12 +41,12 @@ func (w *overlapWriter) Write(p []byte) (int, error) {
 	time.Sleep(5 * time.Millisecond)
 
 	w.mu.Lock()
-	w.buf.Write(p)
+	w.buf.Write(data)
 	w.mu.Unlock()
 
 	w.inFlight.Add(-1)
 
-	return len(p), nil
+	return len(data), nil
 }
 
 // TestPrerequisites_ConcurrentAnnotationsAreSerialisedAndComplete enables four
@@ -81,7 +81,7 @@ func TestPrerequisites_ConcurrentAnnotationsAreSerialisedAndComplete(t *testing.
 		GitRepo:  newHistoryGit([]string{"c0", "c1"}, "", "", "c1"),
 		Provider: fp,
 		Cargo:    fakeCargoTool{version: "cargo 1.90.0"},
-	}, &out, output.NewAnnotator(annotations, output.FormatGitHub), appvalidate.PrerequisitesInput{ //nolint:gosec // synthetic token and key markers; nothing real is read.
+	}, &out, output.NewAnnotator(annotations, output.FormatGitHub), appvalidate.PrerequisitesInput{
 		RefType: "tag", Tag: rerunRequestTag, Ref: "refs/tags/" + rerunRequestTag, Branch: "main",
 		ReleaseToken: "github_pat_AAAA", Repository: "owner/repo", ReleaseGPGPublicKey: "test-key",
 		RequiresGPGSigning: true, HasMavenCentralTarget: true, HasCargoTarget: true, HasJVMTarget: true,
@@ -101,7 +101,7 @@ func TestPrerequisites_ConcurrentAnnotationsAreSerialisedAndComplete(t *testing.
 		"::notice::Cargo.lock present in crates/api",
 		"::notice::Maven reproducibility configured in services/api (outputTimestamp=2026-01-01T00:00:00Z); declaration only, rebuild not checked",
 		"::notice::Toolchain pin present in crates/api",
-		"::warning title=No release signer allowlist::GPG release ran with NO signer allowlist — any valid signature was accepted. Commit .forge-ci/allowed_gpg_keys.asc to authorise specific signers.",
+		"::warning title=No release signer allowlist::GPG release has NO signer allowlist — allowlist enforcement was skipped and signature verification was not required. Commit .forge-ci/allowed_gpg_keys.asc to authorise specific signers.",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("annotations:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))

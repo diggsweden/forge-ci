@@ -45,7 +45,6 @@ func recordPresetInvocation() int {
 
 	// Use the owned symlink's directory, not the resolved test executable's.
 	// Exclusive creation makes a second invocation fail rather than overwrite.
-	//nolint:gosec // argv[0] is the absolute symlink path in the parent's owned t.TempDir.
 	file, err := os.OpenFile(filepath.Join(filepath.Dir(os.Args[0]), presetRecordName),
 		os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {

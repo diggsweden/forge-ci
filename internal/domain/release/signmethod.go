@@ -63,8 +63,6 @@ const DefaultSignMethod = SignMethodGPG
 // the single definition of the set: ParseSignMethod accepts exactly
 // these values and the generated artifacts.yml JSON Schema renders
 // its sign.method enum from this slice.
-//
-//nolint:gochecknoglobals // schema enumeration — read-only and ordered.
 var ValidSignMethods = []SignMethod{
 	SignMethodGPG,
 	SignMethodSigstore,

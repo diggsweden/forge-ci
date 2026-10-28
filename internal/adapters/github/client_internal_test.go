@@ -91,7 +91,7 @@ func TestUploadReleaseAsset_UsesConfiguredEndpoints(t *testing.T) {
 			var requests []string
 
 			uploaded := false
-			p := &Provider{
+			provider := &Provider{
 				Env:             func(key string) string { return env[key] },
 				APIBaseOverride: test.override,
 				HTTPClient: &http.Client{Transport: contractTransport(func(req *http.Request) (*http.Response, error) {
@@ -121,7 +121,7 @@ func TestUploadReleaseAsset_UsesConfiguredEndpoints(t *testing.T) {
 				})},
 			}
 
-			require.NoError(t, p.UploadReleaseAsset(t.Context(), "v1", file), "requests: %v", requests)
+			require.NoError(t, provider.UploadReleaseAsset(t.Context(), "v1", file), "requests: %v", requests)
 			require.True(t, uploaded, "no asset reached the upload endpoint")
 		})
 	}

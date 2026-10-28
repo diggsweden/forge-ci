@@ -95,7 +95,7 @@ func TestTokenTrustBoundary_UnicodeControlRedaction(t *testing.T) {
 	}
 }
 
-func TestWorkspaceTrustBoundary_DirectoryAndManifestLinks(t *testing.T) { //nolint:gocognit // table owns both ecosystems' positive files, link variants, classifications and unchanged canaries.
+func TestWorkspaceTrustBoundary_DirectoryAndManifestLinks(t *testing.T) {
 	for _, kind := range []string{"regular", "directory", "parent", "manifest"} {
 		fsys := testfs.NewReal(t)
 		outside := testfs.NewReal(t)

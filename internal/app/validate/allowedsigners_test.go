@@ -111,7 +111,7 @@ func TestValidateAllowedSignersFormat(t *testing.T) {
 		},
 		{
 			name:    "missing principal — fields shifted right",
-			content: "ssh-ed25519 " + realKeyB64 + " josef.andersson@digg.se\n",
+			content: "ssh-ed25519 " + realKeyB64 + " fixture@example.invalid\n",
 			wantErr: 1,
 		},
 		{
@@ -181,7 +181,7 @@ func TestValidateAllowedSignersFormat_MissingPrincipalMessage(t *testing.T) {
 
 	// A public-key export is not an allowed-signers entry: it needs a principal.
 	path := filepath.Join(t.TempDir(), "allowed_signers")
-	content := "ssh-ed25519 " + realKeyB64 + " josef.andersson@digg.se\n"
+	content := "ssh-ed25519 " + realKeyB64 + " fixture@example.invalid\n"
 
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)

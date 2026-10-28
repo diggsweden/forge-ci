@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -88,9 +89,7 @@ func runPlanWrite(ctx context.Context, cmd *cli.Command, dep *deps.Deps) error {
 		scoped = map[string]any{}
 	}
 
-	for key, value := range values {
-		scoped[key] = value
-	}
+	maps.Copy(scoped, values)
 
 	plan[scope] = scoped
 
@@ -113,7 +112,7 @@ func runPlanWrite(ctx context.Context, cmd *cli.Command, dep *deps.Deps) error {
 func resolveScopeCommand(root *cli.Command, scope string) (*cli.Command, error) {
 	current := root
 
-	for _, part := range strings.Fields(scope) {
+	for part := range strings.FieldsSeq(scope) {
 		next := findSubcommand(current, part)
 		if next == nil {
 			return nil, fmt.Errorf("plan: scope %q does not resolve to a command (no %q under %q): %w",

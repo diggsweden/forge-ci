@@ -46,7 +46,7 @@ func eventContextCmd() *cli.Command {
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+			return deps.FromCmd(ctx, cmd, func(dependencies *deps.Deps) error {
 				eventName := cmd.String("event-name")
 				if eventName == "" {
 					// No env var and no flag (GitLab runners set neither
@@ -54,7 +54,7 @@ func eventContextCmd() *cli.Command {
 					// resolved event context, which carries the canonical
 					// vocabulary. An unresolvable event stays empty and the
 					// gate fails closed on missing input.
-					evt, err := d.Provider.ResolveContext(ctx)
+					evt, err := dependencies.Provider.ResolveContext(ctx)
 					if err != nil {
 						return err
 					}

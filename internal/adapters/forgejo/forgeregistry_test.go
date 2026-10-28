@@ -43,7 +43,7 @@ func TestResolveForgeMavenRegistry_Forgejo(t *testing.T) {
 func TestResolveForgeMavenRegistry_ForgeNeutralNames(t *testing.T) {
 	t.Parallel()
 
-	p := &forgejo.Provider{Env: func(k string) string {
+	forgejoProvider := &forgejo.Provider{Env: func(k string) string {
 		return map[string]string{
 			"CI_SERVER_URL": "https://codeberg.org",
 			"CI_REPO":       "owner/repo",
@@ -51,7 +51,7 @@ func TestResolveForgeMavenRegistry_ForgeNeutralNames(t *testing.T) {
 		}[k]
 	}}
 
-	reg, err := p.ResolveForgeMavenRegistry()
+	reg, err := forgejoProvider.ResolveForgeMavenRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,18 +73,17 @@ func TestResolveForgeMavenRegistry_ForgeNeutralNames(t *testing.T) {
 func TestResolveForgeMavenRegistry_CrossForgeTokenNotLeaked(t *testing.T) {
 	t.Parallel()
 
-	//nolint:gosec // G101: fixture values, not credentials; the literal IS the assertion.
-	p := &forgejo.Provider{Env: func(k string) string {
+	forgejoProvider := &forgejo.Provider{Env: func(key string) string {
 		return map[string]string{
 			"GITHUB_ACTIONS":     "true", // executing on a GitHub runner
 			"FORGEJO_SERVER_URL": "https://third-party.example",
 			"FORGEJO_REPOSITORY": "owner/repo",
 			"FORGEJO_TOKEN":      "",
 			"GITHUB_TOKEN":       "ghs_REAL_GITHUB_JOB_TOKEN",
-		}[k]
+		}[key]
 	}}
 
-	reg, err := p.ResolveForgeMavenRegistry()
+	reg, err := forgejoProvider.ResolveForgeMavenRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,18 +101,17 @@ func TestResolveForgeMavenRegistry_CrossForgeTokenNotLeaked(t *testing.T) {
 func TestResolveForgeMavenRegistry_ForgejoRunnerGithubTokenAlias(t *testing.T) {
 	t.Parallel()
 
-	//nolint:gosec // G101: fixture values, not credentials; the literal IS the assertion.
-	p := &forgejo.Provider{Env: func(k string) string {
+	forgejoProvider := &forgejo.Provider{Env: func(key string) string {
 		return map[string]string{
 			"GITHUB_ACTIONS":     "true",
 			"FORGEJO_ACTIONS":    "true", // ...but a Forgejo runner
 			"FORGEJO_SERVER_URL": "https://codeberg.org",
 			"FORGEJO_REPOSITORY": "owner/repo",
 			"GITHUB_TOKEN":       "forgejo-job-token-under-compat-name",
-		}[k]
+		}[key]
 	}}
 
-	reg, err := p.ResolveForgeMavenRegistry()
+	reg, err := forgejoProvider.ResolveForgeMavenRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +128,7 @@ func TestResolveForgeMavenRegistry_ForgejoRunnerGithubTokenAlias(t *testing.T) {
 func TestResolveForgeMavenRegistry_GiteaToken(t *testing.T) {
 	t.Parallel()
 
-	p := &forgejo.Provider{Env: func(k string) string {
+	forgejoProvider := &forgejo.Provider{Env: func(k string) string {
 		return map[string]string{
 			"FORGEJO_SERVER_URL": "https://codeberg.org",
 			"FORGEJO_REPOSITORY": "owner/repo",
@@ -138,7 +136,7 @@ func TestResolveForgeMavenRegistry_GiteaToken(t *testing.T) {
 		}[k]
 	}}
 
-	reg, err := p.ResolveForgeMavenRegistry()
+	reg, err := forgejoProvider.ResolveForgeMavenRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,15 +221,15 @@ func TestResolveForgeRegistries_RefuseARepositoryWithoutOwnerOrName(t *testing.T
 	t.Parallel()
 
 	for _, repository := range []string{"owner", "owner/", "/repo", ""} {
-		p := &forgejo.Provider{Env: envMap(map[string]string{
+		forgejoProvider := &forgejo.Provider{Env: envMap(map[string]string{
 			"FORGEJO_SERVER_URL": "https://codeberg.org", "FORGEJO_REPOSITORY": repository, "FORGEJO_TOKEN": "ft",
 		})}
 
-		if _, err := p.ResolveForgeMavenRegistry(); !errors.Is(err, errs.ErrUsage) {
+		if _, err := forgejoProvider.ResolveForgeMavenRegistry(); !errors.Is(err, errs.ErrUsage) {
 			t.Errorf("maven with %q: err = %v, want ErrUsage", repository, err)
 		}
 
-		if _, err := p.ResolveForgeNPMRegistry(); !errors.Is(err, errs.ErrUsage) {
+		if _, err := forgejoProvider.ResolveForgeNPMRegistry(); !errors.Is(err, errs.ErrUsage) {
 			t.Errorf("npm with %q: err = %v, want ErrUsage", repository, err)
 		}
 	}

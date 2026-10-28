@@ -61,28 +61,35 @@ func bumpPlanCmd() *cli.Command {
 		Usage: "apply every artifact mutation in a prepare-stage plan to one working tree",
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "plan-json", Required: true, Sources: cli.EnvVars("PREPARE_STAGE_PLAN_JSON"), Usage: "typed release prepare-stage plan JSON"},
+			&cli.StringFlag{Name: "patch", Usage: "native version changes produced by a separate key-free job; never run native tools in this mode"},
+			&cli.StringFlag{Name: "patch-sha256", Usage: "expected sha256 reported by the key-free patch job"},
+			&cli.StringFlag{Name: "release-policy", Value: "stable", Sources: cli.EnvVars("RELEASE_POLICY"), Usage: "accepted release versions: stable or stable-prerelease"},
 			&cli.StringFlag{Name: flagVersion, Required: true, Sources: cli.EnvVars("VERSION"), Usage: "release version without a leading v"},
 			&cli.StringFlag{Name: "changelog-file", Value: defaultChangelogFile, Sources: cli.EnvVars("CHANGELOG_FILE"), Usage: "full changelog copied into each planned artifact directory"},
 			&cli.StringFlag{Name: "xcode-version-file", Sources: cli.EnvVars("XCODE_VERSION_FILE"), Usage: "xcconfig file holding MARKETING_VERSION"},
 			&cli.StringFlag{Name: "maven-cli-opts", Sources: cli.EnvVars("MAVEN_CLI_OPTS"), Usage: "extra args forwarded to mvn"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+			return deps.FromCmd(ctx, cmd, func(dependencies *deps.Deps) error {
 				in := appversion.BumpPlanInput{
 					PlanJSON:      cmd.String("plan-json"),
 					Version:       cmd.String(flagVersion),
 					ChangelogFile: cmd.String("changelog-file"),
 					XcconfigFile:  cmd.String("xcode-version-file"),
+					PatchPath:     cmd.String("patch"),
+					PatchSHA256:   cmd.String("patch-sha256"),
+					ReleasePolicy: cmd.String("release-policy"),
 				}
 				if opts := cmd.String("maven-cli-opts"); opts != "" {
 					in.MavenCLIOpts = strings.Fields(opts)
 				}
 
-				return appversion.BumpPlan(ctx, appversion.BumpOps{
-					Maven: maven.New(),
-					NPM:   npm.New(),
-					Cargo: cargo.New(),
-				}, d.OutputSink, os.Stderr, os.Stderr, deps.Annotator(cmd), in)
+				ops := appversion.BumpOps{Git: git.New()}
+				if in.PatchPath == "" {
+					ops.Maven, ops.NPM, ops.Cargo = maven.New(), npm.New(), cargo.New()
+				}
+
+				return appversion.BumpPlan(ctx, ops, dependencies.OutputSink, os.Stderr, os.Stderr, deps.Annotator(cmd), in)
 			})
 		},
 	}
@@ -214,14 +221,14 @@ func generateDevCmd() *cli.Command {
 				return err
 			}
 
-			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+			return deps.FromCmd(ctx, cmd, func(dependencies *deps.Deps) error {
 				// generate-snapshot's primary output is the dev version string —
 				// designed to be captured via $(...) or piped. Per clig.dev
 				// the value goes to stdout; progress/errors go to stderr.
 				return appversion.GenerateSnapshotVersion(ctx, git.New(), os.Stdout, appversion.GenerateSnapshotVersionInput{
 					RefName: cmd.String("ref-name"),
 					Format:  format,
-					Sink:    d.OutputSink,
+					Sink:    dependencies.OutputSink,
 				})
 			})
 		},
@@ -247,21 +254,21 @@ func deriveReleaseCmd() *cli.Command {
 			&cli.BoolFlag{Name: "resolve-release-request", Usage: "resolve exactly one release-request/v* tag pointing at --revision (HEAD when omitted), ignoring the ambient ref name"},
 			&cli.StringFlag{Name: "revision", Usage: "git revision nominated for --resolve-release-request"},
 			&cli.BoolFlag{Name: "require-release-request", Sources: cli.EnvVars("RELEASE_CONTEXT_REQUIRE_REQUEST"), Usage: "reject refs outside release-request/vMAJOR.MINOR.PATCH"},
-			&cli.BoolFlag{Name: "require-stable", Sources: cli.EnvVars("RELEASE_CONTEXT_REQUIRE_STABLE"), Usage: "reject final tags outside stable vMAJOR.MINOR.PATCH"},
+			commonflags.ReleasePolicy(),
 			&cli.StringFlag{Name: "trailer-mode", Value: "default", Sources: cli.EnvVars("RELEASE_CONTEXT_TRAILER_MODE"), Usage: "commit trailer mode: default (Release-Authorized-By + Co-authored-by) or coauthor-only"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+			return deps.FromCmd(ctx, cmd, func(dependencies *deps.Deps) error {
 				return appversion.ReleaseContext(ctx, git.New(),
 					appversion.ReleaseContextInput{
 						Ref:                   cmd.String("ref-name"),
 						ResolveReleaseRequest: cmd.Bool("resolve-release-request"),
 						Revision:              cmd.String("revision"),
 						RequireReleaseRequest: cmd.Bool("require-release-request"),
-						RequireStable:         cmd.Bool("require-stable"),
+						ReleasePolicy:         cmd.String("release-policy"),
 						TrailerMode:           cmd.String("trailer-mode"),
 					},
-					d.OutputSink, d.ManifestSink, os.Stderr)
+					dependencies.OutputSink, dependencies.ManifestSink, os.Stderr)
 			})
 		},
 	}
@@ -274,6 +281,7 @@ func tagReleaseCmd() *cli.Command {
 		Description: `EXAMPLE:
    forge-ci version tag-release --tag v1.2.3`,
 		Flags: []cli.Flag{
+			commonflags.ReleasePolicy(),
 			&cli.StringFlag{
 				Name:     flagTag,
 				Required: true,
@@ -301,7 +309,7 @@ func tagReleaseCmd() *cli.Command {
 
 			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error {
 				_, err := appversion.TagRelease(ctx, git.New(),
-					appversion.TagReleaseInput{Tag: cmd.String(flagTag), Signed: cmd.Bool("signed") && !cmd.Bool("no-sign"), Token: token, DryRun: dryrun.Enabled(cmd)},
+					appversion.TagReleaseInput{ReleasePolicy: cmd.String("release-policy"), Tag: cmd.String(flagTag), Signed: cmd.Bool("signed") && !cmd.Bool("no-sign"), Token: token, DryRun: dryrun.Enabled(cmd)},
 					d.OutputSink, os.Stderr)
 
 				return err

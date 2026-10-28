@@ -18,25 +18,25 @@ import (
 // permissionServer answers the three probe endpoints in memory with the supplied
 // status codes, so each permission can be denied independently.
 func permissionServer(user, repo, branches int) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		// The branches endpoint decodes into a slice, the other two into
 		// objects; a body of the wrong shape fails the probe for the
 		// wrong reason.
 		status, body := http.StatusNotFound, "{}"
 
 		switch {
-		case strings.HasSuffix(r.URL.Path, "/branches"):
+		case strings.HasSuffix(request.URL.Path, "/branches"):
 			status, body = branches, "[]"
-		case strings.Contains(r.URL.Path, "/repos/"):
+		case strings.Contains(request.URL.Path, "/repos/"):
 			status = repo
-		case strings.HasSuffix(r.URL.Path, "/user"):
+		case strings.HasSuffix(request.URL.Path, "/user"):
 			status = user
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(status)
+		response.Header().Set("Content-Type", "application/json")
+		response.WriteHeader(status)
 
-		_, _ = w.Write([]byte(body))
+		_, _ = response.Write([]byte(body))
 	})
 }
 
@@ -101,13 +101,13 @@ func TestValidateBotPermissions_ReportsEachProbeIndependently(t *testing.T) {
 
 			handler := permissionServer(tc.user, tc.repo, tc.branches)
 
-			p := &forgejo.Provider{
+			forgejoProvider := &forgejo.Provider{
 				Env:             envMap(map[string]string{"FORGEJO_TOKEN": "tok"}),
 				HTTPClient:      inMemoryClient(handler),
 				APIBaseOverride: "https://forgejo.invalid",
 			}
 
-			got, err := p.ValidateBotPermissions(context.Background(), "owner/repo")
+			got, err := forgejoProvider.ValidateBotPermissions(context.Background(), "owner/repo")
 			if tc.wantErr != nil {
 				if !errors.Is(err, tc.wantErr) || errors.Is(err, errs.ErrPermissionDenied) || got != nil {
 					t.Fatalf("got %+v, %v; want only %v", got, err, tc.wantErr)
@@ -149,18 +149,18 @@ func TestValidateBotPermissions_RefusesAnUnusableRepo(t *testing.T) {
 
 	handler := permissionServer(http.StatusOK, http.StatusOK, http.StatusOK)
 
-	p := &forgejo.Provider{
+	forgejoProvider := &forgejo.Provider{
 		Env:             envMap(map[string]string{"FORGEJO_TOKEN": "tok"}),
 		HTTPClient:      inMemoryClient(handler),
 		APIBaseOverride: "https://forgejo.invalid",
 	}
 
-	if _, err := p.ValidateBotPermissions(context.Background(), ""); !errors.Is(err, errs.ErrUsage) {
+	if _, err := forgejoProvider.ValidateBotPermissions(context.Background(), ""); !errors.Is(err, errs.ErrUsage) {
 		t.Errorf("empty repo: err = %v, want ErrUsage", err)
 	}
 
 	for _, repo := range []string{"noslash", "owner/", "/repo"} {
-		if _, err := p.ValidateBotPermissions(context.Background(), repo); !errors.Is(err, errs.ErrUsage) {
+		if _, err := forgejoProvider.ValidateBotPermissions(context.Background(), repo); !errors.Is(err, errs.ErrUsage) {
 			t.Errorf("repo %q: err = %v, want ErrUsage (a caller mistake, not a permissions answer)", repo, err)
 		}
 	}
@@ -183,27 +183,27 @@ func TestValidateBotPermissions_ReadsPushAccess(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handler := http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 				body := "{}"
 
 				switch {
-				case strings.HasSuffix(r.URL.Path, "/branches"):
+				case strings.HasSuffix(request.URL.Path, "/branches"):
 					body = "[]"
-				case strings.Contains(r.URL.Path, "/repos/"):
+				case strings.Contains(request.URL.Path, "/repos/"):
 					body = tc.body
 				}
 
-				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(body))
+				response.Header().Set("Content-Type", "application/json")
+				_, _ = response.Write([]byte(body))
 			})
 
-			p := &forgejo.Provider{
+			forgejoProvider := &forgejo.Provider{
 				Env:             envMap(map[string]string{"FORGEJO_TOKEN": "tok"}),
 				HTTPClient:      inMemoryClient(handler),
 				APIBaseOverride: "https://forgejo.invalid",
 			}
 
-			got, err := p.ValidateBotPermissions(context.Background(), "owner/repo")
+			got, err := forgejoProvider.ValidateBotPermissions(context.Background(), "owner/repo")
 			if err != nil || got == nil || got.Push != tc.want || !got.RepoAccessible {
 				t.Fatalf("got %+v, %v; want Push %v", got, err, tc.want)
 			}

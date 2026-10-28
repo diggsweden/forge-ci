@@ -26,6 +26,7 @@ import (
 
 type releaseBoundaryRepo struct {
 	fakeChangelogReleaseRepo
+
 	inspections  int
 	remoteExists bool
 }
@@ -48,7 +49,7 @@ func TestReleaseBoundary_SubjectAndTagPreflight(t *testing.T) {
 		writeFile(t, dir, "CHANGELOG.md", "# changes\n")
 		writeFile(t, dir, "commit-msg.txt", subject)
 
-		repo := &releaseBoundaryRepo{fakeChangelogReleaseRepo: fakeChangelogReleaseRepo{status: " M CHANGELOG.md"}}
+		repo := &releaseBoundaryRepo{status: " M CHANGELOG.md"}
 
 		var out bytes.Buffer
 
@@ -67,7 +68,7 @@ func TestReleaseBoundary_SubjectAndTagPreflight(t *testing.T) {
 	writeFile(t, dir, "CHANGELOG.md", "# changes\n")
 	writeFile(t, dir, "commit-msg.txt", "chore(release): bump to v1.2.3\n")
 
-	repo := &releaseBoundaryRepo{fakeChangelogReleaseRepo: fakeChangelogReleaseRepo{status: " M CHANGELOG.md"}, remoteExists: true}
+	repo := &releaseBoundaryRepo{status: " M CHANGELOG.md", remoteExists: true}
 
 	_, err := appversion.ChangelogRelease(t.Context(), repo, nil, &bytes.Buffer{}, appversion.ChangelogReleaseInput{Tag: "v1.2.3", Repository: "owner/repo", GitURL: "ssh://git@forge.example/owner/repo.git", AuthorName: "Fixture", AuthorEmail: "fixture@example.invalid", SigningKeyPath: filepath.Join(dir, "fake-key")})
 	if !errors.Is(err, errs.ErrValidation) || len(repo.cfg) != 0 || len(repo.added) != 0 || repo.pushedBranch != "" {
@@ -114,7 +115,7 @@ func (f *retryNPM) RunInherit(context.Context, string, io.Writer, io.Writer, ...
 	return f.err
 }
 
-func TestBumpRetryBoundary_AndroidCodeAndAdditivePaths(t *testing.T) { //nolint:gocognit // independently fail a tool and the sink, then assert two retries converge on the same bytes and path union.
+func TestBumpRetryBoundary_AndroidCodeAndAdditivePaths(t *testing.T) {
 	for _, toolFailure := range []bool{false, true} {
 		root := t.TempDir()
 		t.Chdir(root)

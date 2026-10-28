@@ -132,14 +132,14 @@ func TestProvider_DownloadRunArtifact(t *testing.T) {
 	zipBody := buildZip(t, map[string]string{"hello.txt": "world", "nested/inside.json": `{"ok":true}`})
 	srv := serveArtifactZip(t, zipBody)
 
-	p := &github.Provider{
+	githubProvider := &github.Provider{
 		Env:             envFunc(map[string]string{"GITHUB_REPOSITORY": "owner/repo"}),
 		APIBaseOverride: srv.URL(), HTTPClient: srv.Client(),
 	}
 
 	dir := t.TempDir()
 
-	info, err := p.DownloadRunArtifact(context.Background(), provider.RunArtifactDownload{
+	info, err := githubProvider.DownloadRunArtifact(context.Background(), provider.RunArtifactDownload{
 		Name:  "build-artifacts",
 		Dir:   dir,
 		RunID: "9876",
@@ -153,7 +153,7 @@ func TestProvider_DownloadRunArtifact(t *testing.T) {
 	}
 
 	for name, want := range map[string]string{"hello.txt": "world", filepath.Join("nested", "inside.json"): `{"ok":true}`} {
-		got, readErr := os.ReadFile(filepath.Join(dir, name)) //nolint:gosec // test fixture
+		got, readErr := os.ReadFile(filepath.Join(dir, name))
 		if readErr != nil {
 			t.Fatalf("%s: %v", name, readErr)
 		}
@@ -168,7 +168,7 @@ func TestProvider_DownloadRunArtifact_RejectsExistingDestinationSymlink(t *testi
 	t.Parallel()
 
 	srv := serveArtifactZip(t, buildZip(t, map[string]string{"hello.txt": "new"}))
-	p := &github.Provider{
+	githubProvider := &github.Provider{
 		Env:             envFunc(map[string]string{"GITHUB_REPOSITORY": "owner/repo"}),
 		APIBaseOverride: srv.URL(), HTTPClient: srv.Client(),
 	}
@@ -183,7 +183,7 @@ func TestProvider_DownloadRunArtifact_RejectsExistingDestinationSymlink(t *testi
 		t.Skipf("symlinks unsupported: %v", err)
 	}
 
-	_, err := p.DownloadRunArtifact(context.Background(), provider.RunArtifactDownload{
+	_, err := githubProvider.DownloadRunArtifact(context.Background(), provider.RunArtifactDownload{
 		Name: "build-artifacts", Dir: dir, RunID: "9876",
 	})
 	if !errors.Is(err, errs.ErrValidation) {
@@ -204,7 +204,7 @@ func TestProvider_DownloadRunArtifact_RejectsSymlinkedDestinationRootOrAncestor(
 	t.Parallel()
 
 	srv := serveArtifactZip(t, buildZip(t, map[string]string{"hello.txt": "new"}))
-	p := &github.Provider{
+	githubProvider := &github.Provider{
 		Env:             envFunc(map[string]string{"GITHUB_REPOSITORY": "owner/repo"}),
 		APIBaseOverride: srv.URL(), HTTPClient: srv.Client(),
 	}
@@ -221,7 +221,7 @@ func TestProvider_DownloadRunArtifact_RejectsSymlinkedDestinationRootOrAncestor(
 	}
 
 	for _, dir := range []string{linked, filepath.Join(linked, "child")} {
-		_, err := p.DownloadRunArtifact(context.Background(), provider.RunArtifactDownload{
+		_, err := githubProvider.DownloadRunArtifact(context.Background(), provider.RunArtifactDownload{
 			Name: "build-artifacts", Dir: dir, RunID: "9876",
 		})
 		if !errors.Is(err, errs.ErrValidation) {
@@ -283,14 +283,14 @@ func TestProvider_DownloadRunArtifact_RejectsHostileForgeName(t *testing.T) {
 				return fakegitserver.Response{Status: http.StatusOK, Body: testCase.body}
 			})
 
-			p := &github.Provider{
+			githubProvider := &github.Provider{
 				Env:             envFunc(map[string]string{"GITHUB_REPOSITORY": "owner/repo"}),
 				APIBaseOverride: srv.URL(), HTTPClient: srv.Client(),
 			}
 
 			dir := t.TempDir()
 
-			_, err := p.DownloadRunArtifact(context.Background(), provider.RunArtifactDownload{Pattern: "*", Dir: dir, RunID: "9876"})
+			_, err := githubProvider.DownloadRunArtifact(context.Background(), provider.RunArtifactDownload{Pattern: "*", Dir: dir, RunID: "9876"})
 			if !errors.Is(err, errs.ErrValidation) {
 				t.Fatalf("err = %v, want ErrValidation (hostile forge name rejected)", err)
 			}
@@ -308,14 +308,14 @@ func TestProvider_DownloadRunArtifact_PatternMergeMultiple(t *testing.T) {
 	t.Parallel()
 
 	srv := servePatternArtifacts(t)
-	p := &github.Provider{
+	githubProvider := &github.Provider{
 		Env:             envFunc(map[string]string{"GITHUB_REPOSITORY": "owner/repo"}),
 		APIBaseOverride: srv.URL(), HTTPClient: srv.Client(),
 	}
 
 	dir := t.TempDir()
 
-	info, err := p.DownloadRunArtifact(context.Background(), provider.RunArtifactDownload{
+	info, err := githubProvider.DownloadRunArtifact(context.Background(), provider.RunArtifactDownload{
 		Pattern:       "sbom-*",
 		MergeMultiple: true,
 		Dir:           dir,
@@ -342,14 +342,14 @@ func TestProvider_DownloadRunArtifact_PatternSeparateDirs(t *testing.T) {
 	t.Parallel()
 
 	srv := servePatternArtifacts(t)
-	p := &github.Provider{
+	githubProvider := &github.Provider{
 		Env:             envFunc(map[string]string{"GITHUB_REPOSITORY": "owner/repo"}),
 		APIBaseOverride: srv.URL(), HTTPClient: srv.Client(),
 	}
 
 	dir := t.TempDir()
 
-	if _, err := p.DownloadRunArtifact(context.Background(), provider.RunArtifactDownload{
+	if _, err := githubProvider.DownloadRunArtifact(context.Background(), provider.RunArtifactDownload{
 		Pattern: "sbom-*",
 		Dir:     dir,
 		RunID:   "9876",
@@ -358,7 +358,7 @@ func TestProvider_DownloadRunArtifact_PatternSeparateDirs(t *testing.T) {
 	}
 
 	for name, want := range map[string]string{"sbom-a": "AAA", "sbom-b": "BBB"} {
-		got, err := os.ReadFile(filepath.Join(dir, name, "file.txt")) //nolint:gosec // test fixture
+		got, err := os.ReadFile(filepath.Join(dir, name, "file.txt"))
 		if err != nil {
 			t.Fatalf("%s/file.txt: %v", name, err)
 		}
@@ -373,13 +373,13 @@ func TestProvider_DownloadRunArtifact_PatternZeroMatchesIsNoOp(t *testing.T) {
 	t.Parallel()
 
 	srv := servePatternArtifacts(t)
-	p := &github.Provider{
+	githubProvider := &github.Provider{
 		Env:             envFunc(map[string]string{"GITHUB_REPOSITORY": "owner/repo"}),
 		APIBaseOverride: srv.URL(), HTTPClient: srv.Client(),
 	}
 	dir := filepath.Join(t.TempDir(), "downloads")
 
-	info, err := p.DownloadRunArtifact(context.Background(), provider.RunArtifactDownload{
+	info, err := githubProvider.DownloadRunArtifact(context.Background(), provider.RunArtifactDownload{
 		Pattern: "missing-*",
 		Dir:     dir,
 		RunID:   "9876",
@@ -457,14 +457,14 @@ func TestProvider_DownloadRunArtifact_RejectsZipSymlink(t *testing.T) {
 
 			srv := serveArtifactZip(t, buildZipWithSymlink(t, tc.link, tc.target))
 
-			p := &github.Provider{
+			githubProvider := &github.Provider{
 				Env:             envFunc(map[string]string{"GITHUB_REPOSITORY": "owner/repo"}),
 				APIBaseOverride: srv.URL(), HTTPClient: srv.Client(),
 			}
 
 			dir := t.TempDir()
 
-			_, err := p.DownloadRunArtifact(context.Background(), provider.RunArtifactDownload{Name: "build-artifacts", Dir: dir, RunID: "9876"})
+			_, err := githubProvider.DownloadRunArtifact(context.Background(), provider.RunArtifactDownload{Name: "build-artifacts", Dir: dir, RunID: "9876"})
 			if !errors.Is(err, errs.ErrValidation) {
 				t.Fatalf("err = %v, want ErrValidation (symlink entry rejected)", err)
 			}
@@ -492,14 +492,14 @@ func TestProvider_DownloadRunArtifact_RejectsZipTraversal(t *testing.T) {
 	zipBody := buildZip(t, map[string]string{"../escape.txt": "evil"})
 	srv := serveArtifactZip(t, zipBody)
 
-	p := &github.Provider{
+	githubProvider := &github.Provider{
 		Env:             envFunc(map[string]string{"GITHUB_REPOSITORY": "owner/repo"}),
 		APIBaseOverride: srv.URL(), HTTPClient: srv.Client(),
 	}
 
 	dir := t.TempDir()
 
-	_, err := p.DownloadRunArtifact(context.Background(), provider.RunArtifactDownload{Name: "build-artifacts", Dir: dir, RunID: "9876"})
+	_, err := githubProvider.DownloadRunArtifact(context.Background(), provider.RunArtifactDownload{Name: "build-artifacts", Dir: dir, RunID: "9876"})
 	if !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("err = %v, want ErrValidation (zip traversal rejected)", err)
 	}
@@ -534,8 +534,6 @@ func spoolFileCount(t *testing.T, dir string) int {
 // The other half is that a refusal publishes nothing. These failures happen at
 // different points — before the body is read, while reading it, and after it is
 // fully written — and the destination has to be empty in all three.
-//
-//nolint:paralleltest // sets the process environment that names the spool directory.
 func TestProvider_DownloadRunArtifact_RefusesWholeOperationAndCleansTheSpool(t *testing.T) {
 	// The downloader spools into the runner's per-job temp directory, else the
 	// OS one. Name a private one, so a runner's variables or another process's

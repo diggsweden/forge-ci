@@ -54,8 +54,6 @@ type PinReachabilityInput struct {
 // from the configured main branch and is not the commit pointed to by any tag.
 // This catches history-rewrite/orphaned-pin failures while the git object may
 // still be resolvable before server-side GC.
-//
-//nolint:cyclop // linear validate→collect→clone→check flow; splitting it would obscure the sequence.
 func PinReachability(ctx context.Context, gitrepo PinGit, out io.Writer, in PinReachabilityInput) error {
 	if len(in.Workflows) == 0 {
 		return fmt.Errorf("usage: validate pin-reachability --workflow WORKFLOW.yml [--workflow WORKFLOW.yml ...]: %w", errs.ErrUsage)
@@ -91,7 +89,7 @@ func PinReachability(ctx context.Context, gitrepo PinGit, out io.Writer, in PinR
 			return err
 		}
 
-		defer func() { _ = os.RemoveAll(repoDir) }() //nolint:gosec // the clone dir this call created under the temp root.
+		defer func() { _ = os.RemoveAll(repoDir) }()
 	}
 
 	repo := gitrepo.Open(repoDir)

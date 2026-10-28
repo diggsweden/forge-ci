@@ -14,20 +14,20 @@ import (
 func TestResolveKeylessIdentity_GitHub(t *testing.T) {
 	t.Parallel()
 
-	p := &github.Provider{Env: func(k string) string {
+	provider := &github.Provider{Env: func(key string) string {
 		return map[string]string{
 			"GITHUB_ACTIONS":      "true",
 			"GITHUB_REPOSITORY":   "acme/app",
 			"GITHUB_SERVER_URL":   "https://github.com",
 			"GITHUB_WORKFLOW_REF": "acme/app/.github/workflows/release.yml@refs/tags/v1.2.3",
-		}[k]
+		}[key]
 	}}
 
-	if !p.SupportsKeyless() {
+	if !provider.SupportsKeyless() {
 		t.Fatal("GitHub should support keyless")
 	}
 
-	id, err := p.ResolveKeylessIdentity()
+	id, err := provider.ResolveKeylessIdentity()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestResolveKeylessIdentity_GitHub(t *testing.T) {
 func TestResolveKeylessIdentity_GitHub_NoRef(t *testing.T) {
 	t.Parallel()
 
-	p := &github.Provider{Env: func(k string) string {
+	provider := &github.Provider{Env: func(k string) string {
 		return map[string]string{
 			"GITHUB_ACTIONS":    "true",
 			"GITHUB_REPOSITORY": "acme/app",
@@ -63,7 +63,7 @@ func TestResolveKeylessIdentity_GitHub_NoRef(t *testing.T) {
 		}[k]
 	}}
 
-	id, err := p.ResolveKeylessIdentity()
+	id, err := provider.ResolveKeylessIdentity()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,14 +90,14 @@ func TestResolveKeylessIdentity_GitHub_NoRef(t *testing.T) {
 func TestResolveKeylessIdentity_GitHub_MissingServerFailsClosed(t *testing.T) {
 	t.Parallel()
 
-	p := &github.Provider{Env: func(k string) string {
+	provider := &github.Provider{Env: func(k string) string {
 		return map[string]string{
 			"GITHUB_ACTIONS":    "true",
 			"GITHUB_REPOSITORY": "acme/app",
 		}[k]
 	}}
 
-	if _, err := p.ResolveKeylessIdentity(); !errors.Is(err, errs.ErrUsage) {
+	if _, err := provider.ResolveKeylessIdentity(); !errors.Is(err, errs.ErrUsage) {
 		t.Errorf("absent $GITHUB_SERVER_URL must fail closed, not default to github.com; got %v", err)
 	}
 }

@@ -28,7 +28,7 @@ const noNewlineMarker = `\ No newline at end of file`
 // project type, by base name: the files FilePattern stages besides the
 // changelog. A type that is absent has no isolated bump.
 func BumpPatchFiles(pt projecttype.Type) ([]string, bool) {
-	switch pt { //nolint:exhaustive // only the types with a verified isolated bump are listed.
+	switch pt {
 	case projecttype.Maven:
 		return []string{"pom.xml"}, true
 	case projecttype.NPM:
@@ -44,6 +44,54 @@ func BumpPatchFiles(pt projecttype.Type) ([]string, bool) {
 type BumpPatchResult struct {
 	Paths      []string // repository-relative project files, sorted
 	OldVersion string   // the one version every changed line moved away from
+}
+
+// BumpPatchSection retains a file's exact diff text for the existing verifier.
+type BumpPatchSection struct {
+	Path  string
+	Patch []byte
+}
+
+// SplitBumpPatch separates a multi-project diff without accepting its changes.
+// Each resulting project patch still requires VerifyBumpPatch and ApplyBump.
+func SplitBumpPatch(patch []byte, version string) ([]BumpPatchSection, error) {
+	if len(patch) == 0 {
+		return nil, nil
+	}
+
+	if err := checkBumpPatchText(patch, version); err != nil {
+		return nil, err
+	}
+
+	parts := strings.Split(string(patch), "\ndiff --git ")
+
+	var sections []BumpPatchSection
+
+	for index, part := range parts {
+		if index != 0 {
+			part = "diff --git " + part
+		}
+
+		if !strings.HasSuffix(part, "\n") {
+			part += "\n"
+		}
+
+		header, _, _ := strings.Cut(part, "\n")
+
+		header, ok := strings.CutPrefix(header, "diff --git ")
+		if !ok {
+			return nil, fmt.Errorf("version-bump patch has no diff header: %w", errs.ErrValidation)
+		}
+
+		file, err := bumpPatchFile(header, []string{"pom.xml", "package.json", "package-lock.json", "npm-shrinkwrap.json", "Cargo.toml", "Cargo.lock"})
+		if err != nil {
+			return nil, err
+		}
+
+		sections = append(sections, BumpPatchSection{Path: file, Patch: []byte(part)})
+	}
+
+	return sections, nil
 }
 
 var (

@@ -110,7 +110,7 @@ func createSBOMZipFromAssembly(ctx context.Context, signer Signer, in SBOMZipInp
 		zipName = sbom.ZipName(in.ProjectName, version.StripVPrefix(ver))
 	}
 
-	if mkdirErr := os.MkdirAll(filepath.Dir(zipName), 0o755); mkdirErr != nil { //nolint:gosec,mnd // public release staging dir.
+	if mkdirErr := os.MkdirAll(filepath.Dir(zipName), 0o755); mkdirErr != nil { //nolint:gosec // public release staging dir.
 		return nil, fmt.Errorf("create SBOM ZIP dir for %q: %w", zipName, mkdirErr)
 	}
 
@@ -180,16 +180,16 @@ func scopeToProject(matches []string, projectName string) []string {
 // writeSBOMZip writes wdMatches (path relative to workingDir) and
 // containerMatches (basename only) into zipName.
 func writeSBOMZip(zipName, workingDir string, wdMatches, containerMatches []string, out io.Writer) (int, error) {
-	return writeZipAtomic(zipName, func(w *zip.Writer) (int, error) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	return writeZipAtomic(zipName, func(zipWriter *zip.Writer) (int, error) {
 		count := 0
 
-		for _, m := range wdMatches { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+		for _, m := range wdMatches {
 			rel, err := filepath.Rel(workingDir, m)
 			if err != nil {
 				rel = filepath.Base(m)
 			}
 
-			if err := addToZip(w, m, rel); err != nil {
+			if err := addToZip(zipWriter, m, rel); err != nil {
 				return 0, err
 			}
 
@@ -200,7 +200,7 @@ func writeSBOMZip(zipName, workingDir string, wdMatches, containerMatches []stri
 
 		for _, m := range containerMatches {
 			base := filepath.Base(m)
-			if err := addToZip(w, m, base); err != nil {
+			if err := addToZip(zipWriter, m, base); err != nil {
 				return 0, err
 			}
 
@@ -214,7 +214,7 @@ func writeSBOMZip(zipName, workingDir string, wdMatches, containerMatches []stri
 }
 
 func writeAssemblySBOMZip(zipName string, entries []domainrelease.AssemblyFile, out io.Writer) (int, error) {
-	return writeZipAtomic(zipName, func(w *zip.Writer) (int, error) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	return writeZipAtomic(zipName, func(zipWriter *zip.Writer) (int, error) {
 		count := 0
 
 		for _, entry := range entries {
@@ -227,7 +227,7 @@ func writeAssemblySBOMZip(zipName string, entries []domainrelease.AssemblyFile, 
 				name = filepath.Base(entry.Path)
 			}
 
-			if err := addToZip(w, entry.Path, name); err != nil {
+			if err := addToZip(zipWriter, entry.Path, name); err != nil {
 				return 0, err
 			}
 
@@ -256,19 +256,19 @@ func writeZipAtomic(zipName string, fill func(*zip.Writer) (int, error)) (int, e
 		return 0, err
 	}
 
-	w := zip.NewWriter(tmp) //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	zipWriter := zip.NewWriter(tmp)
 
-	count, err := fill(w)
+	count, err := fill(zipWriter)
 	if err != nil {
 		return fail(err)
 	}
 
-	if err := w.Close(); err != nil {
+	if err := zipWriter.Close(); err != nil {
 		return fail(fmt.Errorf("close zip: %w", err))
 	}
 
 	// CreateTemp creates 0600; the ZIP is a published release asset.
-	if err := tmp.Chmod(0o644); err != nil { //nolint:gosec,mnd // public release asset.
+	if err := tmp.Chmod(0o644); err != nil {
 		return fail(fmt.Errorf("chmod %q: %w", zipName, err))
 	}
 
@@ -372,7 +372,7 @@ func globAll(dir string, patterns []string) ([]string, error) {
 	return out, nil
 }
 
-func addToZip(w *zip.Writer, srcPath, archivePath string) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func addToZip(zipWriter *zip.Writer, srcPath, archivePath string) error {
 	file, err := openReleaseFile(srcPath)
 	if err != nil {
 		return fmt.Errorf("open %q: %w", srcPath, err)
@@ -380,7 +380,7 @@ func addToZip(w *zip.Writer, srcPath, archivePath string) error { //nolint:varna
 
 	defer func() { _ = file.Close() }()
 
-	zw, err := w.Create(archivePath)
+	zw, err := zipWriter.Create(archivePath)
 	if err != nil {
 		return fmt.Errorf("zip create %q: %w", archivePath, err)
 	}

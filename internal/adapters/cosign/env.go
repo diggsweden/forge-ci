@@ -21,7 +21,7 @@ func (a *Adapter) registryEnv() ([]string, func(), error) {
 		return a.Env, noop, nil
 	}
 
-	body, err := os.ReadFile(a.AuthFile) //nolint:gosec // operator-selected registry auth file.
+	body, err := os.ReadFile(a.AuthFile)
 	if err != nil {
 		return nil, noop, fmt.Errorf("read registry auth file %s: %w", a.AuthFile, err)
 	}
@@ -60,8 +60,6 @@ func (a *Adapter) registryEnv() ([]string, func(), error) {
 // Proxy URLs may contain credentials; allowing them is part of this policy.
 // transparency=none suppresses public Sigstore service use, not registry or KMS
 // traffic (see withSigningConfig), so it does not make proxy settings redundant.
-//
-//nolint:gochecknoglobals // read-only allow-set; a const map is not expressible in Go.
 var runtimeKeep = map[string]bool{
 	"PATH":            true,
 	"HOME":            true,

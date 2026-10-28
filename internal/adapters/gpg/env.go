@@ -9,7 +9,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/safeexec"
 )
 
-var runtimeKeep = map[string]bool{ //nolint:gochecknoglobals // read-only allow-set.
+var runtimeKeep = map[string]bool{
 	"PATH":        true,
 	"HOME":        true,
 	"TMPDIR":      true,

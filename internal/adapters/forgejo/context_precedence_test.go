@@ -4,6 +4,7 @@
 package forgejo_test
 
 import (
+	"maps"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -60,13 +61,9 @@ func TestResolveContext_ForgejoNamesWinOverCompetingAliases(t *testing.T) {
 			t.Parallel()
 
 			env := map[string]string{}
-			for key, value := range aliases {
-				env[key] = value
-			}
+			maps.Copy(env, aliases)
 
-			for key, value := range tc.forgejo {
-				env[key] = value
-			}
+			maps.Copy(env, tc.forgejo)
 
 			got, err := (&forgejo.Provider{Env: envMap(env)}).ResolveContext(t.Context())
 			require.NoError(t, err)

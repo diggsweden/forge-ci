@@ -111,7 +111,7 @@ func validateNPMRCInput(in NPMRCInput) (npmrcSettings, error) {
 
 // emitNPMRCLines writes the three-line .npmrc body. Scoped vs unscoped
 // projects differ only in the registry-key prefix.
-func emitNPMRCLines(w io.Writer, s npmrcSettings) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func emitNPMRCLines(w io.Writer, s npmrcSettings) error {
 	if _, err := fmt.Fprintf(w, "//%s/:_authToken=${NODE_AUTH_TOKEN}\n", s.host); err != nil {
 		return fmt.Errorf("write .npmrc: %w", err)
 	}
@@ -171,8 +171,6 @@ func isLoopbackHost(host string) bool {
 // isNPMScope reports whether s is a valid npm scope: leading '@', followed by
 // 1+ characters drawn from [a-z0-9-_.~]. Mirrors npm's own scope-name rules
 // without pulling in a regex dependency.
-//
-//nolint:cyclop // npm scope validation: one branch per allowed/disallowed rune class.
 func isNPMScope(s string) bool {
 	if len(s) < 2 || s[0] != '@' {
 		return false
@@ -213,7 +211,7 @@ type NPMCheckVersionInput struct {
 // NPMCheckVersion checks whether package@version already exists in a registry
 // and emits already-published=true|false. E404-style npm failures are treated
 // as not found; other npm failures surface as errors.
-func NPMCheckVersion(ctx context.Context, npm NPMOps, sink ci.OutputSink, w io.Writer, annot output.Annotator, in NPMCheckVersionInput) error { //nolint:cyclop,varnamelen // exact query evidence, absence and transport failure must remain distinct.
+func NPMCheckVersion(ctx context.Context, npm NPMOps, sink ci.OutputSink, out io.Writer, annot output.Annotator, in NPMCheckVersionInput) error {
 	name := in.Name
 	if name == "" {
 		var err error
@@ -253,7 +251,7 @@ func NPMCheckVersion(ctx context.Context, npm NPMOps, sink ci.OutputSink, w io.W
 	}
 
 	if isNPMNotFound(stderr) {
-		_, _ = fmt.Fprintf(w, "Version %s not found in registry - will publish\n", in.Version)
+		_, _ = fmt.Fprintf(out, "Version %s not found in registry - will publish\n", in.Version)
 
 		if setErr := setAlreadyPublished(ctx, sink, "false"); setErr != nil {
 			return setErr
@@ -276,7 +274,7 @@ func setAlreadyPublished(ctx context.Context, sink ci.OutputSink, value string) 
 // NPMValidateTarball finds a single *.tgz / *.tar.gz at the top of Dir,
 // validates in private staging, then installs the contents and removes the
 // tarball for the snapshot-publish workflow. Rejected input changes no existing files.
-func NPMValidateTarball(_ context.Context, w, stderr io.Writer, annot output.Annotator, in NPMValidateTarballInput) error { //nolint:cyclop,varnamelen // discover, stage, validate, install, then remove the consumed archive.
+func NPMValidateTarball(_ context.Context, out, stderr io.Writer, annot output.Annotator, in NPMValidateTarballInput) error {
 	dir := in.Dir
 	if dir == "" {
 		var err error
@@ -298,7 +296,7 @@ func NPMValidateTarball(_ context.Context, w, stderr io.Writer, annot output.Ann
 		return fmt.Errorf("no tarball found in %s: %w", dir, errs.ErrMissingInput)
 	}
 
-	_, _ = fmt.Fprintf(w, "Extracting %s...\n", tarball)
+	_, _ = fmt.Fprintf(out, "Extracting %s...\n", tarball)
 
 	staging, err := pathsafe.NewArtifactStaging(dir)
 	if err != nil {
@@ -311,22 +309,22 @@ func NPMValidateTarball(_ context.Context, w, stderr io.Writer, annot output.Ann
 		return fmt.Errorf("extract %s: %w", tarball, err)
 	}
 
-	_, _ = fmt.Fprintln(w, "Extracted contents:")
+	_, _ = fmt.Fprintln(out, "Extracted contents:")
 
-	listed := listFiles(w, filepath.Join(extracted, "dist"))
+	listed := listFiles(out, filepath.Join(extracted, "dist"))
 	if !listed {
-		listFiles(w, filepath.Join(extracted, "build"))
+		listFiles(out, filepath.Join(extracted, "build"))
 	}
 
 	cliJS := filepath.Join(extracted, "dist", "cli.js")
 
-	_, _ = fmt.Fprintln(w, "")
-	_, _ = fmt.Fprintln(w, "Verifying dist/cli.js exists:")
+	_, _ = fmt.Fprintln(out, "")
+	_, _ = fmt.Fprintln(out, "Verifying dist/cli.js exists:")
 
 	if info, err := os.Lstat(cliJS); err == nil && info.Mode().IsRegular() {
-		_, _ = fmt.Fprintf(w, "%s dist/cli.js found\n", clicolor.Check(w))
+		_, _ = fmt.Fprintf(out, "%s dist/cli.js found\n", clicolor.Check(out))
 	} else {
-		_, _ = fmt.Fprintf(w, "%s dist/cli.js NOT found\n", clicolor.Cross(w))
+		_, _ = fmt.Fprintf(out, "%s dist/cli.js NOT found\n", clicolor.Cross(out))
 
 		return fmt.Errorf("dist/cli.js not found in extracted tarball: %w", errs.ErrValidation)
 	}
@@ -409,14 +407,14 @@ func listFiles(out io.Writer, dir string) bool {
 		return false
 	}
 
-	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	_ = filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			slog.Debug("listFiles: skipping unreadable entry", "path", path, "err", err)
 
 			return nil
 		}
 
-		if !d.IsDir() {
+		if !entry.IsDir() {
 			_, _ = fmt.Fprintln(out, path)
 		}
 

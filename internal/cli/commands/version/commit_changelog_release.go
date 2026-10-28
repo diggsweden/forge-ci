@@ -17,6 +17,7 @@ import (
 	appversion "github.com/diggsweden/forge-ci/internal/app/version"
 	"github.com/diggsweden/forge-ci/internal/cli/cienv"
 	"github.com/diggsweden/forge-ci/internal/cli/clitoken"
+	"github.com/diggsweden/forge-ci/internal/cli/commonflags"
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
 	"github.com/diggsweden/forge-ci/internal/cli/dryrun"
 	"github.com/diggsweden/forge-ci/internal/cli/secret"
@@ -31,19 +32,21 @@ func commitChangelogReleaseCmd() *cli.Command {
 		Description: `EXAMPLE:
    forge-ci version commit-changelog-release --tag v1.2.3 --repository owner/repo --git-url ssh://git@git.example/owner/repo.git`,
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: flagTag, Required: true, Sources: cli.EnvVars("RELEASE_TAG", "TAG_NAME"), Usage: "final stable release tag to create (vMAJOR.MINOR.PATCH)"},
+			commonflags.ReleasePolicy(),
+			&cli.StringFlag{Name: flagTag, Required: true, Sources: cli.EnvVars("RELEASE_TAG", "TAG_NAME"), Usage: "final release tag to create under release-policy"},
 			&cli.StringFlag{Name: "repository", Required: true, Sources: cienv.Repository(), Usage: "repository in namespace/project form, including GitLab subgroups"},
 			&cli.StringFlag{Name: flagBranch, Value: "main", Usage: "branch to push the signed changelog commit to"},
-			&cli.StringFlag{Name: "changelog", Value: defaultChangelogFile, Sources: cli.EnvVars("CHANGELOG_PATH"), Usage: "pre-generated changelog file to commit"},
+			&cli.StringFlag{Name: "changelog", Value: defaultChangelogFile, Sources: cli.EnvVars("CHANGELOG_FILE"), Usage: "pre-generated changelog file to commit"},
 			&cli.StringFlag{Name: "commit-message-file", Value: defaultCommitMessageFile, Sources: cli.EnvVars("COMMIT_MESSAGE_FILE"), Usage: "pre-generated commit message file used with git commit -F"},
 			&cli.StringFlag{Name: "include-paths-file", Usage: "file naming further repository-relative files to commit beside the changelog, one per line (apply-bump --paths-file)"},
 			&cli.StringFlag{Name: "commit-body-path", Value: defaultCommitBodyFile, Sources: cli.EnvVars("COMMIT_BODY_PATH"), Usage: "rendered commit body removed after the release commit"},
 			&cli.StringFlag{Name: "author-name", Sources: cli.EnvVars("GIT_USER_NAME", "COMMIT_AUTHOR_NAME"), Usage: "git user.name for the release bump commit (required; no org default)"},
 			&cli.StringFlag{Name: "author-email", Sources: cli.EnvVars("GIT_USER_EMAIL", "COMMIT_AUTHOR_EMAIL"), Usage: "git user.email for the release bump commit (required; no org default)"},
 			&cli.StringFlag{Name: "private-key-file", Usage: "path to the OpenSSH private signing key (use '-' for stdin; defaults to $SSH_SIGNING_KEY)"},
-			&cli.StringFlag{Name: "git-url", Required: true, Sources: cli.EnvVars("RELEASE_GIT_URL"), Usage: "SSH origin URL in ssh://git@host[:port]/owner/repository.git form"},
-			&cli.StringFlag{Name: "host-key-type", Value: defaultHostKeyType, Sources: cli.EnvVars("RELEASE_GIT_HOST_KEY_TYPE"), Usage: "host key type passed to ssh-keyscan"},
-			&cli.StringFlag{Name: "host-key-fingerprint", Sources: cli.EnvVars("RELEASE_GIT_HOST_KEY_FINGERPRINT"), Usage: "expected SSH host key fingerprint, required (a trust anchor, never defaulted; get it with: ssh-keyscan [-p <port>] -t <type> <host> | ssh-keygen -lf -)"},
+			&cli.StringFlag{Name: "git-url", Sources: cli.EnvVars("RELEASE_GIT_URL"), Usage: "SSH origin URL in ssh://git@host[:port]/owner/repository.git form; defaults to the repository on the host of --server-url, port 22"},
+			&cli.StringFlag{Name: "server-url", Sources: cienv.ServerURL(), Usage: "forge server URL supplied by the runner, whose host the default --git-url names"},
+			&cli.StringFlag{Name: "host-key-type", Value: defaultHostKeyType, Sources: cli.EnvVars("RELEASE_GIT_HOST_KEY_TYPE"), Usage: "host key type to pin: ed25519, ecdsa or rsa"},
+			&cli.StringFlag{Name: "host-key-fingerprint", Sources: cli.EnvVars("RELEASE_GIT_HOST_KEY_FINGERPRINT"), Usage: "expected SSH host key fingerprint, SHA256:<base64> alone, required (a trust anchor, never defaulted; take it from the forge operator, not from the host it verifies)"},
 			&cli.BoolFlag{Name: "no-sign", Usage: "skip final tag signing (intended for tests; production always signs)"},
 			&cli.BoolFlag{Name: "signed", Value: true, Sources: cli.EnvVars("TAG_RELEASE_SIGNED"), Usage: "create a signed final tag; set TAG_RELEASE_SIGNED=false for unsigned annotated test tags"},
 			clitoken.FileFlag("Optional HTTP token; environment selection prefers $RELEASE_TOKEN. SSH remotes use the signing key."),
@@ -55,7 +58,7 @@ func commitChangelogReleaseCmd() *cli.Command {
 				return err
 			}
 
-			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+			return deps.FromCmd(ctx, cmd, func(dependencies *deps.Deps) error {
 				repo := git.New()
 
 				gitEndpoint, err := appversion.ParseChangelogReleaseGitURL(in.GitURL, in.Repository)
@@ -70,7 +73,7 @@ func commitChangelogReleaseCmd() *cli.Command {
 					// the real run).
 					_, _ = fmt.Fprintln(os.Stderr, "[dry-run] skipping SSH signing key and host-key setup (commit and push are skipped)")
 
-					_, releaseErr := appversion.ChangelogRelease(ctx, repo, d.OutputSink, os.Stderr, in)
+					_, releaseErr := appversion.ChangelogRelease(ctx, repo, dependencies.OutputSink, os.Stderr, in)
 
 					return releaseErr
 				}
@@ -114,12 +117,22 @@ func commitChangelogReleaseCmd() *cli.Command {
 				defer restoreSSHCommand()
 
 				in.SigningKeyPath = ssh.SigningKeyPath
-				_, err = appversion.ChangelogRelease(ctx, repo, d.OutputSink, os.Stderr, in)
+				_, err = appversion.ChangelogRelease(ctx, repo, dependencies.OutputSink, os.Stderr, in)
 
 				return err
 			})
 		},
 	}
+}
+
+// releaseGitURL is --git-url, or else the repository on the host of the
+// forge the job runs on; empty when neither is known.
+func releaseGitURL(cmd *cli.Command) (string, error) {
+	if gitURL := cmd.String("git-url"); gitURL != "" || cmd.String("server-url") == "" {
+		return gitURL, nil
+	}
+
+	return appversion.DefaultChangelogReleaseGitURL(cmd.String("server-url"), cmd.String("repository"))
 }
 
 func changelogReleaseInput(cmd *cli.Command) (appversion.ChangelogReleaseInput, error) {
@@ -139,9 +152,9 @@ func changelogReleaseInput(cmd *cli.Command) (appversion.ChangelogReleaseInput, 
 	var includePaths []string
 
 	if file := cmd.String("include-paths-file"); file != "" {
-		body, err := cliio.ReadRegularFile(file)
-		if err != nil {
-			return appversion.ChangelogReleaseInput{}, fmt.Errorf("read --include-paths-file: %w", err)
+		body, readErr := cliio.ReadRegularFile(file)
+		if readErr != nil {
+			return appversion.ChangelogReleaseInput{}, fmt.Errorf("read --include-paths-file: %w", readErr)
 		}
 
 		// One path per line, exactly as apply-bump writes them; a path is
@@ -149,10 +162,16 @@ func changelogReleaseInput(cmd *cli.Command) (appversion.ChangelogReleaseInput, 
 		includePaths = strings.Split(strings.TrimSuffix(string(body), "\n"), "\n")
 	}
 
+	gitURL, err := releaseGitURL(cmd)
+	if err != nil {
+		return appversion.ChangelogReleaseInput{}, err
+	}
+
 	in := appversion.ChangelogReleaseInput{
+		ReleasePolicy:     cmd.String("release-policy"),
 		Tag:               cmd.String(flagTag),
 		Repository:        cmd.String("repository"),
-		GitURL:            cmd.String("git-url"),
+		GitURL:            gitURL,
 		Branch:            cmd.String(flagBranch),
 		ChangelogPath:     cmd.String("changelog"),
 		CommitMessageFile: cmd.String("commit-message-file"),

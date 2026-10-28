@@ -106,7 +106,7 @@ EXAMPLES:
 			})...,
 		),
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+			return deps.FromCmd(ctx, cmd, func(dependencies *deps.Deps) error {
 				profile, err := parseProvenanceProfile(cmd.String("profile"))
 				if err != nil {
 					return err
@@ -119,7 +119,7 @@ EXAMPLES:
 					return fmt.Errorf("provenance: --%s: %w", flagExternalParametersJSON, err)
 				}
 
-				in, err := provenanceContext(ctx, cmd, d, profile)
+				in, err := provenanceContext(ctx, cmd, dependencies, profile)
 				if err != nil {
 					return err
 				}
@@ -145,7 +145,7 @@ EXAMPLES:
 				}
 
 				output := cmd.String(flagOutput)
-				if err := cliio.WriteFile(output, out, 0o644); err != nil { //nolint:gosec // provenance JSON is public attestation material, not a secret.
+				if err := cliio.WriteFile(output, out, 0o644); err != nil {
 					return err
 				}
 
@@ -168,14 +168,14 @@ EXAMPLES:
 // source from the selected provider; GenerateProvenance names its builder.
 // --ref-name and --source-sha replace the ref and commit of either; the
 // invocation is always the runner's own.
-func provenanceContext(ctx context.Context, cmd *cli.Command, d *deps.Deps, profile apprelease.ProvenanceProfile) (apprelease.ProvenanceInput, error) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func provenanceContext(ctx context.Context, cmd *cli.Command, dependencies *deps.Deps, profile apprelease.ProvenanceProfile) (apprelease.ProvenanceInput, error) {
 	legacy := profile == apprelease.ProvenanceProfileForgejoActions
 	repoURL, ref, sha := cienv.ProvenanceSource()
 
 	if legacy {
 		// Preserve the explicitly selected compatibility profile;
 		// target metadata must not feed the generic trust identity.
-		evt, err := d.Provider.ResolveContext(ctx)
+		evt, err := dependencies.Provider.ResolveContext(ctx)
 		if err != nil {
 			return apprelease.ProvenanceInput{}, err
 		}

@@ -130,7 +130,7 @@ func TestWritePrerequisitesSummary_NoWarningsNoCallout(t *testing.T) {
 func TestWritePrerequisitesSummary_FailuresAreListedOnOneLineEach(t *testing.T) {
 	t.Parallel()
 
-	multiline := errors.New("verify failed\n  gpg: Signature made Tue\n  gpg: Can't check signature") //nolint:err113 // fixture error.
+	multiline := errors.New("verify failed\n  gpg: Signature made Tue\n  gpg: Can't check signature")
 
 	body := summaryFor(t, appvalidate.ValidatorOutcome{Name: "tag-signature", Err: multiline})
 
@@ -144,7 +144,7 @@ func TestWritePrerequisitesSummary_FailuresAreListedOnOneLineEach(t *testing.T) 
 }
 
 // errSummarySink stands in for a summary file that cannot be appended to.
-var errSummarySink = errors.New("summary sink refused") //nolint:err113 // fixture sentinel.
+var errSummarySink = errors.New("summary sink refused")
 
 type refusingSummarySink struct{ calls int }
 
@@ -165,7 +165,7 @@ func TestWritePrerequisitesSummary_WholeReportForSeveralFailures(t *testing.T) {
 
 	body := summaryFor(t,
 		appvalidate.ValidatorOutcome{Name: "ref-type"},
-		appvalidate.ValidatorOutcome{Name: "tag-format", Err: errors.New("\n  \ntag '[v1](https://attacker.invalid)' is not semver\nsecond line")}, //nolint:err113 // fixture error.
+		appvalidate.ValidatorOutcome{Name: "tag-format", Err: errors.New("\n  \ntag '[v1](https://attacker.invalid)' is not semver\nsecond line")},
 		appvalidate.ValidatorOutcome{Name: "tag-signature", Err: errs.ErrPermissionDenied, Output: "⚠️ allowlist <b>skipped</b> for **v1**\n"},
 		appvalidate.ValidatorOutcome{Name: "maven-central", Skipped: true, SkipReason: "no maven-central target"},
 		appvalidate.ValidatorOutcome{Name: "cargo", Output: "ok\n  ⚠️ toolchain pin is a symlink\n"},

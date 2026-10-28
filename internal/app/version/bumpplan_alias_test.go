@@ -150,7 +150,7 @@ func assertBumpPlanAliasRefusal(t *testing.T, root string, items []pipeline.Plan
 		"early-rust/Cargo.toml": "[package]\nversion = \"1.0.0\"\n", "early-rust/Cargo.lock": "early lock canary\n",
 	} {
 		writeFile(t, root, path, body)
-		require.NoError(t, os.Chmod(path, 0o640)) //nolint:gosec // nondefault mode is a preservation canary on this test's owned files.
+		require.NoError(t, os.Chmod(path, 0o640))
 	}
 
 	items = append([]pipeline.PlannedArtifact{
@@ -374,7 +374,7 @@ func TestBumpPlanAliases_SourceOnlyPrimaryAliasHasNoEffects(t *testing.T) {
 			t.Chdir(root)
 			require.NoError(t, os.Mkdir("late", 0o700))
 			writeFile(t, root, "late/gradle.properties", "# Source changes\nversion=1.0.0\n")
-			require.NoError(t, os.Chmod("late/gradle.properties", 0o640)) //nolint:gosec // owned source-mode preservation canary.
+			require.NoError(t, os.Chmod("late/gradle.properties", 0o640))
 
 			primary := pipeline.PlannedArtifact{Name: "source-alias", ProjectType: projecttype.Gradle, WorkingDirectory: "late"}
 			source := "./late//gradle.properties"

@@ -178,6 +178,7 @@ func TestForgePackagesDeploy_ActivatesThePublicationProfile(t *testing.T) {
 	t.Parallel()
 
 	mvn := &fakePublishMaven{}
+
 	resolver := fakeRegistryResolver{reg: provider.ForgeMavenRegistry{
 		ServerID: "github", URL: "https://maven.pkg.github.com/example/library",
 		AuthScheme: provider.MavenAuthJobTokenHeader, Token: "fixture-token",
@@ -186,10 +187,13 @@ func TestForgePackagesDeploy_ActivatesThePublicationProfile(t *testing.T) {
 		apppublish.ForgePackagesDeployInput{CLIOpts: []string{"-B"}, Profile: "library-attachments"}); err != nil {
 		t.Fatal(err)
 	}
+
 	if len(mvn.runs) != 1 {
 		t.Fatalf("mvn runs = %d, want one", len(mvn.runs))
 	}
+
 	args := mvn.runs[0]
+
 	want := []string{"-B", "deploy", "-DskipTests", "--settings", args[4],
 		"-DaltDeploymentRepository=github::default::https://maven.pkg.github.com/example/library", "-Plibrary-attachments"}
 	if !slices.Equal(args, want) {
@@ -225,7 +229,7 @@ func (o *credObservation) observe(flag string, args []string) {
 		o.existed = true
 		o.mode = info.Mode().Perm()
 
-		if body, readErr := os.ReadFile(o.path); readErr == nil { //nolint:gosec // reads the path the code under test generated.
+		if body, readErr := os.ReadFile(o.path); readErr == nil {
 			o.body = string(body)
 		}
 	}
@@ -348,7 +352,7 @@ func assertCredentialFileLifetime(t *testing.T, obs *credObservation, wantToken 
 // TMPDIR points at an owned directory so that last claim can be checked by
 // listing it, which also means these cases cannot run in parallel.
 func TestForgePackages_FailedPublishRemovesOnlyItsCredentialFile(t *testing.T) {
-	errPublishRejected := errors.New("registry rejected the package") //nolint:err113 // a unique value to find in the chain.
+	errPublishRejected := errors.New("registry rejected the package")
 
 	for name, publish := range map[string]func(t *testing.T) (*credObservation, error){
 		"maven settings.xml": func(t *testing.T) (*credObservation, error) {

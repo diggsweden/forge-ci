@@ -79,7 +79,8 @@ func (s stubGit) VerifyTagSSHAgainstAllowedSigners(_ context.Context, _, _ strin
 
 // errUnexpectedSSHVerification marks the stub being asked something the
 // fixtures in this file cannot answer.
-var errUnexpectedSSHVerification = errors.New("stubGit: SSH signature verification is not exercised by these GPG fixtures") //nolint:err113 // test fixture sentinel.
+var errUnexpectedSSHVerification = errors.New("stubGit: SSH signature verification is not exercised by these GPG fixtures")
+
 func (s stubGit) TaggerInfo(_ context.Context, _ string) (git.TaggerInfo, error) {
 	return git.TaggerInfo{Tagger: "x <x@y>", Date: "2026-01-01"}, nil
 }
@@ -92,7 +93,7 @@ func TestPrerequisites_NonTagRefSkipsTagChecks(t *testing.T) {
 	result, err := appvalidate.Prerequisites(context.Background(), appvalidate.PrerequisitesDeps{
 		GitRepo:  stubGit{verifyOK: true, tagSHA: "abc"},
 		Provider: fp,
-	}, io.Discard, output.Annotator{}, appvalidate.PrerequisitesInput{ //nolint:gosec // synthetic provider credential; no real provider or key is used.
+	}, io.Discard, output.Annotator{}, appvalidate.PrerequisitesInput{
 		RefType:      "branch",
 		Tag:          "main",
 		Ref:          "refs/heads/main",
@@ -136,7 +137,7 @@ func TestPrerequisites_TagRefRunsAllTagChecks(t *testing.T) {
 			}
 		}},
 		Provider: fp,
-	}, io.Discard, output.Annotator{}, appvalidate.PrerequisitesInput{ //nolint:gosec // synthetic key and token are passed only to recording fakes.
+	}, io.Discard, output.Annotator{}, appvalidate.PrerequisitesInput{
 		RefType:             "tag",
 		Tag:                 "v1.0.0",
 		Ref:                 "refs/tags/v1.0.0",
@@ -191,7 +192,7 @@ func TestPrerequisites_ExactFinalTagRerunAllowsExpectedTagCollision(t *testing.T
 			revisions: map[string]string{finalTag + "^{commit}": "0bad0bad0b"},
 		},
 		Provider: fp,
-	}, io.Discard, output.Annotator{}, appvalidate.PrerequisitesInput{ //nolint:gosec // fake token and key markers exercise validation without secrets.
+	}, io.Discard, output.Annotator{}, appvalidate.PrerequisitesInput{
 		RefType:             "tag",
 		Tag:                 requestTag,
 		Ref:                 "refs/tags/" + requestTag,
@@ -291,7 +292,7 @@ func TestPrerequisites_GPGCheckUsesResolvedSigningRequirement(t *testing.T) {
 }
 
 // errStubGitBoom is the git failure injected into the aggregate below.
-var errStubGitBoom = errors.New("git boom") //nolint:err113 // test fixture sentinel.
+var errStubGitBoom = errors.New("git boom")
 
 // TestPrerequisites_AggregateNamesEveryFailedCheckAndKeepsItsCauses covers
 // what the caller gets when several validators fail at once. The aggregate is

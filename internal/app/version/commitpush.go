@@ -65,8 +65,6 @@ type CommitPushInput struct {
 // authorization.
 //
 // DryRun reads status without index refresh or staging, then narrates mutations.
-//
-//nolint:cyclop // validate → guard the authorized branch → stage → decide no-op → commit → push, each gated by the dry-run flag. Phases, not nested logic.
 func CommitPush(ctx context.Context, repo commitPushOps, out io.Writer, in CommitPushInput) error {
 	in.ExpectedSHA = strings.TrimSpace(in.ExpectedSHA)
 	if err := requireFields(in); err != nil {

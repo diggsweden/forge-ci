@@ -31,7 +31,7 @@ type FindArtifactInput struct {
 
 // FindArtifact finds the first matching file under Dir, emits it as OutputKey,
 // and prints a short log line for workflow visibility.
-func FindArtifact(ctx context.Context, sink ci.OutputSink, w io.Writer, annot output.Annotator, in FindArtifactInput) (string, error) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func FindArtifact(ctx context.Context, sink ci.OutputSink, out io.Writer, annot output.Annotator, in FindArtifactInput) (string, error) {
 	dir := in.Dir
 	if dir == "" {
 		dir = "artifacts"
@@ -71,10 +71,10 @@ func FindArtifact(ctx context.Context, sink ci.OutputSink, w io.Writer, annot ou
 		return "", fmt.Errorf("set %s: %w", in.OutputKey, err)
 	}
 
-	_, _ = fmt.Fprintf(w, "Found %s: %s\n", label, selected)
+	_, _ = fmt.Fprintf(out, "Found %s: %s\n", label, selected)
 
 	if info, err := os.Stat(selected); err == nil {
-		_, _ = fmt.Fprintf(w, "Size: %d bytes\n", info.Size())
+		_, _ = fmt.Fprintf(out, "Size: %d bytes\n", info.Size())
 	}
 
 	return selected, nil
@@ -99,7 +99,6 @@ func normalizeArtifactExtensions(ext string, exts []string) []string {
 	return out
 }
 
-//nolint:cyclop // rooted walk, recursion, extension matching and file-type refusal are separate guards.
 func findArtifactsByExts(dir string, exts []string, recursive bool) ([]string, error) {
 	root, err := pathsafe.OpenRoot(dir)
 	if err != nil {

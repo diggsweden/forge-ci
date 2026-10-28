@@ -64,27 +64,26 @@ func newSelfRuntimeAPI(target string) *selfRuntimeAPI {
 	}
 }
 
-//nolint:gocognit,gocyclo,maintidx // one linear in-memory fake for the complete GitHub publication API.
 func (a *selfRuntimeAPI) handler(t *testing.T) http.Handler {
 	t.Helper()
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		const root = "/repos/diggsweden/forge-ci"
+	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		const root = "/repos/" + domainrelease.SelfRuntimeRepository
 
-		path := strings.TrimPrefix(r.URL.Path, root)
-		freshRead := path == "/git/ref/heads/"+domainrelease.SelfRuntimeBranch && r.Method == http.MethodGet
+		path := strings.TrimPrefix(request.URL.Path, root)
+		freshRead := path == "/git/ref/heads/"+domainrelease.SelfRuntimeBranch && request.Method == http.MethodGet
 
-		mutation := r.Method == http.MethodPost || r.Method == http.MethodPatch || r.Method == http.MethodDelete
+		mutation := request.Method == http.MethodPost || request.Method == http.MethodPatch || request.Method == http.MethodDelete
 		if !freshRead {
 			if mutation && !a.lastFresh {
-				a.unfreshMutations = append(a.unfreshMutations, r.Method+" "+path)
+				a.unfreshMutations = append(a.unfreshMutations, request.Method+" "+path)
 			}
 
 			a.lastFresh = false
 		}
 
 		switch {
-		case path == "/git/ref/heads/"+domainrelease.SelfRuntimeBranch && r.Method == http.MethodGet:
+		case path == "/git/ref/heads/"+domainrelease.SelfRuntimeBranch && request.Method == http.MethodGet:
 			a.sourceReads++
 
 			sha := a.sourceSHA
@@ -94,60 +93,60 @@ func (a *selfRuntimeAPI) handler(t *testing.T) http.Handler {
 
 			a.lastFresh = true
 
-			writeSelfRuntimeRef(w, selfRuntimeSourceRef, sha)
+			writeSelfRuntimeRef(response, selfRuntimeSourceRef, sha)
 
-		case path == "/releases/tags/"+selfRuntimeTag && r.Method == http.MethodGet:
+		case path == "/releases/tags/"+selfRuntimeTag && request.Method == http.MethodGet:
 			if !a.release {
-				http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
+				http.Error(response, `{"message":"Not Found"}`, http.StatusNotFound)
 
 				return
 			}
 
-			writeSelfRuntimeRelease(w, a)
+			writeSelfRuntimeRelease(response, a)
 
-		case path == "/releases" && r.Method == http.MethodPost:
+		case path == "/releases" && request.Method == http.MethodPost:
 			var in struct {
 				Draft           bool   `json:"draft"`
 				Prerelease      bool   `json:"prerelease"`
 				TargetCommitish string `json:"target_commitish"`
 			}
 
-			_ = json.NewDecoder(r.Body).Decode(&in)
+			_ = json.NewDecoder(request.Body).Decode(&in)
 			a.release = true
 			a.prerelease = in.Prerelease
 			a.releaseDraft = in.Draft
 			a.tagSHA = in.TargetCommitish
 			a.mutations = append(a.mutations, "create-draft")
-			writeSelfRuntimeRelease(w, a)
+			writeSelfRuntimeRelease(response, a)
 
-		case path == "/releases/7" && r.Method == http.MethodPatch:
+		case path == "/releases/7" && request.Method == http.MethodPatch:
 			var in struct {
 				Draft      bool `json:"draft"`
 				Prerelease bool `json:"prerelease"`
 			}
 
-			_ = json.NewDecoder(r.Body).Decode(&in)
+			_ = json.NewDecoder(request.Body).Decode(&in)
 			a.releaseDraft = in.Draft
 			a.prerelease = in.Prerelease
 			a.mutations = append(a.mutations, "publish-release")
-			writeSelfRuntimeRelease(w, a)
+			writeSelfRuntimeRelease(response, a)
 
-		case path == "/releases/7/assets" && r.Method == http.MethodGet:
+		case path == "/releases/7/assets" && request.Method == http.MethodGet:
 			out := make([]map[string]any, 0, len(a.assets))
 			for _, asset := range a.assets {
 				out = append(out, selfRuntimeAssetWire(asset))
 			}
 
-			_ = json.NewEncoder(w).Encode(out)
+			_ = json.NewEncoder(response).Encode(out)
 
-		case path == "/releases/7/assets" && r.Method == http.MethodPost:
-			body, _ := io.ReadAll(r.Body)
+		case path == "/releases/7/assets" && request.Method == http.MethodPost:
+			body, _ := io.ReadAll(request.Body)
 
-			name := r.URL.Query().Get("name")
+			name := request.URL.Query().Get("name")
 			if name == a.failUploadName {
 				a.mutations = append(a.mutations, "upload-failed:"+name)
 
-				http.Error(w, `{"message":"upload failed"}`, http.StatusInternalServerError)
+				http.Error(response, `{"message":"upload failed"}`, http.StatusInternalServerError)
 
 				return
 			}
@@ -157,46 +156,46 @@ func (a *selfRuntimeAPI) handler(t *testing.T) http.Handler {
 			a.assets = append(a.assets, asset)
 			a.mutations = append(a.mutations, "upload:"+asset.name)
 
-			w.WriteHeader(http.StatusCreated)
+			response.WriteHeader(http.StatusCreated)
 
 			wire := selfRuntimeAssetWire(asset)
 			if a.omitUploadDigest {
 				delete(wire, "digest")
 			}
 
-			_ = json.NewEncoder(w).Encode(wire)
+			_ = json.NewEncoder(response).Encode(wire)
 
-		case strings.HasPrefix(path, "/releases/assets/") && r.Method == http.MethodPatch:
+		case strings.HasPrefix(path, "/releases/assets/") && request.Method == http.MethodPatch:
 			id := selfRuntimeAssetID(path)
 
 			var in struct {
 				Name string `json:"name"`
 			}
 
-			_ = json.NewDecoder(r.Body).Decode(&in)
+			_ = json.NewDecoder(request.Body).Decode(&in)
 
 			asset := a.asset(id)
 			if asset == nil {
-				http.Error(w, "not found", http.StatusNotFound)
+				http.Error(response, "not found", http.StatusNotFound)
 
 				return
 			}
 
 			asset.name = in.Name
 			a.mutations = append(a.mutations, "rename:"+in.Name)
-			_ = json.NewEncoder(w).Encode(selfRuntimeAssetWire(asset))
+			_ = json.NewEncoder(response).Encode(selfRuntimeAssetWire(asset))
 
-		case strings.HasPrefix(path, "/releases/assets/") && r.Method == http.MethodGet:
+		case strings.HasPrefix(path, "/releases/assets/") && request.Method == http.MethodGet:
 			asset := a.asset(selfRuntimeAssetID(path))
 			if asset == nil {
-				http.Error(w, "not found", http.StatusNotFound)
+				http.Error(response, "not found", http.StatusNotFound)
 
 				return
 			}
 
-			_, _ = w.Write([]byte(asset.body))
+			_, _ = response.Write([]byte(asset.body))
 
-		case strings.HasPrefix(path, "/releases/assets/") && r.Method == http.MethodDelete:
+		case strings.HasPrefix(path, "/releases/assets/") && request.Method == http.MethodDelete:
 			id := selfRuntimeAssetID(path)
 			deletedName := "unknown"
 
@@ -212,22 +211,22 @@ func (a *selfRuntimeAPI) handler(t *testing.T) http.Handler {
 
 			a.mutations = append(a.mutations, "delete:"+deletedName)
 
-			w.WriteHeader(http.StatusNoContent)
+			response.WriteHeader(http.StatusNoContent)
 
-		case path == "/git/ref/tags/"+selfRuntimeTag && r.Method == http.MethodGet:
+		case path == "/git/ref/tags/"+selfRuntimeTag && request.Method == http.MethodGet:
 			if a.tagSHA == "" {
-				http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
+				http.Error(response, `{"message":"Not Found"}`, http.StatusNotFound)
 
 				return
 			}
 
-			writeSelfRuntimeRef(w, "refs/tags/"+selfRuntimeTag, a.tagSHA)
+			writeSelfRuntimeRef(response, "refs/tags/"+selfRuntimeTag, a.tagSHA)
 
-		case path == "/git/refs/tags/"+selfRuntimeTag && r.Method == http.MethodPatch:
+		case path == "/git/refs/tags/"+selfRuntimeTag && request.Method == http.MethodPatch:
 			if a.failTagMove {
 				a.mutations = append(a.mutations, "move-tag-failed")
 
-				http.Error(w, `{"message":"tag move failed"}`, http.StatusInternalServerError)
+				http.Error(response, `{"message":"tag move failed"}`, http.StatusInternalServerError)
 
 				return
 			}
@@ -236,25 +235,25 @@ func (a *selfRuntimeAPI) handler(t *testing.T) http.Handler {
 				SHA string `json:"sha"`
 			}
 
-			_ = json.NewDecoder(r.Body).Decode(&in)
+			_ = json.NewDecoder(request.Body).Decode(&in)
 			a.tagSHA = in.SHA
 			a.mutations = append(a.mutations, "move-tag")
-			writeSelfRuntimeRef(w, "refs/tags/"+selfRuntimeTag, a.tagSHA)
+			writeSelfRuntimeRef(response, "refs/tags/"+selfRuntimeTag, a.tagSHA)
 
-		case path == "/git/refs" && r.Method == http.MethodPost:
+		case path == "/git/refs" && request.Method == http.MethodPost:
 			var in struct {
 				Ref string `json:"ref"`
 				SHA string `json:"sha"`
 			}
 
-			_ = json.NewDecoder(r.Body).Decode(&in)
+			_ = json.NewDecoder(request.Body).Decode(&in)
 			a.tagSHA = in.SHA
 			a.mutations = append(a.mutations, "move-tag")
 
-			writeSelfRuntimeRef(w, in.Ref, in.SHA)
+			writeSelfRuntimeRef(response, in.Ref, in.SHA)
 
 		default:
-			http.Error(w, fmt.Sprintf("unhandled %s %s", r.Method, r.URL.Path), http.StatusNotFound)
+			http.Error(response, fmt.Sprintf("unhandled %s %s", request.Method, request.URL.Path), http.StatusNotFound)
 		}
 	})
 }

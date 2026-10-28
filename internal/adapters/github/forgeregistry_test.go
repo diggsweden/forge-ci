@@ -17,16 +17,16 @@ import (
 func TestResolveForgeMavenRegistry_GitHub(t *testing.T) {
 	t.Parallel()
 
-	p := &github.Provider{Env: func(k string) string {
+	githubProvider := &github.Provider{Env: func(key string) string {
 		return map[string]string{
 			"GITHUB_REPOSITORY": "org/app",
 			"GITHUB_ACTOR":      "ci",
 			"GITHUB_TOKEN":      "ght",
 			"GITHUB_SERVER_URL": "https://github.com",
-		}[k]
+		}[key]
 	}}
 
-	reg, err := p.ResolveForgeMavenRegistry()
+	reg, err := githubProvider.ResolveForgeMavenRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,14 +40,14 @@ func TestResolveForgeMavenRegistry_GitHub(t *testing.T) {
 func TestForgePackageCoordinatesNormalizeOnlyDestinationOwner(t *testing.T) {
 	t.Parallel()
 
-	p := &github.Provider{Env: func(key string) string {
+	githubProvider := &github.Provider{Env: func(key string) string {
 		return map[string]string{
 			"GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "MixedOwner/My.Repo",
 			"GITHUB_REPOSITORY_OWNER": "MixedOwner", "GITHUB_TOKEN": "synthetic",
 		}[key]
 	}}
 
-	maven, err := p.ResolveForgeMavenRegistry()
+	maven, err := githubProvider.ResolveForgeMavenRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestForgePackageCoordinatesNormalizeOnlyDestinationOwner(t *testing.T) {
 		t.Fatalf("Maven URL: %s", maven.URL)
 	}
 
-	npm, err := p.ResolveForgeNPMRegistry()
+	npm, err := githubProvider.ResolveForgeNPMRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestForgePackageCoordinatesNormalizeOnlyDestinationOwner(t *testing.T) {
 		t.Fatalf("npm config: %s", config.String())
 	}
 
-	path, err := p.ParseRepository("MixedOwner/My.Repo")
+	path, err := githubProvider.ParseRepository("MixedOwner/My.Repo")
 	if err != nil || path.String() != "MixedOwner/My.Repo" {
 		t.Fatalf("source spelling changed: %v %v", path, err)
 	}
@@ -94,7 +94,7 @@ func TestResolveForgeMavenRegistry_GitHub_MissingRepo(t *testing.T) {
 func TestResolveForgeNPMRegistry_GitHub(t *testing.T) {
 	t.Parallel()
 
-	p := &github.Provider{Env: func(k string) string {
+	githubProvider := &github.Provider{Env: func(k string) string {
 		return map[string]string{
 			"GITHUB_REPOSITORY_OWNER": "org",
 			"GITHUB_TOKEN":            "ght",
@@ -102,7 +102,7 @@ func TestResolveForgeNPMRegistry_GitHub(t *testing.T) {
 		}[k]
 	}}
 
-	reg, err := p.ResolveForgeNPMRegistry()
+	reg, err := githubProvider.ResolveForgeNPMRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,8 +136,8 @@ func TestResolveForgeRegistries_GHESRefusesPublicEndpoints(t *testing.T) {
 			t.Parallel()
 
 			tokenRead := false
-			p := &github.Provider{Env: func(k string) string {
-				if k == "GITHUB_TOKEN" {
+			githubProvider := &github.Provider{Env: func(key string) string {
+				if key == "GITHUB_TOKEN" {
 					tokenRead = true
 				}
 
@@ -146,10 +146,10 @@ func TestResolveForgeRegistries_GHESRefusesPublicEndpoints(t *testing.T) {
 					"GITHUB_REPOSITORY_OWNER": "org",
 					"GITHUB_TOKEN":            "ghes-token",
 					"GITHUB_SERVER_URL":       "https://github.acme.example",
-				}[k]
+				}[key]
 			}}
 
-			if err := test.resolve(p); !errors.Is(err, errs.ErrUnsupported) {
+			if err := test.resolve(githubProvider); !errors.Is(err, errs.ErrUnsupported) {
 				t.Errorf("GHES registry resolution should be ErrUnsupported, got %v", err)
 			}
 
@@ -164,8 +164,8 @@ func TestResolveForgeMavenRegistry_MissingServerRefusesPublicEndpoint(t *testing
 	t.Parallel()
 
 	tokenRead := false
-	p := &github.Provider{Env: func(k string) string {
-		if k == "GITHUB_TOKEN" {
+	githubProvider := &github.Provider{Env: func(key string) string {
+		if key == "GITHUB_TOKEN" {
 			tokenRead = true
 		}
 
@@ -173,10 +173,10 @@ func TestResolveForgeMavenRegistry_MissingServerRefusesPublicEndpoint(t *testing
 			"GITHUB_REPOSITORY": "org/app",
 			"GITHUB_ACTOR":      "ci",
 			"GITHUB_TOKEN":      "token",
-		}[k]
+		}[key]
 	}}
 
-	if _, err := p.ResolveForgeMavenRegistry(); !errors.Is(err, errs.ErrUsage) {
+	if _, err := githubProvider.ResolveForgeMavenRegistry(); !errors.Is(err, errs.ErrUsage) {
 		t.Errorf("missing GITHUB_SERVER_URL should be ErrUsage, got %v", err)
 	}
 
@@ -192,7 +192,7 @@ func TestResolveForgeMavenRegistry_MissingServerRefusesPublicEndpoint(t *testing
 func TestResolveForgeMavenRegistry_ForgeNeutralNames(t *testing.T) {
 	t.Parallel()
 
-	p := &github.Provider{Env: func(k string) string {
+	githubProvider := &github.Provider{Env: func(k string) string {
 		return map[string]string{
 			"REPOSITORY":        "owner/repo",
 			"GITHUB_TOKEN":      "gt",
@@ -200,7 +200,7 @@ func TestResolveForgeMavenRegistry_ForgeNeutralNames(t *testing.T) {
 		}[k]
 	}}
 
-	reg, err := p.ResolveForgeMavenRegistry()
+	reg, err := githubProvider.ResolveForgeMavenRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}

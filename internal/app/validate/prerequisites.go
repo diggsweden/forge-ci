@@ -121,8 +121,6 @@ type ValidatorOutcome struct {
 // CheckOrder is the canonical declaration order used by the rendered
 // report. Independent validators run concurrently regardless of the
 // position in this list.
-//
-//nolint:gochecknoglobals // ordered enumeration of check names.
 var checkOrder = []string{
 	"ref-type",
 	"tag-format",
@@ -155,7 +153,7 @@ var checkOrder = []string{
 func Prerequisites(
 	ctx context.Context,
 	deps PrerequisitesDeps,
-	w io.Writer, //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	writer io.Writer,
 	annot output.Annotator,
 	in PrerequisitesInput,
 ) (PrerequisitesResult, error) {
@@ -259,10 +257,10 @@ func Prerequisites(
 	result.ExistingReleaseSHA = existingReleaseSHA
 	for _, c := range result.Checks {
 		if c.Output != "" {
-			_, _ = fmt.Fprint(w, c.Output)
+			_, _ = fmt.Fprint(writer, c.Output)
 
 			if !strings.HasSuffix(c.Output, "\n") {
-				_, _ = fmt.Fprintln(w)
+				_, _ = fmt.Fprintln(writer)
 			}
 		}
 	}
@@ -524,12 +522,12 @@ func canonicalIndex(name string) int {
 // produce the equivalent of the workflow's old per-step UI ticks in
 // one consolidated table.
 func WritePrerequisitesSummary(ctx context.Context, sink ci.SummarySink, result PrerequisitesResult) error {
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
-	b.WriteString("## Release Prerequisites\n\n")
-	b.WriteString("| Check | Status |\n")
-	b.WriteString("|-------|--------|\n")
+	var builder strings.Builder
+	builder.WriteString("## Release Prerequisites\n\n")
+	builder.WriteString("| Check | Status |\n")
+	builder.WriteString("|-------|--------|\n")
 
-	for _, c := range result.Checks { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	for _, c := range result.Checks {
 		var status string
 
 		switch {
@@ -541,28 +539,28 @@ func WritePrerequisitesSummary(ctx context.Context, sink ci.SummarySink, result 
 			status = "✓ Passed"
 		}
 
-		_, _ = fmt.Fprintf(&b, "| %s | %s |\n", domainsummary.LiteralText(c.Name), domainsummary.LiteralText(status))
+		_, _ = fmt.Fprintf(&builder, "| %s | %s |\n", domainsummary.LiteralText(c.Name), domainsummary.LiteralText(status))
 	}
 
 	if result.HasFailures() {
-		b.WriteString("\n### ✗ One or more prerequisites failed\n\n")
+		builder.WriteString("\n### ✗ One or more prerequisites failed\n\n")
 
 		for _, c := range result.Checks {
 			if c.Err != nil {
-				_, _ = fmt.Fprintf(&b, "- **%s**: %s\n", domainsummary.LiteralText(c.Name), domainsummary.LiteralText(errorOneLine(c.Err)))
+				_, _ = fmt.Fprintf(&builder, "- **%s**: %s\n", domainsummary.LiteralText(c.Name), domainsummary.LiteralText(errorOneLine(c.Err)))
 			}
 		}
 	}
 
 	if warnings := collectWarnings(result); len(warnings) > 0 {
-		b.WriteString("\n> [!WARNING]\n")
+		builder.WriteString("\n> [!WARNING]\n")
 
 		for _, w := range warnings {
-			_, _ = fmt.Fprintf(&b, "> %s\n", domainsummary.LiteralText(w))
+			_, _ = fmt.Fprintf(&builder, "> %s\n", domainsummary.LiteralText(w))
 		}
 	}
 
-	return sink.Append(ctx, b.String())
+	return sink.Append(ctx, builder.String())
 }
 
 // collectWarnings gathers the ⚠️-prefixed lines that validators write to

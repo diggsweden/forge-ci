@@ -9,6 +9,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -158,7 +159,7 @@ func TestChangelogRelease_CommitsPushesTagsAndChecksOut(t *testing.T) {
 		Repository:     "itiquette/example",
 		GitURL:         "ssh://git@codeberg.org:2222/itiquette/example.git",
 		AuthorName:     "Itiquette Release Bot",
-		AuthorEmail:    "itiquette-release-bot@pm.me",
+		AuthorEmail:    "release-bot@example.invalid",
 		SigningKeyPath: "/tmp/key",
 		TagSigned:      true,
 	})
@@ -207,7 +208,7 @@ func TestChangelogRelease_UnchangedSkipsCommitButTags(t *testing.T) {
 		Repository:     "itiquette/example",
 		GitURL:         "ssh://git@codeberg.org/itiquette/example.git",
 		AuthorName:     "Itiquette Release Bot",
-		AuthorEmail:    "itiquette-release-bot@pm.me",
+		AuthorEmail:    "release-bot@example.invalid",
 		SigningKeyPath: "/tmp/key",
 		TagSigned:      false,
 	})
@@ -241,7 +242,7 @@ func TestChangelogRelease_DryRunSkipsGitMutationsAndNarrates(t *testing.T) {
 		Repository:  "itiquette/example",
 		GitURL:      "ssh://git@codeberg.org/itiquette/example.git",
 		AuthorName:  "Itiquette Release Bot",
-		AuthorEmail: "itiquette-release-bot@pm.me",
+		AuthorEmail: "release-bot@example.invalid",
 		TagSigned:   true,
 		DryRun:      true,
 	})
@@ -283,26 +284,31 @@ func TestChangelogRelease_DryRunSkipsGitMutationsAndNarrates(t *testing.T) {
 	}
 }
 
-// TestChangelogRelease_DryRunStillFailsValidation proves the preview keeps
-// the full validation surface: file preconditions and tag shape still fail.
-func TestChangelogRelease_DryRunStillFailsValidation(t *testing.T) {
-	t.Run("missing commit message file", func(t *testing.T) {
-		dir := t.TempDir()
-		writeFile(t, dir, "CHANGELOG.md", "# changed\n")
-		t.Chdir(dir)
+// TestChangelogRelease_DryRunStillRequiresCommitMessageFile proves the
+// preview keeps the file preconditions. It changes the working directory,
+// so it stays serial.
+func TestChangelogRelease_DryRunStillRequiresCommitMessageFile(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "CHANGELOG.md", "# changed\n")
+	t.Chdir(dir)
 
-		_, err := appversion.ChangelogRelease(context.Background(), &fakeChangelogReleaseRepo{status: " M CHANGELOG.md"}, nil, &bytes.Buffer{}, appversion.ChangelogReleaseInput{
-			Tag:         "v1.2.3",
-			Repository:  "itiquette/example",
-			GitURL:      "ssh://git@codeberg.org/itiquette/example.git",
-			AuthorName:  "Itiquette Release Bot",
-			AuthorEmail: "itiquette-release-bot@pm.me",
-			DryRun:      true,
-		})
-		if !errors.Is(err, errs.ErrMissingInput) {
-			t.Fatalf("err = %v, want ErrMissingInput", err)
-		}
+	_, err := appversion.ChangelogRelease(context.Background(), &fakeChangelogReleaseRepo{status: " M CHANGELOG.md"}, nil, &bytes.Buffer{}, appversion.ChangelogReleaseInput{
+		Tag:         "v1.2.3",
+		Repository:  "itiquette/example",
+		GitURL:      "ssh://git@codeberg.org/itiquette/example.git",
+		AuthorName:  "Itiquette Release Bot",
+		AuthorEmail: "release-bot@example.invalid",
+		DryRun:      true,
 	})
+	if !errors.Is(err, errs.ErrMissingInput) {
+		t.Fatalf("err = %v, want ErrMissingInput", err)
+	}
+}
+
+// TestChangelogRelease_DryRunStillFailsValidation proves the preview keeps
+// the input validation surface: tag shape and git URL still fail.
+func TestChangelogRelease_DryRunStillFailsValidation(t *testing.T) {
+	t.Parallel()
 
 	t.Run("non-stable tag", func(t *testing.T) {
 		t.Parallel()
@@ -312,11 +318,26 @@ func TestChangelogRelease_DryRunStillFailsValidation(t *testing.T) {
 			Repository:  "itiquette/example",
 			GitURL:      "ssh://git@codeberg.org/itiquette/example.git",
 			AuthorName:  "Itiquette Release Bot",
-			AuthorEmail: "itiquette-release-bot@pm.me",
+			AuthorEmail: "release-bot@example.invalid",
 			DryRun:      true,
 		})
 		if !errors.Is(err, errs.ErrValidation) {
 			t.Fatalf("err = %v, want ErrValidation", err)
+		}
+	})
+
+	t.Run("no git URL names every way to give one", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := appversion.ChangelogRelease(context.Background(), &fakeChangelogReleaseRepo{}, nil, &bytes.Buffer{}, appversion.ChangelogReleaseInput{
+			Tag:         "v1.2.3",
+			Repository:  "itiquette/example",
+			AuthorName:  "Itiquette Release Bot",
+			AuthorEmail: "release-bot@example.invalid",
+			DryRun:      true,
+		})
+		if !errors.Is(err, errs.ErrUsage) || !strings.Contains(err.Error(), "--git-url or $RELEASE_GIT_URL, or --server-url") {
+			t.Fatalf("err = %v, want ErrUsage naming --git-url, $RELEASE_GIT_URL and --server-url", err)
 		}
 	})
 }
@@ -331,7 +352,7 @@ func TestChangelogRelease_RequiresCommitMessageWhenChangelogChanged(t *testing.T
 		Repository:     "itiquette/example",
 		GitURL:         "ssh://git@codeberg.org/itiquette/example.git",
 		AuthorName:     "Itiquette Release Bot",
-		AuthorEmail:    "itiquette-release-bot@pm.me",
+		AuthorEmail:    "release-bot@example.invalid",
 		SigningKeyPath: "/tmp/key",
 	})
 	if !errors.Is(err, errs.ErrMissingInput) {
@@ -347,7 +368,7 @@ func TestChangelogRelease_RequiresStableTag(t *testing.T) {
 		Repository:     "itiquette/example",
 		GitURL:         "ssh://git@codeberg.org/itiquette/example.git",
 		AuthorName:     "Itiquette Release Bot",
-		AuthorEmail:    "itiquette-release-bot@pm.me",
+		AuthorEmail:    "release-bot@example.invalid",
 		SigningKeyPath: "/tmp/key",
 	})
 	if !errors.Is(err, errs.ErrValidation) {
@@ -447,7 +468,7 @@ func TestParseChangelogReleaseGitURL_AcceptsOnlyPasswordlessSSHGitURLs(t *testin
 		{name: "scp form", rawURL: "git@git.example.test:owner/repository.git", repository: "owner/repository", wantErr: true},
 		{name: "wrong scheme", rawURL: "https://git@git.example.test/owner/repository.git", repository: "owner/repository", wantErr: true},
 		{name: "wrong user", rawURL: "ssh://deploy@git.example.test/owner/repository.git", repository: "owner/repository", wantErr: true},
-		{name: "password", rawURL: "ssh://git:secret@git.example.test/owner/repository.git", repository: "owner/repository", wantErr: true}, //nolint:gosec // Synthetic password-bearing URL verifies rejection.
+		{name: "password", rawURL: "ssh://git:secret@git.example.test/owner/repository.git", repository: "owner/repository", wantErr: true},
 		{name: "missing hostname", rawURL: "ssh://git@/owner/repository.git", repository: "owner/repository", wantErr: true},
 		{name: "empty explicit port", rawURL: "ssh://git@git.example.test:/owner/repository.git", repository: "owner/repository", wantErr: true},
 		{name: "nonnumeric port", rawURL: "ssh://git@git.example.test:ssh/owner/repository.git", repository: "owner/repository", wantErr: true},
@@ -485,6 +506,41 @@ func TestParseChangelogReleaseGitURL_AcceptsOnlyPasswordlessSSHGitURLs(t *testin
 	}
 }
 
+// The default push URL is the repository on the web host, over SSH on port
+// 22: the web port and path never leak into it, and it passes the same
+// contract as a given URL.
+func TestDefaultChangelogReleaseGitURL_NamesTheRepositoryOnTheForgeHost(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name, serverURL, repository, want string
+	}{
+		{"web host", "https://codefloe.example", "owner/repository", "ssh://git@codefloe.example/owner/repository.git"},
+		{"web port and path dropped", "https://forge.example:3000/sub/", "owner/repository", "ssh://git@forge.example/owner/repository.git"},
+		{"GitLab subgroup", "https://gitlab.example", "owner/team/repository", "ssh://git@gitlab.example/owner/team/repository.git"},
+		{"IPv6 host", "http://[2001:db8::1]:3000", "owner/repository", "ssh://git@[2001:db8::1]/owner/repository.git"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := appversion.DefaultChangelogReleaseGitURL(tc.serverURL, tc.repository)
+			if err != nil || got != tc.want {
+				t.Fatalf("got %q, %v; want %q", got, err, tc.want)
+			}
+
+			if _, err := appversion.ParseChangelogReleaseGitURL(got, tc.repository); err != nil {
+				t.Fatalf("the default fails its own contract: %v", err)
+			}
+		})
+	}
+
+	for _, serverURL := range []string{"", "forge.example", "ssh://git@forge.example", "https:///owner"} {
+		if _, err := appversion.DefaultChangelogReleaseGitURL(serverURL, "owner/repository"); !errors.Is(err, errs.ErrValidation) {
+			t.Errorf("server URL %q: err = %v, want ErrValidation", serverURL, err)
+		}
+	}
+}
+
 func writeFile(t *testing.T, dir, rel, body string) {
 	t.Helper()
 
@@ -509,7 +565,7 @@ func TestChangelogRelease_StagesIncludedProjectFilesBesideTheChangelog(t *testin
 		Repository:     "itiquette/example",
 		GitURL:         "ssh://git@codeberg.org:2222/itiquette/example.git",
 		AuthorName:     "Itiquette Release Bot",
-		AuthorEmail:    "itiquette-release-bot@pm.me",
+		AuthorEmail:    "release-bot@example.invalid",
 		SigningKeyPath: "/tmp/key",
 		TagSigned:      true,
 		IncludePaths:   []string{"core/pom.xml", "pom.xml"},
@@ -531,7 +587,7 @@ func TestChangelogRelease_RefusesIncludedPathsOutsideTheCheckoutBeforeEffects(t 
 				Repository:     "itiquette/example",
 				GitURL:         "ssh://git@codeberg.org:2222/itiquette/example.git",
 				AuthorName:     "Itiquette Release Bot",
-				AuthorEmail:    "itiquette-release-bot@pm.me",
+				AuthorEmail:    "release-bot@example.invalid",
 				SigningKeyPath: "/tmp/key",
 				IncludePaths:   []string{included},
 			}

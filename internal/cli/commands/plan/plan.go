@@ -11,6 +11,7 @@ import (
 
 	appplan "github.com/diggsweden/forge-ci/internal/app/plan"
 	"github.com/diggsweden/forge-ci/internal/cli/cienv"
+	"github.com/diggsweden/forge-ci/internal/cli/commonflags"
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
 )
 
@@ -37,7 +38,7 @@ func prCmd() *cli.Command {
 		Description: `EXAMPLE:
    forge-ci plan pr --project-type maven --base-branch main`,
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "project-type", Sources: cli.EnvVars("PROJECT_TYPE"), Usage: "primary ecosystem of the project (maven/npm/go/cargo/…)"}, //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
+			&cli.StringFlag{Name: "project-type", Sources: cli.EnvVars("PROJECT_TYPE"), Usage: "primary ecosystem of the project (maven/npm/go/cargo/…)"},
 			&cli.StringFlag{Name: "base-branch", Sources: cli.EnvVars("BASE_BRANCH"), Usage: "base branch the PR targets (used for diff-mode scans)"},
 			&cli.StringFlag{Name: "forge-ci-binary-ref", Sources: cli.EnvVars("FORGE_CI_BINARY_REF"), Usage: "git ref of the forge-ci binary used in the plan (pinned for reproducibility)"},
 			&cli.StringFlag{Name: "lint-engine", Sources: cli.EnvVars("LINT_ENGINE"), Usage: "general lint engine to run: nanolinter, megalinter, or none (default none; mutually exclusive)"},
@@ -67,17 +68,24 @@ func releaseCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "release",
 		Usage: "compose typed release and stage plan contracts",
-		Description: `CONFIG_PLAN_JSON is produced by ` + "`config parse-artifacts`" + `.
+		Description: `CONFIG_PLAN_JSON is the serialized plan string produced by ` + "`config parse-artifacts`" + `.
+The --json output wraps that string under the key "config-plan-json".
+This example composes a plan for a public repository; use the actual visibility.
 
 EXAMPLE:
-   CONFIG_PLAN_JSON="$(forge-ci config parse-artifacts)" forge-ci plan release --tag v1.2.3 --branch main`,
+   config_output="$(forge-ci --runner local --json config parse-artifacts --file .forge-ci/artifacts.yml)" &&
+   config_plan="$(printf '%s\n' "$config_output" | jq -er '."config-plan-json"')" &&
+   CONFIG_PLAN_JSON="$config_plan" forge-ci --runner local --json plan release \
+     --tag v1.2.3 --branch main --repository-visibility public
+
+Composition does not execute a release or establish signing/publication readiness.`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "repository-visibility", Sources: cli.EnvVars("REPOSITORY_VISIBILITY"), Usage: "public, private, internal or unknown; unknown requires explicit public-transparency consent"},
 			&cli.StringFlag{Name: "config-plan-json", Sources: cli.EnvVars("CONFIG_PLAN_JSON"), Usage: "typed config-plan JSON (output of 'config parse-artifacts')"},
 			&cli.StringFlag{Name: "branch", Sources: cli.EnvVars("BRANCH"), Usage: "git branch the release is being built from"},
 			&cli.StringFlag{Name: "tag", Required: true, Sources: cienv.Tag(), Usage: "release tag (e.g. v1.2.3)"},
 			&cli.StringFlag{Name: "file-pattern", Sources: cli.EnvVars("FILE_PATTERN"), Usage: "git pathspecs the version-bump commit stages"},
-			&cli.StringFlag{Name: "release-type", Sources: cli.EnvVars("RELEASE_TYPE"), Usage: "type override (release/snapshot); auto-detected from the tag when empty"},
+			commonflags.ReleasePolicy(),
 			&cli.StringFlag{Name: "release-publisher", Sources: cli.EnvVars("RELEASE_PUBLISHER"), Usage: "platform that publishes the release (github-cli, gitlab-cli, …)"},
 			&cli.BoolFlag{Name: "release-require-allowlisted-signer", Sources: cli.EnvVars("RELEASE_REQUIRE_ALLOWLISTED_SIGNER"), Usage: "require the tag signer to be allowlisted in .forge-ci/allowed_signers (SSH) or .forge-ci/allowed_gpg_keys.asc (GPG)"},
 			&cli.BoolFlag{Name: "release-draft", Sources: cli.EnvVars("RELEASE_DRAFT"), Usage: "create the GitHub Release as a draft"},
@@ -94,7 +102,7 @@ EXAMPLE:
 					Branch:                          cmd.String("branch"),
 					RefName:                         cmd.String("tag"),
 					FilePattern:                     cmd.String("file-pattern"),
-					ReleaseType:                     cmd.String("release-type"),
+					ReleasePolicy:                   cmd.String("release-policy"),
 					ReleasePublisher:                cmd.String("release-publisher"),
 					ReleaseRequireAllowlistedSigner: cmd.Bool("release-require-allowlisted-signer"),
 					ReleaseDraft:                    cmd.Bool("release-draft"),
@@ -114,9 +122,15 @@ func snapshotReleaseCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "snapshot-release",
 		Usage: "compose typed snapshot-release and stage plan contracts",
-		Description: `EXAMPLE:
-   CONFIG_PLAN_JSON="$(forge-ci config parse-artifacts)" \
-   forge-ci plan snapshot-release --project-type npm --branch main`,
+		Description: `Extract the serialized plan from config parse-artifacts' JSON object.
+This example composes a snapshot plan for a Go project; set the primary project
+type to match your configuration. Composition does not publish a snapshot.
+
+EXAMPLE:
+   config_output="$(forge-ci --runner local --json config parse-artifacts --file .forge-ci/artifacts.yml)" &&
+   config_plan="$(printf '%s\n' "$config_output" | jq -er '."config-plan-json"')" &&
+   CONFIG_PLAN_JSON="$config_plan" forge-ci --runner local --json plan snapshot-release \
+     --project-type go --branch main`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "config-plan-json", Sources: cli.EnvVars("CONFIG_PLAN_JSON"), Usage: "typed config-plan JSON (output of 'config parse-artifacts')"},
 			&cli.StringFlag{Name: "project-type", Sources: cli.EnvVars("PROJECT_TYPE"), Usage: "primary ecosystem of the project (maven/npm/go/cargo/…)"},

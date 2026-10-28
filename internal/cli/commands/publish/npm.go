@@ -118,7 +118,7 @@ func npmWriteNPMRCCmd() *cli.Command {
 				path = cliio.StdSentinel
 			}
 
-			w, err := cliio.CreateWriter(path, 0o600) //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+			w, err := cliio.CreateWriter(path, 0o600)
 			if err != nil {
 				return err
 			}

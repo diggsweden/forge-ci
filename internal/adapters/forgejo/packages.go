@@ -33,9 +33,9 @@ func (p *Provider) ListContainerPackageVersions(ctx context.Context, owner, name
 
 	for page := 1; ; page++ {
 		packages, resp, err := client.ListPackages(owner, gitea.ListPackagesOptions{
-			ListOptions: gitea.ListOptions{Page: page, PageSize: forgejoPackagePageSize},
-			Type:        "container",
-			Q:           name,
+			Page: page, PageSize: forgejoPackagePageSize,
+			Type: "container",
+			Q:    name,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("forgejo list container package versions %s/%s: %w", owner, name, classifyErr(resp, err))

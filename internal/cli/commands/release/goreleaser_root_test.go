@@ -83,7 +83,7 @@ fi
 printf 'fixture bundle\n' >"$4"
 `
 			signer = strings.ReplaceAll(signer, "FIRST_FAILURE", tc.firstFailure)
-			require.NoError(t, os.WriteFile(env.Path("empty-path", "cosign"), []byte(signer), 0o700)) //nolint:gosec // executable fixture in the isolated test directory.
+			require.NoError(t, os.WriteFile(env.Path("empty-path", "cosign"), []byte(signer), 0o700))
 
 			args := make([]string, 1, 1+len(sign.Args))
 			args[0] = "forge-ci"

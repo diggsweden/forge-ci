@@ -48,12 +48,12 @@ type MavenCentralDeployInput struct {
 // SettingsPath fails as a pre-flight ErrUsage rather than as a
 // downstream Maven error, so the publish step surfaces the cause
 // immediately.
-func MavenCentralDeploy(ctx context.Context, ops MavenOps, w, stderr io.Writer, in MavenCentralDeployInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func MavenCentralDeploy(ctx context.Context, ops MavenOps, out, stderr io.Writer, in MavenCentralDeployInput) error {
 	if strings.TrimSpace(in.Profile) == "" {
 		return fmt.Errorf("profile is required: %w", errs.ErrUsage)
 	}
 
-	_, _ = fmt.Fprintln(w, "Deploying to Maven Central...")
+	_, _ = fmt.Fprintln(out, "Deploying to Maven Central...")
 
 	args := make([]string, 0, len(in.CLIOpts)+5)
 	args = append(args, in.CLIOpts...)
@@ -64,12 +64,12 @@ func MavenCentralDeploy(ctx context.Context, ops MavenOps, w, stderr io.Writer, 
 			return fmt.Errorf("settings file %q: %w: %w", path, err, errs.ErrMissingInput)
 		}
 
-		_, _ = fmt.Fprintf(w, "Using settings file: %s\n", path)
+		_, _ = fmt.Fprintf(out, "Using settings file: %s\n", path)
 		args = append(args, "--settings", path)
 	}
 
 	args = append(args, "-P"+in.Profile, "-DskipTests")
-	if err := ops.RunInherit(ctx, w, stderr, args...); err != nil {
+	if err := ops.RunInherit(ctx, out, stderr, args...); err != nil {
 		return err
 	}
 
@@ -96,7 +96,7 @@ type MavenValidateArtifactsResult struct {
 // missing.
 //
 //nolint:cyclop // checks each required file presence + signature pairing.
-func MavenValidateArtifacts(_ context.Context, w, stderr io.Writer, annot output.Annotator, in MavenValidateArtifactsInput) (MavenValidateArtifactsResult, error) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func MavenValidateArtifacts(_ context.Context, out, stderr io.Writer, annot output.Annotator, in MavenValidateArtifactsInput) (MavenValidateArtifactsResult, error) {
 	root := in.Root
 	if root == "" {
 		var err error
@@ -107,18 +107,18 @@ func MavenValidateArtifacts(_ context.Context, w, stderr io.Writer, annot output
 		}
 	}
 
-	_, _ = fmt.Fprintln(w, "Checking for required artifacts...")
+	_, _ = fmt.Fprintln(out, "Checking for required artifacts...")
 
 	var res MavenValidateArtifactsResult
 
-	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	walkErr := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			slog.Debug("MavenValidateArtifacts: skipping unreadable entry", "path", path, "err", err)
 
 			return nil
 		}
 
-		if d.IsDir() {
+		if entry.IsDir() {
 			return nil
 		}
 		// Only files under a `target/` directory anywhere in the tree.
@@ -126,7 +126,7 @@ func MavenValidateArtifacts(_ context.Context, w, stderr io.Writer, annot output
 			return nil
 		}
 
-		name := d.Name()
+		name := entry.Name()
 		switch {
 		case strings.HasSuffix(name, "-sources.jar"):
 			res.SourcesCount++
@@ -181,12 +181,12 @@ func MavenValidateArtifacts(_ context.Context, w, stderr io.Writer, annot output
 		}
 	}
 
-	_, _ = fmt.Fprintf(w, "%s All required artifacts present:\n", clicolor.Check(w))
-	_, _ = fmt.Fprintf(w, "  - Sources JARs: %d\n", res.SourcesCount)
-	_, _ = fmt.Fprintf(w, "  - Javadoc JARs: %d\n", res.JavadocCount)
+	_, _ = fmt.Fprintf(out, "%s All required artifacts present:\n", clicolor.Check(out))
+	_, _ = fmt.Fprintf(out, "  - Sources JARs: %d\n", res.SourcesCount)
+	_, _ = fmt.Fprintf(out, "  - Javadoc JARs: %d\n", res.JavadocCount)
 
 	for _, jar := range res.JARs {
-		_, _ = fmt.Fprintln(w, jar)
+		_, _ = fmt.Fprintln(out, jar)
 	}
 
 	return res, nil

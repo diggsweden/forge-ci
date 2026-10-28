@@ -7,16 +7,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
+	"os"
+	"path/filepath"
+	"testing"
+
 	apppublish "github.com/diggsweden/forge-ci/internal/app/publish"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/output"
 	"github.com/diggsweden/forge-ci/internal/testutil/fakeoutputsink"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"io"
-	"os"
-	"path/filepath"
-	"testing"
 )
 
 func TestGoogleCredentialBoundary_ParsesKeysWithoutEchoingValues(t *testing.T) {
@@ -47,6 +48,8 @@ func TestNPMTarballBoundary_RefusalPreservesCallerInput(t *testing.T) {
 
 	for _, kind := range []string{"missing-entrypoint", "stale-entrypoint"} {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+
 			dir := t.TempDir()
 			require.NoError(t, os.Mkdir(filepath.Join(dir, "dist"), 0o700))
 

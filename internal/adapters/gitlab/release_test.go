@@ -51,13 +51,13 @@ func TestPublishRelease_CreatesWhenMissing(t *testing.T) {
 		return fakegitserver.Response{Status: 200, Body: `[]`}
 	})
 
-	p := &gitlab.Provider{
+	gitlabProvider := &gitlab.Provider{
 		APIBaseOverride: srv.URL(),
 		HTTPClient:      srv.Client(),
 		Env:             envFunc(map[string]string{"GITLAB_TOKEN": "t"}),
 	}
 
-	if err := p.PublishRelease(context.Background(), "itiquette/repo", provider.ReleaseSpec{
+	if err := gitlabProvider.PublishRelease(context.Background(), "itiquette/repo", provider.ReleaseSpec{
 		Tag:  glTag,
 		Name: "v1.0.0",
 	}); err != nil {
@@ -69,13 +69,13 @@ func TestPublishRelease_CreatesWhenMissing(t *testing.T) {
 		t.Errorf("expected POST create, got %v", reqs)
 	}
 
-	for _, r := range reqs {
-		if r.Method == http.MethodPut {
-			t.Errorf("must not PUT-update a release that does not exist: %+v", r)
+	for _, request := range reqs {
+		if request.Method == http.MethodPut {
+			t.Errorf("must not PUT-update a release that does not exist: %+v", request)
 		}
 
-		if r.Method == http.MethodDelete && r.Path == glReleasesBase+"/"+glTag {
-			t.Errorf("must not delete the release object: %+v", r)
+		if request.Method == http.MethodDelete && request.Path == glReleasesBase+"/"+glTag {
+			t.Errorf("must not delete the release object: %+v", request)
 		}
 	}
 }
@@ -109,17 +109,17 @@ func TestPublishRelease_UpdatesInPlaceAndReconcilesAssets(t *testing.T) {
 	dir := t.TempDir()
 
 	asset := filepath.Join(dir, "new.tgz")
-	if err := os.WriteFile(asset, []byte("payload"), 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(asset, []byte("payload"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	p := &gitlab.Provider{
+	gitlabProvider := &gitlab.Provider{
 		APIBaseOverride: srv.URL(),
 		HTTPClient:      srv.Client(),
 		Env:             envFunc(map[string]string{"GITLAB_TOKEN": "t"}),
 	}
 
-	if err := p.PublishRelease(context.Background(), "itiquette/repo", provider.ReleaseSpec{
+	if err := gitlabProvider.PublishRelease(context.Background(), "itiquette/repo", provider.ReleaseSpec{
 		Tag:    glTag,
 		Name:   "renamed",
 		Assets: []string{asset},
@@ -172,7 +172,7 @@ func TestPublishRelease_AssetUploadRequiresGitLabTokenBeforeMutation(t *testing.
 	}
 
 	calls := 0
-	p := &gitlab.Provider{
+	gitlabProvider := &gitlab.Provider{
 		APIBaseOverride: "https://gitlab.invalid",
 		Env:             envFunc(map[string]string{"CI_JOB_TOKEN": "ci-job-token"}),
 		HTTPClient: &http.Client{Transport: releasePolicyTransport(func(*http.Request) (*http.Response, error) {
@@ -182,7 +182,7 @@ func TestPublishRelease_AssetUploadRequiresGitLabTokenBeforeMutation(t *testing.
 		})},
 	}
 
-	err := p.PublishRelease(context.Background(), "itiquette/repo", provider.ReleaseSpec{
+	err := gitlabProvider.PublishRelease(context.Background(), "itiquette/repo", provider.ReleaseSpec{
 		Tag:    glTag,
 		Assets: []string{asset},
 	})
@@ -203,7 +203,7 @@ func TestPublishRelease_UnreadableNotesFileFailsBeforeAnyRequest(t *testing.T) {
 
 	srv := fakegitserver.NewGitLab(t)
 
-	p := &gitlab.Provider{
+	gitlabProvider := &gitlab.Provider{
 		APIBaseOverride: srv.URL(),
 		HTTPClient:      srv.Client(),
 		Env:             envFunc(map[string]string{"GITLAB_TOKEN": "t"}),
@@ -212,8 +212,8 @@ func TestPublishRelease_UnreadableNotesFileFailsBeforeAnyRequest(t *testing.T) {
 	spec := provider.ReleaseSpec{Tag: glTag, Name: "v1.0.0", NotesFile: filepath.Join(t.TempDir(), "missing-notes.md")}
 
 	for name, publish := range map[string]func() error{
-		"PublishRelease": func() error { return p.PublishRelease(context.Background(), "itiquette/repo", spec) },
-		"CreateRelease":  func() error { return p.CreateRelease(context.Background(), "itiquette/repo", spec) },
+		"PublishRelease": func() error { return gitlabProvider.PublishRelease(context.Background(), "itiquette/repo", spec) },
+		"CreateRelease":  func() error { return gitlabProvider.CreateRelease(context.Background(), "itiquette/repo", spec) },
 	} {
 		err := publish()
 		if err == nil || !strings.Contains(err.Error(), "release notes") {

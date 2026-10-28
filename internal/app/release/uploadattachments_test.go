@@ -24,7 +24,7 @@ func writeFile(t *testing.T, dir, name string) {
 	t.Helper()
 
 	path := filepath.Join(dir, name)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec // test fixture
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -224,7 +224,7 @@ var errUploadNetworkDown = errors.New("network down")
 
 func TestUploadAttachments_SkipsDirectories(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "subdir"), 0o755); err != nil { //nolint:gosec // test fixture
+	if err := os.MkdirAll(filepath.Join(dir, "subdir"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 

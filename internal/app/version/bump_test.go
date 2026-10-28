@@ -40,6 +40,8 @@ func TestBump_UnsafeEngineInputRefusedBeforeDiagnostics(t *testing.T) {
 	for _, pt := range []projecttype.Type{projecttype.Gradle, projecttype.GradleAndroid, projecttype.XcodeIOS, projecttype.Cargo, projecttype.Maven, projecttype.NPM} {
 		for _, ver := range []string{"2.0.0\nINJECTED=true", "2.0.0\rINJECTED=true", "2.0.0\x00INJECTED=true", "\n2.0.0", "2.0.0\r\n", "2.0.0\xff", "--script-shell=/tmp/x", " -2.0.0"} {
 			t.Run(string(pt)+"/version/"+ver, func(t *testing.T) {
+				t.Parallel()
+
 				testBumpUnsafeEngineInput(t, pt, ver, "")
 			})
 		}
@@ -48,6 +50,8 @@ func TestBump_UnsafeEngineInputRefusedBeforeDiagnostics(t *testing.T) {
 	for _, pt := range []projecttype.Type{projecttype.Gradle, projecttype.GradleAndroid, projecttype.XcodeIOS} {
 		for _, path := range []string{"release\tversion", "release\nversion", "release\rversion", "release\x00version", ".", "../canary"} {
 			t.Run(string(pt)+"/path/"+path, func(t *testing.T) {
+				t.Parallel()
+
 				testBumpUnsafeEngineInput(t, pt, "2.0.0", path)
 			})
 		}
@@ -94,6 +98,8 @@ func TestBump_PreservesNativeVersionForms(t *testing.T) {
 
 	for _, ver := range []string{"2.0.0.Final", "2.0-SNAPSHOT", "RELEASE", "preminor", "from-git"} {
 		t.Run(ver, func(t *testing.T) {
+			t.Parallel()
+
 			root := t.TempDir()
 
 			maven, npm := &fakeMavenOps{}, &fakeNPMOps{}
@@ -125,6 +131,8 @@ func TestBump_EngineSerializationPreservesNonSemverValues(t *testing.T) {
 		{projecttype.Cargo, "Cargo.toml", "[package]\nversion = \"1.0.0\"\n", `release-"quote\path`, "[package]\nversion = \"release-\\\"quote\\\\path\"\n"},
 	} {
 		t.Run(string(tc.pt), func(t *testing.T) {
+			t.Parallel()
+
 			root := t.TempDir()
 			writeFile(t, root, tc.file, tc.before)
 			require.NoError(t, appversion.Bump(t.Context(), appversion.BumpOps{}, io.Discard, io.Discard, output.Annotator{}, appversion.BumpInput{
@@ -150,6 +158,8 @@ func TestBump_StandaloneLiteralFilenames(t *testing.T) {
 	} {
 		for _, path := range []string{"release version", " release ", "config files/release version", "release\vversion", "release\fversion", "release\u00a0version", "release*version", "release?version", "release[1]version", `release\version`, ":(literal)release", ":(glob)release", ":(exclude)release"} {
 			t.Run(tc.name+"/"+path, func(t *testing.T) {
+				t.Parallel()
+
 				root := t.TempDir()
 				require.NoError(t, os.MkdirAll(filepath.Join(root, filepath.Dir(path)), 0o700))
 				writeFile(t, root, "canary", "unchanged\n")
@@ -196,6 +206,8 @@ func TestBump_GradleBackslashesAndRetries(t *testing.T) {
 			{`release-$candidate\`, `release-$candidate\\`},
 		} {
 			t.Run(tc.name+"/"+value.raw, func(t *testing.T) {
+				t.Parallel()
+
 				root := t.TempDir()
 				writeFile(t, root, "gradle.properties", tc.before)
 				writeFile(t, root, "canary", "unchanged\n")
@@ -254,7 +266,7 @@ func (f *fakeCargoOps) Available() bool {
 func (f *fakeCargoOps) RunInherit(_ context.Context, _ string, _, _ io.Writer, args ...string) error {
 	f.calls = append(f.calls, append([]string{}, args...))
 	if f.failOne && len(f.calls) == 1 {
-		return errors.New("offline failed") //nolint:err113 // test mock error
+		return errors.New("offline failed")
 	}
 
 	return f.err
@@ -356,7 +368,6 @@ func TestBump_GradleJVM_RewritesFile(t *testing.T) {
 	// what this pins is that a checkout's permissions survive the bump, since
 	// the file goes into the release commit as it is found.
 	tightened := filepath.Join(dir, "gradle.properties")
-	//nolint:gosec // G302: a deliberately non-default mode is what this test preserves.
 	if err := os.Chmod(tightened, 0o640); err != nil {
 		t.Fatal(err)
 	}
@@ -857,7 +868,7 @@ func treeSnapshot(t *testing.T, root string) map[string]string {
 			return statErr
 		}
 
-		body, readErr := os.ReadFile(path) //nolint:gosec // test fixture under t.TempDir().
+		body, readErr := os.ReadFile(path)
 		if readErr != nil {
 			return readErr
 		}

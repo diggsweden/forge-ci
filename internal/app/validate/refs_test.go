@@ -422,7 +422,7 @@ func TestReleaseTagGuard_RefusesBeforePublishingAnything(t *testing.T) {
 }
 
 // errSinkFull stands in for an output sink that cannot accept a write.
-var errSinkFull = errors.New("sink is full") //nolint:err113 // test fixture sentinel.
+var errSinkFull = errors.New("sink is full")
 
 // TestReleaseTagGuard_ReportsSinkFailuresAndPublishesNoSuccess covers the two
 // output writes independently, because they fail differently.

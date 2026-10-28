@@ -40,7 +40,7 @@ type UploadAttachmentsInput struct {
 // Path safety: each pattern is required to stay within WorkingDir. Patterns
 // that resolve to absolute paths outside WorkingDir or contain `..` segments
 // are rejected before any glob expansion runs.
-func UploadAttachments(ctx context.Context, up provider.ReleaseAssetUploader, w io.Writer, annot output.Annotator, in UploadAttachmentsInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func UploadAttachments(ctx context.Context, up provider.ReleaseAssetUploader, out io.Writer, annot output.Annotator, in UploadAttachmentsInput) error {
 	in.Tag = strings.TrimSpace(in.Tag)
 	if in.Tag == "" {
 		return fmt.Errorf("tag is required: %w", errs.ErrUsage)
@@ -48,7 +48,7 @@ func UploadAttachments(ctx context.Context, up provider.ReleaseAssetUploader, w 
 
 	patterns := splitAttachPatterns(in.Pattern)
 	if len(patterns) == 0 {
-		_, _ = fmt.Fprintln(w, "No attachment patterns configured; nothing to upload.")
+		_, _ = fmt.Fprintln(out, "No attachment patterns configured; nothing to upload.")
 
 		return nil
 	}
@@ -64,7 +64,7 @@ func UploadAttachments(ctx context.Context, up provider.ReleaseAssetUploader, w 
 	}
 
 	if len(files) == 0 {
-		_, _ = fmt.Fprintf(w, "No files matched patterns %q under %s; nothing to upload.\n", in.Pattern, root)
+		_, _ = fmt.Fprintf(out, "No files matched patterns %q under %s; nothing to upload.\n", in.Pattern, root)
 
 		return nil
 	}
@@ -72,7 +72,7 @@ func UploadAttachments(ctx context.Context, up provider.ReleaseAssetUploader, w 
 	var failed []string
 
 	for _, file := range files {
-		_, _ = fmt.Fprintf(w, "Uploading %s to release...\n", file)
+		_, _ = fmt.Fprintf(out, "Uploading %s to release...\n", file)
 
 		if err := up.UploadReleaseAsset(ctx, in.Tag, file); err != nil {
 			annot.Warningf("Failed to upload %s: %v", file, err)

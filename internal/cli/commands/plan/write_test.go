@@ -30,7 +30,7 @@ func runPlanWrite(t *testing.T, args ...string) error {
 func readPlan(t *testing.T, path string) map[string]map[string]any {
 	t.Helper()
 
-	raw, err := os.ReadFile(path) //nolint:gosec // test reads its own temp file.
+	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
 
 	var plan map[string]map[string]any
@@ -242,7 +242,6 @@ func TestPlanWrite_ReplacesASymlinkedDestinationInsteadOfWritingThroughIt(t *tes
 // secret-store values, sitting in a workspace other jobs on the runner can read.
 func TestPlanWrite_TightensAnExistingLoosePermission(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "plan.json")
-	//nolint:gosec // G306: a deliberately loose mode; the test exists to prove it is tightened.
 	require.NoError(t, os.WriteFile(path, []byte("{}\n"), 0o644))
 
 	require.NoError(t, runPlanWrite(t,

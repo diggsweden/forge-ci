@@ -19,6 +19,7 @@ import (
 
 type bindingCommitRepo struct {
 	fakeCommitPushRepo
+
 	calls      []string
 	failAt     string
 	createdSHA string
@@ -116,8 +117,8 @@ func newBindingCommitRepo(size int) (*bindingCommitRepo, appversion.CommitPushIn
 	base := strings.Repeat("a", size)
 
 	return &bindingCommitRepo{
-		fakeCommitPushRepo: fakeCommitPushRepo{localSHA: base, remoteSHA: base, remoteSeen: true, hasStaged: true},
-		createdSHA:         strings.Repeat("c", size), parents: []string{base},
+		localSHA: base, remoteSHA: base, remoteSeen: true, hasStaged: true,
+		createdSHA: strings.Repeat("c", size), parents: []string{base},
 	}, appversion.CommitPushInput{Branch: "release/1.x", AuthorName: "Fixture", AuthorEmail: "fixture@example.invalid",
 		Message: "release\n\nbody", FilePattern: "CHANGELOG.md package.json", ExpectedSHA: base}
 }
@@ -181,8 +182,8 @@ func TestCommitBinding_FailuresStopAtBoundary(t *testing.T) {
 	repo, _ := newBindingCommitRepo(40)
 
 	steps := []string{"index", "base:HEAD", "destination", "remote", "add", "index", "user.name", "user.email", "commit", "capture:HEAD", "parents:" + repo.createdSHA, "lease"}
-	for i, step := range steps {
-		if step == "add" || i == 5 {
+	for index, step := range steps {
+		if step == "add" || index == 5 {
 			continue // AddPathspecs has no error return; the first index read is covered.
 		}
 
@@ -194,11 +195,11 @@ func TestCommitBinding_FailuresStopAtBoundary(t *testing.T) {
 
 			var out bytes.Buffer
 			require.ErrorIs(t, appversion.CommitPush(t.Context(), repo, &out, in), errs.ErrPermissionDenied)
-			require.Equal(t, steps[:i+1], repo.calls)
+			require.Equal(t, steps[:index+1], repo.calls)
 			require.Empty(t, repo.pushedRef)
 			require.NotContains(t, out.String(), "Pushed")
 
-			if i < 4 {
+			if index < 4 {
 				require.Empty(t, repo.cfg)
 				require.Empty(t, repo.added)
 			}

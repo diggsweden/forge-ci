@@ -34,10 +34,11 @@ type tagVerifyGit interface {
 
 // VerifyReleaseTagInput drives VerifyReleaseTag.
 type VerifyReleaseTagInput struct {
-	ReleaseSHA string // the commit the release is built from
-	Tag        string // the release tag, e.g. v1.2.3
-	RepoURL    string // original repository argument for ls-remote; empty defaults to origin
-	Token      runcontext.Credential
+	ReleasePolicy string
+	ReleaseSHA    string // the commit the release is built from
+	Tag           string // the release tag, e.g. v1.2.3
+	RepoURL       string // original repository argument for ls-remote; empty defaults to origin
+	Token         runcontext.Credential
 	// ExpectedParent, when set, requires the release commit to be the single
 	// child of that commit: the caller prepared exactly one commit on top of
 	// the source it authorised.
@@ -73,8 +74,9 @@ func VerifyReleaseTag(ctx context.Context, git tagVerifyGit, out io.Writer, in V
 		return fmt.Errorf("verify-release-tag: release-sha must be a full lowercase commit ID: %w", errs.ErrValidation)
 	}
 
-	if !version.IsStableSemverTag(in.Tag) {
-		return fmt.Errorf("verify-release-tag: release tag must be stable vMAJOR.MINOR.PATCH: %s: %w", in.Tag, errs.ErrValidation)
+	parsed, err := version.ValidateReleaseTag(in.Tag, in.ReleasePolicy)
+	if err != nil {
+		return fmt.Errorf("verify-release-tag: %w", err)
 	}
 
 	if in.ExpectedParent != "" && !domaingit.ValidCommitSHA(in.ExpectedParent) {
@@ -142,7 +144,12 @@ func VerifyReleaseTag(ctx context.Context, git tagVerifyGit, out io.Writer, in V
 		return fmt.Errorf("verify-release-tag: list remote tags: %w", err)
 	}
 
-	if latest := version.LatestSemverTag(tags); latest != "" && latest != in.Tag {
+	latestPolicy := in.ReleasePolicy
+	if parsed.Prerelease == "" {
+		latestPolicy = version.ReleasePolicyStable
+	}
+
+	if latest := version.LatestReleaseTag(tags, latestPolicy); latest != "" && latest != in.Tag {
 		return fmt.Errorf("verify-release-tag: tag %s has been superseded by %s: %w", in.Tag, latest, errs.ErrValidation)
 	}
 
