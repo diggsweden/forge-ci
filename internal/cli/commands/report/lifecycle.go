@@ -107,8 +107,8 @@ func releaseCmd() *cli.Command {
 				return err
 			}
 
-			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
-				return appsummary.ReleaseSummary(ctx, d.SummarySink, appsummary.ReleaseSummaryInput{
+			return deps.FromCmd(ctx, cmd, func(dependencies *deps.Deps) error {
+				return appsummary.ReleaseSummary(ctx, dependencies.SummarySink, appsummary.ReleaseSummaryInput{
 					ReleaseVersion:       cmd.String("release-version"),
 					ReleaseBranch:        cmd.String("release-branch"),
 					ReleaseCommit:        cmd.String("release-commit"),
@@ -122,7 +122,7 @@ func releaseCmd() *cli.Command {
 					BuildStageJSON:       cmd.String("build-stage-result-json"),
 					PublishStageJSON:     cmd.String("publish-stage-result-json"),
 					Jobs:                 jobs,
-					URLs:                 d.WebURLBuilder(),
+					URLs:                 dependencies.WebURLBuilder(),
 					ServerURL:            cmd.String("server-url"),
 					Repository:           cmd.String("repository"),
 				})
@@ -150,8 +150,8 @@ func snapshotReleaseCmd() *cli.Command {
 			&cli.StringFlag{Name: "server-url", Sources: cienv.ServerURL(), Usage: "CI server base URL (used to build artifact/run links)"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
-				return appsummary.SnapshotReleaseSummary(ctx, d.SummarySink, os.Stderr, appsummary.SnapshotReleaseSummaryInput{
+			return deps.FromCmd(ctx, cmd, func(dependencies *deps.Deps) error {
+				return appsummary.SnapshotReleaseSummary(ctx, dependencies.SummarySink, os.Stderr, appsummary.SnapshotReleaseSummaryInput{
 					ProjectType:           projecttype.Type(cmd.String("project-type")),
 					ReleaseRef:            cmd.String("release-ref"),
 					ReleaseSHA:            cmd.String("release-sha"),
@@ -161,7 +161,7 @@ func snapshotReleaseCmd() *cli.Command {
 					BuildStageJSON:        cmd.String("build-stage-result-json"),
 					PublishStageJSON:      cmd.String("publish-stage-result-json"),
 					SnapshotArtifactsJSON: cmd.String("snapshot-artifacts-json"),
-					URLs:                  d.WebURLBuilder(),
+					URLs:                  dependencies.WebURLBuilder(),
 					ServerURL:             cmd.String("server-url"),
 				})
 			})

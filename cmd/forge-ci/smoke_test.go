@@ -33,8 +33,6 @@ import (
 // smoke is the state TestMain prepares once for the whole package: the shared
 // build root, the package directory the test process started in, and the
 // binary built on first use.
-//
-//nolint:gochecknoglobals // TestMain owns the package's shared build and cache state.
 var smoke struct {
 	baseTemp   string
 	packageDir string

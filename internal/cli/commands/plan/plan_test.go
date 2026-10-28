@@ -4,9 +4,11 @@
 package plan_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,7 +22,69 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/projecttype"
 	domainrelease "github.com/diggsweden/forge-ci/internal/domain/release"
 	"github.com/diggsweden/forge-ci/internal/testutil/ghaenv"
+	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
 )
+
+func TestLocalPlanComposition_ExtractsTheConfigEnvelope(t *testing.T) {
+	env := testenv.New(t)
+
+	path := env.Path("artifacts.yml")
+	if err := os.WriteFile(path, []byte("artifacts:\n  - name: cli\n    project-type: go\n    config:\n      build-mode: artifact-first\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	producer := cli.New(cli.BuildInfo{})
+	producer.Writer, producer.ErrWriter = &stdout, &stderr
+
+	if err := producer.Run(t.Context(), []string{"forge-ci", "--provider", "local", "--runner", "local", "--json", "config", "parse-artifacts", "--file", path}); err != nil {
+		t.Fatal(err)
+	}
+
+	var configOutput map[string]string
+
+	if err := json.Unmarshal(stdout.Bytes(), &configOutput); err != nil {
+		t.Fatalf("config output is not one JSON object: %s: %v", stdout.String(), err)
+	}
+
+	configPlan := configOutput["config-plan-json"]
+	if _, err := pipeline.DecodeConfigPlan(configPlan); err != nil {
+		t.Fatalf("the extracted config-plan-json string must be consumable: %v", err)
+	}
+
+	for _, command := range []struct {
+		name string
+		args []string
+		key  string
+	}{
+		{"release", []string{"--tag", "v1.2.3", "--branch", "main", "--repository-visibility", "public"}, "release-plan-json"},
+		{"snapshot-release", []string{"--project-type", "go", "--branch", "main"}, "snapshot-release-plan-json"},
+	} {
+		t.Run(command.name, func(t *testing.T) {
+			env.Setenv("CONFIG_PLAN_JSON", configPlan)
+			stdout.Reset()
+
+			consumer := cli.New(cli.BuildInfo{})
+			consumer.Writer, consumer.ErrWriter = &stdout, &stderr
+
+			args := append([]string{"forge-ci", "--provider", "local", "--runner", "local", "--json", "plan", command.name}, command.args...)
+			if err := consumer.Run(t.Context(), args); err != nil {
+				t.Fatal(err)
+			}
+
+			var outputs map[string]string
+
+			if err := json.Unmarshal(stdout.Bytes(), &outputs); err != nil {
+				t.Fatalf("plan output is not JSON: %s: %v", stdout.String(), err)
+			}
+
+			if !json.Valid([]byte(outputs[command.key])) {
+				t.Fatalf("missing typed %s result: %s", command.key, stdout.String())
+			}
+		})
+	}
+}
 
 func TestReleaseCmd_UsesConfigPlanAndEmitsTypedPlans(t *testing.T) {
 	env := ghaenv.Setup(t)
@@ -140,6 +204,33 @@ func TestPRCmd_EmitsPlanAndQualityStagePlan(t *testing.T) {
 
 	if got := env.Output("pr-plan-json"); !strings.Contains(got, `"nanolinter_image":"ghcr.io/itiquette/nanolinter:go"`) {
 		t.Errorf("pr-plan-json lacks the derived go flavour: %s", got)
+	}
+}
+
+func TestPRCmd_DisabledEngineWarns(t *testing.T) {
+	// Serial: the workflow environment and process logger are test-owned.
+	env := ghaenv.Setup(t)
+	env.Setenv("PROJECT_TYPE", "go")
+	env.Setenv("LINT_ENGINE", "none")
+
+	var logs bytes.Buffer
+
+	previous := slog.Default()
+
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	if err := plancmd.New().Run(t.Context(), []string{"plan", "pr"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(logs.String(), "level=WARN") || !strings.Contains(logs.String(), "no supported lint engine is enabled") {
+		t.Fatalf("normal PR planning did not warn: %s", logs.String())
+	}
+
+	if got := env.Output("quality-stage-plan-json"); !strings.Contains(got, `"nanolinter":{"runs":false`) ||
+		!strings.Contains(got, `"megalinter":{"runs":false`) {
+		t.Errorf("disabled engines unexpectedly scheduled: %s", got)
 	}
 }
 

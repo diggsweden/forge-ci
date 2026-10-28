@@ -51,14 +51,14 @@ func TestBugReportLink_PrePopulatesTitleAndEnvironment(t *testing.T) {
 		t.Fatalf("link is not a valid URL: %v", err)
 	}
 
-	q := parsed.Query()
-	if got := q.Get("title"); got != "panic: nil pointer dereference" {
+	values := parsed.Query()
+	if got := values.Get("title"); got != "panic: nil pointer dereference" {
 		t.Errorf("title = %q", got)
 	}
 
 	// The decoded body carries the environment so the reporter doesn't
 	// have to hand-copy it.
-	body := q.Get("body")
+	body := values.Get("body")
 	for _, want := range []string{"version: 1.2.3", "commit: abc1234", "command: [redacted] (3 arguments)"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q\nbody:\n%s", want, body)

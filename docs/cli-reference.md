@@ -20,7 +20,7 @@ then the environment variables listed per flag, then the flag default.
 | `--quiet`, `-q` | raise the log threshold to error (does not suppress command output) | bool | `false` | `$FORGE_CI_QUIET` |
 | `--log-level` | logging level: debug, info, warn, error (DEBUG=1/true/yes/on is a shortcut for debug) | string | `"info"` | `$FORGE_CI_LOG` |
 | `--format` | output format: auto, text, json, github, forgejo, gitlab | string | `"auto"` | `$FORGE_CI_FORMAT` |
-| `--json` | shortcut for --format=json (overrides --format); only commands with a structured result print JSON: doctor, config sboms, release resolve, version file-pattern and version snapshot | bool | `false` | `$FORGE_CI_JSON` |
+| `--json` | shortcut for --format=json (overrides --format); commands with structured results emit JSON, including config parse-artifacts and plan; other commands retain their documented output | bool | `false` | `$FORGE_CI_JSON` |
 | `--no-color` | disable colored ✓/✗ output (also: $NO_COLOR, non-terminal output) | bool | `false` | `$FORGE_CI_NO_COLOR` |
 | `--provider` | forge API override: auto, github, gitlab, forgejo, local | string | `"auto"` | `$FORGE_CI_PROVIDER` |
 | `--runner` | runner conventions override: auto, github, forgejo, gitlab, local | string | `"auto"` | `$FORGE_CI_RUNNER` |

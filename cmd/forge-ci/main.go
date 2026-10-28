@@ -34,8 +34,6 @@ import (
 const bugReportURL = "https://github.com/diggsweden/forge-ci/issues/new"
 
 // Build metadata, injected via -ldflags at link time. See justfile / .goreleaser.yml.
-//
-//nolint:gochecknoglobals // ldflags can only target package vars.
 var (
 	version = "dev"
 	commit  = "none"
@@ -50,8 +48,6 @@ const exitInterrupted = 130
 
 // newCommand lets owned test children add an inert action while exercising
 // main and run unchanged, including the real root hooks and error classifier.
-//
-//nolint:gochecknoglobals // overridden only inside self-owned test processes.
 var newCommand = cli.New
 
 // exitProcess is os.Exit, indirected for the same reason newCommand is: the
@@ -59,8 +55,6 @@ var newCommand = cli.New
 // only choose between never reaching the path or taking the test binary down
 // with it. In production this is os.Exit and nothing about the lifetime
 // changes.
-//
-//nolint:gochecknoglobals // overridden only inside self-owned test processes.
 var exitProcess = os.Exit
 
 func main() {

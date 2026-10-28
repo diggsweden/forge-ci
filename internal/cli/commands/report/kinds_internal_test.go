@@ -71,8 +71,8 @@ func TestKindRegistry_EveryKindRenders(t *testing.T) {
 	seen := make(map[string]bool, len(cases))
 
 	for group, kinds := range groups {
-		for _, k := range kinds {
-			key := group + " " + k.name
+		for _, kind := range kinds {
+			key := group + " " + kind.name
 
 			seen[key] = true
 
@@ -86,7 +86,7 @@ func TestKindRegistry_EveryKindRenders(t *testing.T) {
 			t.Run(key, func(t *testing.T) {
 				env := ghaenv.Setup(t)
 
-				argv := append([]string{group, k.name}, tc.args...)
+				argv := append([]string{group, kind.name}, tc.args...)
 				if err := runReport(t, argv...); err != nil {
 					t.Fatalf("run %q: %v", key, err)
 				}
@@ -114,7 +114,7 @@ func TestKindRegistry_EveryKindRenders(t *testing.T) {
 // of every kind is enforced individually, not just the first one.
 //
 // It used to run each kind with no flags at all and check the error named
-// k.required[0]. That proved only that the loop fires once: with ten kinds
+// kind.required[0]. That proved only that the loop fires once: with ten kinds
 // declaring up to five required flags each, roughly two thirds of them were
 // unverified, and an enforcement loop that stopped after the first entry
 // would have stayed green.
@@ -132,19 +132,19 @@ func TestKindRegistry_RequiredFlagsAreEnforced(t *testing.T) {
 	cases := kindCases()
 
 	for group, kinds := range groups {
-		for _, k := range kinds {
-			key := group + " " + k.name
+		for _, kind := range kinds {
+			key := group + " " + kind.name
 
 			tc, ok := cases[key]
 			if !ok {
 				continue // TestKindRegistry_EveryKindRenders reports the missing row.
 			}
 
-			for _, missing := range k.required {
+			for _, missing := range kind.required {
 				t.Run(key+" without --"+missing, func(t *testing.T) {
 					ghaenv.Setup(t)
 
-					argv := append([]string{group, k.name}, withoutFlag(tc.args, missing)...)
+					argv := append([]string{group, kind.name}, withoutFlag(tc.args, missing)...)
 
 					err := runReport(t, argv...)
 					if err == nil {
@@ -165,14 +165,14 @@ func TestKindRegistry_RequiredFlagsAreEnforced(t *testing.T) {
 func withoutFlag(args []string, name string) []string {
 	out := make([]string, 0, len(args))
 
-	for i := 0; i < len(args); i++ {
-		if args[i] == "--"+name {
-			i++ // skip the value too
+	for index := 0; index < len(args); index++ {
+		if args[index] == "--"+name {
+			index++ // skip the value too
 
 			continue
 		}
 
-		out = append(out, args[i])
+		out = append(out, args[index])
 	}
 
 	return out

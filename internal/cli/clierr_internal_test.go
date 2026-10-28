@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 // SPDX-License-Identifier: EUPL-1.2 OR GPL-3.0-or-later
 
-package cli //nolint:testpackage // exercises the unexported message rewriter directly.
+package cli
 
 import (
 	"errors"
@@ -52,7 +52,7 @@ func TestRewriteHelpTopicMessage_RelabelsUnknownSubcommandsOnly(t *testing.T) {
 func TestClassifyError_UnknownSubcommandIsUsage(t *testing.T) {
 	t.Parallel()
 
-	err := ClassifyError(errors.New("No help topic for 'relese'. release")) //nolint:err113 // simulating urfave's framework string.
+	err := ClassifyError(errors.New("No help topic for 'relese'. release"))
 	if !errors.Is(err, errs.ErrUsage) {
 		t.Fatalf("err = %v, want wrapped errs.ErrUsage", err)
 	}
@@ -80,22 +80,22 @@ func TestClassifyError_EveryUsageMessageAndItsExitCode(t *testing.T) {
 	}{
 		{
 			name: "a required flag was omitted",
-			in:   errors.New(`Required flag "artifact" not set`), //nolint:err113 // reproducing a framework string.
+			in:   errors.New(`Required flag "artifact" not set`),
 			want: errs.ExitCodeUsage,
 		},
 		{
 			name: "an undefined flag was passed",
-			in:   errors.New("flag provided but not defined: -nope"), //nolint:err113 // reproducing a framework string.
+			in:   errors.New("flag provided but not defined: -nope"),
 			want: errs.ExitCodeUsage,
 		},
 		{
 			name: "an unknown subcommand reached the help topic path",
-			in:   errors.New("No help topic for 'relese'"), //nolint:err113 // reproducing a framework string.
+			in:   errors.New("No help topic for 'relese'"),
 			want: errs.ExitCodeUsage,
 		},
 		{
 			name: "an already-relabelled unknown subcommand",
-			in:   errors.New("unknown subcommand 'relese'"), //nolint:err113 // reproducing a framework string.
+			in:   errors.New("unknown subcommand 'relese'"),
 			want: errs.ExitCodeUsage,
 		},
 		{
@@ -145,21 +145,21 @@ func TestIsAlreadyPrintedByCLI_MatchesOnlyWhatTheFrameworkPrints(t *testing.T) {
 	}{
 		{
 			name: "a required flag is printed by the framework",
-			in:   errors.New(`Required flag "artifact" not set`), //nolint:err113 // reproducing a framework string.
+			in:   errors.New(`Required flag "artifact" not set`),
 			want: true,
 		},
 		{
 			name: "an undefined flag is printed by the framework",
-			in:   errors.New("flag provided but not defined: -nope"), //nolint:err113 // reproducing a framework string.
+			in:   errors.New("flag provided but not defined: -nope"),
 			want: true,
 		},
 		{
 			name: "a help-topic error is NOT printed, so main must print it",
-			in:   errors.New("No help topic for 'relese'"), //nolint:err113 // reproducing a framework string.
+			in:   errors.New("No help topic for 'relese'"),
 		},
 		{
 			name: "a relabelled unknown subcommand is NOT printed either",
-			in:   errors.New("unknown subcommand 'relese'"), //nolint:err113 // reproducing a framework string.
+			in:   errors.New("unknown subcommand 'relese'"),
 		},
 		{name: "an ordinary failure is not printed", in: errs.ErrDependencyUnavailable},
 	} {

@@ -190,7 +190,11 @@ func unsupportedRoleError(p provider.ForgeAPI, capability string) error {
 // belongs to Build's contract (its job IS to init deps), not to each
 // of the 40+ subcommands.
 func Build(ctx context.Context) (*Deps, error) {
-	d, err := buildInternal(ctx)
+	return buildWithSummaryLog(ctx, os.Stdout)
+}
+
+func buildWithSummaryLog(ctx context.Context, summaryLog io.Writer) (*Deps, error) {
+	d, err := buildInternal(ctx, summaryLog)
 	if err != nil {
 		return nil, fmt.Errorf("init deps: %w", err)
 	}
@@ -210,8 +214,20 @@ func Build(ctx context.Context) (*Deps, error) {
 // CLI Actions use FromCmd, which reads the format from the root flag
 // and forwards here. WithFormat is also the primitive for non-CLI
 // callers (tests, library use) that already know the format.
-func WithFormat(ctx context.Context, format output.Format, stdout io.Writer, fn func(*Deps) error) (err error) {
-	d, err := Build(ctx) //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func WithFormat(ctx context.Context, format output.Format, stdout io.Writer, fn func(*Deps) error) error {
+	return withFormat(ctx, format, stdout, os.Stderr, fn)
+}
+
+func withFormat(ctx context.Context, format output.Format, stdout, stderr io.Writer, fn func(*Deps) error) (err error) {
+	var summaryLog io.Writer = os.Stdout
+	if format == output.FormatJSON {
+		summaryLog = stderr
+		if summaryLog == nil {
+			summaryLog = os.Stderr
+		}
+	}
+
+	d, err := buildWithSummaryLog(ctx, summaryLog) //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
 	if err != nil {
 		return err
 	}
@@ -249,10 +265,10 @@ func FromCmd(ctx context.Context, cmd *cli.Command, fn func(*Deps) error) error 
 		return err
 	}
 
-	return WithFormat(ctx, format, os.Stdout, fn)
+	return withFormat(ctx, format, cmd.Writer, cmd.ErrWriter, fn)
 }
 
-func buildInternal(_ context.Context) (*Deps, error) {
+func buildInternal(_ context.Context, summaryLog io.Writer) (*Deps, error) {
 	// Two orthogonal axes: the forge API (which server to call) and the
 	// runner conventions (which output dialect to emit). They resolve
 	// independently — e.g. a self-hosted GitLab forge with a local runner —
@@ -266,7 +282,7 @@ func buildInternal(_ context.Context) (*Deps, error) {
 		return nil, err
 	}
 
-	if err := wireSinks(d, runner); err != nil {
+	if err := wireSinks(d, runner, summaryLog); err != nil {
 		return nil, err
 	}
 
@@ -281,7 +297,7 @@ func buildInternal(_ context.Context) (*Deps, error) {
 }
 
 // wireProvider selects the forge-API adapter for the detected platform.
-func wireProvider(d *Deps, forge provider.ForgeAPI) error { //nolint:varnamelen // idiomatic short name (matches buildInternal's receiver-style d).
+func wireProvider(d *Deps, forge provider.ForgeAPI) error {
 	p, err := providerFor(forge)
 	if err != nil {
 		return err
@@ -373,14 +389,14 @@ func providerEnvKeysFor(forge provider.ForgeAPI) providerEnvKeys {
 		tokens := []string{"GH_TOKEN", "GITHUB_TOKEN"}
 
 		return providerEnvKeys{
-			token:      providerEnvKey{name: "GITHUB_TOKEN", chain: tokens}, //nolint:gosec // G101: env var name, not a value.
+			token:      providerEnvKey{name: "GITHUB_TOKEN", chain: tokens},
 			serverURL:  providerEnvKey{name: "GITHUB_SERVER_URL"},
 			repository: providerEnvKey{name: "GITHUB_REPOSITORY", chain: runcontext.Repository().Keys()},
 			ownTokens:  tokens,
 		}
 	case provider.ForgeGitLab:
 		return providerEnvKeys{
-			token:      providerEnvKey{name: "GITLAB_TOKEN"}, //nolint:gosec // G101: env var name, not a value.
+			token:      providerEnvKey{name: "GITLAB_TOKEN"},
 			serverURL:  providerEnvKey{name: "CI_SERVER_URL"},
 			repository: providerEnvKey{name: "CI_PROJECT_PATH"},
 			ownTokens:  []string{"GITLAB_TOKEN"},
@@ -389,7 +405,7 @@ func providerEnvKeysFor(forge provider.ForgeAPI) providerEnvKeys {
 		// The adapter resolves all three through these runcontext chains, so
 		// the names are taken from the chains rather than repeated here.
 		return providerEnvKeys{
-			token:      providerEnvKey{name: "FORGEJO_TOKEN", chain: runcontext.Token().Keys()}, //nolint:gosec // G101: env var name, not a value.
+			token:      providerEnvKey{name: "FORGEJO_TOKEN", chain: runcontext.Token().Keys()},
 			serverURL:  providerEnvKey{name: "FORGEJO_SERVER_URL", chain: runcontext.ServerURL().Keys()},
 			repository: providerEnvKey{name: "FORGEJO_REPOSITORY", chain: runcontext.Repository().Keys()},
 			// Not the whole chain: CI_TOKEN is the cross-forge name, and
@@ -581,17 +597,17 @@ func CapabilitiesForDetected() provider.Capabilities {
 // its alias); an older Forgejo sets neither, so the summary goes to the job
 // log there. GitLab renders no summary file at all: its sink keeps the file
 // as a job artifact and also prints each summary as a job-log section.
-func wireSinks(d *Deps, runner provider.RunnerKind) error { //nolint:varnamelen // idiomatic short name (matches buildInternal's receiver-style d).
+func wireSinks(d *Deps, runner provider.RunnerKind, summaryLog io.Writer) error {
 	switch runner {
 	case provider.RunnerGitHub:
 		d.OutputSink = ghaoutput.NewFromEnv()
 		d.SummarySink = stepsummary.New(os.Getenv("GITHUB_STEP_SUMMARY"))
 	case provider.RunnerForgejo:
 		d.OutputSink = ghaoutput.NewFromEnvVars("FORGEJO_OUTPUT", "GITHUB_OUTPUT")
-		d.SummarySink = stepsummary.NewWithLog(cmp.Or(os.Getenv("FORGEJO_STEP_SUMMARY"), os.Getenv("GITHUB_STEP_SUMMARY")), os.Stdout)
+		d.SummarySink = stepsummary.NewWithLog(cmp.Or(os.Getenv("FORGEJO_STEP_SUMMARY"), os.Getenv("GITHUB_STEP_SUMMARY")), summaryLog)
 	case provider.RunnerGitLab:
 		d.OutputSink = gitlaboutput.NewFromEnv()
-		d.SummarySink = stepsummary.NewGitLab(os.Getenv("CI_SUMMARY_FILE"), os.Stdout)
+		d.SummarySink = stepsummary.NewGitLab(os.Getenv("CI_SUMMARY_FILE"), summaryLog)
 	case provider.RunnerLocal:
 		d.OutputSink = ghaoutput.New(os.DevNull)
 		d.SummarySink = stepsummary.New("")

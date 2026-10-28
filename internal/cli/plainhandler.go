@@ -41,7 +41,7 @@ func (h *plainHandler) Enabled(_ context.Context, level slog.Level) bool {
 	return level >= h.level
 }
 
-func (h *plainHandler) Handle(_ context.Context, r slog.Record) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func (h *plainHandler) Handle(_ context.Context, r slog.Record) error {
 	var prefix string
 
 	switch {

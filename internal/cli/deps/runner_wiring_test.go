@@ -4,16 +4,87 @@
 package deps_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"os"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/urfave/cli/v3"
 
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
 	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
 )
+
+func TestFromCmd_JSONSeparatesRunnerSummaries(t *testing.T) {
+	for _, runner := range []string{"local", "github", "gitlab", "forgejo"} {
+		for _, file := range []bool{false, true} {
+			t.Run(runner+" summary-file="+strconv.FormatBool(file), func(t *testing.T) {
+				env := testenv.New(t)
+				env.Setenv("FORGE_CI_PROVIDER", "local")
+				env.Setenv("FORGE_CI_RUNNER", runner)
+				path := env.Path("summary.md")
+
+				if file {
+					for _, name := range []string{"GITHUB_STEP_SUMMARY", "FORGEJO_STEP_SUMMARY", "CI_SUMMARY_FILE"} {
+						env.Setenv(name, path)
+					}
+				}
+
+				stdout, err := os.OpenFile(env.Path("stdout.json"), os.O_CREATE|os.O_WRONLY, 0o600)
+				require.NoError(t, err)
+
+				previous := os.Stdout
+				os.Stdout = stdout
+
+				t.Cleanup(func() {
+					os.Stdout = previous
+
+					require.NoError(t, stdout.Close())
+				})
+
+				var stderr bytes.Buffer
+
+				command := &cli.Command{
+					Name: "fixture", Writer: stdout, ErrWriter: &stderr,
+					Flags: []cli.Flag{&cli.BoolFlag{Name: "json", Value: true}},
+				}
+				ctx := t.Context()
+				require.NoError(t, deps.FromCmd(ctx, command, func(d *deps.Deps) error {
+					require.NoError(t, d.OutputSink.Set(ctx, "config-plan-json", `{"version":1}`))
+
+					return d.SummarySink.Append(ctx, "## Config summary\n")
+				}))
+
+				body, err := os.ReadFile(stdout.Name())
+				require.NoError(t, err)
+
+				var decoded map[string]string
+
+				require.NoError(t, json.Unmarshal(body, &decoded), "stdout must contain exactly one JSON document")
+				require.Equal(t, map[string]string{"config-plan-json": `{"version":1}`}, decoded)
+
+				logsSummary := runner == "gitlab" || (runner == "forgejo" && !file)
+				if logsSummary {
+					require.Contains(t, stderr.String(), "## Config summary")
+				} else {
+					require.Empty(t, stderr.String())
+				}
+
+				if file && runner != "local" {
+					body, err := os.ReadFile(path)
+					require.NoError(t, err)
+					require.Equal(t, "## Config summary\n", string(body))
+				} else {
+					require.NoFileExists(t, path)
+				}
+			})
+		}
+	}
+}
 
 func TestBuild_RunnerSinkPolicy(t *testing.T) {
 	for _, tc := range []struct {
@@ -71,10 +142,10 @@ func TestBuild_RunnerSinkPolicy(t *testing.T) {
 			// Build captures os.Stdout for Forgejo's real summary fallback.
 			// A regular owned file avoids pipes, goroutines, and subprocesses.
 			previousStdout := os.Stdout
-			os.Stdout = logFile //nolint:reassign // serial test of Build's actual stdout wiring.
+			os.Stdout = logFile
 
 			t.Cleanup(func() {
-				os.Stdout = previousStdout //nolint:reassign // restore the process stream before closing the owned file.
+				os.Stdout = previousStdout
 
 				require.NoError(t, logFile.Close())
 			})

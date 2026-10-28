@@ -37,6 +37,8 @@ func TestPanicTitleBoundary_PreservesUTF8AndByteBudget(t *testing.T) {
 		{"invalid UTF8", "bad\xffbytes", "panic: bad?bytes"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			link, err := url.Parse(bugReportLink(tc.summary, "v1", "sha", nil))
 			require.NoError(t, err)
 
@@ -149,7 +151,7 @@ func runDiagnosticChild(t *testing.T, mode string, sig os.Signal, wantCode int) 
 	binary, err := os.Executable()
 	require.NoError(t, err)
 
-	cmd := exec.CommandContext(ctx, binary, "-test.run=^TestDiagnosticBoundaryChild$") //nolint:gosec // owned test executable, exact helper selection, no shell or inherited environment.
+	cmd := exec.CommandContext(ctx, binary, "-test.run=^TestDiagnosticBoundaryChild$")
 	root := t.TempDir()
 	cmd.Dir = root
 	cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + root, "TMPDIR=" + root, "RC_DIAGNOSTIC_CHILD=" + mode, "CI_TOKEN=fixture-env-token", "GPG_PRIVATE_KEY=fixture-env-key"}

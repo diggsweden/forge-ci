@@ -37,24 +37,24 @@ func TestBuild_DetectsPlatformAndWiresDependencies(t *testing.T) {
 			env.Setenv("GITHUB_ACTIONS", boolEnv(testCase.github))
 			env.Setenv("GITLAB_CI", boolEnv(testCase.gitlab))
 
-			d, err := deps.Build(context.Background())
+			dependencies, err := deps.Build(context.Background())
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			if d.Platform != testCase.want {
-				t.Errorf("Platform = %q, want %q", d.Platform, testCase.want)
+			if dependencies.Platform != testCase.want {
+				t.Errorf("Platform = %q, want %q", dependencies.Platform, testCase.want)
 			}
 
-			if d.Provider == nil {
+			if dependencies.Provider == nil {
 				t.Fatal("Provider nil")
 			}
 
-			if got := d.Provider.Name(); got != testCase.want {
+			if got := dependencies.Provider.Name(); got != testCase.want {
 				t.Errorf("Provider.Name = %q, want %q", got, testCase.want)
 			}
 
-			if d.OutputSink == nil {
+			if dependencies.OutputSink == nil {
 				t.Errorf("OutputSink nil")
 			}
 		})
@@ -74,7 +74,7 @@ func TestWithFormat_ClosesOutputSink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	body, err := os.ReadFile(outPath) //nolint:gosec // test fixture path
+	body, err := os.ReadFile(outPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,20 +92,20 @@ func TestBuild_GitLabWiresDotenvOutputSink(t *testing.T) {
 	env.Setenv("GITLAB_CI", "true")
 	env.Setenv("CI_OUTPUT", outPath)
 
-	d, err := deps.Build(context.Background())
+	dependencies, err := deps.Build(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if setErr := d.OutputSink.Set(context.Background(), "version-no-v", "1.2.3"); setErr != nil {
+	if setErr := dependencies.OutputSink.Set(context.Background(), "version-no-v", "1.2.3"); setErr != nil {
 		t.Fatal(setErr)
 	}
 
-	if closeErr := d.Close(context.Background()); closeErr != nil {
+	if closeErr := dependencies.Close(context.Background()); closeErr != nil {
 		t.Fatal(closeErr)
 	}
 
-	body, err := os.ReadFile(outPath) //nolint:gosec // test fixture path
+	body, err := os.ReadFile(outPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestBuild_WiresProviderSpecificSummarySink(t *testing.T) {
 			}
 
 			if testCase.want != "" {
-				body, err := os.ReadFile(filepath.Join(dir, testCase.want)) //nolint:gosec // test fixture
+				body, err := os.ReadFile(filepath.Join(dir, testCase.want))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -176,16 +176,16 @@ func TestBuild_LocalOutputSinkIgnoresCIOutputPaths(t *testing.T) {
 	env.Setenv("GITHUB_OUTPUT", githubOutput)
 	env.Setenv("CI_OUTPUT", ciOutput)
 
-	d, err := deps.Build(context.Background())
+	dependencies, err := deps.Build(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := d.OutputSink.Set(context.Background(), "key", "value"); err != nil {
+	if err := dependencies.OutputSink.Set(context.Background(), "key", "value"); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := d.Close(context.Background()); err != nil {
+	if err := dependencies.Close(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -243,17 +243,17 @@ func TestRequireRoles_ConformanceMatrix(t *testing.T) {
 			env := testenv.New(t)
 			env.Setenv("FORGE_CI_PROVIDER", forge.name)
 
-			d, err := deps.Build(context.Background())
+			dependencies, err := deps.Build(context.Background())
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			if string(d.Platform) != forge.name {
-				t.Fatalf("Platform = %q, want %q", d.Platform, forge.name)
+			if string(dependencies.Platform) != forge.name {
+				t.Fatalf("Platform = %q, want %q", dependencies.Platform, forge.name)
 			}
 
 			for _, role := range roles {
-				err := role.require(d)
+				err := role.require(dependencies)
 
 				switch {
 				case role.supported&forge.bit != 0 && err != nil:
@@ -265,11 +265,11 @@ func TestRequireRoles_ConformanceMatrix(t *testing.T) {
 			}
 
 			// Always available: local returns empty metadata and has no web UI.
-			if d.RepoMetadataFetcher() == nil {
+			if dependencies.RepoMetadataFetcher() == nil {
 				t.Error("RepoMetadataFetcher() returned nil")
 			}
 
-			if got, want := d.WebURLBuilder() != nil, forge.bit != 0; got != want {
+			if got, want := dependencies.WebURLBuilder() != nil, forge.bit != 0; got != want {
 				t.Errorf("WebURLBuilder present = %t, want %t", got, want)
 			}
 		})
@@ -282,7 +282,7 @@ type failingWriter struct{ err error }
 
 func (w failingWriter) Write([]byte) (int, error) { return 0, w.err }
 
-var errWriterFull = errors.New("deps test: writer is full") //nolint:err113 // test fixture sentinel.
+var errWriterFull = errors.New("deps test: writer is full")
 
 // TestWithFormat_CloseIsObservable makes the close actually observable.
 //
@@ -334,7 +334,7 @@ func TestWithFormat_CloseIsObservable(t *testing.T) {
 	t.Run("the body's error wins over a close failure", func(t *testing.T) {
 		testenv.New(t)
 
-		bodyErr := errors.New("deps test: the command failed") //nolint:err113 // test fixture sentinel.
+		bodyErr := errors.New("deps test: the command failed")
 
 		err := deps.WithFormat(context.Background(), output.FormatJSON, failingWriter{err: errWriterFull},
 			func(d *deps.Deps) error {
@@ -379,7 +379,7 @@ func TestWithFormat_SelectsTheWriterByFormat(t *testing.T) {
 			t.Errorf("a non-JSON run wrote %q to the command's stdout", out.String())
 		}
 
-		body, err := os.ReadFile(outputFile) //nolint:gosec // owned temp path.
+		body, err := os.ReadFile(outputFile)
 		if err != nil {
 			t.Fatalf("the platform sink wrote nothing: %v", err)
 		}
@@ -392,28 +392,28 @@ func TestWithFormat_SelectsTheWriterByFormat(t *testing.T) {
 	t.Run("a nil writer in JSON mode falls back to stdout", func(t *testing.T) {
 		testenv.New(t)
 
-		r, w, err := os.Pipe()
+		reader, writer, err := os.Pipe()
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		t.Cleanup(func() {
-			_ = r.Close()
-			_ = w.Close()
+			_ = reader.Close()
+			_ = writer.Close()
 		})
 
 		previous := os.Stdout
-		os.Stdout = w //nolint:reassign // serial test of the documented nil-writer default.
+		os.Stdout = writer
 
 		runErr := deps.WithFormat(context.Background(), output.FormatJSON, nil, func(d *deps.Deps) error {
 			return d.OutputSink.Set(context.Background(), "key", "value")
 		})
 
-		os.Stdout = previous //nolint:reassign // restore before reading, so a failure prints normally.
+		os.Stdout = previous
 
-		_ = w.Close()
+		_ = writer.Close()
 
-		captured, readErr := io.ReadAll(r)
+		captured, readErr := io.ReadAll(reader)
 		if runErr != nil || readErr != nil {
 			t.Fatalf("run = %v, read = %v", runErr, readErr)
 		}

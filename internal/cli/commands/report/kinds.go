@@ -106,7 +106,7 @@ func androidBuildKind() summaryKind {
 		flags: []cli.Flag{
 			&cli.BoolFlag{Name: "library", Sources: cli.EnvVars("ANDROID_LIBRARY"), Usage: "report an Android library AAR build"},
 			&cli.StringFlag{Name: "aar-name", Sources: cli.EnvVars("AAR_NAME"), Usage: "uploaded Android library artifact name"},
-			&cli.StringFlag{Name: "java-version", Sources: cli.EnvVars("JAVA_VERSION"), Usage: "JDK major version used for the build"}, //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
+			&cli.StringFlag{Name: "java-version", Sources: cli.EnvVars("JAVA_VERSION"), Usage: "JDK major version used for the build"},
 			&cli.StringFlag{Name: "jdk-dist", Sources: cli.EnvVars("JDK_DIST"), Usage: "JDK distribution (e.g. temurin, zulu, corretto)"},
 			&cli.StringFlag{Name: "build-module", Sources: cli.EnvVars("BUILD_MODULE"), Usage: "gradle module name (e.g. \"app\")"},
 			&cli.StringFlag{Name: "flavor", Sources: cli.EnvVars("FLAVOR"), Usage: "Android product flavor"},
@@ -205,7 +205,7 @@ func googlePlayPublishKind() summaryKind {
 		example: `forge-ci report publish google-play --aab-file app.aab --track internal`,
 		flags: []cli.Flag{
 			&cli.StringFlag{Name: "aab-file", Sources: cli.EnvVars("AAB_FILE"), Usage: "uploaded .aab file path (shown in the summary row)"},
-			&cli.StringFlag{Name: "package-name", Sources: cli.EnvVars("PACKAGE_NAME"), Usage: "Android application id (e.g. com.example.app)"}, //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
+			&cli.StringFlag{Name: "package-name", Sources: cli.EnvVars("PACKAGE_NAME"), Usage: "Android application id (e.g. com.example.app)"},
 			&cli.StringFlag{Name: "track", Sources: cli.EnvVars("TRACK"), Usage: "Google Play track (internal/alpha/beta/production)"},
 			&cli.StringFlag{Name: "status", Sources: cli.EnvVars("STATUS"), Usage: "Google Play release status (draft/inProgress/completed)"}, //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
 			&cli.StringFlag{Name: "release-name", Sources: cli.EnvVars("RELEASE_NAME"), Usage: "release name shown in Google Play"},
@@ -217,7 +217,7 @@ func googlePlayPublishKind() summaryKind {
 			&cli.IntFlag{Name: "priority", Sources: cli.EnvVars("PRIORITY"), Usage: "Google Play in-app-update priority (0–5)"},
 		},
 		required: []string{"aab-file", "package-name", "track", "status"},
-		write: func(ctx context.Context, cmd *cli.Command, d *deps.Deps) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+		write: func(ctx context.Context, cmd *cli.Command, dependencies *deps.Deps) error {
 			fractionStr := cmd.String("user-fraction")
 			fraction := 0.0
 			fractionSet := false
@@ -232,7 +232,7 @@ func googlePlayPublishKind() summaryKind {
 				fractionSet = true
 			}
 
-			return appsummary.GooglePlayUpload(ctx, d.SummarySink, appsummary.GooglePlayUploadInput{
+			return appsummary.GooglePlayUpload(ctx, dependencies.SummarySink, appsummary.GooglePlayUploadInput{
 				AABFile:         cmd.String("aab-file"),
 				PackageName:     cmd.String("package-name"),
 				Track:           cmd.String("track"),
@@ -252,7 +252,7 @@ func mavenCentralPublishKind() summaryKind {
 		usage:   "append the Maven Central publish summary block to the step summary",
 		example: `forge-ci report publish maven-central --version 1.2.3`,
 		flags: []cli.Flag{
-			&cli.StringFlag{Name: "version", Sources: cli.EnvVars("VERSION"), Usage: "published Maven version (used in the summary row)"}, //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
+			&cli.StringFlag{Name: "version", Sources: cli.EnvVars("VERSION"), Usage: "published Maven version (used in the summary row)"},
 			&cli.BoolFlag{Name: "is-snapshot", Sources: cli.EnvVars("IS_SNAPSHOT"), Usage: "the published version is a -SNAPSHOT"},
 		},
 		required: []string{"version"},
@@ -276,13 +276,13 @@ func forgePackagesPublishKind() summaryKind {
 			&cli.StringFlag{Name: "registry-name", Sources: cli.EnvVars("REGISTRY_NAME"), Usage: "registry display name for the summary; defaults to the detected forge's (e.g. \"GitHub Packages\")"},
 		},
 		required: []string{"repository", "package-type"},
-		write: func(ctx context.Context, cmd *cli.Command, d *deps.Deps) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+		write: func(ctx context.Context, cmd *cli.Command, dependencies *deps.Deps) error {
 			registryName := cmd.String("registry-name")
 			if registryName == "" {
 				registryName = deps.DescriberForDetected().Describe().DisplayName + " Packages"
 			}
 
-			return appsummary.ForgePackagesPublish(ctx, d.SummarySink, appsummary.ForgePackagesPublishInput{
+			return appsummary.ForgePackagesPublish(ctx, dependencies.SummarySink, appsummary.ForgePackagesPublishInput{
 				Repository:   cmd.String("repository"),
 				PackageType:  cmd.String("package-type"),
 				RegistryName: registryName,

@@ -18,7 +18,7 @@ func TestPorcelainCommandsResolve(t *testing.T) {
 
 	for _, pc := range porcelainCommands {
 		cur := root
-		for _, seg := range strings.Fields(pc.path) {
+		for seg := range strings.FieldsSeq(pc.path) {
 			next := cur.Command(seg)
 			if next == nil {
 				t.Fatalf("porcelain command %q: segment %q does not resolve to a command", pc.path, seg)

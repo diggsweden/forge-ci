@@ -326,7 +326,7 @@ func newRoot(info BuildInfo, versionString string) *cli.Command {
 				// set, mirroring the convention used by gh, kubectl,
 				// and similar tools.
 				Name:    "json",
-				Usage:   "shortcut for --format=json (overrides --format); only commands with a structured result print JSON: doctor, config sboms, release resolve, version file-pattern and version snapshot",
+				Usage:   "shortcut for --format=json (overrides --format); commands with structured results emit JSON, including config parse-artifacts and plan; other commands retain their documented output",
 				Sources: cli.EnvVars("FORGE_CI_JSON"),
 			},
 			&cli.BoolFlag{
@@ -420,8 +420,6 @@ func newRoot(info BuildInfo, versionString string) *cli.Command {
 // is in docs/cli-reference.md). The list is shown at the top of
 // `forge-ci --help`; TestPorcelainCommandsResolve asserts every path still
 // resolves to a real command, so the list cannot silently drift from the tree.
-//
-//nolint:gochecknoglobals // static, read-only help curation.
 var porcelainCommands = []struct {
 	path string // space-separated command path, e.g. "config validate"
 	what string
@@ -545,13 +543,13 @@ func configureLogger(cmd *cli.Command) error {
 	var slogLevel slog.Level
 
 	switch strings.ToLower(level) {
-	case "debug": //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
+	case "debug":
 		slogLevel = slog.LevelDebug
 	case "info":
 		slogLevel = slog.LevelInfo
-	case "warn", "warning": //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
+	case "warn", "warning":
 		slogLevel = slog.LevelWarn
-	case "error": //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
+	case "error":
 		slogLevel = slog.LevelError
 	default:
 		return fmt.Errorf("invalid log-level %q (want debug/info/warn/error): %w", level, errs.ErrUsage)

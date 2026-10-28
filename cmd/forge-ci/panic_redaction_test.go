@@ -51,6 +51,8 @@ func TestFormatPanic_OmitsSensitiveInputsAndNonerrorPayloads(t *testing.T) {
 		{"nil", "invalid", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			args := []string{"fixture-executable-secret", "--token", "fixture-token-secret", "--password=fixture-password-secret", "https://user:fixture-url-secret@example.invalid", "--private-key-file", "fixture-path-secret", "--", "fixture-positional-secret"}
 			original := append([]string(nil), args...)
 
@@ -86,6 +88,8 @@ func TestFormatPanic_DoesNotInvokePayloadMethods(t *testing.T) {
 		{"Format", countedPanicFormatter{&formatCalls}, &formatCalls},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			formatPanic(io.Discard, tc.payload, []byte("stack"), "v", "c", nil)
 			require.Zero(t, *tc.calls, "reporting must not invoke the payload, even if its output is discarded")
 			// Each fixture implements only one formatting interface. This control
