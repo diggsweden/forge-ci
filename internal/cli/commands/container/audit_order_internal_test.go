@@ -5,10 +5,11 @@ package container
 
 import (
 	"context"
-	"github.com/diggsweden/forge-ci/internal/domain/errs"
-	"github.com/stretchr/testify/require"
 	"io"
 	"testing"
+
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/stretchr/testify/require"
 )
 
 type orderedRegistry struct {
@@ -40,7 +41,7 @@ func TestAuditOrderBoundary_NarratesBeforeEveryMutation(t *testing.T) {
 
 	for _, failure := range []error{nil, errs.ErrDependencyUnavailable} {
 		for _, operation := range []string{"copy", "delete", "restore", "rollback-delete"} {
-			r := &orderedRegistry{fail: failure}
+			registry := &orderedRegistry{fail: failure}
 
 			var (
 				err  error
@@ -49,21 +50,21 @@ func TestAuditOrderBoundary_NarratesBeforeEveryMutation(t *testing.T) {
 
 			switch operation {
 			case "copy":
-				err = (auditCopier{Registry: r, out: r}).CopyTag(t.Context(), "source", "dest")
+				err = (auditCopier{Registry: registry, out: registry}).CopyTag(t.Context(), "source", "dest")
 				want = []string{"log:ledger: promoting source -> dest\n", "copy:source->dest"}
 			case "delete":
-				err = (auditDeleter{CleanupRegistry: r, out: r}).DeleteTag(t.Context(), "ref")
+				err = (auditDeleter{CleanupRegistry: registry, out: registry}).DeleteTag(t.Context(), "ref")
 				want = []string{"log:ledger: deleting ref\n", "delete:ref"}
 			case "restore":
-				err = (auditPromotionRollbackRegistry{PromotionRollbackRegistry: r, out: r}).CopyTag(t.Context(), "source", "dest")
+				err = (auditPromotionRollbackRegistry{PromotionRollbackRegistry: registry, out: registry}).CopyTag(t.Context(), "source", "dest")
 				want = []string{"log:ledger: restoring source -> dest\n", "copy:source->dest"}
 			case "rollback-delete":
-				err = (auditPromotionRollbackRegistry{PromotionRollbackRegistry: r, out: r}).DeleteTag(t.Context(), "ref")
+				err = (auditPromotionRollbackRegistry{PromotionRollbackRegistry: registry, out: registry}).DeleteTag(t.Context(), "ref")
 				want = []string{"log:ledger: deleting ref\n", "delete:ref"}
 			}
 
 			require.ErrorIs(t, err, failure)
-			require.Equal(t, want, r.events)
+			require.Equal(t, want, registry.events)
 		}
 	}
 }

@@ -69,15 +69,15 @@ func (r *fakePromotionRollbackRegistry) DeleteTag(_ context.Context, ref string)
 func TestPlanReleasePromotionRollback_RecordsPrePromotionState(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
-	e.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+	entry := candidateEntry()
+	entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
 	previous := "sha256:" + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 	reg := &fakePromotionRollbackRegistry{digests: map[string]string{
-		e.CandidateTag: goodDigest,
-		e.MovingTag:    previous,
+		entry.CandidateTag: goodDigest,
+		entry.MovingTag:    previous,
 	}}
 
-	records, err := imageledger.PlanReleasePromotionRollback(context.Background(), reg, []imageledger.Entry{e}, "v1.2.3", imageledger.Stage{Name: "release", UseEntryReleaseTags: true})
+	records, err := imageledger.PlanReleasePromotionRollback(context.Background(), reg, []imageledger.Entry{entry}, "v1.2.3", imageledger.Stage{Name: "release", UseEntryReleaseTags: true})
 	if err != nil {
 		t.Fatalf("PlanReleasePromotionRollback: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestPlanReleasePromotionRollback_RecordsPrePromotionState(t *testing.T) {
 	}
 
 	record := records[0]
-	if record.SourceRef != e.CandidateTag+"@"+goodDigest {
+	if record.SourceRef != entry.CandidateTag+"@"+goodDigest {
 		t.Errorf("SourceRef = %q", record.SourceRef)
 	}
 
@@ -103,10 +103,10 @@ func TestPlanReleasePromotionRollback_RecordsPrePromotionState(t *testing.T) {
 func TestPlanReleasePromotionRollback_DigestRefFallbackRecordsDigestRefSource(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
-	reg := &fakePromotionRollbackRegistry{digests: map[string]string{e.Ref: goodDigest}}
+	entry := candidateEntry()
+	reg := &fakePromotionRollbackRegistry{digests: map[string]string{entry.Ref: goodDigest}}
 
-	records, err := imageledger.PlanReleasePromotionRollback(context.Background(), reg, []imageledger.Entry{e}, "v1.2.3", imageledger.Stage{Name: "release", UseEntryReleaseTags: true, AllowDigestRefFallback: true})
+	records, err := imageledger.PlanReleasePromotionRollback(context.Background(), reg, []imageledger.Entry{entry}, "v1.2.3", imageledger.Stage{Name: "release", UseEntryReleaseTags: true, AllowDigestRefFallback: true})
 	if err != nil {
 		t.Fatalf("PlanReleasePromotionRollback with fallback: %v", err)
 	}
@@ -115,22 +115,22 @@ func TestPlanReleasePromotionRollback_DigestRefFallbackRecordsDigestRefSource(t 
 		t.Fatalf("records = %d, want 1", len(records))
 	}
 
-	if records[0].SourceRef != e.Ref {
-		t.Errorf("SourceRef = %q, want digest-pinned ref %q", records[0].SourceRef, e.Ref)
+	if records[0].SourceRef != entry.Ref {
+		t.Errorf("SourceRef = %q, want digest-pinned ref %q", records[0].SourceRef, entry.Ref)
 	}
 }
 
 func TestPlanReleasePromotionRollback_RefusesExistingFinalDifferentDigest(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
+	entry := candidateEntry()
 	other := "sha256:" + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 	reg := &fakePromotionRollbackRegistry{digests: map[string]string{
-		e.CandidateTag: goodDigest,
-		e.FinalTag:     other,
+		entry.CandidateTag: goodDigest,
+		entry.FinalTag:     other,
 	}}
 
-	_, err := imageledger.PlanReleasePromotionRollback(context.Background(), reg, []imageledger.Entry{e}, "v1.2.3", imageledger.Stage{Name: "release", UseEntryReleaseTags: true})
+	_, err := imageledger.PlanReleasePromotionRollback(context.Background(), reg, []imageledger.Entry{entry}, "v1.2.3", imageledger.Stage{Name: "release", UseEntryReleaseTags: true})
 	if !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("existing final tag with another digest must be refused, got %v", err)
 	}
@@ -143,20 +143,20 @@ func TestPlanReleasePromotionRollback_StopsOnUncertainDestinationLookup(t *testi
 		t.Run(field, func(t *testing.T) {
 			t.Parallel()
 
-			e := candidateEntry()
-			e.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+			entry := candidateEntry()
+			entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
 
-			ref := e.FinalTag
+			ref := entry.FinalTag
 			if field == "moving" {
-				ref = e.MovingTag
+				ref = entry.MovingTag
 			}
 
 			reg := &fakePromotionRollbackRegistry{
-				digests:    map[string]string{e.CandidateTag: goodDigest},
+				digests:    map[string]string{entry.CandidateTag: goodDigest},
 				resolveErr: map[string]error{ref: errs.ErrDependencyUnavailable},
 			}
 
-			_, err := imageledger.PlanReleasePromotionRollback(context.Background(), reg, []imageledger.Entry{e}, "v1.2.3", imageledger.Stage{Name: "release", UseEntryReleaseTags: true})
+			_, err := imageledger.PlanReleasePromotionRollback(context.Background(), reg, []imageledger.Entry{entry}, "v1.2.3", imageledger.Stage{Name: "release", UseEntryReleaseTags: true})
 			if !errors.Is(err, errs.ErrDependencyUnavailable) {
 				t.Fatalf("uncertain %s lookup must stop journal planning, got %v", field, err)
 			}
@@ -167,21 +167,21 @@ func TestPlanReleasePromotionRollback_StopsOnUncertainDestinationLookup(t *testi
 func TestRollbackReleasePromotion_RestoresMovingAndDeletesNewFinal(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
-	e.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+	entry := candidateEntry()
+	entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
 	previous := "sha256:" + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 	record := imageledger.PromotionRecord{
 		Version:              imageledger.PromotionJournalVersion,
-		SourceRef:            e.CandidateTag + "@" + goodDigest,
-		FinalTag:             e.FinalTag,
-		MovingTag:            e.MovingTag,
-		CandidateTag:         e.CandidateTag,
+		SourceRef:            entry.CandidateTag + "@" + goodDigest,
+		FinalTag:             entry.FinalTag,
+		MovingTag:            entry.MovingTag,
+		CandidateTag:         entry.CandidateTag,
 		FinalExisted:         false,
 		PreviousMovingDigest: previous,
 	}
 	reg := &fakePromotionRollbackRegistry{digests: map[string]string{
-		e.FinalTag:  goodDigest,
-		e.MovingTag: goodDigest,
+		entry.FinalTag:  goodDigest,
+		entry.MovingTag: goodDigest,
 		"codeberg.org/itiquette/gommitlint@" + previous: previous,
 	}}
 
@@ -189,15 +189,15 @@ func TestRollbackReleasePromotion_RestoresMovingAndDeletesNewFinal(t *testing.T)
 		t.Fatalf("RollbackReleasePromotion: %v", err)
 	}
 
-	if !slices.Equal(reg.copied, []string{"codeberg.org/itiquette/gommitlint@" + previous + "->" + e.MovingTag}) {
+	if !slices.Equal(reg.copied, []string{"codeberg.org/itiquette/gommitlint@" + previous + "->" + entry.MovingTag}) {
 		t.Errorf("restored moving tag copy mismatch: %v", reg.copied)
 	}
 
-	if !slices.Equal(reg.deleted, []string{e.FinalTag}) {
+	if !slices.Equal(reg.deleted, []string{entry.FinalTag}) {
 		t.Errorf("expected new final tag deleted, got %v", reg.deleted)
 	}
 
-	if got := reg.digests[e.MovingTag]; got != previous {
+	if got := reg.digests[entry.MovingTag]; got != previous {
 		t.Errorf("moving tag digest after rollback = %q, want %q", got, previous)
 	}
 }
@@ -205,19 +205,19 @@ func TestRollbackReleasePromotion_RestoresMovingAndDeletesNewFinal(t *testing.T)
 func TestRollbackReleasePromotion_DeletesNewMovingAndKeepsExistingFinal(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
-	e.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+	entry := candidateEntry()
+	entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
 	record := imageledger.PromotionRecord{
 		Version:      imageledger.PromotionJournalVersion,
-		SourceRef:    e.CandidateTag + "@" + goodDigest,
-		FinalTag:     e.FinalTag,
-		MovingTag:    e.MovingTag,
-		CandidateTag: e.CandidateTag,
+		SourceRef:    entry.CandidateTag + "@" + goodDigest,
+		FinalTag:     entry.FinalTag,
+		MovingTag:    entry.MovingTag,
+		CandidateTag: entry.CandidateTag,
 		FinalExisted: true,
 	}
 	reg := &fakePromotionRollbackRegistry{digests: map[string]string{
-		e.FinalTag:  goodDigest,
-		e.MovingTag: goodDigest,
+		entry.FinalTag:  goodDigest,
+		entry.MovingTag: goodDigest,
 	}}
 
 	if err := imageledger.RollbackReleasePromotion(t.Context(), reg, []imageledger.PromotionRecord{record}, "v1.2.3"); err != nil {
@@ -228,11 +228,11 @@ func TestRollbackReleasePromotion_DeletesNewMovingAndKeepsExistingFinal(t *testi
 		t.Errorf("no restore expected for newly-created moving tag, got %v", reg.copied)
 	}
 
-	if !slices.Equal(reg.deleted, []string{e.MovingTag}) {
+	if !slices.Equal(reg.deleted, []string{entry.MovingTag}) {
 		t.Errorf("expected only new moving tag deleted, got %v", reg.deleted)
 	}
 
-	if _, ok := reg.digests[e.FinalTag]; !ok {
+	if _, ok := reg.digests[entry.FinalTag]; !ok {
 		t.Errorf("existing final tag must be kept")
 	}
 }
@@ -240,16 +240,16 @@ func TestRollbackReleasePromotion_DeletesNewMovingAndKeepsExistingFinal(t *testi
 func TestRollbackReleasePromotion_RefusesFinalTagMismatchBeforeDelete(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
+	entry := candidateEntry()
 	other := "sha256:" + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 	record := imageledger.PromotionRecord{
 		Version:      imageledger.PromotionJournalVersion,
-		SourceRef:    e.CandidateTag + "@" + goodDigest,
-		FinalTag:     e.FinalTag,
-		CandidateTag: e.CandidateTag,
+		SourceRef:    entry.CandidateTag + "@" + goodDigest,
+		FinalTag:     entry.FinalTag,
+		CandidateTag: entry.CandidateTag,
 		FinalExisted: false,
 	}
-	reg := &fakePromotionRollbackRegistry{digests: map[string]string{e.FinalTag: other}}
+	reg := &fakePromotionRollbackRegistry{digests: map[string]string{entry.FinalTag: other}}
 
 	err := imageledger.RollbackReleasePromotion(t.Context(), reg, []imageledger.PromotionRecord{record}, "v1.2.3")
 	if !errors.Is(err, errs.ErrValidation) {
@@ -268,25 +268,25 @@ func TestRollbackReleasePromotion_StopsOnUncertainDestinationLookup(t *testing.T
 		t.Run(field, func(t *testing.T) {
 			t.Parallel()
 
-			e := candidateEntry()
-			e.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+			entry := candidateEntry()
+			entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
 			record := imageledger.PromotionRecord{
 				Version:      imageledger.PromotionJournalVersion,
-				SourceRef:    e.CandidateTag + "@" + goodDigest,
-				FinalTag:     e.FinalTag,
-				MovingTag:    e.MovingTag,
-				CandidateTag: e.CandidateTag,
+				SourceRef:    entry.CandidateTag + "@" + goodDigest,
+				FinalTag:     entry.FinalTag,
+				MovingTag:    entry.MovingTag,
+				CandidateTag: entry.CandidateTag,
 			}
 
-			ref := e.FinalTag
+			ref := entry.FinalTag
 			if field == "moving" {
-				ref = e.MovingTag
+				ref = entry.MovingTag
 			}
 
 			reg := &fakePromotionRollbackRegistry{
 				digests: map[string]string{
-					e.FinalTag:  goodDigest,
-					e.MovingTag: goodDigest,
+					entry.FinalTag:  goodDigest,
+					entry.MovingTag: goodDigest,
 				},
 				resolveErr: map[string]error{ref: errs.ErrDependencyUnavailable},
 			}
@@ -306,17 +306,17 @@ func TestRollbackReleasePromotion_StopsOnUncertainDestinationLookup(t *testing.T
 func TestRollbackReleasePromotion_ValidatesWholeJournalBeforeMutation(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
+	entry := candidateEntry()
 	valid := imageledger.PromotionRecord{
 		Version:      imageledger.PromotionJournalVersion,
-		SourceRef:    e.CandidateTag + "@" + goodDigest,
-		FinalTag:     e.FinalTag,
-		CandidateTag: e.CandidateTag,
+		SourceRef:    entry.CandidateTag + "@" + goodDigest,
+		FinalTag:     entry.FinalTag,
+		CandidateTag: entry.CandidateTag,
 	}
 	invalid := valid
 	invalid.SourceRef = "not-a-digest-pinned-ref"
 
-	reg := &fakePromotionRollbackRegistry{digests: map[string]string{e.FinalTag: goodDigest}}
+	reg := &fakePromotionRollbackRegistry{digests: map[string]string{entry.FinalTag: goodDigest}}
 
 	err := imageledger.RollbackReleasePromotion(context.Background(), reg, []imageledger.PromotionRecord{valid, invalid}, "v1.2.3")
 	if !errors.Is(err, errs.ErrValidation) {
@@ -331,13 +331,13 @@ func TestRollbackReleasePromotion_ValidatesWholeJournalBeforeMutation(t *testing
 func TestRollbackReleasePromotion_RejectsLegacyJournalBeforeMutation(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
+	entry := candidateEntry()
 	legacy := imageledger.PromotionRecord{
-		SourceRef:    e.CandidateTag + "@" + goodDigest,
-		FinalTag:     e.FinalTag,
-		CandidateTag: e.CandidateTag,
+		SourceRef:    entry.CandidateTag + "@" + goodDigest,
+		FinalTag:     entry.FinalTag,
+		CandidateTag: entry.CandidateTag,
 	}
-	reg := &fakePromotionRollbackRegistry{digests: map[string]string{e.FinalTag: goodDigest}}
+	reg := &fakePromotionRollbackRegistry{digests: map[string]string{entry.FinalTag: goodDigest}}
 
 	err := imageledger.RollbackReleasePromotion(context.Background(), reg, []imageledger.PromotionRecord{legacy}, "v1.2.3")
 	if !errors.Is(err, errs.ErrValidation) {
@@ -354,18 +354,18 @@ func TestRollbackReleasePromotion_RejectsLegacyJournalBeforeMutation(t *testing.
 func TestRollbackReleasePromotion_RefusesAMalformedPreviousDigestBeforeTheRegistry(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
-	e.MovingTag = "codeberg.org/itiquette/gommitlint:stable"
+	entry := candidateEntry()
+	entry.MovingTag = "codeberg.org/itiquette/gommitlint:stable"
 	record := imageledger.PromotionRecord{
 		Version:              imageledger.PromotionJournalVersion,
-		SourceRef:            e.CandidateTag + "@" + goodDigest,
-		FinalTag:             e.FinalTag,
-		MovingTag:            e.MovingTag,
-		CandidateTag:         e.CandidateTag,
+		SourceRef:            entry.CandidateTag + "@" + goodDigest,
+		FinalTag:             entry.FinalTag,
+		MovingTag:            entry.MovingTag,
+		CandidateTag:         entry.CandidateTag,
 		FinalExisted:         true,
 		PreviousMovingDigest: "latest",
 	}
-	reg := &fakePromotionRollbackRegistry{digests: map[string]string{e.FinalTag: goodDigest, e.MovingTag: goodDigest}}
+	reg := &fakePromotionRollbackRegistry{digests: map[string]string{entry.FinalTag: goodDigest, entry.MovingTag: goodDigest}}
 
 	err := imageledger.RollbackReleasePromotion(t.Context(), reg, []imageledger.PromotionRecord{record}, "v1.2.3")
 	if !errors.Is(err, errs.ErrValidation) {
@@ -382,42 +382,42 @@ func TestRollbackReleasePromotion_RefusesAMalformedPreviousDigestBeforeTheRegist
 func TestRollbackReleasePromotion_LeavesAMovingTagThatServesAnotherDigest(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
-	e.MovingTag = "codeberg.org/itiquette/gommitlint:stable"
+	entry := candidateEntry()
+	entry.MovingTag = "codeberg.org/itiquette/gommitlint:stable"
 	record := imageledger.PromotionRecord{
 		Version:      imageledger.PromotionJournalVersion,
-		SourceRef:    e.CandidateTag + "@" + goodDigest,
-		FinalTag:     e.FinalTag,
-		MovingTag:    e.MovingTag,
-		CandidateTag: e.CandidateTag,
+		SourceRef:    entry.CandidateTag + "@" + goodDigest,
+		FinalTag:     entry.FinalTag,
+		MovingTag:    entry.MovingTag,
+		CandidateTag: entry.CandidateTag,
 		FinalExisted: true,
 	}
-	reg := &fakePromotionRollbackRegistry{digests: map[string]string{e.FinalTag: goodDigest, e.MovingTag: otherDigest}}
+	reg := &fakePromotionRollbackRegistry{digests: map[string]string{entry.FinalTag: goodDigest, entry.MovingTag: otherDigest}}
 
 	if err := imageledger.RollbackReleasePromotion(t.Context(), reg, []imageledger.PromotionRecord{record}, "v1.2.3"); err != nil {
 		t.Fatalf("a moving tag serving another digest must not fail the rollback: %v", err)
 	}
 
-	if len(reg.copied) != 0 || len(reg.deleted) != 0 || reg.digests[e.MovingTag] != otherDigest {
-		t.Fatalf("the moved tag was touched: copied=%v deleted=%v now=%s", reg.copied, reg.deleted, reg.digests[e.MovingTag])
+	if len(reg.copied) != 0 || len(reg.deleted) != 0 || reg.digests[entry.MovingTag] != otherDigest {
+		t.Fatalf("the moved tag was touched: copied=%v deleted=%v now=%s", reg.copied, reg.deleted, reg.digests[entry.MovingTag])
 	}
 }
 
 func TestRollbackReleasePromotion_RechecksTargetImmediatelyBeforeDelete(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
+	entry := candidateEntry()
 	other := "sha256:" + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 	record := imageledger.PromotionRecord{
 		Version:      imageledger.PromotionJournalVersion,
-		SourceRef:    e.CandidateTag + "@" + goodDigest,
-		FinalTag:     e.FinalTag,
-		CandidateTag: e.CandidateTag,
+		SourceRef:    entry.CandidateTag + "@" + goodDigest,
+		FinalTag:     entry.FinalTag,
+		CandidateTag: entry.CandidateTag,
 	}
 	reg := &fakePromotionRollbackRegistry{
 		digests: map[string]string{},
 		resolveSequence: map[string][]resolveResult{
-			e.FinalTag: {{digest: goodDigest}, {digest: other}},
+			entry.FinalTag: {{digest: goodDigest}, {digest: other}},
 		},
 	}
 
@@ -478,23 +478,23 @@ func TestRollbackReleasePromotion_PreflightsEveryRestoreSourceBeforeMutation(t *
 func TestRollbackReleasePromotion_RechecksMovingTargetLast(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
-	e.MovingTag = "codeberg.org/itiquette/gommitlint:stable"
+	entry := candidateEntry()
+	entry.MovingTag = "codeberg.org/itiquette/gommitlint:stable"
 	previous := "sha256:" + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 	source := "codeberg.org/itiquette/gommitlint@" + previous
 	record := imageledger.PromotionRecord{
 		Version:              imageledger.PromotionJournalVersion,
-		SourceRef:            e.CandidateTag + "@" + goodDigest,
-		FinalTag:             e.FinalTag,
-		MovingTag:            e.MovingTag,
-		CandidateTag:         e.CandidateTag,
+		SourceRef:            entry.CandidateTag + "@" + goodDigest,
+		FinalTag:             entry.FinalTag,
+		MovingTag:            entry.MovingTag,
+		CandidateTag:         entry.CandidateTag,
 		FinalExisted:         true,
 		PreviousMovingDigest: previous,
 	}
 	reg := &fakePromotionRollbackRegistry{digests: map[string]string{
-		e.FinalTag:  goodDigest,
-		e.MovingTag: goodDigest,
-		source:      previous,
+		entry.FinalTag:  goodDigest,
+		entry.MovingTag: goodDigest,
+		source:          previous,
 	}}
 
 	if err := imageledger.RollbackReleasePromotion(t.Context(), reg, []imageledger.PromotionRecord{record}, "v1.2.3"); err != nil {
@@ -503,9 +503,9 @@ func TestRollbackReleasePromotion_RechecksMovingTargetLast(t *testing.T) {
 
 	wantTail := []string{
 		"resolve:" + source,
-		"resolve:" + e.MovingTag,
-		"copy:" + source + "->" + e.MovingTag,
-		"resolve:" + e.MovingTag,
+		"resolve:" + entry.MovingTag,
+		"copy:" + source + "->" + entry.MovingTag,
+		"resolve:" + entry.MovingTag,
 	}
 	if len(reg.events) < len(wantTail) || !slices.Equal(reg.events[len(reg.events)-len(wantTail):], wantTail) {
 		t.Fatalf("restore source must be checked before the final target check, copy, and post-copy verification\nevents: %v\nwant tail: %v", reg.events, wantTail)
@@ -705,18 +705,18 @@ func TestPlanReleasePromotionRollback_JournalsEveryPromotableEntry(t *testing.T)
 func TestValidatePromotionJournalIntent_RefusesAJournalThatDoesNotDescribeThisRun(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
-	e.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+	entry := candidateEntry()
+	entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
 	stage := imageledger.Stage{Name: "release", UseEntryReleaseTags: true}
 	record := imageledger.PromotionRecord{
 		Version:      imageledger.PromotionJournalVersion,
-		SourceRef:    e.CandidateTag + "@" + goodDigest,
-		FinalTag:     e.FinalTag,
-		MovingTag:    e.MovingTag,
-		CandidateTag: e.CandidateTag,
+		SourceRef:    entry.CandidateTag + "@" + goodDigest,
+		FinalTag:     entry.FinalTag,
+		MovingTag:    entry.MovingTag,
+		CandidateTag: entry.CandidateTag,
 	}
 
-	if err := imageledger.ValidatePromotionJournalIntent([]imageledger.PromotionRecord{record}, []imageledger.Entry{e}, "v1.2.3", stage); err != nil {
+	if err := imageledger.ValidatePromotionJournalIntent([]imageledger.PromotionRecord{record}, []imageledger.Entry{entry}, "v1.2.3", stage); err != nil {
 		t.Fatalf("the matching journal was refused: %v", err)
 	}
 
@@ -734,8 +734,8 @@ func TestValidatePromotionJournalIntent_RefusesAJournalThatDoesNotDescribeThisRu
 			r.FinalTag = "codeberg.org/itiquette/gommitlint:v1.2.3-static"
 			r.CandidateTag = "codeberg.org/itiquette/gommitlint:staging-v1.2.3-static"
 		}, want: "tags differ"},
-		"digest differs": {mutate: func(r *imageledger.PromotionRecord) { r.SourceRef = e.CandidateTag + "@" + otherDigest }, want: "source differs"},
-		"source is the digest ref without fallback": {mutate: func(r *imageledger.PromotionRecord) { r.SourceRef = e.Ref }, want: "source differs"},
+		"digest differs": {mutate: func(r *imageledger.PromotionRecord) { r.SourceRef = entry.CandidateTag + "@" + otherDigest }, want: "source differs"},
+		"source is the digest ref without fallback": {mutate: func(r *imageledger.PromotionRecord) { r.SourceRef = entry.Ref }, want: "source differs"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -749,7 +749,7 @@ func TestValidatePromotionJournalIntent_RefusesAJournalThatDoesNotDescribeThisRu
 				records = append(records, record)
 			}
 
-			err := imageledger.ValidatePromotionJournalIntent(records, []imageledger.Entry{e}, "v1.2.3", stage)
+			err := imageledger.ValidatePromotionJournalIntent(records, []imageledger.Entry{entry}, "v1.2.3", stage)
 			if !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("err = %v, want ErrValidation naming %q", err, tc.want)
 			}
@@ -758,12 +758,12 @@ func TestValidatePromotionJournalIntent_RefusesAJournalThatDoesNotDescribeThisRu
 
 	// A journal that stops short of the ledger is refused too: its missing
 	// entry would be promoted with no pre-state to roll back to.
-	second := e
+	second := entry
 	second.CandidateTag = "codeberg.org/itiquette/gommitlint:staging-v1.2.3-static"
 	second.FinalTag = "codeberg.org/itiquette/gommitlint:v1.2.3-static"
 	second.MovingTag = ""
 
-	err := imageledger.ValidatePromotionJournalIntent([]imageledger.PromotionRecord{record}, []imageledger.Entry{e, second}, "v1.2.3", stage)
+	err := imageledger.ValidatePromotionJournalIntent([]imageledger.PromotionRecord{record}, []imageledger.Entry{entry, second}, "v1.2.3", stage)
 	if !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "is missing entry 1") {
 		t.Fatalf("short journal: err = %v, want ErrValidation naming the missing entry", err)
 	}

@@ -5,12 +5,14 @@ package buildah_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/adapters/buildah"
 	"github.com/diggsweden/forge-ci/internal/domain/container"
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/testutil/mockbinary"
 )
 
@@ -125,6 +127,29 @@ func TestInfoDriver_IgnoresBuildahsStderrWarnings(t *testing.T) {
 	got, err := (&buildah.Adapter{Bin: bins.Path("buildah")}).InfoDriver(t.Context(), nil)
 	if err != nil || got != "overlay" {
 		t.Fatalf("driver=%q err=%v", got, err)
+	}
+}
+
+// A failing `buildah info` is the storage diagnosis: its stderr names the
+// cause, and the exit status alone names nothing.
+func TestInfoDriver_FailureCarriesBuildahsStderr(t *testing.T) {
+	t.Parallel()
+	bins := mockbinary.New(t)
+	bins.Add("buildah", `printf 'Error: mkdir /run/containers: read-only file system\n' >&2; exit 1`)
+
+	_, err := (&buildah.Adapter{Bin: bins.Path("buildah")}).InfoDriver(t.Context(), nil)
+	if err == nil {
+		t.Fatal("want an error")
+	}
+
+	if !errors.Is(err, errs.ErrValidation) {
+		t.Errorf("err=%v, want ErrValidation", err)
+	}
+
+	for _, want := range []string{"info: exit status 1", "read-only file system"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("err=%q lacks %q", err.Error(), want)
+		}
 	}
 }
 

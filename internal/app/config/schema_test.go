@@ -44,15 +44,15 @@ func loadSchema(t *testing.T) *jsonschema.Schema {
 		t.Fatalf("parse schema as JSON: %v", err)
 	}
 
-	c := jsonschema.NewCompiler()
-	c.UseLoader(jsonschema.SchemeURLLoader{})
-	c.DefaultDraft(jsonschema.Draft2020)
+	compiler := jsonschema.NewCompiler()
+	compiler.UseLoader(jsonschema.SchemeURLLoader{})
+	compiler.DefaultDraft(jsonschema.Draft2020)
 
-	if err = c.AddResource("artifacts.schema.json", doc); err != nil {
+	if err = compiler.AddResource("artifacts.schema.json", doc); err != nil {
 		t.Fatalf("add schema resource: %v", err)
 	}
 
-	sch, err := c.Compile("artifacts.schema.json")
+	sch, err := compiler.Compile("artifacts.schema.json")
 	if err != nil {
 		t.Fatalf("compile schema: %v", err)
 	}
@@ -189,8 +189,7 @@ func TestSchema_RejectsUnknownArtifactField(t *testing.T) {
 	// key in either the error message or the structured cause tree.
 	msg := verr.Error()
 
-	var vErr *jsonschema.ValidationError
-	if errors.As(verr, &vErr) {
+	if vErr, ok := errors.AsType[*jsonschema.ValidationError](verr); ok {
 		msg = vErr.Error()
 	}
 

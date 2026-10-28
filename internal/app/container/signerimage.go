@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -73,6 +74,11 @@ type SignerImageBuildArchInput struct {
 	Title            string // org.opencontainers.image.title label; empty omits the label
 	Containerfile    string
 	Context          string
+	Target           string   // multi-stage target stage; empty builds the final stage
+	BuildArgs        []string // KEY=VALUE build arguments
+	Labels           []string // key=value labels beside the source, revision and title
+	CacheTag         string
+	CacheLabels      []string
 	MetadataDir      string
 	RetryAttempts    int
 	RetryDelay       time.Duration
@@ -89,12 +95,83 @@ type SignerImageAssembleInput struct {
 	TagPrefix        string
 	TagName          string
 	RequiredLabels   []string
+	CacheTagPrefix   string
 	ManifestOutput   string
 	Name             string
 	Archs            []string
 	MetadataDir      string
 	RetryAttempts    int
 	RetryDelay       time.Duration
+	// Evidence, when set, scans every staged architecture before the first
+	// upload. Only PublishAndAssembleSignerImage reads it.
+	Evidence *StagedLayoutEvidence
+}
+
+// StagedLayoutEvidence is the scan a staged architecture passes before
+// publication: the Trivy evidence of its layout, then the publication gate.
+// The build job may lack the scanner, as the kaniko job image does; the
+// publishing job runs it on the very bytes it uploads.
+type StagedLayoutEvidence struct {
+	Trivy  ImageEvidenceTrivy
+	Syft   ImageEvidenceSyft
+	Stderr io.Writer
+	// TrivyOutputTemplate names each architecture's Trivy JSON; it must
+	// contain {arch} or {platform}.
+	TrivyOutputTemplate string
+	// SBOMOutputTemplate optionally retains an inventory of every staged child.
+	// These exact documents are pinned in the ledger before crossing the signer boundary.
+	SBOMOutputTemplate string
+	// IndexSBOMOutput binds every generated inventory to the verified index.
+	// SBOMURLPrefix is the public directory where those inventories will be served.
+	IndexSBOMOutput string
+	SBOMURLPrefix   string
+	// Gate judges a layout after its evidence is recorded; nil records only.
+	Gate func(ctx context.Context, layout, platform string) error
+}
+
+// check scans every staged layout, so the evidence of all architectures is
+// written, and refuses publication if any of them failed.
+func (e *StagedLayoutEvidence) check(ctx context.Context, out io.Writer, inputs []LayoutRecordInput) error {
+	raws := make([]string, 0, len(inputs))
+	for _, in := range inputs {
+		raws = append(raws, in.Platform)
+	}
+
+	platforms, err := parseImageEvidencePlatforms(raws)
+	if err != nil {
+		return err
+	}
+
+	if err := validateImageEvidenceOutputTemplate(e.TrivyOutputTemplate, "trivy output template", platforms); err != nil {
+		return err
+	}
+
+	if e.SBOMOutputTemplate != "" {
+		if err := validateImageEvidenceOutputTemplate(e.SBOMOutputTemplate, "sbom output template", platforms); err != nil {
+			return err
+		}
+	}
+
+	var failures []error
+
+	for idx, in := range inputs {
+		platform := platforms[idx]
+
+		err := ImageEvidence(ctx, nil, nil, e.Trivy, e.Syft, out, e.Stderr, ImageEvidenceInput{
+			OCILayout:   in.Directory,
+			TrivyOutput: renderImageEvidenceTemplate(e.TrivyOutputTemplate, platform),
+			SBOMOutput:  renderImageEvidenceTemplate(e.SBOMOutputTemplate, platform),
+		})
+		if err == nil && e.Gate != nil {
+			err = e.Gate(ctx, in.Directory, platform.Raw)
+		}
+
+		if err != nil {
+			failures = append(failures, fmt.Errorf("staged %s: %w", platform.Raw, err))
+		}
+	}
+
+	return errors.Join(failures...)
 }
 
 // SignerImageArchMetadata is the JSON artifact uploaded by each arch job.
@@ -130,13 +207,30 @@ func StageSignerImageArch(ctx context.Context, tool SignerImageTool, inspector L
 }
 
 func buildSignerImageArch(ctx context.Context, tool SignerImageTool, inspector LayoutInspector, out io.Writer, in SignerImageBuildArchInput) (*SignerImageArchMetadata, error) {
-	derived, err := deriveSignerImageArch(in)
+	// Staging writes no registry, so a build that pulls only public bases
+	// needs no credentials; a push does.
+	derived, err := deriveSignerImageArch(in, inspector == nil)
 	if err != nil {
 		return nil, err
 	}
 
+	if in.AuthFile == "" {
+		anonymous, cleanup, authErr := anonymousAuthFile()
+		if authErr != nil {
+			return nil, authErr
+		}
+		defer cleanup()
+
+		in.AuthFile = anonymous
+	}
+
 	if err = recreateSignerMetadataDir(derived.MetadataDir); err != nil {
 		return nil, err
+	}
+
+	cached, cacheErr := stageCachedArchitecture(ctx, inspector, out, in, derived)
+	if !errors.Is(cacheErr, errArchitectureCacheMiss) {
+		return cached, cacheErr
 	}
 
 	if err = tool.BuildSignerImage(ctx, domaincontainer.SignerImageBuildToolRequest{
@@ -148,6 +242,9 @@ func buildSignerImageArch(ctx context.Context, tool SignerImageTool, inspector L
 		Containerfile: derived.Containerfile,
 		Context:       derived.Context,
 		Title:         in.Title,
+		Target:        in.Target,
+		BuildArgs:     in.BuildArgs,
+		Labels:        in.Labels,
 	}, out); err != nil {
 		return nil, err
 	}
@@ -207,6 +304,48 @@ func PublishAndAssembleSignerImage(ctx context.Context, registry StagedSignerReg
 		return nil, err
 	}
 
+	if cacheErr := validateArchitectureCachePublication(in, derived); cacheErr != nil {
+		return nil, cacheErr
+	}
+
+	inputs, err := stagedSignerInputs(ctx, registry, in, derived)
+	if err != nil {
+		return nil, err
+	}
+
+	if in.Evidence != nil {
+		if err := validateStagedIndexEvidence(in, derived, inputs); err != nil {
+			return nil, err
+		}
+
+		if scanErr := in.Evidence.check(ctx, out, inputs); scanErr != nil {
+			return nil, scanErr
+		}
+	}
+
+	if _, uploadErr := PublishImageLayouts(ctx, registry, out, inputs, in.RetryAttempts, in.RetryDelay); uploadErr != nil {
+		return nil, uploadErr
+	}
+
+	meta, err := AssembleSignerImageManifest(ctx, registry, sink, summary, out, in)
+	if err != nil {
+		return nil, err
+	}
+
+	if in.Evidence != nil && in.Evidence.IndexSBOMOutput != "" {
+		if err := writeStagedIndexEvidence(ctx, sink, in, inputs, meta); err != nil {
+			return nil, err
+		}
+	}
+
+	if cacheErr := publishArchitectureCaches(ctx, registry, out, in, derived, inputs); cacheErr != nil {
+		return nil, cacheErr
+	}
+
+	return meta, nil
+}
+
+func stagedSignerInputs(ctx context.Context, registry LayoutInspector, in SignerImageAssembleInput, derived signerImageManifestDerived) ([]LayoutRecordInput, error) {
 	inputs := make([]LayoutRecordInput, 0, len(derived.Archs))
 	for _, arch := range derived.Archs {
 		tag := derived.ManifestTag + "-" + arch
@@ -234,11 +373,7 @@ func PublishAndAssembleSignerImage(ctx context.Context, registry StagedSignerReg
 		inputs = append(inputs, LayoutRecordInput{Directory: directory, ImageRef: tag, Platform: "linux/" + arch, SourceSHA: in.SourceSHA})
 	}
 
-	if _, err := PublishImageLayouts(ctx, registry, out, inputs, in.RetryAttempts, in.RetryDelay); err != nil {
-		return nil, err
-	}
-
-	return AssembleSignerImageManifest(ctx, registry, sink, summary, out, in)
+	return inputs, nil
 }
 
 // AssembleSignerImageManifest assembles the per-arch signer images into the
@@ -381,12 +516,12 @@ type signerImageManifestDerived struct {
 	Digests         []string
 }
 
-func deriveSignerImageArch(in SignerImageBuildArchInput) (signerImageArchDerived, error) {
+func deriveSignerImageArch(in SignerImageBuildArchInput, authRequired bool) (signerImageArchDerived, error) {
 	if err := validateSignerMetadataName(in.Name); err != nil {
 		return signerImageArchDerived{}, err
 	}
 
-	if err := validateSignerImageCommon(in.AuthFile, in.SourceSHA, in.ServerURL, in.Repository); err != nil {
+	if err := validateSignerImageCommon(in.AuthFile, authRequired, in.SourceSHA, in.ServerURL, in.Repository); err != nil {
 		return signerImageArchDerived{}, err
 	}
 
@@ -426,31 +561,41 @@ func deriveSignerImageArch(in SignerImageBuildArchInput) (signerImageArchDerived
 	}, nil
 }
 
-func deriveSignerImageManifest(in SignerImageAssembleInput) (signerImageManifestDerived, error) {
-	if err := validateSignerMetadataName(in.Name); err != nil {
-		return signerImageManifestDerived{}, err
-	}
-
-	if err := validateSignerImageCommon(in.AuthFile, in.SourceSHA, in.ServerURL, in.Repository); err != nil {
-		return signerImageManifestDerived{}, err
-	}
-
-	archs := in.Archs
+// signerManifestArchs is the requested architectures, both by default, each
+// supported and named once.
+func signerManifestArchs(archs []string) ([]string, error) {
 	if len(archs) == 0 {
-		archs = []string{domaincontainer.ArchAMD64, domaincontainer.ArchARM64}
+		return []string{domaincontainer.ArchAMD64, domaincontainer.ArchARM64}, nil
 	}
 
 	seen := make(map[string]bool, len(archs))
 	for _, arch := range archs {
 		if err := validateSignerArch(arch); err != nil {
-			return signerImageManifestDerived{}, err
+			return nil, err
 		}
 
 		if seen[arch] {
-			return signerImageManifestDerived{}, fmt.Errorf("duplicate requested architecture %s: %w", arch, errs.ErrValidation)
+			return nil, fmt.Errorf("duplicate requested architecture %s: %w", arch, errs.ErrValidation)
 		}
 
 		seen[arch] = true
+	}
+
+	return archs, nil
+}
+
+func deriveSignerImageManifest(in SignerImageAssembleInput) (signerImageManifestDerived, error) {
+	if err := validateSignerMetadataName(in.Name); err != nil {
+		return signerImageManifestDerived{}, err
+	}
+
+	if err := validateSignerImageCommon(in.AuthFile, true, in.SourceSHA, in.ServerURL, in.Repository); err != nil {
+		return signerImageManifestDerived{}, err
+	}
+
+	archs, err := signerManifestArchs(in.Archs)
+	if err != nil {
+		return signerImageManifestDerived{}, err
 	}
 
 	imageRepo, err := signerImageRepository(in.ServerURL, in.Repository, in.RepositorySuffix, in.ImageRepository)
@@ -483,13 +628,15 @@ func deriveSignerImageManifest(in SignerImageAssembleInput) (signerImageManifest
 	return derived, nil
 }
 
-func validateSignerImageCommon(authFile, sourceSHA, serverURL, repository string) error {
-	if err := requireSingleLine(authFile, "auth-file"); err != nil {
-		return err
-	}
+func validateSignerImageCommon(authFile string, authRequired bool, sourceSHA, serverURL, repository string) error {
+	if authFile != "" || authRequired {
+		if err := requireSingleLine(authFile, "auth-file"); err != nil {
+			return err
+		}
 
-	if _, err := os.Stat(authFile); err != nil {
-		return fmt.Errorf("auth-file not found: %s: %w", authFile, err)
+		if _, err := os.Stat(authFile); err != nil {
+			return fmt.Errorf("auth-file not found: %s: %w", authFile, err)
+		}
 	}
 
 	if !git.ValidCommitSHA(sourceSHA) {
@@ -599,7 +746,7 @@ func writeSignerJSON(path string, value any) error {
 	}
 
 	body = append(body, '\n')
-	if err := cliio.WriteFile(path, body, 0o644); err != nil { //nolint:mnd // public CI metadata artifact.
+	if err := cliio.WriteFile(path, body, 0o644); err != nil {
 		return fmt.Errorf("write signer image metadata %s: %w", path, err)
 	}
 
@@ -631,6 +778,31 @@ func recreateSignerMetadataDir(path string) error {
 	}
 
 	return nil
+}
+
+// anonymousAuthFile is an auth file with no credentials, so a staged build
+// pulls anonymously instead of with whatever registry login a persistent
+// runner keeps in the builder's default auth file.
+func anonymousAuthFile() (string, func(), error) {
+	file, err := os.CreateTemp("", "forge-ci-anonymous-auth-*.json")
+	if err != nil {
+		return "", nil, fmt.Errorf("create anonymous registry auth file: %w", err)
+	}
+
+	cleanup := func() { _ = os.Remove(file.Name()) }
+
+	_, err = file.WriteString(`{"auths":{}}`)
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
+	}
+
+	if err != nil {
+		cleanup()
+
+		return "", nil, fmt.Errorf("write anonymous registry auth file: %w", err)
+	}
+
+	return file.Name(), cleanup, nil
 }
 
 func requireSingleLine(value, label string) error {

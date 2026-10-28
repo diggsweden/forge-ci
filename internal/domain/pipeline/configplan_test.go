@@ -83,34 +83,34 @@ func TestNewConfigPlan_GroupsArtifactsAndDefaultsContainers(t *testing.T) {
 		t.Fatalf("containers = %+v", plan.Containers)
 	}
 
-	c := plan.Containers.All[0]
-	if c.ContainerFile != "Containerfile" || c.Context != "." || c.Platforms != "linux/amd64" {
-		t.Errorf("container defaults = %+v", c)
+	plannedContainer := plan.Containers.All[0]
+	if plannedContainer.ContainerFile != "Containerfile" || plannedContainer.Context != "." || plannedContainer.Platforms != "linux/amd64" {
+		t.Errorf("container defaults = %+v", plannedContainer)
 	}
 
-	if c.GoArtifactName != "go-cli" {
-		t.Errorf("go artifact name = %q", c.GoArtifactName)
+	if plannedContainer.GoArtifactName != "go-cli" {
+		t.Errorf("go artifact name = %q", plannedContainer.GoArtifactName)
 	}
 
-	if c.MavenArtifactName != "app-build-artifacts" {
-		t.Errorf("maven artifact name = %q", c.MavenArtifactName)
+	if plannedContainer.MavenArtifactName != "app-build-artifacts" {
+		t.Errorf("maven artifact name = %q", plannedContainer.MavenArtifactName)
 	}
 
-	if c.NPMArtifactName != "pkg-build-artifacts" {
-		t.Errorf("npm artifact name = %q", c.NPMArtifactName)
+	if plannedContainer.NPMArtifactName != "pkg-build-artifacts" {
+		t.Errorf("npm artifact name = %q", plannedContainer.NPMArtifactName)
 	}
 
-	if c.GradleArtifactName != "jvm-app-build-artifacts" {
-		t.Errorf("gradle artifact name = %q", c.GradleArtifactName)
+	if plannedContainer.GradleArtifactName != "jvm-app-build-artifacts" {
+		t.Errorf("gradle artifact name = %q", plannedContainer.GradleArtifactName)
 	}
 
 	// Per-container gates default true when artifacts.yml doesn't set them.
-	if !c.EnableSLSA || !c.EnableScan {
-		t.Errorf("container gates should default true; got EnableSLSA=%v EnableScan=%v", c.EnableSLSA, c.EnableScan)
+	if !plannedContainer.EnableSLSA || !plannedContainer.EnableScan {
+		t.Errorf("container gates should default true; got EnableSLSA=%v EnableScan=%v", plannedContainer.EnableSLSA, plannedContainer.EnableScan)
 	}
 
-	if c.ScanSeverity != "" {
-		t.Errorf("ScanSeverity should be empty when unset (caller default applies); got %q", c.ScanSeverity)
+	if plannedContainer.ScanSeverity != "" {
+		t.Errorf("ScanSeverity should be empty when unset (caller default applies); got %q", plannedContainer.ScanSeverity)
 	}
 }
 
@@ -140,18 +140,18 @@ func TestNewConfigPlan_ContainerGatesPropagateExplicitFalse(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c := pipeline.NewConfigPlan(cfg).Containers.All[0]
+	plannedContainer := pipeline.NewConfigPlan(cfg).Containers.All[0]
 
-	if c.EnableSLSA {
+	if plannedContainer.EnableSLSA {
 		t.Errorf("EnableSLSA=true, want false (explicit override)")
 	}
 
-	if c.EnableScan {
+	if plannedContainer.EnableScan {
 		t.Errorf("EnableScan=true, want false (explicit override)")
 	}
 
-	if c.ScanSeverity != "CRITICAL" {
-		t.Errorf("ScanSeverity=%q, want CRITICAL", c.ScanSeverity)
+	if plannedContainer.ScanSeverity != "CRITICAL" {
+		t.Errorf("ScanSeverity=%q, want CRITICAL", plannedContainer.ScanSeverity)
 	}
 }
 

@@ -69,13 +69,13 @@ func TestSignConfig_Validate_RejectsBadFieldCombinations(t *testing.T) {
 		{"unknown method", config.SignConfig{Method: "openssl"}},
 	}
 
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
+	for _, cfg := range cases {
+		t.Run(cfg.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := c.in.Validate()
+			err := cfg.in.Validate()
 			if !errors.Is(err, errs.ErrInvalidConfig) {
-				t.Errorf("%+v: expected ErrInvalidConfig, got %v", c.in, err)
+				t.Errorf("%+v: expected ErrInvalidConfig, got %v", cfg.in, err)
 			}
 		})
 	}
@@ -115,15 +115,15 @@ func TestSignConfig_Validate_KMSKeySchemeAllowlist(t *testing.T) {
 		"env://",
 	}
 
-	for _, k := range badKeys {
-		t.Run("reject "+k, func(t *testing.T) {
+	for _, value := range badKeys {
+		t.Run("reject "+value, func(t *testing.T) {
 			t.Parallel()
 
-			cfg := config.SignConfig{Method: domainrelease.SignMethodKMS, Key: k}
+			cfg := config.SignConfig{Method: domainrelease.SignMethodKMS, Key: value}
 
 			err := cfg.Validate()
 			if !errors.Is(err, errs.ErrInvalidConfig) {
-				t.Errorf("key %q must be rejected as ErrInvalidConfig, got %v", k, err)
+				t.Errorf("key %q must be rejected as ErrInvalidConfig, got %v", value, err)
 			}
 		})
 	}

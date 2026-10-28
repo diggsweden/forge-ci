@@ -182,18 +182,18 @@ done
 func newBaseSignRegistry(t *testing.T) *httptest.Server {
 	t.Helper()
 
-	registry := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, digest, isManifest := strings.Cut(r.URL.Path, "/manifests/")
+	registry := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		_, digest, isManifest := strings.Cut(request.URL.Path, "/manifests/")
 
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/v2/":
-		case r.Method == http.MethodHead && isManifest && strings.HasPrefix(r.URL.Path, "/v2/"):
-			w.Header().Set("Docker-Content-Digest", digest)
-			w.Header().Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
-			w.Header().Set("Content-Length", "1")
+		case request.Method == http.MethodGet && request.URL.Path == "/v2/":
+		case request.Method == http.MethodHead && isManifest && strings.HasPrefix(request.URL.Path, "/v2/"):
+			response.Header().Set("Docker-Content-Digest", digest)
+			response.Header().Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
+			response.Header().Set("Content-Length", "1")
 		default:
-			t.Errorf("unexpected registry request: %s %s", r.Method, r.URL.Path)
-			w.WriteHeader(http.StatusNotFound)
+			t.Errorf("unexpected registry request: %s %s", request.Method, request.URL.Path)
+			response.WriteHeader(http.StatusNotFound)
 		}
 	}))
 	t.Cleanup(registry.Close)

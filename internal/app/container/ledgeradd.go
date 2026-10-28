@@ -28,7 +28,7 @@ import (
 // validation, capture, lock and write is the use case. Moved verbatim; the CLI
 // file keeps only the flag definitions, flag reading and adapter construction.
 
-var releaseTagFromImageTagRE = regexp.MustCompile(`^(v[0-9]+[.][0-9]+[.][0-9]+)(?:-|$)`) //nolint:gochecknoglobals // compiled regex table; read-only.
+var releaseTagFromImageTagRE = regexp.MustCompile(`^(v[0-9]+[.][0-9]+[.][0-9]+)(?:-|$)`)
 
 // AddLedgerEntryInput carries `ledger add`'s inputs: the ledger file, the
 // capture-digest switch, and the entry's fields as the flags stated them. The
@@ -63,7 +63,7 @@ type AddLedgerEntryInput struct {
 // AddLedgerEntry validates one image entry and appends it to the ledger at
 // in.LedgerPath, reporting the outcome on status. resolver is consulted only when
 // in.CaptureDigest is set.
-func AddLedgerEntry(ctx context.Context, resolver imageledger.DigestResolver, status io.Writer, in AddLedgerEntryInput) error { //nolint:cyclop // optional capture, entry preflight and locked update have separate failure boundaries.
+func AddLedgerEntry(ctx context.Context, resolver imageledger.DigestResolver, status io.Writer, in AddLedgerEntryInput) error {
 	path := in.LedgerPath
 
 	entry, releaseTag, err := ledgerAddEntryFromFlags(in)
@@ -93,7 +93,7 @@ func AddLedgerEntry(ctx context.Context, resolver imageledger.DigestResolver, st
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec,mnd // dist dir; 0755 is conventional.
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec // dist dir; 0755 is conventional.
 		return fmt.Errorf("ledger: create dir for %s: %w", path, err)
 	}
 
@@ -117,7 +117,7 @@ func AddLedgerEntry(ctx context.Context, resolver imageledger.DigestResolver, st
 
 		added = wasNew
 
-		return cliio.WriteFile(path, out, 0o644) //nolint:gosec // ledger is public release metadata, not a secret.
+		return cliio.WriteFile(path, out, 0o644)
 	}); err != nil {
 		return err
 	}
@@ -353,12 +353,10 @@ func ledgerAddCandidateTag(flags AddLedgerEntryInput, imageName, finalTagName st
 func ledgerAddSBOM(flags AddLedgerEntryInput) (string, error) {
 	sbom := flags.SBOM
 	if sbom == "" && flags.DefaultSBOM {
-		suffix := cmp.Or(flags.Flavor, flags.Role)
-		if suffix == "" {
+		sbom = imageledger.DefaultSBOMPath(imageledger.ImageKind(flags.ImageKind), flags.Flavor, flags.Role)
+		if sbom == "" {
 			return "", fmt.Errorf("ledger add: --default-sbom requires --flavor or --role: %w", errs.ErrUsage)
 		}
-
-		sbom = "dist/image-sbom-" + suffix + ".cyclonedx.json"
 	}
 
 	return sbom, nil
@@ -393,8 +391,8 @@ func ledgerAddReleaseTag(explicit, finalTagName string) (string, error) {
 }
 
 func ledgerTagName(ref string) string {
-	if colon := strings.LastIndex(ref, ":"); colon >= 0 {
-		return ref[colon+1:]
+	if _, after, ok := strings.CutLast(ref, ":"); ok {
+		return after
 	}
 
 	return ""
@@ -429,7 +427,7 @@ func captureEntryDigest(ctx context.Context, resolver imageledger.DigestResolver
 		return fmt.Errorf("ledger add: resolver returned a noncanonical digest: %w", errs.ErrMalformedInput)
 	}
 
-	entry.PinDigest(digest)
+	*entry = entry.PinDigest(digest)
 
 	return nil
 }

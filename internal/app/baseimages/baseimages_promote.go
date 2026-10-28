@@ -35,7 +35,7 @@ type baseImageInputOutput struct {
 // PromoteBaseImages verifies candidate/base evidence, promotes missing final
 // immutable tags, and emits the compact JSON outputs consumed by downstream base
 // image jobs.
-func PromoteBaseImages(ctx context.Context, registry baseImageRegistry, verifier imageEvidenceVerifier, out io.Writer, in BaseImagePromoteInput) (BaseImagePromoteResult, error) { //nolint:cyclop // validate all metadata, verify all evidence, then copy; each phase fails closed.
+func PromoteBaseImages(ctx context.Context, registry baseImageRegistry, verifier imageEvidenceVerifier, out io.Writer, in BaseImagePromoteInput) (BaseImagePromoteResult, error) {
 	if registry == nil {
 		return BaseImagePromoteResult{}, fmt.Errorf("base images promote: registry is required: %w", errs.ErrUsage)
 	}

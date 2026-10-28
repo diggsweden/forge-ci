@@ -16,8 +16,6 @@ import (
 // `sbom assemble --project-type` flag, in argv order from the bash for
 // consistent diagnostics. Includes Auto (request detection) and
 // excludes Meta (not a buildable type for SBOM purposes).
-//
-//nolint:gochecknoglobals // schema enumeration — read-only and ordered.
 var ValidProjectTypes = []projecttype.Type{
 	projecttype.Auto, projecttype.Maven, projecttype.NPM, projecttype.Gradle,
 	projecttype.GradleAndroid, projecttype.XcodeIOS, projecttype.Python,

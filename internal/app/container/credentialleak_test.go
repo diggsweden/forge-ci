@@ -29,9 +29,8 @@ import (
 // What must never carry them is stdout, the returned error, or the CI outputs.
 const (
 	canaryPassword = "CANARY-REGISTRY-PASSWORD-4f2a9c7e1b83"
-	//nolint:gosec // G101: a deliberately recognisable canary, not a credential.
-	canarySecret = "CANARY-BUILD-SECRET-VALUE-6d1e08b4af95"
-	canarySecond = "CANARY-BUILD-SECRET-OTHER-3a7c62fe10db"
+	canarySecret   = "CANARY-BUILD-SECRET-VALUE-6d1e08b4af95"
+	canarySecond   = "CANARY-BUILD-SECRET-OTHER-3a7c62fe10db"
 )
 
 func assertNoCanary(t *testing.T, surfaces map[string]string, canaries ...string) {

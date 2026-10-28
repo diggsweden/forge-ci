@@ -62,7 +62,7 @@ type MaterializeBuildSecretsInput struct {
 func MaterializeBuildSecrets(
 	ctx context.Context,
 	sink ci.OutputSink,
-	w io.Writer, //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	out io.Writer,
 	in MaterializeBuildSecretsInput,
 ) error {
 	names := splitNames(in.Names)
@@ -181,7 +181,7 @@ func MaterializeBuildSecrets(
 	}
 
 	keep = true
-	_, _ = fmt.Fprintf(w, "Materialized %d build-secret(s) to %s\n", len(names), dir)
+	_, _ = fmt.Fprintf(out, "Materialized %d build-secret(s) to %s\n", len(names), dir)
 
 	return nil
 }

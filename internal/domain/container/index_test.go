@@ -31,7 +31,10 @@ func TestValidateImageIndexExactChildren(t *testing.T) {
 		"malformed":          `{`,
 		"null":               `null`,
 	} {
-		t.Run(name, func(t *testing.T) { require.Error(t, container.ValidateImageIndex([]byte(body), expected)) })
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			require.Error(t, container.ValidateImageIndex([]byte(body), expected))
+		})
 	}
 
 	require.Error(t, container.ValidateImageIndex([]byte(raw), expected[:1]))

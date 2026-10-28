@@ -23,7 +23,6 @@ import (
 // instead of re-spelling it.
 const DigestPattern = `^sha256:[0-9a-f]{64}$`
 
-//nolint:gochecknoglobals // compiled regex, read-only.
 var digestRE = regexp.MustCompile(DigestPattern)
 
 // ValidDigest reports whether s is a canonical `sha256:<64-hex>` digest.
@@ -37,7 +36,6 @@ func ValidDigest(s string) bool { return digestRE.MatchString(s) }
 // Exported for the same schema-rendering reason as DigestPattern.
 const SHA256HexPattern = `^[0-9a-f]{64}$`
 
-//nolint:gochecknoglobals // compiled regex, read-only.
 var sha256HexRE = regexp.MustCompile(SHA256HexPattern)
 
 // ValidSHA256Hex reports whether s is 64 lowercase hex characters — a bare
@@ -101,8 +99,8 @@ func ValidRepositoryName(value string) bool {
 // The name library rewrites Docker Hub's documented host to its index alias.
 // Accept both explicit hosts, without permitting implicit registry expansion.
 func explicitRegistryName(ref string) string {
-	if strings.HasPrefix(ref, "docker.io/") {
-		return "index.docker.io/" + strings.TrimPrefix(ref, "docker.io/")
+	if after, ok := strings.CutPrefix(ref, "docker.io/"); ok {
+		return "index.docker.io/" + after
 	}
 
 	return ref
@@ -136,7 +134,6 @@ func ValidateManifestTags(image string, tags []string) error {
 // standalone form is ValidOCITagComponent.
 const OCITagComponent = `[A-Za-z0-9_][A-Za-z0-9._-]{0,127}`
 
-//nolint:gochecknoglobals // shared immutable compiled grammar.
 var ociTagRE = regexp.MustCompile("^" + OCITagComponent + "$")
 
 // ValidOCITagComponent reports whether s is a single valid OCI tag component
@@ -163,8 +160,8 @@ func StripTag(ref string) string {
 // that separately, while this helper only computes the repository/tag part for
 // comparison or destination derivation.
 func StripDigest(ref string) string {
-	if at := strings.Index(ref, "@"); at >= 0 {
-		return ref[:at]
+	if before, _, ok := strings.Cut(ref, "@"); ok {
+		return before
 	}
 
 	return ref
@@ -205,15 +202,13 @@ func ImageNameWithoutTag(ref string) (string, error) {
 
 // CanonicalImageRef removes docker:// and canonicalizes digest refs by dropping
 // any tag before @sha256:..., matching Buildah/Skopeo's digest-ref expectation.
-//
-//nolint:cyclop // one refusal per malformed shape (empty, newline, transport, double digest, bad parse), then canonicalise. Flat guards.
 func CanonicalImageRef(ref string) (string, error) {
 	if ref == "" || strings.ContainsAny(ref, "\n\r") {
 		return "", fmt.Errorf("unsafe or empty image ref: %w", errs.ErrUsage)
 	}
 
-	if strings.HasPrefix(ref, "docker://") {
-		ref = strings.TrimPrefix(ref, "docker://")
+	if after, ok := strings.CutPrefix(ref, "docker://"); ok {
+		ref = after
 	} else if strings.Contains(ref, "://") {
 		return "", fmt.Errorf("image ref must not include a transport other than docker://: %s: %w", ref, errs.ErrUsage)
 	}
@@ -262,8 +257,6 @@ func ImageNameForRef(ref string) (string, error) {
 
 // RegistryHost returns the registry authority from either an HTTP(S) URL, a
 // bare host, or a fully qualified OCI repository path.
-//
-//nolint:cyclop // accepts both a URL and a bare OCI repository, each with its own refusals — two flat parse paths rather than nested logic.
 func RegistryHost(raw string) (string, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" || strings.ContainsAny(value, " \t\n\r") {
@@ -323,7 +316,6 @@ func registryAuthority(value string) string {
 // one or more dashes. Tags have their own, case-sensitive grammar above.
 const OCIRepositoryComponent = `[a-z0-9]+(?:(?:[._]|__|[-]+)[a-z0-9]+)*`
 
-//nolint:gochecknoglobals // immutable shared repository grammar.
 var repositoryPathRE = regexp.MustCompile(`^` + OCIRepositoryComponent + `(?:/` + OCIRepositoryComponent + `)*$`)
 
 func validRepositorySegments(path string) bool {

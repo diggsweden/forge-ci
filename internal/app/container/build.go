@@ -75,7 +75,7 @@ func BuildImage(
 	builder imageBuilder,
 	pusher layoutPusher,
 	sink ci.OutputSink,
-	out io.Writer, //nolint:varnamelen // idiomatic short name (io conventions).
+	out io.Writer,
 	in BuildImageInput,
 ) (string, error) {
 	return buildImage(ctx, builder, pusher, sink, out, in, nil)
@@ -192,7 +192,7 @@ func pushByDigest(
 	builder imageBuilder,
 	pusher layoutPusher,
 	req container.BuildRequest,
-	out io.Writer, //nolint:varnamelen // idiomatic short name (io conventions).
+	out io.Writer,
 	checkLayout func(context.Context, string) error,
 ) (string, error) {
 	layoutDir, err := os.MkdirTemp("", "forge-ci-oci-*")

@@ -289,8 +289,8 @@ func mutateExecutionArtifact(t *testing.T, plan *pipeline.ConfigPlan, name strin
 	t.Helper()
 
 	groups := reflect.ValueOf(&plan.Artifacts).Elem()
-	for index := range groups.NumField() {
-		items, ok := groups.Field(index).Interface().([]pipeline.PlannedArtifact)
+	for _, field := range groups.Fields() {
+		items, ok := reflect.TypeAssert[[]pipeline.PlannedArtifact](field)
 		require.True(t, ok, "artifact group fixture must be a list of copies")
 
 		for item := range items {

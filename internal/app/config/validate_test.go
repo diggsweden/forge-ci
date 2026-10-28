@@ -44,8 +44,7 @@ func TestValidate_FileNotFound(t *testing.T) {
 
 	// Specifically not a ValidationError: the file was never read, so
 	// there are no violations to report.
-	var ve *config.ValidationError
-	if errors.As(err, &ve) {
+	if _, ok := errors.AsType[*config.ValidationError](err); ok {
 		t.Errorf("a missing file was reported as a validation failure: %v", err)
 	}
 }
@@ -60,8 +59,7 @@ artifacts:
 `))
 	err := appconfig.Validate(path, nil)
 
-	var ve *config.ValidationError
-	if !errors.As(err, &ve) {
+	if _, ok := errors.AsType[*config.ValidationError](err); !ok {
 		t.Errorf("err = %v, want ValidationError", err)
 	}
 }

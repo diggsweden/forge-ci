@@ -5,6 +5,7 @@ package container
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"runtime"
@@ -13,12 +14,14 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/diggsweden/forge-ci/internal/adapters/buildah"
 	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
+	"github.com/diggsweden/forge-ci/internal/adapters/trivy"
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
 	"github.com/diggsweden/forge-ci/internal/cli/cienv"
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
 	"github.com/diggsweden/forge-ci/internal/cli/regflags"
+	"github.com/diggsweden/forge-ci/internal/cli/secretenv"
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
 func signerImageGroup() *cli.Command {
@@ -80,15 +83,25 @@ func signerImageBuildArchCmd() *cli.Command {
 tag, computes the registry-served manifest digest, and writes <name>-<arch>.json
 for the manifest assembly job. --arch must be the host's own architecture: each
 architecture builds on a native runner, never under CPU emulation.`,
-		Flags: append(append(signerImageCommonFlags(), multiarchImageParamFlags()...),
+		Flags: append(append(append(signerImageCommonFlags(), multiarchImageParamFlags()...), imageBuilderFlags()...),
 			&cli.BoolFlag{Name: "stage", Usage: "retain the OCI layout with architecture metadata; defer ALL uploads to assemble --from-layouts after every build job succeeds"},
 			&cli.StringFlag{Name: flagArch, Sources: cli.EnvVars("IMAGE_ARCH"), Usage: "target architecture: amd64 or arm64"},
 			&cli.StringFlag{Name: flagContainerfile, Value: "Containerfile", Sources: cli.EnvVars("CONTAINERFILE"), Usage: "Containerfile to build"},
 			&cli.StringFlag{Name: flagContext, Value: ".", Sources: cli.EnvVars("BUILD_CONTEXT"), Usage: "directory for the build context"},
 			&cli.StringFlag{Name: flagTitle, Sources: cli.EnvVars("IMAGE_TITLE"), Usage: "org.opencontainers.image.title label value for the built image"},
+			&cli.StringFlag{Name: "target", Usage: "multi-stage target stage to build; default the final stage"},
+			&cli.StringSliceFlag{Name: "build-arg", Usage: "KEY=VALUE build argument (repeatable)"},
+			&cli.StringSliceFlag{Name: "label", Usage: "key=value image label beside the source, revision and title labels (repeatable)"},
+			&cli.StringFlag{Name: "cache-tag", Usage: "with --stage: reuse a bounded architecture slot in the image repository after checking its platform, revision and --require-label values; reads anonymously"},
+			&cli.StringSliceFlag{Name: flagRequireLabel, Usage: "required cache child config label as key=value (repeatable)"},
 			&cli.StringFlag{Name: "metadata-dir", Sources: cli.EnvVars("IMAGE_METADATA_DIR"), Usage: "directory for <name>-<arch>.json (default <name>-arch-<arch>)"},
 		),
 		Action: func(ctx context.Context, cmd *cli.Command) error {
+			builder, err := imageBuilderFromCmd(cmd)
+			if err != nil {
+				return err
+			}
+
 			input := appcontainer.SignerImageBuildArchInput{
 				AuthFile:         cmd.String(flagAuthFile),
 				Arch:             cmd.String(flagArch),
@@ -104,17 +117,26 @@ architecture builds on a native runner, never under CPU emulation.`,
 				Title:            cmd.String("title"),
 				Containerfile:    cmd.String(flagContainerfile),
 				Context:          cmd.String(flagContext),
+				Target:           cmd.String("target"),
+				BuildArgs:        cmd.StringSlice("build-arg"),
+				Labels:           cmd.StringSlice("label"),
+				CacheTag:         cmd.String("cache-tag"),
+				CacheLabels:      cmd.StringSlice(flagRequireLabel),
 				MetadataDir:      cmd.String("metadata-dir"),
 				RetryAttempts:    cmd.Int(flagRetryAttempts),
 				RetryDelay:       time.Duration(cmd.Int(flagRetryDelaySeconds)) * time.Second,
 			}
+			if input.CacheTag != "" && !cmd.Bool("stage") {
+				return fmt.Errorf("--cache-tag requires --stage: %w", errs.ErrUsage)
+			}
+
 			if cmd.Bool("stage") {
-				_, err := appcontainer.StageSignerImageArch(ctx, signerImageTool{buildah.New()}, ociregistry.NewAnonymous(), os.Stderr, input)
+				_, err = appcontainer.StageSignerImageArch(ctx, signerImageTool{builder}, ociregistry.NewAnonymous(), os.Stderr, input)
 
 				return err
 			}
 
-			_, err := appcontainer.BuildSignerImageArch(ctx, signerImageTool{buildah.New()}, os.Stderr, input)
+			_, err = appcontainer.BuildSignerImageArch(ctx, signerImageTool{builder}, os.Stderr, input)
 
 			return err
 		},
@@ -135,8 +157,20 @@ outputs.`,
 			&cli.StringSliceFlag{Name: flagRequireLabel, Usage: "required child config label as key=value (repeatable); checked before any upload"},
 			&cli.StringFlag{Name: flagManifestOutput, Usage: "optional file for exact verified index bytes, suitable for sbom index --index-file; '-' is not supported"},
 			&cli.StringFlag{Name: "metadata-dir", Sources: cli.EnvVars("IMAGE_METADATA_DIR"), Usage: "directory for <name>.json (default <name>-dist)"},
+			&cli.StringFlag{Name: "scan-output-template", Usage: "with --from-layouts: scan every staged architecture before any upload and refuse publication on a finding the container gate blocks; Trivy JSON path must contain {arch} or {platform}"},
+			&cli.StringFlag{Name: "sbom-output-template", Usage: "with --from-layouts and --scan-output-template: generate per-architecture CycloneDX SBOMs from the staged bytes before upload; path must contain {arch} or {platform}"},
+			&cli.StringFlag{Name: "index-sbom-output", Usage: "with staged inventories and --manifest-output: write an index SBOM binding every selected platform; emits image-sbom-sha256"},
+			&cli.StringFlag{Name: "sbom-url-prefix", Usage: "public HTTPS directory where the unchanged platform inventories will be published; required with --index-sbom-output"},
+			&cli.StringFlag{Name: "cache-tag-prefix", Usage: "with --from-layouts: refresh bounded <prefix>-<arch> slots in the image repository only after the complete set passes scans and assembly"},
 		),
 		Action: func(ctx context.Context, cmd *cli.Command) error {
+			if err := validateSignerAssemblyFlags(cmd); err != nil {
+				return err
+			}
+
+			scanTemplate := cmd.String("scan-output-template")
+			sbomTemplate := cmd.String("sbom-output-template")
+
 			return deps.FromCmd(ctx, cmd, func(dep *deps.Deps) error {
 				input := appcontainer.SignerImageAssembleInput{
 					AuthFile:         cmd.String(flagAuthFile),
@@ -148,6 +182,7 @@ outputs.`,
 					TagPrefix:        cmd.String("tag-prefix"),
 					TagName:          cmd.String("tag"),
 					RequiredLabels:   cmd.StringSlice(flagRequireLabel),
+					CacheTagPrefix:   cmd.String("cache-tag-prefix"),
 					ManifestOutput:   cmd.String(flagManifestOutput),
 					Name:             cmd.String("name"),
 					Archs:            splitSignerLines(cmd.String("archs")),
@@ -156,9 +191,28 @@ outputs.`,
 					RetryDelay:       time.Duration(cmd.Int(flagRetryDelaySeconds)) * time.Second,
 				}
 
+				if scanTemplate != "" {
+					scanner := trivy.New(secretenv.Names()...)
+					input.Evidence = &appcontainer.StagedLayoutEvidence{
+						Trivy:               scanner,
+						Syft:                signerSyft(""),
+						Stderr:              os.Stderr,
+						TrivyOutputTemplate: scanTemplate,
+						SBOMOutputTemplate:  sbomTemplate,
+						IndexSBOMOutput:     cmd.String("index-sbom-output"),
+						SBOMURLPrefix:       cmd.String("sbom-url-prefix"),
+						Gate:                publicationGate(scanner, deps.Annotator(cmd)),
+					}
+				}
+
 				registry := ociregistry.WithAuthFile(cmd.String(flagAuthFile))
 				if cmd.Bool("from-layouts") {
 					_, err := appcontainer.PublishAndAssembleSignerImage(ctx, registry, dep.OutputSink, dep.SummarySink, os.Stderr, input)
+					if err == nil && cmd.String("index-sbom-output") == "" {
+						// Keep the reusable workflow output defined for base images
+						// and scan-disabled callers as well as release index BOMs.
+						return dep.OutputSink.Set(ctx, "image-sbom-sha256", "")
+					}
 
 					return err
 				}
@@ -171,9 +225,32 @@ outputs.`,
 	}
 }
 
-// signerImageTool builds/exports with Buildah and publishes/reads through the
-// existing OCI registry adapter, using the same explicit auth file.
-type signerImageTool struct{ *buildah.Adapter }
+func validateSignerAssemblyFlags(cmd *cli.Command) error {
+	scanTemplate := cmd.String("scan-output-template")
+
+	if (cmd.String("index-sbom-output") != "" || cmd.String("sbom-url-prefix") != "") && (!cmd.Bool("from-layouts") || scanTemplate == "") {
+		return fmt.Errorf("index SBOM output requires --from-layouts and --scan-output-template: %w", errs.ErrUsage)
+	}
+
+	if cmd.String("sbom-output-template") != "" && scanTemplate == "" {
+		return fmt.Errorf("--sbom-output-template requires --scan-output-template: %w", errs.ErrUsage)
+	}
+
+	if cmd.String("cache-tag-prefix") != "" && (!cmd.Bool("from-layouts") || scanTemplate == "") {
+		return fmt.Errorf("--cache-tag-prefix requires --from-layouts and --scan-output-template: %w", errs.ErrUsage)
+	}
+
+	if scanTemplate != "" && !cmd.Bool("from-layouts") {
+		return fmt.Errorf("--scan-output-template scans staged layouts and needs --from-layouts: %w", errs.ErrUsage)
+	}
+
+	return nil
+}
+
+// signerImageTool builds/exports with the selected image builder and
+// publishes/reads through the existing OCI registry adapter, using the same
+// explicit auth file.
+type signerImageTool struct{ imageBuilder }
 
 func (signerImageTool) PushLayout(ctx context.Context, authFile, layoutDir, image string) (string, error) {
 	return ociregistry.WithAuthFile(authFile).PushLayout(ctx, layoutDir, image)
@@ -193,7 +270,7 @@ func signerImageCommonFlags() []cli.Flag {
 
 func signerImageSourceFlags() []cli.Flag {
 	return []cli.Flag{
-		regflags.AuthFile(regflags.AuthFileOpts{Env: "FORGE_CI_IMAGE_AUTH_FILE", Usage: "registry auth file used by buildah and the registry client"}),
+		regflags.AuthFile(regflags.AuthFileOpts{Env: "FORGE_CI_IMAGE_AUTH_FILE", Usage: "registry auth file used by buildah and the registry client; build-arch --stage pulls anonymously without one"}),
 		&cli.StringFlag{Name: flagSourceSHA, Sources: cli.EnvVars("SOURCE_SHA"), Usage: "git commit SHA for the OCI revision label and default tag naming"},
 		&cli.StringFlag{Name: flagServerURL, Sources: cienv.ServerURL(), Usage: "forge server URL used to derive the registry/repository"},
 		&cli.StringFlag{Name: flagRepository, Sources: cienv.Repository(), Usage: "owner/repo used to derive the image repository"},

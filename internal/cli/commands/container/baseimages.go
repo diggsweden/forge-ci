@@ -32,22 +32,6 @@ import (
 // flagLocalRegistry selects the plain-OCI surface over the forge package API.
 const flagLocalRegistry = "local-registry"
 
-// flagExternalRegistry declares that the image repository is on a registry
-// other than the forge's own, such as GHCR.
-const flagExternalRegistry = "external-registry"
-
-// externalRegistryFlag is shared by the base-image and release-image verbs:
-// one declaration, made by the caller, rather than a guess from host names,
-// since a forge's registry need not share its server's host (GitLab's does
-// not).
-func externalRegistryFlag() cli.Flag {
-	return &cli.BoolFlag{
-		Name:    flagExternalRegistry,
-		Sources: cli.EnvVars("EXTERNAL_IMAGE_REGISTRY"),
-		Usage:   "the image repository is on a registry other than the forge's own, such as GHCR: it is not held below the source owner, and tags are deleted through that registry, which may keep them",
-	}
-}
-
 // localRegistryFlag is shared by every base-image verb that lists or deletes
 // tags, so a consumer sets the same flag whichever verb it runs.
 func localRegistryFlag() cli.Flag {
@@ -72,9 +56,9 @@ type baseImagesCommon struct {
 	PublicKeyPath        string
 	PublicKeySHA256      string
 	ExpectedWorkflow     string
-	// External is the caller's declaration that the base-image repository is
-	// on a registry other than the forge's own (--external-registry).
-	External bool
+	// Foreign says the base-image repository is on a registry other than the
+	// forge's own, such as GHCR.
+	Foreign bool
 }
 
 func baseImagesGroup() *cli.Command {
@@ -118,13 +102,12 @@ func baseImagesLocationFlags() []cli.Flag {
 		&cli.StringFlag{Name: flagServerURL, Sources: cienv.ServerURL(), Usage: "forge server URL used to derive the registry host and expected source"},
 		&cli.StringFlag{Name: flagRepository, Sources: cienv.Repository(), Usage: "owner/repo used to derive the expected source and base-image repository"},
 		&cli.StringFlag{Name: "repository-suffix", Sources: cli.EnvVars("REPOSITORY_SUFFIX"), Usage: "optional suffix appended to the repository package name, e.g. -base"},
-		&cli.StringFlag{Name: "expected-repository", Sources: cli.EnvVars("EXPECTED_REPOSITORY", "BASE_IMAGES_EXPECTED_REPOSITORY"), Usage: "exact base-image repository allowed for tags/refs (default: host/lower(owner/repo)<suffix>); sign and promote require it on the login registry and, unless --external-registry, below the --repository owner"},
-		externalRegistryFlag(),
+		&cli.StringFlag{Name: "expected-repository", Sources: cli.EnvVars("EXPECTED_REPOSITORY", "BASE_IMAGES_EXPECTED_REPOSITORY"), Usage: "exact base-image repository allowed for tags/refs (default: host/lower(owner/repo)<suffix>); the registry login goes to its host"},
 	}
 }
 
 func baseImagesRegistryFlag() cli.Flag {
-	return &cli.StringFlag{Name: flagRegistry, Sources: cli.EnvVars("CONTAINER_REGISTRY"), Usage: "registry host for the registry login (default: the base-image repository's host with --external-registry, else the host from --server-url)"}
+	return forgeRegistryFlag()
 }
 
 func baseImagesPublicKeyFlags() []cli.Flag {
@@ -180,21 +163,24 @@ func baseImagesLocationFromCmd(cmd *cli.Command, requireRegistry bool) (baseImag
 		return baseImagesCommon{}, err
 	}
 
-	registry, err := resolveRegistryHostFromFlags(cmd, serverHost, expectedRepository)
+	if requireRegistry && serverHost == "" && cmd.String(flagRegistry) == "" {
+		return baseImagesCommon{}, fmt.Errorf("base images: --server-url or --registry is required to tell the forge's registry from another: %w", errs.ErrUsage)
+	}
+
+	registry, err := resolveImageRegistry(cmd.String(flagRegistry), serverHost, expectedRepository)
 	if err != nil {
 		return baseImagesCommon{}, err
 	}
 
-	if requireRegistry && registry == "" {
-		return baseImagesCommon{}, fmt.Errorf("base images: --registry or --server-url is required for registry login: %w", errs.ErrUsage)
+	registryUsername, registryPasswordFile, err := baseImagesRegistryCreds(cmd, requireRegistry, repository, registry)
+	if err != nil {
+		return baseImagesCommon{}, err
 	}
 
-	registryUsername, registryPasswordFile := baseImagesRegistryCreds(cmd, requireRegistry)
-
 	return baseImagesCommon{
-		External:             cmd.Bool(flagExternalRegistry),
+		Foreign:              registry.Foreign,
 		ServerURL:            serverURL,
-		Registry:             registry,
+		Registry:             registry.Host,
 		Repository:           repository,
 		RepositorySuffix:     repositorySuffix,
 		ExpectedRepository:   expectedRepository,
@@ -206,14 +192,19 @@ func baseImagesLocationFromCmd(cmd *cli.Command, requireRegistry bool) (baseImag
 // baseImagesRegistryCreds reads the registry username and password FILE for
 // verbs that log in (the password itself is resolved at login time); verbs
 // without registry login leave both empty.
-func baseImagesRegistryCreds(cmd *cli.Command, requireRegistry bool) (string, string) {
+func baseImagesRegistryCreds(cmd *cli.Command, requireRegistry bool, repository string, registry imageRegistry) (string, string, error) {
 	if !requireRegistry {
-		return "", ""
+		return "", "", nil
 	}
 
 	auth := regflags.Resolve(cmd)
 
-	return auth.Username, auth.PasswordFile
+	username, err := registryLoginUser(auth.Username, repository, registry)
+	if err != nil {
+		return "", "", fmt.Errorf("base images: %w", err)
+	}
+
+	return username, auth.PasswordFile, nil
 }
 
 // baseImagesExpectedRepository resolves the exact base-image repository:
@@ -275,16 +266,6 @@ func baseImagesPublicKeyFromCmd(cmd *cli.Command, requirePublicKey bool) (string
 	return publicKeyPath, strings.TrimSpace(cmd.String("cosign-public-key-sha256")), nil
 }
 
-// requireSourceOwnedRepository is the rule of the verbs that write to the
-// base-image repository under the source's name: sign and promote. The
-// registry is the one resolveRegistryHostFromFlags resolved for the login:
-// --registry, else the repository's host when it is declared external, else
-// the host of --server-url. The owner rule holds unless the caller declared
-// the repository external (--external-registry).
-func (c baseImagesCommon) requireSourceOwnedRepository() error {
-	return appbaseimages.RequireSourceOwnedRepository(c.ExpectedRepository, c.Registry, c.Repository, c.External)
-}
-
 func (c baseImagesCommon) login(authFile string) error {
 	password, err := regflags.LoginPassword(c.RegistryUsername, c.RegistryPasswordFile)
 	if err != nil {
@@ -307,7 +288,7 @@ func withBaseImagesDockerConfig(fn func(authFile string) error) error {
 		return fmt.Errorf("base images: create Docker config dir: %w", err)
 	}
 
-	defer func() { _ = os.RemoveAll(dir) }() //nolint:gosec // dir is a fresh MkdirTemp path under the runner temp root, not caller input.
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	if err := os.Chmod(dir, 0o700); err != nil { //nolint:gosec // 0o700: a directory needs the owner execute bit; it stays owner-only.
 		return fmt.Errorf("base images: chmod Docker config dir: %w", err)
@@ -321,7 +302,7 @@ func withBaseImagesDockerConfig(fn func(authFile string) error) error {
 	defer restoreDockerConfig()
 
 	authFile := filepath.Join(dir, "config.json")
-	if err := os.WriteFile(authFile, []byte("{\"auths\":{}}\n"), 0o600); err != nil { //nolint:gosec // path is inside the fresh MkdirTemp dir created above.
+	if err := os.WriteFile(authFile, []byte("{\"auths\":{}}\n"), 0o600); err != nil {
 		return fmt.Errorf("base images: write empty Docker config: %w", err)
 	}
 
@@ -411,9 +392,9 @@ func parseBaseImages(raw string) ([]appbaseimages.BaseImageMetadata, error) {
 // manifests, with no digest fallback. Refuse a contradictory topology here
 // rather than silently selecting the wrong API.
 func baseImagePackageRegistry(cmd *cli.Command, common baseImagesCommon, capability string) (baseImagePackageAPI, error) {
-	// A repository on an external registry, such as GHCR, has no forge
-	// package API to ask, just as one beside the runner has none.
-	local := cmd.Bool(flagLocalRegistry) || common.External
+	// A repository on another registry, such as GHCR, has no forge package
+	// API to ask, just as one beside the runner has none.
+	local := cmd.Bool(flagLocalRegistry) || common.Foreign
 
 	if err := requireRegistrySurfaceMatches(local, common); err != nil {
 		return nil, err
@@ -426,7 +407,7 @@ func baseImagePackageRegistry(cmd *cli.Command, common baseImagesCommon, capabil
 		}
 
 		local := baseImageLocalRegistry{Adapter: ociregistry.WithAuthFile(cmd.String(flagAuthFile)), host: host}
-		if !common.External {
+		if !common.Foreign {
 			return local, nil
 		}
 
@@ -450,6 +431,7 @@ func baseImagePackageRegistry(cmd *cli.Command, common baseImagesCommon, capabil
 // the configured host too; without it the library defaults to Docker Hub.
 type baseImageLocalRegistry struct {
 	*ociregistry.Adapter
+
 	host string
 }
 

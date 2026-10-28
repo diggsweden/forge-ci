@@ -64,7 +64,7 @@ func TestImageEvidenceRoot_RetriesTheScan(t *testing.T) {
 
 			require.NoError(t, os.Mkdir(bin, 0o750))
 			require.NoError(t, os.Mkdir(layout, 0o750))
-			require.NoError(t, os.WriteFile(filepath.Join(bin, "trivy"), []byte(fakeTrivy), 0o700)) //nolint:gosec // G306: the fake scanner must be executable.
+			require.NoError(t, os.WriteFile(filepath.Join(bin, "trivy"), []byte(fakeTrivy), 0o700))
 
 			calls := filepath.Join(work, "calls")
 			report := filepath.Join(work, "trivy.json")

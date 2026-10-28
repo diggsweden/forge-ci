@@ -29,13 +29,13 @@ func ledgerCleanupCmd() *cli.Command {
 			dryRunFlag(),
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+			return deps.FromCmd(ctx, cmd, func(dependencies *deps.Deps) error {
 				entries, err := ledgerEntriesFromCmd(cmd)
 				if err != nil {
 					return err
 				}
 
-				reg, err := cleanupReg(d, dryrun.Enabled(cmd), ledgerRegistry(cmd))
+				reg, err := cleanupReg(dependencies, dryrun.Enabled(cmd), ledgerRegistry(cmd))
 				if err != nil {
 					return err
 				}

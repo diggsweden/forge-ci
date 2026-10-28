@@ -49,7 +49,7 @@ func (r *recordingImageSigner) SignImage(_ context.Context, in cosign.SignImageI
 }
 
 func (r *recordingImageSigner) AttestImage(_ context.Context, in cosign.AttestImageInput, _ io.Writer) error {
-	body, err := os.ReadFile(in.PredicatePath) //nolint:gosec // test reads app-created predicate path.
+	body, err := os.ReadFile(in.PredicatePath)
 	if err != nil {
 		return err
 	}
@@ -71,7 +71,7 @@ func (f *fakeLedgerSyft) Generate(_ context.Context, target string, outputs map[
 	recorded := map[string]string{}
 	for format, path := range outputs {
 		recorded[format] = path
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec,mnd // test temp dir.
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return err
 		}
 
@@ -80,7 +80,7 @@ func (f *fakeLedgerSyft) Generate(_ context.Context, target string, outputs map[
 			body = []byte(`{"bomFormat":"CycloneDX"}`)
 		}
 
-		if err := os.WriteFile(path, body, 0o600); err != nil { //nolint:gosec // test temp file.
+		if err := os.WriteFile(path, body, 0o600); err != nil {
 			return err
 		}
 	}
@@ -95,7 +95,7 @@ type fakeLedgerResolver map[string]string
 func (f fakeLedgerResolver) ResolveDigest(_ context.Context, ref string) (string, error) {
 	digest, ok := f[ref]
 	if !ok {
-		return "", errors.New("ref not found") //nolint:err113 // test fake.
+		return "", errors.New("ref not found")
 	}
 
 	return digest, nil
@@ -133,7 +133,7 @@ func writeBasePredicate(t *testing.T) string {
   "runDetails": {"builder": {"id": "builder"}, "metadata": {}}
 }
 `)
-	if err := os.WriteFile(path, body, 0o600); err != nil { //nolint:gosec // test fixture.
+	if err := os.WriteFile(path, body, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -160,7 +160,7 @@ func writeBaseEnvelope(t *testing.T) string {
   }
 }
 `)
-	if err := os.WriteFile(path, body, 0o600); err != nil { //nolint:gosec // test fixture.
+	if err := os.WriteFile(path, body, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -364,7 +364,7 @@ func TestSignLedgerImages_RejectsEnvelopeWithoutPredicate(t *testing.T) {
 	t.Chdir(t.TempDir())
 
 	path := filepath.Join(t.TempDir(), "empty.intoto.json")
-	if err := os.WriteFile(path, []byte(`{"predicateType":"https://slsa.dev/provenance/v1"}`), 0o600); err != nil { //nolint:gosec // test fixture.
+	if err := os.WriteFile(path, []byte(`{"predicateType":"https://slsa.dev/provenance/v1"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -954,12 +954,12 @@ func TestSignLedgerImages_BaseKindRequiresBaseInputID(t *testing.T) {
 // any signing happens.
 func TestSignLedgerImages_InputRefusals(t *testing.T) {
 	predicate := filepath.Join(t.TempDir(), "predicate.json")
-	if err := os.WriteFile(predicate, []byte(`{"buildDefinition":{}}`), 0o600); err != nil { //nolint:gosec // test fixture.
+	if err := os.WriteFile(predicate, []byte(`{"buildDefinition":{}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
 	envelope := filepath.Join(t.TempDir(), "envelope.intoto.json")
-	if err := os.WriteFile(envelope, []byte(`{"predicateType":"https://slsa.dev/provenance/v1","predicate":{}}`), 0o600); err != nil { //nolint:gosec // test fixture.
+	if err := os.WriteFile(envelope, []byte(`{"predicateType":"https://slsa.dev/provenance/v1","predicate":{}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

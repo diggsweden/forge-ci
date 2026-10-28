@@ -24,7 +24,6 @@ import (
 	"github.com/diggsweden/forge-ci/internal/cli/planfile"
 	"github.com/diggsweden/forge-ci/internal/cli/regflags"
 	"github.com/diggsweden/forge-ci/internal/cli/secretenv"
-	domaincontainer "github.com/diggsweden/forge-ci/internal/domain/container"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/output"
 )
@@ -49,9 +48,8 @@ emulation for every non-native platform; build it with container
 multiarch-image, one native job per architecture, instead. With
 --scan-output-template, every exported platform must pass Trivy before publication.
 Emits image, verified digest and platforms outputs; platforms is the comma-separated
-list that was built, in plan order. This is the forge-ci implementation of the
-public reusable-workflow build-push-oci-image contract. Every flag may also be
-fed from the $FORGE_CI_PLAN plan file under the "container build-push-oci-image"
+list that was built, in plan order. Release consumers normally use release-images.yml.
+Every flag may also be fed from the $FORGE_CI_PLAN plan file under the "container build-push-oci-image"
 scope (flag > plan > env > default).`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: flagTag, Sources: planfile.Vars(planScopeBuildPush, flagTag, "IMAGE_TAG"), Usage: "image tag to build and push"},
@@ -87,6 +85,7 @@ scope (flag > plan > env > default).`,
 				registry := ociregistry.WithAuthFileAndTLS(auth.AuthFile, auth.TLSVerify != tlsVerifyDisabled)
 
 				var checkLayout func(context.Context, string, []string) error
+
 				if template := cmd.String("scan-output-template"); template != "" {
 					scanner := trivy.New(secretenv.Names()...)
 					annot := deps.Annotator(cmd)
@@ -103,17 +102,15 @@ scope (flag > plan > env > default).`,
 					BuildsJSON:    cmd.String("builds-json"),
 					Image:         cmd.String(flagImage),
 					Context:       cmd.String(flagContext),
-					OCILabels: domaincontainer.OCILabels{
-						Title:         cmd.String("title"),
-						Description:   cmd.String("description"),
-						Licenses:      cmd.String("licenses"),
-						Vendor:        cmd.String("vendor"),
-						Authors:       cmd.String("authors"),
-						Documentation: cmd.String("documentation"),
-						RefName:       cmd.String(flagRefName),
-						Version:       cmd.String(flagVersion),
-						Revision:      cmd.String(flagRevision),
-					},
+					Title:         cmd.String("title"),
+					Description:   cmd.String("description"),
+					Licenses:      cmd.String("licenses"),
+					Vendor:        cmd.String("vendor"),
+					Authors:       cmd.String("authors"),
+					Documentation: cmd.String("documentation"),
+					RefName:       cmd.String(flagRefName),
+					Version:       cmd.String(flagVersion),
+					Revision:      cmd.String(flagRevision),
 					AuthFile:      auth.AuthFile,
 					TLSVerify:     auth.TLSVerify,
 					ServerURL:     cmd.String(flagServerURL),

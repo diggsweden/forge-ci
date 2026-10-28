@@ -40,7 +40,7 @@ func ContainerfileArgDefault(in ContainerfileArgDefaultInput) (string, error) {
 		return "", fmt.Errorf("file and name are required: %w", errs.ErrUsage)
 	}
 
-	file, err := os.Open(in.File) //nolint:gosec // caller-selected Containerfile path.
+	file, err := os.Open(in.File)
 	if err != nil {
 		return "", fmt.Errorf("open containerfile %s: %w: %w", in.File, err, errs.ErrMissingInput)
 	}

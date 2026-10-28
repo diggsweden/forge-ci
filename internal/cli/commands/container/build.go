@@ -15,7 +15,6 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/diggsweden/forge-ci/internal/adapters/buildah"
 	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
 	"github.com/diggsweden/forge-ci/internal/adapters/trivy"
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
@@ -34,7 +33,7 @@ const planScopeBuild = "container build"
 func buildCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "build",
-		Usage: "build a single native-platform container image with buildah, optionally pushing it by digest",
+		Usage: "build a single native-platform container image with buildah or kaniko, optionally pushing it by digest",
 		Description: `Builds ONE native-platform image (the multi-arch index is assembled separately
 by ` + "`container manifest merge`" + `) and, in push-by-digest mode, emits the pushed
 digest for that merge. --scan checks the local layout before publication.
@@ -62,7 +61,7 @@ EXAMPLES:
    # Build, scan the exported layout, then push it by digest
    forge-ci container build --mode push-by-digest --image-ref ghcr.io/org/app \
      --platform linux/amd64 --scan --scan-severity CRITICAL,HIGH`,
-		Flags:  append(buildImageFlags(), scanFlags()...),
+		Flags:  append(append(buildImageFlags(), scanFlags()...), imageBuilderFlags()...),
 		Action: runBuild,
 	}
 }
@@ -74,8 +73,13 @@ func runBuild(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
+	builder, err := imageBuilderFromCmd(cmd)
+	if err != nil {
+		return err
+	}
+
 	return deps.FromCmd(ctx, cmd, func(dep *deps.Deps) error {
-		_, err := appcontainer.BuildAndScan(ctx, buildah.New(), ociregistry.WithAuthFile(buildInput.AuthFile), trivy.New(secretenv.Names()...), dep.OutputSink, os.Stderr, os.Stderr, deps.Annotator(cmd),
+		_, err := appcontainer.BuildAndScan(ctx, builder, ociregistry.WithAuthFile(buildInput.AuthFile), trivy.New(secretenv.Names()...), dep.OutputSink, os.Stderr, os.Stderr, deps.Annotator(cmd),
 			appcontainer.BuildAndScanInput{
 				Build:        buildInput,
 				EnableScan:   cmd.Bool("scan"),
@@ -113,7 +117,7 @@ func buildImageFlags() []cli.Flag {
 		&cli.BoolFlag{Name: "cache-push", Sources: planfile.Vars(planScopeBuild, "cache-push", "BUILD_CACHE_PUSH"), Usage: "also export the layer cache on trusted builds; disabled when --scan gates publication"},
 		&cli.StringFlag{Name: "mode", Required: true, Sources: planfile.Vars(planScopeBuild, "mode", "BUILD_MODE"), Usage: "output mode: push-by-digest | load | local | oci (never exports registry cache)"},
 		&cli.StringFlag{Name: flagImageRef, Sources: planfile.Vars(planScopeBuild, flagImageRef, "IMAGE_REF"), Usage: "push target (push-by-digest) or local tag (load)"},
-		&cli.StringFlag{Name: "output-dir", Sources: planfile.Vars(planScopeBuild, "output-dir", "OUTPUT_DIR"), Usage: "destination for local export, or a fresh directory for oci mode"},
+		&cli.StringFlag{Name: flagOutputDir, Sources: planfile.Vars(planScopeBuild, flagOutputDir, "OUTPUT_DIR"), Usage: "destination for local export, or a fresh directory for oci mode"},
 		&cli.StringFlag{Name: "digest-key", Value: "digest", Sources: planfile.Vars(planScopeBuild, "digest-key", "DIGEST_KEY"), Usage: "OutputSink key for the pushed digest (push-by-digest mode)"},
 	}
 }
@@ -139,7 +143,7 @@ func buildImageInputFromCmd(cmd *cli.Command) (appcontainer.BuildImageInput, err
 		CachePush:       cmd.Bool("cache-push"),
 		Mode:            domaincontainer.BuildOutputMode(cmd.String("mode")),
 		ImageRef:        cmd.String("image-ref"),
-		OutputDir:       cmd.String("output-dir"),
+		OutputDir:       cmd.String(flagOutputDir),
 		DigestKey:       cmd.String("digest-key"),
 	}, nil
 }

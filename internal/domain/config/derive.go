@@ -28,7 +28,7 @@ func Derive(cfg *Config) error {
 	}
 
 	for i := range cfg.Artifacts {
-		a := &cfg.Artifacts[i] //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+		a := &cfg.Artifacts[i]
 
 		sbomsValue := a.SBOMs
 		if sbomsValue == "" {
@@ -80,7 +80,7 @@ func AnyRequireAuthorization(artifacts []Artifact) bool {
 // zero-config plan) work without learning the build-mode concept.
 // container-first stays an explicit opt-in. Returns "" for non-Go
 // artifacts.
-func GoArtifactBuildMode(a Artifact) GoBuildMode { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func GoArtifactBuildMode(a Artifact) GoBuildMode {
 	if a.ProjectType != projecttype.Go {
 		return ""
 	}
@@ -98,7 +98,7 @@ func GoArtifactBuildMode(a Artifact) GoBuildMode { //nolint:varnamelen // idioma
 
 // CargoArtifactBuildMode mirrors GoArtifactBuildMode for Cargo artifacts,
 // including the artifact-first default. Returns "" for non-Cargo artifacts.
-func CargoArtifactBuildMode(a Artifact) CargoBuildMode { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func CargoArtifactBuildMode(a Artifact) CargoBuildMode {
 	if a.ProjectType != projecttype.Cargo {
 		return ""
 	}
@@ -117,7 +117,7 @@ func CargoArtifactBuildMode(a Artifact) CargoBuildMode { //nolint:varnamelen // 
 // SupportedPublishTarget reports whether the current workflows support
 // publishing artifact a to target. It intentionally models the public v3
 // contract, not every schema-recognised future value.
-func SupportedPublishTarget(a Artifact, target PublishTarget) bool { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func SupportedPublishTarget(a Artifact, target PublishTarget) bool {
 	switch target {
 	case PublishForgePackages:
 		if a.ProjectType == projecttype.GradleAndroid {
@@ -153,7 +153,7 @@ func resolveContainers(cfg *Config) {
 
 // resolveContainer fills the derived fields on one Container based on
 // the artifacts it depends on (via From) and its own BuildArgs.
-func resolveContainer(c *Container, byName map[string]*Artifact) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func resolveContainer(c *Container, byName map[string]*Artifact) {
 	scan := scanContainerDeps(c.From, byName)
 
 	types := make([]projecttype.Type, 0, len(scan.typesSeen))
@@ -191,7 +191,7 @@ func scanContainerDeps(from []string, byName map[string]*Artifact) containerDepS
 	scan := containerDepScan{typesSeen: map[projecttype.Type]bool{}}
 
 	for _, dep := range from {
-		a, ok := byName[dep] //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+		a, ok := byName[dep]
 		if !ok {
 			continue
 		}

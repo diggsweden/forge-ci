@@ -22,6 +22,7 @@
 package buildah
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -50,7 +51,7 @@ func New() *Adapter { return &Adapter{} }
 // local container storage under req.ImageRef (smoke-test flows); local exports
 // a stage's filesystem to req.OutputDir (binary extraction). Neither pushes —
 // the push-by-digest path goes through BuildToLayout + the ggcr pusher.
-func (a *Adapter) Build(ctx context.Context, req container.BuildRequest, out io.Writer) error { //nolint:varnamelen // idiomatic short name (io conventions).
+func (a *Adapter) Build(ctx context.Context, req container.BuildRequest, out io.Writer) error {
 	if err := req.Validate(); err != nil {
 		return err
 	}
@@ -70,7 +71,7 @@ func (a *Adapter) Build(ctx context.Context, req container.BuildRequest, out io.
 // BuildToLayout builds the image and exports it to an OCI image layout in
 // layoutDir, ready for a tagless digest push by the ggcr adapter. It builds to
 // an image ID (no tag), exports it, and removes the staged image from storage.
-func (a *Adapter) BuildToLayout(ctx context.Context, req container.BuildRequest, layoutDir string, out io.Writer) error { //nolint:varnamelen // idiomatic short name (io conventions).
+func (a *Adapter) BuildToLayout(ctx context.Context, req container.BuildRequest, layoutDir string, out io.Writer) error {
 	if err := req.Validate(); err != nil {
 		return err
 	}
@@ -268,13 +269,13 @@ func (a *Adapter) runWithEnv(ctx context.Context, w io.Writer, env []string, arg
 // --timestamp, even when both values agree. Keep --timestamp's layer and config
 // normalization and older-version support; without it, leave Buildah's defaults
 // alone. Explicit build arguments are passed through unchanged.
-func (a *Adapter) runBuildWithEnv(ctx context.Context, w io.Writer, env []string, timestamp string, args ...string) error {
+func (a *Adapter) runBuildWithEnv(ctx context.Context, out io.Writer, env []string, timestamp string, args ...string) error {
 	env = append(os.Environ(), env...)
 	if timestamp != "" {
 		env = safeexec.EnvWithout(env, "SOURCE_DATE_EPOCH")
 	}
 
-	return a.runWithCommandEnv(ctx, w, env, args...)
+	return a.runWithCommandEnv(ctx, out, env, args...)
 }
 
 func (a *Adapter) runWithCommandEnv(ctx context.Context, w io.Writer, env []string, args ...string) error {
@@ -308,11 +309,21 @@ func (a *Adapter) outputBytesWithEnv(ctx context.Context, env []string, args ...
 	// writes warnings to stderr while exiting 0 -- a "WARN[0000] Failed to
 	// decode the keys ..." line from a system storage.conf would be returned
 	// as the driver name and fail that comparison with a nonsense message.
-	// Stderr still reaches the operator: it travels on the ExitError that
-	// WrapError classifies.
+	// On failure stderr is the diagnosis -- "buildah info: exit status 1"
+	// alone once left a hosted runner's storage refusal unexplained -- so it
+	// travels on the error, redacted, the way the mise adapter does it.
+	var stderr bytes.Buffer
+
+	cmd.Stderr = &stderr
+
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, safeexec.WrapError(err, a.bin(), safeexec.FirstArg(args))
+		wrapped := safeexec.WrapError(err, a.bin(), safeexec.FirstArg(args))
+		if stderr.Len() == 0 {
+			return nil, wrapped
+		}
+
+		return nil, fmt.Errorf("%w\n%s", wrapped, safeexec.RedactKeyMaterial(stderr.Bytes()))
 	}
 
 	return out, nil

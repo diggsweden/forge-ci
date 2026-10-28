@@ -19,10 +19,11 @@ package pipeline
 //
 // Naming follows Target<Field> — the field name on the matching
 // stage-target struct.
+//
+// The first block holds the build-stage targets (release + dev share
+// these names). Go and Cargo are the artifact-first cross-compile jobs;
+// their container-first counterparts live in the publish-stage block.
 const (
-	// Build-stage targets (release + dev share these names).
-	// Go and Cargo are the artifact-first cross-compile jobs; their
-	// container-first counterparts live in the publish-stage block below.
 	TargetMaven         = "maven"
 	TargetNPM           = "npm"
 	TargetGradle        = "gradle"
@@ -30,15 +31,17 @@ const (
 	TargetXcodeIOS      = "xcode_ios"
 	TargetGo            = "go"
 	TargetCargo         = "cargo"
+)
 
-	// Prepare-stage targets (release only).
-	TargetVersionBump = "version_bump"
+// TargetVersionBump is the prepare-stage target (release only).
+const TargetVersionBump = "version_bump"
 
-	// Publish-stage targets (release + dev). The *ContainerFirst pair
-	// holds the artifacts whose Build SBOM ships from sbom-{lang}.yml at
-	// publish stage. The *ArtifactFirst pair (dev only today) carries
-	// the artifact-first set so dev-publish can disambiguate without
-	// re-deriving build-mode from the planned-artifact list.
+// Publish-stage targets (release + dev). The *ContainerFirst pair
+// holds the artifacts whose Build SBOM ships from sbom-{lang}.yml at
+// publish stage. The *ArtifactFirst pair (dev only today) carries
+// the artifact-first set so dev-publish can disambiguate without
+// re-deriving build-mode from the planned-artifact list.
+const (
 	TargetForgePackages       = "forge_packages"
 	TargetMavenCentral        = "maven_central"
 	TargetGooglePlay          = "google_play"
@@ -48,8 +51,10 @@ const (
 	TargetCargoArtifactFirst  = "cargo_artifact_first" // dev publish only
 	TargetGoArtifactFirst     = "go_artifact_first"    // dev publish only
 	TargetSBOM                = "sbom"                 // dev publish only
+)
 
-	// Quality-stage targets (PR).
+// Quality-stage targets (PR).
+const (
 	TargetNanolinter = "nanolinter"
 	TargetMegalinter = "megalinter"
 	TargetSwift      = "swift"

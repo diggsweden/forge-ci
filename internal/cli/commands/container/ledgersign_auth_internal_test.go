@@ -30,16 +30,16 @@ func TestLedgerSign_EnvKeyPreservesDockerConfigWithoutUnrelatedSecrets(t *testin
 	const digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 	// Only digest resolution reaches HTTP, and only this loopback fixture.
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method + " " + r.URL.Path {
+	srv := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		switch request.Method + " " + request.URL.Path {
 		case "GET /v2/":
 		case "HEAD /v2/owner/app/manifests/" + digest:
-			w.Header().Set("Docker-Content-Digest", digest)
-			w.Header().Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
-			w.Header().Set("Content-Length", "1")
+			response.Header().Set("Docker-Content-Digest", digest)
+			response.Header().Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
+			response.Header().Set("Content-Length", "1")
 		default:
-			t.Errorf("unexpected registry request: %s %s", r.Method, r.URL.Path)
-			w.WriteHeader(http.StatusNotFound)
+			t.Errorf("unexpected registry request: %s %s", request.Method, request.URL.Path)
+			response.WriteHeader(http.StatusNotFound)
 		}
 	}))
 	t.Cleanup(srv.Close)

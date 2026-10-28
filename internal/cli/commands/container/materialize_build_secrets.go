@@ -39,7 +39,7 @@ func materializeBuildSecretsCmd() *cli.Command {
 				Usage:   "JSON object mapping each declared name to its value; sourced from the workflow secret of the same name",
 			},
 			&cli.StringFlag{
-				Name:    "output-dir",
+				Name:    flagOutputDir,
 				Sources: cli.EnvVars("BUILD_SECRETS_DIR"),
 				Usage:   "existing parent for the unique materialized-secret directory; defaults to <temp-dir>",
 			},
@@ -54,7 +54,7 @@ func materializeBuildSecretsCmd() *cli.Command {
 				return appcontainer.MaterializeBuildSecrets(ctx, d.OutputSink, os.Stderr, appcontainer.MaterializeBuildSecretsInput{
 					Names:        cmd.String("names"),
 					EnvelopeJSON: cmd.String("envelope"),
-					OutputDir:    cmd.String("output-dir"),
+					OutputDir:    cmd.String(flagOutputDir),
 					TempDir:      cmd.String(flagTempDir),
 				})
 			})

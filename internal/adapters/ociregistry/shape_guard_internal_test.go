@@ -48,10 +48,10 @@ func TestMergedIndex_RejectsDuplicateConcretePlatforms(t *testing.T) {
 		}
 
 		index := mutate.AppendManifests(empty.Index,
-			mutate.IndexAddendum{Add: empty.Image, Descriptor: v1.Descriptor{Platform: &v1.Platform{OS: "linux", Architecture: "amd64"}}},
-			mutate.IndexAddendum{Add: empty.Image, Descriptor: v1.Descriptor{Platform: &v1.Platform{OS: "linux", Architecture: second}}},
-			mutate.IndexAddendum{Add: empty.Image, Descriptor: v1.Descriptor{Platform: &v1.Platform{OS: "unknown", Architecture: "unknown"}}},
-			mutate.IndexAddendum{Add: empty.Image, Descriptor: v1.Descriptor{Platform: &v1.Platform{OS: "unknown", Architecture: "unknown"}}})
+			mutate.IndexAddendum{Add: empty.Image, Platform: &v1.Platform{OS: "linux", Architecture: "amd64"}},
+			mutate.IndexAddendum{Add: empty.Image, Platform: &v1.Platform{OS: "linux", Architecture: second}},
+			mutate.IndexAddendum{Add: empty.Image, Platform: &v1.Platform{OS: "unknown", Architecture: "unknown"}},
+			mutate.IndexAddendum{Add: empty.Image, Platform: &v1.Platform{OS: "unknown", Architecture: "unknown"}})
 
 		err := validateIndexPlatforms(index)
 		if duplicate {
@@ -83,7 +83,7 @@ func TestMergedIndex_PlatformVariantsAreDistinct(t *testing.T) {
 	t.Parallel()
 
 	arm := func(variant string) mutate.IndexAddendum {
-		return mutate.IndexAddendum{Add: empty.Image, Descriptor: v1.Descriptor{Platform: &v1.Platform{OS: "linux", Architecture: "arm", Variant: variant}}}
+		return mutate.IndexAddendum{Add: empty.Image, Platform: &v1.Platform{OS: "linux", Architecture: "arm", Variant: variant}}
 	}
 
 	require.NoError(t, validateIndexPlatforms(mutate.AppendManifests(empty.Index, arm("v6"), arm("v7"))))

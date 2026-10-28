@@ -42,7 +42,7 @@ func BuildAndScan(
 	pusher layoutPusher,
 	trivy appsecurity.TrivyOps,
 	sink ci.OutputSink,
-	out, stderr io.Writer, //nolint:varnamelen // idiomatic short names (io conventions).
+	out, stderr io.Writer,
 	annot output.Annotator,
 	in BuildAndScanInput,
 ) (string, error) {

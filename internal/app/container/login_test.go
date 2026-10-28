@@ -22,7 +22,7 @@ import (
 func readAuth(t *testing.T, path, registry string) string {
 	t.Helper()
 
-	body, err := os.ReadFile(path) //nolint:gosec // test-controlled path.
+	body, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}
@@ -79,11 +79,7 @@ func TestRegistryLoginConcurrentWritesPreserveAllCredentials(t *testing.T) {
 	var waitGroup sync.WaitGroup
 
 	for index := range loginCount {
-		waitGroup.Add(1)
-
-		go func() {
-			defer waitGroup.Done()
-
+		waitGroup.Go(func() {
 			registry := fmt.Sprintf("registry-%d.example", index)
 			errorsByLogin <- appcontainer.RegistryLogin(io.Discard, appcontainer.RegistryLoginInput{
 				Registry: registry,
@@ -91,7 +87,7 @@ func TestRegistryLoginConcurrentWritesPreserveAllCredentials(t *testing.T) {
 				Password: "password",
 				AuthFile: path,
 			})
-		}()
+		})
 	}
 
 	waitGroup.Wait()

@@ -18,8 +18,6 @@ import "github.com/diggsweden/forge-ci/internal/domain/projecttype"
 // plans with no execution path, which is worse than failing loudly at
 // config-parse. Add it only after the build, publish,
 // validation, and test surfaces are implemented.
-//
-//nolint:gochecknoglobals // schema enumeration — read-only and ordered.
 var ValidProjectTypes = []projecttype.Type{
 	projecttype.Maven,
 	projecttype.NPM,
@@ -34,8 +32,6 @@ var ValidProjectTypes = []projecttype.Type{
 // SBOMSupportedTypes is the set of project-types whose default `sboms`
 // value is "all". Other types default to "none". Python is omitted
 // for the same reason it's omitted from ValidProjectTypes above.
-//
-//nolint:gochecknoglobals // schema lookup table — read-only.
 var SBOMSupportedTypes = map[projecttype.Type]bool{
 	projecttype.Maven:         true,
 	projecttype.NPM:           true,
@@ -61,8 +57,6 @@ const (
 // ValidBuildTypes lists every BuildType the schema recognises. The
 // generated artifacts.yml JSON Schema renders its buildType enum from
 // this slice.
-//
-//nolint:gochecknoglobals // schema enumeration — read-only and ordered.
 var ValidBuildTypes = []BuildType{
 	BuildTypeApplication,
 	BuildTypeLibrary,
@@ -104,8 +98,6 @@ const (
 )
 
 // ValidPublishTargets lists every PublishTarget the schema recognises.
-//
-//nolint:gochecknoglobals // schema enumeration — read-only and ordered.
 var ValidPublishTargets = []PublishTarget{
 	PublishMavenCentral,
 	PublishForgePackages,
@@ -125,8 +117,6 @@ const (
 
 // ValidSBOMLayers lists the layer tokens in canonical pipeline order.
 // Used by ExpandSBOMs to keep output deterministic.
-//
-//nolint:gochecknoglobals // schema enumeration — read-only and ordered.
 var ValidSBOMLayers = []SBOMLayer{
 	SBOMLayerBuild,
 	SBOMLayerAnalyzedArtifact,
@@ -135,7 +125,7 @@ var ValidSBOMLayers = []SBOMLayer{
 
 // Config is the full artifacts.yml content after parsing.
 type Config struct {
-	Artifacts  []Artifact  `yaml:"artifacts"`
+	Artifacts  []Artifact  `yaml:"artifacts,omitempty"`
 	Containers []Container `yaml:"containers,omitempty"`
 
 	// Sign selects the signing backend for `release sign` and
@@ -184,6 +174,10 @@ type Artifact struct {
 	EffectiveSBOMs []SBOMLayer `yaml:"-"`
 }
 
+// DefaultContainerFile is the Containerfile a container builds when it
+// names none, relative to the repository root.
+const DefaultContainerFile = "Containerfile"
+
 // Container is one entry under the top-level `containers:` list. Internal
 // representation only — the public JSON contract is pipeline.PlannedContainer.
 type Container struct {
@@ -193,6 +187,13 @@ type Container struct {
 	Context       string   `yaml:"context,omitempty"`
 	Target        string   `yaml:"target,omitempty"`
 	Platforms     string   `yaml:"platforms,omitempty"`
+	// ImageName replaces the image repository derived from the repository and
+	// Name, as publish-container's image-name input does: a path under the
+	// registry or a full repository. TagSuffix follows the release tag.
+	// Together they let several containers share one image repository as
+	// tag variants (v1.2.3, v1.2.3-distroless).
+	ImageName string `yaml:"image-name,omitempty"`
+	TagSuffix string `yaml:"tag-suffix,omitempty"`
 	// EnableSLSA / EnableScan use pointer-bool so the planner can
 	// distinguish "unset" (nil) from "explicitly false" — both default to
 	// true (per the publish-container.yml input defaults), but an explicit

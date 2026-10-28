@@ -84,7 +84,7 @@ func priorityFor(t RuleType) int {
 func ParseRules(input string) ([]Rule, error) {
 	var rules []Rule
 
-	for i, raw := range strings.Split(input, "\n") { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	for i, raw := range strings.Split(input, "\n") {
 		line := strings.TrimSpace(raw)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue

@@ -13,5 +13,8 @@ type SignerImageBuildToolRequest struct {
 	LocalImage    string
 	Containerfile string
 	Context       string
-	Title         string // org.opencontainers.image.title label; empty omits the label
+	Title         string   // org.opencontainers.image.title label; empty omits the label
+	Target        string   // multi-stage target stage; empty builds the final stage
+	BuildArgs     []string // KEY=VALUE build arguments
+	Labels        []string // key=value labels beside the source, revision and title
 }

@@ -17,9 +17,11 @@ func (a *Adapter) ExportLayoutFilesystem(ctx context.Context, directory string) 
 	if _, err := a.InspectLayout(ctx, directory); err != nil {
 		return nil, err
 	}
+
 	image, err := layoutImage(directory)
 	if err != nil {
 		return nil, err
 	}
+
 	return mutate.Extract(image), nil
 }

@@ -51,6 +51,8 @@ func TestDecodeConfigPlan_DuplicateConsumedMembers(t *testing.T) {
 			{"equal", tc.first, tc.first}, {"forward", tc.first, tc.second}, {"reverse", tc.second, tc.first},
 		} {
 			t.Run(tc.path+"/"+pair.name, func(t *testing.T) {
+				t.Parallel()
+
 				raw := tc.prefix + pair.first + "," + pair.second + tc.suffix
 				require.True(t, json.Valid([]byte(raw)), raw)
 				plan, err := pipeline.DecodeConfigPlan(raw)
@@ -67,6 +69,8 @@ func TestDecodeConfigPlan_EveryProjection(t *testing.T) {
 
 	for _, group := range []string{"all", "maven", "npm", "gradle", "gradle_android", "xcode_ios", "python", "go", "cargo", "meta", "go_artifact_first", "go_container_first", "cargo_artifact_first", "cargo_container_first", "forge_packages", "maven_central", "google_play", "npmjs"} {
 		t.Run(group, func(t *testing.T) {
+			t.Parallel()
+
 			for _, pair := range []string{`[] , "` + strings.ToUpper(group) + `":[]`, `null , "` + group + `":[]`, `[] , "` + group + `":null`} {
 				_, err := pipeline.DecodeConfigPlan(`{"artifacts":{"` + group + `":` + pair + `}}`)
 				require.ErrorContains(t, err, "config-plan.artifacts."+group+" has duplicate consumed member")

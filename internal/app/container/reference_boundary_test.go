@@ -5,14 +5,15 @@ package container_test
 
 import (
 	"encoding/json"
-	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
-	"github.com/diggsweden/forge-ci/internal/domain/errs"
-	"github.com/stretchr/testify/require"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPushReferenceBoundary_RejectsUnsafeLocalNames(t *testing.T) {

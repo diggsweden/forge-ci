@@ -46,17 +46,17 @@ func (r *fakeCleanupRegistry) DeleteTag(_ context.Context, ref string) error {
 func TestCleanup_DeletesCandidateWhenFinalVerified(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
+	entry := candidateEntry()
 	reg := &fakeCleanupRegistry{digests: map[string]string{
-		e.FinalTag:     goodDigest, // promoted final serves the digest
-		e.CandidateTag: goodDigest,
+		entry.FinalTag:     goodDigest, // promoted final serves the digest
+		entry.CandidateTag: goodDigest,
 	}}
 
-	if result, err := imageledger.Cleanup(context.Background(), reg, []imageledger.Entry{e}, "v1.2.3"); err != nil || result.Deleted != 1 {
+	if result, err := imageledger.Cleanup(context.Background(), reg, []imageledger.Entry{entry}, "v1.2.3"); err != nil || result.Deleted != 1 {
 		t.Fatalf("cleanup failed: %v", err)
 	}
 
-	if !slices.Equal(reg.deleted, []string{e.CandidateTag}) {
+	if !slices.Equal(reg.deleted, []string{entry.CandidateTag}) {
 		t.Errorf("expected candidate deleted, got %v", reg.deleted)
 	}
 }
@@ -79,13 +79,13 @@ func TestCleanup_LeavesCandidateWhenFinalMissing(t *testing.T) {
 func TestCleanup_FailsWhenFinalDigestMismatches(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
+	entry := candidateEntry()
 	reg := &fakeCleanupRegistry{digests: map[string]string{
-		e.FinalTag:     otherDigest,
-		e.CandidateTag: goodDigest,
+		entry.FinalTag:     otherDigest,
+		entry.CandidateTag: goodDigest,
 	}}
 
-	if _, err := imageledger.Cleanup(context.Background(), reg, []imageledger.Entry{e}, "v1.2.3"); !errors.Is(err, errs.ErrValidation) {
+	if _, err := imageledger.Cleanup(context.Background(), reg, []imageledger.Entry{entry}, "v1.2.3"); !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("cleanup mismatch error = %v, want ErrValidation", err)
 	}
 
@@ -97,14 +97,14 @@ func TestCleanup_FailsWhenFinalDigestMismatches(t *testing.T) {
 func TestCleanup_LeavesCandidateWhenMovingTagMissing(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
-	e.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+	entry := candidateEntry()
+	entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
 	reg := &fakeCleanupRegistry{digests: map[string]string{
-		e.FinalTag:     goodDigest,
-		e.CandidateTag: goodDigest,
+		entry.FinalTag:     goodDigest,
+		entry.CandidateTag: goodDigest,
 	}}
 
-	if result, err := imageledger.Cleanup(context.Background(), reg, []imageledger.Entry{e}, "v1.2.3"); err != nil || result.Deleted != 0 {
+	if result, err := imageledger.Cleanup(context.Background(), reg, []imageledger.Entry{entry}, "v1.2.3"); err != nil || result.Deleted != 0 {
 		t.Fatalf("cleanup should preserve candidate when moving_tag is missing: %v", err)
 	}
 
@@ -112,12 +112,12 @@ func TestCleanup_LeavesCandidateWhenMovingTagMissing(t *testing.T) {
 		t.Errorf("candidate must be left in place when moving_tag is missing, got deleted=%v", reg.deleted)
 	}
 
-	reg.digests[e.MovingTag] = goodDigest
-	if result, err := imageledger.Cleanup(context.Background(), reg, []imageledger.Entry{e}, "v1.2.3"); err != nil || result.Deleted != 1 {
+	reg.digests[entry.MovingTag] = goodDigest
+	if result, err := imageledger.Cleanup(context.Background(), reg, []imageledger.Entry{entry}, "v1.2.3"); err != nil || result.Deleted != 1 {
 		t.Fatalf("cleanup with verified moving tag failed: %v", err)
 	}
 
-	if !slices.Equal(reg.deleted, []string{e.CandidateTag}) {
+	if !slices.Equal(reg.deleted, []string{entry.CandidateTag}) {
 		t.Errorf("expected candidate deleted after moving_tag verifies, got %v", reg.deleted)
 	}
 }
@@ -125,13 +125,13 @@ func TestCleanup_LeavesCandidateWhenMovingTagMissing(t *testing.T) {
 func TestCleanup_FailsWhenCandidateDigestMismatches(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
+	entry := candidateEntry()
 	reg := &fakeCleanupRegistry{digests: map[string]string{
-		e.FinalTag:     goodDigest,
-		e.CandidateTag: otherDigest,
+		entry.FinalTag:     goodDigest,
+		entry.CandidateTag: otherDigest,
 	}}
 
-	if _, err := imageledger.Cleanup(context.Background(), reg, []imageledger.Entry{e}, "v1.2.3"); !errors.Is(err, errs.ErrValidation) {
+	if _, err := imageledger.Cleanup(context.Background(), reg, []imageledger.Entry{entry}, "v1.2.3"); !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("cleanup mismatch error = %v, want ErrValidation", err)
 	}
 
@@ -143,15 +143,15 @@ func TestCleanup_FailsWhenCandidateDigestMismatches(t *testing.T) {
 func TestCleanup_FailsWhenMovingTagDigestMismatches(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
-	e.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+	entry := candidateEntry()
+	entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
 	reg := &fakeCleanupRegistry{digests: map[string]string{
-		e.FinalTag:     goodDigest,
-		e.CandidateTag: goodDigest,
-		e.MovingTag:    otherDigest,
+		entry.FinalTag:     goodDigest,
+		entry.CandidateTag: goodDigest,
+		entry.MovingTag:    otherDigest,
 	}}
 
-	if _, err := imageledger.Cleanup(context.Background(), reg, []imageledger.Entry{e}, "v1.2.3"); !errors.Is(err, errs.ErrValidation) {
+	if _, err := imageledger.Cleanup(context.Background(), reg, []imageledger.Entry{entry}, "v1.2.3"); !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("cleanup mismatch error = %v, want ErrValidation", err)
 	}
 
@@ -178,17 +178,17 @@ func TestCleanup_SkipsEntryWithoutCandidate(t *testing.T) {
 func TestCleanup_DoesNotDeleteSignatureArtifactsWhenFinalVerified(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
+	entry := candidateEntry()
 	reg := &fakeCleanupRegistry{digests: map[string]string{
-		e.FinalTag:     goodDigest,
-		e.CandidateTag: goodDigest,
+		entry.FinalTag:     goodDigest,
+		entry.CandidateTag: goodDigest,
 	}}
 
-	if result, err := imageledger.Cleanup(context.Background(), reg, []imageledger.Entry{e}, "v1.2.3"); err != nil || result.Deleted != 1 {
+	if result, err := imageledger.Cleanup(context.Background(), reg, []imageledger.Entry{entry}, "v1.2.3"); err != nil || result.Deleted != 1 {
 		t.Fatalf("cleanup failed: %v", err)
 	}
 
-	if !slices.Equal(reg.deleted, []string{e.CandidateTag}) {
+	if !slices.Equal(reg.deleted, []string{entry.CandidateTag}) {
 		t.Errorf("cleanup should delete only the staging tag, not sha256-*.sig/.att package versions; deleted=%v", reg.deleted)
 	}
 }
@@ -243,6 +243,7 @@ func TestCleanup_VisitsEveryEntry(t *testing.T) {
 // sibling tag, the way a manifest-level delete takes every name of the digest.
 type droppingRegistry struct {
 	fakeCleanupRegistry
+
 	alsoDrops string
 }
 
@@ -264,21 +265,21 @@ func (r *droppingRegistry) DeleteTag(ctx context.Context, ref string) error {
 func TestCleanup_RerunDeletesNothingAndADisturbingDeleteIsReported(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
-	e.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+	entry := candidateEntry()
+	entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
 
-	rerun := &fakeCleanupRegistry{digests: map[string]string{e.FinalTag: goodDigest, e.MovingTag: goodDigest}}
-	if result, err := imageledger.Cleanup(context.Background(), rerun, []imageledger.Entry{e}, "v1.2.3"); err != nil || result.Deleted != 0 || len(rerun.deleted) != 0 {
+	rerun := &fakeCleanupRegistry{digests: map[string]string{entry.FinalTag: goodDigest, entry.MovingTag: goodDigest}}
+	if result, err := imageledger.Cleanup(context.Background(), rerun, []imageledger.Entry{entry}, "v1.2.3"); err != nil || result.Deleted != 0 || len(rerun.deleted) != 0 {
 		t.Fatalf("a rerun with the candidate already gone: err=%v deleted=%v, want nothing", err, rerun.deleted)
 	}
 
-	for _, disturbed := range []string{e.FinalTag, e.MovingTag} {
+	for _, disturbed := range []string{entry.FinalTag, entry.MovingTag} {
 		reg := &droppingRegistry{
-			fakeCleanupRegistry: fakeCleanupRegistry{digests: map[string]string{e.FinalTag: goodDigest, e.MovingTag: goodDigest, e.CandidateTag: goodDigest}},
-			alsoDrops:           disturbed,
+			digests:   map[string]string{entry.FinalTag: goodDigest, entry.MovingTag: goodDigest, entry.CandidateTag: goodDigest},
+			alsoDrops: disturbed,
 		}
 
-		_, err := imageledger.Cleanup(context.Background(), reg, []imageledger.Entry{e}, "v1.2.3")
+		_, err := imageledger.Cleanup(context.Background(), reg, []imageledger.Entry{entry}, "v1.2.3")
 		if err == nil || !strings.Contains(err.Error(), "after candidate cleanup") || !strings.Contains(err.Error(), disturbed) {
 			t.Errorf("a delete that dropped %s: err = %v, want the post-delete refusal naming it", disturbed, err)
 		}
@@ -290,14 +291,14 @@ func TestCleanup_RerunDeletesNothingAndADisturbingDeleteIsReported(t *testing.T)
 func TestCleanup_KeepsWhatTheRegistryCannotDelete(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
+	entry := candidateEntry()
 	reg := &fakeCleanupRegistry{digests: map[string]string{
-		e.FinalTag:     goodDigest,
-		e.CandidateTag: goodDigest,
+		entry.FinalTag:     goodDigest,
+		entry.CandidateTag: goodDigest,
 	}, delErr: errs.ErrUnsupported}
 
-	result, err := imageledger.Cleanup(context.Background(), reg, []imageledger.Entry{e}, "v1.2.3")
-	if err != nil || result.Deleted != 0 || len(result.Left) != 1 || result.Left[0] != e.CandidateTag {
+	result, err := imageledger.Cleanup(context.Background(), reg, []imageledger.Entry{entry}, "v1.2.3")
+	if err != nil || result.Deleted != 0 || len(result.Left) != 1 || result.Left[0] != entry.CandidateTag {
 		t.Fatalf("Cleanup = %+v, %v; want the candidate kept and reported", result, err)
 	}
 }

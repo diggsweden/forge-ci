@@ -5,7 +5,10 @@
   "description": "Declarative release plan for a repository. See docs/artifacts-reference.md.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["artifacts"],
+  "anyOf": [
+    { "required": ["artifacts"] },
+    { "required": ["containers"], "properties": { "containers": { "minItems": 1 } } }
+  ],
   "properties": {
     "artifacts": {
       "type": "array",
@@ -119,6 +122,16 @@
         "platforms": {
           "type": "string",
           "description": "Comma-separated platform list (e.g. linux/amd64,linux/arm64)."
+        },
+        "image-name": {
+          "type": "string",
+          "pattern": "^([a-z0-9.-]+(:[0-9]+)?/)?[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*$",
+          "description": "Image repository in place of the one derived from the repository and name: a path under the registry (owner/app) or a full repository with its own registry. Containers that share one are tag variants and must differ by tag-suffix."
+        },
+        "tag-suffix": {
+          "type": "string",
+          "pattern": "^-[a-z0-9]+([._-][a-z0-9]+)*$",
+          "description": "Suffix after the release tag, e.g. -distroless for v1.2.3-distroless. Default: none."
         },
         "enable-slsa": {
           "type": "boolean",

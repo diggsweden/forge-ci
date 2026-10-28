@@ -37,7 +37,7 @@ type ValidateArtifactsInput struct {
 // the purpose of separate build steps).
 //
 //nolint:cyclop // validates each presence/exclusivity rule independently.
-func ValidateArtifacts(w io.Writer, annot output.Annotator, in ValidateArtifactsInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func ValidateArtifacts(out io.Writer, annot output.Annotator, in ValidateArtifactsInput) error {
 	if in.ProjectType == "" || in.ArtifactDir == "" {
 		return fmt.Errorf("usage: validate-artifacts <project-type> <artifact-dir> [containerfile-path]: %w", errs.ErrUsage)
 	}
@@ -104,9 +104,9 @@ func ValidateArtifacts(w io.Writer, annot output.Annotator, in ValidateArtifacts
 	if len(hits) == 0 {
 		annot.Errorf("No %s artifacts found in %s/", typeLabel, in.ArtifactDir)
 
-		_, _ = fmt.Fprintf(w, "Expected %s in %s/ — the upstream build job should have uploaded them.\n", expectLabel, in.ArtifactDir)
-		_, _ = fmt.Fprintln(w, "If this container does not actually depend on this ecosystem's artifacts,")
-		_, _ = fmt.Fprintln(w, "drop the matching `from:` entry in artifacts.yml so the verify step is skipped.")
+		_, _ = fmt.Fprintf(out, "Expected %s in %s/ — the upstream build job should have uploaded them.\n", expectLabel, in.ArtifactDir)
+		_, _ = fmt.Fprintln(out, "If this container does not actually depend on this ecosystem's artifacts,")
+		_, _ = fmt.Fprintln(out, "drop the matching `from:` entry in artifacts.yml so the verify step is skipped.")
 
 		return fmt.Errorf("no %s artifacts in %s: %w", typeLabel, in.ArtifactDir, errs.ErrValidation)
 	}
@@ -126,16 +126,16 @@ func ValidateArtifacts(w io.Writer, annot output.Annotator, in ValidateArtifacts
 		sizes[index] = info.Size()
 	}
 
-	_, _ = fmt.Fprintf(w, "%s %s artifacts found:\n", clicolor.Check(w), typeLabel)
+	_, _ = fmt.Fprintf(out, "%s %s artifacts found:\n", clicolor.Check(out), typeLabel)
 
 	var largest int64
 
-	for index, h := range hits { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	for index, h := range hits {
 		size := sizes[index]
 
 		largest = max(largest, size)
 
-		_, _ = fmt.Fprintf(w, "  %10d  %s\n", size, h)
+		_, _ = fmt.Fprintf(out, "  %10d  %s\n", size, h)
 	}
 
 	// Every match is zero bytes. This verb exists so a container is never
@@ -148,19 +148,19 @@ func ValidateArtifacts(w io.Writer, annot output.Annotator, in ValidateArtifacts
 	if largest == 0 {
 		annot.Errorf("All %s artifacts in %s/ are empty (0 bytes)", typeLabel, in.ArtifactDir)
 
-		_, _ = fmt.Fprintf(w, "Expected %s with content — the upstream build job uploaded %d empty file(s).\n", expectLabel, len(hits))
+		_, _ = fmt.Fprintf(out, "Expected %s with content — the upstream build job uploaded %d empty file(s).\n", expectLabel, len(hits))
 
 		return fmt.Errorf("all %s artifacts in %s are empty: %w", typeLabel, in.ArtifactDir, errs.ErrValidation)
 	}
 
-	checkContainerfileRebuilds(cf, w, annot)
+	checkContainerfileRebuilds(cf, out, annot)
 
 	return nil
 }
 
 // checkContainerfileRebuilds reads cf and emits an advisory warning
 // when it appears to rebuild from source.
-func checkContainerfileRebuilds(cf string, w io.Writer, annot output.Annotator) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func checkContainerfileRebuilds(cf string, out io.Writer, annot output.Annotator) {
 	body, err := os.ReadFile(cf) //nolint:gosec // cf is a CLI-flag path.
 	if err != nil {
 		return // file missing → silently skip
@@ -172,9 +172,9 @@ func checkContainerfileRebuilds(cf string, w io.Writer, annot output.Annotator) 
 
 	annot.Warningf("Containerfile rebuilds from source - downloaded artifacts may be ignored")
 
-	_, _ = fmt.Fprintln(w, "This means the container build will NOT use pre-built artifacts, defeating the purpose of separate build steps.")
-	_, _ = fmt.Fprintln(w, "Consider updating Containerfile to COPY pre-built artifacts instead of rebuilding.")
-	_, _ = fmt.Fprintf(w, "See: %s\n", cf)
+	_, _ = fmt.Fprintln(out, "This means the container build will NOT use pre-built artifacts, defeating the purpose of separate build steps.")
+	_, _ = fmt.Fprintln(out, "Consider updating Containerfile to COPY pre-built artifacts instead of rebuilding.")
+	_, _ = fmt.Fprintf(out, "See: %s\n", cf)
 }
 
 // listMatching walks the checked directory handle without following links.

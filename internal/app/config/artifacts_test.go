@@ -130,13 +130,106 @@ artifacts:
 	}
 }
 
+// A repository that builds its binaries with its own tooling declares only
+// the images it releases.
+func TestEmitReleaseImagesPlan_ContainersWithoutArtifacts(t *testing.T) {
+	t.Parallel()
+	path := writeYAML(t, "containers:\n  - name: app\n")
+	sink := fakeoutputsink.New(t)
+
+	plan, err := appconfig.EmitReleaseImagesPlan(context.Background(), sink, output.Annotator{}, appconfig.EmitReleaseImagesPlanInput{
+		Config: appconfig.EmitConfigPlanInput{Path: path},
+		Images: pipeline.ReleaseImagesInput{ImageRepository: "ghcr.io/acme/app", Repository: "acme/app", ReleaseTag: "v1.2.3"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(plan.Images) != 1 || plan.Images[0].ImageRepository != "ghcr.io/acme/app" || !plan.Images[0].Scan {
+		t.Fatalf("images = %+v, want one scanned ghcr.io/acme/app", plan.Images)
+	}
+
+	if sink.Single("images") == "" || sink.Single("builds") == "" {
+		t.Fatalf("outputs = %v, want builds and images", sink.Keys())
+	}
+}
+
+func TestEmitReleaseImagesPlan_ResolvedPolicyUsesTheSameOutputContract(t *testing.T) {
+	t.Parallel()
+
+	in := pipeline.ReleaseImagesInput{ImageRepository: "ghcr.io/acme/app", Repository: "acme/app", ReleaseTag: "v1.2.3"}
+	want, err := pipeline.PlanReleaseImages([]pipeline.PlannedContainer{{
+		Name: "app", ContainerFile: "Containerfile", Context: ".", Platforms: "linux/amd64", EnableScan: true,
+	}}, in)
+	require.NoError(t, err)
+	body, err := json.Marshal(want)
+	require.NoError(t, err)
+	sink := fakeoutputsink.New(t)
+	got, err := appconfig.EmitReleaseImagesPlan(t.Context(), sink, output.Annotator{}, appconfig.EmitReleaseImagesPlanInput{
+		Config: appconfig.EmitConfigPlanInput{Path: "not-read.yml", FS: fstest.MapFS{}},
+		Images: in, ResolvedPlan: string(body),
+	})
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+	require.NotEmpty(t, sink.Single("builds"))
+	require.NotEmpty(t, sink.Single("images"))
+
+	invalid := fakeoutputsink.New(t)
+	_, err = appconfig.EmitReleaseImagesPlan(t.Context(), invalid, output.Annotator{}, appconfig.EmitReleaseImagesPlanInput{
+		Images: in, ResolvedPlan: strings.Replace(string(body), "ghcr.io/acme/app", "ghcr.io/other/app", 1),
+	})
+	require.Error(t, err)
+	require.Empty(t, invalid.Keys(), "a refused policy must emit no partial matrix")
+
+	in.ReleasePlatforms = "linux/arm64"
+	invalid = fakeoutputsink.New(t)
+	_, err = appconfig.EmitReleaseImagesPlan(t.Context(), invalid, output.Annotator{}, appconfig.EmitReleaseImagesPlanInput{
+		Images: in, ResolvedPlan: string(body),
+	})
+	require.Error(t, err, "a frozen policy must not ignore the operator's platform selection")
+	require.Empty(t, invalid.Keys())
+}
+
+// Without an artifacts.yml the repository releases its own image from the
+// root Containerfile; a file the caller named must exist, and without a
+// Containerfile there is no image to default to.
+func TestEmitReleaseImagesPlan_DefaultImageWithoutArtifactsYML(t *testing.T) {
+	t.Parallel()
+
+	images := pipeline.ReleaseImagesInput{ImageRepository: "ghcr.io/acme/app", Repository: "Acme/App", ReleaseTag: "v1.2.3"}
+	withContainerfile := fstest.MapFS{"Containerfile": {Data: []byte("FROM scratch\n")}}
+
+	plan, err := appconfig.EmitReleaseImagesPlan(context.Background(), fakeoutputsink.New(t), output.Annotator{}, appconfig.EmitReleaseImagesPlanInput{
+		Config:            appconfig.EmitConfigPlanInput{Path: ".forge-ci/artifacts.yml", FS: withContainerfile},
+		DefaultWhenAbsent: true,
+		Images:            images,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(plan.Builds) != 1 || plan.Builds[0].ContainerFile != "Containerfile" || plan.Builds[0].Platform != "linux/amd64" ||
+		len(plan.Images) != 1 || plan.Images[0].ImageRepository != "ghcr.io/acme/app" || plan.Images[0].FinalTagName != "v1.2.3" || !plan.Images[0].Scan {
+		t.Fatalf("plan = %+v, want the scanned linux/amd64 image ghcr.io/acme/app:v1.2.3 from ./Containerfile", plan)
+	}
+
+	for name, in := range map[string]appconfig.EmitReleaseImagesPlanInput{
+		"named file missing": {Config: appconfig.EmitConfigPlanInput{Path: "images.yml", FS: withContainerfile}, Images: images},
+		"no Containerfile":   {Config: appconfig.EmitConfigPlanInput{Path: ".forge-ci/artifacts.yml", FS: fstest.MapFS{}}, DefaultWhenAbsent: true, Images: images},
+	} {
+		if _, err := appconfig.EmitReleaseImagesPlan(context.Background(), fakeoutputsink.New(t), output.Annotator{}, in); !errors.Is(err, errs.ErrMissingInput) {
+			t.Errorf("%s: err = %v, want ErrMissingInput", name, err)
+		}
+	}
+}
+
 func TestEmitConfigPlan_EmptyArtifactsErrors(t *testing.T) {
 	t.Parallel()
 	path := writeYAML(t, "artifacts: []\n")
 	sink := fakeoutputsink.New(t)
 
 	err := appconfig.EmitConfigPlan(context.Background(), sink, nil, &bytes.Buffer{}, output.Annotator{}, appconfig.EmitConfigPlanInput{Path: path})
-	if !errors.Is(err, errs.ErrInvalidConfig) || !strings.Contains(err.Error(), "no artifacts found") {
+	if !errors.Is(err, errs.ErrInvalidConfig) || !strings.Contains(err.Error(), "no artifacts or containers found") {
 		t.Fatalf("err = %v, want ErrInvalidConfig naming the empty artifact list", err)
 	}
 
@@ -270,20 +363,20 @@ containers:
 		t.Fatalf("got %d containers", len(plan.Containers.All))
 	}
 
-	c := plan.Containers.All[0]
-	if !slices.Equal(c.ArtifactTypes, []projecttype.Type{projecttype.Maven, projecttype.NPM}) {
-		t.Fatalf("derived types=%v", c.ArtifactTypes)
+	plannedContainer := plan.Containers.All[0]
+	if !slices.Equal(plannedContainer.ArtifactTypes, []projecttype.Type{projecttype.Maven, projecttype.NPM}) {
+		t.Fatalf("derived types=%v", plannedContainer.ArtifactTypes)
 	}
 
-	if c.Name != "my-app" {
-		t.Errorf("name = %v", c.Name)
+	if plannedContainer.Name != "my-app" {
+		t.Errorf("name = %v", plannedContainer.Name)
 	}
 
-	if !c.EnableAnalyzedContainerSBOM {
+	if !plannedContainer.EnableAnalyzedContainerSBOM {
 		t.Error("enable-analyzed-container-sbom = false, want true (an artifact asked for all SBOMs)")
 	}
 
-	if got := c.BuildArgsString; got != "BAZ=qux\nFOO=bar" {
+	if got := plannedContainer.BuildArgsString; got != "BAZ=qux\nFOO=bar" {
 		t.Errorf("build-args-string = %v", got)
 	}
 }
@@ -644,20 +737,20 @@ containers:
 		t.Fatalf("got %d containers", len(plan.Containers.All))
 	}
 
-	c := plan.Containers.All[0]
-	if c.Target != "runtime" {
-		t.Errorf("target = %v", c.Target)
+	plannedContainer := plan.Containers.All[0]
+	if plannedContainer.Target != "runtime" {
+		t.Errorf("target = %v", plannedContainer.Target)
 	}
 
-	if c.ExtractBinaryTarget != "export-binary" {
-		t.Errorf("extract_binary_target = %v", c.ExtractBinaryTarget)
+	if plannedContainer.ExtractBinaryTarget != "export-binary" {
+		t.Errorf("extract_binary_target = %v", plannedContainer.ExtractBinaryTarget)
 	}
 
-	if len(c.ExtractBinaryNames) != 2 || c.ExtractBinaryNames[0] != "hsm-worker" || c.ExtractBinaryNames[1] != "digg-hsm-keytool" {
-		t.Fatalf("extract_binary_names = %v", c.ExtractBinaryNames)
+	if len(plannedContainer.ExtractBinaryNames) != 2 || plannedContainer.ExtractBinaryNames[0] != "hsm-worker" || plannedContainer.ExtractBinaryNames[1] != "digg-hsm-keytool" {
+		t.Fatalf("extract_binary_names = %v", plannedContainer.ExtractBinaryNames)
 	}
 
-	if got := c.BuildArgsString; got != "RUST_VERSION=1.94\nSERVICE=hsm-worker" {
+	if got := plannedContainer.BuildArgsString; got != "RUST_VERSION=1.94\nSERVICE=hsm-worker" {
 		t.Errorf("build-args-string = %v", got)
 	}
 }

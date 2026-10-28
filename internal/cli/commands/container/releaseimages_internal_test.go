@@ -17,7 +17,6 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
-	"github.com/diggsweden/forge-ci/internal/cli/regflags"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
 	"github.com/diggsweden/forge-ci/internal/runcontext"
@@ -35,7 +34,7 @@ func TestReleaseImagesGroupExposesBoundaryCommands(t *testing.T) {
 		require.Empty(t, cmd.Aliases)
 	}
 
-	require.ElementsMatch(t, []string{"import", "sign", "validate", "promote", "rollback", "cleanup"}, found)
+	require.ElementsMatch(t, []string{"plan", "import", "sign", "validate", "promote", "rollback", "cleanup"}, found)
 }
 
 // Only the verbs that act on every ledger entry can be told that a release
@@ -85,7 +84,8 @@ func TestReleaseImagesAllowMissingLedger_SkipsOnlyAnAbsentDefaultLedger(t *testi
 			want         error // nil: the command reports no ledger and succeeds
 			wantMessage  string
 			// cleanupLogsIn marks a ledger cleanup admits with no entries: it goes
-			// on to the registry login and stops at the missing username.
+			// on to the registry login, as the repository owner on the forge's
+			// registry, and stops at the missing password file.
 			cleanupLogsIn bool
 		}{
 			{name: "default absent", ledger: absent, want: os.ErrNotExist},
@@ -131,7 +131,7 @@ func TestReleaseImagesAllowMissingLedger_SkipsOnlyAnAbsentDefaultLedger(t *testi
 
 				want, wantMessage := tc.want, tc.wantMessage
 				if verb == subCmdCleanup && tc.cleanupLogsIn {
-					want, wantMessage = errs.ErrUsage, regflags.CredUsername
+					want, wantMessage = os.ErrNotExist, "no-such-password-file"
 				}
 
 				if want != nil {
@@ -184,15 +184,15 @@ func TestReleaseImagesTagDeleter_IsConfiguredFromTheCommandLineOnEveryForge(t *t
 		},
 		{
 			forge:     provider.ForgeGitLab,
-			envTokens: []string{"GITLAB_TOKEN", "CI_JOB_TOKEN"}, envServers: []string{"CI_SERVER_URL"}, envRepositories: []string{"CI_PROJECT_PATH"}, //nolint:gosec // G101: env var names, not values.
+			envTokens: []string{"GITLAB_TOKEN", "CI_JOB_TOKEN"}, envServers: []string{"CI_SERVER_URL"}, envRepositories: []string{"CI_PROJECT_PATH"},
 			authHeader: "Private-Token", wantAuth: givenToken,
-			respond: func(w http.ResponseWriter, r *http.Request) {
+			respond: func(response http.ResponseWriter, r *http.Request) {
 				body := `{}`
 				if r.Method == http.MethodGet {
 					body = `[{"id":42,"path":"owner/app"}]`
 				}
 
-				_, _ = w.Write([]byte(body))
+				_, _ = response.Write([]byte(body))
 			},
 			wantRequests: []string{
 				"GET /api/v4/projects/owner%2Fapp/registry/repositories",
@@ -209,18 +209,18 @@ func TestReleaseImagesTagDeleter_IsConfiguredFromTheCommandLineOnEveryForge(t *t
 				requests []string
 			)
 
-			given := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			given := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 				mu.Lock()
 
-				requests = append(requests, r.Method+" "+r.URL.EscapedPath())
+				requests = append(requests, request.Method+" "+request.URL.EscapedPath())
 
 				mu.Unlock()
 
-				if got := r.Header.Get(tc.authHeader); got != tc.wantAuth {
+				if got := request.Header.Get(tc.authHeader); got != tc.wantAuth {
 					t.Errorf("%s header = %q, want %q", tc.authHeader, got, tc.wantAuth)
 				}
 
-				tc.respond(w, r)
+				tc.respond(response, request)
 			}))
 			t.Cleanup(given.Close)
 
@@ -463,15 +463,15 @@ func runReleaseImagesVerb(t *testing.T, env *testenv.Env, verb string, extra ...
 	require.NoError(t, err)
 
 	stderr := os.Stderr
-	os.Stderr = stderrFile //nolint:reassign // the command reports on the process stream; this serial test captures it.
+	os.Stderr = stderrFile
 
 	t.Cleanup(func() {
-		os.Stderr = stderr //nolint:reassign // restore the process stream even when the run panics.
+		os.Stderr = stderr
 	})
 
 	runErr := command.Run(t.Context(), append(args, extra...))
 
-	os.Stderr = stderr //nolint:reassign // restore before asserting so failures are visible.
+	os.Stderr = stderr
 
 	require.NoError(t, stderrFile.Close())
 
@@ -497,22 +497,68 @@ func TestReleaseImages_RefusesProviderTokenAndRegistryPasswordBothFromStdin(t *t
 	}
 }
 
-// Images on an external registry, such as GHCR, are not the forge's packages:
-// the deleter is that registry's, through the login's auth file, and no
-// provider token is read.
-func TestReleaseImagesTagDeleter_ExternalRegistryUsesTheImagesRegistry(t *testing.T) {
+// Images on another registry are not the forge's packages: the deleter is
+// that registry's, through the login's auth file, and no provider token is
+// read.
+func TestReleaseImagesTagDeleter_AnotherRegistryUsesTheImagesRegistry(t *testing.T) {
 	t.Parallel()
 
 	deleter, err := releaseImagesTagDeleter(&cli.Command{}, releaseImagesCommon{
 		ServerURL:               "https://forge.example",
+		Registry:                "registry.example",
 		Repository:              "owner/app",
-		ExpectedImageRepository: "ghcr.io/owner/app",
-		External:                true,
+		RegistryUsername:        "registry-user",
+		ExpectedImageRepository: "registry.example/owner/app",
+		Foreign:                 true,
 	}, "/tmp/auth.json")
 	require.NoError(t, err)
 
 	_, isAdapter := deleter.(*ociregistry.Adapter)
 	require.True(t, isAdapter, "deleter = %T, want the plain OCI adapter", deleter)
+}
+
+// Where the images are is derived from the repository's host: the forge's
+// own registry is the server's host, or --registry for a forge that serves it
+// apart (GitLab). The login always goes to the repository's host.
+func TestResolveImageRegistry_DerivesTheForeignRegistryFromTheHost(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name, forgeRegistry, serverHost, repository string
+		want                                        imageRegistry
+	}{
+		{name: "forge's own", serverHost: "forge.example:8443", repository: "forge.example:8443/owner/app", want: imageRegistry{Host: "forge.example:8443"}},
+		// Host names are case-insensitive; the default repository is lowercased.
+		{name: "forge's own, server URL in capitals", serverHost: "Forge.Example", repository: "forge.example/owner/app", want: imageRegistry{Host: "forge.example"}},
+		{name: "GHCR", serverHost: "forge.example", repository: "ghcr.io/owner/app", want: imageRegistry{Host: "ghcr.io", Foreign: true}},
+		{name: "the forge's host on another port", serverHost: "forge.example:8443", repository: "forge.example/owner/app", want: imageRegistry{Host: "forge.example", Foreign: true}},
+		{name: "GitLab's registry", forgeRegistry: "registry.gitlab.example", serverHost: "gitlab.example", repository: "registry.gitlab.example/group/app", want: imageRegistry{Host: "registry.gitlab.example"}},
+		{name: "GitLab beside GHCR", forgeRegistry: "registry.gitlab.example", serverHost: "gitlab.example", repository: "ghcr.io/owner/app", want: imageRegistry{Host: "ghcr.io", Foreign: true}},
+	} {
+		got, err := resolveImageRegistry(tc.forgeRegistry, tc.serverHost, tc.repository)
+		require.NoError(t, err, tc.name)
+		require.Equal(t, tc.want, got, tc.name)
+	}
+}
+
+// On the forge's own registry the token logs in as the repository owner when
+// no user is named; another registry has its own users, so there the user
+// must be named, and the refusal says which input names it.
+func TestRegistryLoginUser_DefaultsToTheOwnerOnTheForgeOnly(t *testing.T) {
+	t.Parallel()
+
+	got, err := registryLoginUser("", "owner/app", imageRegistry{Host: "forge.example"})
+	require.NoError(t, err)
+	require.Equal(t, "owner", got)
+
+	got, err = registryLoginUser("someone", "owner/app", imageRegistry{Host: "ghcr.io", Foreign: true})
+	require.NoError(t, err)
+	require.Equal(t, "someone", got)
+
+	_, err = registryLoginUser("", "owner/app", imageRegistry{Host: "ghcr.io", Foreign: true})
+	require.ErrorIs(t, err, errs.ErrUsage)
+	require.ErrorContains(t, err, "registry-user")
+	require.ErrorContains(t, err, "ghcr.io")
 }
 
 // A login names its registry by host, URL or an image repository on it: a

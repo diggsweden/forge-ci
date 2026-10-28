@@ -19,7 +19,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//nolint:paralleltest // replaces and restores the library transport; every request stays in memory.
 func TestCopyTag_TaggedDigestIgnoresAMovedTag(t *testing.T) {
 	const (
 		repository = "registry.invalid:5000/nested/team/app"

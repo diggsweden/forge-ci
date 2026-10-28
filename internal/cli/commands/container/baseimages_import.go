@@ -25,11 +25,11 @@ import (
 func baseImagesImportCmd() *cli.Command {
 	return &cli.Command{
 		Name:  subCmdImport,
-		Usage: "copy unsigned base digests from staging to a separate source-owned publication repository",
+		Usage: "copy unsigned base digests from staging to a separate publication repository",
 		Description: "Admits a nonempty base-only ledger and its content-addressed tags before login. " +
 			"Copies only immutable image digests to staging candidates, without signatures or final tags. " +
 			"Preserves base identities, SBOM pins and lineage; conflicting candidates refuse. " +
-			"The expected publication repository must be on the login registry under the source owner.",
+			"The registry login goes to the expected publication repository's host.",
 		Flags: append(baseImagesLocationFlags(),
 			baseImagesRegistryFlag(),
 			&cli.StringFlag{Name: flagLedger, Required: true, Usage: "unsigned source base-image ledger"},
@@ -45,10 +45,6 @@ func baseImagesImportCmd() *cli.Command {
 func importBaseImages(ctx context.Context, cmd *cli.Command) error {
 	common, err := baseImagesLocationFromCmd(cmd, true)
 	if err != nil {
-		return err
-	}
-
-	if err = common.requireSourceOwnedRepository(); err != nil {
 		return err
 	}
 

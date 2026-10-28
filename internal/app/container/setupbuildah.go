@@ -143,7 +143,7 @@ func setupBuildahPackages(extra string) ([]string, error) {
 	packages := []string{buildahBinary, fuseOverlayfsBinary}
 	seen := map[string]bool{buildahBinary: true, fuseOverlayfsBinary: true}
 
-	for _, packageName := range strings.Fields(strings.ReplaceAll(extra, "\n", " ")) {
+	for packageName := range strings.FieldsSeq(strings.ReplaceAll(extra, "\n", " ")) {
 		if !aptPackageRE.MatchString(packageName) {
 			return nil, fmt.Errorf("unsafe apt package name: %s: %w", packageName, errs.ErrUsage)
 		}
@@ -353,10 +353,26 @@ func configureBuildahStorage(ctx context.Context, tool BuildahSetupTool, out io.
 	}
 
 	if err := writeBuildahStorage(ctx, tool, out, paths, "vfs", probe); err != nil {
-		return "", err
+		return "", withUserNamespaceHint(err)
 	}
 
 	return "vfs", nil
+}
+
+// userNamespaceRefusal is what Buildah prints when the job's container may not
+// create a user namespace: a pool that shares its kernel between tenants
+// denies them, and rootless Buildah cannot run without one.
+const userNamespaceRefusal = "unshare(CLONE_NEWUSER): Operation not permitted"
+
+// withUserNamespaceHint names the runner, not the storage driver, as the
+// cause when every driver failed the same way, and the variables that move
+// the job or change its builder.
+func withUserNamespaceHint(err error) error {
+	if err == nil || !strings.Contains(err.Error(), userNamespaceRefusal) {
+		return err
+	}
+
+	return fmt.Errorf("%w\nthis runner denies user namespaces, which rootless Buildah needs; no storage driver can help. Run container-building jobs on a runner that permits them: CI_RUNNER_LABEL_CONTAINER selects it, and `forge-ci platform request-runner` can lend one; or build without them with CI_IMAGE_BUILDER=kaniko (docs/runners.md)", err)
 }
 
 func writeBuildahStorage(ctx context.Context, tool BuildahSetupTool, out io.Writer, paths buildahSetupPaths, driver string, probe bool) error {

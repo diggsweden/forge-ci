@@ -61,7 +61,7 @@ func (f *fakeBuildahSetupTool) ProbeBuild(_ context.Context, env []string, probe
 	f.probeCalls = append(f.probeCalls, driver)
 
 	if driver == "overlay" && f.failOverlayProbe {
-		return errors.New("simulated overlay probe failure") //nolint:err113 // test double error.
+		return errors.New("simulated overlay probe failure")
 	}
 
 	return nil
@@ -319,10 +319,10 @@ func storageDriverFromEnv(env []string) (string, error) {
 	}
 
 	if storageConf == "" {
-		return "", errors.New("missing CONTAINERS_STORAGE_CONF") //nolint:err113 // test double error.
+		return "", errors.New("missing CONTAINERS_STORAGE_CONF")
 	}
 
-	body, err := os.ReadFile(storageConf) //nolint:gosec // test-controlled path.
+	body, err := os.ReadFile(storageConf)
 	if err != nil {
 		return "", err
 	}
@@ -337,7 +337,7 @@ func storageDriverFromEnv(env []string) (string, error) {
 func readText(t *testing.T, path string) string {
 	t.Helper()
 
-	body, err := os.ReadFile(path) //nolint:gosec // test-controlled path.
+	body, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}

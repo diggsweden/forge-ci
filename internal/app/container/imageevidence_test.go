@@ -34,10 +34,10 @@ func (f *fakeImageEvidenceBuildah) ExportLocalImageToLayout(_ context.Context, i
 
 	f.layout = layoutDir
 	if f.fail {
-		return errors.New("buildah failed") //nolint:err113 // test double error.
+		return errors.New("buildah failed")
 	}
 
-	return os.WriteFile(filepath.Join(layoutDir, "index.json"), []byte("{}"), 0o600) //nolint:gosec,mnd // test fixture.
+	return os.WriteFile(filepath.Join(layoutDir, "index.json"), []byte("{}"), 0o600)
 }
 
 func (f *fakeImageEvidenceBuildah) ExportLocalManifestToLayout(_ context.Context, manifest, layoutDir string, _ io.Writer) error {
@@ -45,10 +45,10 @@ func (f *fakeImageEvidenceBuildah) ExportLocalManifestToLayout(_ context.Context
 
 	f.manifestLayout = layoutDir
 	if f.fail {
-		return errors.New("buildah failed") //nolint:err113 // test double error.
+		return errors.New("buildah failed")
 	}
 
-	return os.WriteFile(filepath.Join(layoutDir, "index.json"), []byte("{}"), 0o600) //nolint:gosec,mnd // test fixture.
+	return os.WriteFile(filepath.Join(layoutDir, "index.json"), []byte("{}"), 0o600)
 }
 
 type fakeImageEvidenceCopy struct {
@@ -69,19 +69,19 @@ type fakeImageEvidenceCopier struct {
 func (f *fakeImageEvidenceCopier) CopyOCILayoutToOCILayout(_ context.Context, sourceLayout, destLayout, osName, arch string) error {
 	f.localCopies = append(f.localCopies, fakeImageEvidenceCopy{sourceLayout: sourceLayout, destLayout: destLayout, osName: osName, arch: arch})
 	if f.fail {
-		return errors.New("copy failed") //nolint:err113 // test double error.
+		return errors.New("copy failed")
 	}
 
-	return os.WriteFile(filepath.Join(destLayout, "index.json"), []byte("{}"), 0o600) //nolint:gosec,mnd // test fixture.
+	return os.WriteFile(filepath.Join(destLayout, "index.json"), []byte("{}"), 0o600)
 }
 
 func (f *fakeImageEvidenceCopier) CopyDockerDigestToOCILayout(_ context.Context, ref, digest, destLayout, osName, arch string) error {
 	f.registryCopies = append(f.registryCopies, fakeImageEvidenceCopy{ref: ref, digest: digest, destLayout: destLayout, osName: osName, arch: arch})
 	if f.fail {
-		return errors.New("copy failed") //nolint:err113 // test double error.
+		return errors.New("copy failed")
 	}
 
-	return os.WriteFile(filepath.Join(destLayout, "index.json"), []byte("{}"), 0o600) //nolint:gosec,mnd // test fixture.
+	return os.WriteFile(filepath.Join(destLayout, "index.json"), []byte("{}"), 0o600)
 }
 
 type fakeImageEvidenceTrivy struct {
@@ -108,14 +108,14 @@ func (f *fakeImageEvidenceTrivy) RunInherit(_ context.Context, _, _ io.Writer, a
 		return code, nil
 	}
 
-	for i, arg := range args {
-		if arg == "--output" && i+1 < len(args) {
+	for index, arg := range args {
+		if arg == "--output" && index+1 < len(args) {
 			body := f.jsonBody
 			if body == "" {
 				body = `{"Results":[]}`
 			}
 
-			if err := os.WriteFile(args[i+1], []byte(body), 0o600); err != nil { //nolint:gosec,mnd // test fixture.
+			if err := os.WriteFile(args[index+1], []byte(body), 0o600); err != nil {
 				return 1, err
 			}
 		}
@@ -125,11 +125,12 @@ func (f *fakeImageEvidenceTrivy) RunInherit(_ context.Context, _, _ io.Writer, a
 }
 
 type fakeImageEvidenceSyft struct {
-	target   string // the last target, for single-platform tests
-	targets  []string
-	outputs  map[string]string
-	noOutput bool
-	jsonBody string
+	target     string // the last target, for single-platform tests
+	targets    []string
+	outputs    map[string]string
+	noOutput   bool
+	jsonBody   string
+	jsonBodies map[string]string
 }
 
 func (f *fakeImageEvidenceSyft) Generate(_ context.Context, target string, outputs map[string]string, _ io.Writer) error {
@@ -142,12 +143,16 @@ func (f *fakeImageEvidenceSyft) Generate(_ context.Context, target string, outpu
 	}
 
 	for _, path := range outputs {
-		body := f.jsonBody
+		body := f.jsonBodies[target]
+		if body == "" {
+			body = f.jsonBody
+		}
+
 		if body == "" {
 			body = `{"bomFormat":"CycloneDX","specVersion":"1.6","version":1}`
 		}
 
-		if err := os.WriteFile(path, []byte(body), 0o600); err != nil { //nolint:gosec,mnd // test fixture.
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 			return err
 		}
 	}
@@ -160,7 +165,7 @@ func TestImageEvidence_OCILayoutScansAndWritesOptionalSBOM(t *testing.T) {
 	work := t.TempDir()
 
 	layout := filepath.Join(work, "layout")
-	if err := os.Mkdir(layout, 0o755); err != nil { //nolint:gosec,mnd // test fixture.
+	if err := os.Mkdir(layout, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -242,6 +247,8 @@ func TestImageEvidence_ValidatesReportBeforePublication(t *testing.T) {
 		{"named-null", `{"ArtifactName":"image","Results":null}`, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			root := t.TempDir()
 
 			trivyPath, sbomPath := filepath.Join(root, "trivy.json"), filepath.Join(root, "sbom.json")
@@ -328,7 +335,7 @@ func TestImageEvidence_RejectsInvalidInputsBeforeTools(t *testing.T) {
 	work := t.TempDir()
 
 	layout := filepath.Join(work, "layout")
-	if err := os.Mkdir(layout, 0o755); err != nil { //nolint:gosec,mnd // test fixture.
+	if err := os.Mkdir(layout, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -345,6 +352,8 @@ func TestImageEvidence_RejectsInvalidInputsBeforeTools(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			buildah := &fakeImageEvidenceBuildah{}
 			copier := &fakeImageEvidenceCopier{}
 			trivy := &fakeImageEvidenceTrivy{}
@@ -390,6 +399,8 @@ func TestImageEvidence_ScansEachPlatformFromItsOwnLayout(t *testing.T) {
 	}
 
 	t.Run("exports the local manifest and does not reach for the registry", func(t *testing.T) {
+		t.Parallel()
+
 		if buildah.manifest != "localhost/example:candidate" || buildah.manifestLayout == "" {
 			t.Errorf("buildah manifest=%q layout=%q", buildah.manifest, buildah.manifestLayout)
 		}
@@ -400,14 +411,20 @@ func TestImageEvidence_ScansEachPlatformFromItsOwnLayout(t *testing.T) {
 	})
 
 	t.Run("splits the manifest into one layout per platform", func(t *testing.T) {
+		t.Parallel()
+
 		assertPlatformLayouts(t, buildah.manifestLayout, copier.localCopies)
 	})
 
 	t.Run("scans each platform from the layout made for it", func(t *testing.T) {
+		t.Parallel()
+
 		assertPerPlatformScans(t, trivy, syft, copier.localCopies, work)
 	})
 
 	t.Run("writes the evidence and removes every temporary layout", func(t *testing.T) {
+		t.Parallel()
+
 		assertEvidenceWrittenAndCleanedUp(t, buildah.manifestLayout, copier.localCopies, work)
 	})
 }
@@ -421,13 +438,13 @@ func assertPlatformLayouts(t *testing.T, manifestLayout string, copies []fakeIma
 		t.Fatalf("local copies = %d, want one per platform", len(copies))
 	}
 
-	for i, arch := range []string{"amd64", "arm64"} {
-		if copies[i].sourceLayout != manifestLayout {
-			t.Errorf("copy[%d] source = %q, want the exported manifest layout %q", i, copies[i].sourceLayout, manifestLayout)
+	for index, arch := range []string{"amd64", "arm64"} {
+		if copies[index].sourceLayout != manifestLayout {
+			t.Errorf("copy[%d] source = %q, want the exported manifest layout %q", index, copies[index].sourceLayout, manifestLayout)
 		}
 
-		if copies[i].osName != "linux" || copies[i].arch != arch {
-			t.Errorf("copy[%d] platform = %s/%s, want linux/%s", i, copies[i].osName, copies[i].arch, arch)
+		if copies[index].osName != "linux" || copies[index].arch != arch {
+			t.Errorf("copy[%d] platform = %s/%s, want linux/%s", index, copies[index].osName, copies[index].arch, arch)
 		}
 	}
 }
@@ -446,17 +463,17 @@ func assertPerPlatformScans(t *testing.T, trivy *fakeImageEvidenceTrivy, syft *f
 		t.Fatalf("syft targets = %v, want one per platform", syft.targets)
 	}
 
-	for i, arch := range []string{"amd64", "arm64"} {
-		layout := copies[i].destLayout
+	for index, arch := range []string{"amd64", "arm64"} {
+		layout := copies[index].destLayout
 
-		if got := trivyArg(t, trivy.calls[i], "--input"); got != layout {
+		if got := trivyArg(t, trivy.calls[index], "--input"); got != layout {
 			t.Errorf("trivy scanned %q for %s, want that platform's layout %q", got, arch, layout)
 		}
 
-		assertPrivateEvidenceOutput(t, trivyArg(t, trivy.calls[i], "--output"), filepath.Join(work, "trivy-"+arch+".json"))
+		assertPrivateEvidenceOutput(t, trivyArg(t, trivy.calls[index], "--output"), filepath.Join(work, "trivy-"+arch+".json"))
 
-		if want := "oci-dir:" + layout; syft.targets[i] != want {
-			t.Errorf("syft scanned %q for %s, want %q", syft.targets[i], arch, want)
+		if want := "oci-dir:" + layout; syft.targets[index] != want {
+			t.Errorf("syft scanned %q for %s, want %q", syft.targets[index], arch, want)
 		}
 	}
 }
@@ -507,7 +524,7 @@ func TestImageEvidence_MultiArchPrefersScanLayoutOverOtherSources(t *testing.T) 
 	work := t.TempDir()
 
 	scanLayout := filepath.Join(work, "scan-layout")
-	if err := os.Mkdir(scanLayout, 0o755); err != nil { //nolint:gosec,mnd // test fixture.
+	if err := os.Mkdir(scanLayout, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -651,7 +668,7 @@ func TestImageEvidence_RejectsInvalidMultiArchInputsBeforeTools(t *testing.T) {
 	work := t.TempDir()
 
 	layout := filepath.Join(work, "layout")
-	if err := os.Mkdir(layout, 0o755); err != nil { //nolint:gosec,mnd // test fixture.
+	if err := os.Mkdir(layout, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -672,6 +689,8 @@ func TestImageEvidence_RejectsInvalidMultiArchInputsBeforeTools(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			buildah := &fakeImageEvidenceBuildah{}
 			copier := &fakeImageEvidenceCopier{}
 			trivy := &fakeImageEvidenceTrivy{}

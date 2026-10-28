@@ -50,7 +50,7 @@ func ledgerAddCmd() *cli.Command {
 			&cli.StringFlag{Name: "moving-tag", Usage: "optional moving tag ref, e.g. forgejo.example.com/owner/repo:rust"},
 			&cli.StringFlag{Name: flagFlavor, Usage: "optional base-image flavour"},
 			&cli.BoolFlag{Name: "derive-candidate-tag", Sources: cli.EnvVars("LEDGER_DERIVE_CANDIDATE_TAG"), Usage: "derive --candidate-tag as <image>:staging-<final-tag-name>; mutually exclusive with explicit candidate tag flags"},
-			&cli.BoolFlag{Name: "default-sbom", Usage: "when --sbom is empty, use dist/image-sbom-<flavor|role>.cyclonedx.json"},
+			&cli.BoolFlag{Name: "default-sbom", Usage: "when --sbom is empty, use dist/image-sbom-<flavor|role>.cyclonedx.json; base images use premade-sboms/base-sbom-<flavor>.cyclonedx.json"},
 			&cli.StringFlag{Name: "candidate-tag-name", Usage: "optional staging tag name/portion combined with --image-name"},
 			&cli.StringFlag{Name: "candidate-tag", Usage: "optional staging tag ref (scoped to staging-<tag>); derived from --image-name when omitted"},
 			&cli.StringFlag{Name: "base-ref", Usage: "optional digest-pinned base image"},

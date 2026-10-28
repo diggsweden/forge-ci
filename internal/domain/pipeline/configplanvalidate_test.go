@@ -39,7 +39,7 @@ func TestConfigPlanInvariant_ProjectionMembership(t *testing.T) {
 				plan := invariantConfigPlan(t)
 				field := reflect.ValueOf(&plan.Artifacts).Elem().FieldByName(group.field)
 
-				items, ok := field.Interface().([]pipeline.PlannedArtifact)
+				items, ok := reflect.TypeAssert[[]pipeline.PlannedArtifact](field)
 				if !ok || len(items) == 0 && fault != "extra" {
 					t.Fatalf("invalid group fixture %s", group.field)
 				}

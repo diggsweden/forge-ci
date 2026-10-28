@@ -139,10 +139,12 @@ func validateIndexBOMPart(repository string, part IndexBOMPart) error {
 		return fmt.Errorf("native SBOM must be a CycloneDX JSON document: %w", errs.ErrMalformedInput)
 	}
 
-	return validatePublicBOMURL(part.URL)
+	return ValidatePublicBOMURL(part.URL)
 }
 
-func validatePublicBOMURL(value string) error {
+// ValidatePublicBOMURL admits a public evidence URL without embedded credentials.
+// It does not fetch the URL or authenticate the referenced document.
+func ValidatePublicBOMURL(value string) error {
 	public, err := url.Parse(value)
 	if err != nil || public.Scheme != "https" || public.Hostname() == "" || public.User != nil || public.RawQuery != "" || public.Fragment != "" || public.Opaque != "" {
 		return fmt.Errorf("native SBOM URL must be public HTTPS without credentials, query or fragment: %w", errs.ErrUsage)

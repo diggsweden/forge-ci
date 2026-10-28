@@ -29,11 +29,11 @@ func layoutExtractFilesCmd() *cli.Command {
 		Name: "extract-files", Usage: "copy selected executables from the retained image filesystem without rebuilding",
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "layout-dir", Required: true, Usage: "verified single-image OCI layout directory"},
-			&cli.StringFlag{Name: "output-dir", Required: true, Usage: "directory receiving unique executable basenames; existing files are never overwritten"},
+			&cli.StringFlag{Name: flagOutputDir, Required: true, Usage: "directory receiving unique executable basenames; existing files are never overwritten"},
 			&cli.StringFlag{Name: "paths", Required: true, Sources: cli.EnvVars("EXTRACT_BINARY_PATHS"), Usage: "comma/space-separated regular-file paths inside the image"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			return appcontainer.ExtractLayoutFiles(ctx, ociregistry.NewAnonymous(), os.Stderr, cmd.String("layout-dir"), cmd.String("output-dir"), listval.Tokens(cmd.String("paths")))
+			return appcontainer.ExtractLayoutFiles(ctx, ociregistry.NewAnonymous(), os.Stderr, cmd.String("layout-dir"), cmd.String(flagOutputDir), listval.Tokens(cmd.String("paths")))
 		},
 	}
 }

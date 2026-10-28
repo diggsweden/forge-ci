@@ -66,46 +66,46 @@ func TestValidate_Accepts(t *testing.T) {
 	}
 
 	// final_tag may be a suffixed scope of the release tag.
-	e := validEntry()
+	entry := validEntry()
 
-	e.FinalTag = "codeberg.org/itiquette/gommitlint:v1.2.3-amd64"
-	if err := e.Validate("v1.2.3"); err != nil {
+	entry.FinalTag = "codeberg.org/itiquette/gommitlint:v1.2.3-amd64"
+	if err := entry.Validate("v1.2.3"); err != nil {
 		t.Errorf("suffixed final_tag rejected: %v", err)
 	}
 
 	// candidate_tag scoped to staging-<release> is accepted.
-	e = validEntry()
+	entry = validEntry()
 
-	e.CandidateTag = "codeberg.org/itiquette/gommitlint:staging-v1.2.3"
-	if err := e.Validate("v1.2.3"); err != nil {
+	entry.CandidateTag = "codeberg.org/itiquette/gommitlint:staging-v1.2.3"
+	if err := entry.Validate("v1.2.3"); err != nil {
 		t.Errorf("valid candidate_tag rejected: %v", err)
 	}
 
 	// moving_tag is accepted when it is a stable pointer, not a staging or
 	// immutable release tag.
-	e = validEntry()
+	entry = validEntry()
 
-	e.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
-	if err := e.Validate("v1.2.3"); err != nil {
+	entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+	if err := entry.Validate("v1.2.3"); err != nil {
 		t.Errorf("valid moving_tag rejected: %v", err)
 	}
 
 	// The strict OCI parser accepts bracketed IPv6 registries, which the old
 	// hand-written host regex could not represent.
-	e = validEntry()
-	e.Ref = "[::1]:5000/itiquette/gommitlint@" + goodDigest
+	entry = validEntry()
+	entry.Ref = "[::1]:5000/itiquette/gommitlint@" + goodDigest
 
-	e.FinalTag = "[::1]:5000/itiquette/gommitlint:v1.2.3"
-	if err := e.Validate("v1.2.3"); err != nil {
+	entry.FinalTag = "[::1]:5000/itiquette/gommitlint:v1.2.3"
+	if err := entry.Validate("v1.2.3"); err != nil {
 		t.Errorf("IPv6 registry entry rejected: %v", err)
 	}
 
 	// Promotion journals retain the source tag while the digest keeps the
 	// reference immutable.
-	e = validEntry()
+	entry = validEntry()
 
-	e.Ref = "codeberg.org/itiquette/gommitlint:staging-v1.2.3@" + goodDigest
-	if err := e.Validate("v1.2.3"); err != nil {
+	entry.Ref = "codeberg.org/itiquette/gommitlint:staging-v1.2.3@" + goodDigest
+	if err := entry.Validate("v1.2.3"); err != nil {
 		t.Errorf("tagged digest reference rejected: %v", err)
 	}
 }
@@ -327,35 +327,35 @@ func TestValidate_BaseEntryRejections(t *testing.T) {
 
 	// The candidate discipline survives in base terms: the candidate must
 	// be the exact staging counterpart of the content-addressed final tag.
-	e := baseEntry()
-	e.CandidateTag = "codeberg.org/itiquette/nanolinter-base:staging-" + strings.Repeat("f", 64) + "-go"
+	entry := baseEntry()
+	entry.CandidateTag = "codeberg.org/itiquette/nanolinter-base:staging-" + strings.Repeat("f", 64) + "-go"
 
-	if err := e.Validate(""); !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "staging counterpart") {
+	if err := entry.Validate(""); !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "staging counterpart") {
 		t.Errorf("mismatched base candidate should fail, got %v", err)
 	}
 
-	e = baseEntry()
-	e.MovingTag = "codeberg.org/itiquette/nanolinter-base:staging-latest"
+	entry = baseEntry()
+	entry.MovingTag = "codeberg.org/itiquette/nanolinter-base:staging-latest"
 
-	if err := e.Validate(""); !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "moving_tag") {
+	if err := entry.Validate(""); !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "moving_tag") {
 		t.Errorf("staging moving tag should fail, got %v", err)
 	}
 
 	// A moving tag outside final_tag's repository would be written into a
 	// repository the entry never named, or rehomed by a cross-registry
 	// promotion; base entries follow the release rule.
-	e = baseEntry()
-	e.MovingTag = "ghcr.io/other/project:latest"
+	entry = baseEntry()
+	entry.MovingTag = "ghcr.io/other/project:latest"
 
-	if err := e.Validate(""); !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "must share final_tag's repository") {
+	if err := entry.Validate(""); !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "must share final_tag's repository") {
 		t.Errorf("foreign moving tag on a base entry should fail, got %v", err)
 	}
 
 	// The shared format rules still bind base entries.
-	e = baseEntry()
-	e.Digest = "sha256:short"
+	entry = baseEntry()
+	entry.Digest = "sha256:short"
 
-	if err := e.Validate(""); !errors.Is(err, errs.ErrValidation) {
+	if err := entry.Validate(""); !errors.Is(err, errs.ErrValidation) {
 		t.Errorf("bad digest on base entry should fail, got %v", err)
 	}
 }
@@ -490,15 +490,14 @@ func TestEntry_PinDigest(t *testing.T) {
 
 	// Derives the canonical <registry>/<path>@<digest> ref from the
 	// digest source, stripping the source tag (and leaving a host:port).
-	e := imageledger.Entry{CandidateTag: "codeberg.org:443/owner/repo:staging-v1.2.3"}
-	e.PinDigest(dig)
+	entry := imageledger.Entry{CandidateTag: "codeberg.org:443/owner/repo:staging-v1.2.3"}.PinDigest(dig)
 
-	if e.Digest != dig {
-		t.Errorf("Digest=%q, want %q", e.Digest, dig)
+	if entry.Digest != dig {
+		t.Errorf("Digest=%q, want %q", entry.Digest, dig)
 	}
 
-	if want := "codeberg.org:443/owner/repo@" + dig; e.Ref != want {
-		t.Errorf("Ref=%q, want %q (tag stripped, host:port kept)", e.Ref, want)
+	if want := "codeberg.org:443/owner/repo@" + dig; entry.Ref != want {
+		t.Errorf("Ref=%q, want %q (tag stripped, host:port kept)", entry.Ref, want)
 	}
 }
 

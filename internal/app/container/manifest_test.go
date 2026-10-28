@@ -138,19 +138,19 @@ func TestInspectManifest_RejectsMalformedDigest(t *testing.T) {
 		{"trailing garbage", "sha256:abc1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd extra"},
 	}
 
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
+	for _, cfg := range cases {
+		t.Run(cfg.name, func(t *testing.T) {
 			t.Parallel()
 
 			sink := fakeoutputsink.New(t)
-			reg := &fakeManifestRegistry{digest: c.digest}
+			reg := &fakeManifestRegistry{digest: cfg.digest}
 
 			_, err := appcontainer.InspectManifest(context.Background(), reg, sink, io.Discard, appcontainer.InspectManifestInput{Image: "ghcr.io/org/app:v1"})
 
 			// ErrInvalidConfig: the registry answered, and what it said is
 			// unusable — not the caller's mistake and not a missing image.
 			if !errors.Is(err, errs.ErrInvalidConfig) {
-				t.Fatalf("digest %q: err = %v, want ErrInvalidConfig", c.digest, err)
+				t.Fatalf("digest %q: err = %v, want ErrInvalidConfig", cfg.digest, err)
 			}
 
 			if !strings.Contains(err.Error(), "unexpected digest format") {
@@ -178,19 +178,19 @@ func TestStripTag_HandlesPortInRegistry(t *testing.T) {
 		{"alpine", "alpine"},
 	}
 
-	for _, c := range cases {
+	for _, cfg := range cases {
 		// stripTag is package-private; exercise it via the public
 		// InspectManifest output to avoid widening the API.
 		sink := fakeoutputsink.New(t)
 		reg := &fakeManifestRegistry{digest: oneDigest}
 
-		_, err := appcontainer.InspectManifest(context.Background(), reg, sink, io.Discard, appcontainer.InspectManifestInput{Image: c.in})
+		_, err := appcontainer.InspectManifest(context.Background(), reg, sink, io.Discard, appcontainer.InspectManifestInput{Image: cfg.in})
 		if err != nil {
-			t.Fatalf("%s: %v", c.in, err)
+			t.Fatalf("%s: %v", cfg.in, err)
 		}
 
-		if got := sink.Single("image-digest-ref"); got != c.want+"@"+oneDigest {
-			t.Errorf("stripTag(%q) → image-digest-ref = %q, want %s@%s", c.in, got, c.want, oneDigest)
+		if got := sink.Single("image-digest-ref"); got != cfg.want+"@"+oneDigest {
+			t.Errorf("stripTag(%q) → image-digest-ref = %q, want %s@%s", cfg.in, got, cfg.want, oneDigest)
 		}
 	}
 }
@@ -458,7 +458,7 @@ func TestInspectManifest_TracesEachPhaseInOrder(t *testing.T) {
 func TestMergeManifest_EndsAtEachDirectoryAndMergerBoundary(t *testing.T) {
 	t.Parallel()
 
-	errMergeRejected := errors.New("registry rejected the index") //nolint:err113 // a unique value to find in the chain.
+	errMergeRejected := errors.New("registry rejected the index")
 
 	for name, tc := range map[string]struct {
 		markers   []string

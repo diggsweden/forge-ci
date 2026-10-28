@@ -153,18 +153,18 @@ func TestAttestImage_RejectsGPG(t *testing.T) {
 func writeTemp(t *testing.T, body string) string {
 	t.Helper()
 
-	f, err := os.CreateTemp(t.TempDir(), "pred-*.json")
+	file, err := os.CreateTemp(t.TempDir(), "pred-*.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := f.WriteString(body); err != nil {
+	if _, err := file.WriteString(body); err != nil {
 		t.Fatal(err)
 	}
 
-	_ = f.Close()
+	_ = file.Close()
 
-	return f.Name()
+	return file.Name()
 }
 
 // TestAttestImage_ForwardsTheWholeRequestForEachMethod compares the request

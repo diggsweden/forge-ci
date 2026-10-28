@@ -33,6 +33,8 @@ func TestFreshnessBoundary_CompleteValidationAndResolution(t *testing.T) {
 
 	for _, kind := range []string{"valid", "label", "pinned", "source", "returned"} {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+
 			items := slices.Clone(checks)
 
 			switch kind {
@@ -78,6 +80,7 @@ func TestFreshnessBoundary_CompleteValidationAndResolution(t *testing.T) {
 
 type boundaryVerifier struct {
 	*fakeBaseImageVerifier
+
 	refs   []string
 	cancel context.CancelFunc
 	refuse string
@@ -99,6 +102,8 @@ func TestPromotionBoundary_AllEntriesBeforeCopy(t *testing.T) {
 
 	for _, kind := range []string{"valid", "late metadata", "late digest", "duplicate", "late final", "late evidence"} {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
@@ -154,6 +159,8 @@ func TestCleanupBoundary_UncertainSweepPreservesCandidates(t *testing.T) {
 
 	for _, kind := range []string{"missing", "unavailable", "mismatch", "architecture unknown", "architecture unavailable"} {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+
 			version := "staging-" + pruneIDKept + "-rust"
 			final := pruneRepo + ":" + pruneIDKept + "-rust"
 			registry := &fakeBaseImageRegistry{digests: map[string]string{pruneRepo + ":" + version: promoteDigest}, resolveErr: map[string]error{}}
@@ -190,11 +197,13 @@ func TestCleanupBoundary_UncertainSweepPreservesCandidates(t *testing.T) {
 	}
 }
 
-func TestPruneLineageBoundary_RequiresBoundSLSA(t *testing.T) { //nolint:gocognit,forcetypeassert // mutate our known fixture at each independent binding, then exercise the public prune path.
+func TestPruneLineageBoundary_RequiresBoundSLSA(t *testing.T) {
 	t.Parallel()
 
 	for _, kind := range []string{"valid distinct hashes", "wrong predicate", "foreign repository", "malformed ref", "unbound digest", "unbound input", "multiple statements", "late release ref"} {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+
 			payload := prunePayload(t, pruneIDKept, false)
 
 			var envelope map[string]string
@@ -224,7 +233,7 @@ func TestPruneLineageBoundary_RequiresBoundSLSA(t *testing.T) { //nolint:gocogni
 				statement["predicateType"] = "https://example.invalid/not-slsa"
 			case "foreign repository":
 				base["ref"] = "registry.example/other/base@sha256:" + strings.Repeat("a", 64)
-				dependency["uri"] = "oci://" + base["ref"].(string) //nolint:forcetypeassert // string assigned on the preceding line.
+				dependency["uri"] = "oci://" + base["ref"].(string)
 			case "malformed ref":
 				base["ref"] = pruneRepo + ":latest"
 			case "unbound digest":

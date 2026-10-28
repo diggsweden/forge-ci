@@ -99,7 +99,7 @@ func TestReleaseImagesSchemaMatchesTheTypesThatParseTheJSON(t *testing.T) {
 
 	// The ledger is a bare JSON array, so the object under comparison is the
 	// array's `items`, and the wire tags are json rather than yaml.
-	compareSchemaToRuntime(t, document, "items", "json", reflect.TypeOf(imageledger.Entry{}), nil)
+	compareSchemaToRuntime(t, document, "items", "json", reflect.TypeFor[imageledger.Entry](), nil)
 }
 
 // compareSchemaToRuntime is the whole comparison: same field set, same
@@ -139,7 +139,7 @@ func compareSchemaToRuntime(t *testing.T, document map[string]json.RawMessage, o
 			objectLabel(object), runtime.Name(), field)
 	}
 
-	if got, want := sorted(schema.Required), sorted(fromGo.required); !equal(got, want) {
+	if got, want := sorted(schema.Required), sorted(fromGo.required); !slices.Equal(got, want) {
 		t.Errorf("%s: schema requires %v, %s requires %v (a field without `omitempty` is required)",
 			objectLabel(object), got, runtime.Name(), want)
 	}
@@ -162,8 +162,8 @@ func runtimeObjectOf(t *testing.T, typ reflect.Type, tagKey string) runtimeObjec
 
 	out := runtimeObject{}
 
-	for i := range typ.NumField() {
-		tag, ok := typ.Field(i).Tag.Lookup(tagKey)
+	for field := range typ.Fields() {
+		tag, ok := field.Tag.Lookup(tagKey)
 		if !ok {
 			continue
 		}
@@ -270,18 +270,4 @@ func sortedKeys(in map[string]json.RawMessage) []string {
 	slices.Sort(out)
 
 	return out
-}
-
-func equal(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-
-	return true
 }

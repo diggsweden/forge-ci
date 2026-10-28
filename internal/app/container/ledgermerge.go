@@ -28,11 +28,11 @@ func MergeLedgers(paths []string, ledgerPath string, status io.Writer) error {
 	}
 
 	path := ledgerPath
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec,mnd // dist dir; 0755 is conventional.
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec // dist dir; 0755 is conventional.
 		return fmt.Errorf("ledger: create dir for %s: %w", path, err)
 	}
 
-	if err := cliio.WriteFile(path, out, 0o644); err != nil { //nolint:gosec // ledger is public release metadata, not a secret.
+	if err := cliio.WriteFile(path, out, 0o644); err != nil {
 		return err
 	}
 

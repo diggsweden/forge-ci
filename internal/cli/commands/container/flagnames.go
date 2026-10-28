@@ -13,6 +13,7 @@ import "github.com/diggsweden/forge-ci/internal/cli/regflags"
 // change. The registry-credential family aliases the shared regflags
 // spellings so package-local reads stay in sync with the shared flag set.
 const (
+	flagOutputDir          = "output-dir"
 	flagAllowMissingLedger = "allow-missing-ledger"
 	flagAnonymous          = "anonymous"
 	flagArch               = "arch"

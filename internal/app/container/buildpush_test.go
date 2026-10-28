@@ -100,13 +100,11 @@ func TestBuildPushOCIImage_BuildsEachPlatformThenPushesTheManifest(t *testing.T)
 		Tag:           "v1.2.3-alpine",
 		Containerfile: "Containerfile",
 		BuildsJSON:    `[{"platform":"linux/amd64","build-args":["ARCH=amd64"]},{"platform":"linux/arm64","build-args":["ARCH=arm64"]}]`,
-		OCILabels: domaincontainer.OCILabels{
-			Title:       "Forgejo CI",
-			Description: "Reusable workflows",
-			Licenses:    "CC0-1.0",
-			Vendor:      "Itiquette",
-			Authors:     "The Itiquette Authors",
-		},
+		Title:         "Forgejo CI",
+		Description:   "Reusable workflows",
+		Licenses:      "CC0-1.0",
+		Vendor:        "Itiquette",
+		Authors:       "The Itiquette Authors",
 		AuthFile:      "auth.json",
 		TLSVerify:     "true",
 		ServerURL:     "https://codeberg.org",
@@ -202,28 +200,28 @@ func assertPlatformBuilds(t *testing.T, builds []domaincontainer.BuildPushManife
 		{platform: "linux/arm64", args: []string{"ARCH=arm64"}},
 	}
 
-	for i, w := range want {
-		build := builds[i]
-		if build.Platform != w.platform {
-			t.Errorf("build[%d] platform = %q, want %q", i, build.Platform, w.platform)
+	for index, expected := range want {
+		build := builds[index]
+		if build.Platform != expected.platform {
+			t.Errorf("build[%d] platform = %q, want %q", index, build.Platform, expected.platform)
 		}
 
-		if !slices.Equal(build.BuildArgs, w.args) {
-			t.Errorf("build[%d] args = %v, want %v", i, build.BuildArgs, w.args)
+		if !slices.Equal(build.BuildArgs, expected.args) {
+			t.Errorf("build[%d] args = %v, want %v", index, build.BuildArgs, expected.args)
 		}
 
 		if build.Manifest != manifest {
-			t.Errorf("build[%d] manifest = %q, want %q", i, build.Manifest, manifest)
+			t.Errorf("build[%d] manifest = %q, want %q", index, build.Manifest, manifest)
 		}
 
 		if !build.TLSVerify {
-			t.Errorf("build[%d] built without TLS verification", i)
+			t.Errorf("build[%d] built without TLS verification", index)
 		}
 
 		// Taken from the commit, not the clock, so the same commit rebuilds
 		// to the same image.
 		if build.SourceDateEpoch != "1700000000" {
-			t.Errorf("build[%d] SOURCE_DATE_EPOCH = %q, want the commit time", i, build.SourceDateEpoch)
+			t.Errorf("build[%d] SOURCE_DATE_EPOCH = %q, want the commit time", index, build.SourceDateEpoch)
 		}
 	}
 }
@@ -354,7 +352,7 @@ func validBuildPushInput() appcontainer.BuildPushOCIImageInput {
 		Tag:           "v0.0.0",
 		Containerfile: "Containerfile",
 		BuildsJSON:    `[{"platform":"linux/amd64"}]`,
-		OCILabels:     domaincontainer.OCILabels{Title: "selftest"},
+		Title:         "selftest",
 		TLSVerify:     "true",
 		ServerURL:     "https://codeberg.org",
 		Repository:    "itiquette/forgejo-ci",
@@ -364,7 +362,7 @@ func validBuildPushInput() appcontainer.BuildPushOCIImageInput {
 func writeBuildPushFile(t *testing.T, path, body string) {
 	t.Helper()
 
-	if err := os.WriteFile(path, []byte(body), 0o600); err != nil { //nolint:gosec,mnd // test fixture.
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -405,10 +403,8 @@ func TestBuildPushOCIImage_PreservesBuildArgumentOrderPerPlatform(t *testing.T) 
 		Tag:           "v1.2.3-alpine",
 		Containerfile: "Containerfile",
 		BuildsJSON:    buildsJSON,
-		OCILabels: domaincontainer.OCILabels{
-			Title: "Forgejo CI", Description: "Reusable workflows",
-			Licenses: "CC0-1.0", Vendor: "Itiquette", Authors: "The Itiquette Authors",
-		},
+		Title:         "Forgejo CI", Description: "Reusable workflows",
+		Licenses: "CC0-1.0", Vendor: "Itiquette", Authors: "The Itiquette Authors",
 		AuthFile:      "auth.json",
 		TLSVerify:     "true",
 		ServerURL:     "https://codeberg.org",

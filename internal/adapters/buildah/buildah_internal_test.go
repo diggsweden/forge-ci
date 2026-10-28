@@ -153,10 +153,10 @@ func TestGlobal_DoesNotAliasTheSharedSlice(t *testing.T) {
 	shared := make([]string, 1, 8)
 	shared[0] = "--storage-driver"
 
-	a := &Adapter{Global: append(shared, "vfs")}
+	adapter := &Adapter{Global: append(shared, "vfs")}
 
-	first := a.buildArgs(container.BuildRequest{Context: "one", Target: "a"})
-	second := a.buildArgs(container.BuildRequest{Context: "two"})
+	first := adapter.buildArgs(container.BuildRequest{Context: "one", Target: "a"})
+	second := adapter.buildArgs(container.BuildRequest{Context: "two"})
 
 	if !reflect.DeepEqual(first, []string{"--storage-driver", "vfs", "build", network, host, "--target", "a", "one"}) {
 		t.Errorf("first = %q", first)
@@ -166,8 +166,8 @@ func TestGlobal_DoesNotAliasTheSharedSlice(t *testing.T) {
 		t.Errorf("second call saw the first call's flags: %q", second)
 	}
 
-	if got := len(a.Global); got != 2 {
-		t.Errorf("Global grew to %d entries: %q", got, a.Global)
+	if got := len(adapter.Global); got != 2 {
+		t.Errorf("Global grew to %d entries: %q", got, adapter.Global)
 	}
 }
 

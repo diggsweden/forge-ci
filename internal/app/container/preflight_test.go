@@ -130,7 +130,7 @@ func TestSuffixExtractedBinaries_PreflightPreservesEntireTree(t *testing.T) {
 			root := t.TempDir()
 			dir := filepath.Join(root, "bin")
 			require.NoError(t, os.Mkdir(dir, 0o700))
-			require.NoError(t, os.WriteFile(filepath.Join(dir, "app"), []byte("binary"), 0o700)) //nolint:gosec // preserves executable fixture mode; never executed.
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "app"), []byte("binary"), 0o700))
 			require.NoError(t, os.WriteFile(filepath.Join(root, "outside"), []byte("canary"), 0o600))
 
 			if tc.collision != "" {
@@ -178,7 +178,7 @@ func TestWriteDigestMarker_PreservesExistingEntries(t *testing.T) {
 			case "nonempty":
 				require.NoError(t, os.WriteFile(marker, []byte("keep"), 0o600))
 			case "empty":
-				require.NoError(t, os.WriteFile(marker, nil, 0o644)) //nolint:gosec // public empty digest-marker fixture.
+				require.NoError(t, os.WriteFile(marker, nil, 0o644))
 			}
 
 			before := snapshotContainerTree(t, root)
@@ -222,7 +222,7 @@ func TestMergeManifest_PreflightsEveryDestination(t *testing.T) {
 
 	for _, later := range []string{"registry.example/app:bad tag", "registry.example/other:v2", "registry.example/app:v1", "registry.example/app@" + oneDigest} {
 		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, strings.TrimPrefix(oneDigest, "sha256:")), nil, 0o644)) //nolint:gosec // public empty digest-marker fixture.
+		require.NoError(t, os.WriteFile(filepath.Join(dir, strings.TrimPrefix(oneDigest, "sha256:")), nil, 0o644))
 
 		registry := &fakeManifestRegistry{}
 
@@ -237,6 +237,7 @@ func TestMergeManifest_PreflightsEveryDestination(t *testing.T) {
 
 type metadataPreflightProvider struct {
 	provider.Provider
+
 	calls int
 }
 

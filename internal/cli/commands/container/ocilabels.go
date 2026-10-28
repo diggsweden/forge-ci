@@ -13,7 +13,6 @@ import (
 	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
 	"github.com/diggsweden/forge-ci/internal/cli/regflags"
-	domaincontainer "github.com/diggsweden/forge-ci/internal/domain/container"
 )
 
 func releaseLabelsCmd() *cli.Command {
@@ -53,19 +52,17 @@ buildah bud without reimplementing label policy in shell.`,
 
 func releaseLabelsInput(cmd *cli.Command) appcontainer.OCIReleaseLabelsInput {
 	return appcontainer.OCIReleaseLabelsInput{
-		OCILabels: domaincontainer.OCILabels{
-			Title:         cmd.String("title"),
-			Version:       cmd.String(flagVersion),
-			Revision:      cmd.String(flagRevision),
-			RefName:       cmd.String(flagRefName),
-			Documentation: cmd.String("documentation"),
-			Description:   cmd.String("description"),
-			Licenses:      cmd.String("licenses"),
-			Vendor:        cmd.String("vendor"),
-			Authors:       cmd.String("authors"),
-		},
-		Created: cmd.String("created"),
-		Source:  cmd.String(flagSource),
+		Title:         cmd.String("title"),
+		Version:       cmd.String(flagVersion),
+		Revision:      cmd.String(flagRevision),
+		RefName:       cmd.String(flagRefName),
+		Documentation: cmd.String("documentation"),
+		Description:   cmd.String("description"),
+		Licenses:      cmd.String("licenses"),
+		Vendor:        cmd.String("vendor"),
+		Authors:       cmd.String("authors"),
+		Created:       cmd.String("created"),
+		Source:        cmd.String(flagSource),
 	}
 }
 

@@ -54,16 +54,16 @@ func TestDerive_DefaultsSBOMsAndContainerFields(t *testing.T) {
 		t.Errorf("explicit sboms changed to %q", got)
 	}
 
-	c := cfg.Containers[0]
-	if got, want := c.ArtifactTypes, []projecttype.Type{projecttype.NPM, projecttype.Meta}; !slices.Equal(got, want) {
+	container := cfg.Containers[0]
+	if got, want := container.ArtifactTypes, []projecttype.Type{projecttype.NPM, projecttype.Meta}; !slices.Equal(got, want) {
 		t.Errorf("artifact types = %v, want %v", got, want)
 	}
 
-	if !c.EnableAnalyzedContainerSBOM {
+	if !container.EnableAnalyzedContainerSBOM {
 		t.Error("expected analyzed-container SBOM to be enabled from referenced artifact")
 	}
 
-	if got, want := c.BuildArgsString, "ALPHA=1\nZETA=last"; got != want {
+	if got, want := container.BuildArgsString, "ALPHA=1\nZETA=last"; got != want {
 		t.Errorf("build args string = %q, want %q", got, want)
 	}
 }

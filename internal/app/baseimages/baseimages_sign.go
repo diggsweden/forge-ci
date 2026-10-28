@@ -49,46 +49,6 @@ func AdmitBaseImageLedger(ledger []byte, expectedRepository string) ([]imageledg
 	return entries, nil
 }
 
-// RequireSourceOwnedRepository holds the repository a base-image verb writes
-// to, with signatures or with final tags, to the source it speaks for. The
-// repository is on the registry the verb logs in to, host and port exactly.
-// On the forge's own registry its path is also below the owner namespace of
-// the source repository, compared without case; the name below the owner is
-// the caller's choice.
-//
-// A statement signed here says the images were built from the source
-// repository. Without the owner rule the caller of a shared signing workflow
-// could name any path on the forge's registry, where the forge's owners are
-// the namespaces, and have it attested as that source's build. A repository
-// the caller declares external, on another registry such as GHCR, has no
-// forge owner to compare with: it is the one the caller's reviewed workflow
-// declared, every ledger entry must already equal it, and that registry's own
-// token decides what can be written there.
-func RequireSourceOwnedRepository(repository, registryHost, sourceRepository string, external bool) error {
-	slash := strings.LastIndex(sourceRepository, "/")
-	if slash <= 0 || slash == len(sourceRepository)-1 {
-		return fmt.Errorf("base images: the source repository must be <owner>/<name> to name the owner of the base-image repository, got %q: %w", sourceRepository, errs.ErrUsage)
-	}
-
-	owner := sourceRepository[:slash]
-
-	host, path, found := strings.Cut(repository, "/")
-	if !found || registryHost == "" || host != registryHost {
-		return fmt.Errorf("base images: base-image repository %q must be on the registry this command logs in to, %q: %w", repository, registryHost, errs.ErrValidation)
-	}
-
-	if external {
-		return nil
-	}
-
-	name, below := strings.CutPrefix(strings.ToLower(path), strings.ToLower(owner)+"/")
-	if !below || name == "" {
-		return fmt.Errorf("base images: base-image repository %q must be below the source repository's owner, %s/%s/: %w", repository, registryHost, strings.ToLower(owner), errs.ErrValidation)
-	}
-
-	return nil
-}
-
 // BaseImageProvenanceInput drives BaseImageProvenance. The source coordinates
 // are the caller's: the repository the bases were built from and the commit
 // that build was pinned to, which need not be the commit the signer runs on.

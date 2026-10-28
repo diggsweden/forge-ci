@@ -110,7 +110,7 @@ func PublishImageLayouts(ctx context.Context, registry LayoutRegistry, out io.Wr
 	return digests, nil
 }
 
-func verifyImageLayouts(ctx context.Context, inspector LayoutInspector, inputs []LayoutRecordInput) (map[string]string, error) { //nolint:cyclop // linear all-input binding/content checks, before the separate upload phase.
+func verifyImageLayouts(ctx context.Context, inspector LayoutInspector, inputs []LayoutRecordInput) (map[string]string, error) {
 	if len(inputs) == 0 {
 		return nil, fmt.Errorf("no staged images: %w", errs.ErrMissingInput)
 	}
@@ -151,7 +151,7 @@ func verifyImageLayouts(ctx context.Context, inspector LayoutInspector, inputs [
 
 // LayoutSetInputs admits exactly the selected platforms from artifact download
 // subdirectories. Folder names are transport details; metadata binds identity.
-func LayoutSetInputs(directory, image, sourceSHA string, platforms []string) ([]LayoutRecordInput, error) { //nolint:cyclop // cardinality, uniqueness and completeness form one artifact-set admission boundary.
+func LayoutSetInputs(directory, image, sourceSHA string, platforms []string) ([]LayoutRecordInput, error) {
 	if !domaincontainer.ValidRepositoryName(image) {
 		return nil, fmt.Errorf("layout set publication requires a tag-free repository: %w", errs.ErrUsage)
 	}

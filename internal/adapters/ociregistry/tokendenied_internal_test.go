@@ -25,16 +25,16 @@ func TestResolveDigest_ATokenDeniedIsPermissionDenied(t *testing.T) {
 
 	var server *httptest.Server
 
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server = httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/token" {
-			w.WriteHeader(http.StatusForbidden)
-			_, _ = w.Write([]byte(`{"errors":[{"code":"DENIED","message":"requested access to the resource is denied"}]}`))
+			response.WriteHeader(http.StatusForbidden)
+			_, _ = response.Write([]byte(`{"errors":[{"code":"DENIED","message":"requested access to the resource is denied"}]}`))
 
 			return
 		}
 
-		w.Header().Set("Www-Authenticate", `Bearer realm="`+server.URL+`/token",service="registry"`)
-		w.WriteHeader(http.StatusUnauthorized)
+		response.Header().Set("Www-Authenticate", `Bearer realm="`+server.URL+`/token",service="registry"`)
+		response.WriteHeader(http.StatusUnauthorized)
 	}))
 	t.Cleanup(server.Close)
 

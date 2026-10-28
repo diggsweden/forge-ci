@@ -31,7 +31,7 @@ func (r *captureRecorder) ResolveDigest(ctx context.Context, ref string) (string
 func TestCaptureBoundary_RefusalPreservesEntry(t *testing.T) {
 	t.Parallel()
 
-	cause := errors.New("owned resolver failure") //nolint:err113 // distinct dependency error.
+	cause := errors.New("owned resolver failure")
 	for _, tc := range []struct {
 		source, digest    string
 		resolverErr, want error
@@ -45,15 +45,15 @@ func TestCaptureBoundary_RefusalPreservesEntry(t *testing.T) {
 	} {
 		entry := imageledger.Entry{CandidateTag: tc.source, Ref: "seeded-ref", Digest: "seeded-digest", Role: "owned"}
 		before := entry
-		r := &captureRecorder{digest: tc.digest, err: tc.resolverErr}
+		recorder := &captureRecorder{digest: tc.digest, err: tc.resolverErr}
 		ctx := t.Context()
 
-		err := captureEntryDigest(ctx, r, &entry)
-		if !errors.Is(err, tc.want) || len(r.calls) != tc.calls {
-			t.Fatalf("source=%q err=%v calls=%v", tc.source, err, r.calls)
+		err := captureEntryDigest(ctx, recorder, &entry)
+		if !errors.Is(err, tc.want) || len(recorder.calls) != tc.calls {
+			t.Fatalf("source=%q err=%v calls=%v", tc.source, err, recorder.calls)
 		}
 
-		if tc.calls == 1 && (r.calls[0] != tc.source || r.ctx != ctx) {
+		if tc.calls == 1 && (recorder.calls[0] != tc.source || recorder.ctx != ctx) {
 			t.Fatal("request identity not preserved")
 		}
 

@@ -13,7 +13,12 @@ import (
 // BuildSignerImage builds one architecture of a two-phase multi-arch image into
 // local buildah storage under the supplied local tag.
 func (a *Adapter) BuildSignerImage(ctx context.Context, req container.SignerImageBuildToolRequest, out io.Writer) error {
-	args := append(a.global("bud", "--authfile", req.AuthFile), chrootIsolation()...)
+	args := a.global("bud")
+	if req.AuthFile != "" {
+		args = append(args, "--authfile", req.AuthFile)
+	}
+
+	args = append(args, chrootIsolation()...)
 	args = append(args,
 		"--pull=missing",
 		"--layers",
@@ -24,6 +29,18 @@ func (a *Adapter) BuildSignerImage(ctx context.Context, req container.SignerImag
 
 	if req.Title != "" {
 		args = append(args, "--label", "org.opencontainers.image.title="+req.Title)
+	}
+
+	for _, label := range req.Labels {
+		args = append(args, "--label", label)
+	}
+
+	for _, buildArg := range req.BuildArgs {
+		args = append(args, "--build-arg", buildArg)
+	}
+
+	if req.Target != "" {
+		args = append(args, "--target", req.Target)
 	}
 
 	args = append(args,

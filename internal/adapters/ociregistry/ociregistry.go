@@ -23,6 +23,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"net/http"
 	"os"
@@ -109,13 +110,11 @@ func (a *Adapter) ResolveDigest(ctx context.Context, ref string) (string, error)
 func classifyRegistryError(err error) error {
 	// A reference the library could not parse never reached a registry, and
 	// retrying it cannot succeed: it is the caller's input.
-	var badName *name.ErrBadName
-	if errors.As(err, &badName) {
+	if _, ok := errors.AsType[*name.ErrBadName](err); ok {
 		return errs.ErrUsage
 	}
 
-	var transportErr *transport.Error
-	if errors.As(err, &transportErr) {
+	if transportErr, ok := errors.AsType[*transport.Error](err); ok {
 		if transportErr.StatusCode == http.StatusNotFound {
 			return errs.ErrMissingInput
 		}
@@ -227,9 +226,7 @@ func (a *Adapter) Labels(ctx context.Context, ref string) (map[string]string, er
 	}
 
 	labels := make(map[string]string, len(config.Config.Labels))
-	for key, value := range config.Config.Labels {
-		labels[key] = value
-	}
+	maps.Copy(labels, config.Config.Labels)
 
 	return labels, nil
 }
@@ -340,9 +337,7 @@ func imageConfigMetadata(img v1.Image, ref string) (string, map[string]string, e
 	}
 
 	labels := make(map[string]string, len(config.Config.Labels))
-	for key, value := range config.Config.Labels {
-		labels[key] = value
-	}
+	maps.Copy(labels, config.Config.Labels)
 
 	return config.Architecture, labels, nil
 }
@@ -564,12 +559,10 @@ func (a *Adapter) addendaFor(ctx context.Context, ref name.Reference) ([]mutate.
 		}
 
 		addenda = append(addenda, mutate.IndexAddendum{
-			Add: img,
-			Descriptor: v1.Descriptor{
-				MediaType:   child.MediaType,
-				Platform:    child.Platform,
-				Annotations: child.Annotations,
-			},
+			Add:         img,
+			MediaType:   child.MediaType,
+			Platform:    child.Platform,
+			Annotations: child.Annotations,
 		})
 	}
 
@@ -590,7 +583,7 @@ func singleImageAddendum(ref name.Reference, desc *remote.Descriptor) ([]mutate.
 		return nil, fmt.Errorf("merge manifest: read config of %s: %w: %w", ref, err, classifyRegistryError(err))
 	}
 
-	return []mutate.IndexAddendum{{Add: img, Descriptor: v1.Descriptor{Platform: config.Platform()}}}, nil
+	return []mutate.IndexAddendum{{Add: img, Platform: config.Platform()}}, nil
 }
 
 // layoutIndex loads the single index from a Buildah manifest export.
@@ -700,7 +693,7 @@ type authFileKeychain struct {
 }
 
 func (k authFileKeychain) Resolve(target authn.Resource) (authn.Authenticator, error) {
-	authFile, err := os.Open(k.path) //nolint:gosec // caller-selected Docker auth config.
+	authFile, err := os.Open(k.path)
 	if err != nil {
 		return nil, fmt.Errorf("open registry auth file %s: %w: %w", k.path, err, errs.ErrMissingInput)
 	}

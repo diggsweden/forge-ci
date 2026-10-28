@@ -34,17 +34,17 @@ func TestAutoDerive_MavenRoot(t *testing.T) {
 		t.Fatalf("expected 1 artifact, got %d", len(cfg.Artifacts))
 	}
 
-	a := cfg.Artifacts[0]
-	if a.Name != "my-app" {
-		t.Errorf("name = %q, want my-app", a.Name)
+	artifact := cfg.Artifacts[0]
+	if artifact.Name != "my-app" {
+		t.Errorf("name = %q, want my-app", artifact.Name)
 	}
 
-	if a.ProjectType != projecttype.Maven {
-		t.Errorf("project-type = %q, want maven", a.ProjectType)
+	if artifact.ProjectType != projecttype.Maven {
+		t.Errorf("project-type = %q, want maven", artifact.ProjectType)
 	}
 
-	if a.WorkingDirectory != "." {
-		t.Errorf("working-directory = %q, want .", a.WorkingDirectory)
+	if artifact.WorkingDirectory != "." {
+		t.Errorf("working-directory = %q, want .", artifact.WorkingDirectory)
 	}
 }
 
@@ -171,5 +171,25 @@ func TestAutoDerive_GradleBothScriptsCountedOnce(t *testing.T) {
 
 	if cfg.Artifacts[0].Name != "myproj" || cfg.Artifacts[0].ProjectType != projecttype.Gradle {
 		t.Errorf("artifact = %+v", cfg.Artifacts[0])
+	}
+}
+
+// Auto-derive releases no image, even beside a root Containerfile: only
+// calling the release-images plan is a repository's choice to release one.
+func TestAutoDerive_AddsNoContainerBesideAContainerfile(t *testing.T) {
+	t.Parallel()
+
+	fsys := fstest.MapFS{
+		"Cargo.toml":    &fstest.MapFile{Data: []byte("[package]\nname = \"app\"\nversion = \"1.0.0\"\n")},
+		"Containerfile": &fstest.MapFile{Data: []byte("FROM scratch\n")},
+	}
+
+	cfg, err := appconfig.AutoDeriveConfig(fsys, ".")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(cfg.Artifacts) != 1 || len(cfg.Containers) != 0 {
+		t.Fatalf("artifacts = %d, containers = %+v; want one artifact and no container", len(cfg.Artifacts), cfg.Containers)
 	}
 }

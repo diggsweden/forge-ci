@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -74,7 +75,7 @@ func (f *fakeSignerImageTool) PushLayout(_ context.Context, authFile, directory,
 	if f.pushFails > 0 {
 		f.pushFails--
 
-		return "", errors.New("temporary push failure") //nolint:err113 // test double error.
+		return "", errors.New("temporary push failure")
 	}
 
 	if f.digest != "" {
@@ -508,7 +509,7 @@ func TestAssembleSignerImageManifest_RejectsWrongPlatformBeforePublication(t *te
 func writeAuthFileForSignerImage(t *testing.T, path string) { //nolint:unparam // explicit fixture path keeps call sites tied to the auth input under test.
 	t.Helper()
 
-	if err := os.WriteFile(path, []byte(`{"auths":{}}`), 0o600); err != nil { //nolint:gosec,mnd // test fixture.
+	if err := os.WriteFile(path, []byte(`{"auths":{}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -517,7 +518,7 @@ func writeSignerArchMetadata(t *testing.T, arch, repo, digestHex string) {
 	t.Helper()
 
 	dir := "signer-image-arch-" + arch
-	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec,mnd // test fixture.
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -531,7 +532,7 @@ func writeSignerArchMetadata(t *testing.T, arch, repo, digestHex string) {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(filepath.Join(dir, "signer-image-"+arch+".json"), body, 0o644); err != nil { //nolint:gosec,mnd // test fixture.
+	if err := os.WriteFile(filepath.Join(dir, "signer-image-"+arch+".json"), body, 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -539,7 +540,7 @@ func writeSignerArchMetadata(t *testing.T, arch, repo, digestHex string) {
 func readJSONForSignerImage(t *testing.T, path string, out any) {
 	t.Helper()
 
-	body, err := os.ReadFile(path) //nolint:gosec // test fixture.
+	body, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -564,6 +565,7 @@ func TestBuildSignerImageArch_HandsTheBuilderTheWholeRequest(t *testing.T) {
 		AuthFile: "auth.json", Arch: "arm64", HostArch: "arm64", SourceSHA: sourceSHA, ServerURL: "https://codeberg.org/", Repository: "Itiquette/Forgejo-CI",
 		RepositorySuffix: "-signer", TagPrefix: "signer-", Name: "signer-image", Title: "forgejo-ci signer",
 		Containerfile: "build/Signer.Containerfile", Context: "build", MetadataDir: "out/meta", RetryAttempts: 1,
+		Target: "runtime", BuildArgs: []string{"VERSION=1.2.3"}, Labels: []string{"org.example.flavor=core"},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -571,9 +573,9 @@ func TestBuildSignerImageArch_HandsTheBuilderTheWholeRequest(t *testing.T) {
 	want := []domaincontainer.SignerImageBuildToolRequest{{
 		AuthFile: "auth.json", Platform: "linux/arm64", SourceURL: "https://codeberg.org/Itiquette/Forgejo-CI", Revision: sourceSHA,
 		LocalImage: "localhost/signer-image:" + sourceSHA + "-arm64", Containerfile: "build/Signer.Containerfile", Context: "build",
-		Title: "forgejo-ci signer",
+		Title: "forgejo-ci signer", Target: "runtime", BuildArgs: []string{"VERSION=1.2.3"}, Labels: []string{"org.example.flavor=core"},
 	}}
-	if !slices.Equal(tool.buildReqs, want) {
+	if !reflect.DeepEqual(tool.buildReqs, want) {
 		t.Errorf("build requests =\n%+v\nwant\n%+v", tool.buildReqs, want)
 	}
 

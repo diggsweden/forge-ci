@@ -508,4 +508,4 @@ func TestPruneBaseImages_APartialFailureReportsWhatWasDeleted(t *testing.T) {
 	}
 }
 
-var errPruneDelete = errors.New("registry refused the delete") //nolint:err113 // test fixture sentinel.
+var errPruneDelete = errors.New("registry refused the delete")

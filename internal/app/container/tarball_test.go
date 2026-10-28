@@ -17,7 +17,7 @@ import (
 func makeTarball(t *testing.T, path string, files map[string]string) {
 	t.Helper()
 
-	out, err := os.Create(path) //nolint:gosec // test fixture
+	out, err := os.Create(path)
 	if err != nil {
 		t.Fatal(err)
 	}

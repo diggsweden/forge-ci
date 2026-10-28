@@ -21,8 +21,6 @@ import (
 // Order matters only for tie-breaking in error messages — every test
 // inspects ALL probes so a multi-manifest repo always reports the full
 // list.
-//
-//nolint:gochecknoglobals // schema enumeration; immutable ordering.
 var manifestProbes = []struct {
 	filename string
 	ptype    projecttype.Type

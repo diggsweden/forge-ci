@@ -60,45 +60,45 @@ func TestBaseImagesPrune_EnforcesRequestedTrustBeforeInventory(t *testing.T) {
 }
 
 func TestBaseImagesPrune_EnvironmentExpectationsAndFlagPrecedence(t *testing.T) {
-	f := newPruneFixture(t, false)
-	f.env.Setenv("COSIGN_PUBLIC_KEY_SHA256", strings.Repeat("f", 64))
-	f.env.Setenv("EXPECTED_SOURCE", "https://source.example/other/consumer")
-	f.env.Setenv("EXPECTED_WORKFLOW", "other.yml")
-	require.ErrorIs(t, f.run(t, "prune"), errs.ErrValidation)
-	require.Empty(t, f.cosign.Invocations("cosign"))
-	require.Empty(t, f.requests)
+	fixture := newPruneFixture(t, false)
+	fixture.env.Setenv("COSIGN_PUBLIC_KEY_SHA256", strings.Repeat("f", 64))
+	fixture.env.Setenv("EXPECTED_SOURCE", "https://source.example/other/consumer")
+	fixture.env.Setenv("EXPECTED_WORKFLOW", "other.yml")
+	require.ErrorIs(t, fixture.run(t, "prune"), errs.ErrValidation)
+	require.Empty(t, fixture.cosign.Invocations("cosign"))
+	require.Empty(t, fixture.requests)
 
 	args := make([]string, 0, 6)
-	args = append(args, "--cosign-public-key-sha256", f.keyHash)
-	require.ErrorIs(t, f.run(t, "prune", args...), errs.ErrValidation)
-	require.Len(t, f.cosign.Invocations("cosign"), 1)
-	require.Empty(t, f.requests)
+	args = append(args, "--cosign-public-key-sha256", fixture.keyHash)
+	require.ErrorIs(t, fixture.run(t, "prune", args...), errs.ErrValidation)
+	require.Len(t, fixture.cosign.Invocations("cosign"), 1)
+	require.Empty(t, fixture.requests)
 
 	args = append(args, "--expected-source", pruneSource)
-	require.ErrorIs(t, f.run(t, "prune", args...), errs.ErrValidation)
-	require.Len(t, f.cosign.Invocations("cosign"), 2)
-	require.Empty(t, f.requests)
+	require.ErrorIs(t, fixture.run(t, "prune", args...), errs.ErrValidation)
+	require.Len(t, fixture.cosign.Invocations("cosign"), 2)
+	require.Empty(t, fixture.requests)
 
 	args = append(args, "--expected-workflow", pruneWorkflow)
-	require.NoError(t, f.run(t, "prune", args...))
-	require.Len(t, f.cosign.Invocations("cosign"), 3)
-	require.NotEmpty(t, f.requests)
+	require.NoError(t, fixture.run(t, "prune", args...))
+	require.Len(t, fixture.cosign.Invocations("cosign"), 3)
+	require.NotEmpty(t, fixture.requests)
 }
 
 func TestBaseImagesPrune_VerifiesBothProvenanceProfilesAndUsesExplicitAuth(t *testing.T) {
 	for _, structured := range []bool{false, true} {
 		t.Run(fmt.Sprintf("structured=%t", structured), func(t *testing.T) {
-			f := newPruneFixture(t, structured)
-			err := f.run(t, "prune", "--cosign-public-key-sha256", f.keyHash,
+			fixture := newPruneFixture(t, structured)
+			err := fixture.run(t, "prune", "--cosign-public-key-sha256", fixture.keyHash,
 				"--expected-source", pruneSource, "--expected-workflow", pruneWorkflow)
 			require.NoError(t, err)
-			require.Len(t, f.cosign.Invocations("cosign"), 1)
-			body, readErr := os.ReadFile(f.env.Path("seen-auth.json"))
+			require.Len(t, fixture.cosign.Invocations("cosign"), 1)
+			body, readErr := os.ReadFile(fixture.env.Path("seen-auth.json"))
 			require.NoError(t, readErr)
 			require.JSONEq(t, `{"auths":{}}`, string(body), "explicit auth must reach cosign instead of ambient Docker config")
-			require.NotEmpty(t, f.requests)
+			require.NotEmpty(t, fixture.requests)
 
-			for _, request := range f.requests {
+			for _, request := range fixture.requests {
 				require.Equal(t, http.MethodGet, request.method, "default is dry-run")
 				require.Equal(t, pruneRegistry, request.host)
 			}
@@ -107,14 +107,14 @@ func TestBaseImagesPrune_VerifiesBothProvenanceProfilesAndUsesExplicitAuth(t *te
 }
 
 func TestBaseImagesPrune_OmittedIdentityAllowsAnotherConsumerAndDeletesOnlyStaleTags(t *testing.T) {
-	f := newPruneFixture(t, false)
+	fixture := newPruneFixture(t, false)
 	// The base repository is owner/nested/base; the attestation is from
 	// team/consumer. No source/workflow expectation is inferred from the former.
-	require.NoError(t, f.run(t, "prune", "--dry-run=false"))
+	require.NoError(t, fixture.run(t, "prune", "--dry-run=false"))
 
 	var deletes []string
 
-	for _, request := range f.requests {
+	for _, request := range fixture.requests {
 		require.Equal(t, pruneRegistry, request.host)
 
 		if request.method == http.MethodDelete {
@@ -165,17 +165,17 @@ func newPruneFixture(t *testing.T, structured bool) *pruneFixture {
 	env.Setenv("DOCKER_CONFIG", env.MkdirAll("ambient"))
 	require.NoError(t, os.WriteFile(env.Path("ambient", "config.json"), []byte(`{"auths":{},"fixture":"ambient"}`), 0o600))
 
-	f := &pruneFixture{env: env, cosign: mockbinary.New(t), keyHash: fmt.Sprintf("%x", sha256.Sum256(key))}
-	f.cosign.Add("cosign", fmt.Sprintf("cat \"${DOCKER_CONFIG:?}/config.json\" > %q\nprintf '%%s\\n' '%s'\n", env.Path("seen-auth.json"), pruneEnvelope(t, structured)))
-	f.cosign.OnPath()
+	fixture := &pruneFixture{env: env, cosign: mockbinary.New(t), keyHash: fmt.Sprintf("%x", sha256.Sum256(key))}
+	fixture.cosign.Add("cosign", fmt.Sprintf("cat \"${DOCKER_CONFIG:?}/config.json\" > %q\nprintf '%%s\\n' '%s'\n", env.Path("seen-auth.json"), pruneEnvelope(t, structured)))
+	fixture.cosign.OnPath()
 
 	original := remote.DefaultTransport
 
 	t.Cleanup(func() { remote.DefaultTransport = original })
 
-	remote.DefaultTransport = pruneTransport(f.roundTrip)
+	remote.DefaultTransport = pruneTransport(fixture.roundTrip)
 
-	return f
+	return fixture
 }
 
 func pruneEnvelope(t *testing.T, structured bool) string {
@@ -226,19 +226,19 @@ func (f *pruneFixture) run(t *testing.T, verb string, extra ...string) error {
 	return command.Run(t.Context(), append(args, extra...))
 }
 
-func (f *pruneFixture) roundTrip(r *http.Request) (*http.Response, error) {
-	f.requests = append(f.requests, pruneRequest{method: r.Method, host: r.URL.Host, path: r.URL.Path})
+func (f *pruneFixture) roundTrip(request *http.Request) (*http.Response, error) {
+	f.requests = append(f.requests, pruneRequest{method: request.Method, host: request.URL.Host, path: request.URL.Path})
 	kept, stale := strings.Repeat("a", 64)+"-go", strings.Repeat("b", 64)+"-go"
 	header, status, body := make(http.Header), http.StatusOK, ""
 
-	switch r.Method + " " + r.URL.Path {
+	switch request.Method + " " + request.URL.Path {
 	case "GET /v2/":
 	case "GET /v2/owner/nested/base/tags/list":
 		body = fmt.Sprintf(`{"name":"owner/nested/base","tags":[%q,%q]}`, kept, stale)
 	case "HEAD /v2/owner/nested/base/manifests/" + kept, "HEAD /v2/owner/nested/base/manifests/" + stale:
 		header.Set("Docker-Content-Digest", "sha256:"+strings.Repeat("c", 64))
 
-		if strings.HasSuffix(r.URL.Path, stale) {
+		if strings.HasSuffix(request.URL.Path, stale) {
 			header.Set("Docker-Content-Digest", "sha256:"+strings.Repeat("e", 64))
 		}
 
@@ -247,8 +247,8 @@ func (f *pruneFixture) roundTrip(r *http.Request) (*http.Response, error) {
 	case "DELETE /v2/owner/nested/base/manifests/" + stale:
 		status = http.StatusAccepted
 	default:
-		return nil, fmt.Errorf("unexpected fixture request %s %s: %w", r.Method, r.URL, errs.ErrValidation)
+		return nil, fmt.Errorf("unexpected fixture request %s %s: %w", request.Method, request.URL, errs.ErrValidation)
 	}
 
-	return &http.Response{StatusCode: status, Header: header, Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+	return &http.Response{StatusCode: status, Header: header, Body: io.NopCloser(strings.NewReader(body)), Request: request}, nil
 }

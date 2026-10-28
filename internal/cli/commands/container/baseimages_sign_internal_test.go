@@ -5,6 +5,7 @@ package container
 
 import (
 	"context"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -200,9 +201,7 @@ func TestBaseImagesSign_RefusesBeforeAnyRegistryOrSigningEffect(t *testing.T) {
 				args["--registry"], args["--expected-repository"] = strings.TrimPrefix(registry.URL, "http://"), repository
 			}
 
-			for flag, value := range tc.args {
-				args[flag] = value
-			}
+			maps.Copy(args, tc.args)
 
 			for name, value := range tc.env {
 				if strings.HasPrefix(name, "--") {

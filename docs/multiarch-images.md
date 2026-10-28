@@ -5,6 +5,39 @@ tests, release names and base-image policy. Forge CI owns immutable image
 validation, registry-only index assembly and checksum-bound SBOM composition.
 The commands are provider-neutral and contain no consumer-specific policy.
 
+## Builder identity and cache inputs
+
+The selected builder is behind the same interface for both Buildah and Kaniko.
+Consumers that bind image-producing tools into a base-input ID can capture its
+identity without naming backend executables or probing container storage:
+
+```bash
+forge-ci container builder-identity
+```
+
+The command prints one opaque SHA-256 material ID. A consumer includes this value
+in its deterministic cache inputs without knowing backend names, executable paths
+or an identity-record schema. Operator configuration selects the backend through
+`CI_IMAGE_BUILDER`; changing either the backend or its executable changes the ID.
+Capture it on each native build runner, because executable bytes can differ
+between architectures. No builder is run, installed, or probed, and no registry
+is contacted. `--format=json` additionally emits the ID and backend details for
+provenance or diagnostics; consumers need not interpret those details. The ID
+identifies bytes and backend selection; it is not a signature verification.
+
+Keep the approved job-image digest and engine pin as explicit provenance inputs
+too. This command does not replace job-image admission, source identity,
+dependency selection or the consumer's base-graph policy.
+
+For bounded whole-architecture reuse, `build-arch --stage --cache-tag <slot>`
+accepts repeated `--require-label` checks. A hit is copied by immutable digest
+to the ordinary staged layout; no build or registry write runs in that job.
+Use a content-derived revision for reusable bases. `assemble --from-layouts`
+can generate per-platform SBOMs with `--sbom-output-template` beside its
+`--scan-output-template`, and refresh slots using `--cache-tag-prefix` only
+after every child passes its gate and the index is assembled. This is not
+registry-backed intermediate-layer caching, and cache slots are not signed bases.
+
 ## Build and publish the index
 
 `container multiarch-image build-arch` and `assemble` accept `--tag` for an
@@ -85,6 +118,20 @@ Index verification does not execute either architecture's code.
 
 ## Compose the index SBOM
 
+For staged builds, `container multiarch-image assemble --from-layouts` can
+perform this composition directly. Alongside `--scan-output-template` and
+`--sbom-output-template`, pass `--manifest-output`, `--index-sbom-output` and
+`--sbom-url-prefix`. The prefix is the public HTTPS directory where the caller
+will publish the unchanged platform inventories. The operation scans the staged
+bytes before any upload and uses their recorded child digests and the checked
+served index to compose the index BOM without re-pulling images. It emits
+`image-sbom-sha256` for the ledger pin. Evidence destinations must be distinct
+and must not overwrite authentication or staged image inputs. The shared
+`release-images.yml` uses this path for scanned release images.
+
+For evidence produced separately, the existing offline command below remains
+available.
+
 Keep each native CycloneDX document unchanged. Supply a version-1 manifest such
 as `platform-sboms.json` alongside the verified `index.json` and native BOMs in
 the release evidence directory:
@@ -159,3 +206,42 @@ are checked before registry writes using an in-process registry fixture.
 These checks do not establish runner isolation, native smoke success, hosted
 credential sharing, public URL availability or a production release's signing
 authority. Those remain caller and hosted-acceptance responsibilities.
+
+### Staged evidence scenarios
+
+The provider-free suite exercises the actual application and workflow shell:
+
+| Scenario | Required result |
+| --- | --- |
+| One selected platform or AMD64 + ARM64 metadata | Every scanned layout has an unchanged inventory bound to its child digest in the checked index BOM. No second image pull or scan. |
+| Distroless, Alpine and arbitrary flavor names | Evidence paths follow the ledger's flavor/role policy, independently of the build name. |
+| Multiple images in one workflow | Exact named artifacts retain each image's platform inventories, index snapshot and index BOM without changing their bytes. |
+| One platform fails the scan/gate or produces no SBOM | No image upload and no index BOM; existing complete-set publication tests remain mandatory. |
+| Missing inventory/index/URL inputs; unsafe public URL | Refuse before scanners or registry writes. |
+| Colliding paths, symlink aliases, auth/metadata/layout overwrite | Refuse before scanners or registry writes. |
+| Different inventory paths with the same public download filename | Refuse before scanners or registry writes; platform inventory filenames must be distinct. |
+| Scanned release ledger has no index-BOM checksum | Refuse to record the release image. |
+| Explicit release scan opt-out | Preserve the existing signer-generated SBOM contract. |
+| Base image | Retain all inventories and the existing first-platform premade signing contract. |
+
+Existing index-SBOM and signer tests cover missing/duplicate platforms, wrong
+child/index digests, changed inventory bytes and ledger checksum mismatches.
+Dual-platform fixtures construct OCI metadata only; they do not execute foreign
+architecture code. Live rollout acceptance remains a separate native profile:
+verify original scans, published child/index digests, retained inventory hashes,
+runtime evidence and exact-document signing through the guarded scratch workflow.
+
+### Native mechanism acceptance
+
+Run the guarded `TestForgejoLayer_ResolvedImagePlan` against the exact engine
+and workflow revision selected for adoption. Exercise cold, one-sibling reuse
+and fully warm cache phases with two small base images and a final-release
+canary. Use actual build/cache logs as the cache oracle; digest equality alone
+does not establish reuse.
+
+Check retained scans/inventories, registry-served child/index digests, marker
+bytes, index-BOM platform/digest/URL/hash bindings and the ledger's exact BOM
+checksum. Retain the run evidence and exact-resource cleanup receipt. Acceptance
+is specific to the native platform and mechanism tested; it does not establish
+other architecture execution or complete consumer release acceptance.
+Consumer adoption requires a published, reviewed engine/workflow tuple.

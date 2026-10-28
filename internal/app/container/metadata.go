@@ -116,7 +116,7 @@ func ComputeMetadata(
 	var applied []container.AppliedTag
 
 	for _, r := range rules {
-		a, ok, err := container.Apply(r, mctx) //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+		a, ok, err := container.Apply(r, mctx)
 		if err != nil {
 			return nil, err
 		}

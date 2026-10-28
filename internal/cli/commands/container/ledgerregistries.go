@@ -39,6 +39,7 @@ func (r cleanupRegistry) DeleteTag(ctx context.Context, ref string) error {
 
 type promotionRollbackRegistry struct {
 	imageledger.Registry
+
 	deleter provider.TagDeleter
 }
 
@@ -50,7 +51,7 @@ func (r promotionRollbackRegistry) DeleteTag(ctx context.Context, ref string) er
 // dry-run it previews via the in-memory decorator (no forge needed); a
 // real run resolves digests via docker and deletes via the active
 // forge's tag-scoped package API (gated by RequireTagDeleter).
-func cleanupReg(d *deps.Deps, dryRun bool, reg imageledger.DigestResolver) (imageledger.CleanupRegistry, error) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func cleanupReg(d *deps.Deps, dryRun bool, reg imageledger.DigestResolver) (imageledger.CleanupRegistry, error) {
 	if dryRun {
 		return newDryRunRegistry(reg, os.Stderr), nil
 	}
@@ -68,7 +69,7 @@ func cleanupReg(d *deps.Deps, dryRun bool, reg imageledger.DigestResolver) (imag
 	}, nil
 }
 
-func promotionRollbackReg(d *deps.Deps, dryRun bool, reg imageledger.Registry) (imageledger.PromotionRollbackRegistry, error) { //nolint:varnamelen // idiomatic short name.
+func promotionRollbackReg(d *deps.Deps, dryRun bool, reg imageledger.Registry) (imageledger.PromotionRollbackRegistry, error) {
 	if dryRun {
 		return newDryRunRegistry(reg, os.Stderr), nil
 	}
@@ -238,6 +239,7 @@ func externalTagDeleter(registry, username, passwordFile string, oci *ociregistr
 // deletes them through the external registry's deleter.
 type externalBaseImageRegistry struct {
 	baseImageLocalRegistry
+
 	deleter provider.TagDeleter
 }
 

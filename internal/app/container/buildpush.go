@@ -48,16 +48,16 @@ type BuildPushGit interface {
 // BuildPushOCIImageInput drives `container build-push-oci-image`, a Go port of
 // a public reusable-workflow build-push-oci-image action body.
 type BuildPushOCIImageInput struct {
+	// OCILabels carries the caller-supplied org.opencontainers.image.*
+	// label fields; RefName, Version, Revision, and Documentation default
+	// from the tag/checkout when empty.
+	domaincontainer.OCILabels
+
 	Tag           string
 	Containerfile string
 	BuildsJSON    string
 	Image         string
 	Context       string
-
-	// OCILabels carries the caller-supplied org.opencontainers.image.*
-	// label fields; RefName, Version, Revision, and Documentation default
-	// from the tag/checkout when empty.
-	domaincontainer.OCILabels
 
 	AuthFile      string
 	TLSVerify     string

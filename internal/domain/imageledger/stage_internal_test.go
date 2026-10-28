@@ -5,9 +5,10 @@ package imageledger
 
 import (
 	"errors"
-	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"slices"
 	"testing"
+
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
 // TestStageDestinations_ResolvesTagsPerStage locks in the build-once / promote-many tag scheme:

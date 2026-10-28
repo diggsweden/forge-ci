@@ -36,7 +36,15 @@ func parseArtifactsCmd() *cli.Command {
    # Parse artifacts.yml; the typed config plan lands on the
    # configured OutputSink ($GITHUB_OUTPUT on GitHub, dotenv on
    # GitLab, /dev/null in local mode).
-   forge-ci config parse-artifacts --file artifacts.yml`,
+   forge-ci config parse-artifacts --file artifacts.yml
+
+   # Locally, --json writes an object whose config-plan-json value is
+   # the serialized plan string. Extract that value for plan commands:
+   forge-ci --runner local --json config parse-artifacts --file .forge-ci/artifacts.yml \
+     | jq -er '."config-plan-json"'
+
+When composing commands in a script, preserve the producer's exit status;
+see ` + "`plan release --help`" + ` for a checked command-substitution example.`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "file",
@@ -83,7 +91,7 @@ func expandSBOMsCmd() *cli.Command {
 
 			format := appconfig.ExpandSBOMsFormat(cmd.String("as"))
 
-			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+			return deps.FromCmd(ctx, cmd, func(dependencies *deps.Deps) error {
 				// expand-sboms's primary output is the expanded layer
 				// list (JSON or comma-separated) — designed to be piped
 				// or captured. Per clig.dev the value goes to stdout;
@@ -93,7 +101,7 @@ func expandSBOMsCmd() *cli.Command {
 					Format:  format,
 					Exclude: cmd.StringSlice("exclude"),
 					Output:  outFormat,
-					Sink:    d.OutputSink,
+					Sink:    dependencies.OutputSink,
 				})
 			})
 		},

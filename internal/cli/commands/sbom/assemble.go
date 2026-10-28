@@ -70,7 +70,7 @@ EXAMPLES:
 			&cli.StringFlag{Name: "plan", Sources: cli.EnvVars("CONFIG_PLAN_JSON"), Usage: "typed config-plan JSON: assemble one layer set per artifact in the plan (from \"config parse-artifacts\")"},
 			&cli.StringFlag{Name: "sboms", Value: "all", Sources: cli.EnvVars("SBOMS"), Usage: "plan mode: sboms enum (\"all\", \"build,source\", …) selecting which layers to produce per artifact"},
 			// Multi-artifact container mode (was `sbom generate container`).
-			&cli.StringFlag{Name: "image-name", Sources: cli.EnvVars("IMAGE_NAME"), Usage: "container mode: base image name without tag/digest; with --image-digest forms the syft target"}, //nolint:goconst // generic flag identifier shared across container commands.
+			&cli.StringFlag{Name: "image-name", Sources: cli.EnvVars("IMAGE_NAME"), Usage: "container mode: base image name without tag/digest; with --image-digest forms the syft target"},
 			&cli.StringFlag{Name: "image-digest", Sources: cli.EnvVars("IMAGE_DIGEST"), Usage: "container mode: sha256:… digest pinning the exact image manifest"},
 			&cli.StringFlag{Name: "artifact-types", Sources: cli.EnvVars("ARTIFACT_TYPES"), Usage: "container mode: ecosystems embedded in the multi-artifact container SBOM"},
 			&cli.StringFlag{Name: "ref-name", Sources: cienv.RefName(), Usage: "container mode: git ref name (leading \"v\" stripped) used in the SBOM filename"},

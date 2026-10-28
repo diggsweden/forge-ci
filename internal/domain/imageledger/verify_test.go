@@ -19,7 +19,7 @@ type fakeResolver map[string]string
 func (f fakeResolver) ResolveDigest(_ context.Context, ref string) (string, error) {
 	d, ok := f[ref]
 	if !ok {
-		return "", errors.New("ref not found") //nolint:err113 // test mock error
+		return "", errors.New("ref not found")
 	}
 
 	return d, nil
@@ -41,13 +41,13 @@ func TestVerify_AcceptsWhenCandidateResolves(t *testing.T) {
 func TestVerify_FallsBackToFinalTagThenRef(t *testing.T) {
 	t.Parallel()
 
-	e := validEntry()
-	e.CandidateTag = "codeberg.org/itiquette/gommitlint:staging-v1.2.3"
+	entry := validEntry()
+	entry.CandidateTag = "codeberg.org/itiquette/gommitlint:staging-v1.2.3"
 
 	// Candidate already cleaned up (resolver errors on it); final_tag serves it.
-	resolver := fakeResolver{e.FinalTag: goodDigest}
+	resolver := fakeResolver{entry.FinalTag: goodDigest}
 
-	if err := imageledger.Verify(context.Background(), resolver, []imageledger.Entry{e}, "v1.2.3"); err != nil {
+	if err := imageledger.Verify(context.Background(), resolver, []imageledger.Entry{entry}, "v1.2.3"); err != nil {
 		t.Fatalf("verify should fall back to final_tag: %v", err)
 	}
 }

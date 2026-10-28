@@ -6,12 +6,14 @@ package syncguard
 import (
 	"bytes"
 	"encoding/json"
+	"maps"
+	"strings"
+	"testing"
+
 	"github.com/diggsweden/forge-ci/internal/domain/imageledger"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/stretchr/testify/require"
-	"strings"
-	"testing"
 )
 
 func TestLedgerSchemaBoundary_CompilesAndMatchesSharedRuntimeCases(t *testing.T) {
@@ -31,9 +33,7 @@ func TestLedgerSchemaBoundary_CompilesAndMatchesSharedRuntimeCases(t *testing.T)
 
 	for _, field := range []string{"valid", "base", "extra", "ref", "digest", "final_tag", "image_kind", "sbom", "sbom_sha256", "provenance", "missing"} {
 		entry := map[string]any{}
-		for key, value := range base {
-			entry[key] = value
-		}
+		maps.Copy(entry, base)
 
 		switch field {
 		case "valid":

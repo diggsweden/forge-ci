@@ -101,8 +101,7 @@ func (a *Adapter) DeleteTag(ctx context.Context, ref string) error {
 // request: the first is a capability the registry lacks and no retry or
 // credential changes, so callers keep the tag and say so.
 func classifyDeleteError(err error) error {
-	var transportErr *transport.Error
-	if errors.As(err, &transportErr) {
+	if transportErr, ok := errors.AsType[*transport.Error](err); ok {
 		if transportErr.StatusCode == http.StatusMethodNotAllowed {
 			return errs.ErrUnsupported
 		}

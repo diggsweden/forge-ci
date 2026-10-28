@@ -6,6 +6,7 @@ package pipeline
 
 import (
 	"cmp"
+	"maps"
 	"slices"
 
 	"github.com/diggsweden/forge-ci/internal/domain/build"
@@ -158,6 +159,8 @@ type PlannedContainer struct {
 	Context                     string             `json:"context"`
 	Target                      string             `json:"target,omitempty"`
 	Platforms                   string             `json:"platforms"`
+	ImageName                   string             `json:"image_name,omitempty"`
+	TagSuffix                   string             `json:"tag_suffix,omitempty"`
 	EnableAnalyzedContainerSBOM bool               `json:"enable_analyzed_container_sbom"`
 	EnableSLSA                  bool               `json:"enable_slsa"`
 	EnableScan                  bool               `json:"enable_scan"`
@@ -322,7 +325,6 @@ func planArtifacts(in []config.Artifact) []PlannedArtifact {
 	return out
 }
 
-//nolint:cyclop // plans container builds with one branch per (project type, multi-arch, platform) combination.
 func planContainers(artifacts []config.Artifact, containers []config.Container) []PlannedContainer {
 	byName := make(map[string]config.Artifact, len(artifacts))
 	for _, a := range artifacts {
@@ -335,10 +337,12 @@ func planContainers(artifacts []config.Artifact, containers []config.Container) 
 			Name:                        c.Name,
 			From:                        slices.Clone(c.From),
 			ArtifactTypes:               slices.Clone(c.ArtifactTypes),
-			ContainerFile:               cmp.Or(c.ContainerFile, "Containerfile"),
+			ContainerFile:               cmp.Or(c.ContainerFile, config.DefaultContainerFile),
 			Context:                     cmp.Or(c.Context, "."),
 			Target:                      c.Target,
 			Platforms:                   cmp.Or(c.Platforms, build.DefaultPlatform),
+			ImageName:                   c.ImageName,
+			TagSuffix:                   c.TagSuffix,
 			EnableAnalyzedContainerSBOM: c.EnableAnalyzedContainerSBOM,
 			EnableSLSA:                  c.EnableSLSAEffective(),
 			EnableScan:                  c.EnableScanEffective(),
@@ -379,6 +383,7 @@ func planContainers(artifacts []config.Artifact, containers []config.Container) 
 		if c.Extract != nil && c.Extract.Binary != nil {
 			pc.ExtractBinaryTarget = c.Extract.Binary.Target
 			pc.ExtractBinaryNames = slices.Clone(c.Extract.Binary.Names)
+
 			pc.ExtractBinaryPaths = slices.Clone(c.Extract.Binary.Paths)
 			if len(pc.ExtractBinaryPaths) != 0 {
 				pc.ExtractBinaryNames, _ = domaincontainer.ImageFileNames(pc.ExtractBinaryPaths) // Config validation already checked these paths.
@@ -492,7 +497,7 @@ func filterArtifacts(in []PlannedArtifact, keep func(PlannedArtifact) bool) []Pl
 }
 
 func filterArtifactsByPublishTarget(in []PlannedArtifact, target config.PublishTarget) []PlannedArtifact {
-	return filterArtifacts(in, func(a PlannedArtifact) bool { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	return filterArtifacts(in, func(a PlannedArtifact) bool {
 		for _, t := range a.PublishTo {
 			if t == target && config.SupportedPublishTarget(config.Artifact{
 				Name:        a.Name,
@@ -517,9 +522,7 @@ func cloneStringMap(in map[string]string) map[string]string {
 	}
 
 	out := make(map[string]string, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
+	maps.Copy(out, in)
 
 	return out
 }

@@ -132,14 +132,14 @@ func TestBuildJSONOutput_Shape(t *testing.T) {
 		},
 	)
 
-	b, err := json.Marshal(jo)
+	data, err := json.Marshal(jo)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Pin every public key and value, including tag order and the complete labels.
 	want := `{"tags":["img:v1.0.0","img:1"],"labels":{"org.opencontainers.image.licenses":"MIT","org.opencontainers.image.title":"app"}}`
-	if string(b) != want {
-		t.Errorf("JSON = %s, want %s", b, want)
+	if string(data) != want {
+		t.Errorf("JSON = %s, want %s", data, want)
 	}
 }
 
@@ -148,7 +148,7 @@ func TestBuildJSONOutput_EmptyTagsRendersArrayNotNull(t *testing.T) {
 
 	jo := container.BuildJSONOutput(nil, nil)
 
-	b, err := json.Marshal(jo)
+	data, err := json.Marshal(jo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestBuildJSONOutput_EmptyTagsRendersArrayNotNull(t *testing.T) {
 		Tags   []string          `json:"tags"`
 		Labels map[string]string `json:"labels"`
 	}
-	if err := json.Unmarshal(b, &got); err != nil {
+	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatal(err)
 	}
 

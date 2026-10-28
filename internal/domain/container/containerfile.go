@@ -16,8 +16,6 @@ import "regexp"
 // were dead and are gone. This is a substring heuristic over the whole file,
 // comments included; a match does not prove the Containerfile executes a
 // build, only that it mentions one.
-//
-//nolint:gochecknoglobals // precompiled regex table — read-only.
 var RebuildPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`mvn.*package`),
 	regexp.MustCompile(`mvn.*install`),

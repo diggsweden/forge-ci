@@ -120,7 +120,7 @@ func ResolvePushedManifestDigest(ctx context.Context, registry RawManifestRegist
 	if in.DigestFile != "" {
 		warnOnInvalidExpected = true
 
-		body, err := os.ReadFile(in.DigestFile) //nolint:gosec // operator-selected Buildah digestfile path.
+		body, err := os.ReadFile(in.DigestFile)
 		if err == nil {
 			expectedDigest = string(body)
 		}

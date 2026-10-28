@@ -39,26 +39,26 @@ func FuzzParseRules(f *testing.F) {
 			return
 		}
 
-		for i, rule := range rules {
+		for index, rule := range rules {
 			if rule.Type == "" {
-				t.Fatalf("rules[%d] has empty type for input %q", i, input)
+				t.Fatalf("rules[%d] has empty type for input %q", index, input)
 			}
 
 			switch rule.Type {
 			case container.RuleTypeRaw, container.RuleTypeRef, container.RuleTypeSemver, container.RuleTypeSHA:
 			default:
-				t.Fatalf("rules[%d] has unsupported type %q for input %q", i, rule.Type, input)
+				t.Fatalf("rules[%d] has unsupported type %q for input %q", index, rule.Type, input)
 			}
 
 			if rule.Priority() <= 0 {
-				t.Fatalf("rules[%d] has non-positive priority %d", i, rule.Priority())
+				t.Fatalf("rules[%d] has non-positive priority %d", index, rule.Priority())
 			}
 
 			if rule.Event != "" {
 				switch rule.Event {
 				case container.RefEventBranch, container.RefEventTag, container.RefEventPR:
 				default:
-					t.Fatalf("rules[%d] has invalid event %q", i, rule.Event)
+					t.Fatalf("rules[%d] has invalid event %q", index, rule.Event)
 				}
 			}
 
@@ -71,7 +71,7 @@ func FuzzParseRules(f *testing.F) {
 			// and is pinned there.
 			for _, value := range []string{rule.Value, rule.Pattern, rule.Prefix} {
 				if strings.ContainsAny(value, ",\n") || value != strings.TrimSpace(value) {
-					t.Fatalf("rules[%d] has a value that is not one trimmed field: %q", i, value)
+					t.Fatalf("rules[%d] has a value that is not one trimmed field: %q", index, value)
 				}
 			}
 		}

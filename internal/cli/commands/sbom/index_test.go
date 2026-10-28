@@ -19,6 +19,11 @@ import (
 
 func TestIndexCommandIsOfflineAndBindsProducerDocuments(t *testing.T) {
 	root := t.TempDir()
+	outputs := filepath.Join(root, "ci-output")
+	t.Setenv("FORGEJO_OUTPUT", outputs)
+	t.Setenv("FORGEJO_ACTIONS", "true")
+	t.Setenv("GITHUB_ACTIONS", "true")
+
 	native := []byte(`{"bomFormat":"CycloneDX","specVersion":"1.6"}`)
 	digest := "sha256:" + strings.Repeat("1", 64)
 	index := []byte(fmt.Sprintf(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[{"digest":%q,"platform":{"os":"linux","architecture":"arm64"}}]}`, digest))
@@ -34,6 +39,12 @@ func TestIndexCommandIsOfflineAndBindsProducerDocuments(t *testing.T) {
 	args := []string{"sbom", "index", "--root", root, "--index-file", "index.json", "--platform-sboms", "parts.json", "--image-ref", ref, "--output", out}
 	require.NoError(t, sbomcmd.New().Run(t.Context(), args))
 	require.FileExists(t, out)
+
+	ciOutput, err := os.ReadFile(outputs)
+	require.NoError(t, err)
+	require.Contains(t, string(ciOutput), "evidence-files<<")
+	require.Contains(t, string(ciOutput), filepath.Join(root, "native.json"))
+	require.Contains(t, string(ciOutput), out)
 	require.NoError(t, os.Remove(out))
 	require.NoError(t, os.WriteFile(filepath.Join(root, "native.json"), []byte(`{}`), 0o600))
 	require.Error(t, sbomcmd.New().Run(t.Context(), args))

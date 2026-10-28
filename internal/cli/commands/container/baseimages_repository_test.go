@@ -13,39 +13,28 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
-// A base-image statement says its images were built from --repository, so the
-// signer signs only below that repository's owner on the registry it logs in
-// to. The caller chooses the repository name there and nothing else. Every
-// ledger below is entirely inside the repository it is signed with: the
-// repository rule is the only thing that can refuse it.
-func TestBaseImagesSign_SignsOnlyBelowTheSourceOwnerOnTheLoginRegistry(t *testing.T) {
+// The signer signs in the one base-image repository it is given, or the one
+// derived from --server-url and --repository, and logs in to that repository's
+// registry. The repository may be under any owner and on any registry: the
+// registry token decides what can be written there. Every ledger below is
+// inside the repository it is signed with unless the case says otherwise.
+func TestBaseImagesSign_SignsInTheGivenRepositoryOnItsRegistry(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		// The placeholders HOST and OTHER stand for the forge's registry and a
 		// second registry; an empty expected repository leaves the flag off.
 		source, expected, registry string
-		// external passes --external-registry: the repository is on a
-		// registry other than the forge's, named by the repository itself.
-		external bool
-		refused  string
+		// ledger, when set, is the repository the ledger's entries are in.
+		ledger  string
+		refused string
 	}{
 		{name: "derived default", source: baseSlug},
 		{name: "derived default named outright", source: baseSlug, expected: "HOST/owner/app-base"},
 		{name: "same owner, another name", source: baseSlug, expected: "HOST/owner/release-bases"},
-		{name: "same owner, a nested name", source: baseSlug, expected: "HOST/owner/bases/alpine"},
-		{name: "owner in another case", source: "OWNER/App", expected: "HOST/owner/release-bases"},
-		{name: "nested owner namespace", source: "Group/Team/App", expected: "HOST/group/team/bases"},
-		{name: "registry named with --registry", source: baseSlug, expected: "OTHER/owner/app-base", registry: "OTHER"},
-		{name: "another owner", source: baseSlug, expected: "HOST/other/app-base", refused: "must be below the source repository's owner"},
-		{name: "an owner that only starts the same", source: baseSlug, expected: "HOST/owner-two/app-base", refused: "must be below the source repository's owner"},
-		{name: "the owner itself", source: baseSlug, expected: "HOST/owner", refused: "must be below the source repository's owner"},
-		{name: "part of a nested owner namespace", source: "Group/Team/App", expected: "HOST/group/bases", refused: "must be below the source repository's owner"},
-		{name: "another registry", source: baseSlug, expected: "OTHER/owner/app-base", refused: "must be on the registry this command logs in to"},
-		{name: "the forge beside another --registry", source: baseSlug, expected: "HOST/owner/app-base", registry: "OTHER", refused: "must be on the registry this command logs in to"},
-		{name: "the same host on another port", source: baseSlug, expected: "HOST0/owner/app-base", refused: "must be on the registry this command logs in to"},
-		{name: "external registry named by its repository", source: baseSlug, expected: "OTHER/owner/app-base", external: true},
-		{name: "external registry under another owner", source: baseSlug, expected: "OTHER/another-org/nanolinter-base", external: true},
-		{name: "external repository beside another --registry", source: baseSlug, expected: "OTHER/another-org/app-base", registry: "HOST", external: true, refused: "must be on the registry this command logs in to"},
+		{name: "another owner", source: baseSlug, expected: "HOST/other/app-base"},
+		{name: "another registry", source: baseSlug, expected: "OTHER/another-org/app-base"},
+		{name: "the forge's registry named with --registry", source: baseSlug, expected: "OTHER/owner/app-base", registry: "OTHER"},
+		{name: "a ledger outside the repository", source: baseSlug, expected: "HOST/owner/app-base", ledger: "HOST/owner/elsewhere", refused: "must be under"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			fixture := newBaseSignFixture(t)
@@ -70,11 +59,12 @@ func TestBaseImagesSign_SignsOnlyBelowTheSourceOwnerOnTheLoginRegistry(t *testin
 				args = append(args, "--registry", place(tc.registry))
 			}
 
-			if tc.external {
-				args = append(args, "--external-registry")
+			ledger := repository
+			if tc.ledger != "" {
+				ledger = place(tc.ledger)
 			}
 
-			fixture.writeLedger(t, repository)
+			fixture.writeLedger(t, ledger)
 
 			var signErr error
 
@@ -91,9 +81,8 @@ func TestBaseImagesSign_SignsOnlyBelowTheSourceOwnerOnTheLoginRegistry(t *testin
 				return
 			}
 
-			require.ErrorIs(t, signErr, errs.ErrValidation)
 			require.ErrorContains(t, signErr, tc.refused)
-			require.Empty(t, calls, "cosign ran for a refused repository")
+			require.Empty(t, calls, "cosign ran for a refused ledger")
 
 			scratch, err := os.ReadDir(fixture.env.Path("runner-temp"))
 			require.NoError(t, err)
@@ -102,20 +91,21 @@ func TestBaseImagesSign_SignsOnlyBelowTheSourceOwnerOnTheLoginRegistry(t *testin
 	}
 }
 
-// Promotion writes the final tags of the same repository, so it holds an
-// explicit repository to the rule the signer does. An admitted repository
-// goes on to the trusted key, which this run does not have.
-func TestBaseImagesPromote_PromotesOnlyBelowTheSourceOwnerOnTheLoginRegistry(t *testing.T) {
+// Promotion logs in to the base-image repository's own registry. An empty
+// registry user is the source owner on the forge's registry; another registry
+// needs its user named, refused before the key or a credential is read.
+func TestBaseImagesPromote_NeedsARegistryUserOffTheForge(t *testing.T) {
 	for _, tc := range []struct {
-		name, expected string
-		want           error
-		contains       string
+		name, expected, user string
+		want                 error
+		contains             string
 	}{
-		{name: "derived default", want: errs.ErrMissingInput, contains: "Cosign public key is missing"},
-		{name: "same owner, another name", expected: "forge.example:8443/owner/release-bases", want: errs.ErrMissingInput, contains: "Cosign public key is missing"},
-		{name: "another owner", expected: "forge.example:8443/other/app-base", want: errs.ErrValidation, contains: "must be below the source repository's owner"},
-		{name: "another registry", expected: "registry.example/owner/app-base", want: errs.ErrValidation, contains: "must be on the registry this command logs in to"},
-		{name: "the forge without its port", expected: "forge.example/owner/app-base", want: errs.ErrValidation, contains: "must be on the registry this command logs in to"},
+		{name: "derived default", user: "fixture", want: errs.ErrMissingInput, contains: "Cosign public key is missing"},
+		{name: "another owner", expected: "forge.example:8443/other/app-base", user: "fixture", want: errs.ErrMissingInput, contains: "Cosign public key is missing"},
+		{name: "the forge's owner by default", want: errs.ErrMissingInput, contains: "Cosign public key is missing"},
+		{name: "another registry with its user", expected: "registry.example/owner/app-base", user: "fixture", want: errs.ErrMissingInput, contains: "Cosign public key is missing"},
+		{name: "another registry without a user", expected: "registry.example/owner/app-base", want: errs.ErrUsage, contains: "registry-user"},
+		{name: "the forge without its port", expected: "forge.example/owner/app-base", want: errs.ErrUsage, contains: "registry-user"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			fixture := newBaseSignFixture(t)
@@ -124,8 +114,12 @@ func TestBaseImagesPromote_PromotesOnlyBelowTheSourceOwnerOnTheLoginRegistry(t *
 				"container", "base-images", "promote", "--all-images-json", "[]",
 				"--server-url", "https://forge.example:8443", "--repository", baseSlug, "--repository-suffix", "-base",
 				"--expected-workflow", baseWorkflow, "--cosign-public-key-path", "keys/absent.pub",
-				"--cosign-public-key-sha256", strings.Repeat("a", 64), "--registry-username", "fixture",
+				"--cosign-public-key-sha256", strings.Repeat("a", 64),
 			}
+			if tc.user != "" {
+				args = append(args, "--registry-username", tc.user)
+			}
+
 			if tc.expected != "" {
 				args = append(args, "--expected-repository", tc.expected)
 			}

@@ -251,7 +251,7 @@ func imageEvidenceMultiArch(ctx context.Context, deps imageEvidenceDeps, in Imag
 // imageEvidenceScanOnePlatform extracts one platform into a temp OCI layout
 // and scans it. The first return value is a non-fatal scan/cleanup error (the
 // caller keeps going); the second aborts the whole run.
-func imageEvidenceScanOnePlatform(ctx context.Context, deps imageEvidenceDeps, in ImageEvidenceInput, scan imageEvidenceScan, fullLayout string, platform imageEvidencePlatform) (error, error) { //nolint:revive // (scanErr, fatalErr): non-fatal scan error vs run-aborting error.
+func imageEvidenceScanOnePlatform(ctx context.Context, deps imageEvidenceDeps, in ImageEvidenceInput, scan imageEvidenceScan, fullLayout string, platform imageEvidencePlatform) (error, error) {
 	layout, err := makeImageEvidenceTempDir(in, "image-evidence-"+platform.Arch+".*")
 	if err != nil {
 		return nil, err
@@ -338,7 +338,7 @@ func validateImageEvidenceOutputPaths(paths []string) error {
 			continue
 		}
 
-		absolute, err := filepath.Abs(path)
+		absolute, err := canonicalSnapshotPath(path)
 		if err != nil {
 			return err
 		}

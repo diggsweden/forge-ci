@@ -462,7 +462,6 @@ func TestVerifyExistingReleaseImage_RedactsUnsafeVerifierOutput(t *testing.T) {
 		{name: "authorization header", line: "GET /v2/ HTTP/1.1 Authorization: Basic Y2FuYXJ5OnBhc3N3b3Jk", canary: "Y2FuYXJ5OnBhc3N3b3Jk"},
 		{name: "bearer token", line: "retrying with Bearer CANARY-BEARER-9f31c8", canary: "CANARY-BEARER-9f31c8"},
 		{name: "registry password", line: "password=CANARY-REGISTRY-PW-4a17", canary: "CANARY-REGISTRY-PW-4a17"},
-		//nolint:gosec // G101: a synthetic canary in a fixture line, not a credential.
 		{name: "credential URL", line: "fetching https://user:CANARY-INLINE-PW-77b2@registry.example/v2/", canary: "CANARY-INLINE-PW-77b2"},
 		{
 			name: "an OIDC JWT", canary: "eyJhbGciOiJIUzI1NiJ9",
@@ -508,7 +507,7 @@ func TestVerifyExistingReleaseImage_RedactsUnsafeVerifierOutput(t *testing.T) {
 	}
 }
 
-var errReleaseImageVerify = errors.New("cosign: verification failed") //nolint:err113 // test fixture sentinel.
+var errReleaseImageVerify = errors.New("cosign: verification failed")
 
 // TestVerifyExistingReleaseImage_EachIdentityFieldIsChecked makes one
 // provenance field wrong at a time on a statement that otherwise matches,
@@ -533,15 +532,15 @@ func TestVerifyExistingReleaseImage_EachIdentityFieldIsChecked(t *testing.T) {
 	path := func(statement map[string]any, keys ...string) map[string]any {
 		node := statement
 		for _, key := range keys {
-			node = node[key].(map[string]any) //nolint:forcetypeassert // the fixture builds these maps.
+			node = node[key].(map[string]any)
 		}
 
 		return node
 	}
 	dependency := func(statement map[string]any, index int) map[string]any {
-		deps := path(statement, "predicate", "buildDefinition")["resolvedDependencies"].([]any) //nolint:forcetypeassert // fixture shape.
+		deps := path(statement, "predicate", "buildDefinition")["resolvedDependencies"].([]any)
 
-		return deps[index].(map[string]any) //nolint:forcetypeassert // fixture shape.
+		return deps[index].(map[string]any)
 	}
 
 	for name, mutate := range map[string]func(map[string]any){

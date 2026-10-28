@@ -23,7 +23,7 @@ type ExtractNPMTarballInput struct {
 // extracts it with `tar --strip-components=1` semantics, removes the
 // tarball for container build contexts, and behaves as a no-op when no tarball
 // is present.
-func ExtractNPMTarball(w io.Writer, in ExtractNPMTarballInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func ExtractNPMTarball(out io.Writer, in ExtractNPMTarballInput) error {
 	dir := in.Dir
 	if dir == "" {
 		var err error
@@ -43,7 +43,7 @@ func ExtractNPMTarball(w io.Writer, in ExtractNPMTarballInput) error { //nolint:
 		return nil
 	}
 
-	_, _ = fmt.Fprintf(w, "Extracting %s...\n", tarball)
+	_, _ = fmt.Fprintf(out, "Extracting %s...\n", tarball)
 
 	if err := archive.UntarStripOne(tarball, dir); err != nil {
 		return fmt.Errorf("extract %s: %w", tarball, err)

@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -42,15 +43,15 @@ func TestLedgerCleanup_ReportsOnlyDeletedCandidates(t *testing.T) {
 			defer func() { _ = capture.Close() }()
 
 			previous := os.Stderr
-			os.Stderr = capture //nolint:reassign // serial test captures the command's public diagnostic.
+			os.Stderr = capture
 
-			defer func() { os.Stderr = previous }() //nolint:reassign // restore even after a failed assertion.
+			defer func() { os.Stderr = previous }()
 
 			if cleanupErr := runLedgerCleanup(t.Context(), reg, []imageledger.Entry{entry}, "v1.2.3", "ledger", false); cleanupErr != nil {
 				t.Fatal(cleanupErr)
 			}
 
-			os.Stderr = previous //nolint:reassign // restore before reading the result.
+			os.Stderr = previous
 
 			body, err := os.ReadFile(capture.Name())
 			if err != nil || !strings.Contains(string(body), fmt.Sprintf("cleaned up %d candidate tag(s)", want)) || len(reg.operations) != want {
@@ -79,20 +80,20 @@ func TestDryRunRegistry_SimulatesCopyAndLogsWithoutMutating(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	d := newDryRunRegistry(stubResolver{"reg/repo:staging": dig}, &buf)
+	registry := newDryRunRegistry(stubResolver{"reg/repo:staging": dig}, &buf)
 	ctx := context.Background()
 
 	// A copy is simulated, not performed: it logs and makes the dest
 	// resolve to the source digest so the domain's post-copy verify passes.
-	if err := d.CopyTag(ctx, "reg/repo:staging", "reg/repo:v1"); err != nil {
+	if err := registry.CopyTag(ctx, "reg/repo:staging", "reg/repo:v1"); err != nil {
 		t.Fatal(err)
 	}
 
-	if got, _ := d.ResolveDigest(ctx, "reg/repo:v1"); got != dig {
+	if got, _ := registry.ResolveDigest(ctx, "reg/repo:v1"); got != dig {
 		t.Errorf("simulated dest digest = %q, want %q", got, dig)
 	}
 
-	if err := d.DeleteTag(ctx, "reg/repo:staging"); err != nil {
+	if err := registry.DeleteTag(ctx, "reg/repo:staging"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -323,10 +324,8 @@ func TestLedgerAdd_ExposesSBOMPinAndProvenanceFlags(t *testing.T) {
 
 func hasFlag(cmd *cli.Command, name string) bool {
 	for _, f := range cmd.Flags {
-		for _, n := range f.Names() {
-			if n == name {
-				return true
-			}
+		if slices.Contains(f.Names(), name) {
+			return true
 		}
 	}
 

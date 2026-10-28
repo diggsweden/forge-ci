@@ -16,6 +16,7 @@ package imageledger
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/diggsweden/forge-ci/internal/domain/container"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/version"
 	"github.com/diggsweden/forge-ci/internal/pathsafe"
 )
 
@@ -144,8 +146,6 @@ func DeriveTags(imageName, releaseTag string) (string, string) {
 
 // Schema patterns provide portable editor lint for OCI/registry references.
 // Runtime validation uses the strict parser-backed container helpers below.
-//
-//nolint:gochecknoglobals // compiled regex table — read-only.
 var (
 	imageRefSchemaRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)+(:` + container.OCITagComponent + `)?@sha256:[0-9a-f]{64}$`)
 	tagRefSchemaRE   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)+:` + container.OCITagComponent + `$`)
@@ -159,8 +159,8 @@ var (
 // tagName returns the tag portion of a registry ref (everything after
 // the final ':').
 func tagName(ref string) string {
-	if i := strings.LastIndex(ref, ":"); i >= 0 {
-		return ref[i+1:]
+	if _, after, ok := strings.CutLast(ref, ":"); ok {
+		return after
 	}
 
 	return ref
@@ -175,8 +175,8 @@ func tagName(ref string) string {
 // any external naming invariant.
 func repoPathAfterHost(ref string) string {
 	repo := container.StripTag(ref)
-	if slash := strings.Index(repo, "/"); slash >= 0 {
-		return repo[slash+1:]
+	if _, after, ok := strings.Cut(repo, "/"); ok {
+		return after
 	}
 
 	return repo
@@ -193,14 +193,16 @@ func (e Entry) DigestSource() string {
 	return e.FinalTag
 }
 
-// PinDigest records the resolved digest on the entry and derives its
-// canonical digest-pinned Ref (<registry>/<path>@<digest>) from the
-// digest source. This keeps the "what an Entry.Ref is" invariant inside
-// the package that owns the schema, rather than letting callers assemble
-// the ref by hand.
-func (e *Entry) PinDigest(digest string) {
+// PinDigest returns the entry with the resolved digest recorded and its
+// canonical digest-pinned Ref (<registry>/<path>@<digest>) derived from
+// the digest source. This keeps the "what an Entry.Ref is" invariant
+// inside the package that owns the schema, rather than letting callers
+// assemble the ref by hand.
+func (e Entry) PinDigest(digest string) Entry {
 	e.Digest = digest
 	e.Ref = container.StripTag(e.DigestSource()) + "@" + digest
+
+	return e
 }
 
 // Validate enforces the full trust-boundary rules for one entry against
@@ -352,6 +354,10 @@ func (e Entry) validateReleaseMovingTag(releaseTag string) error {
 		return nil
 	}
 
+	if parsed, ok := version.ParseSemverTag(releaseTag); ok && parsed.Prerelease != "" {
+		return fmt.Errorf("imageledger: prereleases cannot publish a moving tag: %w", errs.ErrValidation)
+	}
+
 	movingName := tagName(e.MovingTag)
 	if strings.HasPrefix(movingName, StagingTagPrefix) || movingName == releaseTag || strings.HasPrefix(movingName, releaseTag+"-") {
 		return fmt.Errorf("imageledger: moving_tag %q must not be a staging or immutable release tag: %w", e.MovingTag, errs.ErrValidation)
@@ -401,6 +407,26 @@ func (e Entry) validateFormat() error {
 	}
 
 	return e.validateTagRefs()
+}
+
+// DefaultSBOMPath chooses the premade base-signer path for bases and the
+// conventional flavor/role path for releases. Empty means required naming input
+// is missing. Entry validation checks paths at admission and publication.
+func DefaultSBOMPath(kind ImageKind, flavor, role string) string {
+	if kind == ImageKindBase {
+		if flavor == "" {
+			return ""
+		}
+
+		return "premade-sboms/base-sbom-" + flavor + ".cyclonedx.json"
+	}
+
+	suffix := cmp.Or(flavor, role)
+	if suffix == "" {
+		return ""
+	}
+
+	return "dist/image-sbom-" + suffix + ".cyclonedx.json"
 }
 
 // validateSBOM checks the optional SBOM path, which must stay inside the

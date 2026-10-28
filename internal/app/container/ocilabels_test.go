@@ -33,18 +33,16 @@ func TestOCIReleaseLabelFlags_EmitsBuildahTokensAndDefaultsDocumentation(t *test
 	t.Parallel()
 
 	got, err := appcontainer.OCIReleaseLabelFlags(appcontainer.OCIReleaseLabelsInput{
-		OCILabels: domaincontainer.OCILabels{
-			Title:       "nanolinter",
-			Version:     "v0.7.9",
-			Revision:    strings.Repeat("a", 40),
-			RefName:     "v0.7.9-alpine",
-			Description: "Small lint image",
-			Licenses:    "EUPL-1.2",
-			Vendor:      "Itiquette",
-			Authors:     "The Itiquette Authors",
-		},
-		Created: "2026-06-30T12:34:56Z",
-		Source:  "https://codeberg.org/Itiquette/nanolinter",
+		Title:       "nanolinter",
+		Version:     "v0.7.9",
+		Revision:    strings.Repeat("a", 40),
+		RefName:     "v0.7.9-alpine",
+		Description: "Small lint image",
+		Licenses:    "EUPL-1.2",
+		Vendor:      "Itiquette",
+		Authors:     "The Itiquette Authors",
+		Created:     "2026-06-30T12:34:56Z",
+		Source:      "https://codeberg.org/Itiquette/nanolinter",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -269,14 +267,12 @@ func TestOCIImageLabelsJSON_UnlabelledImageIsAnEmptyObject(t *testing.T) {
 // exactly one field.
 func validOCIReleaseLabelsInput() appcontainer.OCIReleaseLabelsInput {
 	return appcontainer.OCIReleaseLabelsInput{
-		OCILabels: domaincontainer.OCILabels{
-			Title:    "Demo",
-			Version:  "v1.2.3",
-			Revision: strings.Repeat("a", 40),
-			RefName:  "v1.2.3",
-		},
-		Created: "2026-01-01T00:00:00Z",
-		Source:  "https://codeberg.org/example/demo",
+		Title:    "Demo",
+		Version:  "v1.2.3",
+		Revision: strings.Repeat("a", 40),
+		RefName:  "v1.2.3",
+		Created:  "2026-01-01T00:00:00Z",
+		Source:   "https://codeberg.org/example/demo",
 	}
 }
 

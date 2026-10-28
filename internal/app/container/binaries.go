@@ -35,7 +35,7 @@ type SuffixExtractedBinariesInput struct {
 // Every source and destination is checked before the first rename.
 //
 //nolint:cyclop // renames per (variant, ext, platform) combination.
-func SuffixExtractedBinaries(w io.Writer, in SuffixExtractedBinariesInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func SuffixExtractedBinaries(out io.Writer, in SuffixExtractedBinariesInput) error {
 	if in.Dir == "" {
 		return fmt.Errorf("directory is required: pass --dir <path> or set $EXTRACTED_BINARIES_DIR: %w", errs.ErrUsage)
 	}
@@ -95,7 +95,7 @@ func SuffixExtractedBinaries(w io.Writer, in SuffixExtractedBinariesInput) error
 			return fmt.Errorf("rename %s -> %s: %w", name, newName, err)
 		}
 
-		_, _ = fmt.Fprintf(w, "renamed %s -> %s\n", name, newName)
+		_, _ = fmt.Fprintf(out, "renamed %s -> %s\n", name, newName)
 	}
 
 	return nil
@@ -124,11 +124,8 @@ func preflightBinaryNames(root *os.Root, names []string, arch string) error {
 			return statErr
 		}
 
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("binary %s is not a regular file: %w", name, errs.ErrValidation)
-		}
-		if info.Size() == 0 {
-			return fmt.Errorf("binary %s is empty: %w", name, errs.ErrValidation)
+		if err := validateExtractedBinary(info, name); err != nil {
+			return err
 		}
 
 		if _, destErr := root.Lstat(name + "-linux-" + arch); !errors.Is(destErr, os.ErrNotExist) {
@@ -138,6 +135,18 @@ func preflightBinaryNames(root *os.Root, names []string, arch string) error {
 
 	if len(missing) > 0 {
 		return fmt.Errorf("expected extracted binaries missing: %s: %w", strings.Join(missing, ", "), errs.ErrMissingInput)
+	}
+
+	return nil
+}
+
+func validateExtractedBinary(info fs.FileInfo, name string) error {
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("binary %s is not a regular file: %w", name, errs.ErrValidation)
+	}
+
+	if info.Size() == 0 {
+		return fmt.Errorf("binary %s is empty: %w", name, errs.ErrValidation)
 	}
 
 	return nil

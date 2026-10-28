@@ -2,10 +2,10 @@
 
 Complete reference for the artifacts config format.
 
-> **Unpublished 0.90.0:** `@v0.90.0` references below are prospective. Until the tag
-> and matching runtime images exist, use the reviewed-branch procedure in
-> [Runtime Images](runtime-images.md); do not substitute an unreviewed moving
-> ref in production.
+> **Current source versus release pins:** `v0.90.0` examples identify a historical
+> baseline, not the current source revision. Confirm matching workflows, CLI
+> assets and runtime images before adoption. For unreleased changes, follow
+> [Branch Testing](runtime-images.md#branch-testing).
 
 ---
 
@@ -30,7 +30,7 @@ Co-located with the other forge-ci files:
 [`.forge-ci/artifacts.schema.json`](../.forge-ci/artifacts.schema.json) is a Draft 2020-12 schema for editor completion and structural checks. Most editors honour the `# yaml-language-server: $schema=…` directive at the top of a YAML file:
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/diggsweden/forge-ci/main/.forge-ci/artifacts.schema.json
+# yaml-language-server: $schema=./artifacts.schema.json
 artifacts:
   - name: my-artifact
     project-type: maven
@@ -40,6 +40,13 @@ The schema is contract-tested against shipped `examples/*/artifacts.yml`, but
 does not replace `config parse-artifacts`. Ecosystem-specific `config` blocks
 remain open in the schema; runtime parsing rejects unknown keys and validation
 checks supported combinations.
+
+Copy `.forge-ci/artifacts.schema.json` from the reviewed Forge CI revision that
+matches your workflow and executor into your project's `.forge-ci/` directory.
+The relative directive above resolves beside `artifacts.yml`. If using a remote
+schema instead, pin its URL to that same immutable source revision rather than
+`main`; a moving schema can accept fields an older executor does not support.
+Coordinate schema updates with the [runtime and CLI pins](runtime-images.md#advanced-pinning-recipe).
 
 ## Auto-derive: skip the file for simple repos
 
@@ -54,6 +61,14 @@ When `.forge-ci/artifacts.yml` is absent AND the repo has **exactly one** ecosys
 | `build.gradle` or `build.gradle.kts` | one Gradle artifact, name = `rootProject.name` (or repo dir name as fallback) |
 
 This collapses the common "single-library repo" case to zero configuration. **Polyglot repos** (more than one root manifest) refuse to auto-derive and demand an explicit `artifacts.yml`. The error names every manifest it found.
+
+Auto-derive synthesises no container, so no image is released from it. The
+release-images plan (`forge-ci container release-images plan`, which the
+Forgejo `release-images.yml` runs) is the exception: called without an
+`artifacts.yml`, it releases the repository's own image, one container named
+after the repository and built from the root `Containerfile` with every
+default (`linux/amd64`, scanned). Calling it is the repository's choice to
+release images; declare `containers:` for anything else.
 
 ## Overview
 
@@ -727,7 +742,9 @@ Google Play normally requires a signed bundle.
 ## Containers Section
 
 For artifact-first examples that need no image, omit `containers` or set it to
-`[]`; retain the artifact declaration. Container-first builds need their
+`[]`; retain the artifact declaration. A repository that builds its binaries
+with its own tooling may declare only `containers:` and omit `artifacts`; a
+file must declare at least one of the two. Container-first builds need their
 container build path, so choose the appropriate build mode before removing it.
 Use `platforms` for one or multiple native architecture builds. Per-container
 `enable-slsa`, `enable-scan` and `scan-severity` values flow through the typed
@@ -824,6 +841,22 @@ vulnerabilities:
 ```
 
 Once `expired_at` passes, the finding blocks again.
+
+#### `image-name`
+
+- **Type:** `string`
+- **Description:** The image repository instead of the one derived from the repository and `name`, as the GitHub `publish-container.yml` input of the same name takes it: a path under the registry (`owner/app`) or a full repository (`ghcr.io/owner/app`). Lowercase, no tag or digest. The Forgejo `release-images.yml` refuses it: a release there publishes to the one repository of its `image-repository` input.
+- **Default:** empty (derived)
+- **Example:** `image-name: owner/app`
+- **Used by:** the GitHub `publish-container.yml`
+
+#### `tag-suffix`
+
+- **Type:** `string`
+- **Description:** Appended to the release tag to make this container's tag, so `v1.2.3` with `-distroless` publishes `v1.2.3-distroless`. Starts with `-`; lowercase letters, digits and `.`, `_` or `-` separators.
+- **Default:** empty (the release tag itself)
+- **Example:** `tag-suffix: -distroless`
+- **Used by:** the Forgejo `release-images.yml`; see [Release images](forgejo.md#release-images)
 
 #### `target`
 

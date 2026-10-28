@@ -30,16 +30,14 @@ func baseImagesSignCmd() *cli.Command {
 		Usage: "sign and attest the base images recorded in a base-image ledger",
 		Description: `Signer side of the base-image boundary, in one process and in this order:
 
-  1. admit the repository and the ledger: the base-image repository is on the
-     registry this command logs in to (--registry, else the --server-url host,
-     with its port) and below the owner of --repository, compared without
-     case; the ledger parses, every entry is an image_kind=base entry, and
-     every ref and tag is inside that repository (the one "base-images
-     validate" derives from the same flags);
+  1. admit the ledger: it parses, every entry is an image_kind=base entry,
+     and every ref and tag is inside the one base-image repository
+     (--expected-repository, else the one "base-images validate" derives from
+     the same flags);
   2. build the run-level SLSA provenance from the ledger's own image digests
      (the generic "release provenance" profile), naming --server-url/--repository
      as the source, --source-sha as its commit and --workflow as the caller;
-  3. log in to the registry with a short-lived auth config;
+  3. log in to that repository's registry with a short-lived auth config;
   4. sign each image digest and attest its CycloneDX SBOM and its per-image
      SLSA predicate, as "container ledger sign" does.
 
@@ -47,9 +45,6 @@ A refusal in step 1 or 2 happens before any credential is read and before
 anything is signed or written to a registry. The source repository and commit
 come from the flags, so a signer can attest a pinned commit other than the one
 it runs on; the builder identity, invocation and ref remain the runner's own.
---expected-repository chooses the repository name below the owner and nothing
-else: another owner or another registry is refused, with no flag to allow it,
-so the signer cannot attest a path the source repository's owner does not hold.
 --workflow, --source-sha and --started-on are read from the command line only:
 what the statement records is not taken from a variable the job happens to set.
 
@@ -115,7 +110,7 @@ EXAMPLE:
 				// auth directory is this run's only scratch space and is
 				// removed with it.
 				envelope := filepath.Join(filepath.Dir(authFile), "base-provenance.intoto.json")
-				if err := os.WriteFile(envelope, statement, 0o600); err != nil { //nolint:gosec // path is inside the fresh private directory created by withBaseImagesDockerConfig.
+				if err := os.WriteFile(envelope, statement, 0o600); err != nil {
 					return fmt.Errorf("base images: write provenance statement: %w", err)
 				}
 
@@ -144,16 +139,11 @@ EXAMPLE:
 }
 
 // baseImagesSignSource returns the source repository URL the statement
-// records, once the base-image repository is one that source may be signed
-// in.
+// records.
 func baseImagesSignSource(common baseImagesCommon) (string, error) {
 	source := baseImagesSource(common.ServerURL, common.Repository)
 	if source == "" {
 		return "", fmt.Errorf("base images: --%s and --%s are required: they name the source repository the provenance records: %w", flagServerURL, flagRepository, errs.ErrUsage)
-	}
-
-	if err := common.requireSourceOwnedRepository(); err != nil {
-		return "", err
 	}
 
 	return source, nil

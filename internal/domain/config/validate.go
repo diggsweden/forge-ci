@@ -20,8 +20,6 @@ import (
 // uppercase / digit / underscore, starting with letter or underscore.
 // Each `build-secrets` entry has to fit this because the value flows
 // through env-var lookup at materialize time.
-//
-//nolint:gochecknoglobals // immutable compiled regexp.
 var buildSecretNamePattern = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
 
 // ValidBuildSecretName reports whether name has the env-var identifier
@@ -36,8 +34,6 @@ func ValidBuildSecretName(name string) bool { return buildSecretNamePattern.Matc
 // its own secret pass-through. Adopters can't shadow them as
 // build-secret entries — that would create a name collision in the
 // envelope decoding.
-//
-//nolint:gochecknoglobals // immutable lookup table.
 var forgeCIReservedSecretNames = map[string]bool{
 	"FORGE_CI_BUILD_SECRETS_JSON":              true,
 	"RELEASE_GPG_PRIVATE_KEY":                  true,
@@ -157,8 +153,10 @@ func Validate(cfg *Config) error {
 
 	var violations []string
 
-	if len(cfg.Artifacts) == 0 {
-		violations = append(violations, "no artifacts found")
+	// A repository that builds its binaries itself may declare only the
+	// images it releases; one that declares neither describes nothing.
+	if len(cfg.Artifacts) == 0 && len(cfg.Containers) == 0 {
+		violations = append(violations, "no artifacts or containers found")
 	}
 
 	validTypes := validProjectTypeSet()
@@ -243,7 +241,7 @@ func walkArtifacts(artifacts []Artifact, validTypes map[projecttype.Type]bool, v
 // validateArtifact runs all per-artifact schema rules, mutating
 // artifactNames as a side-effect (to detect duplicates across the loop).
 // Returns the list of violations contributed by this artifact.
-func validateArtifact(a Artifact, idx int, artifactNames map[string]bool, validTypes map[projecttype.Type]bool, validPublishTargets map[PublishTarget]bool) []string { //nolint:cyclop,varnamelen // each independent artifact schema rule contributes its own diagnostic.
+func validateArtifact(a Artifact, idx int, artifactNames map[string]bool, validTypes map[projecttype.Type]bool, validPublishTargets map[PublishTarget]bool) []string { //nolint:varnamelen // each independent artifact schema rule contributes its own diagnostic.
 	var v []string //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
 
 	switch {
@@ -306,7 +304,7 @@ func validateArtifact(a Artifact, idx int, artifactNames map[string]bool, validT
 	return v
 }
 
-func validateAndroidBuildTypes(a Artifact) []string { //nolint:varnamelen // matches sibling per-artifact validators.
+func validateAndroidBuildTypes(a Artifact) []string {
 	if a.ProjectType != projecttype.GradleAndroid {
 		return nil
 	}
@@ -333,7 +331,7 @@ func validateAndroidBuildTypes(a Artifact) []string { //nolint:varnamelen // mat
 //   - Artifact.Name              (SBOM filename prefix, upload-artifact tag)
 //   - Artifact.Go.BinaryName     (dist/<goos>-<goarch>/<bin>-<goos>-<goarch>)
 //   - Artifact.Cargo.BinaryName  (same)
-func validateArtifactFileNames(a Artifact) []string { //nolint:varnamelen // idiomatic short name (matches sibling validators).
+func validateArtifactFileNames(a Artifact) []string {
 	var v []string //nolint:varnamelen // idiomatic short name.
 
 	if err := checkNoPathSeparators(fmt.Sprintf("artifact %q name", a.Name), a.Name); err != "" {
@@ -429,7 +427,7 @@ func validateWorkingDirectory(a Artifact) []string { //nolint:varnamelen // idio
 // validateGoBuildMode rejects an invalid build-mode on a Go artifact.
 // Omitted is fine — GoArtifactBuildMode defaults it to artifact-first —
 // so only a typo/wrong value fails.
-func validateGoBuildMode(a Artifact) []string { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func validateGoBuildMode(a Artifact) []string {
 	switch GoArtifactBuildMode(a) {
 	case GoBuildModeArtifactFirst, GoBuildModeContainerFirst:
 		return nil
@@ -444,7 +442,7 @@ func validateGoBuildMode(a Artifact) []string { //nolint:varnamelen // idiomatic
 // validateCargoBuildMode is the Cargo counterpart of validateGoBuildMode.
 // Omitted is fine — CargoArtifactBuildMode defaults it — so only a
 // typo/wrong value fails.
-func validateCargoBuildMode(a Artifact) []string { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func validateCargoBuildMode(a Artifact) []string {
 	switch CargoArtifactBuildMode(a) {
 	case CargoBuildModeArtifactFirst, CargoBuildModeContainerFirst:
 		return nil
@@ -467,15 +465,8 @@ func validateContainer(ct Container, artifactNames map[string]bool, artifactByNa
 	if ct.Name == "" {
 		v = append(v, "container with empty name")
 	}
-	if ct.Extract != nil && ct.Extract.Binary != nil && ct.Extract.Binary.Paths != nil {
-		binary := ct.Extract.Binary
-		if binary.Target != "" || len(binary.Names) != 0 {
-			v = append(v, fmt.Sprintf("container %q extract.binary.paths cannot be combined with target or names", ct.Name))
-		}
-		if _, err := domaincontainer.ImageFileNames(binary.Paths); err != nil {
-			v = append(v, fmt.Sprintf("container %q extract.binary.paths: %v", ct.Name, err))
-		}
-	}
+
+	v = append(v, validateImageExtraction(ct)...)
 
 	artifactFirstGoDeps := []string{}
 	artifactFirstCargoDeps := []string{}
@@ -516,8 +507,50 @@ func validateContainer(ct Container, artifactNames map[string]bool, artifactByNa
 
 	v = append(v, validateBuildArgs(ct)...)
 	v = append(v, validateBuildSecrets(ct)...)
+	v = append(v, validateImageNaming(ct)...)
 
 	return v
+}
+
+var (
+	imageNamePattern = regexp.MustCompile(`^([a-z0-9.-]+(:[0-9]+)?/)?[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*$`)
+	tagSuffixPattern = regexp.MustCompile(`^-[a-z0-9]+([._-][a-z0-9]+)*$`)
+)
+
+// validateImageNaming keeps image-name a repository path and tag-suffix a
+// tag continuation, the same patterns the JSON schema publishes.
+func validateImageNaming(ct Container) []string {
+	var violations []string
+
+	if ct.ImageName != "" && !imageNamePattern.MatchString(ct.ImageName) {
+		violations = append(violations, fmt.Sprintf("container %q image-name %q must be a lowercase image repository without tag or digest, e.g. owner/app or ghcr.io/owner/app", ct.Name, ct.ImageName))
+	}
+
+	if ct.TagSuffix != "" && !tagSuffixPattern.MatchString(ct.TagSuffix) {
+		violations = append(violations, fmt.Sprintf("container %q tag-suffix %q must start with - and continue a tag in lowercase, e.g. -distroless", ct.Name, ct.TagSuffix))
+	}
+
+	return violations
+}
+
+func validateImageExtraction(ct Container) []string {
+	if ct.Extract == nil || ct.Extract.Binary == nil || ct.Extract.Binary.Paths == nil {
+		return nil
+	}
+
+	binary := ct.Extract.Binary
+
+	var violations []string
+
+	if binary.Target != "" || len(binary.Names) != 0 {
+		violations = append(violations, fmt.Sprintf("container %q extract.binary.paths cannot be combined with target or names", ct.Name))
+	}
+
+	if _, err := domaincontainer.ImageFileNames(binary.Paths); err != nil {
+		violations = append(violations, fmt.Sprintf("container %q extract.binary.paths: %v", ct.Name, err))
+	}
+
+	return violations
 }
 
 // validateBuildArgs enforces the CLI's newline-separated KEY=VALUE framing.
@@ -535,14 +568,14 @@ func validateBuildArgs(ct Container) []string {
 // Warnings returns non-fatal observations about a Config: e.g. Maven
 // applications publishing to forge-packages (libraries should, but
 // applications shouldn't). Validation passes regardless.
-func Warnings(c *Config) []string { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func Warnings(c *Config) []string {
 	if c == nil {
 		return nil
 	}
 
-	var w []string //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var w []string
 
-	for _, a := range c.Artifacts { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	for _, a := range c.Artifacts {
 		if a.ProjectType == projecttype.Maven &&
 			a.BuildType == BuildTypeApplication &&
 			slices.Contains(a.PublishTo, PublishForgePackages) {

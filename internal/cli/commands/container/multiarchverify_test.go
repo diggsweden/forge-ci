@@ -20,7 +20,12 @@ func TestMultiarchCommandRejectsConflictingTagAndMalformedLabelsBeforeIO(t *test
 	require.NoError(t, os.WriteFile(auth, []byte(`{"auths":{}}`), 0o600))
 	base := []string{"container", "multiarch-image", "assemble", "--auth-file", auth, "--source-sha", strings.Repeat("a", 64), "--server-url", "https://forge.invalid", "--repository", "acme/widget", "--image-repository", "registry.invalid/acme/widget"}
 
-	for _, extra := range [][]string{{"--tag", "staging-v1.2.3", "--tag-prefix", "conflict-"}, {"--require-label", "missing-equals"}} {
+	for _, extra := range [][]string{
+		{"--tag", "staging-v1.2.3", "--tag-prefix", "conflict-"},
+		{"--require-label", "missing-equals"},
+		// The gate scans staged layouts; a registry assembly has none.
+		{"--tag", "staging-v1.2.3", "--scan-output-template", "trivy-{arch}.json"},
+	} {
 		args := append(append([]string{}, base...), extra...)
 		err := containercmd.New().Run(t.Context(), args)
 		require.ErrorIs(t, err, errs.ErrUsage)

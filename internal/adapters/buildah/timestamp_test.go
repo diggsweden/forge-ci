@@ -29,6 +29,7 @@ while [ "$#" -gt 0 ]; do
 done
 `)
 			adapter := &buildah.Adapter{Bin: bins.Path("buildah"), Global: []string{"--storage-driver", "vfs"}}
+
 			for _, mode := range []string{"load", "local", "layout", "manifest", "without-timestamp"} {
 				t.Run(mode, func(t *testing.T) {
 					req := container.BuildRequest{
@@ -36,8 +37,12 @@ done
 						SourceDateEpoch: "1700000000", AuthFile: "/tmp/timestamp-auth.json",
 						BuildArgs: []string{"VERSION=1.2.3"},
 					}
-					var log strings.Builder
-					var err error
+
+					var (
+						log strings.Builder
+						err error
+					)
+
 					switch mode {
 					case "manifest":
 						err = adapter.BuildManifest(t.Context(), container.BuildPushManifestBuildRequest{
@@ -48,35 +53,43 @@ done
 						req.Mode = container.BuildModePushByDigest
 						err = adapter.BuildToLayout(t.Context(), req, t.TempDir(), &log)
 					default:
-						if mode == "local" {
+						switch mode {
+						case "local":
 							req.Mode, req.OutputDir = container.BuildModeLocal, t.TempDir()
-						} else if mode == "without-timestamp" {
+						case "without-timestamp":
 							req.SourceDateEpoch = ""
 						}
+
 						err = adapter.Build(t.Context(), req, &log)
 					}
+
 					if err != nil {
 						t.Fatal(err)
 					}
 					// BuildToLayout also exports and cleans up; inspect just the build.
 					lines := strings.Split(log.String(), "\n")
+
 					wantEpoch := "EPOCH <unset>"
 					if mode == "without-timestamp" {
 						wantEpoch = "EPOCH " + inherited
+
 						if strings.Contains(lines[0], "--timestamp") {
 							t.Fatal("timestamp added to an unpinned build")
 						}
 					} else if !strings.Contains(lines[0], "--timestamp 1700000000") {
 						t.Fatalf("timestamp missing: %s", lines[0])
 					}
+
 					for _, want := range []string{wantEpoch, "KEEP keep", "AUTH " + req.AuthFile} {
 						if !strings.Contains(strings.Join(lines[:4], "\n"), want) {
 							t.Errorf("missing %q in build subprocess: %s", want, log.String())
 						}
 					}
+
 					if !strings.Contains(lines[0], "--build-arg VERSION=1.2.3") || strings.Contains(lines[0], "--source-date-epoch") {
 						t.Fatalf("changed build arguments or timestamp mode: %s", lines[0])
 					}
+
 					if got := os.Getenv("SOURCE_DATE_EPOCH"); got != inherited {
 						t.Fatalf("parent environment changed: %q", got)
 					}

@@ -27,8 +27,6 @@ const (
 // "all" and "none" cannot be combined with other tokens.
 //
 // Returns an error with a clear message on invalid input.
-//
-//nolint:cyclop // expands per layer × format permutation.
 func ExpandSBOMs(value string) ([]SBOMLayer, error) {
 	cleaned := stripWhitespace(value)
 	if cleaned == "" {
@@ -54,7 +52,7 @@ func ExpandSBOMs(value string) ([]SBOMLayer, error) {
 	seen := make(map[SBOMLayer]struct{}, len(parts))
 
 	out := make([]SBOMLayer, 0, len(parts))
-	for _, p := range parts { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	for _, p := range parts {
 		switch SBOMLayer(p) {
 		case SBOMLayerBuild, SBOMLayerAnalyzedArtifact, SBOMLayerAnalyzedContainer:
 			layer := SBOMLayer(p)
@@ -103,8 +101,8 @@ func PipelineSBOMs(artifacts []Artifact) string {
 }
 
 func stripWhitespace(s string) string {
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
-	b.Grow(len(s))
+	var builder strings.Builder
+	builder.Grow(len(s))
 
 	for i := range len(s) {
 		c := s[i]
@@ -112,8 +110,8 @@ func stripWhitespace(s string) string {
 			continue
 		}
 
-		b.WriteByte(c)
+		builder.WriteByte(c)
 	}
 
-	return b.String()
+	return builder.String()
 }

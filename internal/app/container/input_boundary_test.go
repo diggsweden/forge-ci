@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
-	domaincontainer "github.com/diggsweden/forge-ci/internal/domain/container"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/output"
 	"github.com/stretchr/testify/require"
@@ -23,6 +22,8 @@ func TestContainerfileBoundary_StopsBeforeLateOnlyARG(t *testing.T) {
 
 	for _, from := range []string{"FROM alpine", "from alpine", "FrOm alpine", "FROM\talpine", " \tFROM alpine"} {
 		t.Run(from, func(t *testing.T) {
+			t.Parallel()
+
 			path := filepath.Join(t.TempDir(), "Containerfile")
 			require.NoError(t, os.WriteFile(path, []byte(from+"\nARG BASE=late\n"), 0o600))
 			got, err := appcontainer.ContainerfileArgDefault(appcontainer.ContainerfileArgDefaultInput{File: path, Name: "BASE"})
@@ -71,6 +72,8 @@ func TestArtifactDirectoryBoundary_MissingIsNotEmpty(t *testing.T) {
 	root := t.TempDir()
 	for _, kind := range []string{"missing", "empty", "file"} {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+
 			path := filepath.Join(root, kind)
 			switch kind {
 			case "empty":
@@ -105,6 +108,8 @@ func TestDigestMarkerBoundary_RejectsNormalizedCollisionsAndTypes(t *testing.T) 
 
 	for _, kind := range []string{"case", "directory", "link"} {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+
 			root := t.TempDir()
 			dir := filepath.Join(root, "digests")
 			require.NoError(t, os.Mkdir(dir, 0o700))
@@ -135,7 +140,7 @@ func TestDigestMarkerBoundary_RejectsNormalizedCollisionsAndTypes(t *testing.T) 
 func TestReleaseLabelBoundary_RequiresValuesAndRFC3339(t *testing.T) {
 	t.Parallel()
 
-	valid := appcontainer.OCIReleaseLabelsInput{OCILabels: domaincontainer.OCILabels{Title: "app", Version: "v1", Revision: strings.Repeat("a", 40), RefName: "v1", Documentation: "https://example.test/docs"}, Source: "https://example.test/repo", Created: "2026-08-01T02:03:04Z"}
+	valid := appcontainer.OCIReleaseLabelsInput{Title: "app", Version: "v1", Revision: strings.Repeat("a", 40), RefName: "v1", Documentation: "https://example.test/docs", Source: "https://example.test/repo", Created: "2026-08-01T02:03:04Z"}
 
 	for _, field := range []string{"title", "version", "revision", "ref", "source", "documentation", "created"} {
 		for _, value := range []string{"", " \t "} {

@@ -30,22 +30,22 @@ artifacts:
       java-version: "25"
 `)
 
-	c, err := config.Parse(in)
+	cfg, err := config.Parse(in)
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
 
-	if got := len(c.Artifacts); got != 1 {
+	if got := len(cfg.Artifacts); got != 1 {
 		t.Fatalf("len(Artifacts) = %d, want 1", got)
 	}
 
-	a := c.Artifacts[0]
-	if a.Name != "my-app" || a.ProjectType != projecttype.Maven || a.BuildType != "application" {
-		t.Errorf("artifact mismatch: %+v", a)
+	artifact := cfg.Artifacts[0]
+	if artifact.Name != "my-app" || artifact.ProjectType != projecttype.Maven || artifact.BuildType != "application" {
+		t.Errorf("artifact mismatch: %+v", artifact)
 	}
 
-	if a.Maven == nil || a.Maven.JavaVersion != "25" {
-		t.Errorf("maven.java-version = %+v, want 25", a.Maven)
+	if artifact.Maven == nil || artifact.Maven.JavaVersion != "25" {
+		t.Errorf("maven.java-version = %+v, want 25", artifact.Maven)
 	}
 }
 
@@ -66,20 +66,20 @@ containers:
     enable-slsa: true
 `)
 
-	c, err := config.Parse(in)
+	cfg, err := config.Parse(in)
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
 
-	if len(c.Artifacts) != 2 {
-		t.Errorf("Artifacts = %d, want 2", len(c.Artifacts))
+	if len(cfg.Artifacts) != 2 {
+		t.Errorf("Artifacts = %d, want 2", len(cfg.Artifacts))
 	}
 
-	if len(c.Containers) != 1 {
-		t.Errorf("Containers = %d, want 1", len(c.Containers))
+	if len(cfg.Containers) != 1 {
+		t.Errorf("Containers = %d, want 1", len(cfg.Containers))
 	}
 
-	if !c.Containers[0].EnableSLSAEffective() {
+	if !cfg.Containers[0].EnableSLSAEffective() {
 		t.Errorf("EnableSLSA not parsed")
 	}
 }
@@ -251,41 +251,41 @@ artifacts:
       build-mode: container-first
 `)
 
-	c, err := config.Parse(body)
+	cfg, err := config.Parse(body)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	require.Len(t, c.Artifacts, 7)
+	require.Len(t, cfg.Artifacts, 7)
 
-	require.NotNil(t, c.Artifacts[0].Go)
-	require.Equal(t, "my-svc", c.Artifacts[0].Go.BinaryName)
-	require.Equal(t, "linux/amd64,linux/arm64", c.Artifacts[0].Go.Platforms)
-	require.Equal(t, config.GoBuildModeContainerFirst, c.Artifacts[0].Go.BuildMode)
-	require.True(t, c.Artifacts[0].Go.SkipTests)
+	require.NotNil(t, cfg.Artifacts[0].Go)
+	require.Equal(t, "my-svc", cfg.Artifacts[0].Go.BinaryName)
+	require.Equal(t, "linux/amd64,linux/arm64", cfg.Artifacts[0].Go.Platforms)
+	require.Equal(t, config.GoBuildModeContainerFirst, cfg.Artifacts[0].Go.BuildMode)
+	require.True(t, cfg.Artifacts[0].Go.SkipTests)
 
-	require.NotNil(t, c.Artifacts[1].Maven)
-	require.Equal(t, "21", c.Artifacts[1].Maven.JavaVersion)
-	require.Equal(t, "central-release", c.Artifacts[1].Maven.MavenProfile)
+	require.NotNil(t, cfg.Artifacts[1].Maven)
+	require.Equal(t, "21", cfg.Artifacts[1].Maven.JavaVersion)
+	require.Equal(t, "central-release", cfg.Artifacts[1].Maven.MavenProfile)
 
-	require.NotNil(t, c.Artifacts[2].GradleAndroid)
-	require.Equal(t, "app", c.Artifacts[2].GradleAndroid.BuildModule)
-	require.Equal(t, "release", c.Artifacts[2].GradleAndroid.BuildTypes)
-	require.NotNil(t, c.Artifacts[2].GradleAndroid.IncludeAAB)
-	require.False(t, *c.Artifacts[2].GradleAndroid.IncludeAAB)
+	require.NotNil(t, cfg.Artifacts[2].GradleAndroid)
+	require.Equal(t, "app", cfg.Artifacts[2].GradleAndroid.BuildModule)
+	require.Equal(t, "release", cfg.Artifacts[2].GradleAndroid.BuildTypes)
+	require.NotNil(t, cfg.Artifacts[2].GradleAndroid.IncludeAAB)
+	require.False(t, *cfg.Artifacts[2].GradleAndroid.IncludeAAB)
 
-	require.Equal(t, &config.NPMConfig{NodeVersion: "24", AttachPattern: "packages/web/*.tgz"}, c.Artifacts[3].NPM)
+	require.Equal(t, &config.NPMConfig{NodeVersion: "24", AttachPattern: "packages/web/*.tgz"}, cfg.Artifacts[3].NPM)
 	require.Equal(t, &config.GradleConfig{
 		JavaVersion: "25", GradleTasks: "clean assemble", GradleVersionFile: "gradle/release.properties",
-	}, c.Artifacts[4].Gradle)
+	}, cfg.Artifacts[4].Gradle)
 
 	signing := false
 	require.Equal(t, &config.XcodeIOSConfig{
 		XcodeVersion: "26", Scheme: "ReleaseApp", EnableCodeSigning: &signing, UseXcodegen: true,
-	}, c.Artifacts[5].XcodeIOS)
+	}, cfg.Artifacts[5].XcodeIOS)
 	require.Equal(t, &config.CargoConfig{
 		BinaryName: "release-cli", Platforms: "linux/arm64", SkipTests: true, BuildMode: config.CargoBuildModeContainerFirst,
-	}, c.Artifacts[6].Cargo)
+	}, cfg.Artifacts[6].Cargo)
 }
 
 func TestParse_PreservesRequireAuthorization(t *testing.T) {
@@ -625,16 +625,16 @@ containers:
     container-file: Containerfile
 ` + flags)
 
-		c, err := config.Parse(in)
+		cfg, err := config.Parse(in)
 		if err != nil {
 			t.Fatalf("Parse: %v", err)
 		}
 
-		if len(c.Containers) != 1 {
-			t.Fatalf("Containers = %d, want 1", len(c.Containers))
+		if len(cfg.Containers) != 1 {
+			t.Fatalf("Containers = %d, want 1", len(cfg.Containers))
 		}
 
-		return c.Containers[0]
+		return cfg.Containers[0]
 	}
 
 	t.Run("explicit false is preserved", func(t *testing.T) {
@@ -642,7 +642,7 @@ containers:
 
 		ct := parseContainer(t, "    enable-slsa: false\n    enable-scan: false\n")
 
-		for _, f := range []struct {
+		for _, file := range []struct {
 			name string
 			ptr  *bool
 			eff  bool
@@ -650,18 +650,18 @@ containers:
 			{"enable-slsa", ct.EnableSLSA, ct.EnableSLSAEffective()},
 			{"enable-scan", ct.EnableScan, ct.EnableScanEffective()},
 		} {
-			if f.ptr == nil {
-				t.Errorf("%s: pointer is nil, so the explicit false was dropped and the default turns it back on", f.name)
+			if file.ptr == nil {
+				t.Errorf("%s: pointer is nil, so the explicit false was dropped and the default turns it back on", file.name)
 
 				continue
 			}
 
-			if *f.ptr {
-				t.Errorf("%s: parsed as true, want false", f.name)
+			if *file.ptr {
+				t.Errorf("%s: parsed as true, want false", file.name)
 			}
 
-			if f.eff {
-				t.Errorf("%s: effective value is true despite an explicit false", f.name)
+			if file.eff {
+				t.Errorf("%s: effective value is true despite an explicit false", file.name)
 			}
 		}
 	})
@@ -671,7 +671,7 @@ containers:
 
 		ct := parseContainer(t, "    enable-slsa: true\n    enable-scan: true\n")
 
-		for _, f := range []struct {
+		for _, file := range []struct {
 			name string
 			ptr  *bool
 			eff  bool
@@ -679,8 +679,8 @@ containers:
 			{"enable-slsa", ct.EnableSLSA, ct.EnableSLSAEffective()},
 			{"enable-scan", ct.EnableScan, ct.EnableScanEffective()},
 		} {
-			if f.ptr == nil || !*f.ptr || !f.eff {
-				t.Errorf("%s: explicit true not preserved (ptr=%v, effective=%v)", f.name, f.ptr, f.eff)
+			if file.ptr == nil || !*file.ptr || !file.eff {
+				t.Errorf("%s: explicit true not preserved (ptr=%v, effective=%v)", file.name, file.ptr, file.eff)
 			}
 		}
 	})

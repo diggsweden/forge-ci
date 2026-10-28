@@ -20,20 +20,20 @@ func TestCaptureEntryDigest_PinsTheRefToADigestOrFails(t *testing.T) {
 	const dig = "sha256:" + "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 	// Staging flow: resolve from the candidate tag, rewrite Ref + Digest.
-	e := imageledger.Entry{
+	entry := imageledger.Entry{
 		CandidateTag: "codeberg.org/itiquette/repo:staging-v1.2.3",
 		FinalTag:     "codeberg.org/itiquette/repo:v1.2.3",
 	}
-	if err := captureEntryDigest(context.Background(), stubResolver{e.CandidateTag: dig}, &e); err != nil {
+	if err := captureEntryDigest(context.Background(), stubResolver{entry.CandidateTag: dig}, &entry); err != nil {
 		t.Fatal(err)
 	}
 
-	if e.Digest != dig {
-		t.Errorf("Digest = %q", e.Digest)
+	if entry.Digest != dig {
+		t.Errorf("Digest = %q", entry.Digest)
 	}
 
-	if e.Ref != "codeberg.org/itiquette/repo@"+dig {
-		t.Errorf("Ref = %q (should be candidate's registry path + @digest)", e.Ref)
+	if entry.Ref != "codeberg.org/itiquette/repo@"+dig {
+		t.Errorf("Ref = %q (should be candidate's registry path + @digest)", entry.Ref)
 	}
 
 	// Direct push: no candidate → resolve from the final tag.

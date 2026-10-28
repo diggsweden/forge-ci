@@ -36,8 +36,6 @@ const DefaultGitSignMethod = GitSignGPG
 // is the single definition of the set: Validate accepts exactly these
 // values and the generated artifacts.yml JSON Schema renders its
 // git-signing.method enum from this slice.
-//
-//nolint:gochecknoglobals // schema enumeration — read-only and ordered.
 var ValidGitSignMethods = []GitSignMethod{
 	GitSignGPG,
 	GitSignSSH,

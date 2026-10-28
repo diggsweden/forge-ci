@@ -12,7 +12,9 @@ import (
 	"path/filepath"
 
 	"github.com/diggsweden/forge-ci/internal/cliio"
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/imageledger"
+	"github.com/diggsweden/forge-ci/internal/domain/version"
 )
 
 // LedgerPromotion carries the promote workflow's inputs; `ledger promote` and
@@ -34,6 +36,10 @@ type LedgerPromotion struct {
 // plan first (the rollback source of truth), promote every entry to the
 // stage, then report how many destination tags were copied.
 func PromoteLedger(ctx context.Context, run LedgerPromotion) error {
+	if parsed, ok := version.ParseSemverTag(run.ReleaseTag); ok && parsed.Prerelease != "" && (!run.Stage.IsRelease() || !run.Stage.UseEntryReleaseTags) {
+		return fmt.Errorf("prereleases publish version-specific image tags, not stage aliases: %w", errs.ErrValidation)
+	}
+
 	if err := writePromotionJournal(ctx, run); err != nil {
 		return err
 	}
@@ -84,7 +90,7 @@ func writePromotionJournal(ctx context.Context, run LedgerPromotion) error {
 }
 
 func reuseOrWritePromotionJournal(ctx context.Context, run LedgerPromotion) error {
-	existing, err := os.ReadFile(run.Journal) //nolint:gosec // operator-supplied journal path is the command's intended input.
+	existing, err := os.ReadFile(run.Journal)
 	if os.IsNotExist(err) || (err == nil && len(bytes.TrimSpace(existing)) == 0) {
 		return writeNewPromotionJournal(ctx, run)
 	}

@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/urfave/cli/v3"
 
@@ -45,12 +44,18 @@ or the accuracy of the producer's package inventory. URLs are never fetched.`,
 				}
 
 				for _, item := range []struct{ key, value string }{
-					{"sbom-path", result.Path}, {"sbom-sha256", result.SHA256}, {"evidence-files", strings.Join(result.EvidenceFiles, "\n")},
+					{"sbom-path", result.Path}, {"sbom-sha256", result.SHA256},
 				} {
 					if dep.OutputSink != nil {
 						if err = dep.OutputSink.Set(ctx, item.key, item.value); err != nil {
 							return err
 						}
+					}
+				}
+
+				if dep.OutputSink != nil {
+					if err = dep.OutputSink.SetMultiline(ctx, "evidence-files", result.EvidenceFiles); err != nil {
+						return err
 					}
 				}
 

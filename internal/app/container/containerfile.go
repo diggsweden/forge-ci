@@ -34,13 +34,13 @@ type ValidateContainerfileInput struct {
 // On success, emits `containerfile=<path>` via OutputSink.
 //
 // ValidateContainerfile checks the configured Containerfile exists.
-func ValidateContainerfile(ctx context.Context, sink ci.OutputSink, w io.Writer, in ValidateContainerfileInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func ValidateContainerfile(ctx context.Context, sink ci.OutputSink, out io.Writer, in ValidateContainerfileInput) error {
 	if in.Path == "" {
 		return fmt.Errorf("containerfile path is required: pass --path <file> or set $CONTAINERFILE: %w", errs.ErrUsage)
 	}
 
 	if info, err := os.Stat(in.Path); err == nil && !info.IsDir() {
-		_, _ = fmt.Fprintf(w, "Using containerfile: %s\n", in.Path)
+		_, _ = fmt.Fprintf(out, "Using containerfile: %s\n", in.Path)
 
 		return sink.Set(ctx, "containerfile", in.Path)
 	}
@@ -52,7 +52,7 @@ func ValidateContainerfile(ctx context.Context, sink ci.OutputSink, w io.Writer,
 	case 0:
 		return fmt.Errorf("containerfile %q not found and no Dockerfile*/Containerfile* match found in %q: %w", in.Path, dir, errs.ErrMissingInput)
 	case 1:
-		_, _ = fmt.Fprintf(w, "Using containerfile: %s\n", matches[0])
+		_, _ = fmt.Fprintf(out, "Using containerfile: %s\n", matches[0])
 
 		return sink.Set(ctx, "containerfile", matches[0])
 	default:

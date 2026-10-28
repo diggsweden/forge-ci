@@ -56,6 +56,8 @@ func TestEvidenceBoundary_RequiresFreshCompleteReports(t *testing.T) {
 
 	for _, kind := range []string{"missing-trivy", "missing-sbom", "malformed-sbom", "success"} {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+
 			root := t.TempDir()
 			layout := filepath.Join(root, "layout")
 			require.NoError(t, os.Mkdir(layout, 0o700))

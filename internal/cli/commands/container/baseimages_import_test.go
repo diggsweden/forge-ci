@@ -24,7 +24,7 @@ func TestBaseImportCLIRejectsBeforeCredentialAccess(t *testing.T) {
 
 	baseID, digest := strings.Repeat("a", 64), "sha256:"+strings.Repeat("b", 64)
 
-	for _, scenario := range []string{"foreign destination", "release entry", "moving tag", "preseeded output", "same ledger", "valid admission"} {
+	for _, scenario := range []string{"release entry", "moving tag", "preseeded output", "same ledger", "valid admission"} {
 		t.Run(scenario, func(t *testing.T) {
 			env := testenv.New(t)
 			t.Chdir(env.Temp)
@@ -35,8 +35,6 @@ func TestBaseImportCLIRejectsBeforeCredentialAccess(t *testing.T) {
 			output, repository := "dist/imported.json", destination
 
 			switch scenario {
-			case "foreign destination":
-				repository = "registry.example/other/bases"
 			case "release entry":
 				entry.ImageKind = imageledger.ImageKindRelease
 			case "moving tag":

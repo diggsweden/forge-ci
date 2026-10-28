@@ -52,7 +52,7 @@ func TestUnsafeCosignErrorLine_FiltersCredentialShapes(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct{ name, line string }{
-		{name: "credentials embedded in a URL", line: "GET https://alice:ghp_ABCDEFGHIJKLMNOP@ghcr.io/v2/org/app/manifests/1.0"}, //nolint:gosec // G101: a fake credential in a fixture; the point of the test is that this line is not filtered.
+		{name: "credentials embedded in a URL", line: "GET https://alice:ghp_ABCDEFGHIJKLMNOP@ghcr.io/v2/org/app/manifests/1.0"},
 		{name: "basic-auth blob without the header name", line: "auth failed for dXNlcjpodW50ZXIy"},
 		{name: "raw JWT", line: "rejected eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIn0.sig"},
 	} {

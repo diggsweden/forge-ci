@@ -40,6 +40,8 @@ func TestBuildSignerImage_ArgvShape(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			m := mockbinary.New(t)
 			m.Add("buildah", `printf 'ARGV %s\n' "$*" >&2`)
 
@@ -96,5 +98,56 @@ func TestBuildSignerImage_ArgvShape(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A staged build without credentials passes no --authfile, which Buildah
+// would refuse to open.
+func TestBuildSignerImage_NoAuthFileOmitsTheFlag(t *testing.T) {
+	t.Parallel()
+
+	m := mockbinary.New(t)
+	m.Add("buildah", `printf 'ARGV %s\n' "$*" >&2`)
+
+	a := &buildah.Adapter{Bin: m.Path("buildah")}
+
+	var stderr strings.Builder
+
+	err := a.BuildSignerImage(context.Background(), container.SignerImageBuildToolRequest{
+		Platform: "linux/amd64", SourceURL: "https://codeberg.org/org/repo", Revision: "abc123",
+		LocalImage: "localhost/image:amd64", Containerfile: "Containerfile", Context: ".",
+	}, &stderr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if log := stderr.String(); strings.Contains(log, "--authfile") || !strings.Contains(log, "bud") {
+		t.Errorf("argv carries --authfile or no bud:\n%s", log)
+	}
+}
+
+// The build-arch flags reach Buildah: a stage, build arguments and labels
+// beside the provenance labels.
+func TestBuildSignerImage_PassesTargetBuildArgsAndLabels(t *testing.T) {
+	t.Parallel()
+
+	m := mockbinary.New(t)
+	m.Add("buildah", `printf 'ARGV %s\n' "$*" >&2`)
+
+	var stderr strings.Builder
+
+	err := (&buildah.Adapter{Bin: m.Path("buildah")}).BuildSignerImage(context.Background(), container.SignerImageBuildToolRequest{
+		AuthFile: "/tmp/auth.json", Platform: "linux/arm64", SourceURL: "https://forge.example/org/repo", Revision: "abc123",
+		LocalImage: "localhost/image:arm64", Containerfile: "Containerfile", Context: ".",
+		Target: "runtime-core", BuildArgs: []string{"FLAVOR=core"}, Labels: []string{"org.example.flavor=core"},
+	}, &stderr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{"--target runtime-core", "--build-arg FLAVOR=core", "--label org.example.flavor=core", "--label org.opencontainers.image.revision=abc123"} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Errorf("argv missing %q:\n%s", want, stderr.String())
+		}
 	}
 }

@@ -178,8 +178,7 @@ func TestValidateNamespace_AcceptsOnlyTheOwnersPrefixAndItsSubpaths(t *testing.T
 			}
 
 			if tc.wantViolation {
-				var nv *container.NamespaceViolationError
-				if !errors.As(err, &nv) {
+				if _, ok := errors.AsType[*container.NamespaceViolationError](err); !ok {
 					t.Errorf("err = %v, want NamespaceViolation", err)
 				}
 				// A namespace violation is a domain-rule failure → EX_VALIDATION

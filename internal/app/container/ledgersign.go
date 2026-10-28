@@ -282,7 +282,7 @@ func (run ledgerSignRun) signEntry(ctx context.Context, entry imageledger.Entry,
 
 func readLedgerSignBasePredicate(in SignLedgerImagesInput) ([]byte, error) {
 	if in.PredicatePath != "" {
-		body, err := os.ReadFile(in.PredicatePath) //nolint:gosec // CLI/operator-supplied release artifact path.
+		body, err := os.ReadFile(in.PredicatePath)
 		if err != nil {
 			return nil, fmt.Errorf("container ledger sign: read provenance predicate %s: %w", in.PredicatePath, err)
 		}
@@ -290,7 +290,7 @@ func readLedgerSignBasePredicate(in SignLedgerImagesInput) ([]byte, error) {
 		return body, nil
 	}
 
-	body, err := os.ReadFile(in.PredicateEnvelopePath) //nolint:gosec // CLI/operator-supplied release artifact path.
+	body, err := os.ReadFile(in.PredicateEnvelopePath)
 	if err != nil {
 		return nil, fmt.Errorf("container ledger sign: read provenance envelope %s: %w", in.PredicateEnvelopePath, err)
 	}
@@ -302,7 +302,7 @@ func readLedgerSignBasePredicate(in SignLedgerImagesInput) ([]byte, error) {
 		return nil, fmt.Errorf("container ledger sign: parse provenance envelope %s: %w: %w", in.PredicateEnvelopePath, err, errs.ErrMalformedInput)
 	}
 
-	if len(envelope.Predicate) == 0 || string(envelope.Predicate) == "null" { //nolint:goconst // the JSON null literal, read where it is compared.
+	if len(envelope.Predicate) == 0 || string(envelope.Predicate) == "null" {
 		return nil, fmt.Errorf("container ledger sign: provenance envelope %s lacks predicate: %w", in.PredicateEnvelopePath, errs.ErrMalformedInput)
 	}
 
@@ -356,7 +356,6 @@ func validateLedgerSignEntry(entry imageledger.Entry, releaseTag string, constra
 	return validateLedgerSignBase(entry, constraints)
 }
 
-//nolint:cyclop // missing outputs are allowed only during preflight; ancestry, type and size checks remain explicit.
 func validateLedgerSBOMPath(path string, allowMissing bool) error {
 	if !pathsafe.Relative(path) {
 		return fmt.Errorf("ledger SBOM must stay within the workspace: %w", errs.ErrValidation)
@@ -545,7 +544,7 @@ func ensureImageSBOM(ctx context.Context, sbom ImageEvidenceSyft, stderr io.Writ
 }
 
 func generateImageSBOM(ctx context.Context, sbom ImageEvidenceSyft, stderr io.Writer, imageRef, sbomPath string) error {
-	if err := os.MkdirAll(filepath.Dir(sbomPath), 0o755); err != nil { //nolint:gosec,mnd // release dist dir.
+	if err := os.MkdirAll(filepath.Dir(sbomPath), 0o755); err != nil { //nolint:gosec // release dist dir.
 		return fmt.Errorf("create SBOM dir for %s: %w", sbomPath, err)
 	}
 
@@ -559,7 +558,7 @@ func writeImagePredicate(dir string, idx int, base []byte, entry imageledger.Ent
 	}
 
 	path := filepath.Join(dir, fmt.Sprintf("image-%d.predicate.json", idx))
-	if err := os.WriteFile(path, body, 0o600); err != nil { //nolint:gosec // temp predicate contains release metadata, not secrets.
+	if err := os.WriteFile(path, body, 0o600); err != nil {
 		return "", fmt.Errorf("write image predicate %s: %w", path, err)
 	}
 
@@ -585,13 +584,13 @@ func enrichImagePredicate(base []byte, entry imageledger.Entry, imageRef, candid
 	imageDigestHex := strings.TrimPrefix(entry.Digest, "sha256:")
 	ext["image"] = map[string]any{
 		"ref":           imageRef,
-		"digest":        map[string]any{"sha256": imageDigestHex}, //nolint:goconst // SLSA predicate JSON field name, not the output-sink key.
+		"digest":        map[string]any{"sha256": imageDigestHex},
 		"digest_ref":    entry.Digest,
 		"final_tag":     entry.FinalTag,
 		"moving_tag":    entry.MovingTag,
 		"candidate_tag": candidateTag,
 		"role":          entry.Role,
-		"flavor":        entry.Flavor, //nolint:goconst // SLSA predicate JSON field name.
+		"flavor":        entry.Flavor,
 		"sbom":          entry.SBOM,
 	}
 

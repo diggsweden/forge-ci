@@ -119,8 +119,8 @@ func TestTargetKeys_EveryTargetFieldIsPinned(t *testing.T) {
 		pipeline.PRQualityTargets{},
 	} {
 		rt := reflect.TypeOf(target)
-		for i := range rt.NumField() {
-			key := rt.Name() + "." + rt.Field(i).Name
+		for field := range rt.Fields() {
+			key := rt.Name() + "." + field.Name
 			if !pinned[key] {
 				t.Errorf("%s has no row in targetKeyCases: its json tag is unguarded, "+
 					"so it can drift from its Target* constant unnoticed", key)

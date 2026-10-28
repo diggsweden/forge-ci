@@ -137,8 +137,7 @@ func configPlanMember(shape reflect.Type, name string) (string, reflect.Type) {
 		return name, shape.Elem()
 	}
 
-	for index := range shape.NumField() {
-		field := shape.Field(index)
+	for field := range shape.Fields() {
 		tag, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 		// ConfigPlan's tags are unique even under encoding/json's Unicode fold.
 		if strings.EqualFold(name, tag) {

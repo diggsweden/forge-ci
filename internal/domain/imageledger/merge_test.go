@@ -64,13 +64,13 @@ func TestDeriveTags_MatchesValidatorScoping(t *testing.T) {
 	}
 
 	// The derived pair must satisfy Entry.Validate at the same release tag.
-	e := imageledger.Entry{
+	entry := imageledger.Entry{
 		Ref:          "ghcr.io/org/app@" + goodDigest,
 		Digest:       goodDigest,
 		FinalTag:     final,
 		CandidateTag: candidate,
 	}
-	if err := e.Validate("v1.2.3"); err != nil {
+	if err := entry.Validate("v1.2.3"); err != nil {
 		t.Errorf("derived tags rejected by Validate: %v", err)
 	}
 }

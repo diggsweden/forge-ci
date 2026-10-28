@@ -28,7 +28,7 @@ func Validate(path string, warnW io.Writer) error {
 		return fmt.Errorf("config: read %q: %w", path, err)
 	}
 
-	c, err := config.Parse(data) //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	c, err := config.Parse(data)
 	if err != nil {
 		return err
 	}

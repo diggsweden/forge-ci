@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"slices"
 	"testing"
 
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
@@ -32,7 +33,7 @@ func (f *fakeTrivy) RunInherit(_ context.Context, _, _ io.Writer, args ...string
 
 	for i, a := range args {
 		if a == "--output" && i+1 < len(args) {
-			_ = os.WriteFile(args[i+1], []byte(`{"Results":[]}`), 0o644) //nolint:gosec // test fixture
+			_ = os.WriteFile(args[i+1], []byte(`{"Results":[]}`), 0o644)
 		}
 	}
 
@@ -221,10 +222,10 @@ func TestBuildAndScan_RefusesAnUnsupportedSeverity(t *testing.T) {
 // argValue returns the value following flag in the last recorded invocation
 // that carries it.
 func argValue(runs [][]string, flag string) (string, bool) {
-	for i := len(runs) - 1; i >= 0; i-- {
-		for j, arg := range runs[i] {
-			if arg == flag && j+1 < len(runs[i]) {
-				return runs[i][j+1], true
+	for _, run := range slices.Backward(runs) {
+		for j, arg := range run {
+			if arg == flag && j+1 < len(run) {
+				return run[j+1], true
 			}
 		}
 	}

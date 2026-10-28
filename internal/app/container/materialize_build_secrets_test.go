@@ -58,7 +58,7 @@ func TestMaterializeBuildSecrets_MaterializesOnlyTheDeclaredNames(t *testing.T) 
 	} {
 		path := filepath.Join(dir, want.name)
 
-		got, err := os.ReadFile(path) //nolint:gosec // test fixture path
+		got, err := os.ReadFile(path)
 		if err != nil {
 			t.Errorf("read %s: %v", path, err)
 

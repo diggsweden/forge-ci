@@ -224,7 +224,7 @@ func TestMergeManifest_AdvertisesEveryPlatformChild(t *testing.T) {
 		{os: osLinux, arch: "arm64"},
 	}
 
-	for i := range platforms {
+	for platformIndex := range platforms {
 		img, err := random.Image(512, 1)
 		if err != nil {
 			t.Fatalf("random image: %v", err)
@@ -236,21 +236,21 @@ func TestMergeManifest_AdvertisesEveryPlatformChild(t *testing.T) {
 		}
 
 		config = config.DeepCopy()
-		config.OS = platforms[i].os
-		config.Architecture = platforms[i].arch
+		config.OS = platforms[platformIndex].os
+		config.Architecture = platforms[platformIndex].arch
 
 		img, err = mutate.ConfigFile(img, config)
 		if err != nil {
 			t.Fatalf("set platform: %v", err)
 		}
 
-		ref, err := name.ParseReference(repo+":"+platforms[i].arch, name.Insecure)
+		ref, err := name.ParseReference(repo+":"+platforms[platformIndex].arch, name.Insecure)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		if err = remote.Write(ref, img, remote.WithContext(t.Context())); err != nil {
-			t.Fatalf("seed %s: %v", platforms[i].arch, err)
+			t.Fatalf("seed %s: %v", platforms[platformIndex].arch, err)
 		}
 
 		digest, err := img.Digest()
@@ -258,7 +258,7 @@ func TestMergeManifest_AdvertisesEveryPlatformChild(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		platforms[i].hex = digest.Hex
+		platforms[platformIndex].hex = digest.Hex
 	}
 
 	tag := repo + ":multi"
@@ -470,8 +470,8 @@ func credentialedRegistry(t *testing.T) (string, string, func() []string) {
 	)
 
 	inner := registry.New()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if header := r.Header.Get("Authorization"); header != "" {
+	srv := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if header := request.Header.Get("Authorization"); header != "" {
 			mu.Lock()
 
 			sent = append(sent, header)
@@ -479,14 +479,14 @@ func credentialedRegistry(t *testing.T) (string, string, func() []string) {
 			mu.Unlock()
 		}
 
-		if user, password, ok := r.BasicAuth(); !ok || user != "ci" || password != "secret" {
-			w.Header().Set("WWW-Authenticate", `Basic realm="registry"`)
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+		if user, password, ok := request.BasicAuth(); !ok || user != "ci" || password != "secret" {
+			response.Header().Set("WWW-Authenticate", `Basic realm="registry"`)
+			http.Error(response, "unauthorized", http.StatusUnauthorized)
 
 			return
 		}
 
-		inner.ServeHTTP(w, r)
+		inner.ServeHTTP(response, request)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -531,7 +531,7 @@ func writeRegistryAuth(t *testing.T, directory, host string) string {
 
 // The auth file is where the credential comes from: with nothing ambient, a
 // registry that demands one is still reached.
-func TestAuthFile_SuppliesTheRegistryCredential(t *testing.T) { //nolint:paralleltest // the fixture sets process environment.
+func TestAuthFile_SuppliesTheRegistryCredential(t *testing.T) {
 	host, _, _ := credentialedRegistry(t)
 
 	tags, err := WithAuthFile(writeRegistryAuth(t, t.TempDir(), host)).ListContainerPackageVersions(t.Context(), host+"/owner", "app")
@@ -543,7 +543,7 @@ func TestAuthFile_SuppliesTheRegistryCredential(t *testing.T) { //nolint:paralle
 // An auth file without an entry for the registry means anonymous, never the
 // ambient credential: keeping a job's other logins away from this registry is
 // what naming an auth file is for.
-func TestAuthFile_WithoutAnEntryStaysAnonymous(t *testing.T) { //nolint:paralleltest // the fixture sets process environment.
+func TestAuthFile_WithoutAnEntryStaysAnonymous(t *testing.T) {
 	host, ambient, sent := credentialedRegistry(t)
 	writeRegistryAuth(t, ambient, host)
 
@@ -559,7 +559,7 @@ func TestAuthFile_WithoutAnEntryStaysAnonymous(t *testing.T) { //nolint:parallel
 }
 
 // A public availability probe must not borrow a job's existing registry login.
-func TestAnonymous_DoesNotUseAnAmbientCredential(t *testing.T) { //nolint:paralleltest // the fixture sets process environment.
+func TestAnonymous_DoesNotUseAnAmbientCredential(t *testing.T) {
 	host, ambient, sent := credentialedRegistry(t)
 	writeRegistryAuth(t, ambient, host)
 

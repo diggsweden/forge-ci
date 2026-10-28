@@ -24,7 +24,7 @@ func PackageJSONName(body []byte) string {
 		Name string `json:"name"`
 	}
 
-	var p pkg //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var p pkg
 	if err := json.Unmarshal(body, &p); err != nil {
 		return ""
 	}

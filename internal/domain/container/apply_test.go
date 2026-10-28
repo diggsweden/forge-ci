@@ -64,9 +64,9 @@ func TestApply_DisabledRuleSkipped(t *testing.T) {
 
 func TestApply_RefEventBranch(t *testing.T) {
 	t.Parallel()
-	r := mustRule(t, "type=ref,event=branch")
+	rule := mustRule(t, "type=ref,event=branch")
 
-	got, ok, err := container.Apply(r, container.MetadataContext{
+	got, ok, err := container.Apply(rule, container.MetadataContext{
 		RefName: "develop",
 		RefType: provider.RefTypeBranch,
 	})
@@ -90,7 +90,7 @@ func TestApply_RefEventBranch(t *testing.T) {
 		{"release/1.0.x", "release-1.0.x"},                   // dots kept in body
 		{strings.Repeat("a", 200), strings.Repeat("a", 128)}, // capped at 128
 	} {
-		got, ok, err = container.Apply(r, container.MetadataContext{
+		got, ok, err = container.Apply(rule, container.MetadataContext{
 			RefName: tc.ref,
 			RefType: provider.RefTypeBranch,
 		})
@@ -106,7 +106,7 @@ func TestApply_RefEventBranch(t *testing.T) {
 	}
 	// On a tag ref: silent skip -- no tag AND no error. Discarding the error
 	// here would let "skipped because it failed" pass as "skipped by design".
-	_, ok, err = container.Apply(r, container.MetadataContext{
+	_, ok, err = container.Apply(rule, container.MetadataContext{
 		RefName: "v1.0.0",
 		RefType: provider.RefTypeTag,
 	})
@@ -117,9 +117,9 @@ func TestApply_RefEventBranch(t *testing.T) {
 
 func TestApply_RefEventTag(t *testing.T) {
 	t.Parallel()
-	r := mustRule(t, "type=ref,event=tag")
+	rule := mustRule(t, "type=ref,event=tag")
 
-	got, ok, err := container.Apply(r, container.MetadataContext{
+	got, ok, err := container.Apply(rule, container.MetadataContext{
 		RefName: "v1.2.3",
 		RefType: provider.RefTypeTag,
 	})
@@ -131,7 +131,7 @@ func TestApply_RefEventTag(t *testing.T) {
 		t.Errorf("got=%+v ok=%v", got, ok)
 	}
 
-	got, ok, err = container.Apply(r, container.MetadataContext{
+	got, ok, err = container.Apply(rule, container.MetadataContext{
 		RefName: "v1.2.3",
 		RefType: provider.RefTypeBranch,
 	})
@@ -142,9 +142,9 @@ func TestApply_RefEventTag(t *testing.T) {
 
 func TestApply_RefEventPR(t *testing.T) {
 	t.Parallel()
-	r := mustRule(t, "type=ref,event=pr")
+	rule := mustRule(t, "type=ref,event=pr")
 
-	got, ok, err := container.Apply(r, container.MetadataContext{
+	got, ok, err := container.Apply(rule, container.MetadataContext{
 		PRNumber: "42",
 	})
 	if err != nil {
@@ -155,7 +155,7 @@ func TestApply_RefEventPR(t *testing.T) {
 		t.Errorf("got=%+v ok=%v", got, ok)
 	}
 
-	_, ok, err = container.Apply(r, container.MetadataContext{})
+	_, ok, err = container.Apply(rule, container.MetadataContext{})
 	if ok || err != nil {
 		t.Errorf("ref,event=pr with no PR number: ok=%v err=%v, want a silent skip", ok, err)
 	}
@@ -180,31 +180,31 @@ func TestApply_SemverPatterns(t *testing.T) {
 		{"v{{major}}.{{minor}}", "v2.5.7", "v2.5"},
 		{"v{{major}}", "v3.7.1", "v3"},
 	}
-	for _, c := range cases {
-		r := mustRule(t, "type=semver,pattern="+c.pattern)
+	for _, cfg := range cases {
+		r := mustRule(t, "type=semver,pattern="+cfg.pattern)
 
 		got, ok, err := container.Apply(r, container.MetadataContext{
-			RefName: c.ref,
+			RefName: cfg.ref,
 			RefType: provider.RefTypeTag,
 		})
 		if err != nil {
-			t.Errorf("pattern=%q ref=%q: %v", c.pattern, c.ref, err)
+			t.Errorf("pattern=%q ref=%q: %v", cfg.pattern, cfg.ref, err)
 
 			continue
 		}
 
-		if !ok || got.Tag != c.want {
+		if !ok || got.Tag != cfg.want {
 			t.Errorf("pattern=%q ref=%q → got=%+v ok=%v want=%q",
-				c.pattern, c.ref, got, ok, c.want)
+				cfg.pattern, cfg.ref, got, ok, cfg.want)
 		}
 	}
 }
 
 func TestApply_SemverSilentOnNonTag(t *testing.T) {
 	t.Parallel()
-	r := mustRule(t, "type=semver,pattern={{version}}")
+	rule := mustRule(t, "type=semver,pattern={{version}}")
 
-	got, ok, err := container.Apply(r, container.MetadataContext{
+	got, ok, err := container.Apply(rule, container.MetadataContext{
 		RefName: "v1.2.3",
 		RefType: provider.RefTypeBranch,
 	})
@@ -212,7 +212,7 @@ func TestApply_SemverSilentOnNonTag(t *testing.T) {
 		t.Errorf("semver on a branch ref: got=%+v ok=%v err=%v, want zero/false/nil", got, ok, err)
 	}
 
-	got, ok, err = container.Apply(r, container.MetadataContext{
+	got, ok, err = container.Apply(rule, container.MetadataContext{
 		RefName: "v1.2.3",
 		RefType: provider.RefTypeTag,
 	})
@@ -274,9 +274,9 @@ func TestApply_SemverStrict(t *testing.T) {
 
 func TestApply_SHAWithBranchTemplate(t *testing.T) {
 	t.Parallel()
-	r := mustRule(t, "type=sha,prefix={{branch}}-")
+	rule := mustRule(t, "type=sha,prefix={{branch}}-")
 
-	got, ok, err := container.Apply(r, container.MetadataContext{
+	got, ok, err := container.Apply(rule, container.MetadataContext{
 		BranchName: "feat-x",
 		ShortSHA:   "abcdef0",
 	})
@@ -288,7 +288,7 @@ func TestApply_SHAWithBranchTemplate(t *testing.T) {
 		t.Errorf("got=%+v ok=%v", got, ok)
 	}
 	// A slashed branch in the {{branch}} template is sanitized too.
-	got, ok, err = container.Apply(r, container.MetadataContext{
+	got, ok, err = container.Apply(rule, container.MetadataContext{
 		BranchName: "feat/x",
 		ShortSHA:   "abcdef0",
 	})

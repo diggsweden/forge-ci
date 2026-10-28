@@ -42,7 +42,7 @@ type PlatformPlanOutput struct {
 // PlatformPlan writes platform matrix/suffix values to the output sink.
 //
 //nolint:cyclop // selects platforms per (CI provider, refType, override) combination.
-func PlatformPlan(ctx context.Context, sink ci.OutputSink, w io.Writer, in PlatformPlanInput) (*PlatformPlanOutput, error) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func PlatformPlan(ctx context.Context, sink ci.OutputSink, writer io.Writer, in PlatformPlanInput) (*PlatformPlanOutput, error) {
 	platforms, err := splitPlatforms(in.Platforms)
 	if err != nil {
 		return nil, err
@@ -95,13 +95,13 @@ func PlatformPlan(ctx context.Context, sink ci.OutputSink, w io.Writer, in Platf
 		}
 	}
 
-	if w != nil {
+	if writer != nil {
 		if len(out.Platforms) > 0 {
-			_, _ = fmt.Fprintf(w, "platforms: %s\n", strings.Join(out.Platforms, ","))
+			_, _ = fmt.Fprintf(writer, "platforms: %s\n", strings.Join(out.Platforms, ","))
 		}
 
 		if out.Suffix != "" {
-			_, _ = fmt.Fprintf(w, "suffix: %s\n", out.Suffix)
+			_, _ = fmt.Fprintf(writer, "suffix: %s\n", out.Suffix)
 		}
 	}
 

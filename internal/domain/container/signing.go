@@ -12,7 +12,6 @@ import (
 	"github.com/diggsweden/forge-ci/internal/secrettext"
 )
 
-//nolint:gochecknoglobals // immutable compiled expressions.
 var credentialURLPattern = regexp.MustCompile(`(?i)https?://[^/\s:@]+:[^/\s@]+@`)
 
 // Well-known cosign --type names for the attestation predicates this

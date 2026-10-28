@@ -32,6 +32,7 @@ func TestValidate_HappyPath(t *testing.T) {
 
 func TestValidate_ImagePathExtractionHasOneUnambiguousSource(t *testing.T) {
 	t.Parallel()
+
 	for _, test := range []struct {
 		name   string
 		binary config.ContainerExtractBinary
@@ -46,6 +47,7 @@ func TestValidate_ImagePathExtractionHasOneUnambiguousSource(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
+
 			cfg := &config.Config{Artifacts: []config.Artifact{{Name: "source", ProjectType: projecttype.Meta}}, Containers: []config.Container{{Name: "runtime", Extract: &config.ContainerExtract{Binary: &test.binary}}}}
 			if err := config.Validate(cfg); (err == nil) != test.valid {
 				t.Fatalf("valid=%v error=%v", test.valid, err)
@@ -57,13 +59,13 @@ func TestValidate_ImagePathExtractionHasOneUnambiguousSource(t *testing.T) {
 func TestValidate_RejectsInvalidPublishTarget(t *testing.T) {
 	t.Parallel()
 
-	c := &config.Config{
+	cfg := &config.Config{
 		Artifacts: []config.Artifact{
 			{Name: "pkg", ProjectType: projecttype.NPM, PublishTo: []config.PublishTarget{"bogus"}},
 		},
 	}
 
-	err := config.Validate(c)
+	err := config.Validate(cfg)
 	if !isValidationError(err) {
 		t.Fatalf("err = %v, want ValidationError", err)
 	}
@@ -76,7 +78,7 @@ func TestValidate_RejectsInvalidPublishTarget(t *testing.T) {
 func TestValidate_RejectsUnsupportedPublishTarget(t *testing.T) {
 	t.Parallel()
 
-	c := &config.Config{
+	cfg := &config.Config{
 		Artifacts: []config.Artifact{
 			{Name: "go-lib", ProjectType: projecttype.Go, PublishTo: []config.PublishTarget{config.PublishForgePackages}},
 			{Name: "maven-app", ProjectType: projecttype.Maven, BuildType: config.BuildTypeApplication, PublishTo: []config.PublishTarget{config.PublishMavenCentral}},
@@ -84,7 +86,7 @@ func TestValidate_RejectsUnsupportedPublishTarget(t *testing.T) {
 		},
 	}
 
-	err := config.Validate(c)
+	err := config.Validate(cfg)
 	if !isValidationError(err) {
 		t.Fatalf("err = %v, want ValidationError", err)
 	}
@@ -118,13 +120,13 @@ func TestValidate_RejectsEmptyArtifacts(t *testing.T) {
 func TestValidate_RejectsInvalidProjectType(t *testing.T) {
 	t.Parallel()
 
-	c := &config.Config{
+	cfg := &config.Config{
 		Artifacts: []config.Artifact{
 			{Name: "x", ProjectType: "rust"}, // not in ValidProjectTypes
 		},
 	}
 
-	err := config.Validate(c)
+	err := config.Validate(cfg)
 	if !isValidationError(err) {
 		t.Fatalf("err = %v, want ValidationError", err)
 	}
@@ -176,13 +178,13 @@ func TestValidate_GoBuildModeDefaultsToArtifactFirst(t *testing.T) {
 	// A bare Go artifact (no config block — what auto-derive produces) is
 	// valid: build-mode defaults to artifact-first; container-first stays
 	// an explicit opt-in.
-	c := &config.Config{Artifacts: []config.Artifact{{Name: "go-app", ProjectType: projecttype.Go}}}
+	cfg := &config.Config{Artifacts: []config.Artifact{{Name: "go-app", ProjectType: projecttype.Go}}}
 
-	if err := config.Validate(c); err != nil {
+	if err := config.Validate(cfg); err != nil {
 		t.Fatalf("bare Go artifact rejected: %v", err)
 	}
 
-	if got := config.GoArtifactBuildMode(c.Artifacts[0]); got != config.GoBuildModeArtifactFirst {
+	if got := config.GoArtifactBuildMode(cfg.Artifacts[0]); got != config.GoBuildModeArtifactFirst {
 		t.Errorf("default build-mode = %q, want artifact-first", got)
 	}
 }
@@ -190,13 +192,13 @@ func TestValidate_GoBuildModeDefaultsToArtifactFirst(t *testing.T) {
 func TestValidate_GoRejectsInvalidBuildMode(t *testing.T) {
 	t.Parallel()
 
-	c := &config.Config{Artifacts: []config.Artifact{{
+	cfg := &config.Config{Artifacts: []config.Artifact{{
 		Name:        "go-app",
 		ProjectType: projecttype.Go,
 		Go:          &config.GoConfig{BuildMode: "native"},
 	}}}
 
-	err := config.Validate(c)
+	err := config.Validate(cfg)
 	if !isValidationError(err) {
 		t.Fatalf("err = %v, want ValidationError", err)
 	}
@@ -209,13 +211,13 @@ func TestValidate_GoRejectsInvalidBuildMode(t *testing.T) {
 func TestValidate_CargoBuildModeDefaultsToArtifactFirst(t *testing.T) {
 	t.Parallel()
 
-	c := &config.Config{Artifacts: []config.Artifact{{Name: "rust-app", ProjectType: projecttype.Cargo}}}
+	cfg := &config.Config{Artifacts: []config.Artifact{{Name: "rust-app", ProjectType: projecttype.Cargo}}}
 
-	if err := config.Validate(c); err != nil {
+	if err := config.Validate(cfg); err != nil {
 		t.Fatalf("bare Cargo artifact rejected: %v", err)
 	}
 
-	if got := config.CargoArtifactBuildMode(c.Artifacts[0]); got != config.CargoBuildModeArtifactFirst {
+	if got := config.CargoArtifactBuildMode(cfg.Artifacts[0]); got != config.CargoBuildModeArtifactFirst {
 		t.Errorf("default build-mode = %q, want artifact-first", got)
 	}
 }
@@ -223,13 +225,13 @@ func TestValidate_CargoBuildModeDefaultsToArtifactFirst(t *testing.T) {
 func TestValidate_CargoRejectsInvalidBuildMode(t *testing.T) {
 	t.Parallel()
 
-	c := &config.Config{Artifacts: []config.Artifact{{
+	cfg := &config.Config{Artifacts: []config.Artifact{{
 		Name:        "rust-app",
 		ProjectType: projecttype.Cargo,
 		Cargo:       &config.CargoConfig{BuildMode: "native"},
 	}}}
 
-	err := config.Validate(c)
+	err := config.Validate(cfg)
 	if !isValidationError(err) {
 		t.Fatalf("err = %v, want ValidationError", err)
 	}
@@ -269,7 +271,7 @@ func TestValidate_AndroidBuildTypesUseExactTokens(t *testing.T) {
 func TestValidate_RejectsMultipleArtifactFirstCargoDepsForOneContainer(t *testing.T) {
 	t.Parallel()
 
-	c := &config.Config{
+	cfg := &config.Config{
 		Artifacts: []config.Artifact{
 			{Name: "cli-a", ProjectType: projecttype.Cargo, Cargo: &config.CargoConfig{BuildMode: config.CargoBuildModeArtifactFirst}},
 			{Name: "cli-b", ProjectType: projecttype.Cargo, Cargo: &config.CargoConfig{BuildMode: config.CargoBuildModeArtifactFirst}},
@@ -281,7 +283,7 @@ func TestValidate_RejectsMultipleArtifactFirstCargoDepsForOneContainer(t *testin
 		}},
 	}
 
-	err := config.Validate(c)
+	err := config.Validate(cfg)
 	if !isValidationError(err) {
 		t.Fatalf("err = %v, want ValidationError", err)
 	}
@@ -322,7 +324,7 @@ func TestValidate_BuildSecrets(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			c := &config.Config{
+			cfg := &config.Config{
 				Artifacts: []config.Artifact{{Name: "app", ProjectType: projecttype.Go, Go: &config.GoConfig{BuildMode: config.GoBuildModeArtifactFirst}}},
 				Containers: []config.Container{{
 					Name:         "img",
@@ -331,7 +333,7 @@ func TestValidate_BuildSecrets(t *testing.T) {
 				}},
 			}
 
-			err := config.Validate(c)
+			err := config.Validate(cfg)
 			if tc.wantError {
 				if !isValidationError(err) {
 					t.Fatalf("err = %v, want ValidationError", err)
@@ -350,7 +352,7 @@ func TestValidate_BuildSecrets(t *testing.T) {
 func TestValidate_RejectsMultipleArtifactFirstGoDepsForOneContainer(t *testing.T) {
 	t.Parallel()
 
-	c := &config.Config{
+	cfg := &config.Config{
 		Artifacts: []config.Artifact{
 			{Name: "api", ProjectType: projecttype.Go, Go: &config.GoConfig{BuildMode: config.GoBuildModeArtifactFirst}},
 			{Name: "worker", ProjectType: projecttype.Go, Go: &config.GoConfig{BuildMode: config.GoBuildModeArtifactFirst}},
@@ -362,7 +364,7 @@ func TestValidate_RejectsMultipleArtifactFirstGoDepsForOneContainer(t *testing.T
 		}},
 	}
 
-	err := config.Validate(c)
+	err := config.Validate(cfg)
 	if !isValidationError(err) {
 		t.Fatalf("err = %v, want ValidationError", err)
 	}
@@ -377,14 +379,14 @@ func TestValidate_RejectsMultipleArtifactFirstGoDepsForOneContainer(t *testing.T
 func TestValidate_RejectsDuplicateNames(t *testing.T) {
 	t.Parallel()
 
-	c := &config.Config{
+	cfg := &config.Config{
 		Artifacts: []config.Artifact{
 			{Name: "x", ProjectType: projecttype.Maven},
 			{Name: "x", ProjectType: projecttype.NPM},
 		},
 	}
 
-	err := config.Validate(c)
+	err := config.Validate(cfg)
 	if !isValidationError(err) {
 		t.Fatalf("err = %v, want ValidationError", err)
 	}
@@ -397,13 +399,13 @@ func TestValidate_RejectsDuplicateNames(t *testing.T) {
 func TestValidate_RejectsEmptyArtifactName(t *testing.T) {
 	t.Parallel()
 
-	c := &config.Config{
+	cfg := &config.Config{
 		Artifacts: []config.Artifact{
 			{Name: "", ProjectType: projecttype.Maven},
 		},
 	}
 
-	err := config.Validate(c)
+	err := config.Validate(cfg)
 	if !isValidationError(err) {
 		t.Errorf("err = %v, want ValidationError", err)
 	}
@@ -558,7 +560,7 @@ func TestValidate_AcceptsRelativeWorkingDirectory(t *testing.T) {
 func TestValidate_ContainerReferencesUnknownArtifact(t *testing.T) {
 	t.Parallel()
 
-	c := &config.Config{
+	cfg := &config.Config{
 		Artifacts: []config.Artifact{
 			{Name: "real", ProjectType: projecttype.Maven},
 		},
@@ -567,7 +569,7 @@ func TestValidate_ContainerReferencesUnknownArtifact(t *testing.T) {
 		},
 	}
 
-	err := config.Validate(c)
+	err := config.Validate(cfg)
 	if !isValidationError(err) {
 		t.Fatalf("err = %v, want ValidationError", err)
 	}
@@ -580,7 +582,7 @@ func TestValidate_ContainerReferencesUnknownArtifact(t *testing.T) {
 func TestValidate_ReportsAllViolations(t *testing.T) {
 	t.Parallel()
 
-	c := &config.Config{
+	cfg := &config.Config{
 		Artifacts: []config.Artifact{
 			{Name: "x", ProjectType: "rust"},
 			{Name: "x", ProjectType: projecttype.Maven}, // dup
@@ -590,7 +592,7 @@ func TestValidate_ReportsAllViolations(t *testing.T) {
 		},
 	}
 
-	err := config.Validate(c)
+	err := config.Validate(cfg)
 
 	var ve *config.ValidationError
 	if !errors.As(err, &ve) {
@@ -605,16 +607,16 @@ func TestValidate_ReportsAllViolations(t *testing.T) {
 		`container "ct" references unknown artifact "missing"`,
 	}, ve.Violations)
 
-	c.Artifacts[0].ProjectType = projecttype.Cargo
-	c.Artifacts[1].Name = "y"
-	c.Containers[0].From = []string{"x"}
-	require.NoError(t, config.Validate(c))
+	cfg.Artifacts[0].ProjectType = projecttype.Cargo
+	cfg.Artifacts[1].Name = "y"
+	cfg.Containers[0].From = []string{"x"}
+	require.NoError(t, config.Validate(cfg))
 }
 
 func TestWarnings_MavenAppToForgePackages(t *testing.T) {
 	t.Parallel()
 
-	c := &config.Config{
+	cfg := &config.Config{
 		Artifacts: []config.Artifact{
 			{
 				Name: "app", ProjectType: projecttype.Maven,
@@ -624,7 +626,7 @@ func TestWarnings_MavenAppToForgePackages(t *testing.T) {
 		},
 	}
 
-	w := config.Warnings(c)
+	w := config.Warnings(cfg)
 	if len(w) != 1 || !strings.Contains(w[0], "Maven application") {
 		t.Errorf("Warnings = %v, want 1 maven-app warning", w)
 	}
@@ -633,7 +635,7 @@ func TestWarnings_MavenAppToForgePackages(t *testing.T) {
 func TestWarnings_LibraryToForgePackagesIsOK(t *testing.T) {
 	t.Parallel()
 
-	c := &config.Config{
+	cfg := &config.Config{
 		Artifacts: []config.Artifact{
 			{
 				Name: "lib", ProjectType: projecttype.Maven,
@@ -642,7 +644,7 @@ func TestWarnings_LibraryToForgePackagesIsOK(t *testing.T) {
 			},
 		},
 	}
-	if w := config.Warnings(c); len(w) != 0 {
+	if w := config.Warnings(cfg); len(w) != 0 {
 		t.Errorf("Warnings = %v, want none for library", w)
 	}
 }
@@ -656,7 +658,7 @@ func isValidationError(err error) bool {
 func TestValidate_RejectsDuplicateContainerNames(t *testing.T) {
 	t.Parallel()
 
-	c := &config.Config{
+	cfg := &config.Config{
 		Artifacts: []config.Artifact{{Name: "api", ProjectType: projecttype.Go}},
 		Containers: []config.Container{
 			{Name: "svc", From: []string{"api"}},
@@ -664,7 +666,7 @@ func TestValidate_RejectsDuplicateContainerNames(t *testing.T) {
 		},
 	}
 
-	err := config.Validate(c)
+	err := config.Validate(cfg)
 	if err == nil {
 		t.Fatal("expected duplicate container names to be rejected")
 	}

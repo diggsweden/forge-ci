@@ -77,7 +77,7 @@ func ledgerPromoteCmd() *cli.Command {
 				ReleaseTag:      cmd.String(flagTag),
 				Stage:           stage,
 				Journal:         cmd.String("journal"),
-				JournalDirPerm:  0o755, //nolint:mnd // dist-style state dir; 0755 is conventional.
+				JournalDirPerm:  0o755,
 				DryRun:          dryrun.Enabled(cmd),
 				ErrPrefix:       "ledger",
 				Out:             os.Stderr,

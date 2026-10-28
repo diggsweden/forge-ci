@@ -25,7 +25,7 @@ type failingExpansionWriter struct{}
 
 func (failingExpansionWriter) Write([]byte) (int, error) { return 0, io.ErrClosedPipe }
 
-func TestSBOMExpansionBoundary_FormatsWritersAndRefusal(t *testing.T) { //nolint:gocognit // both CI formats independently cover empty/full layers, serializers and writer failures.
+func TestSBOMExpansionBoundary_FormatsWritersAndRefusal(t *testing.T) {
 	t.Parallel()
 
 	for _, mode := range []output.Format{output.FormatGitHub, output.FormatGitLab} {

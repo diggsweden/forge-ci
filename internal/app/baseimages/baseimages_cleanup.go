@@ -18,7 +18,7 @@ import (
 // CleanupStagingBaseImages deletes promoted staging base tags through the forge
 // package-version API, verifies final tags before and after deletion, and sweeps
 // stale staging versions that are still present in the package registry.
-func CleanupStagingBaseImages(ctx context.Context, registry imageDigestResolver, cleaner baseImagePackageAPI, out io.Writer, in BaseImageCleanupStagingInput) error { //nolint:cyclop // separate metadata and final-tag preflight passes precede the destructive pass.
+func CleanupStagingBaseImages(ctx context.Context, registry imageDigestResolver, cleaner baseImagePackageAPI, out io.Writer, in BaseImageCleanupStagingInput) error {
 	if registry == nil {
 		return fmt.Errorf("base images cleanup: registry resolver is required: %w", errs.ErrUsage)
 	}
@@ -228,7 +228,7 @@ func reusableBaseArchFinalTags(expectedRepository string, inputs []BaseInput) (m
 	return finalTags, nil
 }
 
-func deleteStagingBaseVersion(ctx context.Context, registry imageDigestResolver, cleaner baseImagePackageAPI, out io.Writer, expectedRepository string, archFinalTags map[string]string, stagingVersion, stagingLabel string) error { //nolint:cyclop,nestif // architecture reuse and manifest candidates have distinct final-tag safety checks.
+func deleteStagingBaseVersion(ctx context.Context, registry imageDigestResolver, cleaner baseImagePackageAPI, out io.Writer, expectedRepository string, archFinalTags map[string]string, stagingVersion, stagingLabel string) error {
 	if !validBaseStagingVersion(stagingVersion) {
 		return fmt.Errorf("base images cleanup: refusing to delete unexpected staging version: %s: %w", stagingVersion, errs.ErrValidation)
 	}

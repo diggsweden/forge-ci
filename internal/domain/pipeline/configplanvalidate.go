@@ -179,7 +179,7 @@ func validateArtifactExecution(artifact PlannedArtifact, source config.Artifact)
 	return nil
 }
 
-func validateContainerExecution(containers []PlannedContainer, artifacts []config.Artifact) error { //nolint:cyclop // bounded dependency and producer-projection checks, not native configuration validation.
+func validateContainerExecution(containers []PlannedContainer, artifacts []config.Artifact) error {
 	byName := make(map[string]config.Artifact, len(artifacts))
 	for _, artifact := range artifacts {
 		byName[artifact.Name] = artifact

@@ -55,8 +55,6 @@ type SignConfig struct {
 // future PR to point sign.key at that target. The current list mirrors
 // cosign's supported provider URIs; `file:` is explicit and intended
 // only for local-development / integration-test usage.
-//
-//nolint:gochecknoglobals // schema enumeration — read-only and ordered.
 var allowedKMSSchemes = []string{
 	"awskms",
 	"gcpkms",
@@ -194,10 +192,8 @@ func validateKMSKey(key string) error {
 	}
 
 	scheme := key[:colon]
-	for _, allowed := range allowedKMSSchemes {
-		if scheme == allowed {
-			return nil
-		}
+	if slices.Contains(allowedKMSSchemes, scheme) {
+		return nil
 	}
 
 	return fmt.Errorf(

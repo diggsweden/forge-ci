@@ -38,7 +38,7 @@ func TestOCIReleaseLabels_RejectsLineBreaksInEveryField(t *testing.T) {
 			t.Run(name+control, func(t *testing.T) {
 				t.Parallel()
 
-				in := appcontainer.OCIReleaseLabelsInput{OCILabels: domaincontainer.OCILabels{Title: "title", Version: "version", Revision: "revision", RefName: "ref"}, Source: "source", Created: "created"}
+				in := appcontainer.OCIReleaseLabelsInput{Title: "title", Version: "version", Revision: "revision", RefName: "ref", Source: "source", Created: "created"}
 				set(&in, "value"+control+"--another-argument")
 				flags, err := appcontainer.OCIReleaseLabelFlags(in)
 				require.ErrorIs(t, err, errs.ErrUsage)
@@ -92,7 +92,7 @@ func buildPushPreflightInput(t *testing.T) appcontainer.BuildPushOCIImageInput {
 	file := filepath.Join(t.TempDir(), "Containerfile")
 	require.NoError(t, os.WriteFile(file, []byte("FROM scratch\n"), 0o600))
 
-	return appcontainer.BuildPushOCIImageInput{Tag: "v1", Image: "registry.example/app", Containerfile: file, BuildsJSON: `[{"platform":"linux/amd64"}]`, TLSVerify: "true", ServerURL: "https://registry.example", Repository: "owner/app", OCILabels: domaincontainer.OCILabels{Title: "fixture", Revision: "revision"}, RetryAttempts: 1}
+	return appcontainer.BuildPushOCIImageInput{Tag: "v1", Image: "registry.example/app", Containerfile: file, BuildsJSON: `[{"platform":"linux/amd64"}]`, TLSVerify: "true", ServerURL: "https://registry.example", Repository: "owner/app", Title: "fixture", Revision: "revision", RetryAttempts: 1}
 }
 
 func TestBuildPushOCIImage_RejectsBadCoordinatesBeforeTools(t *testing.T) {

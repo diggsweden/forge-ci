@@ -23,7 +23,6 @@ type deleteRequestTransport func(*http.Request) (*http.Response, error)
 
 func (f deleteRequestTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
-//nolint:paralleltest // replaces and restores the process-local library transport.
 func TestMergeManifest_RejectsLateTagsBeforeTransport(t *testing.T) {
 	original := remote.DefaultTransport
 
@@ -49,7 +48,6 @@ func TestMergeManifest_RejectsLateTagsBeforeTransport(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // replaces and restores the process-local library transport.
 func TestDeleteTag_KeepsTagIdentifierWhenASiblingAppears(t *testing.T) {
 	// Serial: remote's default transport is replaced only for this test and
 	// restored before any parallel tests run. No listener or socket is used.
@@ -58,15 +56,15 @@ func TestDeleteTag_KeepsTagIdentifierWhenASiblingAppears(t *testing.T) {
 	t.Cleanup(func() { remote.DefaultTransport = original })
 
 	sibling, deleted := false, false
-	remote.DefaultTransport = deleteRequestTransport(func(r *http.Request) (*http.Response, error) {
-		if r.URL.Host != "registry.example" {
-			return nil, fmt.Errorf("unexpected host %q: %w", r.URL.Host, errs.ErrValidation)
+	remote.DefaultTransport = deleteRequestTransport(func(request *http.Request) (*http.Response, error) {
+		if request.URL.Host != "registry.example" {
+			return nil, fmt.Errorf("unexpected host %q: %w", request.URL.Host, errs.ErrValidation)
 		}
 
 		header := make(http.Header)
 		status, body := http.StatusOK, ""
 
-		switch r.Method + " " + r.URL.Path {
+		switch request.Method + " " + request.URL.Path {
 		case "GET /v2/":
 		case "HEAD /v2/owner/app/manifests/prune":
 			header.Set("Docker-Content-Digest", "sha256:"+strings.Repeat("a", 64))
@@ -82,10 +80,10 @@ func TestDeleteTag_KeepsTagIdentifierWhenASiblingAppears(t *testing.T) {
 
 			deleted, status = true, http.StatusAccepted
 		default:
-			return nil, fmt.Errorf("unexpected registry request: %s %s: %w", r.Method, r.URL.Path, errs.ErrValidation)
+			return nil, fmt.Errorf("unexpected registry request: %s %s: %w", request.Method, request.URL.Path, errs.ErrValidation)
 		}
 
-		return &http.Response{StatusCode: status, Header: header, Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+		return &http.Response{StatusCode: status, Header: header, Body: io.NopCloser(strings.NewReader(body)), Request: request}, nil
 	})
 
 	auth := filepath.Join(t.TempDir(), "config.json")

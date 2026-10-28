@@ -541,6 +541,14 @@ EXAMPLES:
    # configured OutputSink ($GITHUB_OUTPUT on GitHub, dotenv on
    # GitLab, /dev/null in local mode).
    forge-ci config parse-artifacts --file artifacts.yml
+
+   # Locally, --json writes an object whose config-plan-json value is
+   # the serialized plan string. Extract that value for plan commands:
+   forge-ci --runner local --json config parse-artifacts --file .forge-ci/artifacts.yml \
+     | jq -er '."config-plan-json"'
+
+When composing commands in a script, preserve the producer's exit status;
+see `plan release --help` for a checked command-substitution example.
 ```
 
 | Flag | Description | Type | Default | Env vars |
@@ -633,11 +641,10 @@ Requires a forge implementing both container tag listing and tag deletion
 | `--server-url` | forge server URL used to derive the registry host and expected source | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive the expected source and base-image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
 | `--repository-suffix` | optional suffix appended to the repository package name, e.g. -base | string | `""` | `$REPOSITORY_SUFFIX` |
-| `--expected-repository` | exact base-image repository allowed for tags/refs (default: host/lower(owner/repo)<suffix>); sign and promote require it on the login registry and, unless --external-registry, below the --repository owner | string | `""` | `$EXPECTED_REPOSITORY`, `$BASE_IMAGES_EXPECTED_REPOSITORY` |
-| `--external-registry` | the image repository is on a registry other than the forge's own, such as GHCR: it is not held below the source owner, and tags are deleted through that registry, which may keep them | bool | `false` | `$EXTERNAL_IMAGE_REGISTRY` |
+| `--expected-repository` | exact base-image repository allowed for tags/refs (default: host/lower(owner/repo)<suffix>); the registry login goes to its host | string | `""` | `$EXPECTED_REPOSITORY`, `$BASE_IMAGES_EXPECTED_REPOSITORY` |
 | `--expected-source` | source repository URL expected in SLSA lineage (default: <server-url>/<repository>) | string | `""` | `$EXPECTED_SOURCE`, `$BASE_IMAGES_EXPECTED_SOURCE` |
 | `--expected-workflow` | workflow filename expected in SLSA lineage | string | `""` | `$EXPECTED_WORKFLOW` |
-| `--registry` | registry host for the registry login (default: the base-image repository's host with --external-registry, else the host from --server-url) | string | `""` | `$CONTAINER_REGISTRY` |
+| `--registry` | the forge's own registry host, when it is not the host of --server-url (GitLab's $CI_REGISTRY); the login goes to the image repository's host, and a repository on any other host has its tags deleted through that registry | string | `""` | `$CONTAINER_REGISTRY` |
 | `--shared-core-images-json` | JSON array of shared-core base image metadata | string | `"[]"` | `$SHARED_CORE_IMAGES_JSON` |
 | `--base-images-json` | JSON array of base image metadata | string | `"[]"` | `$BASE_IMAGES_JSON` |
 | `--base-inputs-json` | JSON array mapping flavors to content/base input IDs | string | `"[]"` | `$BASE_INPUTS_JSON` |
@@ -672,10 +679,10 @@ EXAMPLE:
 
 #### `forge-ci container base-images import`
 
-copy unsigned base digests from staging to a separate source-owned publication repository
+copy unsigned base digests from staging to a separate publication repository
 
 ```
-Admits a nonempty base-only ledger and its content-addressed tags before login. Copies only immutable image digests to staging candidates, without signatures or final tags. Preserves base identities, SBOM pins and lineage; conflicting candidates refuse. The expected publication repository must be on the login registry under the source owner.
+Admits a nonempty base-only ledger and its content-addressed tags before login. Copies only immutable image digests to staging candidates, without signatures or final tags. Preserves base identities, SBOM pins and lineage; conflicting candidates refuse. The registry login goes to the expected publication repository's host.
 ```
 
 | Flag | Description | Type | Default | Env vars |
@@ -683,9 +690,8 @@ Admits a nonempty base-only ledger and its content-addressed tags before login. 
 | `--server-url` | forge server URL used to derive the registry host and expected source | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive the expected source and base-image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
 | `--repository-suffix` | optional suffix appended to the repository package name, e.g. -base | string | `""` | `$REPOSITORY_SUFFIX` |
-| `--expected-repository` | exact base-image repository allowed for tags/refs (default: host/lower(owner/repo)<suffix>); sign and promote require it on the login registry and, unless --external-registry, below the --repository owner | string | `""` | `$EXPECTED_REPOSITORY`, `$BASE_IMAGES_EXPECTED_REPOSITORY` |
-| `--external-registry` | the image repository is on a registry other than the forge's own, such as GHCR: it is not held below the source owner, and tags are deleted through that registry, which may keep them | bool | `false` | `$EXTERNAL_IMAGE_REGISTRY` |
-| `--registry` | registry host for the registry login (default: the base-image repository's host with --external-registry, else the host from --server-url) | string | `""` | `$CONTAINER_REGISTRY` |
+| `--expected-repository` | exact base-image repository allowed for tags/refs (default: host/lower(owner/repo)<suffix>); the registry login goes to its host | string | `""` | `$EXPECTED_REPOSITORY`, `$BASE_IMAGES_EXPECTED_REPOSITORY` |
+| `--registry` | the forge's own registry host, when it is not the host of --server-url (GitLab's $CI_REGISTRY); the login goes to the image repository's host, and a repository on any other host has its tags deleted through that registry | string | `""` | `$CONTAINER_REGISTRY` |
 | `--ledger` | unsigned source base-image ledger (required) | string | `""` | n/a |
 | `--source-repository` | exact staging image repository allowed in the source ledger (required) | string | `""` | n/a |
 | `--output-ledger` | new publication ledger under --dist-dir; never replaces the source ledger (required) | string | `""` | n/a |
@@ -701,12 +707,9 @@ verify base-image evidence and promote candidate refs to immutable final tags
 Verifies each image's signature, CycloneDX SBOM attestation and SLSA lineage
 with the trusted key, then makes its candidate the immutable final tag.
 
-The base-image repository answers to the rule "base-images sign" holds it to:
-it is on the registry this command logs in to (--registry, else the
---server-url host, with its port) and below the owner of --repository,
-compared without case. --expected-repository chooses the name below the owner;
-another owner or another registry is refused before the key or a credential is
-read.
+Every image must be in the one base-image repository, --expected-repository
+or the one derived from --server-url and --repository; the login goes to its
+registry.
 ```
 
 | Flag | Description | Type | Default | Env vars |
@@ -714,11 +717,10 @@ read.
 | `--server-url` | forge server URL used to derive the registry host and expected source | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive the expected source and base-image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
 | `--repository-suffix` | optional suffix appended to the repository package name, e.g. -base | string | `""` | `$REPOSITORY_SUFFIX` |
-| `--expected-repository` | exact base-image repository allowed for tags/refs (default: host/lower(owner/repo)<suffix>); sign and promote require it on the login registry and, unless --external-registry, below the --repository owner | string | `""` | `$EXPECTED_REPOSITORY`, `$BASE_IMAGES_EXPECTED_REPOSITORY` |
-| `--external-registry` | the image repository is on a registry other than the forge's own, such as GHCR: it is not held below the source owner, and tags are deleted through that registry, which may keep them | bool | `false` | `$EXTERNAL_IMAGE_REGISTRY` |
+| `--expected-repository` | exact base-image repository allowed for tags/refs (default: host/lower(owner/repo)<suffix>); the registry login goes to its host | string | `""` | `$EXPECTED_REPOSITORY`, `$BASE_IMAGES_EXPECTED_REPOSITORY` |
 | `--expected-source` | source repository URL expected in SLSA lineage (default: <server-url>/<repository>) | string | `""` | `$EXPECTED_SOURCE`, `$BASE_IMAGES_EXPECTED_SOURCE` |
 | `--expected-workflow` | workflow filename expected in SLSA lineage | string | `""` | `$EXPECTED_WORKFLOW` |
-| `--registry` | registry host for the registry login (default: the base-image repository's host with --external-registry, else the host from --server-url) | string | `""` | `$CONTAINER_REGISTRY` |
+| `--registry` | the forge's own registry host, when it is not the host of --server-url (GitLab's $CI_REGISTRY); the login goes to the image repository's host, and a repository on any other host has its tags deleted through that registry | string | `""` | `$CONTAINER_REGISTRY` |
 | `--cosign-public-key-path` | relative path to the trusted Cosign public key in the consumer checkout | string | `""` | `$COSIGN_PUBLIC_KEY_PATH` |
 | `--cosign-public-key-sha256` | expected sha256 digest of the trusted Cosign public key | string | `""` | `$COSIGN_PUBLIC_KEY_SHA256` |
 | `--all-images-json` | JSON array of base image metadata to verify/promote | string | `""` | `$ALL_IMAGES_JSON` |
@@ -766,13 +768,12 @@ EXAMPLE:
 | `--server-url` | forge server URL used to derive the registry host and expected source | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive the expected source and base-image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
 | `--repository-suffix` | optional suffix appended to the repository package name, e.g. -base | string | `""` | `$REPOSITORY_SUFFIX` |
-| `--expected-repository` | exact base-image repository allowed for tags/refs (default: host/lower(owner/repo)<suffix>); sign and promote require it on the login registry and, unless --external-registry, below the --repository owner | string | `""` | `$EXPECTED_REPOSITORY`, `$BASE_IMAGES_EXPECTED_REPOSITORY` |
-| `--external-registry` | the image repository is on a registry other than the forge's own, such as GHCR: it is not held below the source owner, and tags are deleted through that registry, which may keep them | bool | `false` | `$EXTERNAL_IMAGE_REGISTRY` |
+| `--expected-repository` | exact base-image repository allowed for tags/refs (default: host/lower(owner/repo)<suffix>); the registry login goes to its host | string | `""` | `$EXPECTED_REPOSITORY`, `$BASE_IMAGES_EXPECTED_REPOSITORY` |
 | `--cosign-public-key-path` | relative path to the trusted Cosign public key in the consumer checkout | string | `""` | `$COSIGN_PUBLIC_KEY_PATH` |
 | `--cosign-public-key-sha256` | expected sha256 digest of the trusted Cosign public key | string | `""` | `$COSIGN_PUBLIC_KEY_SHA256` |
 | `--expected-source` | optional source repository URL required in every release attestation; not derived from the base-image repository | string | `""` | `$EXPECTED_SOURCE`, `$BASE_IMAGES_EXPECTED_SOURCE` |
 | `--expected-workflow` | optional relative workflow path required in every release attestation | string | `""` | `$EXPECTED_WORKFLOW` |
-| `--registry` | registry host for the registry login (default: the base-image repository's host with --external-registry, else the host from --server-url) | string | `""` | `$CONTAINER_REGISTRY` |
+| `--registry` | the forge's own registry host, when it is not the host of --server-url (GitLab's $CI_REGISTRY); the login goes to the image repository's host, and a repository on any other host has its tags deleted through that registry | string | `""` | `$CONTAINER_REGISTRY` |
 | `--release-images` | newline- or comma-separated digest-pinned release image refs whose bases must be kept | string | `""` | `$RELEASE_IMAGES` |
 | `--max-delete` | maximum unreferenced base-input IDs per pass; all flavor tags of each ID are removed (0 disables the bound) | int | `20` | `$BASE_IMAGES_MAX_DELETE` |
 | `--dry-run` | report what would be deleted without deleting it | bool | `true` | `$BASE_IMAGES_PRUNE_DRY_RUN` |
@@ -786,16 +787,14 @@ sign and attest the base images recorded in a base-image ledger
 ```
 Signer side of the base-image boundary, in one process and in this order:
 
-  1. admit the repository and the ledger: the base-image repository is on the
-     registry this command logs in to (--registry, else the --server-url host,
-     with its port) and below the owner of --repository, compared without
-     case; the ledger parses, every entry is an image_kind=base entry, and
-     every ref and tag is inside that repository (the one "base-images
-     validate" derives from the same flags);
+  1. admit the ledger: it parses, every entry is an image_kind=base entry,
+     and every ref and tag is inside the one base-image repository
+     (--expected-repository, else the one "base-images validate" derives from
+     the same flags);
   2. build the run-level SLSA provenance from the ledger's own image digests
      (the generic "release provenance" profile), naming --server-url/--repository
      as the source, --source-sha as its commit and --workflow as the caller;
-  3. log in to the registry with a short-lived auth config;
+  3. log in to that repository's registry with a short-lived auth config;
   4. sign each image digest and attest its CycloneDX SBOM and its per-image
      SLSA predicate, as "container ledger sign" does.
 
@@ -803,9 +802,6 @@ A refusal in step 1 or 2 happens before any credential is read and before
 anything is signed or written to a registry. The source repository and commit
 come from the flags, so a signer can attest a pinned commit other than the one
 it runs on; the builder identity, invocation and ref remain the runner's own.
---expected-repository chooses the repository name below the owner and nothing
-else: another owner or another registry is refused, with no flag to allow it,
-so the signer cannot attest a path the source repository's owner does not hold.
 --workflow, --source-sha and --started-on are read from the command line only:
 what the statement records is not taken from a variable the job happens to set.
 
@@ -822,9 +818,8 @@ EXAMPLE:
 | `--server-url` | forge server URL used to derive the registry host and expected source | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive the expected source and base-image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
 | `--repository-suffix` | optional suffix appended to the repository package name, e.g. -base | string | `""` | `$REPOSITORY_SUFFIX` |
-| `--expected-repository` | exact base-image repository allowed for tags/refs (default: host/lower(owner/repo)<suffix>); sign and promote require it on the login registry and, unless --external-registry, below the --repository owner | string | `""` | `$EXPECTED_REPOSITORY`, `$BASE_IMAGES_EXPECTED_REPOSITORY` |
-| `--external-registry` | the image repository is on a registry other than the forge's own, such as GHCR: it is not held below the source owner, and tags are deleted through that registry, which may keep them | bool | `false` | `$EXTERNAL_IMAGE_REGISTRY` |
-| `--registry` | registry host for the registry login (default: the base-image repository's host with --external-registry, else the host from --server-url) | string | `""` | `$CONTAINER_REGISTRY` |
+| `--expected-repository` | exact base-image repository allowed for tags/refs (default: host/lower(owner/repo)<suffix>); the registry login goes to its host | string | `""` | `$EXPECTED_REPOSITORY`, `$BASE_IMAGES_EXPECTED_REPOSITORY` |
+| `--registry` | the forge's own registry host, when it is not the host of --server-url (GitLab's $CI_REGISTRY); the login goes to the image repository's host, and a repository on any other host has its tags deleted through that registry | string | `""` | `$CONTAINER_REGISTRY` |
 | `--ledger` | base-image ledger JSON file: a bare array of image_kind=base entries ("-" reads stdin) (required) | string | `""` | `$BASE_IMAGES_LEDGER` |
 | `--workflow` | calling workflow filename/path, relative with no '..' step or control character; recorded as externalParameters.workflow, which base-image verification matches against --expected-workflow | string | `""` | n/a |
 | `--source-sha` | pinned source commit the base images were built from, recorded as the provenance gitCommit | string | `""` | n/a |
@@ -848,11 +843,10 @@ validate existing immutable final base-image tags and report missing flavors
 | `--server-url` | forge server URL used to derive the registry host and expected source | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive the expected source and base-image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
 | `--repository-suffix` | optional suffix appended to the repository package name, e.g. -base | string | `""` | `$REPOSITORY_SUFFIX` |
-| `--expected-repository` | exact base-image repository allowed for tags/refs (default: host/lower(owner/repo)<suffix>); sign and promote require it on the login registry and, unless --external-registry, below the --repository owner | string | `""` | `$EXPECTED_REPOSITORY`, `$BASE_IMAGES_EXPECTED_REPOSITORY` |
-| `--external-registry` | the image repository is on a registry other than the forge's own, such as GHCR: it is not held below the source owner, and tags are deleted through that registry, which may keep them | bool | `false` | `$EXTERNAL_IMAGE_REGISTRY` |
+| `--expected-repository` | exact base-image repository allowed for tags/refs (default: host/lower(owner/repo)<suffix>); the registry login goes to its host | string | `""` | `$EXPECTED_REPOSITORY`, `$BASE_IMAGES_EXPECTED_REPOSITORY` |
 | `--expected-source` | source repository URL expected in SLSA lineage (default: <server-url>/<repository>) | string | `""` | `$EXPECTED_SOURCE`, `$BASE_IMAGES_EXPECTED_SOURCE` |
 | `--expected-workflow` | workflow filename expected in SLSA lineage | string | `""` | `$EXPECTED_WORKFLOW` |
-| `--registry` | registry host for the registry login (default: the base-image repository's host with --external-registry, else the host from --server-url) | string | `""` | `$CONTAINER_REGISTRY` |
+| `--registry` | the forge's own registry host, when it is not the host of --server-url (GitLab's $CI_REGISTRY); the login goes to the image repository's host, and a repository on any other host has its tags deleted through that registry | string | `""` | `$CONTAINER_REGISTRY` |
 | `--cosign-public-key-path` | relative path to the trusted Cosign public key in the consumer checkout | string | `""` | `$COSIGN_PUBLIC_KEY_PATH` |
 | `--cosign-public-key-sha256` | expected sha256 digest of the trusted Cosign public key | string | `""` | `$COSIGN_PUBLIC_KEY_SHA256` |
 | `--base-input-id` | optional single sha256 base input ID expected for every flavor | string | `""` | `$BASE_INPUT_ID` |
@@ -861,7 +855,7 @@ validate existing immutable final base-image tags and report missing flavors
 
 ### `forge-ci container build`
 
-build a single native-platform container image with buildah, optionally pushing it by digest
+build a single native-platform container image with buildah or kaniko, optionally pushing it by digest
 
 ```
 Builds ONE native-platform image (the multi-arch index is assembled separately
@@ -913,6 +907,8 @@ EXAMPLES:
 | `--scan` | scan the exported layout before pushing or retaining it; fail on fixable findings at/above --scan-severity and on unfixed CRITICAL findings .trivyignore.yaml does not approve (push-by-digest and oci modes) | bool | `false` | `$ENABLE_SCAN` |
 | `--scan-severity` | trivy severity filter and gate threshold | string | `"CRITICAL,HIGH"` | `$SCAN_SEVERITY` |
 | `--trivy-version` | version embedded in the GitLab container-scanning report | string | `""` | `$TRIVY_VERSION` |
+| `--image-builder` | image builder type: buildah (default; rootless, needs user namespaces) or kaniko (for a pool that denies them; runs as root in the job image CI_IMAGE_BUILDER_JOB_IMAGE names, builds to a layout only, no load/local modes, no build secrets). Set CI_IMAGE_BUILDER on the repository to select it. | string | `"buildah"` | `$CI_IMAGE_BUILDER` |
+| `--kaniko-executor` | path of the kaniko executor (default /kaniko/executor) | string | `""` | `$KANIKO_EXECUTOR` |
 
 ### `forge-ci container build-push-oci-image`
 
@@ -929,9 +925,8 @@ emulation for every non-native platform; build it with container
 multiarch-image, one native job per architecture, instead. With
 --scan-output-template, every exported platform must pass Trivy before publication.
 Emits image, verified digest and platforms outputs; platforms is the comma-separated
-list that was built, in plan order. This is the forge-ci implementation of the
-public reusable-workflow build-push-oci-image contract. Every flag may also be
-fed from the $FORGE_CI_PLAN plan file under the "container build-push-oci-image"
+list that was built, in plan order. Release consumers normally use release-images.yml.
+Every flag may also be fed from the $FORGE_CI_PLAN plan file under the "container build-push-oci-image"
 scope (flag > plan > env > default).
 ```
 
@@ -958,6 +953,20 @@ scope (flag > plan > env > default).
 | `--repository` | owner/repo used to derive defaults and source labels | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
 | `--retry-attempts` | manifest push attempts | int | `3` | `$MANIFEST_PUSH_RETRY_ATTEMPTS` |
 | `--retry-delay-seconds` | base delay between manifest push retry attempts | int | `15` | `$MANIFEST_PUSH_RETRY_DELAY_SECONDS` |
+
+### `forge-ci container builder-identity`
+
+print an opaque cache-material ID for the selected image builder without running it
+
+```
+Prints a SHA-256 material ID by default: the consumer includes that value in its cache inputs without interpreting backend names or executable details. --format=json emits the ID and builder details for provenance and diagnostics. Capture on each native build runner. The engine pin and approved job-image digest remain separate provenance inputs. This command performs no build, storage probe, registry operation or installation.
+```
+
+| Flag | Description | Type | Default | Env vars |
+|------|-------------|------|---------|----------|
+| `--image-builder` | image builder type: buildah (default; rootless, needs user namespaces) or kaniko (for a pool that denies them; runs as root in the job image CI_IMAGE_BUILDER_JOB_IMAGE names, builds to a layout only, no load/local modes, no build secrets). Set CI_IMAGE_BUILDER on the repository to select it. | string | `"buildah"` | `$CI_IMAGE_BUILDER` |
+| `--kaniko-executor` | path of the kaniko executor (default /kaniko/executor) | string | `""` | `$KANIKO_EXECUTOR` |
+| `--format` | output format: id or json | string | `"id"` | n/a |
 
 ### `forge-ci container containerfile-arg-default`
 
@@ -1159,7 +1168,7 @@ EXAMPLES:
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--ledger` | ledger JSON file (a bare array; created if absent on add) | string | `"dist/release-images.json"` | `$RELEASE_IMAGES_LEDGER` |
+| `--ledger` | ledger JSON file (a bare array; created if absent on add) | string | `"dist/release-images.json"` | `$RELEASE_IMAGES_PATH` |
 | `--tag` | release tag that final_tag (and candidate_tag) must be scoped to | string | `""` | `$TAG_NAME`, `$RELEASE_TAG`, `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
 | `--role` | image role, e.g. distroless, alpine, base | string | `""` | n/a |
 | `--image-kind` | entry validation scope recorded as image_kind: release (default) or base | string | `"release"` | n/a |
@@ -1175,7 +1184,7 @@ EXAMPLES:
 | `--moving-tag` | optional moving tag ref, e.g. forgejo.example.com/owner/repo:rust | string | `""` | n/a |
 | `--flavor` | optional base-image flavour | string | `""` | n/a |
 | `--derive-candidate-tag` | derive --candidate-tag as <image>:staging-<final-tag-name>; mutually exclusive with explicit candidate tag flags | bool | `false` | `$LEDGER_DERIVE_CANDIDATE_TAG` |
-| `--default-sbom` | when --sbom is empty, use dist/image-sbom-<flavor\|role>.cyclonedx.json | bool | `false` | n/a |
+| `--default-sbom` | when --sbom is empty, use dist/image-sbom-<flavor\|role>.cyclonedx.json; base images use premade-sboms/base-sbom-<flavor>.cyclonedx.json | bool | `false` | n/a |
 | `--candidate-tag-name` | optional staging tag name/portion combined with --image-name | string | `""` | n/a |
 | `--candidate-tag` | optional staging tag ref (scoped to staging-<tag>); derived from --image-name when omitted | string | `""` | n/a |
 | `--base-ref` | optional digest-pinned base image | string | `""` | n/a |
@@ -1194,7 +1203,7 @@ EXAMPLE:
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--ledger` | ledger JSON file (a bare array; created if absent on add) | string | `"dist/release-images.json"` | `$RELEASE_IMAGES_LEDGER` |
+| `--ledger` | ledger JSON file (a bare array; created if absent on add) | string | `"dist/release-images.json"` | `$RELEASE_IMAGES_PATH` |
 | `--tag` | release tag that final_tag (and candidate_tag) must be scoped to | string | `""` | `$TAG_NAME`, `$RELEASE_TAG`, `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
 | `--auth-file` | registry auth file for the promoted-tag verification | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
 | `--expected-image-repository` | optional exact image repository allowed for ledger refs/tags at the signer/publisher boundary | string | `""` | `$LEDGER_EXPECTED_IMAGE_REPOSITORY` |
@@ -1213,7 +1222,7 @@ EXAMPLE:
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--ledger` | ledger JSON file (a bare array; created if absent on add) | string | `"dist/release-images.json"` | `$RELEASE_IMAGES_LEDGER` |
+| `--ledger` | ledger JSON file (a bare array; created if absent on add) | string | `"dist/release-images.json"` | `$RELEASE_IMAGES_PATH` |
 
 #### `forge-ci container ledger promote`
 
@@ -1230,7 +1239,7 @@ EXAMPLES:
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--ledger` | ledger JSON file (a bare array; created if absent on add) | string | `"dist/release-images.json"` | `$RELEASE_IMAGES_LEDGER` |
+| `--ledger` | ledger JSON file (a bare array; created if absent on add) | string | `"dist/release-images.json"` | `$RELEASE_IMAGES_PATH` |
 | `--tag` | release tag that final_tag (and candidate_tag) must be scoped to | string | `""` | `$TAG_NAME`, `$RELEASE_TAG`, `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
 | `--auth-file` | registry auth file for the promotion copies and digest verification | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
 | `--stage` | promotion stage: 'release' adds the <base>:release pointer and enforces the release scope; a named stage ('dev', 'staging') adds <base>:<stage> on the same digest and needs no --tag. The immutable :<version> tag is build-only. | string | `"release"` | `$PROMOTE_STAGE` |
@@ -1274,7 +1283,7 @@ ledger promote operation.
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--ledger` | ledger JSON file (a bare array; created if absent on add) | string | `"dist/release-images.json"` | `$RELEASE_IMAGES_LEDGER` |
+| `--ledger` | ledger JSON file (a bare array; created if absent on add) | string | `"dist/release-images.json"` | `$RELEASE_IMAGES_PATH` |
 | `--tag` | release tag that final_tag (and candidate_tag) must be scoped to | string | `""` | `$TAG_NAME`, `$RELEASE_TAG`, `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
 | `--auth-file` | registry auth file for resolving each image before signing | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
 | `--provenance-predicate` | base SLSA provenance predicate JSON enriched per image before attestation | string | `"dist/slsa-provenance.predicate.json"` | `$SLSA_PROVENANCE_PREDICATE` |
@@ -1301,7 +1310,7 @@ EXAMPLE:
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--ledger` | ledger JSON file (a bare array; created if absent on add) | string | `"dist/release-images.json"` | `$RELEASE_IMAGES_LEDGER` |
+| `--ledger` | ledger JSON file (a bare array; created if absent on add) | string | `"dist/release-images.json"` | `$RELEASE_IMAGES_PATH` |
 | `--tag` | release tag that final_tag (and candidate_tag) must be scoped to | string | `""` | `$TAG_NAME`, `$RELEASE_TAG`, `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
 | `--allow-empty` | accept a ledger with no entries (default: an empty ledger is a failure) | bool | `false` | n/a |
 
@@ -1316,7 +1325,7 @@ EXAMPLE:
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--ledger` | ledger JSON file (a bare array; created if absent on add) | string | `"dist/release-images.json"` | `$RELEASE_IMAGES_LEDGER` |
+| `--ledger` | ledger JSON file (a bare array; created if absent on add) | string | `"dist/release-images.json"` | `$RELEASE_IMAGES_PATH` |
 | `--tag` | release tag that final_tag (and candidate_tag) must be scoped to | string | `""` | `$TAG_NAME`, `$RELEASE_TAG`, `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
 | `--auth-file` | registry auth file for the recorded-digest checks | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
 
@@ -1527,7 +1536,7 @@ outputs.
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--auth-file` | registry auth file used by buildah and the registry client | string | `""` | `$FORGE_CI_IMAGE_AUTH_FILE` |
+| `--auth-file` | registry auth file used by buildah and the registry client; build-arch --stage pulls anonymously without one | string | `""` | `$FORGE_CI_IMAGE_AUTH_FILE` |
 | `--source-sha` | git commit SHA for the OCI revision label and default tag naming | string | `""` | `$SOURCE_SHA` |
 | `--server-url` | forge server URL used to derive the registry/repository | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive the image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
@@ -1543,6 +1552,11 @@ outputs.
 | `--require-label` | required child config label as key=value (repeatable); checked before any upload | string | `""` | n/a |
 | `--manifest-output` | optional file for exact verified index bytes, suitable for sbom index --index-file; '-' is not supported | string | `""` | n/a |
 | `--metadata-dir` | directory for <name>.json (default <name>-dist) | string | `""` | `$IMAGE_METADATA_DIR` |
+| `--scan-output-template` | with --from-layouts: scan every staged architecture before any upload and refuse publication on a finding the container gate blocks; Trivy JSON path must contain {arch} or {platform} | string | `""` | n/a |
+| `--sbom-output-template` | with --from-layouts and --scan-output-template: generate per-architecture CycloneDX SBOMs from the staged bytes before upload; path must contain {arch} or {platform} | string | `""` | n/a |
+| `--index-sbom-output` | with staged inventories and --manifest-output: write an index SBOM binding every selected platform; emits image-sbom-sha256 | string | `""` | n/a |
+| `--sbom-url-prefix` | public HTTPS directory where the unchanged platform inventories will be published; required with --index-sbom-output | string | `""` | n/a |
+| `--cache-tag-prefix` | with --from-layouts: refresh bounded <prefix>-<arch> slots in the image repository only after the complete set passes scans and assembly | string | `""` | n/a |
 
 #### `forge-ci container multiarch-image build-arch`
 
@@ -1557,7 +1571,7 @@ architecture builds on a native runner, never under CPU emulation.
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--auth-file` | registry auth file used by buildah and the registry client | string | `""` | `$FORGE_CI_IMAGE_AUTH_FILE` |
+| `--auth-file` | registry auth file used by buildah and the registry client; build-arch --stage pulls anonymously without one | string | `""` | `$FORGE_CI_IMAGE_AUTH_FILE` |
 | `--source-sha` | git commit SHA for the OCI revision label and default tag naming | string | `""` | `$SOURCE_SHA` |
 | `--server-url` | forge server URL used to derive the registry/repository | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive the image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
@@ -1568,11 +1582,18 @@ architecture builds on a native runner, never under CPU emulation.
 | `--tag-prefix` | prefix prepended to the source-SHA image and manifest tags (e.g. signer-) | string | `""` | `$IMAGE_TAG_PREFIX` |
 | `--tag` | explicit index tag name instead of tag-prefix + source-sha; architecture tags append -<arch>; mutually exclusive with tag-prefix | string | `""` | n/a |
 | `--name` | basename for the per-arch/manifest metadata files and dirs shared across the two phases | string | `"image"` | `$IMAGE_METADATA_NAME` |
+| `--image-builder` | image builder type: buildah (default; rootless, needs user namespaces) or kaniko (for a pool that denies them; runs as root in the job image CI_IMAGE_BUILDER_JOB_IMAGE names, builds to a layout only, no load/local modes, no build secrets). Set CI_IMAGE_BUILDER on the repository to select it. | string | `"buildah"` | `$CI_IMAGE_BUILDER` |
+| `--kaniko-executor` | path of the kaniko executor (default /kaniko/executor) | string | `""` | `$KANIKO_EXECUTOR` |
 | `--stage` | retain the OCI layout with architecture metadata; defer ALL uploads to assemble --from-layouts after every build job succeeds | bool | `false` | n/a |
 | `--arch` | target architecture: amd64 or arm64 | string | `""` | `$IMAGE_ARCH` |
 | `--containerfile` | Containerfile to build | string | `"Containerfile"` | `$CONTAINERFILE` |
 | `--context` | directory for the build context | string | `"."` | `$BUILD_CONTEXT` |
 | `--title` | org.opencontainers.image.title label value for the built image | string | `""` | `$IMAGE_TITLE` |
+| `--target` | multi-stage target stage to build; default the final stage | string | `""` | n/a |
+| `--build-arg` | KEY=VALUE build argument (repeatable) | string | `""` | n/a |
+| `--label` | key=value image label beside the source, revision and title labels (repeatable) | string | `""` | n/a |
+| `--cache-tag` | with --stage: reuse a bounded architecture slot in the image repository after checking its platform, revision and --require-label values; reads anonymously | string | `""` | n/a |
+| `--require-label` | required cache child config label as key=value (repeatable) | string | `""` | n/a |
 | `--metadata-dir` | directory for <name>-<arch>.json (default <name>-arch-<arch>) | string | `""` | `$IMAGE_METADATA_DIR` |
 
 #### `forge-ci container multiarch-image verify`
@@ -1581,7 +1602,7 @@ verify an existing digest-pinned index against the complete architecture metadat
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--auth-file` | registry auth file used by buildah and the registry client | string | `""` | `$FORGE_CI_IMAGE_AUTH_FILE` |
+| `--auth-file` | registry auth file used by buildah and the registry client; build-arch --stage pulls anonymously without one | string | `""` | `$FORGE_CI_IMAGE_AUTH_FILE` |
 | `--source-sha` | git commit SHA for the OCI revision label and default tag naming | string | `""` | `$SOURCE_SHA` |
 | `--server-url` | forge server URL used to derive the registry/repository | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive the image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
@@ -1728,7 +1749,7 @@ case drift; revision, version, and ref.name are exact matches.
 
 ### `forge-ci container release-images`
 
-high-level release-image import, signing, promotion, rollback, and cleanup boundary
+high-level release-image planning, import, signing, promotion, rollback, and cleanup boundary
 
 ```
 Workflow-facing release-image boundary. These commands combine the
@@ -1745,16 +1766,15 @@ delete release candidate tags after verified final/moving promotion
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
 | `--dist-dir` | release dist directory; the default ledger and SLSA envelope are resolved under this directory | string | `"dist"` | `$DIST_DIR` |
-| `--ledger` | release-image ledger path; defaults to <dist-dir>/release-images.json and must remain under <dist-dir>/ | string | `""` | `$RELEASE_IMAGES_PATH`, `$RELEASE_IMAGES_LEDGER` |
+| `--ledger` | release-image ledger path; defaults to <dist-dir>/release-images.json and must remain under <dist-dir>/ | string | `""` | `$RELEASE_IMAGES_PATH` |
 | `--tag` | release tag that final_tag (and candidate_tag) must be scoped to | string | `""` | `$TAG_NAME`, `$RELEASE_TAG`, `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
 | `--stage` | promotion stage: 'release' adds the <base>:release pointer and enforces the release scope; a named stage ('dev', 'staging') adds <base>:<stage> on the same digest and needs no --tag. The immutable :<version> tag is build-only. | string | `"release"` | `$PROMOTE_STAGE` |
 | `--server-url` | forge server URL used to derive the registry host and provider API base | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive the expected image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
-| `--registry` | registry host for the short-lived Docker auth config (default: the image repository's host with --external-registry, else the host from --server-url) | string | `""` | `$CONTAINER_REGISTRY` |
-| `--registry-username` | registry username; the password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
+| `--registry` | the forge's own registry host, when it is not the host of --server-url (GitLab's $CI_REGISTRY); the login goes to the image repository's host, and a repository on any other host has its tags deleted through that registry | string | `""` | `$CONTAINER_REGISTRY` |
+| `--registry-username` | user the registry token logs in as; empty is the --repository owner on the forge's own registry and refused on another one. The password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
 | `--registry-password-file` | file containing the registry password/token ("-" reads stdin); defaults to $REGISTRY_TOKEN then $REGISTRY_PASSWORD. The password never appears in argv. | string | `""` | n/a |
 | `--expected-image-repository` | optional exact image repository allowed for ledger refs/tags at the signer/publisher boundary | string | `""` | `$LEDGER_EXPECTED_IMAGE_REPOSITORY` |
-| `--external-registry` | the image repository is on a registry other than the forge's own, such as GHCR: it is not held below the source owner, and tags are deleted through that registry, which may keep them | bool | `false` | `$EXTERNAL_IMAGE_REGISTRY` |
 | `--allow-missing-ledger` | accept a release without images: when the default ledger <dist-dir>/release-images.json does not exist, say so and exit 0 before any credential read or registry login. The dist directory must exist, a ledger that exists is held to every rule, and a ledger named with --ledger must exist | bool | `false` | n/a |
 | `--provider-token-file` | file containing the provider/package-API token ("-" reads stdin); defaults to $FORGE_CI_PACKAGE_API_TOKEN, then the detected forge's own token variable ($FORGEJO_TOKEN or $GITEA_TOKEN on Forgejo, $GITLAB_TOKEN on GitLab); another forge's token is never used. The token never appears in argv. | string | `""` | n/a |
 | `--dry-run` | preview registry mutations (copies/deletes) without performing them | bool | `false` | n/a |
@@ -1766,18 +1786,69 @@ copy unsigned release-image digests to a separate publication repository and wri
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
 | `--dist-dir` | release dist directory; the default ledger and SLSA envelope are resolved under this directory | string | `"dist"` | `$DIST_DIR` |
-| `--ledger` | release-image ledger path; defaults to <dist-dir>/release-images.json and must remain under <dist-dir>/ | string | `""` | `$RELEASE_IMAGES_PATH`, `$RELEASE_IMAGES_LEDGER` |
+| `--ledger` | release-image ledger path; defaults to <dist-dir>/release-images.json and must remain under <dist-dir>/ | string | `""` | `$RELEASE_IMAGES_PATH` |
 | `--tag` | release tag that final_tag (and candidate_tag) must be scoped to | string | `""` | `$TAG_NAME`, `$RELEASE_TAG`, `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
 | `--stage` | promotion stage: 'release' adds the <base>:release pointer and enforces the release scope; a named stage ('dev', 'staging') adds <base>:<stage> on the same digest and needs no --tag. The immutable :<version> tag is build-only. | string | `"release"` | `$PROMOTE_STAGE` |
 | `--server-url` | forge server URL used to derive the registry host and provider API base | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive the expected image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
-| `--registry` | registry host for the short-lived Docker auth config (default: the image repository's host with --external-registry, else the host from --server-url) | string | `""` | `$CONTAINER_REGISTRY` |
-| `--registry-username` | registry username; the password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
+| `--registry` | the forge's own registry host, when it is not the host of --server-url (GitLab's $CI_REGISTRY); the login goes to the image repository's host, and a repository on any other host has its tags deleted through that registry | string | `""` | `$CONTAINER_REGISTRY` |
+| `--registry-username` | user the registry token logs in as; empty is the --repository owner on the forge's own registry and refused on another one. The password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
 | `--registry-password-file` | file containing the registry password/token ("-" reads stdin); defaults to $REGISTRY_TOKEN then $REGISTRY_PASSWORD. The password never appears in argv. | string | `""` | n/a |
 | `--expected-image-repository` | optional exact image repository allowed for ledger refs/tags at the signer/publisher boundary | string | `""` | `$LEDGER_EXPECTED_IMAGE_REPOSITORY` |
-| `--external-registry` | the image repository is on a registry other than the forge's own, such as GHCR: it is not held below the source owner, and tags are deleted through that registry, which may keep them | bool | `false` | `$EXTERNAL_IMAGE_REGISTRY` |
 | `--destination-repository` | exact publication image repository, without tag or digest (required) | string | `""` | n/a |
 | `--output-ledger` | new publication ledger under --dist-dir; the input ledger is preserved (required) | string | `""` | n/a |
+
+#### `forge-ci container release-images plan`
+
+plan the release images artifacts.yml declares: one build per container and architecture, one publication per container
+
+```
+Reads the containers: section of artifacts.yml and writes three outputs:
+builds, a JSON array with one entry per container and architecture for the
+native build jobs; images, one entry per container for the job that scans,
+assembles and records it; and registry-user, the user the registry token logs
+in as there. Each image is published under staging-<final tag>
+for the signer to promote; the final tag is the release tag followed by the
+container's tag-suffix. A release publishes to one repository, the one its
+signer is bound to: --image-repository, or the forge's own registry when it
+is empty, so containers are tag variants there and declare no image-name.
+An empty --registry-username is the --repository owner on the forge's own
+registry; on another registry it is refused here, before any build.
+
+Without an artifacts.yml, a repository releases its own image: one container
+named after the repository, built from the root Containerfile with every
+default. An artifacts.yml named by --file or ARTIFACTS_CONFIG must exist; an
+empty name is no name, as a workflow passes an input left empty.
+
+A consumer with its own image policy can pass --image-plan-json, the same
+builds/images contract this planner emits. It is checked against the destination
+repository, exact architecture partition, local build paths and the existing
+ledger rules before any outputs are emitted. Base entries may use content-derived
+tags; their graph and input-ID computation remain consumer policy. This input
+does not choose a builder or permit build secrets, and cannot be combined with
+an explicit artifacts file.
+When RELEASE_PLATFORMS is set, the resolved plan must already match it; the
+engine refuses a different frozen selection rather than silently rewriting it.
+
+Declared features the release-images workflow does not carry out (build
+secrets, binary extraction, another scan threshold than its CRITICAL,HIGH gate,
+platforms other than linux/amd64 and linux/arm64) are refused here, before any
+runner starts. RELEASE_PLATFORMS narrows every container's platforms.
+
+EXAMPLE:
+   forge-ci container release-images plan --image-repository ghcr.io/owner/app --registry-username owner --release-tag v1.2.3
+```
+
+| Flag | Description | Type | Default | Env vars |
+|------|-------------|------|---------|----------|
+| `--image-plan-json` | resolved consumer image policy as builds/images JSON; admitted against --image-repository instead of loading artifacts.yml; supports content-addressed base tags | string | `""` | `$IMAGE_PLAN_JSON` |
+| `--file` | path to the artifacts.yml file declaring the containers; without it and the default file, the root Containerfile is the repository's image | string | `".forge-ci/artifacts.yml"` | `$ARTIFACTS_CONFIG` |
+| `--image-repository` | the one repository the release's images publish to, e.g. ghcr.io/owner/app; empty is the forge's own registry, <server host>/<owner>/<repository> | string | `""` | `$IMAGE_REPOSITORY` |
+| `--server-url` | forge server URL, whose registry an empty --image-repository names | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
+| `--repository` | owner/repo the image repositories are derived from | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
+| `--release-tag` | release tag the image tags are made of, e.g. v1.2.3 (required) | string | `""` | n/a |
+| `--release-platforms` | comma-separated subset of each container's platforms to build; empty builds them all | string | `""` | `$RELEASE_PLATFORMS` |
+| `--registry-username` | user the registry token logs in as, written to the registry-user output; empty is the --repository owner on the forge's own registry and refused on another one | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
 
 #### `forge-ci container release-images promote`
 
@@ -1786,16 +1857,15 @@ promote signed release image candidates to their final/moving release tags
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
 | `--dist-dir` | release dist directory; the default ledger and SLSA envelope are resolved under this directory | string | `"dist"` | `$DIST_DIR` |
-| `--ledger` | release-image ledger path; defaults to <dist-dir>/release-images.json and must remain under <dist-dir>/ | string | `""` | `$RELEASE_IMAGES_PATH`, `$RELEASE_IMAGES_LEDGER` |
+| `--ledger` | release-image ledger path; defaults to <dist-dir>/release-images.json and must remain under <dist-dir>/ | string | `""` | `$RELEASE_IMAGES_PATH` |
 | `--tag` | release tag that final_tag (and candidate_tag) must be scoped to | string | `""` | `$TAG_NAME`, `$RELEASE_TAG`, `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
 | `--stage` | promotion stage: 'release' adds the <base>:release pointer and enforces the release scope; a named stage ('dev', 'staging') adds <base>:<stage> on the same digest and needs no --tag. The immutable :<version> tag is build-only. | string | `"release"` | `$PROMOTE_STAGE` |
 | `--server-url` | forge server URL used to derive the registry host and provider API base | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive the expected image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
-| `--registry` | registry host for the short-lived Docker auth config (default: the image repository's host with --external-registry, else the host from --server-url) | string | `""` | `$CONTAINER_REGISTRY` |
-| `--registry-username` | registry username; the password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
+| `--registry` | the forge's own registry host, when it is not the host of --server-url (GitLab's $CI_REGISTRY); the login goes to the image repository's host, and a repository on any other host has its tags deleted through that registry | string | `""` | `$CONTAINER_REGISTRY` |
+| `--registry-username` | user the registry token logs in as; empty is the --repository owner on the forge's own registry and refused on another one. The password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
 | `--registry-password-file` | file containing the registry password/token ("-" reads stdin); defaults to $REGISTRY_TOKEN then $REGISTRY_PASSWORD. The password never appears in argv. | string | `""` | n/a |
 | `--expected-image-repository` | optional exact image repository allowed for ledger refs/tags at the signer/publisher boundary | string | `""` | `$LEDGER_EXPECTED_IMAGE_REPOSITORY` |
-| `--external-registry` | the image repository is on a registry other than the forge's own, such as GHCR: it is not held below the source owner, and tags are deleted through that registry, which may keep them | bool | `false` | `$EXTERNAL_IMAGE_REGISTRY` |
 | `--state-dir` | release-image state directory; default promotion journal is <state-dir>/image-promotions.jsonl | string | `""` | `$SIGN_AND_PUBLISH_STATE_DIR` |
 | `--journal` | JSONL promotion rollback journal; promote writes it before tag moves, rollback restores/deletes from it | string | `""` | `$IMAGE_PROMOTIONS_JOURNAL` |
 | `--allow-missing-ledger` | accept a release without images: when the default ledger <dist-dir>/release-images.json does not exist, say so and exit 0 before any credential read or registry login. The dist directory must exist, a ledger that exists is held to every rule, and a ledger named with --ledger must exist | bool | `false` | n/a |
@@ -1808,16 +1878,15 @@ roll back a failed release-image promotion from its promotion journal
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
 | `--dist-dir` | release dist directory; the default ledger and SLSA envelope are resolved under this directory | string | `"dist"` | `$DIST_DIR` |
-| `--ledger` | release-image ledger path; defaults to <dist-dir>/release-images.json and must remain under <dist-dir>/ | string | `""` | `$RELEASE_IMAGES_PATH`, `$RELEASE_IMAGES_LEDGER` |
+| `--ledger` | release-image ledger path; defaults to <dist-dir>/release-images.json and must remain under <dist-dir>/ | string | `""` | `$RELEASE_IMAGES_PATH` |
 | `--tag` | release tag that final_tag (and candidate_tag) must be scoped to | string | `""` | `$TAG_NAME`, `$RELEASE_TAG`, `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
 | `--stage` | promotion stage: 'release' adds the <base>:release pointer and enforces the release scope; a named stage ('dev', 'staging') adds <base>:<stage> on the same digest and needs no --tag. The immutable :<version> tag is build-only. | string | `"release"` | `$PROMOTE_STAGE` |
 | `--server-url` | forge server URL used to derive the registry host and provider API base | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive the expected image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
-| `--registry` | registry host for the short-lived Docker auth config (default: the image repository's host with --external-registry, else the host from --server-url) | string | `""` | `$CONTAINER_REGISTRY` |
-| `--registry-username` | registry username; the password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
+| `--registry` | the forge's own registry host, when it is not the host of --server-url (GitLab's $CI_REGISTRY); the login goes to the image repository's host, and a repository on any other host has its tags deleted through that registry | string | `""` | `$CONTAINER_REGISTRY` |
+| `--registry-username` | user the registry token logs in as; empty is the --repository owner on the forge's own registry and refused on another one. The password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
 | `--registry-password-file` | file containing the registry password/token ("-" reads stdin); defaults to $REGISTRY_TOKEN then $REGISTRY_PASSWORD. The password never appears in argv. | string | `""` | n/a |
 | `--expected-image-repository` | optional exact image repository allowed for ledger refs/tags at the signer/publisher boundary | string | `""` | `$LEDGER_EXPECTED_IMAGE_REPOSITORY` |
-| `--external-registry` | the image repository is on a registry other than the forge's own, such as GHCR: it is not held below the source owner, and tags are deleted through that registry, which may keep them | bool | `false` | `$EXTERNAL_IMAGE_REGISTRY` |
 | `--state-dir` | release-image state directory; default promotion journal is <state-dir>/image-promotions.jsonl | string | `""` | `$SIGN_AND_PUBLISH_STATE_DIR` |
 | `--journal` | JSONL promotion rollback journal; promote writes it before tag moves, rollback restores/deletes from it | string | `""` | `$IMAGE_PROMOTIONS_JOURNAL` |
 | `--provider-token-file` | file containing the provider/package-API token ("-" reads stdin); defaults to $FORGE_CI_PACKAGE_API_TOKEN, then the detected forge's own token variable ($FORGEJO_TOKEN or $GITEA_TOKEN on Forgejo, $GITLAB_TOKEN on GitLab); another forge's token is never used. The token never appears in argv. | string | `""` | n/a |
@@ -1830,16 +1899,15 @@ sign and attest release images from the confined release-image ledger
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
 | `--dist-dir` | release dist directory; the default ledger and SLSA envelope are resolved under this directory | string | `"dist"` | `$DIST_DIR` |
-| `--ledger` | release-image ledger path; defaults to <dist-dir>/release-images.json and must remain under <dist-dir>/ | string | `""` | `$RELEASE_IMAGES_PATH`, `$RELEASE_IMAGES_LEDGER` |
+| `--ledger` | release-image ledger path; defaults to <dist-dir>/release-images.json and must remain under <dist-dir>/ | string | `""` | `$RELEASE_IMAGES_PATH` |
 | `--tag` | release tag that final_tag (and candidate_tag) must be scoped to | string | `""` | `$TAG_NAME`, `$RELEASE_TAG`, `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
 | `--stage` | promotion stage: 'release' adds the <base>:release pointer and enforces the release scope; a named stage ('dev', 'staging') adds <base>:<stage> on the same digest and needs no --tag. The immutable :<version> tag is build-only. | string | `"release"` | `$PROMOTE_STAGE` |
 | `--server-url` | forge server URL used to derive the registry host and provider API base | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive the expected image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
-| `--registry` | registry host for the short-lived Docker auth config (default: the image repository's host with --external-registry, else the host from --server-url) | string | `""` | `$CONTAINER_REGISTRY` |
-| `--registry-username` | registry username; the password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
+| `--registry` | the forge's own registry host, when it is not the host of --server-url (GitLab's $CI_REGISTRY); the login goes to the image repository's host, and a repository on any other host has its tags deleted through that registry | string | `""` | `$CONTAINER_REGISTRY` |
+| `--registry-username` | user the registry token logs in as; empty is the --repository owner on the forge's own registry and refused on another one. The password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
 | `--registry-password-file` | file containing the registry password/token ("-" reads stdin); defaults to $REGISTRY_TOKEN then $REGISTRY_PASSWORD. The password never appears in argv. | string | `""` | n/a |
 | `--expected-image-repository` | optional exact image repository allowed for ledger refs/tags at the signer/publisher boundary | string | `""` | `$LEDGER_EXPECTED_IMAGE_REPOSITORY` |
-| `--external-registry` | the image repository is on a registry other than the forge's own, such as GHCR: it is not held below the source owner, and tags are deleted through that registry, which may keep them | bool | `false` | `$EXTERNAL_IMAGE_REGISTRY` |
 | `--allow-missing-ledger` | accept a release without images: when the default ledger <dist-dir>/release-images.json does not exist, say so and exit 0 before any credential read or registry login. The dist directory must exist, a ledger that exists is held to every rule, and a ledger named with --ledger must exist | bool | `false` | n/a |
 | `--provenance-envelope` | in-toto statement JSON; defaults to <dist-dir>/slsa-provenance.intoto.json | string | `""` | `$SLSA_PROVENANCE_ENVELOPE` |
 | `--recursive` | pass --recursive to cosign sign for manifest-list children | bool | `false` | `$LEDGER_SIGN_RECURSIVE` |

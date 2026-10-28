@@ -40,8 +40,8 @@ func platformIndex(t *testing.T) (v1.ImageIndex, map[string]v1.Hash) {
 		}
 
 		index = mutate.AppendManifests(index, mutate.IndexAddendum{
-			Add:        img,
-			Descriptor: v1.Descriptor{Platform: &v1.Platform{OS: "linux", Architecture: arch}},
+			Add:      img,
+			Platform: &v1.Platform{OS: "linux", Architecture: arch},
 		})
 	}
 

@@ -186,7 +186,7 @@ func ledgerPathFlag() cli.Flag {
 	return &cli.StringFlag{
 		Name:    flagLedger,
 		Value:   defaultLedgerPath,
-		Sources: cli.EnvVars("RELEASE_IMAGES_LEDGER"),
+		Sources: cli.EnvVars("RELEASE_IMAGES_PATH"),
 		Usage:   "ledger JSON file (a bare array; created if absent on add)",
 	}
 }

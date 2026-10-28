@@ -23,12 +23,9 @@ func baseImagesPromoteCmd() *cli.Command {
 		Description: `Verifies each image's signature, CycloneDX SBOM attestation and SLSA lineage
 with the trusted key, then makes its candidate the immutable final tag.
 
-The base-image repository answers to the rule "base-images sign" holds it to:
-it is on the registry this command logs in to (--registry, else the
---server-url host, with its port) and below the owner of --repository,
-compared without case. --expected-repository chooses the name below the owner;
-another owner or another registry is refused before the key or a credential is
-read.`,
+Every image must be in the one base-image repository, --expected-repository
+or the one derived from --server-url and --repository; the login goes to its
+registry.`,
 		Flags: append(baseImagesCommonFlags(),
 			&cli.StringFlag{Name: "all-images-json", Sources: cli.EnvVars("ALL_IMAGES_JSON"), Usage: "JSON array of base image metadata to verify/promote"},
 			&cli.StringFlag{Name: flagBaseInputID, Sources: cli.EnvVars("BASE_INPUT_ID"), Usage: "optional single sha256 base input ID expected for every image"},
@@ -39,10 +36,6 @@ read.`,
 			common, err := baseImagesCommonFromCmd(cmd, true, true)
 			if err != nil {
 				return err
-			}
-
-			if ownedErr := common.requireSourceOwnedRepository(); ownedErr != nil {
-				return ownedErr
 			}
 
 			if keyErr := validateBaseImagesPublicKey(common.PublicKeyPath, common.PublicKeySHA256); keyErr != nil {

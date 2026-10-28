@@ -31,7 +31,7 @@ func (r *fakeRegistry) ResolveDigest(_ context.Context, ref string) (string, err
 		return "", err
 	}
 
-	d, ok := r.digests[ref]
+	value, ok := r.digests[ref]
 	if !ok {
 		// A tagged digest can name the manifest already held by a known tag.
 		// Unknown repositories/digests remain absent rather than being invented.
@@ -42,7 +42,7 @@ func (r *fakeRegistry) ResolveDigest(_ context.Context, ref string) (string, err
 		return "", errs.ErrMissingInput
 	}
 
-	return d, nil
+	return value, nil
 }
 
 func (r *fakeRegistry) CopyTag(ctx context.Context, source, dest string) error {
@@ -126,10 +126,10 @@ func TestPromote_CopiesCandidateToReleasePointerAndVerifies(t *testing.T) {
 
 	const releasePointer = "codeberg.org/itiquette/gommitlint:release"
 
-	e := candidateEntry()
-	reg := &fakeRegistry{digests: map[string]string{e.CandidateTag: goodDigest}}
+	entry := candidateEntry()
+	reg := &fakeRegistry{digests: map[string]string{entry.CandidateTag: goodDigest}}
 
-	if err := imageledger.Promote(context.Background(), reg, []imageledger.Entry{e}, "v1.2.3"); err != nil {
+	if err := imageledger.Promote(context.Background(), reg, []imageledger.Entry{entry}, "v1.2.3"); err != nil {
 		t.Fatalf("promote failed: %v", err)
 	}
 
@@ -139,8 +139,8 @@ func TestPromote_CopiesCandidateToReleasePointerAndVerifies(t *testing.T) {
 	}
 
 	// The immutable :<version> tag is build-applied, never written by promote.
-	if _, ok := reg.digests[e.FinalTag]; ok {
-		t.Errorf("release promotion must not write the immutable %s, got %v", e.FinalTag, reg.digests)
+	if _, ok := reg.digests[entry.FinalTag]; ok {
+		t.Errorf("release promotion must not write the immutable %s, got %v", entry.FinalTag, reg.digests)
 	}
 
 	if len(reg.copies) != 1 {
@@ -151,20 +151,20 @@ func TestPromote_CopiesCandidateToReleasePointerAndVerifies(t *testing.T) {
 func TestPromoteToStage_ReleaseCanUseLedgerFinalAndMovingTags(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
-	e.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
-	reg := &fakeRegistry{digests: map[string]string{e.CandidateTag: goodDigest}}
+	entry := candidateEntry()
+	entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+	reg := &fakeRegistry{digests: map[string]string{entry.CandidateTag: goodDigest}}
 	stage := imageledger.Stage{Name: "release", UseEntryReleaseTags: true}
 
-	if _, err := imageledger.PromoteToStage(context.Background(), reg, nil, []imageledger.Entry{e}, "v1.2.3", stage); err != nil {
+	if _, err := imageledger.PromoteToStage(context.Background(), reg, nil, []imageledger.Entry{entry}, "v1.2.3", stage); err != nil {
 		t.Fatalf("release-tag promote failed: %v", err)
 	}
 
-	if reg.digests[e.FinalTag] != goodDigest {
+	if reg.digests[entry.FinalTag] != goodDigest {
 		t.Errorf("final tag not promoted: %v", reg.digests)
 	}
 
-	if reg.digests[e.MovingTag] != goodDigest {
+	if reg.digests[entry.MovingTag] != goodDigest {
 		t.Errorf("moving tag not promoted: %v", reg.digests)
 	}
 
@@ -176,15 +176,15 @@ func TestPromoteToStage_ReleaseCanUseLedgerFinalAndMovingTags(t *testing.T) {
 func TestPromoteToStage_ReleaseRefusesExistingFinalDifferentDigest(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
+	entry := candidateEntry()
 	otherDigest := "sha256:" + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 	reg := &fakeRegistry{digests: map[string]string{
-		e.CandidateTag: goodDigest,
-		e.FinalTag:     otherDigest,
+		entry.CandidateTag: goodDigest,
+		entry.FinalTag:     otherDigest,
 	}}
 	stage := imageledger.Stage{Name: "release", UseEntryReleaseTags: true}
 
-	_, err := imageledger.PromoteToStage(context.Background(), reg, nil, []imageledger.Entry{e}, "v1.2.3", stage)
+	_, err := imageledger.PromoteToStage(context.Background(), reg, nil, []imageledger.Entry{entry}, "v1.2.3", stage)
 	if !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("existing final tag with another digest must be refused, got %v", err)
 	}
@@ -197,19 +197,19 @@ func TestPromoteToStage_ReleaseRefusesExistingFinalDifferentDigest(t *testing.T)
 func TestPromoteToStage_ReleaseSkipsExistingFinalAtSameDigest(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
-	e.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+	entry := candidateEntry()
+	entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
 	reg := &fakeRegistry{digests: map[string]string{
-		e.CandidateTag: goodDigest,
-		e.FinalTag:     goodDigest,
+		entry.CandidateTag: goodDigest,
+		entry.FinalTag:     goodDigest,
 	}}
 	stage := imageledger.Stage{Name: "release", UseEntryReleaseTags: true}
 
-	if _, err := imageledger.PromoteToStage(context.Background(), reg, nil, []imageledger.Entry{e}, "v1.2.3", stage); err != nil {
+	if _, err := imageledger.PromoteToStage(context.Background(), reg, nil, []imageledger.Entry{entry}, "v1.2.3", stage); err != nil {
 		t.Fatalf("release-tag promote failed: %v", err)
 	}
 
-	want := []string{e.CandidateTag + "@" + e.Digest + "->" + e.MovingTag}
+	want := []string{entry.CandidateTag + "@" + entry.Digest + "->" + entry.MovingTag}
 	if !slices.Equal(reg.copies, want) {
 		t.Errorf("expected only moving-tag copy when final already serves digest, got %v", reg.copies)
 	}
@@ -218,14 +218,14 @@ func TestPromoteToStage_ReleaseSkipsExistingFinalAtSameDigest(t *testing.T) {
 func TestPromoteToStage_ReleaseStopsWhenFinalLookupIsUncertain(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
+	entry := candidateEntry()
 	reg := &fakeRegistry{
-		digests:    map[string]string{e.CandidateTag: goodDigest},
-		resolveErr: map[string]error{e.FinalTag: errs.ErrDependencyUnavailable},
+		digests:    map[string]string{entry.CandidateTag: goodDigest},
+		resolveErr: map[string]error{entry.FinalTag: errs.ErrDependencyUnavailable},
 	}
 	stage := imageledger.Stage{Name: "release", UseEntryReleaseTags: true}
 
-	_, err := imageledger.PromoteToStage(context.Background(), reg, nil, []imageledger.Entry{e}, "v1.2.3", stage)
+	_, err := imageledger.PromoteToStage(context.Background(), reg, nil, []imageledger.Entry{entry}, "v1.2.3", stage)
 	if !errors.Is(err, errs.ErrDependencyUnavailable) {
 		t.Fatalf("uncertain final lookup must stop promotion, got %v", err)
 	}
@@ -254,19 +254,19 @@ func TestPromoteToStage_DefaultStillRequiresCandidate(t *testing.T) {
 func TestPromoteToStage_DigestRefFallbackUsesRecordedRefWhenCandidateMissing(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
-	reg := &fakeRegistry{digests: map[string]string{e.Ref: goodDigest}}
+	entry := candidateEntry()
+	reg := &fakeRegistry{digests: map[string]string{entry.Ref: goodDigest}}
 	stage := imageledger.Stage{Name: "release", UseEntryReleaseTags: true, AllowDigestRefFallback: true}
 
-	if _, err := imageledger.PromoteToStage(context.Background(), reg, nil, []imageledger.Entry{e}, "v1.2.3", stage); err != nil {
+	if _, err := imageledger.PromoteToStage(context.Background(), reg, nil, []imageledger.Entry{entry}, "v1.2.3", stage); err != nil {
 		t.Fatalf("digest-ref fallback promote failed: %v", err)
 	}
 
-	if !slices.Equal(reg.copies, []string{e.Ref + "->" + e.FinalTag}) {
+	if !slices.Equal(reg.copies, []string{entry.Ref + "->" + entry.FinalTag}) {
 		t.Errorf("expected promote from digest ref, got %v", reg.copies)
 	}
 
-	if reg.digests[e.FinalTag] != goodDigest {
+	if reg.digests[entry.FinalTag] != goodDigest {
 		t.Errorf("final tag not promoted from digest ref: %v", reg.digests)
 	}
 }
@@ -274,16 +274,16 @@ func TestPromoteToStage_DigestRefFallbackUsesRecordedRefWhenCandidateMissing(t *
 func TestPromoteToStage_DigestRefFallbackUsesRecordedRefWhenCandidateMoved(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
+	entry := candidateEntry()
 	otherDigest := "sha256:" + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-	reg := &fakeRegistry{digests: map[string]string{e.CandidateTag: otherDigest, e.Ref: goodDigest}}
+	reg := &fakeRegistry{digests: map[string]string{entry.CandidateTag: otherDigest, entry.Ref: goodDigest}}
 	stage := imageledger.Stage{Name: "release", UseEntryReleaseTags: true, AllowDigestRefFallback: true}
 
-	if _, err := imageledger.PromoteToStage(context.Background(), reg, nil, []imageledger.Entry{e}, "v1.2.3", stage); err != nil {
+	if _, err := imageledger.PromoteToStage(context.Background(), reg, nil, []imageledger.Entry{entry}, "v1.2.3", stage); err != nil {
 		t.Fatalf("digest-ref fallback promote failed: %v", err)
 	}
 
-	if !slices.Equal(reg.copies, []string{e.Ref + "->" + e.FinalTag}) {
+	if !slices.Equal(reg.copies, []string{entry.Ref + "->" + entry.FinalTag}) {
 		t.Errorf("expected promote from digest ref, got %v", reg.copies)
 	}
 }
@@ -291,15 +291,15 @@ func TestPromoteToStage_DigestRefFallbackUsesRecordedRefWhenCandidateMoved(t *te
 func TestPromoteToStage_DigestRefFallbackPromotesEntryWithoutCandidate(t *testing.T) {
 	t.Parallel()
 
-	e := validEntry()
-	reg := &fakeRegistry{digests: map[string]string{e.Ref: goodDigest}}
+	entry := validEntry()
+	reg := &fakeRegistry{digests: map[string]string{entry.Ref: goodDigest}}
 	stage := imageledger.Stage{Name: "release", UseEntryReleaseTags: true, AllowDigestRefFallback: true}
 
-	if _, err := imageledger.PromoteToStage(context.Background(), reg, nil, []imageledger.Entry{e}, "v1.2.3", stage); err != nil {
+	if _, err := imageledger.PromoteToStage(context.Background(), reg, nil, []imageledger.Entry{entry}, "v1.2.3", stage); err != nil {
 		t.Fatalf("digest-ref fallback promote failed: %v", err)
 	}
 
-	if !slices.Equal(reg.copies, []string{e.Ref + "->" + e.FinalTag}) {
+	if !slices.Equal(reg.copies, []string{entry.Ref + "->" + entry.FinalTag}) {
 		t.Errorf("expected no-candidate promote from digest ref, got %v", reg.copies)
 	}
 }
@@ -307,12 +307,12 @@ func TestPromoteToStage_DigestRefFallbackPromotesEntryWithoutCandidate(t *testin
 func TestPromoteToStage_DevPromotesCandidateToStageTag(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
-	reg := &fakeRegistry{digests: map[string]string{e.CandidateTag: goodDigest}}
+	entry := candidateEntry()
+	reg := &fakeRegistry{digests: map[string]string{entry.CandidateTag: goodDigest}}
 
 	// A pre-release (dev) promotion needs no release tag; it retags the
 	// candidate's digest to <base>:dev and verifies — same trust boundary.
-	if _, err := imageledger.PromoteToStage(context.Background(), reg, nil, []imageledger.Entry{e}, "", imageledger.Stage{Name: "dev"}); err != nil {
+	if _, err := imageledger.PromoteToStage(context.Background(), reg, nil, []imageledger.Entry{entry}, "", imageledger.Stage{Name: "dev"}); err != nil {
 		t.Fatalf("dev promote failed: %v", err)
 	}
 
@@ -321,7 +321,7 @@ func TestPromoteToStage_DevPromotesCandidateToStageTag(t *testing.T) {
 	}
 
 	// A dev promotion must NOT touch the final tag.
-	if _, ok := reg.digests[e.FinalTag]; ok {
+	if _, ok := reg.digests[entry.FinalTag]; ok {
 		t.Errorf("dev promotion must not touch final tag, got %v", reg.digests)
 	}
 }
@@ -344,8 +344,8 @@ func TestPromoteToStage_DevSkipsReleaseScope(t *testing.T) {
 func TestPromoteToStage_CrossRepoUsesSignatureCopier(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
-	reg := &fakeRegistry{digests: map[string]string{e.CandidateTag: goodDigest}}
+	entry := candidateEntry()
+	reg := &fakeRegistry{digests: map[string]string{entry.CandidateTag: goodDigest}}
 	sig := &fakeSigCopier{reg: reg}
 
 	// Promote the Codeberg candidate to a ghcr release tag (cross-registry):
@@ -353,7 +353,7 @@ func TestPromoteToStage_CrossRepoUsesSignatureCopier(t *testing.T) {
 	// target is a registry prefix; the source path (itiquette/gommitlint) is
 	// preserved beneath it, so the dest is ghcr.io/itiquette/gommitlint:release-prod.
 	stage := imageledger.Stage{Name: "release-prod", TargetRepo: "ghcr.io"}
-	if _, err := imageledger.PromoteToStage(context.Background(), reg, sig, []imageledger.Entry{e}, "", stage); err != nil {
+	if _, err := imageledger.PromoteToStage(context.Background(), reg, sig, []imageledger.Entry{entry}, "", stage); err != nil {
 		t.Fatalf("cross-repo promote failed: %v", err)
 	}
 
@@ -374,14 +374,14 @@ func TestPromoteToStage_CrossRepoUsesSignatureCopier(t *testing.T) {
 func TestPromoteToStage_CrossRepoRefusedWithoutCopier(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
-	reg := &fakeRegistry{digests: map[string]string{e.CandidateTag: goodDigest}}
+	entry := candidateEntry()
+	reg := &fakeRegistry{digests: map[string]string{entry.CandidateTag: goodDigest}}
 
 	// Cross-repo destination but no signature copier → refuse, don't silently
 	// drop the signature.
 	stage := imageledger.Stage{Name: "release-prod", TargetRepo: "ghcr.io/itiquette/gommitlint"}
 
-	_, err := imageledger.PromoteToStage(context.Background(), reg, nil, []imageledger.Entry{e}, "", stage)
+	_, err := imageledger.PromoteToStage(context.Background(), reg, nil, []imageledger.Entry{entry}, "", stage)
 	if !errors.Is(err, errs.ErrUsage) {
 		t.Errorf("cross-repo without a copier must be refused as usage error, got %v", err)
 	}
@@ -425,15 +425,15 @@ func TestPromote_SkipsEntryWithoutCandidate(t *testing.T) {
 func TestPromote_RefusesWrongImageLanded(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
+	entry := candidateEntry()
 
 	otherDigest := "sha256:" + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 	reg := &fakeRegistry{
-		digests: map[string]string{e.CandidateTag: goodDigest},
+		digests: map[string]string{entry.CandidateTag: goodDigest},
 		badCopy: otherDigest, // copy lands the wrong digest
 	}
 
-	err := imageledger.Promote(context.Background(), reg, []imageledger.Entry{e}, "v1.2.3")
+	err := imageledger.Promote(context.Background(), reg, []imageledger.Entry{entry}, "v1.2.3")
 	if !errors.Is(err, errs.ErrValidation) {
 		t.Errorf("a wrong-image promotion must be refused, got %v", err)
 	}
@@ -442,13 +442,13 @@ func TestPromote_RefusesWrongImageLanded(t *testing.T) {
 func TestPromote_RefusesCandidateDigestMismatchBeforeCopy(t *testing.T) {
 	t.Parallel()
 
-	e := candidateEntry()
+	entry := candidateEntry()
 
 	otherDigest := "sha256:" + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 	// Candidate serves a different digest than recorded → refuse before any copy.
-	reg := &fakeRegistry{digests: map[string]string{e.CandidateTag: otherDigest}}
+	reg := &fakeRegistry{digests: map[string]string{entry.CandidateTag: otherDigest}}
 
-	err := imageledger.Promote(context.Background(), reg, []imageledger.Entry{e}, "v1.2.3")
+	err := imageledger.Promote(context.Background(), reg, []imageledger.Entry{entry}, "v1.2.3")
 	if !errors.Is(err, errs.ErrValidation) {
 		t.Errorf("candidate digest mismatch must be refused, got %v", err)
 	}

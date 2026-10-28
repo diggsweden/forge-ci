@@ -60,7 +60,7 @@ type WriteDigestMarkerInput struct {
 
 // MergeManifest assembles a multi-platform manifest list from the per-platform
 // digest marker files and writes it to every tag.
-func MergeManifest(ctx context.Context, reg ManifestRegistry, w io.Writer, in MergeManifestInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func MergeManifest(ctx context.Context, reg ManifestRegistry, out io.Writer, in MergeManifestInput) error {
 	image := strings.TrimSpace(in.ImageName)
 	if image == "" {
 		return fmt.Errorf("image-name is required: %w", errs.ErrUsage)
@@ -95,7 +95,7 @@ func MergeManifest(ctx context.Context, reg ManifestRegistry, w io.Writer, in Me
 		return err
 	}
 
-	_, _ = fmt.Fprintf(w, "Created manifest list for %s — %d platform(s) at %d tag(s)\n", image, len(digests), len(tags))
+	_, _ = fmt.Fprintf(out, "Created manifest list for %s — %d platform(s) at %d tag(s)\n", image, len(digests), len(tags))
 
 	return nil
 }
@@ -286,7 +286,7 @@ func normalizeDigest(value string) (string, error) {
 		return "", fmt.Errorf("digest must be sha256:<64 hex chars> or 64 hex chars: %w", errs.ErrUsage)
 	}
 
-	for _, r := range digest { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	for _, r := range digest {
 		switch {
 		case r >= '0' && r <= '9':
 		case r >= 'a' && r <= 'f':

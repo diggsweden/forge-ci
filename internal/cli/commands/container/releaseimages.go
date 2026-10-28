@@ -47,21 +47,22 @@ type releaseImagesCommon struct {
 	RegistryUsername        string
 	RegistryPasswordFile    string
 	ExpectedImageRepository string
-	// External is the caller's declaration that the images are on a registry
-	// other than the forge's own (--external-registry).
-	External bool
+	// Foreign says the images are on a registry other than the forge's own,
+	// such as GHCR.
+	Foreign bool
 }
 
 func releaseImagesGroup() *cli.Command {
 	return &cli.Command{
 		Name:  "release-images",
-		Usage: "high-level release-image import, signing, promotion, rollback, and cleanup boundary",
+		Usage: "high-level release-image planning, import, signing, promotion, rollback, and cleanup boundary",
 		Description: `Workflow-facing release-image boundary. These commands combine the
 digest-first image ledger with short-lived registry auth, signer-safe cosign
 environment isolation, provider package-API tag deletion, and a release-only
 promotion policy. Lower-level ` + "`container ledger`" + ` verbs remain
 available for custom workflows; reusable workflows should use this group.`,
 		Commands: []*cli.Command{
+			releaseImagesPlanCmd(),
 			releaseImagesImportCmd(),
 			releaseImagesSignCmd(),
 			releaseImagesVerifyCmd(),
@@ -367,21 +368,20 @@ func releaseImagesCleanupCmd() *cli.Command {
 func releaseImagesCommonFlags() []cli.Flag {
 	return []cli.Flag{
 		&cli.StringFlag{Name: "dist-dir", Value: "dist", Sources: cli.EnvVars("DIST_DIR"), Usage: "release dist directory; the default ledger and SLSA envelope are resolved under this directory"},
-		&cli.StringFlag{Name: flagLedger, Sources: cli.EnvVars("RELEASE_IMAGES_PATH", "RELEASE_IMAGES_LEDGER"), Usage: "release-image ledger path; defaults to <dist-dir>/release-images.json and must remain under <dist-dir>/"},
+		&cli.StringFlag{Name: flagLedger, Sources: cli.EnvVars("RELEASE_IMAGES_PATH"), Usage: "release-image ledger path; defaults to <dist-dir>/release-images.json and must remain under <dist-dir>/"},
 		releaseTagFlag(),
 		stageFlag(),
 		&cli.StringFlag{Name: flagServerURL, Sources: cienv.ServerURL(), Usage: "forge server URL used to derive the registry host and provider API base"},
 		&cli.StringFlag{Name: flagRepository, Sources: cienv.Repository(), Usage: "owner/repo used to derive the expected image repository"},
-		&cli.StringFlag{Name: flagRegistry, Sources: cli.EnvVars("CONTAINER_REGISTRY"), Usage: "registry host for the short-lived Docker auth config (default: the image repository's host with --external-registry, else the host from --server-url)"},
-		regflags.Username(),
+		forgeRegistryFlag(),
+		regflags.UsernameFor("user the registry token logs in as; empty is the --repository owner on the forge's own registry and refused on another one. The password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD"),
 		regflags.PasswordFile(),
 		expectedImageRepositoryFlag(),
-		externalRegistryFlag(),
 	}
 }
 
 func releaseImagesStateFlags(extra ...cli.Flag) []cli.Flag {
-	flags := make([]cli.Flag, 0, 2+len(extra)) //nolint:mnd // the two fixed state flags appended below.
+	flags := make([]cli.Flag, 0, 2+len(extra))
 	flags = append(flags,
 		&cli.StringFlag{Name: "state-dir", Sources: cli.EnvVars("SIGN_AND_PUBLISH_STATE_DIR"), Usage: "release-image state directory; default promotion journal is <state-dir>/image-promotions.jsonl"},
 		promotionJournalFlag(),
@@ -429,13 +429,13 @@ func releaseImagesCommonFromCmd(cmd *cli.Command) (releaseImagesCommon, error) {
 		return releaseImagesCommon{}, err
 	}
 
-	registry, err := resolveRegistryHostFromFlags(cmd, serverHost, expectedImageRepository)
-	if err != nil {
-		return releaseImagesCommon{}, err
+	if serverHost == "" && cmd.String(flagRegistry) == "" {
+		return releaseImagesCommon{}, fmt.Errorf("release images: --server-url or --registry is required to tell the forge's registry from another: %w", errs.ErrUsage)
 	}
 
-	if registry == "" {
-		return releaseImagesCommon{}, fmt.Errorf("release images: --registry or --server-url is required for registry login: %w", errs.ErrUsage)
+	registry, err := resolveImageRegistry(cmd.String(flagRegistry), serverHost, expectedImageRepository)
+	if err != nil {
+		return releaseImagesCommon{}, err
 	}
 
 	return releaseImagesCommon{
@@ -444,30 +444,13 @@ func releaseImagesCommonFromCmd(cmd *cli.Command) (releaseImagesCommon, error) {
 		LedgerExplicit:          ledgerExplicit,
 		ReleaseTag:              cmd.String(flagTag),
 		ServerURL:               serverURL,
-		Registry:                registry,
+		Registry:                registry.Host,
 		Repository:              repository,
 		RegistryUsername:        strings.TrimSpace(cmd.String(flagRegistryUsername)),
 		RegistryPasswordFile:    cmd.String(flagRegistryPasswordFile),
 		ExpectedImageRepository: expectedImageRepository,
-		External:                cmd.Bool(flagExternalRegistry),
+		Foreign:                 registry.Foreign,
 	}, nil
-}
-
-// resolveRegistryHostFromFlags picks the registry host for short-lived
-// auth: --registry when set (normalized to a bare host); else, for a
-// repository declared external (--external-registry), that repository's host;
-// else the host derived from --server-url. Empty when none is available.
-func resolveRegistryHostFromFlags(cmd *cli.Command, serverHost, imageRepository string) (string, error) {
-	registry := cmd.String(flagRegistry)
-	if registry != "" {
-		return appcontainer.RegistryHost(registry)
-	}
-
-	if cmd.Bool(flagExternalRegistry) {
-		return appcontainer.OptionalRegistryHost(imageRepository)
-	}
-
-	return serverHost, nil
 }
 
 // releaseImagesExpectedRepository resolves the exact release-image
@@ -519,15 +502,31 @@ func (c releaseImagesCommon) singleStdin(cmd *cli.Command) error {
 	)
 }
 
+// loginUser is resolved when a verb logs in, not before: a release without
+// images reads no credential at all.
+func (c releaseImagesCommon) loginUser() (string, error) {
+	username, err := registryLoginUser(c.RegistryUsername, c.Repository, imageRegistry{Host: c.Registry, Foreign: c.Foreign})
+	if err != nil {
+		return "", fmt.Errorf("release images: %w", err)
+	}
+
+	return username, nil
+}
+
 func (c releaseImagesCommon) login(authFile string) error {
-	password, err := regflags.LoginPassword(c.RegistryUsername, c.RegistryPasswordFile)
+	username, err := c.loginUser()
+	if err != nil {
+		return err
+	}
+
+	password, err := regflags.LoginPassword(username, c.RegistryPasswordFile)
 	if err != nil {
 		return err
 	}
 
 	return appcontainer.RegistryLogin(os.Stderr, appcontainer.RegistryLoginInput{
 		Registry: c.Registry,
-		Username: c.RegistryUsername,
+		Username: username,
 		Password: password,
 		AuthFile: authFile,
 	})
@@ -541,7 +540,7 @@ func withReleaseImagesDockerConfig(fn func(authFile string) error) error {
 		return fmt.Errorf("release images: create Docker config dir: %w", err)
 	}
 
-	defer func() { _ = os.RemoveAll(dir) }() //nolint:gosec // dir is a fresh MkdirTemp path under the runner temp root, not caller input.
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	if err := os.Chmod(dir, 0o700); err != nil { //nolint:gosec // 0o700: a directory needs the owner execute bit; it stays owner-only.
 		return fmt.Errorf("release images: chmod Docker config dir: %w", err)
@@ -606,14 +605,19 @@ func releaseImagesProviderToken(cmd *cli.Command) (string, error) {
 // releaseImagesTagDeleter returns the deleter for the registry the images are
 // on: the detected forge's, configured with the provider token and the
 // --server-url and --repository of this invocation, for the forge's own
-// registry, and plain OCI with the login's auth file for an external one. The values
-// go to the adapter, not to the process environment.
+// registry, and that registry's own for another one. The values go to the
+// adapter, not to the process environment.
 func releaseImagesTagDeleter(cmd *cli.Command, common releaseImagesCommon, authFile string) (imageledger.TagDeleter, error) {
-	// Images on an external registry, such as GHCR, are deleted through that
+	// Images on another registry, such as GHCR, are deleted through that
 	// registry, which may not delete tags at all; the forge's package API only
 	// knows the forge's own packages.
-	if common.External {
-		return externalTagDeleter(common.Registry, common.RegistryUsername, common.RegistryPasswordFile, ociregistry.WithAuthFile(authFile))
+	if common.Foreign {
+		username, err := common.loginUser()
+		if err != nil {
+			return nil, err
+		}
+
+		return externalTagDeleter(common.Registry, username, common.RegistryPasswordFile, ociregistry.WithAuthFile(authFile))
 	}
 
 	token, err := releaseImagesProviderToken(cmd)

@@ -177,15 +177,15 @@ func TestDeleteTag_ASiblingPublishedAfterThePreflightSurvives(t *testing.T) {
 	)
 
 	inner := registry.New()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete {
+	srv := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Method == http.MethodDelete {
 			mu.Lock()
 
-			deletes = append(deletes, r.URL.Path)
+			deletes = append(deletes, request.URL.Path)
 			body, contentType := manifest, mediaType
 			mu.Unlock()
 
-			put := httptest.NewRequestWithContext(r.Context(), http.MethodPut, "/v2/owner/project-base/manifests/sibling", bytes.NewReader(body))
+			put := httptest.NewRequestWithContext(request.Context(), http.MethodPut, "/v2/owner/project-base/manifests/sibling", bytes.NewReader(body))
 			put.Header.Set("Content-Type", contentType)
 
 			published := httptest.NewRecorder()
@@ -196,7 +196,7 @@ func TestDeleteTag_ASiblingPublishedAfterThePreflightSurvives(t *testing.T) {
 			}
 		}
 
-		inner.ServeHTTP(w, r)
+		inner.ServeHTTP(response, request)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -255,17 +255,17 @@ func TestDeleteTag_StopsWhenTheRegistryRefusesALookup(t *testing.T) {
 			)
 
 			inner := registry.New()
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			srv := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 				switch {
-				case r.Method == http.MethodDelete:
+				case request.Method == http.MethodDelete:
 					deletes.Add(1)
-				case armed.Load() && strings.HasSuffix(r.URL.Path, refused):
-					http.Error(w, "denied", http.StatusForbidden)
+				case armed.Load() && strings.HasSuffix(request.URL.Path, refused):
+					http.Error(response, "denied", http.StatusForbidden)
 
 					return
 				}
 
-				inner.ServeHTTP(w, r)
+				inner.ServeHTTP(response, request)
 			}))
 			t.Cleanup(srv.Close)
 

@@ -60,16 +60,14 @@ func seedRealisticBuildKitIndex(t *testing.T, repo, arch, variant string) buildK
 	require.NoError(t, err)
 
 	index := mutate.AppendManifests(mutate.IndexMediaType(empty.Index, types.OCIImageIndex),
-		mutate.IndexAddendum{Add: img, Descriptor: v1.Descriptor{
-			MediaType: types.OCIManifestSchema1, Platform: &v1.Platform{OS: osLinux, Architecture: arch, Variant: variant},
-		}},
-		mutate.IndexAddendum{Add: attestation, Descriptor: v1.Descriptor{
+		mutate.IndexAddendum{Add: img,
+			MediaType: types.OCIManifestSchema1, Platform: &v1.Platform{OS: osLinux, Architecture: arch, Variant: variant}},
+		mutate.IndexAddendum{Add: attestation,
 			MediaType: types.OCIManifestSchema1, Platform: &v1.Platform{OS: unknownPlatform, Architecture: unknownPlatform},
 			Annotations: map[string]string{
 				"vnd.docker.reference.type":   "attestation-manifest",
 				"vnd.docker.reference.digest": imageDigest.String(),
-			},
-		}},
+			}},
 	)
 
 	ref, err := name.ParseReference(repo+":src-"+arch, name.Insecure)
