@@ -13,6 +13,7 @@ import (
 
 	apprelease "github.com/diggsweden/forge-ci/internal/app/release"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/testutil/sshkey"
 )
 
 // fakeGitOps records the git config writes SSHSigningSetup makes, keeping the
@@ -77,7 +78,7 @@ func TestSSHSigningSetup_InstallsTheKeyAndPointsGitAtIt(t *testing.T) {
 	}
 
 	err := apprelease.SSHSigningSetup(context.Background(), git, writeKey, apprelease.SSHSigningInput{
-		PrivateKey:    "-----BEGIN OPENSSH PRIVATE KEY-----\nabc", // no trailing newline on purpose
+		PrivateKey:    strings.TrimSuffix(sshkey.PrivateKey(t), "\n"), // no trailing newline on purpose
 		AuthorName:    "Release Bot",
 		AuthorEmail:   "bot@example.org",
 		GitCommitSign: true,
@@ -121,7 +122,7 @@ func TestSSHSigningSetup_TouchesGlobalGitConfigOnlyWhenAsked(t *testing.T) {
 			writeKey := func([]byte) (string, error) { return fakeSSHKeyPath, nil }
 
 			err := apprelease.SSHSigningSetup(context.Background(), git, writeKey, apprelease.SSHSigningInput{
-				PrivateKey:      "key",
+				PrivateKey:      sshkey.PrivateKey(t),
 				GitConfigGlobal: global,
 			}, io.Discard)
 			if err != nil {
@@ -155,7 +156,7 @@ func TestSSHSigningSetup_NoCommitSignOmitsGpgsign(t *testing.T) {
 	writeKey := func([]byte) (string, error) { return "/k", nil }
 
 	err := apprelease.SSHSigningSetup(context.Background(), git, writeKey, apprelease.SSHSigningInput{
-		PrivateKey: "key",
+		PrivateKey: sshkey.PrivateKey(t),
 	}, io.Discard)
 	if err != nil {
 		t.Fatal(err)

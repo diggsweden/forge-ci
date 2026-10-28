@@ -90,8 +90,8 @@ func commitChangelogReleaseCmd() *cli.Command {
 				// no default, so require it explicitly before pinning the host.
 				fingerprint := cmd.String("host-key-fingerprint")
 				if fingerprint == "" {
-					return fmt.Errorf("commit-changelog: --host-key-fingerprint is required (a trust anchor; get it with: %s | ssh-keygen -lf -): %w",
-						strings.Join(git.HostKeyScanArgs(gitEndpoint.Host, gitEndpoint.Port, cmd.String("host-key-type")), " "), errs.ErrUsage)
+					return fmt.Errorf("commit-changelog: --host-key-fingerprint is required: the %s host key fingerprint of %s port %d, as its forge operator publishes it; one fetched from the host it verifies proves nothing: %w",
+						cmd.String("host-key-type"), gitEndpoint.Host, gitEndpoint.Port, errs.ErrUsage)
 				}
 
 				ssh, cleanup, err := git.SetupPinnedSSH(ctx, git.PinnedSSHInput{

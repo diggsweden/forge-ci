@@ -41,7 +41,6 @@ type fakeCheckoutGit struct {
 	fetchedTags    bool // FetchTags was called
 	fetchedAllRefs bool // FetchAllRefs was called
 	failFetchTag   error
-	partialClone   bool     // EnablePartialClone was called
 	sparseCone     bool     // SparseInit cone arg
 	sparsePatterns []string // SparseSet patterns
 	headSHA        string
@@ -107,12 +106,6 @@ func (f *fakeCheckoutGit) FetchAllRefs(ctx context.Context, url string, cred run
 	f.fetchedAllRefs = true
 
 	return f.record(ctx, "all", cred, url)
-}
-
-func (f *fakeCheckoutGit) EnablePartialClone(ctx context.Context) error {
-	f.partialClone = true
-
-	return f.record(ctx, "partial", runcontext.Credential{})
 }
 
 func (f *fakeCheckoutGit) SparseInit(ctx context.Context, cone bool) error {
@@ -303,10 +296,6 @@ func TestCheckout_Sparse(t *testing.T) {
 
 		if _, err := appplatform.Checkout(context.Background(), checkoutDestinations(), checkoutGitFactory(git), fakeoutputsink.New(t), nil, in); err != nil {
 			t.Fatal(err)
-		}
-
-		if !git.partialClone {
-			t.Error("partial clone not enabled alongside sparse")
 		}
 
 		if !git.sparseCone {

@@ -63,7 +63,7 @@ func newFakeGitBinary(t *testing.T, stdout, stderr string, exitCode int) *fakeGi
 		"printf '%s' '" + stderr + "' >&2\n" +
 		"exit " + strconv.Itoa(exitCode) + "\n"
 
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil { //nolint:gosec // test stub must be executable.
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatalf("write fake git: %v", err)
 	}
 

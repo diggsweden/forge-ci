@@ -100,7 +100,7 @@ func TestDebugWorkspace_RefusalsWriteNothing(t *testing.T) {
 			t.Fatal(chmodErr)
 		}
 
-		t.Cleanup(func() { _ = os.Chmod(locked.Path(".github-shared/locked"), 0o700) }) //nolint:gosec // restores an owned temp directory for cleanup.
+		t.Cleanup(func() { _ = os.Chmod(locked.Path(".github-shared/locked"), 0o700) })
 
 		err = appplatform.DebugWorkspace(&out, appplatform.DebugWorkspaceInput{Root: locked.Root})
 		if !errors.Is(err, fs.ErrPermission) || out.Len() != 0 {

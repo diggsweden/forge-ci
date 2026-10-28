@@ -214,7 +214,10 @@ Current CLI alternatives, subject to their provider and runtime contracts:
 - `docker/setup-buildx-action` + `docker/build-push-action` → `container build`
   (buildah builds; the ggcr adapter pushes tagless by digest, daemonless, no
   BuildKit and no GitHub-marketplace action; the multi-arch index is assembled by
-  `container manifest merge`).
+  `container manifest merge`). On a runner pool that denies user namespaces,
+  `--image-builder kaniko` builds the same layout with kaniko in the kaniko job
+  image; the push, scan and ledger do not change. See
+  [Runners and runner lending](runners.md#building-on-the-pool-with-kaniko).
 - `github/codeql-action/upload-sarif` → `security report upload-sarif` (stamps
   the category into each run's `automationDetails.id`, the field Code Scanning
   keys analyses on).
@@ -239,8 +242,9 @@ Current CLI alternatives, subject to their provider and runtime contracts:
   `retention-days`, `include-hidden-files`.
 
 Checkout boundary:
-- `actions/checkout` → `platform checkout` (`--fetch-tags`, `--sparse` cone +
-  partial clone, `--path`). Runtime-image jobs may use the verb, including for
+- `actions/checkout` → `platform checkout` (`--fetch-tags`, `--sparse` cone,
+  `--path`). It makes no partial clone, whose later blob fetches would carry
+  no credential. Runtime-image jobs may use the verb, including for
   their first checkout. A bare-runner bootstrap must first make the binary
   available through its reviewed installer/checkout path (see above).
 

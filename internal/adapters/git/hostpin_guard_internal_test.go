@@ -7,61 +7,71 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 
-	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/ssh"
+
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	domaingit "github.com/diggsweden/forge-ci/internal/domain/git"
+	"github.com/diggsweden/forge-ci/internal/testutil/sshkey"
 )
 
-func TestHostPin_RequiresEveryScannedFingerprintBeforeInstall(t *testing.T) {
+func newHostKey(t *testing.T) ssh.PublicKey {
+	t.Helper()
+
+	_, signer := sshkey.New(t)
+
+	return signer.PublicKey()
+}
+
+// known_hosts is written only for a presented key that matches the pin; a
+// mismatch or a failed scan leaves no file that a later ssh could trust.
+func TestHostPin_InstallsOnlyAMatchingKey(t *testing.T) {
 	t.Parallel()
 
-	const matching = "256 SHA256:fixture host (ED25519)"
-	for _, line := range []string{"", matching, matching + "\n" + matching, matching + "\n256 SHA256:other host (ED25519)", matching + "\nbroken"} {
+	pinned := newHostKey(t)
+
+	pin, err := domaingit.ParseHostKeyPin(ssh.FingerprintSHA256(pinned))
+	require.NoError(t, err)
+
+	for name, scanned := range map[string]struct {
+		key ssh.PublicKey
+		err error
+	}{
+		"match":       {key: pinned},
+		"mismatch":    {key: newHostKey(t)},
+		"scan failed": {err: syscall.ECONNREFUSED},
+	} {
 		root := t.TempDir()
-		calls := 0
-		run := func(_ context.Context, command string, args ...string) (string, error) {
-			calls++
+		scan := func(_ context.Context, host string, port int, keyType string) (ssh.PublicKey, error) {
+			require.Equal(t, "host.invalid", host)
+			require.Equal(t, 22, port)
+			require.Equal(t, "ed25519", keyType)
 
-			if command == "ssh-keyscan" {
-				require.Equal(t, []string{"-t", "ed25519", "host.invalid"}, args)
-
-				return "host.invalid ssh-ed25519 synthetic-key", nil
-			}
-
-			require.Equal(t, "ssh-keygen", command)
-			require.Equal(t, []string{"-lf", filepath.Join(root, "known_hosts.tmp")}, args)
-
-			return line, nil
+			return scanned.key, scanned.err
 		}
 
-		path, err := pinScannedHostKey(t.Context(), root, "host.invalid", 22, "ed25519", "SHA256:fixture", run)
-		if line == matching || line == matching+"\n"+matching {
+		path, err := pinScannedHostKey(t.Context(), root, "host.invalid", 22, "ed25519", pin, scan)
+		if name == "match" {
 			require.NoError(t, err)
 
 			body, readErr := os.ReadFile(path)
 			require.NoError(t, readErr)
-			require.Equal(t, "host.invalid ssh-ed25519 synthetic-key\n", string(body))
-		} else {
-			require.ErrorIs(t, err, errs.ErrValidation)
-			require.Empty(t, path)
+			require.Equal(t, "host.invalid "+string(ssh.MarshalAuthorizedKey(pinned)), string(body))
 
-			_, statErr := os.Stat(filepath.Join(root, "known_hosts"))
-			require.ErrorIs(t, statErr, os.ErrNotExist)
+			continue
 		}
 
-		require.Equal(t, 2, calls)
+		require.Error(t, err, name)
+		require.Empty(t, path, name)
+
+		if name == "mismatch" {
+			require.ErrorIs(t, err, errs.ErrValidation)
+		}
+
+		_, statErr := os.Stat(filepath.Join(root, "known_hosts"))
+		require.ErrorIs(t, statErr, os.ErrNotExist, name)
 	}
-}
-
-// An empty pin is refused for itself. A scanned line with no second field
-// yields an empty fingerprint, which would otherwise equal it.
-func TestHostPin_RefusesAnEmptyPinnedFingerprint(t *testing.T) {
-	t.Parallel()
-
-	for _, scanned := range []string{"broken", "256 SHA256:fixture host (ED25519)"} {
-		require.ErrorIs(t, validateHostKeyFingerprints(scanned, ""), errs.ErrValidation)
-	}
-
-	require.NoError(t, validateHostKeyFingerprints("256 SHA256:fixture host (ED25519)", "SHA256:fixture"))
 }

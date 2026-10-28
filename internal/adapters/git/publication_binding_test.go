@@ -80,7 +80,7 @@ func TestPublicationBinding_NativeDestinationInspection(t *testing.T) {
 		require.NoError(t, validateOriginURLs(url+"\n", url+"\n"))
 	}
 
-	url := "https://user:fixture-secret@forge.example/owner/repo.git" //nolint:gosec // Synthetic credential marker proves refusal errors do not echo URLs.
+	url := "https://user:fixture-secret@forge.example/owner/repo.git"
 	for _, pair := range [][2]string{
 		{url, "https://other.example/owner/repo.git"},
 		{url, url + "\n" + url},

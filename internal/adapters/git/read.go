@@ -85,7 +85,7 @@ func commitParentsArgs(commitSHA string) ([]string, error) {
 		return nil, fmt.Errorf("parent inspection requires a full commit OID: %w", errs.ErrUsage)
 	}
 
-	return []string{"--no-replace-objects", "-c", hooksDisabledConfig, "cat-file", "commit", commitSHA}, nil //nolint:goconst // Native Git object type, not application vocabulary.
+	return []string{"--no-replace-objects", "-c", hooksDisabledConfig, "cat-file", "commit", commitSHA}, nil
 }
 
 func commitParentsFromObject(body string) ([]string, error) {
@@ -126,6 +126,17 @@ func (r *Repo) TagSHA(ctx context.Context, tag string) (string, error) {
 // ShortSHA returns `git rev-parse --short=<n> <ref>`.
 func (r *Repo) ShortSHA(ctx context.Context, ref string, n int) (string, error) {
 	return r.Run(ctx, "rev-parse", fmt.Sprintf("--short=%d", n), ref)
+}
+
+// ObjectFormat returns the repository's object format, sha1 or sha256
+// (`git rev-parse --show-object-format`).
+func (r *Repo) ObjectFormat(ctx context.Context) (string, error) {
+	out, err := r.Run(ctx, "rev-parse", "--show-object-format")
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(out), nil
 }
 
 // StatusPorcelain returns `git status --porcelain -- <pathspec>`.
@@ -296,12 +307,24 @@ func (r *Repo) CommitUnixTime(ctx context.Context, ref string) (string, error) {
 // narrowing only; deciding which of these are valid release tags (and
 // which is highest) is the domain's job — see domain/version.
 func (r *Repo) RemoteVersionTags(ctx context.Context, repoURL string, cred runcontext.Credential) ([]string, error) {
+	return r.remoteTags(ctx, repoURL, cred, refsTagsPrefix+"v*")
+}
+
+// RemoteReleaseTags gathers prefixed and unprefixed version candidates for
+// initialization. Domain selection rejects non-stable or malformed versions.
+func (r *Repo) RemoteReleaseTags(ctx context.Context, repoURL string, cred runcontext.Credential) ([]string, error) {
+	return r.remoteTags(ctx, repoURL, cred, refsTagsPrefix+"v*", refsTagsPrefix+"[0-9]*")
+}
+
+func (r *Repo) remoteTags(ctx context.Context, repoURL string, cred runcontext.Credential, patterns ...string) ([]string, error) {
 	env, err := r.remoteAuthEnv(ctx, repoURL, cred)
 	if err != nil {
 		return nil, err
 	}
 
-	out, err := r.runEnvOutput(ctx, env, "ls-remote", "--tags", "--refs", "--", repoURL, refsTagsPrefix+"v*")
+	args := append([]string{"ls-remote", "--tags", "--refs", "--", repoURL}, patterns...)
+
+	out, err := r.runEnvOutput(ctx, env, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -627,8 +650,7 @@ func (r *Repo) runIsAncestor(ctx context.Context, ancestor, descendant string) (
 		return true, nil
 	}
 
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		if exitErr.ExitCode() == 1 {
 			return false, nil
 		}
@@ -744,7 +766,7 @@ func (r *Repo) CatFileTag(ctx context.Context, tag string) (string, error) {
 // signer's key. An empty keyring returns ok=false, err=nil so callers
 // can render the existing "verification requires signer's public key"
 // hint.
-func (r *Repo) VerifyTagSignature(_ context.Context, tag string, armoredKeyring []byte) (string, string, bool, error) { //nolint:gocritic // wants tuple return for parallel signer+fingerprint reporting.
+func (r *Repo) VerifyTagSignature(_ context.Context, tag string, armoredKeyring []byte) (string, string, bool, error) {
 	if len(armoredKeyring) == 0 {
 		return "", "", false, nil
 	}
@@ -1032,29 +1054,29 @@ func (r *Repo) lookupTagObject(tag string) (*object.Tag, bool, error) {
 // callers that parse the raw `git cat-file tag` output see the same
 // shape. Header order matches git's spec.
 func renderTagObject(t *object.Tag) string { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var builder strings.Builder
 
-	_, _ = fmt.Fprintf(&b, "object %s\n", t.Target)
-	_, _ = fmt.Fprintf(&b, "type %s\n", t.TargetType)
-	_, _ = fmt.Fprintf(&b, "tag %s\n", t.Name)
-	_, _ = fmt.Fprintf(&b, "tagger %s <%s> %d %s\n", t.Tagger.Name, t.Tagger.Email,
+	_, _ = fmt.Fprintf(&builder, "object %s\n", t.Target)
+	_, _ = fmt.Fprintf(&builder, "type %s\n", t.TargetType)
+	_, _ = fmt.Fprintf(&builder, "tag %s\n", t.Name)
+	_, _ = fmt.Fprintf(&builder, "tagger %s <%s> %d %s\n", t.Tagger.Name, t.Tagger.Email,
 		t.Tagger.When.Unix(), t.Tagger.When.Format("-0700"))
-	b.WriteString("\n")
-	b.WriteString(t.Message)
+	builder.WriteString("\n")
+	builder.WriteString(t.Message)
 
 	if !strings.HasSuffix(t.Message, "\n") {
-		b.WriteString("\n")
+		builder.WriteString("\n")
 	}
 
 	if t.PGPSignature != "" {
-		b.WriteString(t.PGPSignature)
+		builder.WriteString(t.PGPSignature)
 
 		if !strings.HasSuffix(t.PGPSignature, "\n") {
-			b.WriteString("\n")
+			builder.WriteString("\n")
 		}
 	}
 
-	return b.String()
+	return builder.String()
 }
 
 // HasPathspecChanges reads tracked and untracked changes without refreshing the

@@ -33,7 +33,6 @@ type CheckoutGit interface { //nolint:interfacebloat // existing checkout stages
 	Fetch(ctx context.Context, remoteURL string, refspecs []string, cred runcontext.Credential, depth int) error
 	FetchTags(ctx context.Context, remoteURL string, cred runcontext.Credential) error
 	FetchAllRefs(ctx context.Context, remoteURL string, cred runcontext.Credential) error
-	EnablePartialClone(ctx context.Context) error
 	SparseInit(ctx context.Context, cone bool) error
 	SparseSet(ctx context.Context, patterns []string) error
 	CheckoutDetach(ctx context.Context, ref string) error
@@ -83,7 +82,7 @@ type CheckoutInput struct {
 // behaviours (named errors, quiet probe misses, no interactive prompts,
 // unsafe-ref rejection). The resolved commit SHA is written to the
 // OutputSink and returned.
-func Checkout(ctx context.Context, destinations CheckoutDestinations, newGit func(dir string) CheckoutGit, sink domainci.OutputSink, w io.Writer, in CheckoutInput) (string, error) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func Checkout(ctx context.Context, destinations CheckoutDestinations, newGit func(dir string) CheckoutGit, sink domainci.OutputSink, out io.Writer, in CheckoutInput) (string, error) {
 	// Refused before the destination is opened: a missing collaborator
 	// used to panic only after the staging directory existed, or after the
 	// fetch when the sink was the missing one. The writer is optional.
@@ -108,7 +107,7 @@ func Checkout(ctx context.Context, destinations CheckoutDestinations, newGit fun
 	git := newGit(dir)
 	in.Workspace = dir
 
-	sha, err := runCheckout(ctx, git, sink, w, in)
+	sha, err := runCheckout(ctx, git, sink, out, in)
 
 	// Publication is the last thing that happens, and only when everything
 	// before it worked.
@@ -121,7 +120,7 @@ func Checkout(ctx context.Context, destinations CheckoutDestinations, newGit fun
 
 // runCheckout performs the Git sequence in whichever directory the destination
 // resolved to.
-func runCheckout(ctx context.Context, git CheckoutGit, sink domainci.OutputSink, w io.Writer, in CheckoutInput) (string, error) { //nolint:varnamelen // writer convention.
+func runCheckout(ctx context.Context, git CheckoutGit, sink domainci.OutputSink, out io.Writer, in CheckoutInput) (string, error) {
 	// The command resolves the override-or-provider object format and
 	// passes it in; an empty value (no override, forge does not report
 	// one) defaults to sha1.
@@ -152,7 +151,7 @@ func runCheckout(ctx context.Context, git CheckoutGit, sink domainci.OutputSink,
 		return "", err
 	}
 
-	return reportCheckout(ctx, git, sink, w, in, format)
+	return reportCheckout(ctx, git, sink, out, in, format)
 }
 
 // fetchAllRefs performs the all-history checkout when requested: it populates
@@ -175,19 +174,15 @@ func fetchAllRefs(ctx context.Context, git CheckoutGit, remoteURL string, in Che
 
 // configureSparse sets up cone-mode sparse-checkout BEFORE any checkout, so the
 // working tree is only ever populated with the requested cone — the subtree
-// never lands on disk in full. (Partial-clone blob filtering is a download
-// optimization that can be layered on later without changing this.) A no-op
-// when no patterns are requested.
+// never lands on disk in full. A no-op when no patterns are requested.
+//
+// It is no partial clone: a promisor remote fetches missing blobs later, in
+// commands that carry no credential, so a private repository's checkout
+// failed with "could not read Username". The fetch is one commit deep, so
+// downloading the whole tree costs little.
 func configureSparse(ctx context.Context, git CheckoutGit, in CheckoutInput) error {
 	if len(in.Sparse) == 0 {
 		return nil
-	}
-
-	// Pair sparse-checkout with a blob:none partial clone (as the JS
-	// actions/checkout does): only the cone's blobs download. Degrades to a
-	// full fetch on servers without partial-clone support.
-	if err := git.EnablePartialClone(ctx); err != nil {
-		return fmt.Errorf("enable partial clone: %w", err)
 	}
 
 	if err := git.SparseInit(ctx, true); err != nil {
@@ -229,7 +224,7 @@ func fetchExtras(ctx context.Context, git CheckoutGit, remoteURL string, in Chec
 // reportCheckout resolves the checked-out HEAD, records it on the output
 // sink, and prints the summary line. Split out so Checkout stays within
 // the cyclomatic budget.
-func reportCheckout(ctx context.Context, git CheckoutGit, sink domainci.OutputSink, w io.Writer, in CheckoutInput, format string) (string, error) { //nolint:cyclop,varnamelen // canonical HEAD validation precedes sink-first publication and diagnostics.
+func reportCheckout(ctx context.Context, git CheckoutGit, sink domainci.OutputSink, out io.Writer, in CheckoutInput, format string) (string, error) {
 	sha, err := git.RevParse(ctx, "HEAD")
 	if err != nil {
 		return "", fmt.Errorf("resolve checked-out HEAD: %w", err)
@@ -250,8 +245,8 @@ func reportCheckout(ctx context.Context, git CheckoutGit, sink domainci.OutputSi
 		return "", err
 	}
 
-	if w != nil {
-		if _, err := fmt.Fprintf(w, "Checked out %s at %s (%s)\n", in.Repository, sha, format); err != nil {
+	if out != nil {
+		if _, err := fmt.Fprintf(out, "Checked out %s at %s (%s)\n", in.Repository, sha, format); err != nil {
 			return "", fmt.Errorf("write checkout summary: %w", err)
 		}
 	}

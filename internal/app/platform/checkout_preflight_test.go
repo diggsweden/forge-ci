@@ -76,6 +76,8 @@ func TestCheckoutPreflight_AllLocalFieldsBeforeCreation(t *testing.T) {
 		{"workspace-encoding", func(in *appplatform.CheckoutInput) { in.Workspace += "/bad\xffpath" }, errs.ErrUsage},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			root := t.TempDir()
 			in := appplatform.CheckoutInput{Repository: "team/sub/repo", ServerURL: "https://forge.example/base", Ref: "release", Workspace: filepath.Join(root, "missing", "checkout"), Depth: 7, FetchBase: "base", FetchTags: true, FetchAllRefs: true, Sparse: []string{"src", "scripts/bootstrap"}, OutputKey: "selected-sha"}
 			tc.change(&in)
@@ -103,6 +105,8 @@ func TestCheckoutPreflight_DefersOnlyUnknownSHALength(t *testing.T) {
 
 	for _, format := range []string{"", "sha1", "sha256"} {
 		t.Run(format, func(t *testing.T) {
+			t.Parallel()
+
 			root := t.TempDir()
 			in := appplatform.CheckoutInput{Repository: "team/sub/repo", ServerURL: "https://forge.example/base", Ref: strings.Repeat("b", 64), Workspace: filepath.Join(root, "missing", "checkout"), ObjectFormat: format}
 

@@ -97,8 +97,7 @@ func (r *Repo) HasStagedChanges(ctx context.Context) (bool, error) {
 		return false, nil // exit 0: no diff
 	}
 
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		if exitErr.ExitCode() == 1 {
 			return true, nil // exit 1: there is a diff
 		}
@@ -365,7 +364,7 @@ func validateRepositoryRouting(env []string) error {
 }
 
 func originURLArgs(push bool) []string {
-	args := []string{"remote", "get-url", "--all"} //nolint:goconst // Native Git flags, not application vocabulary.
+	args := []string{"remote", "get-url", "--all"}
 	if push {
 		args = append(args, "--push")
 	}

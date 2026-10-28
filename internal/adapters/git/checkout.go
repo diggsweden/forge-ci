@@ -218,22 +218,6 @@ func authEnv(remoteURL string, cred runcontext.Credential) []string {
 	)
 }
 
-// EnablePartialClone marks origin a promisor remote with a blob:none filter,
-// so subsequent fetches download only the objects the working tree needs (the
-// sparse cone) and backfill the rest on demand. It configures exactly what
-// `git clone --filter=blob:none` does. A server that does not support partial
-// clone ignores the filter and fetches fully — harmless, since the promisor
-// flag then has nothing to backfill. Run after RemoteAdd, before the fetch.
-func (r *Repo) EnablePartialClone(ctx context.Context) error {
-	if _, err := r.Run(ctx, append(r.safeDirArgs(), "config", "remote.origin.promisor", "true")...); err != nil {
-		return err
-	}
-
-	_, err := r.Run(ctx, append(r.safeDirArgs(), "config", "remote.origin.partialclonefilter", "blob:none")...)
-
-	return err
-}
-
 // SparseInit enables sparse-checkout for the repo. cone selects cone mode
 // (directory-prefix patterns), which is the fast, well-defined form the JS
 // actions/checkout uses and the only form we expose. Run before SparseSet and

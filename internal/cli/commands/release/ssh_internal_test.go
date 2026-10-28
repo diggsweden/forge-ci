@@ -13,9 +13,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v3"
+	"golang.org/x/crypto/ssh"
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/testutil/mockbinary"
+	"github.com/diggsweden/forge-ci/internal/testutil/sshkey"
 	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
 )
 
@@ -119,7 +121,9 @@ func TestSSHCommands_SelectedDestinationRoundTrip(t *testing.T) {
 			env := testenv.New(t)
 			root := t.TempDir()
 			t.Chdir(root)
-			t.Setenv("SSH_SIGNING_KEY", "synthetic-signing-key")
+
+			key, signer := sshkey.New(t)
+			t.Setenv("SSH_SIGNING_KEY", key)
 
 			if tc.env {
 				t.Setenv("SSH_SIGNING_KEY_PATH", filepath.Join(root, "env", "key"))
@@ -150,7 +154,9 @@ func TestSSHCommands_SelectedDestinationRoundTrip(t *testing.T) {
 			want := filepath.Join(root, tc.want)
 			body, err := os.ReadFile(want)
 			require.NoError(t, err)
-			require.Equal(t, "synthetic-signing-key\n", string(body))
+			written, err := ssh.ParsePrivateKey(body)
+			require.NoError(t, err)
+			require.Equal(t, signer.PublicKey().Marshal(), written.PublicKey().Marshal())
 
 			info, err := os.Stat(want)
 			require.NoError(t, err)

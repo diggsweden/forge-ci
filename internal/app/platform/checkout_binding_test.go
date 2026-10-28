@@ -23,8 +23,6 @@ import (
 //
 // The marker is deliberately something no other value in a checkout could be,
 // so a match cannot be a coincidence and an absence cannot be an empty string.
-//
-//nolint:gosec // G101: a deliberately recognisable fixture value, not a credential.
 const checkoutCredentialMarker = "rci-marker-6f1c9d2a-not-a-real-token"
 
 // This layer must hand Git the Credential VALUE, not a string it unwrapped.

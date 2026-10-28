@@ -10,8 +10,6 @@ import "regexp"
 // shape validation — the release-provenance, sign-and-publish, and signer-image
 // paths pin the same shape here rather than each re-deriving it (which had
 // drifted into strict `40|64` and loose `40,64` spellings).
-//
-//nolint:gochecknoglobals // compiled regex, read-only.
 var commitSHARE = regexp.MustCompile(`^([0-9a-f]{40}|[0-9a-f]{64})$`)
 
 // ValidCommitSHA reports whether s is a full-length git commit hash (exactly 40

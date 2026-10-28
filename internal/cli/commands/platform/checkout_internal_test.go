@@ -28,6 +28,7 @@ var errCheckoutCommandStop = errors.New("owned checkout init stop")
 
 type checkoutTokenRecorder struct {
 	appplatform.CheckoutGit
+
 	remote string
 	token  string
 }
@@ -42,7 +43,7 @@ func (g *checkoutTokenRecorder) Fetch(_ context.Context, remote string, _ []stri
 	return errCheckoutCommandStop
 }
 
-func TestCheckoutCommand_TokenFilesPreserveCredentialScope(t *testing.T) { //nolint:paralleltest // tests intentionally control CLI environment sources.
+func TestCheckoutCommand_TokenFilesPreserveCredentialScope(t *testing.T) {
 	for _, tc := range []struct {
 		name, server, content, want string
 		file                        bool
@@ -89,7 +90,7 @@ func TestCheckoutCommand_TokenFilesPreserveCredentialScope(t *testing.T) { //nol
 	}
 }
 
-func TestCheckoutCommand_TokenReadFailureBeforeMetadata(t *testing.T) { //nolint:paralleltest // tests intentionally control CLI environment sources.
+func TestCheckoutCommand_TokenReadFailureBeforeMetadata(t *testing.T) {
 	checkoutCommandEnv(t)
 	root := t.TempDir()
 	workspace := filepath.Join(root, "checkout")
@@ -132,6 +133,7 @@ func requireCheckoutWorkDir(t *testing.T, workspace, dir string) {
 
 type checkoutMetadataRecorder struct {
 	provider.Provider
+
 	fetch func(context.Context, string) (*provider.RepoMetadata, error)
 }
 
@@ -141,6 +143,7 @@ func (p checkoutMetadataRecorder) FetchRepoMetadata(ctx context.Context, repo st
 
 type checkoutInitRecorder struct {
 	appplatform.CheckoutGit
+
 	init func(context.Context, string) error
 }
 
@@ -200,7 +203,7 @@ func checkoutCommandEnv(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 }
 
-func TestCheckoutCommand_LocalPreflightBeforeMetadata(t *testing.T) { //nolint:paralleltest // tests intentionally control CLI environment sources.
+func TestCheckoutCommand_LocalPreflightBeforeMetadata(t *testing.T) {
 	checkoutCommandEnv(t)
 
 	for _, tc := range []struct{ flag, value string }{
@@ -232,7 +235,7 @@ func TestCheckoutCommand_LocalPreflightBeforeMetadata(t *testing.T) { //nolint:p
 	}
 }
 
-func TestCheckoutCommand_ForgePathBeforeToken(t *testing.T) { //nolint:paralleltest // CLI flag sources are process-global.
+func TestCheckoutCommand_ForgePathBeforeToken(t *testing.T) {
 	checkoutCommandEnv(t)
 
 	for _, tc := range []struct {
@@ -257,7 +260,7 @@ func TestCheckoutCommand_ForgePathBeforeToken(t *testing.T) { //nolint:parallelt
 	}
 }
 
-func TestCheckoutCommand_WorkspaceRefusalBeforeMetadata(t *testing.T) { //nolint:paralleltest // CLI flag sources are process-global.
+func TestCheckoutCommand_WorkspaceRefusalBeforeMetadata(t *testing.T) {
 	checkoutCommandEnv(t)
 
 	for _, state := range []string{"workspace-link", "workspace-link-parent", "ancestor-link", "dangling-workspace", "workspace-file", "ancestor-file", "git-link", "git-dangling", "git-file", "git-dir", "inspection-error"} {
@@ -325,7 +328,7 @@ func TestCheckoutCommand_WorkspaceRefusalBeforeMetadata(t *testing.T) { //nolint
 	}
 }
 
-func TestCheckoutCommand_MetadataFormatAndRecheck(t *testing.T) { //nolint:paralleltest // runs actual CLI parsing with isolated environment sources.
+func TestCheckoutCommand_MetadataFormatAndRecheck(t *testing.T) {
 	checkoutCommandEnv(t)
 
 	for _, tc := range []struct {
@@ -414,7 +417,7 @@ func TestCheckoutCommand_MetadataFormatAndRecheck(t *testing.T) { //nolint:paral
 	}
 }
 
-func TestCheckoutCommand_WorkspaceAuthority(t *testing.T) { //nolint:paralleltest // runner workspace and cwd are intentionally varied.
+func TestCheckoutCommand_WorkspaceAuthority(t *testing.T) {
 	checkoutCommandEnv(t)
 	root := t.TempDir()
 	runner, alias, explicit := filepath.Join(root, "runner"), filepath.Join(root, "alias"), filepath.Join(root, "operator-absolute")

@@ -26,6 +26,7 @@ import (
 type checkoutJournal struct {
 	*fakeoutputsink.Sink
 	bytes.Buffer
+
 	events []checkoutEvent
 	record func(context.Context, checkoutEvent) error
 }
@@ -41,7 +42,7 @@ func (j *checkoutJournal) Set(ctx context.Context, key, value string) error {
 func (j *checkoutJournal) Write(body []byte) (int, error) {
 	// The diagnostic writer can accept a prefix before failing, independently of
 	// the already accepted machine value. No imaginary rollback is modeled.
-	if err := j.record(nil, checkoutEvent{method: "writer", args: []string{string(body)}}); err != nil { //nolint:staticcheck // io.Writer has no context; the callback handles writer events separately.
+	if err := j.record(nil, checkoutEvent{method: "writer", args: []string{string(body)}}); err != nil {
 		count, _ := j.Buffer.Write(body[:5])
 
 		return count, err
@@ -50,7 +51,7 @@ func (j *checkoutJournal) Write(body []byte) (int, error) {
 	return j.Buffer.Write(body)
 }
 
-func TestCheckoutJourney_OrderedFailuresAndRetainedDestination(t *testing.T) { //nolint:gocognit,gocyclo,maintidx // one oracle pins all branch policies, failure positions and publication states.
+func TestCheckoutJourney_OrderedFailuresAndRetainedDestination(t *testing.T) {
 	t.Parallel()
 
 	const remote = "https://forge.example/team/sub/repo.git"
@@ -82,7 +83,7 @@ func TestCheckoutJourney_OrderedFailuresAndRetainedDestination(t *testing.T) { /
 			if extras != "minimal" {
 				key = "selected-commit"
 
-				want = append(want, checkoutEvent{method: "partial"}, checkoutEvent{method: "sparse-init", args: []string{"true"}},
+				want = append(want, checkoutEvent{method: "sparse-init", args: []string{"true"}},
 					checkoutEvent{method: "sparse-set", args: []string{"src", "scripts/bootstrap"}}, checkoutEvent{method: "all", args: []string{remote}, credential: cred})
 			}
 
@@ -107,12 +108,14 @@ func TestCheckoutJourney_OrderedFailuresAndRetainedDestination(t *testing.T) { /
 
 			causes := make([]error, len(want))
 			for index, event := range want {
-				causes[index] = fmt.Errorf("%s/%s/%d/%s", policy.name, extras, index, event.method) //nolint:err113 // every reachable position has an independent identity, including repeated Fetch/probe calls.
+				causes[index] = fmt.Errorf("%s/%s/%d/%s", policy.name, extras, index, event.method)
 			}
 
 			for _, existing := range []bool{false, true} {
 				for fail := 0; fail <= len(want); fail++ {
 					t.Run(policy.name+"/"+extras+"/existing="+strconv.FormatBool(existing)+"/fail="+strconv.Itoa(fail), func(t *testing.T) {
+						t.Parallel()
+
 						ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(time.Minute))
 						defer cancel()
 

@@ -115,7 +115,7 @@ func TestCheckout_FailureAtAnyStepPreservesACallerSeededDestination(t *testing.T
 				t.Fatalf("call %d was supposed to fail", step)
 			}
 
-			body, readErr := os.ReadFile(seeded) //nolint:gosec // owned temporary workspace.
+			body, readErr := os.ReadFile(seeded)
 			if readErr != nil {
 				t.Fatalf("failure at call %d destroyed the caller's file: %v", step, readErr)
 			}
@@ -365,14 +365,14 @@ func checkoutStepCount(t *testing.T) int {
 	return len(git.events)
 }
 
-func itoa(n int) string {
-	if n == 0 {
+func itoa(index int) string {
+	if index == 0 {
 		return "0"
 	}
 
 	digits := ""
-	for ; n > 0; n /= 10 {
-		digits = string(rune('0'+n%10)) + digits
+	for ; index > 0; index /= 10 {
+		digits = string(rune('0'+index%10)) + digits
 	}
 
 	return digits

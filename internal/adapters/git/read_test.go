@@ -19,10 +19,10 @@ import (
 func TestReleaseRequestGitHelpersUseHookDisabledRemoteCommands(t *testing.T) {
 	t.Parallel()
 
-	m := mockbinary.New(t)
+	mock := mockbinary.New(t)
 	// Every remote read runs with prompting off, so a missing credential fails
 	// fast instead of reaching for a terminal the runner does not have.
-	m.Add("git", `
+	mock.Add("git", `
 set -euo pipefail
 [ "${GIT_TERMINAL_PROMPT:-}" = 0 ] || { echo "interactive prompt left enabled" >&2; exit 1; }
 case "$*" in
@@ -35,7 +35,7 @@ case "$*" in
 esac
 `)
 
-	repo := &adaptergit.Repo{GitBin: m.Path("git")}
+	repo := &adaptergit.Repo{GitBin: mock.Path("git")}
 	ctx := context.Background()
 
 	if err := repo.FetchTagFromRemote(ctx, "origin", "release-request/v1.2.3", runcontext.Credential{}); err != nil {
@@ -60,7 +60,7 @@ esac
 		t.Error("final tag should not exist when ls-remote returns no rows")
 	}
 
-	invocations := m.Invocations("git")
+	invocations := mock.Invocations("git")
 	if len(invocations) != 3 {
 		t.Fatalf("git invocations = %d, want 3", len(invocations))
 	}
@@ -111,8 +111,8 @@ func TestRemoteTagExistence_PreservesQueryFailures(t *testing.T) {
 func TestVerifyTagSSHAgainstAllowedSigners_UsesSSHFormat(t *testing.T) {
 	t.Parallel()
 
-	m := mockbinary.New(t)
-	m.Add("git", `
+	mock := mockbinary.New(t)
+	mock.Add("git", `
 set -euo pipefail
 if [ "$*" != '-c core.hooksPath=/dev/null -c gpg.format=ssh -c gpg.ssh.allowedSignersFile=allowed_signers tag -v release-request/v1.2.3' ]; then
   echo "unexpected git args: $*" >&2
@@ -121,7 +121,7 @@ fi
 printf 'Good "git" signature for release-request/v1.2.3\n'
 `)
 
-	repo := &adaptergit.Repo{GitBin: m.Path("git")}
+	repo := &adaptergit.Repo{GitBin: mock.Path("git")}
 
 	ok, out, err := repo.VerifyTagSSHAgainstAllowedSigners(context.Background(), "release-request/v1.2.3", "allowed_signers")
 	if err != nil {
@@ -275,7 +275,7 @@ func TestGitRun_PassesTheAmbientEnvironmentThrough(t *testing.T) {
 func TestGitRun_RedactsKeyMaterialFromADiagnostic(t *testing.T) {
 	// Base64-looking, but it is the literal string "secret-key-material":
 	// deliberately recognisable so a leak is obvious in a failure message.
-	const secret = "c2VjcmV0LWtleS1tYXRlcmlhbA" //nolint:gosec // G101: synthetic fixture, not a credential.
+	const secret = "c2VjcmV0LWtleS1tYXRlcmlhbA" // gitleaks:allow -- encoded redaction fixture, not a credential.
 
 	fake := newFakeGitBinary(t, "",
 		"error: bad key\n-----BEGIN OPENSSH PRIVATE KEY-----\n"+secret+"\n-----END OPENSSH PRIVATE KEY-----\n", 1)

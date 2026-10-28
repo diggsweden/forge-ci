@@ -31,7 +31,7 @@ func TestTaggerBoundary_EmptyLightweightMetadata(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, git.Storer.SetReference(plumbing.NewHashReference(plumbing.NewTagReferenceName("light"), hash)))
 	bin := filepath.Join(t.TempDir(), "git-fixture")
-	require.NoError(t, os.WriteFile(bin, []byte("#!/bin/sh\ncase \"$*\" in *taggername*) printf ' <>\\n';; *taggerdate*) printf '\\n';; *) exit 1;; esac\n"), 0o700)) //nolint:gosec // owned fixed-output fixture, not Git.
+	require.NoError(t, os.WriteFile(bin, []byte("#!/bin/sh\ncase \"$*\" in *taggername*) printf ' <>\\n';; *taggerdate*) printf '\\n';; *) exit 1;; esac\n"), 0o700))
 
 	for _, repo := range []*adaptergit.Repo{{Dir: dir, GitBin: bin}, {Dir: t.TempDir(), GitBin: bin}} {
 		info, tagErr := repo.TaggerInfo(t.Context(), "light")

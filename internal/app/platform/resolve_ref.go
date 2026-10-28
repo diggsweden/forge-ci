@@ -31,7 +31,7 @@ type ResolveRefInput struct {
 // ResolveRef queries exact branch/tag names (not globs). Branch/tag collisions
 // and unbound peeled rows refuse independent of output order. A canonical
 // 40/64-character object ID passes through only when the remote returns no rows.
-func ResolveRef(ctx context.Context, git GitOps, sink domainci.OutputSink, w io.Writer, in ResolveRefInput) (string, error) { //nolint:cyclop,varnamelen // preflight then one exact lookup, strict binding and publication.
+func ResolveRef(ctx context.Context, git GitOps, sink domainci.OutputSink, writer io.Writer, in ResolveRefInput) (string, error) { //nolint:cyclop // preflight then one exact lookup, strict binding and publication.
 	// The writer is optional; the Git port and the output sink are not.
 	if git == nil || sink == nil {
 		return "", fmt.Errorf("resolve-ref: git and output sink are required: %w", errs.ErrUsage)
@@ -84,8 +84,8 @@ func ResolveRef(ctx context.Context, git GitOps, sink domainci.OutputSink, w io.
 		return "", err
 	}
 
-	if w != nil {
-		if _, err := fmt.Fprintln(w, sha); err != nil {
+	if writer != nil {
+		if _, err := fmt.Fprintln(writer, sha); err != nil {
 			return "", fmt.Errorf("write resolved ref: %w", err)
 		}
 	}

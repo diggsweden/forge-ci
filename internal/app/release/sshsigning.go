@@ -11,6 +11,7 @@ import (
 
 	"github.com/diggsweden/forge-ci/internal/clicolor"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	domaingit "github.com/diggsweden/forge-ci/internal/domain/git"
 )
 
 // SSHKeyWriter persists the OpenSSH private signing key and returns the path
@@ -46,7 +47,12 @@ func SSHSigningSetup(ctx context.Context, gitr gitSigningOps, writeKey SSHKeyWri
 		return err
 	}
 
-	keyPath, err := writeKey([]byte(ensureTrailingNewline(in.PrivateKey)))
+	key, err := domaingit.ParseSSHPrivateKey(in.PrivateKey)
+	if err != nil {
+		return fmt.Errorf("ssh-signing: %w", err)
+	}
+
+	keyPath, err := writeKey(key.OpenSSH)
 	if err != nil {
 		return fmt.Errorf("ssh-signing: write key: %w", err)
 	}
@@ -111,14 +117,4 @@ func configureSSHSigning(ctx context.Context, gitr gitSigningOps, keyPath string
 	}
 
 	return nil
-}
-
-// ensureTrailingNewline appends a newline when absent: OpenSSH refuses to read
-// a private key file whose final line is not newline-terminated.
-func ensureTrailingNewline(s string) string {
-	if strings.HasSuffix(s, "\n") {
-		return s
-	}
-
-	return s + "\n"
 }

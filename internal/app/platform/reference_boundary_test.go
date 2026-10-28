@@ -25,6 +25,7 @@ import (
 
 type refRecorder struct {
 	fakeRefGit
+
 	calls [][]string
 }
 
@@ -62,7 +63,9 @@ func TestResolveBoundary_BoundRowsAndExactCall(t *testing.T) {
 		{"mixed format", "v1", one + "\trefs/tags/v1\n" + long + "\trefs/tags/v1^{}", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			recorder := &refRecorder{fakeRefGit: fakeRefGit{out: tc.rows}}
+			t.Parallel()
+
+			recorder := &refRecorder{out: tc.rows}
 			sink := fakeoutputsink.New(t)
 
 			var out bytes.Buffer
@@ -114,7 +117,7 @@ func TestResolveBoundary_RefusalAndDependencyIdentity(t *testing.T) {
 		}
 	}
 
-	recorder := &refRecorder{fakeRefGit: fakeRefGit{err: errRefLookupOffline}}
+	recorder := &refRecorder{err: errRefLookupOffline}
 
 	_, err := appplatform.ResolveRef(t.Context(), recorder, fakeoutputsink.New(t), &bytes.Buffer{}, appplatform.ResolveRefInput{RemoteURL: "https://forge.example/o/r", Ref: "main"})
 	if !errors.Is(err, errRefLookupOffline) || len(recorder.calls) != 1 {
@@ -131,7 +134,7 @@ func TestCheckoutBoundary_CompleteOrderCredentialsAndFailures(t *testing.T) {
 
 	want := []checkoutEvent{
 		{method: "init", args: []string{"sha1"}}, {method: "remote", args: []string{"origin", remote}},
-		{method: "partial"}, {method: "sparse-init", args: []string{"true"}}, {method: "sparse-set", args: []string{"scripts/bootstrap", "src"}},
+		{method: "sparse-init", args: []string{"true"}}, {method: "sparse-set", args: []string{"scripts/bootstrap", "src"}},
 		{method: "all", args: []string{remote}, credential: cred}, {method: "probe-tag", args: []string{"origin", "release"}, credential: cred},
 		{method: "probe-branch", args: []string{"origin", "release"}, credential: cred},
 		{method: "fetch", args: []string{remote, "7", "+refs/heads/release:refs/remotes/origin/release"}, credential: cred},
@@ -140,6 +143,8 @@ func TestCheckoutBoundary_CompleteOrderCredentialsAndFailures(t *testing.T) {
 	}
 	for fail := 0; fail <= len(want); fail++ {
 		t.Run(strconv.Itoa(fail), func(t *testing.T) {
+			t.Parallel()
+
 			cause := fmt.Errorf("stage %d: %w", fail, errFetchMiss)
 			git := &fakeCheckoutGit{tagMissing: true, failAt: fail, failure: cause}
 			in := baseInput(t, "release")

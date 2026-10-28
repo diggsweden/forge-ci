@@ -4,19 +4,22 @@
 package git
 
 import (
-	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 	"mvdan.cc/sh/v3/syntax"
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	domaingit "github.com/diggsweden/forge-ci/internal/domain/git"
 	"github.com/diggsweden/forge-ci/internal/runcontext"
-	"github.com/diggsweden/forge-ci/internal/safeexec"
 )
 
 // PinnedSSHInput is what SetupPinnedSSH needs to build an SSH transport that
@@ -26,10 +29,10 @@ type PinnedSSHInput struct {
 	PrivateKey string
 	Host       string
 	Port       int
-	// HostKeyType is the key type asked of ssh-keyscan (for example "ed25519").
+	// HostKeyType is the host key type to pin: ed25519, ecdsa or rsa.
 	HostKeyType string
-	// HostKeyFingerprint is the trust anchor: every scanned host key must
-	// carry exactly this fingerprint.
+	// HostKeyFingerprint is the trust anchor: the host key the server
+	// presents must carry exactly this SHA256 fingerprint.
 	HostKeyFingerprint string
 }
 
@@ -48,6 +51,16 @@ type PinnedSSH struct {
 // The error text carries the "commit-changelog:" prefix of the one command
 // that drives this, version commit-changelog-release.
 func SetupPinnedSSH(ctx context.Context, in PinnedSSHInput) (PinnedSSH, func(), error) {
+	pin, err := domaingit.ParseHostKeyPin(in.HostKeyFingerprint)
+	if err != nil {
+		return PinnedSSH{}, func() {}, fmt.Errorf("commit-changelog: %w", err)
+	}
+
+	key, err := domaingit.ParseSSHPrivateKey(in.PrivateKey)
+	if err != nil {
+		return PinnedSSH{}, func() {}, fmt.Errorf("commit-changelog: %w", err)
+	}
+
 	base := runcontext.TempRoot(os.Getenv)
 
 	dir, err := os.MkdirTemp(base, "forge-ci-ssh.")
@@ -55,29 +68,22 @@ func SetupPinnedSSH(ctx context.Context, in PinnedSSHInput) (PinnedSSH, func(), 
 		return PinnedSSH{}, func() {}, fmt.Errorf("commit-changelog: create ssh temp dir: %w", err)
 	}
 
-	cleanup := func() { _ = os.RemoveAll(dir) } //nolint:gosec // G703 false positive: dir comes from os.MkdirTemp above.
+	cleanup := func() { _ = os.RemoveAll(dir) }
 
 	keyPath := filepath.Join(dir, "signing_key")
-	if writeErr := os.WriteFile(keyPath, []byte(ensureTrailingNewline(in.PrivateKey)), 0o600); writeErr != nil { //nolint:gosec // G703 false positive: keyPath lives under the os.MkdirTemp dir above.
+	if writeErr := os.WriteFile(keyPath, key.OpenSSH, 0o600); writeErr != nil {
 		cleanup()
 
 		return PinnedSSH{}, func() {}, fmt.Errorf("commit-changelog: write SSH signing key: %w", writeErr)
 	}
 
-	pub, err := runTool(ctx, "ssh-keygen", "-y", "-f", keyPath)
-	if err != nil {
-		cleanup()
-
-		return PinnedSSH{}, func() {}, fmt.Errorf("commit-changelog: validate SSH signing key: %w", err)
-	}
-
-	if writeErr := os.WriteFile(filepath.Join(dir, "signing_key.pub"), []byte(ensureTrailingNewline(pub)), 0o644); writeErr != nil { //nolint:gosec // 0o644 is deliberate for the non-secret public key; the path lives under the os.MkdirTemp dir above.
+	if writeErr := os.WriteFile(filepath.Join(dir, "signing_key.pub"), key.AuthorizedKey, 0o644); writeErr != nil { //nolint:gosec // 0o644 is deliberate for the non-secret public key; the path lives under the os.MkdirTemp dir above.
 		cleanup()
 
 		return PinnedSSH{}, func() {}, fmt.Errorf("commit-changelog: write SSH public key: %w", writeErr)
 	}
 
-	knownHostsPath, err := pinScannedHostKey(ctx, dir, in.Host, in.Port, in.HostKeyType, in.HostKeyFingerprint, runTool)
+	knownHostsPath, err := pinScannedHostKey(ctx, dir, in.Host, in.Port, in.HostKeyType, pin, scanHostKey)
 	if err != nil {
 		cleanup()
 
@@ -101,8 +107,8 @@ func SetupPinnedSSH(ctx context.Context, in PinnedSSHInput) (PinnedSSH, func(), 
 		return PinnedSSH{}, func() {}, fmt.Errorf("commit-changelog: quote SSH config path: %w", err)
 	}
 
-	config := fmt.Sprintf("Host *\n  HostName %s\n  Port %d\n  User git\n  IdentityFile \"%s\"\n  IdentitiesOnly yes\n  UserKnownHostsFile \"%s\"\n  StrictHostKeyChecking yes\n", in.Host, in.Port, keyPath, knownHostsPath)
-	if writeErr := os.WriteFile(configPath, []byte(config), 0o600); writeErr != nil { //nolint:gosec // G703 false positive: configPath lives under the os.MkdirTemp dir above.
+	config := fmt.Sprintf("Host *\n  HostName %s\n  Port %d\n  User %s\n  IdentityFile \"%s\"\n  IdentitiesOnly yes\n  UserKnownHostsFile \"%s\"\n  StrictHostKeyChecking yes\n", in.Host, in.Port, sshUser, keyPath, knownHostsPath)
+	if writeErr := os.WriteFile(configPath, []byte(config), 0o600); writeErr != nil {
 		cleanup()
 
 		return PinnedSSH{}, func() {}, fmt.Errorf("commit-changelog: write SSH config: %w", writeErr)
@@ -111,103 +117,93 @@ func SetupPinnedSSH(ctx context.Context, in PinnedSSHInput) (PinnedSSH, func(), 
 	return PinnedSSH{Command: "ssh -F " + quotedConfigPath, SigningKeyPath: keyPath}, cleanup, nil
 }
 
-// HostKeyScanArgs returns the ssh-keyscan argv, program name first, that
-// SetupPinnedSSH runs for this host. It is exported so a caller can show the
-// operator the exact command that yields the fingerprint to pin.
-func HostKeyScanArgs(host string, port int, keyType string) []string {
-	args := []string{"ssh-keyscan"}
-	if port != 22 {
-		args = append(args, "-p", strconv.Itoa(port))
+// sshUser is the account every forge serves Git over SSH as.
+const sshUser = "git"
+
+// hostKeyAlgorithms returns the SSH algorithms offered for a host key type,
+// so the server presents the key of the pinned type.
+func hostKeyAlgorithms(keyType string) ([]string, bool) {
+	switch keyType {
+	case "ed25519":
+		return []string{ssh.KeyAlgoED25519}, true
+	case "ecdsa":
+		return []string{ssh.KeyAlgoECDSA256, ssh.KeyAlgoECDSA384, ssh.KeyAlgoECDSA521}, true
+	case "rsa":
+		return []string{ssh.KeyAlgoRSASHA512, ssh.KeyAlgoRSASHA256}, true
 	}
 
-	return append(args, "-t", keyType, host)
+	return nil, false
 }
 
-// pinScannedHostKey scans the SSH host key, verifies its fingerprint against
-// the expected value and writes the pinned known_hosts file inside dir,
-// returning the final known_hosts path. run is the process seam.
-func pinScannedHostKey(ctx context.Context, dir, host string, port int, keyType, expectedFingerprint string, run func(context.Context, string, ...string) (string, error)) (string, error) {
-	knownHostsTmp := filepath.Join(dir, "known_hosts.tmp")
+// errHostKeyCaptured ends the handshake once the host key is in hand; no
+// authentication is attempted.
+var errHostKeyCaptured = errors.New("host key captured")
 
-	knownHosts, err := run(ctx, "ssh-keyscan", HostKeyScanArgs(host, port, keyType)[1:]...)
+// scanHostKey returns the host key the server presents for keyType, read
+// from the SSH handshake itself.
+func scanHostKey(ctx context.Context, host string, port int, keyType string) (ssh.PublicKey, error) {
+	algorithms, ok := hostKeyAlgorithms(keyType)
+	if !ok {
+		return nil, fmt.Errorf("host key type %q is not ed25519, ecdsa or rsa: %w", keyType, errs.ErrValidation)
+	}
+
+	address := net.JoinHostPort(host, strconv.Itoa(port))
+
+	var dialer net.Dialer
+
+	conn, err := dialer.DialContext(ctx, "tcp", address)
+	if err != nil {
+		return nil, fmt.Errorf("connect %s: %w", address, err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	// The handshake has no context of its own; closing the connection ends it.
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
+
+	var presented ssh.PublicKey
+
+	client, _, _, err := ssh.NewClientConn(conn, address, &ssh.ClientConfig{
+		User:              sshUser,
+		HostKeyAlgorithms: algorithms,
+		HostKeyCallback: func(_ string, _ net.Addr, key ssh.PublicKey) error {
+			presented = key
+
+			return errHostKeyCaptured
+		},
+	})
+	if client != nil {
+		_ = client.Close()
+	}
+
+	if presented == nil {
+		return nil, fmt.Errorf("SSH handshake with %s: %w", address, err)
+	}
+
+	return presented, nil
+}
+
+// pinScannedHostKey reads the SSH host key, verifies it against the pin and
+// writes the pinned known_hosts file inside dir, returning its path. scan is
+// the network seam.
+func pinScannedHostKey(ctx context.Context, dir, host string, port int, keyType string, pin domaingit.HostKeyPin, scan func(context.Context, string, int, string) (ssh.PublicKey, error)) (string, error) {
+	key, err := scan(ctx, host, port, keyType)
 	if err != nil {
 		return "", fmt.Errorf("commit-changelog: scan SSH host key: %w", err)
 	}
 
-	if writeErr := os.WriteFile(knownHostsTmp, []byte(ensureTrailingNewline(knownHosts)), 0o644); writeErr != nil { //nolint:gosec // 0o644 is deliberate for the non-secret known_hosts; the path lives under the caller's os.MkdirTemp dir.
-		return "", fmt.Errorf("commit-changelog: write known_hosts: %w", writeErr)
-	}
-
-	fingerprintLine, err := run(ctx, "ssh-keygen", "-lf", knownHostsTmp)
-	if err != nil {
-		return "", fmt.Errorf("commit-changelog: fingerprint SSH host key: %w", err)
-	}
-
-	if err := validateHostKeyFingerprints(fingerprintLine, expectedFingerprint); err != nil {
-		return "", err
+	// Both fingerprints are public and together tell a rotated host key from
+	// an interception, which is the operator's next decision.
+	if !pin.Matches(key) {
+		return "", fmt.Errorf("SSH host key fingerprint mismatch: scanned %s, pinned %s: %w", ssh.FingerprintSHA256(key), pin, errs.ErrValidation)
 	}
 
 	knownHostsPath := filepath.Join(dir, "known_hosts")
-	if renameErr := os.Rename(knownHostsTmp, knownHostsPath); renameErr != nil { //nolint:gosec // G703 false positive: both paths live under the caller's os.MkdirTemp dir.
-		return "", fmt.Errorf("commit-changelog: finalize known_hosts: %w", renameErr)
+
+	line := knownhosts.Line([]string{knownhosts.Normalize(net.JoinHostPort(host, strconv.Itoa(port)))}, key) + "\n"
+	if writeErr := os.WriteFile(knownHostsPath, []byte(line), 0o644); writeErr != nil { //nolint:gosec // 0o644 is deliberate for the non-secret known_hosts; the path lives under the caller's os.MkdirTemp dir.
+		return "", fmt.Errorf("commit-changelog: write known_hosts: %w", writeErr)
 	}
 
 	return knownHostsPath, nil
-}
-
-func validateHostKeyFingerprints(output, expected string) error {
-	if strings.TrimSpace(output) == "" || expected == "" {
-		return fmt.Errorf("SSH host key fingerprints are required: %w", errs.ErrValidation)
-	}
-
-	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
-		// Both fingerprints are public and together tell a rotated host key
-		// from an interception, which is the operator's next decision.
-		if got := secondField(line); got != expected {
-			return fmt.Errorf("SSH host key fingerprint mismatch: scanned %s, pinned %s: %w", got, expected, errs.ErrValidation)
-		}
-	}
-
-	return nil
-}
-
-// runTool runs one ssh tool and returns its trimmed stdout. A start failure
-// is classified through safeexec.WrapError like every other adapter process.
-func runTool(ctx context.Context, bin string, args ...string) (string, error) {
-	cmd := safeexec.Command(ctx, bin, args...)
-
-	// Only stdout is the value: it becomes a key or known_hosts file, so a
-	// warning on stderr must not end up inside it.
-	var stderr bytes.Buffer
-
-	cmd.Stderr = &stderr
-
-	out, err := cmd.Output()
-	if err != nil {
-		wrapped := safeexec.WrapError(err, bin, safeexec.FirstArg(args))
-		if stderr.Len() == 0 {
-			return "", wrapped
-		}
-
-		return "", fmt.Errorf("%w\n%s", wrapped, safeexec.RedactKeyMaterial(stderr.Bytes()))
-	}
-
-	return strings.TrimRight(string(out), "\n"), nil
-}
-
-func secondField(line string) string {
-	fields := strings.Fields(line)
-	if len(fields) < 2 {
-		return ""
-	}
-
-	return fields[1]
-}
-
-func ensureTrailingNewline(value string) string {
-	if strings.HasSuffix(value, "\n") {
-		return value
-	}
-
-	return value + "\n"
 }

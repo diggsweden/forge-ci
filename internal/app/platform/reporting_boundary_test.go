@@ -23,6 +23,7 @@ var errReportingBoundary = errors.New("owned reporting failure")
 
 type reportingSink struct {
 	*fakeoutputsink.Sink
+
 	events *[]string
 	fail   bool
 }
@@ -38,6 +39,7 @@ func (s *reportingSink) Set(ctx context.Context, key, value string) error {
 
 type reportingWriter struct {
 	bytes.Buffer
+
 	events *[]string
 	fail   bool
 }
@@ -54,7 +56,7 @@ func (w *reportingWriter) Write(body []byte) (int, error) {
 	return w.Buffer.Write(body)
 }
 
-func TestPlatformReportingBoundary_ExactOutputAndCommitOrder(t *testing.T) { //nolint:gocognit // both public commands share the sink-first contract, with independent writer and sink failures.
+func TestPlatformReportingBoundary_ExactOutputAndCommitOrder(t *testing.T) {
 	t.Parallel()
 
 	for _, checkout := range []bool{false, true} {
@@ -190,7 +192,7 @@ func TestFetchBaseBoundary_AbsenceErrorsAndForwarding(t *testing.T) {
 		var out bytes.Buffer
 
 		_, err := appplatform.Checkout(t.Context(), checkoutDestinations(), checkoutGitFactory(git), sink, &out, in)
-		if state == "present" || state == "absent" { //nolint:nestif // positive existence and typed absence intentionally take different fetch paths.
+		if state == "present" || state == "absent" {
 			if err != nil || !git.fetchedTags {
 				t.Fatalf("state=%s err=%v", state, err)
 			}

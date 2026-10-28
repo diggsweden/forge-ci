@@ -139,7 +139,6 @@ func TestSparseCheckout_Local(t *testing.T) {
 	for _, step := range []func() error{
 		func() error { return r.InitWithObjectFormat(ctx, "sha1") },
 		func() error { return r.RemoteAdd(ctx, "origin", src.Dir) },
-		func() error { return r.EnablePartialClone(ctx) },
 		func() error { return r.SparseInit(ctx, true) },
 		func() error { return r.SparseSet(ctx, []string{"keep"}) },
 		func() error {
@@ -150,12 +149,6 @@ func TestSparseCheckout_Local(t *testing.T) {
 		if err := step(); err != nil {
 			t.Fatal(err)
 		}
-	}
-
-	// Partial-clone config applied (a file:// server ignores the filter and
-	// fetches fully — harmless; the working-tree result below is the contract).
-	if got := strings.TrimSpace(gitIn(t, target, "config", "--get", "remote.origin.partialclonefilter")); got != "blob:none" {
-		t.Errorf("partialclonefilter = %q, want blob:none", got)
 	}
 
 	if _, err := os.Stat(filepath.Join(target, "keep", "file.txt")); err != nil {

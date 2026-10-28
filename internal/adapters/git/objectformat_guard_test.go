@@ -18,7 +18,7 @@ func TestInitObjectFormat_ExplicitSHA1IgnoresDefaults(t *testing.T) {
 	root := t.TempDir()
 	record := filepath.Join(root, "args")
 	binary := filepath.Join(root, "git-fixture")
-	require.NoError(t, os.WriteFile(binary, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$RECORDED_GIT_ARGS\"\n"), 0o700)) //nolint:gosec // owned executable fixture, never a real Git binary.
+	require.NoError(t, os.WriteFile(binary, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$RECORDED_GIT_ARGS\"\n"), 0o700))
 	t.Setenv("RECORDED_GIT_ARGS", record)
 	t.Setenv("GIT_DEFAULT_HASH", "sha256")
 
