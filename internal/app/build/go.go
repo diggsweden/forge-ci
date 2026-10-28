@@ -74,7 +74,7 @@ func GoDownload(ctx context.Context, tool GoTool, w, stderr io.Writer, dir strin
 }
 
 // GoTest runs `go test ./...` with optional build tags.
-func GoTest(ctx context.Context, tool GoTool, w, stderr io.Writer, in GoTestInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func GoTest(ctx context.Context, tool GoTool, out, stderr io.Writer, in GoTestInput) error {
 	args := []string{"test"}
 	if strings.TrimSpace(in.BuildTags) != "" {
 		args = append(args, "-tags", strings.TrimSpace(in.BuildTags))
@@ -82,11 +82,11 @@ func GoTest(ctx context.Context, tool GoTool, w, stderr io.Writer, in GoTestInpu
 
 	args = append(args, "./...")
 
-	return tool.Run(ctx, GoRunInput{Dir: defaultGoDir(in.Dir), Args: args, Stdout: w, Stderr: stderr})
+	return tool.Run(ctx, GoRunInput{Dir: defaultGoDir(in.Dir), Args: args, Stdout: out, Stderr: stderr})
 }
 
 // GoBuildSBOM generates a build-layer SBOM into the canonical forge-ci path.
-func GoBuildSBOM(ctx context.Context, tool CycloneDXGoModTool, w, stderr io.Writer, in GoBuildSBOMInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func GoBuildSBOM(ctx context.Context, tool CycloneDXGoModTool, out, stderr io.Writer, in GoBuildSBOMInput) error {
 	dir := defaultGoDir(in.Dir)
 
 	name := firstNonEmpty(in.ArtifactName, in.BinaryName)
@@ -107,7 +107,7 @@ func GoBuildSBOM(ctx context.Context, tool CycloneDXGoModTool, w, stderr io.Writ
 	return tool.Run(ctx, GoRunInput{
 		Dir:    dir,
 		Args:   []string{"mod", "-json", "-output", filepath.Join(sbomDir, "bom.json"), "."},
-		Stdout: w,
+		Stdout: out,
 		Stderr: stderr,
 	})
 }
@@ -132,7 +132,7 @@ type GoBuildBinariesInput struct {
 // GoBuildBinaries cross-compiles one binary per target platform into dist/.
 //
 //nolint:cyclop // matrix loop: GOOS×GOARCH×ldflags×outputName combinations.
-func GoBuildBinaries(ctx context.Context, tool GoTool, w, stderr io.Writer, in GoBuildBinariesInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func GoBuildBinaries(ctx context.Context, tool GoTool, out, stderr io.Writer, in GoBuildBinariesInput) error {
 	dir := defaultGoDir(in.Dir)
 
 	binaryName := strings.TrimSpace(in.BinaryName)
@@ -218,7 +218,7 @@ func GoBuildBinaries(ctx context.Context, tool GoTool, w, stderr io.Writer, in G
 		goos, goarch, _ := parseGoPlatform(platform)
 
 		outDir := filepath.Join(dist.Name(), goos+"-"+goarch)
-		if err := dist.MkdirAll(goos+"-"+goarch, 0o755); err != nil { //nolint:gosec // release binary dir read by upload-artifact step.
+		if err := dist.MkdirAll(goos+"-"+goarch, 0o755); err != nil {
 			return fmt.Errorf("mkdir %s: %w", outDir, err)
 		}
 
@@ -227,7 +227,7 @@ func GoBuildBinaries(ctx context.Context, tool GoTool, w, stderr io.Writer, in G
 			outName += extExe
 		}
 
-		_, _ = fmt.Fprintf(w, "Building %s/%s -> %s\n", goos, goarch, filepath.Join(outDir, outName))
+		_, _ = fmt.Fprintf(out, "Building %s/%s -> %s\n", goos, goarch, filepath.Join(outDir, outName))
 
 		args := []string{subCmdBuild, "-trimpath", "-buildvcs=false", "-ldflags", baseLDFlags}
 		if strings.TrimSpace(in.BuildTags) != "" {
@@ -239,7 +239,7 @@ func GoBuildBinaries(ctx context.Context, tool GoTool, w, stderr io.Writer, in G
 			Dir:    dir,
 			Env:    []string{"CGO_ENABLED=0", "GOOS=" + goos, "GOARCH=" + goarch},
 			Args:   args,
-			Stdout: w,
+			Stdout: out,
 			Stderr: stderr,
 		}); err != nil {
 			return err
@@ -300,7 +300,7 @@ func resolveGoMetadata(in GoMetadataInput) (goMetadata, error) {
 
 // GoMetadata reads go.mod metadata and emits the build contract used by the Go
 // build workflow: binary-name, version, and module.
-func GoMetadata(ctx context.Context, sink ci.OutputSink, w io.Writer, in GoMetadataInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func GoMetadata(ctx context.Context, sink ci.OutputSink, writer io.Writer, in GoMetadataInput) error {
 	meta, err := resolveGoMetadata(in)
 	if err != nil {
 		return err
@@ -328,7 +328,7 @@ func GoMetadata(ctx context.Context, sink ci.OutputSink, w io.Writer, in GoMetad
 		}
 	}
 
-	_, _ = fmt.Fprintf(w, "Binary: %s\nModule: %s\nVersion: %s\n", binaryName, module, version)
+	_, _ = fmt.Fprintf(writer, "Binary: %s\nModule: %s\nVersion: %s\n", binaryName, module, version)
 
 	return nil
 }

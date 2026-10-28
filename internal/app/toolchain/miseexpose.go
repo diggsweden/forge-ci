@@ -26,6 +26,7 @@ type MiseRunner interface {
 // Root selection must reach mise itself, not just our evidence readers.
 type rootedMiseRunner struct {
 	MiseRunner
+
 	root string
 }
 
@@ -48,7 +49,7 @@ type ExposeMiseToolsInput struct {
 // The complete selection is preflighted before publishing PATH or creating links.
 // Existing same-file destinations are retained; all other occupied names refuse.
 // Absolute sources and source symlinks are supported, not content-authenticated.
-func ExposeMiseTools(ctx context.Context, runner MiseRunner, out io.Writer, in ExposeMiseToolsInput) error { //nolint:cyclop // evidence and both enumerations precede exposure.
+func ExposeMiseTools(ctx context.Context, runner MiseRunner, out io.Writer, in ExposeMiseToolsInput) error {
 	if runner == nil {
 		return fmt.Errorf("mise runner is required: %w", errs.ErrUsage)
 	}
@@ -139,7 +140,7 @@ func resolveBinHome(value string) (string, error) {
 	return filepath.Join(home, ".local", "bin"), nil
 }
 
-func resolveCargoBinDir(ctx context.Context, runner MiseRunner, root string, locked bool) (string, error) { //nolint:cyclop // optional rustup evidence, locked invocation and returned executable all need validation.
+func resolveCargoBinDir(ctx context.Context, runner MiseRunner, root string, locked bool) (string, error) {
 	configs, _, err := readMiseConfigs(root)
 	if err != nil {
 		return "", err
@@ -217,106 +218,118 @@ func exposeMiseBinPaths(dirs []string, binHome, pathFile string) error {
 // an old link, even one that resembles a mise link. Symlink creation is an
 // atomic, no-clobber leaf operation through the validated destination root.
 // Later I/O failures can leave earlier new links; this is not a transaction.
-func publishMiseExecutables(selected []miseExecutable, paths []string, binHome, pathFile string) error { //nolint:cyclop,gocognit,gocyclo // complete destination preflight, including a planned PATH parent, precedes publication.
-	for _, path := range paths {
-		if !validMiseSourcePath(path) {
-			return fmt.Errorf("invalid PATH entry %q: %w", path, errs.ErrValidation)
-		}
-	}
-
-	if pathFile == "" {
-		return fmt.Errorf("path-file is required: %w", errs.ErrUsage)
-	}
-
-	binHome, err := filepath.Abs(binHome)
+func publishMiseExecutables(selected []miseExecutable, paths []string, binHome, pathFile string) error {
+	binHome, pathFile, err := resolveMiseDestinations(paths, binHome, pathFile)
 	if err != nil {
 		return err
 	}
 
-	pathFile, err = filepath.Abs(pathFile)
+	dest, err := openMiseDestinations(binHome, pathFile)
+	defer dest.close()
+
 	if err != nil {
 		return err
 	}
 
-	if binHome == pathFile || strings.HasPrefix(binHome, pathFile+string(filepath.Separator)) {
-		return fmt.Errorf("PATH file overlaps bin home: %w", errs.ErrValidation)
-	}
-
-	binRoot, err := pathsafe.OpenRoot(binHome)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("open bin home: %w", err)
-	}
-
-	defer func() {
-		if binRoot != nil {
-			_ = binRoot.Close()
-		}
-	}()
-
-	pathRoot := binRoot
-	if filepath.Dir(pathFile) != binHome {
-		pathRoot, err = pathsafe.OpenRoot(filepath.Dir(pathFile))
-		if err != nil {
-			return fmt.Errorf("open PATH parent: %w", err)
-		}
-		defer func() { _ = pathRoot.Close() }()
-	}
-
-	var pathInfo os.FileInfo
-	if pathRoot != nil {
-		pathInfo, err = pathRoot.Lstat(filepath.Base(pathFile))
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("inspect PATH file: %w", err)
-		}
-
-		if pathInfo != nil && !pathInfo.Mode().IsRegular() {
-			return fmt.Errorf("PATH destination must be a regular file: %w", errs.ErrValidation)
-		}
-	}
-
-	for index := range selected {
-		executable := &selected[index]
-		if pathFile == filepath.Join(binHome, executable.name) || (pathInfo != nil && os.SameFile(pathInfo, executable.info)) {
-			return fmt.Errorf("PATH file overlaps executable %q: %w", executable.name, errs.ErrValidation)
-		}
-
-		if binRoot != nil {
-			executable.exists, err = existingMiseDestination(binRoot, *executable)
-			if err != nil {
-				return err
-			}
-		}
+	if err = markExistingMiseDestinations(selected, dest.binRoot, binHome, pathFile, dest.pathInfo); err != nil {
+		return err
 	}
 
 	if len(paths) == 0 {
 		return nil
 	}
 
-	if pathRoot == nil {
+	return dest.publish(selected, paths)
+}
+
+// miseDestinations are the bin home and PATH file parent as opened during
+// preflight. Either may still be missing: publication creates the bin home
+// only after the complete preflight.
+type miseDestinations struct {
+	binHome, pathFile string
+	binRoot, pathRoot *os.Root
+	ownPathRoot       bool
+	pathInfo          os.FileInfo
+}
+
+// openMiseDestinations always returns destinations the caller closes, also
+// on error.
+func openMiseDestinations(binHome, pathFile string) (*miseDestinations, error) {
+	dest := &miseDestinations{binHome: binHome, pathFile: pathFile}
+
+	binRoot, err := pathsafe.OpenRoot(binHome)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return dest, fmt.Errorf("open bin home: %w", err)
+	}
+
+	dest.binRoot = binRoot
+	dest.pathRoot = binRoot
+
+	if filepath.Dir(pathFile) != binHome {
+		dest.pathRoot, err = pathsafe.OpenRoot(filepath.Dir(pathFile))
+		if err != nil {
+			return dest, fmt.Errorf("open PATH parent: %w", err)
+		}
+
+		dest.ownPathRoot = true
+	}
+
+	if dest.pathRoot == nil {
+		return dest, nil
+	}
+
+	dest.pathInfo, err = dest.pathRoot.Lstat(filepath.Base(pathFile))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return dest, fmt.Errorf("inspect PATH file: %w", err)
+	}
+
+	if dest.pathInfo != nil && !dest.pathInfo.Mode().IsRegular() {
+		return dest, fmt.Errorf("PATH destination must be a regular file: %w", errs.ErrValidation)
+	}
+
+	return dest, nil
+}
+
+func (d *miseDestinations) close() {
+	if d.ownPathRoot && d.pathRoot != nil {
+		_ = d.pathRoot.Close()
+	}
+
+	if d.binRoot != nil {
+		_ = d.binRoot.Close()
+	}
+}
+
+// publish appends the PATH entries and links every executable not already
+// present, creating the bin home if needed.
+func (d *miseDestinations) publish(selected []miseExecutable, paths []string) error {
+	var err error
+
+	if d.pathRoot == nil {
 		// PATH directly inside a new bin home shares its planned creation,
-		// but only after the complete source/destination preflight above.
-		binRoot, err = pathsafe.MkdirRoot(binHome, 0o755)
+		// but only after the complete source/destination preflight.
+		d.binRoot, err = pathsafe.MkdirRoot(d.binHome, 0o755)
 		if err != nil {
 			return fmt.Errorf("create bin home for PATH: %w", err)
 		}
 
-		pathRoot = binRoot
+		d.pathRoot = d.binRoot
 	}
 
 	flags := os.O_APPEND | os.O_WRONLY
-	if pathInfo == nil {
+	if d.pathInfo == nil {
 		flags |= os.O_CREATE | os.O_EXCL
 	}
 
-	pathOutput, err := pathRoot.OpenFile(filepath.Base(pathFile), flags, 0o644)
+	pathOutput, err := d.pathRoot.OpenFile(filepath.Base(d.pathFile), flags, 0o644)
 	if err != nil {
 		return fmt.Errorf("open PATH file: %w", err)
 	}
 
 	defer func() { _ = pathOutput.Close() }()
 
-	if binRoot == nil {
-		binRoot, err = pathsafe.MkdirRoot(binHome, 0o755)
+	if d.binRoot == nil {
+		d.binRoot, err = pathsafe.MkdirRoot(d.binHome, 0o755)
 		if err != nil {
 			return fmt.Errorf("create bin home: %w", err)
 		}
@@ -327,7 +340,7 @@ func publishMiseExecutables(selected []miseExecutable, paths []string, binHome, 
 			continue
 		}
 
-		if err = binRoot.Symlink(executable.path, executable.name); err != nil {
+		if err = d.binRoot.Symlink(executable.path, executable.name); err != nil {
 			return fmt.Errorf("create executable link %q: %w", executable.name, err)
 		}
 	}
@@ -335,6 +348,60 @@ func publishMiseExecutables(selected []miseExecutable, paths []string, binHome, 
 	_, writeErr := pathOutput.WriteString(strings.Join(paths, "\n") + "\n")
 	if err = errors.Join(writeErr, pathOutput.Close()); err != nil {
 		return fmt.Errorf("append exposed paths: %w", err)
+	}
+
+	return nil
+}
+
+// resolveMiseDestinations validates the PATH entries and returns the absolute
+// bin home and PATH file, which must not overlap.
+func resolveMiseDestinations(paths []string, binHome, pathFile string) (string, string, error) {
+	for _, path := range paths {
+		if !validMiseSourcePath(path) {
+			return "", "", fmt.Errorf("invalid PATH entry %q: %w", path, errs.ErrValidation)
+		}
+	}
+
+	if pathFile == "" {
+		return "", "", fmt.Errorf("path-file is required: %w", errs.ErrUsage)
+	}
+
+	binHome, err := filepath.Abs(binHome)
+	if err != nil {
+		return "", "", err
+	}
+
+	pathFile, err = filepath.Abs(pathFile)
+	if err != nil {
+		return "", "", err
+	}
+
+	if binHome == pathFile || strings.HasPrefix(binHome, pathFile+string(filepath.Separator)) {
+		return "", "", fmt.Errorf("PATH file overlaps bin home: %w", errs.ErrValidation)
+	}
+
+	return binHome, pathFile, nil
+}
+
+// markExistingMiseDestinations refuses a PATH file that is one of the
+// executables and records which executables already have a link.
+func markExistingMiseDestinations(selected []miseExecutable, binRoot *os.Root, binHome, pathFile string, pathInfo os.FileInfo) error {
+	for index := range selected {
+		executable := &selected[index]
+		if pathFile == filepath.Join(binHome, executable.name) || (pathInfo != nil && os.SameFile(pathInfo, executable.info)) {
+			return fmt.Errorf("PATH file overlaps executable %q: %w", executable.name, errs.ErrValidation)
+		}
+
+		if binRoot == nil {
+			continue
+		}
+
+		exists, err := existingMiseDestination(binRoot, *executable)
+		if err != nil {
+			return err
+		}
+
+		executable.exists = exists
 	}
 
 	return nil

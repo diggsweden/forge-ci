@@ -38,7 +38,7 @@ type GoReleaseBuildInput struct {
 // per-forge re-encoding. The resolved metadata is threaded between steps
 // in-process, so — unlike the granular subcommands — no scalar-output round
 // trip (and thus no $CI_OUTPUT) is needed.
-func GoReleaseBuild(ctx context.Context, summarySink ci.SummarySink, goTool GoTool, sbomTool CycloneDXGoModTool, w, stderr io.Writer, in GoReleaseBuildInput) error { //nolint:varnamelen // idiomatic short names (w/in) — testing/http/io conventions, matching the sibling build funcs.
+func GoReleaseBuild(ctx context.Context, summarySink ci.SummarySink, goTool GoTool, sbomTool CycloneDXGoModTool, out, stderr io.Writer, in GoReleaseBuildInput) error {
 	meta, err := resolveGoMetadata(GoMetadataInput{
 		Dir:             in.Dir,
 		ArtifactName:    in.ArtifactName,
@@ -50,20 +50,20 @@ func GoReleaseBuild(ctx context.Context, summarySink ci.SummarySink, goTool GoTo
 		return err
 	}
 
-	_, _ = fmt.Fprintf(w, "Go release build: binary=%s module=%s version=%s\n", meta.BinaryName, meta.Module, meta.Version)
+	_, _ = fmt.Fprintf(out, "Go release build: binary=%s module=%s version=%s\n", meta.BinaryName, meta.Module, meta.Version)
 
-	if err := GoDownload(ctx, goTool, w, stderr, in.Dir); err != nil {
+	if err := GoDownload(ctx, goTool, out, stderr, in.Dir); err != nil {
 		return fmt.Errorf("download dependencies: %w", err)
 	}
 
 	if !in.SkipTests {
-		if err := GoTest(ctx, goTool, w, stderr, GoTestInput{Dir: in.Dir, BuildTags: in.BuildTags}); err != nil {
+		if err := GoTest(ctx, goTool, out, stderr, GoTestInput{Dir: in.Dir, BuildTags: in.BuildTags}); err != nil {
 			return fmt.Errorf("go test: %w", err)
 		}
 	}
 
 	if in.EnableBuildSBOM {
-		if err := GoBuildSBOM(ctx, sbomTool, w, stderr, GoBuildSBOMInput{
+		if err := GoBuildSBOM(ctx, sbomTool, out, stderr, GoBuildSBOMInput{
 			Dir:          in.Dir,
 			ArtifactName: in.ArtifactName,
 			BinaryName:   meta.BinaryName,
@@ -72,7 +72,7 @@ func GoReleaseBuild(ctx context.Context, summarySink ci.SummarySink, goTool GoTo
 		}
 	}
 
-	if err := GoBuildBinaries(ctx, goTool, w, stderr, GoBuildBinariesInput{
+	if err := GoBuildBinaries(ctx, goTool, out, stderr, GoBuildBinariesInput{
 		Dir:         in.Dir,
 		BinaryName:  meta.BinaryName,
 		BuildTags:   in.BuildTags,

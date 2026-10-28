@@ -34,7 +34,7 @@ func (w *androidTaskWriter) Write(body []byte) (int, error) {
 	return w.buf.Write(body)
 }
 
-func TestAndroidReleaseBuild_SelectedTaskPreflight(t *testing.T) { //nolint:gocognit // refusals and precedence controls share one fully valid signed fixture and effect oracle.
+func TestAndroidReleaseBuild_SelectedTaskPreflight(t *testing.T) {
 	for _, tc := range []struct {
 		name, override, module string
 		includeAAB, refuse     bool
@@ -50,7 +50,7 @@ func TestAndroidReleaseBuild_SelectedTaskPreflight(t *testing.T) { //nolint:goco
 		t.Run(tc.name, func(t *testing.T) {
 			fsys := testfs.NewReal(t)
 			wrapper := fsys.WriteFile("project/gradlew", []byte("inert wrapper; fake Gradle only\n"))
-			require.NoError(t, os.Chmod(wrapper, 0o644)) //nolint:gosec // explicit non-executable owned fixture mode.
+			require.NoError(t, os.Chmod(wrapper, 0o644))
 			fsys.WriteFile("project/gradle.properties", []byte("versionName=1.2.3\nversionCode=42\n"))
 			fsys.WriteFile("signing/caller", []byte("signing scratch canary"))
 			fsys.WriteFile("os-temp/caller", []byte("SBOM scratch canary"))
@@ -60,9 +60,9 @@ func TestAndroidReleaseBuild_SelectedTaskPreflight(t *testing.T) { //nolint:goco
 				t.Setenv(key, "ambient-"+key)
 			}
 
-			in := appbuild.AndroidReleaseBuildInput{ //nolint:gosec // synthetic credential canaries; no host secrets.
-				ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: fsys.Path("project"), ArtifactName: "release-bundle", EnableBuildSBOM: true},
-				RepoName:            "wallet", BuildTypes: "release", GradleTasksOverride: tc.override, BuildModule: tc.module, IncludeAAB: tc.includeAAB,
+			in := appbuild.AndroidReleaseBuildInput{
+				Dir: fsys.Path("project"), ArtifactName: "release-bundle", EnableBuildSBOM: true,
+				RepoName: "wallet", BuildTypes: "release", GradleTasksOverride: tc.override, BuildModule: tc.module, IncludeAAB: tc.includeAAB,
 				EnableSigning: true, KeystoreBase64: base64.StdEncoding.EncodeToString([]byte("owned-keystore")),
 				KeystorePassword: "owned-store-password", KeyAlias: "owned-alias", KeyPassword: "owned-key-password",
 				SecretsPropertiesBase64: base64.StdEncoding.EncodeToString([]byte("token=owned-properties\n")),
@@ -109,7 +109,7 @@ func TestAndroidReleaseBuild_SelectedTaskPreflight(t *testing.T) { //nolint:goco
 					if strings.ContainsRune(arg, '\x00') {
 						t.Logf("unrepresentable argv reached fake after both secret files were staged: %q", call.Args)
 
-						return errors.New("fake refuses unrepresentable argv") //nolint:err113 // synthetic native-boundary refusal, not a preflight validation error.
+						return errors.New("fake refuses unrepresentable argv")
 					}
 				}
 

@@ -73,9 +73,9 @@ func TestGoReleaseBuild_RunsFullSequenceInOrder(t *testing.T) {
 	var out bytes.Buffer
 
 	err := appbuild.GoReleaseBuild(context.Background(), summary, goTool, sbomTool, &out, &out, appbuild.GoReleaseBuildInput{
-		ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir, EnableBuildSBOM: true},
-		Version:             "1.2.3",
-		Platforms:           "linux/amd64",
+		Dir: dir, EnableBuildSBOM: true,
+		Version:   "1.2.3",
+		Platforms: "linux/amd64",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -102,9 +102,9 @@ func TestGoReleaseBuild_SkipTests(t *testing.T) {
 	var out bytes.Buffer
 
 	err := appbuild.GoReleaseBuild(context.Background(), &recordingSummarySink{}, goTool, &fakeCycloneDXGoModTool{}, &out, &out, appbuild.GoReleaseBuildInput{
-		ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir, SkipTests: true, EnableBuildSBOM: true},
-		Version:             "1.2.3",
-		Platforms:           "linux/amd64",
+		Dir: dir, SkipTests: true, EnableBuildSBOM: true,
+		Version:   "1.2.3",
+		Platforms: "linux/amd64",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -124,9 +124,9 @@ func TestGoReleaseBuild_NoBuildSBOM(t *testing.T) {
 	var out bytes.Buffer
 
 	err := appbuild.GoReleaseBuild(context.Background(), &recordingSummarySink{}, goTool, sbomTool, &out, &out, appbuild.GoReleaseBuildInput{
-		ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir, EnableBuildSBOM: false},
-		Version:             "1.2.3",
-		Platforms:           "linux/amd64",
+		Dir: dir, EnableBuildSBOM: false,
+		Version:   "1.2.3",
+		Platforms: "linux/amd64",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -149,9 +149,9 @@ func TestGoReleaseBuild_VersionFromRefName(t *testing.T) {
 
 	// No --version; the tag ref-name supplies it (v-prefix stripped).
 	err := appbuild.GoReleaseBuild(context.Background(), &recordingSummarySink{}, goTool, &fakeCycloneDXGoModTool{}, &out, &out, appbuild.GoReleaseBuildInput{
-		ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir},
-		RefName:             "v4.5.6",
-		Platforms:           "linux/amd64",
+		Dir:       dir,
+		RefName:   "v4.5.6",
+		Platforms: "linux/amd64",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -171,9 +171,9 @@ func TestGoReleaseBuild_MissingGoModFails(t *testing.T) {
 	sbomTool := &fakeCycloneDXGoModTool{}
 
 	err := appbuild.GoReleaseBuild(context.Background(), &recordingSummarySink{}, goTool, sbomTool, &bytes.Buffer{}, &bytes.Buffer{}, appbuild.GoReleaseBuildInput{
-		ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: t.TempDir()},
-		Version:             "1.2.3",
-		Platforms:           "linux/amd64",
+		Dir:       t.TempDir(),
+		Version:   "1.2.3",
+		Platforms: "linux/amd64",
 	})
 	if !errors.Is(err, errs.ErrMissingInput) {
 		t.Fatalf("err = %v, want ErrMissingInput", err)

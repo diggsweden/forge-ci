@@ -78,7 +78,7 @@ func npmScopeMismatch(name, scope string) bool {
 
 // NPMMetadata reads package.json, validates an optional scope, and emits the
 // package name/version outputs for workflow callers.
-func NPMMetadata(ctx context.Context, sink ci.OutputSink, w io.Writer, annot output.Annotator, in NPMMetadataInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func NPMMetadata(ctx context.Context, sink ci.OutputSink, writer io.Writer, annot output.Annotator, in NPMMetadataInput) error {
 	meta, err := resolveNPMMetadata(in)
 	if err != nil {
 		return err
@@ -87,7 +87,7 @@ func NPMMetadata(ctx context.Context, sink ci.OutputSink, w io.Writer, annot out
 	if npmScopeMismatch(meta.Name, in.PackageScope) {
 		annot.Errorf("package.json name must be scoped as %s/<pkg>", in.PackageScope)
 
-		_, _ = fmt.Fprintf(w, "Found: %s\n", meta.Name)
+		_, _ = fmt.Fprintf(writer, "Found: %s\n", meta.Name)
 
 		return fmt.Errorf("package name %q does not match scope %q: %w", meta.Name, in.PackageScope, errs.ErrInvalidConfig)
 	}
@@ -103,7 +103,7 @@ func NPMMetadata(ctx context.Context, sink ci.OutputSink, w io.Writer, annot out
 		}
 	}
 
-	_, _ = fmt.Fprintf(w, "Package: %s@%s\n", meta.Name, meta.Version)
+	_, _ = fmt.Fprintf(writer, "Package: %s@%s\n", meta.Name, meta.Version)
 
 	return nil
 }
@@ -119,7 +119,7 @@ type NPMApplicationInput struct {
 // NPMApplication runs `npm run <script>` iff package.json declares the
 // named script. Empty/absent script is logged and returns nil — npm projects
 // without a build step (lots of CLI/lib packages) are valid.
-func NPMApplication(ctx context.Context, ops NPMRunner, w, stderr io.Writer, in NPMApplicationInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func NPMApplication(ctx context.Context, ops NPMRunner, out, stderr io.Writer, in NPMApplicationInput) error {
 	dir := defaultDir(in.Dir)
 
 	script := in.ScriptName
@@ -133,14 +133,14 @@ func NPMApplication(ctx context.Context, ops NPMRunner, w, stderr io.Writer, in 
 	}
 
 	if !has {
-		_, _ = fmt.Fprintf(w, "No %q script in package.json; skipping build step\n", script)
+		_, _ = fmt.Fprintf(out, "No %q script in package.json; skipping build step\n", script)
 
 		return nil
 	}
 
-	_, _ = fmt.Fprintf(w, "Running %q npm script...\n", script)
+	_, _ = fmt.Fprintf(out, "Running %q npm script...\n", script)
 
-	if err := ops.RunInherit(ctx, dir, w, stderr, "run", script); err != nil {
+	if err := ops.RunInherit(ctx, dir, out, stderr, "run", script); err != nil {
 		return err
 	}
 
@@ -201,10 +201,10 @@ func preflightNPMScript(dir, name string) error {
 
 // NPMPack runs `npm pack --json`, validates the machine-readable result, and
 // emits the created tarball filename.
-func NPMPack(ctx context.Context, ops NPMOps, sink ci.OutputSink, w, stderr io.Writer, in NPMMetadataInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func NPMPack(ctx context.Context, ops NPMOps, sink ci.OutputSink, writer, stderr io.Writer, in NPMMetadataInput) error {
 	dir := defaultDir(in.Dir)
 
-	_, _ = fmt.Fprintln(w, "Running npm pack...")
+	_, _ = fmt.Fprintln(writer, "Running npm pack...")
 
 	out, errOut, err := ops.Run(ctx, dir, "pack", "--json")
 	if errOut != "" {
@@ -228,7 +228,7 @@ func NPMPack(ctx context.Context, ops NPMOps, sink ci.OutputSink, w, stderr io.W
 		return fmt.Errorf("set tarball: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(w, "Created tarball: %s\n", filename)
+	_, _ = fmt.Fprintf(writer, "Created tarball: %s\n", filename)
 
 	return nil
 }

@@ -49,7 +49,7 @@ type MavenReleaseBuildInput struct {
 // MavenInstall installs the project (and its modules) to the local repository
 // so multi-module builds resolve sibling modules: `mvn $CLI_OPTS install
 // -DskipTests`.
-func MavenInstall(ctx context.Context, ops MavenOps, cliOpts []string, w, stderr io.Writer) error { //nolint:varnamelen // idiomatic short names (w) — testing/http/io conventions.
+func MavenInstall(ctx context.Context, ops MavenOps, cliOpts []string, w, stderr io.Writer) error {
 	args := make([]string, 0, len(cliOpts)+2)
 	args = append(args, cliOpts...)
 	args = append(args, "install", "-DskipTests")
@@ -59,7 +59,7 @@ func MavenInstall(ctx context.Context, ops MavenOps, cliOpts []string, w, stderr
 
 // MavenBuildSBOM generates an aggregate Build SBOM via the pinned
 // cyclonedx-maven-plugin.
-func MavenBuildSBOM(ctx context.Context, ops MavenOps, cliOpts []string, toolVersion string, w, stderr io.Writer) error { //nolint:varnamelen // idiomatic short names (w) — testing/http/io conventions.
+func MavenBuildSBOM(ctx context.Context, ops MavenOps, cliOpts []string, toolVersion string, out, stderr io.Writer) error {
 	if toolVersion == "" {
 		return fmt.Errorf("SBOM tool version is required (set --sbom-tool-version or $CYCLONEDX_MAVEN_VERSION): %w", errs.ErrUsage)
 	}
@@ -68,7 +68,7 @@ func MavenBuildSBOM(ctx context.Context, ops MavenOps, cliOpts []string, toolVer
 	args = append(args, cliOpts...)
 	args = append(args, "org.cyclonedx:cyclonedx-maven-plugin:"+toolVersion+":makeAggregateBom")
 
-	return ops.RunInherit(ctx, w, stderr, args...)
+	return ops.RunInherit(ctx, out, stderr, args...)
 }
 
 // mavenDeps is the collaborator set the maven build steps share: the summary
@@ -94,9 +94,7 @@ type mavenDeps struct {
 // (Design Rule 1). mvn runs in the process working directory (the forge job's
 // working-directory), matching MavenOps. When enabled, the Build SBOM is a
 // mandatory release deliverable and generation failure fails the build.
-//
-//nolint:cyclop,varnamelen // linear preflight/install/expand/build/report sequence; idiomatic w/in writer/input names.
-func MavenReleaseBuild(ctx context.Context, summarySink ci.SummarySink, ops MavenOps, w, stderr io.Writer, in MavenReleaseBuildInput) error {
+func MavenReleaseBuild(ctx context.Context, summarySink ci.SummarySink, ops MavenOps, out, stderr io.Writer, in MavenReleaseBuildInput) error {
 	if in.BuildType != mavenBuildTypeApp && in.BuildType != mavenBuildTypeLib {
 		return fmt.Errorf("build-type must be %q or %q, got %q: %w", mavenBuildTypeApp, mavenBuildTypeLib, in.BuildType, errs.ErrUsage)
 	}
@@ -110,7 +108,7 @@ func MavenReleaseBuild(ctx context.Context, summarySink ci.SummarySink, ops Mave
 		return err
 	}
 
-	if installErr := MavenInstall(ctx, ops, in.CLIOpts, w, stderr); installErr != nil {
+	if installErr := MavenInstall(ctx, ops, in.CLIOpts, out, stderr); installErr != nil {
 		return fmt.Errorf("mvn install: %w", installErr)
 	}
 
@@ -126,9 +124,9 @@ func MavenReleaseBuild(ctx context.Context, summarySink ci.SummarySink, ops Mave
 			meta.version, want, errs.ErrValidation)
 	}
 
-	_, _ = fmt.Fprintf(w, "Maven release build (%s): %s:%s:%s\n", in.BuildType, meta.groupID, meta.artifactID, meta.version)
+	_, _ = fmt.Fprintf(out, "Maven release build (%s): %s:%s:%s\n", in.BuildType, meta.groupID, meta.artifactID, meta.version)
 
-	deps := mavenDeps{summary: summarySink, ops: ops, w: w, stderr: stderr}
+	deps := mavenDeps{summary: summarySink, ops: ops, w: out, stderr: stderr}
 
 	if err := mavenBuildArtifact(ctx, deps, in); err != nil {
 		return err

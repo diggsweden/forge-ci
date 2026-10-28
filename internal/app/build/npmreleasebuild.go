@@ -28,8 +28,9 @@ import (
 // ReleaseBuildOptions and adds the npm-specific knobs as configuration: the
 // SBOM tool version and the build script name.
 type NPMReleaseBuildInput struct {
-	DependencyAccess *NPMDependencyAccess
 	ReleaseBuildOptions
+
+	DependencyAccess *NPMDependencyAccess
 
 	// PackageScope, when set, requires package.json's name to be scoped to it.
 	PackageScope string
@@ -74,9 +75,7 @@ type npmSBOMDeps struct {
 // pinned cyclonedx-npm SBOM tool. The tarball is left at its default
 // <name>-<version>.tgz path for the forge job to upload by glob, so no scalar
 // output (and no $CI_OUTPUT) is needed.
-//
-//nolint:varnamelen // idiomatic short names (w/in) — testing/http/io conventions, matching the sibling build funcs.
-func NPMReleaseBuild(ctx context.Context, summarySink ci.SummarySink, npmRunner, npxRunner NPMRunner, annot output.Annotator, w, stderr io.Writer, in NPMReleaseBuildInput) error { //nolint:cyclop // metadata, tool steps and evidence each have distinct failure boundaries.
+func NPMReleaseBuild(ctx context.Context, summarySink ci.SummarySink, npmRunner, npxRunner NPMRunner, annot output.Annotator, out, stderr io.Writer, in NPMReleaseBuildInput) error { //nolint:cyclop // metadata, tool steps and evidence each have distinct failure boundaries.
 	in.SBOMToolVersion = strings.TrimSpace(in.SBOMToolVersion)
 	if in.EnableBuildSBOM && !domainversion.IsStableSemverTag("v"+in.SBOMToolVersion) {
 		return fmt.Errorf("SBOM tool version must be an exact stable version: %w", errs.ErrUsage)
@@ -86,6 +85,7 @@ func NPMReleaseBuild(ctx context.Context, summarySink ci.SummarySink, npmRunner,
 	if err != nil {
 		return err
 	}
+
 	if expected := strings.TrimPrefix(in.ExpectVersion, "v"); expected != "" && meta.Version != expected {
 		return fmt.Errorf("package.json declares version %q, but the release requires %q; the release commit must already carry that version: %w", meta.Version, expected, errs.ErrValidation)
 	}
@@ -104,37 +104,29 @@ func NPMReleaseBuild(ctx context.Context, summarySink ci.SummarySink, npmRunner,
 	}
 	// Check only the selected script now; NPMApplication still re-reads all
 	// scripts after npm ci, whose install hooks may repair unselected values.
-	if err := preflightNPMScript(dir, script); err != nil {
+	if err = preflightNPMScript(dir, script); err != nil {
 		return fmt.Errorf("preflight npm build script: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(w, "NPM release build: %s@%s\n", meta.Name, meta.Version)
+	_, _ = fmt.Fprintf(out, "NPM release build: %s@%s\n", meta.Name, meta.Version)
 
-	if err := installNPMDependencies(ctx, npmRunner, w, stderr, dir, in.DependencyAccess); err != nil {
+	if err = installNPMDependencies(ctx, npmRunner, out, stderr, dir, in.DependencyAccess); err != nil {
 		return fmt.Errorf("npm ci: %w", err)
 	}
 
 	testsSkipped := in.SkipTests
 	if !in.SkipTests {
-		hasTests, err := npmHasScript(dir, "test")
+		testsSkipped, err = runNPMReleaseTests(ctx, npmRunner, out, stderr, dir)
 		if err != nil {
-			return fmt.Errorf("read npm test script: %w", err)
-		}
-		if hasTests {
-			if err := npmRunner.RunInherit(ctx, dir, w, stderr, "test"); err != nil {
-				return fmt.Errorf("npm test: %w", err)
-			}
-		} else {
-			testsSkipped = true
-			_, _ = fmt.Fprintln(w, "No test script in package.json; tests not run")
+			return err
 		}
 	}
 
-	if err := NPMApplication(ctx, npmRunner, w, stderr, NPMApplicationInput{Dir: dir, ScriptName: in.ScriptName}); err != nil {
+	if err := NPMApplication(ctx, npmRunner, out, stderr, NPMApplicationInput{Dir: dir, ScriptName: in.ScriptName}); err != nil {
 		return fmt.Errorf("npm run build: %w", err)
 	}
 
-	sbomDeps := npmSBOMDeps{summary: summarySink, npx: npxRunner, annot: annot, w: w, stderr: stderr}
+	sbomDeps := npmSBOMDeps{summary: summarySink, npx: npxRunner, annot: annot, w: out, stderr: stderr}
 	if err := npmBuildSBOMStep(ctx, sbomDeps, dir, in.EnableBuildSBOM, in.SBOMToolVersion); err != nil {
 		return err
 	}
@@ -153,6 +145,25 @@ func NPMReleaseBuild(ctx context.Context, summarySink ci.SummarySink, npmRunner,
 	}
 
 	return nil
+}
+
+func runNPMReleaseTests(ctx context.Context, runner NPMRunner, out, stderr io.Writer, dir string) (bool, error) {
+	hasTests, err := npmHasScript(dir, "test")
+	if err != nil {
+		return false, fmt.Errorf("read npm test script: %w", err)
+	}
+
+	if !hasTests {
+		_, _ = fmt.Fprintln(out, "No test script in package.json; tests not run")
+
+		return true, nil
+	}
+
+	if err := runner.RunInherit(ctx, dir, out, stderr, "test"); err != nil {
+		return false, fmt.Errorf("npm test: %w", err)
+	}
+
+	return false, nil
 }
 
 func packNPMRelease(ctx context.Context, runner NPMRunner, stderr io.Writer, dir string, meta npmPackageJSON) error { //nolint:cyclop // stage, validate reported and embedded identities, then install; no caller files change before validation.
@@ -255,7 +266,7 @@ func npmBuildSBOMStep(ctx context.Context, deps npmSBOMDeps, dir string, enabled
 	return nil
 }
 
-func npmBuildSBOM(ctx context.Context, deps npmSBOMDeps, dir, toolVersion string) error { //nolint:cyclop // validate the fresh scanner output before replacing the public SBOM.
+func npmBuildSBOM(ctx context.Context, deps npmSBOMDeps, dir, toolVersion string) error {
 	version := strings.TrimSpace(toolVersion)
 	if version == "" {
 		return fmt.Errorf("SBOM tool version is required (set --sbom-tool-version or $CYCLONEDX_VERSION): %w", errs.ErrUsage)

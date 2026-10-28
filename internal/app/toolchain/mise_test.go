@@ -55,7 +55,7 @@ func TestInstallMise_DownloadsVerifiesAndInstalls(t *testing.T) {
 		t.Fatalf("installPath = %q", installPath)
 	}
 
-	body, err := os.ReadFile(installPath) //nolint:gosec // test fixture path.
+	body, err := os.ReadFile(installPath)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -64,32 +64,32 @@ func PRSummary(ctx context.Context, sink ci.SummarySink, in PRSummaryInput) erro
 
 	swift := get(pipeline.TargetSwift)
 
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var builder strings.Builder
 
-	_, _ = fmt.Fprintf(&b, "# Pull Request Summary\n\n")
-	_, _ = fmt.Fprintf(&b, "## Overview\n")
-	_, _ = fmt.Fprintf(&b, "| Property | Value |\n")
-	_, _ = fmt.Fprintf(&b, "|----------|-------|\n")
-	_, _ = fmt.Fprintf(&b, "| **Project Type** | `%s` |\n", domainsummary.SanitizeCell(in.ProjectType))
-	_, _ = fmt.Fprintf(&b, "| **Branch** | `%s` |\n", domainsummary.SanitizeCell(in.Branch))
-	_, _ = fmt.Fprintf(&b, "| **Commit** | `%s` |\n", domainsummary.SanitizeCell(short))
-	_, _ = fmt.Fprintf(&b, "| **Checked By** | @%s |\n", domainsummary.SanitizeCell(in.Actor))
-	_, _ = fmt.Fprintf(&b, "| **Checked At** | %s |\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
-	_, _ = fmt.Fprintf(&b, "\n## Quality Check Status\n")
-	_, _ = fmt.Fprintf(&b, "| Check | Status |\n")
+	_, _ = fmt.Fprintf(&builder, "# Pull Request Summary\n\n")
+	_, _ = fmt.Fprintf(&builder, "## Overview\n")
+	_, _ = fmt.Fprintf(&builder, "| Property | Value |\n")
+	_, _ = fmt.Fprintf(&builder, "|----------|-------|\n")
+	_, _ = fmt.Fprintf(&builder, "| **Project Type** | `%s` |\n", domainsummary.SanitizeCell(in.ProjectType))
+	_, _ = fmt.Fprintf(&builder, "| **Branch** | `%s` |\n", domainsummary.SanitizeCell(in.Branch))
+	_, _ = fmt.Fprintf(&builder, "| **Commit** | `%s` |\n", domainsummary.SanitizeCell(short))
+	_, _ = fmt.Fprintf(&builder, "| **Checked By** | @%s |\n", domainsummary.SanitizeCell(in.Actor))
+	_, _ = fmt.Fprintf(&builder, "| **Checked At** | %s |\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
+	_, _ = fmt.Fprintf(&builder, "\n## Quality Check Status\n")
+	_, _ = fmt.Fprintf(&builder, "| Check | Status |\n")
 
-	_, _ = fmt.Fprintf(&b, "|-------|--------|\n")
+	_, _ = fmt.Fprintf(&builder, "|-------|--------|\n")
 	if len(in.Jobs) > 0 {
-		writeJobRows(&b, in.Jobs)
+		writeJobRows(&builder, in.Jobs)
 	} else {
-		_, _ = fmt.Fprintf(&b, "| %s | %s |\n", lintLabel, domainsummary.StatusIcon(lintResult))
-		_, _ = fmt.Fprintf(&b, "| Swift Lint | %s |\n", domainsummary.StatusIcon(swift))
+		_, _ = fmt.Fprintf(&builder, "| %s | %s |\n", lintLabel, domainsummary.StatusIcon(lintResult))
+		_, _ = fmt.Fprintf(&builder, "| Swift Lint | %s |\n", domainsummary.StatusIcon(swift))
 	}
 
-	_, _ = fmt.Fprintf(&b, "\n## Resources\n")
-	b.WriteString(resourceLine("Workflow Run", in.RunURL))
+	_, _ = fmt.Fprintf(&builder, "\n## Resources\n")
+	builder.WriteString(resourceLine("Workflow Run", in.RunURL))
 
-	return sink.Append(ctx, b.String())
+	return sink.Append(ctx, builder.String())
 }
 
 // lintEngineRan reports whether a lint-engine target actually executed (vs.

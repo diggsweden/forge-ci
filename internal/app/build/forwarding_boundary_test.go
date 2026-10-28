@@ -40,7 +40,7 @@ func ownedTree(t *testing.T, root string) map[string]string {
 
 		var body []byte
 		if info.Mode().IsRegular() {
-			body, err = os.ReadFile(path) //nolint:gosec // owned fixture only; this snapshots state, never follows entries classified as links.
+			body, err = os.ReadFile(path)
 		} else if info.Mode()&fs.ModeSymlink != 0 {
 			var target string
 
@@ -59,7 +59,7 @@ func ownedTree(t *testing.T, root string) map[string]string {
 	return state
 }
 
-func TestGoForwardingBoundary_ExactReleaseInputs(t *testing.T) { //nolint:gocognit // two precedence cases assert every field of the complete four-call sequence.
+func TestGoForwardingBoundary_ExactReleaseInputs(t *testing.T) {
 	t.Setenv("SOURCE_DATE_EPOCH", "1700000000")
 
 	for _, override := range []bool{true, false} {
@@ -70,8 +70,8 @@ func TestGoForwardingBoundary_ExactReleaseInputs(t *testing.T) { //nolint:gocogn
 			var stdout, stderr bytes.Buffer
 
 			in := appbuild.GoReleaseBuildInput{
-				ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir, ArtifactName: "release-bundle", EnableBuildSBOM: true},
-				BinaryName:          "executable", Version: "v2.3.4", RefName: "v9.8.7", Commit: "abc123def456",
+				Dir: dir, ArtifactName: "release-bundle", EnableBuildSBOM: true,
+				BinaryName: "executable", Version: "v2.3.4", RefName: "v9.8.7", Commit: "abc123def456",
 				Platforms: "linux/amd64,windows/arm64", BuildTags: "production,netgo", LDFlags: "-X main.channel=stable", MainPackage: "./cmd/service",
 			}
 			version, binary := "2.3.4", "executable"
@@ -208,7 +208,7 @@ func TestSwiftDirectoryBoundary_RequestedProjectAndErrors(t *testing.T) {
 
 	for _, stage := range []string{"listing", "format", "lint"} {
 		t.Run(stage, func(t *testing.T) {
-			cause := errors.New(stage + " sentinel") //nolint:err113 // a distinct per-stage sentinel proves dependency error identity.
+			cause := errors.New(stage + " sentinel")
 			files, format, lint := &fakeFiles{listed: "Selected.swift"}, &fakeSwiftFormat{}, &fakeSwiftLint{}
 			summary := &recordingSummarySink{}
 
@@ -258,7 +258,7 @@ func TestCargoSelectionBoundary_ExactSourceAndAmbiguousRefusal(t *testing.T) {
 	before := ownedTree(t, dir)
 	tool = &fakeCargoTool{metadata: `{"packages":[{"name":"package","version":"1.0.0","targets":[{"name":"selected","kind":["bin"]},{"name":"decoy","kind":["bin"]}]}]}`, binaryNames: []string{"selected", "decoy"}}
 
-	err = appbuild.CargoReleaseBuild(t.Context(), &recordingSummarySink{}, tool, io.Discard, io.Discard, appbuild.CargoReleaseBuildInput{ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir}, BinaryName: "only-a-rename", Version: "1.0.0"})
+	err = appbuild.CargoReleaseBuild(t.Context(), &recordingSummarySink{}, tool, io.Discard, io.Discard, appbuild.CargoReleaseBuildInput{Dir: dir, BinaryName: "only-a-rename", Version: "1.0.0"})
 	if !errors.Is(err, errs.ErrUsage) || len(tool.calls) != 1 || tool.calls[0].Args[0] != "metadata" || !reflect.DeepEqual(before, ownedTree(t, dir)) {
 		t.Fatalf("err=%v calls=%v", err, tool.calls)
 	}
@@ -269,6 +269,8 @@ func TestJVMPreflightBoundary_RequiredInputBeforeEffects(t *testing.T) {
 
 	for _, ecosystem := range []string{"maven", "gradle"} {
 		t.Run(ecosystem, func(t *testing.T) {
+			t.Parallel()
+
 			dir := newGradleDir(t)
 			if ecosystem == "maven" {
 				dir = newMavenDir(t)
@@ -283,9 +285,9 @@ func TestJVMPreflightBoundary_RequiredInputBeforeEffects(t *testing.T) {
 				err error
 			)
 			if ecosystem == "maven" {
-				err = appbuild.MavenReleaseBuild(t.Context(), summary, maven, &out, &out, appbuild.MavenReleaseBuildInput{ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir, EnableBuildSBOM: true}, BuildType: "app"})
+				err = appbuild.MavenReleaseBuild(t.Context(), summary, maven, &out, &out, appbuild.MavenReleaseBuildInput{Dir: dir, EnableBuildSBOM: true, BuildType: "app"})
 			} else {
-				err = appbuild.GradleReleaseBuild(t.Context(), summary, gradle, &out, &out, appbuild.GradleReleaseBuildInput{ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir}, Tasks: " "})
+				err = appbuild.GradleReleaseBuild(t.Context(), summary, gradle, &out, &out, appbuild.GradleReleaseBuildInput{Dir: dir, Tasks: " "})
 			}
 
 			if !errors.Is(err, errs.ErrUsage) || len(maven.runs) != 0 || len(gradle.calls) != 0 || summary.buf.Len() != 0 || out.Len() != 0 || !reflect.DeepEqual(before, ownedTree(t, dir)) {

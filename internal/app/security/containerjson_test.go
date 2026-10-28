@@ -50,14 +50,14 @@ func (f *fakeRawContainerScanTrivy) RunInherit(_ context.Context, _, _ io.Writer
 		return 1, nil
 	}
 
-	for i, arg := range args {
-		if arg == "--output" && i+1 < len(args) {
+	for index, arg := range args {
+		if arg == "--output" && index+1 < len(args) {
 			body := f.body
 			if body == "" {
 				body = `{"Results":[]}`
 			}
 
-			if err := os.WriteFile(args[i+1], []byte(body), 0o600); err != nil { //nolint:gosec,mnd // test fixture.
+			if err := os.WriteFile(args[index+1], []byte(body), 0o600); err != nil {
 				return 1, err
 			}
 		}
@@ -139,6 +139,8 @@ func TestRawContainerScan_ValidatesReportBeforeSuccessOutput(t *testing.T) {
 		{"named-null", `{"ArtifactName":"image","Results":null}`, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			path := filepath.Join(t.TempDir(), "trivy.json")
 			sink := fakeoutputsink.New(t)
 			require.NoError(t, sink.Set(t.Context(), "prior", "keep"))
@@ -284,7 +286,7 @@ func TestRawContainerScan_FailuresPublishNothing(t *testing.T) {
 	t.Run("sink refuses the path", func(t *testing.T) {
 		t.Parallel()
 
-		errSinkClosed := errors.New("output file closed") //nolint:err113 // a unique value to find in the chain.
+		errSinkClosed := errors.New("output file closed")
 		sink := &failingSink{Sink: fakeoutputsink.New(t), failKey: "result-path", err: errSinkClosed}
 
 		err := appsecurity.RawContainerScan(t.Context(), &fakeRawContainerScanTrivy{}, sink, io.Discard, io.Discard, appsecurity.RawContainerScanInput{

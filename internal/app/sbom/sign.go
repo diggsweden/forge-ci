@@ -28,26 +28,26 @@ type FileSigner interface {
 // SignAssembled signs every assembled SBOM under dir — files matching
 // *-sbom.spdx.json / *-sbom.cyclonedx.json — producing a <file>.bundle each.
 // Mode-agnostic: it runs after any assemble mode and signs whatever landed.
-func SignAssembled(ctx context.Context, signer FileSigner, dir string, w io.Writer) error { //nolint:varnamelen // idiomatic short names (w) — testing/http/io conventions.
+func SignAssembled(ctx context.Context, signer FileSigner, dir string, out io.Writer) error {
 	files, err := findAssembledSBOMs(dir)
 	if err != nil {
 		return err
 	}
 
 	if len(files) == 0 {
-		_, _ = fmt.Fprintln(w, "🔏 Signing: no assembled SBOMs found, nothing to sign")
+		_, _ = fmt.Fprintln(out, "🔏 Signing: no assembled SBOMs found, nothing to sign")
 
 		return nil
 	}
 
-	_, _ = fmt.Fprintln(w, "🔏 Signing assembled SBOMs...")
+	_, _ = fmt.Fprintln(out, "🔏 Signing assembled SBOMs...")
 
 	for _, file := range files {
 		if signErr := signer.SignFile(ctx, file); signErr != nil {
 			return fmt.Errorf("sign %s: %w", file, signErr)
 		}
 
-		_, _ = fmt.Fprintf(w, "   %s %s.bundle\n", clicolor.Check(w), file)
+		_, _ = fmt.Fprintf(out, "   %s %s.bundle\n", clicolor.Check(out), file)
 	}
 
 	return nil
@@ -71,7 +71,7 @@ func findAssembledSBOMs(dir string) ([]string, error) {
 
 	walkErr := fs.WalkDir(root.FS(), ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
-			return err //nolint:wrapcheck // walker error surfaced as-is.
+			return err
 		}
 
 		name := d.Name()

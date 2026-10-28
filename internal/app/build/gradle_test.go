@@ -61,7 +61,7 @@ func projectWithGradlew(t *testing.T) string {
 	fsys := testfs.NewReal(t)
 	fsys.WriteFile("gradlew", []byte("#!/bin/sh\nexit 0\n"))
 
-	if err := os.Chmod(fsys.Path("gradlew"), 0o755); err != nil { //nolint:gosec // test fixture
+	if err := os.Chmod(fsys.Path("gradlew"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 

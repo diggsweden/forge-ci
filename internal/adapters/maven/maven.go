@@ -10,9 +10,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/diggsweden/forge-ci/internal/safeexec"
 	"io"
 	"strings"
+
+	"github.com/diggsweden/forge-ci/internal/safeexec"
 )
 
 // Adapter wraps the mvn binary. MvnBin is overridable for tests.

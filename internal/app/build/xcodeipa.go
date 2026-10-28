@@ -41,7 +41,7 @@ func decodeXcodeExportOptions(in XcodeExportIPAInput) ([]byte, error) {
 
 // exportXcodeIPA stages the decoded export-options plist and runs
 // `xcodebuild -exportArchive` against build/app.xcarchive.
-func exportXcodeIPA(ctx context.Context, ops XcodeBuildOps, w, stderr io.Writer, body []byte) (err error) { //nolint:varnamelen // writer convention.
+func exportXcodeIPA(ctx context.Context, ops XcodeBuildOps, out, stderr io.Writer, body []byte) (err error) {
 	tempDir, err := mobileTempRoot()
 	if err != nil {
 		return err
@@ -57,7 +57,7 @@ func exportXcodeIPA(ctx context.Context, ops XcodeBuildOps, w, stderr io.Writer,
 		return fmt.Errorf("write export-options.plist: %w", writeErr)
 	}
 
-	code, err := ops.RunInherit(ctx, w, stderr,
+	code, err := ops.RunInherit(ctx, out, stderr,
 		"-exportArchive",
 		"-archivePath", "build/app.xcarchive",
 		"-exportPath", "build/export",

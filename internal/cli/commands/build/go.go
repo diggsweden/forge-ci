@@ -59,20 +59,18 @@ EXAMPLE:
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error {
 				return appbuild.GoReleaseBuild(ctx, d.SummarySink, gotool.Go{}, gotool.CycloneDXGoMod{}, os.Stderr, os.Stderr, appbuild.GoReleaseBuildInput{
-					ReleaseBuildOptions: appbuild.ReleaseBuildOptions{
-						Dir:             cmd.String(flagWorkingDir),
-						ArtifactName:    cmd.String(flagArtifactName),
-						SkipTests:       cmd.Bool(flagSkipTests),
-						EnableBuildSBOM: cmd.Bool(flagBuildSBOM),
-					},
-					BinaryName:  cmd.String(flagBinaryName),
-					Version:     cmd.String(flagVersion),
-					RefName:     cmd.String(flagRefName),
-					Commit:      cmd.String("commit"),
-					Platforms:   cmd.String(flagPlatforms),
-					BuildTags:   cmd.String(flagBuildTags),
-					LDFlags:     cmd.String("ldflags"),
-					MainPackage: cmd.String("main-package"),
+					Dir:             cmd.String(flagWorkingDir),
+					ArtifactName:    cmd.String(flagArtifactName),
+					SkipTests:       cmd.Bool(flagSkipTests),
+					EnableBuildSBOM: cmd.Bool(flagBuildSBOM),
+					BinaryName:      cmd.String(flagBinaryName),
+					Version:         cmd.String(flagVersion),
+					RefName:         cmd.String(flagRefName),
+					Commit:          cmd.String("commit"),
+					Platforms:       cmd.String(flagPlatforms),
+					BuildTags:       cmd.String(flagBuildTags),
+					LDFlags:         cmd.String("ldflags"),
+					MainPackage:     cmd.String("main-package"),
 				})
 			})
 		},
@@ -86,7 +84,7 @@ func goDownloadCmd() *cli.Command {
 		Description: `EXAMPLE:
    forge-ci build go download --working-dir .`,
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: flagWorkingDir, Value: ".", Sources: cli.EnvVars("WORKING_DIRECTORY"), Usage: usageGoModDirectory}, //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
+			&cli.StringFlag{Name: flagWorkingDir, Value: ".", Sources: cli.EnvVars("WORKING_DIRECTORY"), Usage: usageGoModDirectory},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return appbuild.GoDownload(ctx, gotool.Go{}, os.Stderr, os.Stderr, cmd.String(flagWorkingDir))
@@ -96,7 +94,7 @@ func goDownloadCmd() *cli.Command {
 
 func goMetadataCmd() *cli.Command {
 	return &cli.Command{
-		Name:  subCmdMetadata, //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
+		Name:  subCmdMetadata,
 		Usage: "read go.mod metadata and emit Go build outputs",
 		Description: `EXAMPLE:
    forge-ci build go metadata --working-dir .`,

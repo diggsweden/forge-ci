@@ -69,7 +69,7 @@ func AndroidArtifactNames(ctx context.Context, sink ci.OutputSink, stderr io.Wri
 		pairs = []kv{{"aar-name", names.AARName}, {"sbom-name", names.SBOMName}}
 	}
 
-	for _, p := range pairs { //nolint:varnamelen // idiomatic short name for an output pair.
+	for _, p := range pairs {
 		if err := sink.Set(ctx, p.k, p.v); err != nil {
 			return fmt.Errorf("set %s: %w", p.k, err)
 		}
@@ -121,7 +121,7 @@ func AndroidVersionInfo(ctx context.Context, sink ci.OutputSink, stderr io.Write
 		return sink.Set(ctx, "version-code", "unknown")
 	}
 
-	v, c := build.ParseGradleVersionFromProperties(string(data)) //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	v, c := build.ParseGradleVersionFromProperties(string(data))
 	if err := sink.Set(ctx, "version", v); err != nil {
 		return err
 	}
@@ -145,19 +145,19 @@ type AndroidGradleBuildInput struct {
 }
 
 // AndroidGradleBuild runs `./gradlew <tasks> [-x test]`. Mirrors.
-func AndroidGradleBuild(ctx context.Context, ops GradleOps, w, stderr io.Writer, in AndroidGradleBuildInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func AndroidGradleBuild(ctx context.Context, ops GradleOps, out, stderr io.Writer, in AndroidGradleBuildInput) error {
 	if strings.TrimSpace(in.Tasks) == "" {
 		return fmt.Errorf("gradle tasks are required: pass --tasks <list> or set $GRADLE_TASKS: %w", errs.ErrUsage)
 	}
 
-	_, _ = fmt.Fprintf(w, "Running Gradle tasks: %s\n", in.Tasks)
+	_, _ = fmt.Fprintf(out, "Running Gradle tasks: %s\n", in.Tasks)
 
 	args := strings.Fields(in.Tasks)
 	if in.SkipTests {
 		args = append(args, "-x", "test")
 	}
 
-	return ops.RunInherit(ctx, w, stderr, args...)
+	return ops.RunInherit(ctx, out, stderr, args...)
 }
 
 // AndroidListArtifactsInput drives AndroidListArtifacts.
@@ -171,9 +171,7 @@ type AndroidListArtifactsInput struct {
 
 // AndroidListArtifacts walks <BuildModule>/build/outputs for *.apk and
 // *.aab files and prints their absolute paths to w, one per line.
-//
-//nolint:cyclop // lists APK+AAB by build-type with conditional include/skip per pattern.
-func AndroidListArtifacts(w io.Writer, in AndroidListArtifactsInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func AndroidListArtifacts(out io.Writer, in AndroidListArtifactsInput) error {
 	if in.BuildModule == "" {
 		return fmt.Errorf("build module is required: pass --build-module <name> or set $BUILD_MODULE: %w", errs.ErrUsage)
 	}
@@ -199,13 +197,13 @@ func AndroidListArtifacts(w io.Writer, in AndroidListArtifactsInput) error { //n
 		return err
 	}
 
-	_, _ = fmt.Fprintf(w, "Built artifacts:\n")
+	_, _ = fmt.Fprintf(out, "Built artifacts:\n")
 	for _, path := range paths {
-		_, _ = fmt.Fprintln(w, filepath.Join(outputs, path))
+		_, _ = fmt.Fprintln(out, filepath.Join(outputs, path))
 	}
 
 	if len(paths) == 0 {
-		_, _ = fmt.Fprintln(w, "No artifacts found")
+		_, _ = fmt.Fprintln(out, "No artifacts found")
 	}
 
 	return nil

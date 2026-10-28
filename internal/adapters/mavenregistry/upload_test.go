@@ -49,28 +49,28 @@ func TestMavenUploadUsesResolvedAuthenticationAndExactBytes(t *testing.T) {
 
 			requests := 0
 
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 				requests++
 
-				assert.Equal(t, "/packages/org/example/demo/1.2.3/demo-1.2.3.jar", r.URL.Path)
-				assert.Equal(t, http.MethodPut, r.Method)
-				body, err := io.ReadAll(r.Body)
+				assert.Equal(t, "/packages/org/example/demo/1.2.3/demo-1.2.3.jar", request.URL.Path)
+				assert.Equal(t, http.MethodPut, request.Method)
+				body, err := io.ReadAll(request.Body)
 				assert.NoError(t, err)
 				assert.Equal(t, "fixture", string(body))
 
 				switch scheme {
 				case provider.MavenAuthServerPassword:
-					user, token, ok := r.BasicAuth()
+					user, token, ok := request.BasicAuth()
 					assert.True(t, ok)
 					assert.Equal(t, "user", user)
 					assert.Equal(t, "synthetic", token)
 				case provider.MavenAuthJobTokenHeader:
-					assert.Equal(t, "synthetic", r.Header.Get("Job-Token"))
+					assert.Equal(t, "synthetic", request.Header.Get("Job-Token"))
 				case provider.MavenAuthTokenHeader:
-					assert.Equal(t, "token synthetic", r.Header.Get("Authorization"))
+					assert.Equal(t, "token synthetic", request.Header.Get("Authorization"))
 				}
 
-				w.WriteHeader(http.StatusCreated)
+				response.WriteHeader(http.StatusCreated)
 			}))
 			defer server.Close()
 

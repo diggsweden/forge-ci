@@ -157,7 +157,7 @@ func TestInstallChangelogRenderer_InstallsThePinnedArchive(t *testing.T) {
 			}
 
 			installed := filepath.Join(binHome, testCase.backend)
-			if body, readErr := os.ReadFile(installed); readErr != nil || string(body) != rendererScript { //nolint:gosec // test-owned path.
+			if body, readErr := os.ReadFile(installed); readErr != nil || string(body) != rendererScript {
 				t.Fatalf("installed %q, %v", body, readErr)
 			}
 

@@ -21,7 +21,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/testutil/testfs"
 )
 
-func TestAndroidReleaseBuild_PreflightRefusals(t *testing.T) { //nolint:gocognit // shared table checks all effects and both fresh/seeded secret destinations.
+func TestAndroidReleaseBuild_PreflightRefusals(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		change func(*appbuild.AndroidReleaseBuildInput)
@@ -76,7 +76,7 @@ func TestAndroidReleaseBuild_PreflightRefusals(t *testing.T) { //nolint:gocognit
 
 				beforeEnv, beforeTree := os.Environ(), ownedTree(t, fsys.Root)
 				in := appbuild.AndroidReleaseBuildInput{
-					ReleaseBuildOptions:     appbuild.ReleaseBuildOptions{Dir: dir, EnableBuildSBOM: true},
+					Dir: dir, EnableBuildSBOM: true,
 					RepoName:                "test-app",
 					EnableSigning:           true,
 					KeystoreBase64:          base64.StdEncoding.EncodeToString([]byte("synthetic keystore")),
@@ -124,6 +124,7 @@ func TestAndroidReleaseBuild_PreflightRefusals(t *testing.T) { //nolint:gocognit
 
 type androidPreflightStopSink struct {
 	*fakeoutputsink.Sink
+
 	calls int
 	err   error
 }
@@ -143,7 +144,7 @@ func TestAndroidReleaseBuild_PreflightAcceptsBoundedBlobs(t *testing.T) {
 			t.Setenv("TMPDIR", fsys.MkdirAll("fallback"))
 			fsys.WriteFile("project/gradlew", []byte("inert wrapper"))
 			in := appbuild.AndroidReleaseBuildInput{
-				ReleaseBuildOptions:     appbuild.ReleaseBuildOptions{Dir: fsys.MkdirAll("project"), EnableBuildSBOM: true},
+				Dir: fsys.MkdirAll("project"), EnableBuildSBOM: true,
 				RepoName:                "test-app",
 				EnableSigning:           true,
 				KeystoreBase64:          "aw==",
@@ -173,7 +174,7 @@ func TestAndroidReleaseBuild_PreflightAcceptsBoundedBlobs(t *testing.T) {
 			}
 
 			before := ownedTree(t, fsys.Root)
-			cause := errors.New("stop before signing effects") //nolint:err113 // unique recording sink sentinel.
+			cause := errors.New("stop before signing effects")
 			sink := &androidPreflightStopSink{Sink: fakeoutputsink.New(t), err: cause}
 			ops, summary := &recordingGradle{}, &recordingSummarySink{}
 

@@ -20,6 +20,8 @@ func TestRunContextFlagNameCoverage(t *testing.T) {
 	for _, concept := range runcontext.All() {
 		for _, key := range concept.Keys() {
 			t.Run(concept.Concept+"/"+key, func(t *testing.T) {
+				t.Parallel()
+
 				root := &urfavecli.Command{Flags: []urfavecli.Flag{
 					&urfavecli.StringFlag{Name: "value", Sources: urfavecli.EnvVars(key)},
 				}}
@@ -59,6 +61,8 @@ func TestRunContextFlagExemptionFixtures(t *testing.T) {
 		{name: "mixed cienv and inline", command: "sign", flag: "value", sources: urfavecli.NewValueSourceChain(append(cienv.Repository().Chain, urfavecli.EnvVars("GITHUB_ACTOR").Chain...)...), want: []string{path + " --value reads $GITHUB_ACTOR via an inline chain"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			root := &urfavecli.Command{Commands: []*urfavecli.Command{{Name: "release", Commands: []*urfavecli.Command{{
 				Name: tc.command,
 				Flags: []urfavecli.Flag{&urfavecli.StringFlag{
@@ -75,6 +79,8 @@ func TestRunContextFlagShippedExemptionsStayNarrow(t *testing.T) {
 
 	for key, reason := range runContextFlagExemptions() {
 		t.Run(key.command+"/"+key.flag+"/"+key.key, func(t *testing.T) {
+			t.Parallel()
+
 			// Even a justified exemption must not silently survive removal of its
 			// command or name a non-owned key. The assembled-tree test proves use.
 			want := fmt.Sprintf("unused run-context exemption: %s --%s $%s", key.command, key.flag, key.key)

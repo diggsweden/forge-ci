@@ -76,16 +76,14 @@ EXAMPLE:
 			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error {
 				return appbuild.NPMReleaseBuild(ctx, d.SummarySink, &npm.Adapter{Env: environment.base}, &npm.Adapter{Bin: "npx", Env: environment.base}, deps.Annotator(cmd), os.Stderr, os.Stderr, appbuild.NPMReleaseBuildInput{
 					DependencyAccess: access,
-					ReleaseBuildOptions: appbuild.ReleaseBuildOptions{
-						Dir:             cmd.String(flagWorkingDir),
-						SkipTests:       cmd.Bool(flagSkipTests),
-						EnableBuildSBOM: cmd.Bool(flagBuildSBOM),
-					},
-					PackageScope:    cmd.String("scope"),
-					ScriptName:      cmd.String("script"),
-					SBOMToolVersion: cmd.String(flagSBOMToolVersion),
-					NodeVersion:     cmd.String("node-version"),
-					ExpectVersion:   cmd.String("expect-version"),
+					Dir:              cmd.String(flagWorkingDir),
+					SkipTests:        cmd.Bool(flagSkipTests),
+					EnableBuildSBOM:  cmd.Bool(flagBuildSBOM),
+					PackageScope:     cmd.String("scope"),
+					ScriptName:       cmd.String("script"),
+					SBOMToolVersion:  cmd.String(flagSBOMToolVersion),
+					NodeVersion:      cmd.String("node-version"),
+					ExpectVersion:    cmd.String("expect-version"),
 				})
 			})
 		},
@@ -94,7 +92,7 @@ EXAMPLE:
 
 func npmMetadataCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "metadata", //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
+		Name:  "metadata",
 		Usage: "read package.json metadata and emit CI outputs",
 		Description: `EXAMPLE:
    forge-ci build npm metadata --scope @org --working-dir .`,

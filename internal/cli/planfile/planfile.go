@@ -43,11 +43,11 @@ const EnvVar = "FORGE_CI_PLAN"
 
 // warnedPaths remembers plan paths already reported as unreadable or
 // malformed, so a broken plan warns once instead of once per flag.
-var warnedPaths sync.Map //nolint:gochecknoglobals // once-per-path warn guard.
+var warnedPaths sync.Map
 
 // loggedPaths remembers plan paths whose use has been announced, so the
 // audit line (path + content digest) appears once per run, not per flag.
-var loggedPaths sync.Map //nolint:gochecknoglobals // once-per-path audit log.
+var loggedPaths sync.Map
 
 // Chain returns fallback with a plan-file source for (scope, key)
 // resolved FIRST, giving flag > plan > env > default.

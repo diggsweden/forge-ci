@@ -73,25 +73,24 @@ func Prerequisites(ctx context.Context, sink ci.SummarySink, gitr gitInfoOps, in
 		now = time.Now()
 	}
 
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
-	if err := writeTagInfo(ctx, &b, gitr, in); err != nil {
+	var builder strings.Builder
+	if err := writeTagInfo(ctx, &builder, gitr, in); err != nil {
 		return err
 	}
 
-	if err := writeCommitInfo(ctx, &b, gitr, in); err != nil {
+	if err := writeCommitInfo(ctx, &builder, gitr, in); err != nil {
 		return err
 	}
 
-	writeConfiguration(&b, in)
-	writeSecretsStatus(&b, in)
-	writeJobStatus(&b, in)
-	writeValidationResults(&b, in)
-	_, _ = fmt.Fprintf(&b, "\n---\n*Generated at: %s*\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
+	writeConfiguration(&builder, in)
+	writeSecretsStatus(&builder, in)
+	writeJobStatus(&builder, in)
+	writeValidationResults(&builder, in)
+	_, _ = fmt.Fprintf(&builder, "\n---\n*Generated at: %s*\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
 
-	return sink.Append(ctx, b.String())
+	return sink.Append(ctx, builder.String())
 }
 
-//nolint:cyclop // enriches prereqs with one field per artifact's plan slice.
 func enrichPrerequisitesFromConfigPlan(in *PrerequisitesSummaryInput) error {
 	if strings.TrimSpace(in.ConfigPlanJSON) == "" {
 		return nil
@@ -160,12 +159,11 @@ func sortedCSV(values map[string]bool) string {
 	return strings.Join(out, ",")
 }
 
-//nolint:cyclop // tag-info renderer: one branch per known/unknown signer + repo state.
-func writeTagInfo(ctx context.Context, b *strings.Builder, gitr gitInfoOps, in PrerequisitesSummaryInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
-	_, _ = fmt.Fprintf(b, "# 📋 Release Prerequisites Validation Report\n\n")
-	_, _ = fmt.Fprintf(b, "## 🏷️ Release Tag\n")
-	_, _ = fmt.Fprintf(b, "- **Tag:** %s\n", domainsummary.InlineCode(in.TagName))
-	_, _ = fmt.Fprintf(b, "- **Type:** %s\n", in.RefType)
+func writeTagInfo(ctx context.Context, builder *strings.Builder, gitr gitInfoOps, in PrerequisitesSummaryInput) error {
+	_, _ = fmt.Fprintf(builder, "# 📋 Release Prerequisites Validation Report\n\n")
+	_, _ = fmt.Fprintf(builder, "## 🏷️ Release Tag\n")
+	_, _ = fmt.Fprintf(builder, "- **Tag:** %s\n", domainsummary.InlineCode(in.TagName))
+	_, _ = fmt.Fprintf(builder, "- **Type:** %s\n", in.RefType)
 
 	if in.RefType != provider.RefTypeTag || gitr == nil {
 		return nil
@@ -212,15 +210,15 @@ func writeTagInfo(ctx context.Context, b *strings.Builder, gitr gitInfoOps, in P
 
 	// Tag and commit metadata is written by whoever created the tag or commit,
 	// so it is rendered as literal text rather than Markdown.
-	_, _ = fmt.Fprintf(b, "- **Tagger:** %s\n", domainsummary.LiteralText(tagger))
-	_, _ = fmt.Fprintf(b, "- **Tag Date:** %s\n", domainsummary.LiteralText(date))
-	_, _ = fmt.Fprintf(b, "- **Tag Signature:** %s\n", sig)
-	_, _ = fmt.Fprintf(b, "- **Tag Message:** %s\n", domainsummary.LiteralText(msg))
+	_, _ = fmt.Fprintf(builder, "- **Tagger:** %s\n", domainsummary.LiteralText(tagger))
+	_, _ = fmt.Fprintf(builder, "- **Tag Date:** %s\n", domainsummary.LiteralText(date))
+	_, _ = fmt.Fprintf(builder, "- **Tag Signature:** %s\n", sig)
+	_, _ = fmt.Fprintf(builder, "- **Tag Message:** %s\n", domainsummary.LiteralText(msg))
 
 	return nil
 }
 
-func writeCommitInfo(ctx context.Context, b *strings.Builder, gitr gitInfoOps, in PrerequisitesSummaryInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func writeCommitInfo(ctx context.Context, builder *strings.Builder, gitr gitInfoOps, in PrerequisitesSummaryInput) error {
 	if gitr == nil || in.CommitSHA == "" {
 		return nil
 	}
@@ -242,17 +240,17 @@ func writeCommitInfo(ctx context.Context, b *strings.Builder, gitr gitInfoOps, i
 		sig = "SSH signed"
 	}
 
-	_, _ = fmt.Fprintf(b, "\n## 📦 Tagged Commit\n")
-	_, _ = fmt.Fprintf(b, "- **SHA:** %s\n", domainsummary.InlineCode(in.CommitSHA))
-	_, _ = fmt.Fprintf(b, "- **Author:** %s\n", domainsummary.LiteralText(info.Author))
-	_, _ = fmt.Fprintf(b, "- **Date:** %s\n", domainsummary.LiteralText(info.Date))
-	_, _ = fmt.Fprintf(b, "- **Signature:** %s\n", sig)
-	_, _ = fmt.Fprintf(b, "- **Message:** %s\n", domainsummary.LiteralText(info.Message))
+	_, _ = fmt.Fprintf(builder, "\n## 📦 Tagged Commit\n")
+	_, _ = fmt.Fprintf(builder, "- **SHA:** %s\n", domainsummary.InlineCode(in.CommitSHA))
+	_, _ = fmt.Fprintf(builder, "- **Author:** %s\n", domainsummary.LiteralText(info.Author))
+	_, _ = fmt.Fprintf(builder, "- **Date:** %s\n", domainsummary.LiteralText(info.Date))
+	_, _ = fmt.Fprintf(builder, "- **Signature:** %s\n", sig)
+	_, _ = fmt.Fprintf(builder, "- **Message:** %s\n", domainsummary.LiteralText(info.Message))
 
 	return nil
 }
 
-func writeConfiguration(b *strings.Builder, in PrerequisitesSummaryInput) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func writeConfiguration(builder *strings.Builder, in PrerequisitesSummaryInput) {
 	signing := "Disabled"
 	if in.SignArtifacts {
 		signing = "Enabled"
@@ -268,20 +266,20 @@ func writeConfiguration(b *strings.Builder, in PrerequisitesSummaryInput) { //no
 		buildTypes = "(unspecified)"
 	}
 
-	_, _ = fmt.Fprintf(b, "\n## ⚙️ Configuration\n")
-	_, _ = fmt.Fprintf(b, "| Setting | Value |\n")
-	_, _ = fmt.Fprintf(b, "|---------|-------|\n")
-	_, _ = fmt.Fprintf(b, "| **Project Types** | %s |\n", domainsummary.SanitizeCell(projectTypes))
-	_, _ = fmt.Fprintf(b, "| **Build Types** | %s |\n", domainsummary.SanitizeCell(buildTypes))
-	_, _ = fmt.Fprintf(b, "| **Container Registry** | %s |\n", domainsummary.SanitizeCell(in.ContainerRegistry))
-	_, _ = fmt.Fprintf(b, "| **Release Publisher** | GitHub CLI |\n")
-	_, _ = fmt.Fprintf(b, "| **GPG Signing** | %s |\n", signing)
+	_, _ = fmt.Fprintf(builder, "\n## ⚙️ Configuration\n")
+	_, _ = fmt.Fprintf(builder, "| Setting | Value |\n")
+	_, _ = fmt.Fprintf(builder, "|---------|-------|\n")
+	_, _ = fmt.Fprintf(builder, "| **Project Types** | %s |\n", domainsummary.SanitizeCell(projectTypes))
+	_, _ = fmt.Fprintf(builder, "| **Build Types** | %s |\n", domainsummary.SanitizeCell(buildTypes))
+	_, _ = fmt.Fprintf(builder, "| **Container Registry** | %s |\n", domainsummary.SanitizeCell(in.ContainerRegistry))
+	_, _ = fmt.Fprintf(builder, "| **Release Publisher** | GitHub CLI |\n")
+	_, _ = fmt.Fprintf(builder, "| **GPG Signing** | %s |\n", signing)
 }
 
-func writeSecretsStatus(b *strings.Builder, in PrerequisitesSummaryInput) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
-	_, _ = fmt.Fprintf(b, "\n## 🔑 Required Secrets Status\n\n")
-	_, _ = fmt.Fprintf(b, "| Secret | Purpose | Status |\n")
-	_, _ = fmt.Fprintf(b, "|--------|---------|--------|\n")
+func writeSecretsStatus(builder *strings.Builder, in PrerequisitesSummaryInput) {
+	_, _ = fmt.Fprintf(builder, "\n## 🔑 Required Secrets Status\n\n")
+	_, _ = fmt.Fprintf(builder, "| Secret | Purpose | Status |\n")
+	_, _ = fmt.Fprintf(builder, "|--------|---------|--------|\n")
 
 	row := func(name, purpose string, has bool) {
 		status := "✗ Missing"
@@ -289,7 +287,7 @@ func writeSecretsStatus(b *strings.Builder, in PrerequisitesSummaryInput) { //no
 			status = "✓ Available"
 		}
 
-		_, _ = fmt.Fprintf(b, "| %s | %s | %s |\n", name, purpose, status)
+		_, _ = fmt.Fprintf(builder, "| %s | %s | %s |\n", name, purpose, status)
 	}
 	if in.SignArtifacts {
 		row("RELEASE_GPG_PRIVATE_KEY", "Sign commits/artifacts", in.HasReleaseGPGPrivateKey)
@@ -315,25 +313,25 @@ func writeSecretsStatus(b *strings.Builder, in PrerequisitesSummaryInput) { //no
 	}
 }
 
-func writeJobStatus(b *strings.Builder, in PrerequisitesSummaryInput) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
-	_, _ = fmt.Fprintf(b, "\n")
+func writeJobStatus(builder *strings.Builder, in PrerequisitesSummaryInput) {
+	_, _ = fmt.Fprintf(builder, "\n")
 
 	if in.JobStatus == domainsummary.ResultSuccess {
-		_, _ = fmt.Fprintf(b, "### ✓ All selected prerequisite checks passed!\n")
-		_, _ = fmt.Fprintf(b, "Release preflight completed.\n")
+		_, _ = fmt.Fprintf(builder, "### ✓ All selected prerequisite checks passed!\n")
+		_, _ = fmt.Fprintf(builder, "Release preflight completed.\n")
 	} else {
-		_, _ = fmt.Fprintf(b, "### ✗ Prerequisites validation failed\n")
-		_, _ = fmt.Fprintf(b, "Review the failed checks before attempting release.\n")
+		_, _ = fmt.Fprintf(builder, "### ✗ Prerequisites validation failed\n")
+		_, _ = fmt.Fprintf(builder, "Review the failed checks before attempting release.\n")
 	}
 }
 
-func writeValidationResults(b *strings.Builder, in PrerequisitesSummaryInput) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
-	_, _ = fmt.Fprintf(b, "\n## ✓ Validation Results\n\n")
-	_, _ = fmt.Fprintf(b, "| Validation | Result | Details |\n")
-	_, _ = fmt.Fprintf(b, "|------------|--------|---------|\n")
+func writeValidationResults(builder *strings.Builder, in PrerequisitesSummaryInput) {
+	_, _ = fmt.Fprintf(builder, "\n## ✓ Validation Results\n\n")
+	_, _ = fmt.Fprintf(builder, "| Validation | Result | Details |\n")
+	_, _ = fmt.Fprintf(builder, "|------------|--------|---------|\n")
 
 	row := func(name, result, details string) {
-		_, _ = fmt.Fprintf(b, "| %s | %s | %s |\n", name, result, details)
+		_, _ = fmt.Fprintf(builder, "| %s | %s | %s |\n", name, result, details)
 	}
 
 	if in.RefType == provider.RefTypeTag {

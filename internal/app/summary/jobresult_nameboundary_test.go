@@ -26,6 +26,8 @@ func TestJobResult_NameBoundaryRefusesBeforeStore(t *testing.T) {
 		"job\x7fname", "job\u0085name", "job\xffname",
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
 			store := &nameBoundaryStore{Store: fakejobresultstore.New(t)}
 			err := appsummary.JobResult(t.Context(), store, appsummary.JobResultInput{Job: name, Status: "success"})
 			require.ErrorIs(t, err, errs.ErrUsage)
@@ -88,6 +90,7 @@ func TestJobResult_NameBoundaryContainsConcreteManifestEscape(t *testing.T) {
 
 type nameBoundaryStore struct {
 	*fakejobresultstore.Store
+
 	calls int
 }
 

@@ -38,7 +38,7 @@ func GenerateArtifacts(
 	syft SyftOps,
 	mvn MavenOps,
 	gitRepo GitOps,
-	w, stderr io.Writer, //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	out, stderr io.Writer,
 	in GenerateArtifactsInput,
 ) error {
 	layers, err := artifactLayers(in.SBOMs)
@@ -47,7 +47,7 @@ func GenerateArtifacts(
 	}
 
 	if len(layers) == 0 {
-		_, _ = fmt.Fprintln(w, "No artifact-level SBOM layers requested; analyzed-container (if any) is already downloaded.")
+		_, _ = fmt.Fprintln(out, "No artifact-level SBOM layers requested; analyzed-container (if any) is already downloaded.")
 
 		return nil
 	}
@@ -76,7 +76,7 @@ func GenerateArtifacts(
 			workingDir = in.WorkingDir
 		}
 
-		if err := Generate(ctx, syft, mvn, gitRepo, nil, w, stderr, GenerateInput{
+		if err := Generate(ctx, syft, mvn, gitRepo, nil, out, stderr, GenerateInput{
 			ProjectType: string(artifact.Type),
 			Layers:      sbomLayerCSV(artifactLayers),
 			Version:     in.Version,

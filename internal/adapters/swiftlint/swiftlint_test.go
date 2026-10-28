@@ -46,6 +46,8 @@ func TestLint_ExitCodeIsReturnedNotRaised(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			m := mockbinary.New(t)
 			m.Add("swiftlint", tc.script)
 
@@ -101,6 +103,8 @@ func TestLint_ArgvShape(t *testing.T) {
 		{name: "with config", config: ".swiftlint.yml", want: "lint --config .swiftlint.yml --reporter github-actions-logging"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			m := mockbinary.New(t)
 			m.Add("swiftlint", `printf '%s\n' "$*"`)
 

@@ -25,7 +25,7 @@ type EnrichGitHubSARIFInput struct {
 // partialFingerprints.primaryLocationLineHash on every result that
 // lacks one, and writes the document back to the same path. Missing
 // SARIF file is a successful no-op so the workflow step is idempotent.
-func EnrichGitHubSARIFFile(w, stderr io.Writer, annot output.Annotator, in EnrichGitHubSARIFInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func EnrichGitHubSARIFFile(writer, stderr io.Writer, annot output.Annotator, in EnrichGitHubSARIFInput) error {
 	if in.Path == "" {
 		annot.Errorf("SARIF file is required (pass --sarif-file <path> or set $SARIF_FILE)")
 
@@ -60,11 +60,11 @@ func EnrichGitHubSARIFFile(w, stderr io.Writer, annot output.Annotator, in Enric
 
 	// Atomic, because the rewrite replaces the only copy: a write cut short
 	// would leave a truncated document that the rerun can no longer parse.
-	if err := cliio.WriteFile(in.Path, out, 0o644); err != nil { //nolint:gosec // SARIF read by GitHub Code Scanning; 0644 expected.
+	if err := cliio.WriteFile(in.Path, out, 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", in.Path, err)
 	}
 
-	_, _ = fmt.Fprintf(w, "Enriched SARIF with GitHub partialFingerprints: %s\n", in.Path)
+	_, _ = fmt.Fprintf(writer, "Enriched SARIF with GitHub partialFingerprints: %s\n", in.Path)
 
 	return nil
 }

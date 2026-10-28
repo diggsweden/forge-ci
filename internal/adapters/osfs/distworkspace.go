@@ -28,8 +28,6 @@ import (
 // long as it lands inside. The command already treats the working directory as
 // the workspace, since transfer item paths and the default "dist/" resolve
 // against it, so anchoring here matches what everything else already assumes.
-//
-//nolint:cyclop // resolve cwd → resolve path → containment check → walk each component for a symlink escape. Phases of one containment decision.
 func (f *FS) ContainDistPath(path string) error {
 	cwd, err := os.Getwd()
 	if err != nil {

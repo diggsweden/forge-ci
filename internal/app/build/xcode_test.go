@@ -76,7 +76,7 @@ func TestXcodeXCConfig_DecodesAndWritesOwnerOnlyFile(t *testing.T) {
 		t.Errorf("xcconfig path = %q", path)
 	}
 
-	got, err := os.ReadFile(path) //nolint:gosec // test fixture; path is the returned xcconfig path.
+	got, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}

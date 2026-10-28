@@ -97,8 +97,8 @@ func TestNPMReleaseBuild_LocalPreflightRefusesBeforeEffects(t *testing.T) {
 					return err
 				})
 				in := appbuild.NPMReleaseBuildInput{
-					ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir, EnableBuildSBOM: true},
-					PackageScope:        tc.scope, ScriptName: tc.script, SBOMToolVersion: "4.2.1",
+					Dir: dir, EnableBuildSBOM: true,
+					PackageScope: tc.scope, ScriptName: tc.script, SBOMToolVersion: "4.2.1",
 				}
 				beforeInput := in
 				err := appbuild.NPMReleaseBuild(t.Context(), sink, npmRunner, npxRunner, output.NewAnnotator(annotations, output.FormatGitHub), stdout, stderr, in)
@@ -270,13 +270,14 @@ func TestNPMReleaseBuild_LocalPreflightPreservesNativeSelection(t *testing.T) {
 				return nil
 			})
 			err = appbuild.NPMReleaseBuild(t.Context(), summary, npmRunner, npxRunner, output.NewAnnotator(&annotations, output.FormatGitHub), &stdout, &stderr, appbuild.NPMReleaseBuildInput{
-				ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir, EnableBuildSBOM: true},
-				PackageScope:        tc.scope, ScriptName: tc.script, SBOMToolVersion: "4.2.1", NodeVersion: "24",
+				Dir: dir, EnableBuildSBOM: true,
+				PackageScope: tc.scope, ScriptName: tc.script, SBOMToolVersion: "4.2.1", NodeVersion: "24",
 			})
 			require.NoError(t, err)
 
 			wantCalls := [][]string{{"ci"}}
 			wantEvents := []string{"npm ci"}
+
 			if tc.wantTests {
 				wantCalls = append(wantCalls, []string{"test"})
 				wantEvents = append(wantEvents, "npm test")
@@ -303,11 +304,13 @@ func TestNPMReleaseBuild_LocalPreflightPreservesNativeSelection(t *testing.T) {
 			require.Len(t, summaries, 2)
 			require.Contains(t, summaries[0], "Build SBOM")
 			require.Contains(t, summaries[1], "`"+tc.packageName+"@"+tc.version+"`")
+
 			if tc.wantTests {
 				require.Contains(t, summaries[1], "Tests:** ✓ Executed")
 			} else {
 				require.Contains(t, summaries[1], "Tests:** ⊘ Skipped")
 			}
+
 			require.Contains(t, stdout.String(), "NPM release build: "+tc.packageName+"@"+tc.version+"\n")
 			require.Empty(t, stderr.String())
 			require.Empty(t, annotations.String())
@@ -367,8 +370,8 @@ func TestNPMReleaseBuild_ScriptTypesRetainPostinstallBoundary(t *testing.T) {
 			var stdout, stderr, annotations bytes.Buffer
 
 			err := appbuild.NPMReleaseBuild(t.Context(), summary, npmRunner, npxRunner, output.NewAnnotator(&annotations, output.FormatGitHub), &stdout, &stderr, appbuild.NPMReleaseBuildInput{
-				ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: fsys.Root, EnableBuildSBOM: true},
-				PackageScope:        "@org/", SBOMToolVersion: "4.2.1",
+				Dir: fsys.Root, EnableBuildSBOM: true,
+				PackageScope: "@org/", SBOMToolVersion: "4.2.1",
 			})
 			require.ErrorIs(t, err, errs.ErrInvalidConfig)
 			assert.Contains(t, err.Error(), tc.message)

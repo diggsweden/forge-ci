@@ -8,8 +8,9 @@ package npm
 import (
 	"bytes"
 	"context"
-	"github.com/diggsweden/forge-ci/internal/safeexec"
 	"io"
+
+	"github.com/diggsweden/forge-ci/internal/safeexec"
 )
 
 // Adapter wraps the npm binary. Bin is overridable for tests.

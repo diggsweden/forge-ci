@@ -120,7 +120,7 @@ func TestBuildSBOMStatus_AnUnreadableModuleDoesNotHideTheReport(t *testing.T) {
 	fsys.WriteFile("locked/build/reports/bom.json", []byte("{}"))
 	fsys.WriteFile("wear/build/reports/bom.json", []byte("{}"))
 	require.NoError(t, os.Chmod(fsys.Path("locked"), 0o000))
-	t.Cleanup(func() { _ = os.Chmod(fsys.Path("locked"), 0o700) }) //nolint:gosec // restores an owned temp directory so cleanup can remove it.
+	t.Cleanup(func() { _ = os.Chmod(fsys.Path("locked"), 0o700) })
 
 	sink := &fakeSummarySink{}
 	require.NoError(t, appsummary.BuildSBOMStatus(t.Context(), sink, appsummary.BuildSBOMStatusInput{Ecosystem: "gradle", Outcome: "success", WorkDir: fsys.Root}))

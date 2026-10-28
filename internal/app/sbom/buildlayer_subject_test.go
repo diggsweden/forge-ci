@@ -97,7 +97,7 @@ func TestGenerate_BuildLayerBindsToTheReleaseSubject(t *testing.T) {
 
 			require.NoError(t, err, out.String())
 
-			body, readErr := os.ReadFile(published) //nolint:gosec // owned fixture path.
+			body, readErr := os.ReadFile(published)
 			require.NoError(t, readErr)
 			require.Equal(t, testCase.bom, string(body), "the harvested bytes are copied, never rewritten")
 		})

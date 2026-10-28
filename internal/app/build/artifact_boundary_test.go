@@ -6,19 +6,21 @@ package build_test
 import (
 	"bytes"
 	"context"
-	appbuild "github.com/diggsweden/forge-ci/internal/app/build"
-	"github.com/diggsweden/forge-ci/internal/domain/errs"
-	"github.com/diggsweden/forge-ci/internal/domain/output"
-	"github.com/stretchr/testify/require"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	appbuild "github.com/diggsweden/forge-ci/internal/app/build"
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/output"
+	"github.com/stretchr/testify/require"
 )
 
 type brokenNPM struct {
 	fakeNPMRunner
+
 	mode string
 }
 
@@ -76,7 +78,7 @@ func TestNPMArtifactBoundary_RejectsMissingStaleAndAmbiguousOutputs(t *testing.T
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "bom.json"), []byte("old sbom"), 0o600))
 
 		runner := &brokenNPM{mode: mode}
-		err := appbuild.NPMReleaseBuild(t.Context(), &recordingSummarySink{}, runner, runner, output.Annotator{}, io.Discard, io.Discard, appbuild.NPMReleaseBuildInput{ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir, EnableBuildSBOM: strings.HasSuffix(mode, "-sbom")}, SBOMToolVersion: "4.2.1"})
+		err := appbuild.NPMReleaseBuild(t.Context(), &recordingSummarySink{}, runner, runner, output.Annotator{}, io.Discard, io.Discard, appbuild.NPMReleaseBuildInput{Dir: dir, EnableBuildSBOM: strings.HasSuffix(mode, "-sbom"), SBOMToolVersion: "4.2.1"})
 		require.Error(t, err)
 		body, err := os.ReadFile(filepath.Join(dir, "org-app-1.0.0.tgz"))
 		require.NoError(t, err)
@@ -88,7 +90,7 @@ func TestNPMArtifactBoundary_RejectsMissingStaleAndAmbiguousOutputs(t *testing.T
 
 	dir := newNPMDir(t)
 	runner := &fakeNPMRunner{}
-	err := appbuild.NPMReleaseBuild(t.Context(), &recordingSummarySink{}, runner, runner, output.Annotator{}, io.Discard, io.Discard, appbuild.NPMReleaseBuildInput{ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir, EnableBuildSBOM: true}, SBOMToolVersion: "latest"})
+	err := appbuild.NPMReleaseBuild(t.Context(), &recordingSummarySink{}, runner, runner, output.Annotator{}, io.Discard, io.Discard, appbuild.NPMReleaseBuildInput{Dir: dir, EnableBuildSBOM: true, SBOMToolVersion: "latest"})
 	require.ErrorIs(t, err, errs.ErrUsage)
 	require.Empty(t, runner.calls)
 }
@@ -102,7 +104,7 @@ func (f incompleteCargo) Run(_ context.Context, in appbuild.CargoRunInput) error
 			return err
 		}
 
-		return os.WriteFile(path, nil, 0o700) //nolint:gosec // synthetic executable-mode fixture, never executed.
+		return os.WriteFile(path, nil, 0o700)
 	}
 
 	return nil
@@ -124,7 +126,7 @@ func TestCargoArtifactBoundary_RejectsStaleAndEmptyBinary(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "target", "x86_64-unknown-linux-gnu", "release", "hello")
 		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o700))
-		require.NoError(t, os.WriteFile(path, []byte("stale executable"), 0o700)) //nolint:gosec // synthetic executable-mode fixture, never executed.
+		require.NoError(t, os.WriteFile(path, []byte("stale executable"), 0o700))
 		err := appbuild.CargoBuildBinaries(t.Context(), incompleteCargo{empty: empty}, io.Discard, io.Discard, appbuild.CargoBuildBinariesInput{Dir: dir, BinaryName: "hello", CrateBinaryName: "hello", Version: "1.0.0", Platforms: "linux/amd64", Commit: strings.Repeat("a", 40)})
 		require.Error(t, err)
 		_, err = os.Stat(filepath.Join(dir, "dist", "linux-amd64", "hello-linux-amd64"))

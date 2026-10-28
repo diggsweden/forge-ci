@@ -263,7 +263,7 @@ func TestInstallSystemDependencies_SkipIsReported(t *testing.T) {
 }
 
 // errAptFailed stands in for a package manager that refused.
-var errAptFailed = errors.New("apt-get exited 100") //nolint:err113 // test fixture sentinel.
+var errAptFailed = errors.New("apt-get exited 100")
 
 func TestTrustMiseConfig_RequiresARunner(t *testing.T) {
 	t.Parallel()

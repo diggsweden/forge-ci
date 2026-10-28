@@ -95,7 +95,7 @@ func TestInstallMise_RefusesAndClassifiesEveryDownloadFailure(t *testing.T) {
 		{
 			name:         "a transport failure is retried",
 			wantAttempts: 4,
-			transport:    fixedTransport(0, nil, 0, errors.New("dial failed")), //nolint:err113 // injected transport failure.
+			transport:    fixedTransport(0, nil, 0, errors.New("dial failed")),
 			wantErr:      errs.ErrDependencyUnavailable,
 			why:          "a dropped connection is the case retries exist for",
 		},

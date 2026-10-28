@@ -21,9 +21,9 @@ import (
 func TestAdapter_GenerateUsesSortedOutputArgs(t *testing.T) {
 	t.Parallel()
 
-	m := mockbinary.New(t)
-	m.Add("syft", `printf 'ok\n' >&2`)
-	a := &syft.Adapter{Bin: m.Path("syft")}
+	mock := mockbinary.New(t)
+	mock.Add("syft", `printf 'ok\n' >&2`)
+	a := &syft.Adapter{Bin: mock.Path("syft")}
 
 	var stderr bytes.Buffer
 
@@ -36,7 +36,7 @@ func TestAdapter_GenerateUsesSortedOutputArgs(t *testing.T) {
 	}
 
 	wantArgs := []string{"./target", "-o", "cyclonedx-json=out.cyclonedx.json", "-o", "spdx-json=out.spdx.json"}
-	if got := m.Invocations("syft")[0].Args; !slices.Equal(got, wantArgs) {
+	if got := mock.Invocations("syft")[0].Args; !slices.Equal(got, wantArgs) {
 		t.Errorf("args = %v, want %v", got, wantArgs)
 	}
 
@@ -57,8 +57,8 @@ func TestAdapter_GenerateRequiresOutputs(t *testing.T) {
 // UnsetEnv covers every way the adapter starts syft, and removes only what it
 // names: an adapter that emptied the environment would pass a leak-only check.
 func TestAdapter_UnsetsSensitiveEnvOnEveryEntryPoint(t *testing.T) {
-	m := mockbinary.New(t)
-	m.Add("syft", `
+	mock := mockbinary.New(t)
+	mock.Add("syft", `
 if [ -n "${COSIGN_KEY:-}" ] || [ -n "${REGISTRY_TOKEN:-}" ]; then
   printf 'secret env leaked to syft\n' >&2
   exit 42
@@ -70,14 +70,14 @@ printf 'ok\n' >&2
 	t.Setenv("REGISTRY_TOKEN", "token")
 	t.Setenv("KEEP_ME", "kept")
 
-	a := &syft.Adapter{Bin: m.Path("syft"), UnsetEnv: []string{"COSIGN_KEY", "REGISTRY_TOKEN"}}
+	adapter := &syft.Adapter{Bin: mock.Path("syft"), UnsetEnv: []string{"COSIGN_KEY", "REGISTRY_TOKEN"}}
 
 	for name, run := range map[string]func(stderr io.Writer) error{
 		"Generate": func(stderr io.Writer) error {
-			return a.Generate(t.Context(), "image@sha256:abc", map[string]string{"cyclonedx-json": "out.json"}, stderr)
+			return adapter.Generate(t.Context(), "image@sha256:abc", map[string]string{"cyclonedx-json": "out.json"}, stderr)
 		},
 		"RunInherit": func(stderr io.Writer) error {
-			return a.RunInherit(t.Context(), io.Discard, stderr, "--version")
+			return adapter.RunInherit(t.Context(), io.Discard, stderr, "--version")
 		},
 	} {
 		var stderr bytes.Buffer

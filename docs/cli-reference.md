@@ -696,7 +696,7 @@ Admits a nonempty base-only ledger and its content-addressed tags before login. 
 | `--source-repository` | exact staging image repository allowed in the source ledger (required) | string | `""` | n/a |
 | `--output-ledger` | new publication ledger under --dist-dir; never replaces the source ledger (required) | string | `""` | n/a |
 | `--dist-dir` | artifact root containing both ledgers | string | `"dist"` | n/a |
-| `--registry-username` | registry username; the password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
+| `--registry-username` | registry username; the password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER` |
 | `--registry-password-file` | file containing the registry password/token ("-" reads stdin); defaults to $REGISTRY_TOKEN then $REGISTRY_PASSWORD. The password never appears in argv. | string | `""` | n/a |
 
 #### `forge-ci container base-images promote`
@@ -725,7 +725,7 @@ registry.
 | `--cosign-public-key-sha256` | expected sha256 digest of the trusted Cosign public key | string | `""` | `$COSIGN_PUBLIC_KEY_SHA256` |
 | `--all-images-json` | JSON array of base image metadata to verify/promote | string | `""` | `$ALL_IMAGES_JSON` |
 | `--base-input-id` | optional single sha256 base input ID expected for every image | string | `""` | `$BASE_INPUT_ID` |
-| `--registry-username` | registry username; the password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
+| `--registry-username` | registry username; the password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER` |
 | `--registry-password-file` | file containing the registry password/token ("-" reads stdin); defaults to $REGISTRY_TOKEN then $REGISTRY_PASSWORD. The password never appears in argv. | string | `""` | n/a |
 
 #### `forge-ci container base-images prune`
@@ -825,7 +825,7 @@ EXAMPLE:
 | `--source-sha` | pinned source commit the base images were built from, recorded as the provenance gitCommit | string | `""` | n/a |
 | `--started-on` | RFC3339 build timestamp (default: $SOURCE_DATE_EPOCH) | string | `""` | n/a |
 | `--sbom-path-pattern` | optional regular expression every ledger SBOM path must match | string | `""` | `$LEDGER_SIGN_SBOM_PATH_PATTERN` |
-| `--registry-username` | registry username; the password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
+| `--registry-username` | registry username; the password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER` |
 | `--registry-password-file` | file containing the registry password/token ("-" reads stdin); defaults to $REGISTRY_TOKEN then $REGISTRY_PASSWORD. The password never appears in argv. | string | `""` | n/a |
 | `--method` | signing backend: sigstore (keyless cosign + OIDC) or kms (cosign + --key). gpg is rejected — it cannot sign OCI images. | string | `""` | `$SIGN_METHOD` |
 | `--key` | cosign --key for --method=kms: KMS/PKCS#11 URI (awskms://, gcpkms://, hashivault://, azurekms://, pkcs11:), env://VAR, or file path. Forbidden for --method=sigstore. | string | `""` | `$SIGN_KEY` |
@@ -1347,7 +1347,7 @@ EXAMPLES:
 |------|-------------|------|---------|----------|
 | `--registry` | registry host (e.g. ghcr.io, forgejo.example.com), or an image repository on it | string | `"ghcr.io"` | `$CONTAINER_REGISTRY` |
 | `--server-url` | forge/server URL used to derive the registry host when --registry is empty or omitted | string | `""` | n/a |
-| `--registry-username` | registry username; the password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
+| `--registry-username` | registry username; the password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER` |
 | `--registry-password-file` | file containing the registry password/token ("-" reads stdin); defaults to $REGISTRY_TOKEN then $REGISTRY_PASSWORD. The password never appears in argv. | string | `""` | n/a |
 | `--auth-file` | override the auth config path (default: $REGISTRY_AUTH_FILE, else $DOCKER_CONFIG/config.json, else ~/.docker/config.json) | string | `""` | n/a |
 | `--create-auth-file` | when --auth-file is empty, create a fresh job-local auth file under $RUNNER_TEMP | bool | `false` | `$REGISTRY_CREATE_AUTH_FILE` |
@@ -1657,7 +1657,7 @@ EXAMPLE:
 | `--max-delete` | refuse a package that would lose more versions than this (0 disables the bound) | int | `100` | `$PACKAGE_RETENTION_MAX_DELETE` |
 | `--dry-run` | report what would be deleted without deleting it | bool | `true` | `$PACKAGE_RETENTION_DRY_RUN` |
 | `--token-file` | file holding the GitHub token (default: $GH_TOKEN, then $GITHUB_TOKEN) | string | `""` | n/a |
-| `--registry-username` | the user the token logs in to ghcr.io as, to read manifests | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
+| `--registry-username` | the user the token logs in to ghcr.io as, to read manifests | string | `""` | `$REGISTRY_USER` |
 
 ### `forge-ci container platform-plan`
 
@@ -1777,7 +1777,7 @@ delete release candidate tags after verified final/moving promotion
 | `--server-url` | forge server URL used to derive the registry host and provider API base | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive the expected image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
 | `--registry` | the forge's own registry host, when it is not the host of --server-url (GitLab's $CI_REGISTRY); the login goes to the image repository's host, and a repository on any other host has its tags deleted through that registry | string | `""` | `$CONTAINER_REGISTRY` |
-| `--registry-username` | user the registry token logs in as; empty is the --repository owner on the forge's own registry and refused on another one. The password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
+| `--registry-username` | user the registry token logs in as; empty is the --repository owner on the forge's own registry and refused on another one. The password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER` |
 | `--registry-password-file` | file containing the registry password/token ("-" reads stdin); defaults to $REGISTRY_TOKEN then $REGISTRY_PASSWORD. The password never appears in argv. | string | `""` | n/a |
 | `--expected-image-repository` | optional exact image repository allowed for ledger refs/tags at the signer/publisher boundary | string | `""` | `$LEDGER_EXPECTED_IMAGE_REPOSITORY` |
 | `--allow-missing-ledger` | accept a release without images: when the default ledger <dist-dir>/release-images.json does not exist, say so and exit 0 before any credential read or registry login. The dist directory must exist, a ledger that exists is held to every rule, and a ledger named with --ledger must exist | bool | `false` | n/a |
@@ -1797,7 +1797,7 @@ copy unsigned release-image digests to a separate publication repository and wri
 | `--server-url` | forge server URL used to derive the registry host and provider API base | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive the expected image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
 | `--registry` | the forge's own registry host, when it is not the host of --server-url (GitLab's $CI_REGISTRY); the login goes to the image repository's host, and a repository on any other host has its tags deleted through that registry | string | `""` | `$CONTAINER_REGISTRY` |
-| `--registry-username` | user the registry token logs in as; empty is the --repository owner on the forge's own registry and refused on another one. The password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
+| `--registry-username` | user the registry token logs in as; empty is the --repository owner on the forge's own registry and refused on another one. The password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER` |
 | `--registry-password-file` | file containing the registry password/token ("-" reads stdin); defaults to $REGISTRY_TOKEN then $REGISTRY_PASSWORD. The password never appears in argv. | string | `""` | n/a |
 | `--expected-image-repository` | optional exact image repository allowed for ledger refs/tags at the signer/publisher boundary | string | `""` | `$LEDGER_EXPECTED_IMAGE_REPOSITORY` |
 | `--destination-repository` | exact publication image repository, without tag or digest (required) | string | `""` | n/a |
@@ -1853,7 +1853,7 @@ EXAMPLE:
 | `--repository` | owner/repo the image repositories are derived from | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
 | `--release-tag` | release tag the image tags are made of, e.g. v1.2.3 (required) | string | `""` | n/a |
 | `--release-platforms` | comma-separated subset of each container's platforms to build; empty builds them all | string | `""` | `$RELEASE_PLATFORMS` |
-| `--registry-username` | user the registry token logs in as, written to the registry-user output; empty is the --repository owner on the forge's own registry and refused on another one | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
+| `--registry-username` | user the registry token logs in as, written to the registry-user output; empty is the --repository owner on the forge's own registry and refused on another one | string | `""` | `$REGISTRY_USER` |
 
 #### `forge-ci container release-images promote`
 
@@ -1868,7 +1868,7 @@ promote signed release image candidates to their final/moving release tags
 | `--server-url` | forge server URL used to derive the registry host and provider API base | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive the expected image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
 | `--registry` | the forge's own registry host, when it is not the host of --server-url (GitLab's $CI_REGISTRY); the login goes to the image repository's host, and a repository on any other host has its tags deleted through that registry | string | `""` | `$CONTAINER_REGISTRY` |
-| `--registry-username` | user the registry token logs in as; empty is the --repository owner on the forge's own registry and refused on another one. The password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
+| `--registry-username` | user the registry token logs in as; empty is the --repository owner on the forge's own registry and refused on another one. The password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER` |
 | `--registry-password-file` | file containing the registry password/token ("-" reads stdin); defaults to $REGISTRY_TOKEN then $REGISTRY_PASSWORD. The password never appears in argv. | string | `""` | n/a |
 | `--expected-image-repository` | optional exact image repository allowed for ledger refs/tags at the signer/publisher boundary | string | `""` | `$LEDGER_EXPECTED_IMAGE_REPOSITORY` |
 | `--state-dir` | release-image state directory; default promotion journal is <state-dir>/image-promotions.jsonl | string | `""` | `$SIGN_AND_PUBLISH_STATE_DIR` |
@@ -1889,7 +1889,7 @@ roll back a failed release-image promotion from its promotion journal
 | `--server-url` | forge server URL used to derive the registry host and provider API base | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive the expected image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
 | `--registry` | the forge's own registry host, when it is not the host of --server-url (GitLab's $CI_REGISTRY); the login goes to the image repository's host, and a repository on any other host has its tags deleted through that registry | string | `""` | `$CONTAINER_REGISTRY` |
-| `--registry-username` | user the registry token logs in as; empty is the --repository owner on the forge's own registry and refused on another one. The password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
+| `--registry-username` | user the registry token logs in as; empty is the --repository owner on the forge's own registry and refused on another one. The password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER` |
 | `--registry-password-file` | file containing the registry password/token ("-" reads stdin); defaults to $REGISTRY_TOKEN then $REGISTRY_PASSWORD. The password never appears in argv. | string | `""` | n/a |
 | `--expected-image-repository` | optional exact image repository allowed for ledger refs/tags at the signer/publisher boundary | string | `""` | `$LEDGER_EXPECTED_IMAGE_REPOSITORY` |
 | `--state-dir` | release-image state directory; default promotion journal is <state-dir>/image-promotions.jsonl | string | `""` | `$SIGN_AND_PUBLISH_STATE_DIR` |
@@ -1910,7 +1910,7 @@ sign and attest release images from the confined release-image ledger
 | `--server-url` | forge server URL used to derive the registry host and provider API base | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive the expected image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
 | `--registry` | the forge's own registry host, when it is not the host of --server-url (GitLab's $CI_REGISTRY); the login goes to the image repository's host, and a repository on any other host has its tags deleted through that registry | string | `""` | `$CONTAINER_REGISTRY` |
-| `--registry-username` | user the registry token logs in as; empty is the --repository owner on the forge's own registry and refused on another one. The password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER`, `$REGISTRY_USERNAME` |
+| `--registry-username` | user the registry token logs in as; empty is the --repository owner on the forge's own registry and refused on another one. The password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER` |
 | `--registry-password-file` | file containing the registry password/token ("-" reads stdin); defaults to $REGISTRY_TOKEN then $REGISTRY_PASSWORD. The password never appears in argv. | string | `""` | n/a |
 | `--expected-image-repository` | optional exact image repository allowed for ledger refs/tags at the signer/publisher boundary | string | `""` | `$LEDGER_EXPECTED_IMAGE_REPOSITORY` |
 | `--allow-missing-ledger` | accept a release without images: when the default ledger <dist-dir>/release-images.json does not exist, say so and exit 0 before any credential read or registry login. The dist directory must exist, a ledger that exists is held to every rule, and a ledger named with --ledger must exist | bool | `false` | n/a |
@@ -4261,7 +4261,7 @@ scope (flag > plan > env > default).
 |------|-------------|------|---------|----------|
 | `--root` | repository root containing mise config | string | `"."` | `$MISE_PROJECT_ROOT` |
 | `--locked` | whether mise install should use locked mode: true\|false | string | `"false"` | `$MISE_LOCKED_INSTALL` |
-| `--tools` | whitespace-separated mise tool selectors to install instead of the full config | string | `""` | `$TOOLS_SUBSET`, `$MISE_TOOLS` |
+| `--tools` | whitespace-separated mise tool selectors to install instead of the full config | string | `""` | `$TOOLSET_TOOLS` |
 | `--mise-bin` | mise binary path (default: $HOME/.local/bin/mise when present, else mise from PATH) | string | `""` | `$MISE_BIN` |
 | `--retry-attempts` | attempts for each mise install and rustup toolchain download | int | `3` | `$MISE_INSTALL_RETRY_ATTEMPTS` |
 | `--retry-delay-seconds` | seconds between mise install retry attempts | int | `10` | `$MISE_INSTALL_RETRY_DELAY_SECONDS` |
@@ -4295,7 +4295,7 @@ or as a selected go: tool's dependency; an omitted runtime fails before env writ
 | `--root` | repository root containing mise config | string | `"."` | `$MISE_PROJECT_ROOT` |
 | `--path-file` | runner path file to append GOPATH/bin to (required) | string | `""` | `$FORGEJO_PATH`, `$GITHUB_PATH` |
 | `--env-file` | runner env file receiving GOTOOLCHAIN (required) | string | `""` | `$FORGEJO_ENV`, `$GITHUB_ENV` |
-| `--tools` | mise tool subset used by the install step; empty selects all declared tools | string | `""` | `$TOOLS_SUBSET` |
+| `--tools` | mise tool subset used by the install step; empty selects all declared tools | string | `""` | `$TOOLSET_TOOLS` |
 
 ### `forge-ci toolchain setup-mise-env`
 
@@ -4335,7 +4335,7 @@ must pin their runtime (uv for pipx, go for go, rust or rustup+rust-toolchain fo
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--tools` | whitespace-separated tool subset to validate; empty validates all declared tools | string | `""` | `$TOOLS_SUBSET` |
+| `--tools` | whitespace-separated tool subset to validate; empty validates all declared tools | string | `""` | `$TOOLSET_TOOLS` |
 | `--root` | repository root containing mise config | string | `"."` | `$MISE_PROJECT_ROOT` |
 | `--locked` | whether mise install will run in locked mode: true\|false | string | `"false"` | `$MISE_LOCKED_INSTALL` |
 | `--github-token-present` | whether the caller has a GitHub rate-limit token; pass presence only, never the token | bool | `false` | `$MISE_GITHUB_TOKEN_PRESENT` |

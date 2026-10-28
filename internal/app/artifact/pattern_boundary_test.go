@@ -17,6 +17,8 @@ func TestArtifactPatternBoundary_CompleteRequestAndRefusals(t *testing.T) {
 
 	for _, pattern := range []string{"", "release-*", "[ab]-?", "[", "bad\n*", "bad\x1b*", "bad\xff*"} {
 		t.Run(pattern, func(t *testing.T) {
+			t.Parallel()
+
 			in := provider.RunArtifactDownload{Pattern: pattern, MergeMultiple: pattern != "", Dir: t.TempDir(), RunID: "run-42", Repository: "owner/repository"}
 			if pattern == "" {
 				in.Name = "exact-artifact-name"

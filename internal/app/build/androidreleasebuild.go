@@ -27,6 +27,7 @@ import (
 // resolution, and the pinned SBOM plugin.
 type AndroidReleaseBuildInput struct {
 	ReleaseBuildOptions
+
 	Library bool
 
 	// Artifact-name composition (ArtifactName from the embed is the override).
@@ -72,61 +73,16 @@ type AndroidReleaseBuildInput struct {
 // replaced. The keystore path and credentials use the child environment; the
 // resolved artifact names + version are emitted on the sink as the job outputs
 // downstream upload/publish jobs consume.
-//
-//nolint:varnamelen,cyclop,gocognit,gocyclo // ordered preflight, optional staging and all-exit cleanup stay together in this linear orchestration.
-func AndroidReleaseBuild(ctx context.Context, sink ci.OutputSink, summarySink ci.SummarySink, ops AndroidGradleOps, annot output.Annotator, w, stderr io.Writer, in AndroidReleaseBuildInput) (err error) {
+func AndroidReleaseBuild(ctx context.Context, sink ci.OutputSink, summarySink ci.SummarySink, ops AndroidGradleOps, annot output.Annotator, out, stderr io.Writer, in AndroidReleaseBuildInput) (err error) {
 	dir, err := filepath.Abs(defaultDir(in.Dir))
 	if err != nil {
 		return err
 	}
 
 	in.Dir = dir
-	if in.Library && in.EnableSigning {
-		return fmt.Errorf("android libraries do not use APK keystore signing: %w", errs.ErrInvalidConfig)
-	}
 
-	// Validate both blobs before publishing outputs or staging either secret.
-	var keystore, properties []byte
-
-	if in.EnableSigning {
-		if in.KeystoreBase64 == "" {
-			return fmt.Errorf("ANDROID_KEYSTORE secret not found but enable-signing is true: %w", errs.ErrPermissionDenied)
-		}
-
-		keystore, err = decodeMobileSecret(in.KeystoreBase64)
-		if err != nil {
-			return fmt.Errorf("decode keystore base64: %w", err)
-		}
-	}
-
-	if in.SecretsPropertiesBase64 != "" {
-		properties, err = decodeMobileSecret(in.SecretsPropertiesBase64)
-		if err != nil {
-			return fmt.Errorf("decode secrets.properties base64: %w", err)
-		}
-	}
-
-	tasks, err := androidReleaseTasks(in)
+	pre, err := preflightAndroidRelease(in)
 	if err != nil {
-		return err
-	}
-	// These compose the artifact names this build publishes as job outputs, so
-	// they have to be printable text before a name is derived from them, not
-	// after a sink refuses one.
-	for _, field := range []struct{ name, value string }{
-		{"artifact-name", in.ArtifactName}, {"artifact-name-prefix", in.ArtifactNamePrefix},
-		{"repository-name", in.RepoName}, {"product-flavor", in.ProductFlavor},
-	} {
-		if err = validateScalarValue(field.value); err != nil {
-			return fmt.Errorf("%s: %w", field.name, err)
-		}
-	}
-
-	if in.EnableBuildSBOM && !domainversion.IsStableSemverTag("v"+in.SBOMToolVersion) {
-		return fmt.Errorf("SBOM tool version must be an exact MAJOR.MINOR.PATCH: %w", errs.ErrUsage)
-	}
-
-	if err = validateAndroidCredentials(in); err != nil {
 		return err
 	}
 
@@ -143,31 +99,8 @@ func AndroidReleaseBuild(ctx context.Context, sink ci.OutputSink, summarySink ci
 
 	defer func() { err = errors.Join(err, wrapper.Close()) }()
 
-	if err = checkAndroidMetadata(project); err != nil {
+	if err = preflightAndroidProject(project, &in); err != nil {
 		return err
-	}
-
-	if in.SecretsPropertiesBase64 != "" {
-		if _, statErr := project.Lstat("secrets.properties"); !errors.Is(statErr, os.ErrNotExist) {
-			return fmt.Errorf("injected secrets.properties requires an absent destination: %w", errors.Join(errs.ErrValidation, statErr))
-		}
-
-		if err = checkBuildWritableRoot(project); err != nil {
-			return err
-		}
-	}
-
-	if in.EnableSigning {
-		in.TempDir, err = androidKeystoreTempDir(in.TempDir, dir)
-		if err != nil {
-			return err
-		}
-	}
-
-	if in.EnableBuildSBOM {
-		if _, err = gradleSBOMTempDir(); err != nil {
-			return fmt.Errorf("preflight Gradle SBOM scratch: %w", err)
-		}
 	}
 
 	if err = AndroidArtifactNames(ctx, sink, stderr, AndroidArtifactNamesInput{
@@ -181,58 +114,171 @@ func AndroidReleaseBuild(ctx context.Context, sink ci.OutputSink, summarySink ci
 		return fmt.Errorf("compose artifact names: %w", err)
 	}
 
-	if err = wrapper.Chmod(0o755); err != nil { //nolint:gosec // project wrapper must be executable; descriptor was checked before outputs.
+	if err = wrapper.Chmod(0o755); err != nil {
 		return fmt.Errorf("make gradlew executable: %w", err)
 	}
 
 	bound := androidProjectGradle{ops: ops, dir: dir}
 
 	if in.EnableSigning {
-		stage, stageErr := pathsafe.NewArtifactStaging(in.TempDir)
+		env, cleanup, stageErr := stageAndroidKeystore(pre.keystore, in)
 		if stageErr != nil {
-			return fmt.Errorf("stage Android keystore: %w", stageErr)
+			return stageErr
 		}
-		defer func() {
-			if cleanupErr := stage.Close(); cleanupErr != nil {
-				err = errors.Join(err, fmt.Errorf("clean Android keystore: %w", cleanupErr))
-			}
-		}()
+		defer func() { err = errors.Join(err, cleanup()) }()
 
-		if err = stage.Root().WriteFile("release.keystore", keystore, 0o600); err != nil {
-			return fmt.Errorf("write Android keystore: %w", err)
-		}
-
-		bound.env = []string{
-			"ANDROID_KEYSTORE_PATH=" + filepath.Join(stage.Root().Name(), "release.keystore"),
-			"ANDROID_KEYSTORE_PASSWORD=" + in.KeystorePassword,
-			"ANDROID_KEY_ALIAS=" + in.KeyAlias,
-			"ANDROID_KEY_PASSWORD=" + in.KeyPassword,
-		}
+		bound.env = env
 	}
 
-	if in.Library {
-		err = sink.Set(ctx, "version", resolveGradleVersion(in.Dir))
-	} else {
-		err = AndroidVersionInfo(ctx, sink, stderr, annot, AndroidVersionInfoInput{Dir: in.Dir})
-	}
-
-	if err != nil {
+	if err = publishAndroidVersion(ctx, sink, annot, stderr, in); err != nil {
 		return fmt.Errorf("resolve version: %w", err)
 	}
 
 	if in.SecretsPropertiesBase64 != "" {
-		cleanup, createErr := createAndroidProperties(project, properties)
+		cleanup, createErr := createAndroidProperties(project, pre.properties)
 		if createErr != nil {
 			return fmt.Errorf("write secrets.properties: %w", createErr)
 		}
 		defer func() { err = errors.Join(err, cleanup()) }()
 	}
 
-	if err = AndroidGradleBuild(ctx, bound, w, stderr, AndroidGradleBuildInput{Tasks: tasks, SkipTests: in.SkipTests}); err != nil {
+	if err = AndroidGradleBuild(ctx, bound, out, stderr, AndroidGradleBuildInput{Tasks: pre.tasks, SkipTests: in.SkipTests}); err != nil {
 		return fmt.Errorf("gradle build: %w", err)
 	}
 
-	return androidSBOMStep(ctx, gradleDeps{summary: summarySink, ops: bound, w: w, stderr: stderr}, in)
+	return androidSBOMStep(ctx, gradleDeps{summary: summarySink, ops: bound, w: out, stderr: stderr}, in)
+}
+
+// publishAndroidVersion emits the version output: a library's Gradle version,
+// or an app's version and version-code from gradle.properties.
+func publishAndroidVersion(ctx context.Context, sink ci.OutputSink, annot output.Annotator, stderr io.Writer, in AndroidReleaseBuildInput) error {
+	if in.Library {
+		return sink.Set(ctx, "version", resolveGradleVersion(in.Dir))
+	}
+
+	return AndroidVersionInfo(ctx, sink, stderr, annot, AndroidVersionInfoInput{Dir: in.Dir})
+}
+
+// androidReleasePreflight holds what AndroidReleaseBuild checks and decodes
+// before it opens the project, publishes an output or stages a secret.
+type androidReleasePreflight struct {
+	keystore, properties []byte
+	tasks                string
+}
+
+func preflightAndroidRelease(in AndroidReleaseBuildInput) (androidReleasePreflight, error) {
+	var (
+		pre androidReleasePreflight
+		err error
+	)
+
+	if in.Library && in.EnableSigning {
+		return pre, fmt.Errorf("android libraries do not use APK keystore signing: %w", errs.ErrInvalidConfig)
+	}
+
+	if in.EnableSigning {
+		if in.KeystoreBase64 == "" {
+			return pre, fmt.Errorf("ANDROID_KEYSTORE secret not found but enable-signing is true: %w", errs.ErrPermissionDenied)
+		}
+
+		pre.keystore, err = decodeMobileSecret(in.KeystoreBase64)
+		if err != nil {
+			return pre, fmt.Errorf("decode keystore base64: %w", err)
+		}
+	}
+
+	if in.SecretsPropertiesBase64 != "" {
+		pre.properties, err = decodeMobileSecret(in.SecretsPropertiesBase64)
+		if err != nil {
+			return pre, fmt.Errorf("decode secrets.properties base64: %w", err)
+		}
+	}
+
+	pre.tasks, err = androidReleaseTasks(in)
+	if err != nil {
+		return pre, err
+	}
+	// These compose the artifact names this build publishes as job outputs, so
+	// they have to be printable text before a name is derived from them, not
+	// after a sink refuses one.
+	for _, field := range []struct{ name, value string }{
+		{"artifact-name", in.ArtifactName}, {"artifact-name-prefix", in.ArtifactNamePrefix},
+		{"repository-name", in.RepoName}, {"product-flavor", in.ProductFlavor},
+	} {
+		if err = validateScalarValue(field.value); err != nil {
+			return pre, fmt.Errorf("%s: %w", field.name, err)
+		}
+	}
+
+	if in.EnableBuildSBOM && !domainversion.IsStableSemverTag("v"+in.SBOMToolVersion) {
+		return pre, fmt.Errorf("SBOM tool version must be an exact MAJOR.MINOR.PATCH: %w", errs.ErrUsage)
+	}
+
+	return pre, validateAndroidCredentials(in)
+}
+
+// preflightAndroidProject checks the opened project and scratch locations
+// before anything is published. It settles in.TempDir for the keystore.
+func preflightAndroidProject(project *os.Root, in *AndroidReleaseBuildInput) error {
+	if err := checkAndroidMetadata(project); err != nil {
+		return err
+	}
+
+	if in.SecretsPropertiesBase64 != "" {
+		if _, statErr := project.Lstat("secrets.properties"); !errors.Is(statErr, os.ErrNotExist) {
+			return fmt.Errorf("injected secrets.properties requires an absent destination: %w", errors.Join(errs.ErrValidation, statErr))
+		}
+
+		if err := checkBuildWritableRoot(project); err != nil {
+			return err
+		}
+	}
+
+	if in.EnableSigning {
+		tempDir, err := androidKeystoreTempDir(in.TempDir, in.Dir)
+		if err != nil {
+			return err
+		}
+
+		in.TempDir = tempDir
+	}
+
+	if in.EnableBuildSBOM {
+		if _, err := gradleSBOMTempDir(); err != nil {
+			return fmt.Errorf("preflight Gradle SBOM scratch: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// stageAndroidKeystore writes the keystore into a private staging directory
+// below in.TempDir. It returns the Gradle child environment that names it and
+// the cleanup that removes it.
+func stageAndroidKeystore(keystore []byte, in AndroidReleaseBuildInput) ([]string, func() error, error) {
+	stage, err := pathsafe.NewArtifactStaging(in.TempDir)
+	if err != nil {
+		return nil, nil, fmt.Errorf("stage Android keystore: %w", err)
+	}
+
+	cleanup := func() error {
+		if err := stage.Close(); err != nil {
+			return fmt.Errorf("clean Android keystore: %w", err)
+		}
+
+		return nil
+	}
+
+	if err = stage.Root().WriteFile("release.keystore", keystore, 0o600); err != nil {
+		return nil, nil, errors.Join(fmt.Errorf("write Android keystore: %w", err), cleanup())
+	}
+
+	return []string{
+		"ANDROID_KEYSTORE_PATH=" + filepath.Join(stage.Root().Name(), "release.keystore"),
+		"ANDROID_KEYSTORE_PASSWORD=" + in.KeystorePassword,
+		"ANDROID_KEY_ALIAS=" + in.KeyAlias,
+		"ANDROID_KEY_PASSWORD=" + in.KeyPassword,
+	}, cleanup, nil
 }
 
 func androidReleaseTasks(in AndroidReleaseBuildInput) (string, error) {
@@ -246,7 +292,7 @@ func androidReleaseTasks(in AndroidReleaseBuildInput) (string, error) {
 		}
 	}
 	// Each task becomes one argument; name the field instead of echoing input.
-	for _, task := range strings.Fields(tasks) {
+	for task := range strings.FieldsSeq(tasks) {
 		if err := validateScalarValue(task); err != nil {
 			return "", fmt.Errorf("resolved Android build tasks: %w: %w", err, errs.ErrValidation)
 		}

@@ -73,7 +73,7 @@ type xcodeSigningPaths struct {
 //
 // Pure darwin operation: the linux unit tests use a fake XcodeSecurityOps that
 // records the security-CLI invocations.
-func setupXcodeSigning(ctx context.Context, sec XcodeSecurityOps, w io.Writer, in XcodeSetupCodeSigningInput, cert, profile []byte) (*xcodeSigningState, error) { //nolint:varnamelen // writer convention.
+func setupXcodeSigning(ctx context.Context, sec XcodeSecurityOps, out io.Writer, in XcodeSetupCodeSigningInput, cert, profile []byte) (*xcodeSigningState, error) {
 	paths, err := preflightXcodeSigningPaths(in)
 	if err != nil {
 		return nil, err
@@ -86,7 +86,7 @@ func setupXcodeSigning(ctx context.Context, sec XcodeSecurityOps, w io.Writer, i
 		return nil, errors.Join(err, teardownXcodeSigning(ctx, sec, state))
 	}
 
-	_, _ = fmt.Fprintf(w, "%s Code signing configured successfully\n", clicolor.Check(w))
+	_, _ = fmt.Fprintf(out, "%s Code signing configured successfully\n", clicolor.Check(out))
 
 	return state, nil
 }
@@ -111,7 +111,7 @@ func stageXcodeSigning(ctx context.Context, sec XcodeSecurityOps, in XcodeSetupC
 // unsafe ones before any file, keychain or security(1) call exists. Roots are
 // opened without following links, so a linked temporary or profiles component
 // cannot redirect owner-only credential writes.
-func preflightXcodeSigningPaths(in XcodeSetupCodeSigningInput) (xcodeSigningPaths, error) { //nolint:cyclop // one flat destination policy: staging root, three leaves, profiles root and their overlap.
+func preflightXcodeSigningPaths(in XcodeSetupCodeSigningInput) (xcodeSigningPaths, error) {
 	tmp := in.TempDir
 	if tmp == "" {
 		// CLI binding reads $CI_TEMP_DIR / $RUNNER_TEMP via flag sources;
@@ -185,7 +185,7 @@ func preflightXcodeSigningPaths(in XcodeSetupCodeSigningInput) (xcodeSigningPath
 	// happens last so a refusal leaves the host exactly as it was. It runs here
 	// rather than at install time so an unusable profiles path is refused before
 	// any keychain exists.
-	created, createErr := pathsafe.MkdirRoot(paths.profilesDir, 0o755) //nolint:gosec // macOS xcodebuild expects this exact dir mode.
+	created, createErr := pathsafe.MkdirRoot(paths.profilesDir, 0o755)
 	if createErr != nil {
 		return xcodeSigningPaths{}, fmt.Errorf("create provisioning profiles dir %s: %w", paths.profilesDir, createErr)
 	}

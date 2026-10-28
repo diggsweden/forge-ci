@@ -114,14 +114,14 @@ func TestXcodeSetupCodeSigning_MissingSecretsError(t *testing.T) {
 		{"no cert", appbuild.XcodeSetupCodeSigningInput{}, "CERTIFICATE_BASE64"},
 		{"no pp", appbuild.XcodeSetupCodeSigningInput{CertBase64: "x"}, "PROVISIONING_PROFILE"},
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
+	for _, cfg := range cases {
+		t.Run(cfg.name, func(t *testing.T) {
 			owned := xcodeSecurityFixture(t)
-			c.in.TempDir, c.in.ProvisioningProfilesDir = owned.TempDir, owned.ProvisioningProfilesDir
+			cfg.in.TempDir, cfg.in.ProvisioningProfilesDir = owned.TempDir, owned.ProvisioningProfilesDir
 			before := ownedTree(t, filepath.Dir(owned.TempDir))
 			sec, out := &fakeSecurity{}, &xcodeSecurityWriter{}
-			checkProcess := captureXcodeProcessDiagnostics(t, c.in)
-			err := setupXcodeCodeSigning(t.Context(), sec, out, c.in)
+			checkProcess := captureXcodeProcessDiagnostics(t, cfg.in)
+			err := setupXcodeCodeSigning(t.Context(), sec, out, cfg.in)
 
 			checkProcess()
 			require.Empty(t, sec.calls)
@@ -135,8 +135,8 @@ func TestXcodeSetupCodeSigning_MissingSecretsError(t *testing.T) {
 				t.Fatalf("err = %v, want ErrPermissionDenied", err)
 			}
 
-			if !strings.Contains(err.Error(), c.want) {
-				t.Errorf("err = %v, want it to name %q", err, c.want)
+			if !strings.Contains(err.Error(), cfg.want) {
+				t.Errorf("err = %v, want it to name %q", err, cfg.want)
 			}
 		})
 	}

@@ -218,7 +218,7 @@ func TestXcodeVersionInfo_WorkspaceRefusesUnprovenSelection(t *testing.T) {
 	}
 }
 
-func TestXcodeVersionInfo_SelectedFilesDoNotFallBack(t *testing.T) { //nolint:gocognit // independent filesystem refusals share only the selected-project/decoy setup and publication assertions.
+func TestXcodeVersionInfo_SelectedFilesDoNotFallBack(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {

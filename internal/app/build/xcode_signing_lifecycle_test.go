@@ -174,7 +174,7 @@ func teardownAfterRelease(t *testing.T, in appbuild.XcodeSetupCodeSigningInput, 
 // keychain or security(1) call exists, and the blocking canary survives
 // untouched: a link is never followed, a non-file is never replaced, and an
 // existing keychain is never adopted by a run that would later delete it.
-func TestXcodeSigningLifecycle_DestinationAdversaries(t *testing.T) { //nolint:gocognit // one destination policy, one fixture shape, many adversaries.
+func TestXcodeSigningLifecycle_DestinationAdversaries(t *testing.T) {
 	for _, testCase := range []struct {
 		name    string
 		arrange func(t *testing.T, in *appbuild.XcodeSetupCodeSigningInput) string
@@ -290,7 +290,7 @@ func TestXcodeSigningLifecycle_ReplacesOwnStaleMaterial(t *testing.T) {
 		filepath.Join(in.TempDir, "pp.mobileprovision"),
 		filepath.Join(in.ProvisioningProfilesDir, "pp.mobileprovision"),
 	} {
-		require.NoError(t, os.WriteFile(path, []byte("stale world-readable material"), 0o644)) //nolint:gosec // deliberate broad canary mode.
+		require.NoError(t, os.WriteFile(path, []byte("stale world-readable material"), 0o644))
 	}
 
 	sec, out := &recordingXcodeSecurity{}, &xcodeSecurityWriter{}
@@ -311,8 +311,8 @@ func TestXcodeSigningLifecycle_TeardownFailuresAreReportedNotMasked(t *testing.T
 			fsys, release := xcodeReleaseFixture(t)
 			release.CertBase64, release.PPBase64 = in.CertBase64, in.PPBase64
 			release.CertPassphrase = in.CertPassphrase
-			teardownCause := errors.New("owned teardown refusal") //nolint:err113 // distinct port cause.
-			primary := errors.New("owned primary refusal")        //nolint:err113 // distinct port cause.
+			teardownCause := errors.New("owned teardown refusal")
+			primary := errors.New("owned primary refusal")
 			sec := &recordingXcodeSecurity{}
 			sec.run = func(index int) (string, error) {
 				switch {
@@ -382,7 +382,7 @@ func primaryPrefix(testCase string) string {
 // and is deleted when the build ends, so nothing needs the operator to supply a
 // password for it. The run mints its own, and no operator secret reaches that
 // argv at all.
-func TestXcodeSigningLifecycle_KeychainPasswordIsMintedPerRun(t *testing.T) { //nolint:paralleltest // the shared fixture sets process environment.
+func TestXcodeSigningLifecycle_KeychainPasswordIsMintedPerRun(t *testing.T) {
 	passwords := make([]string, 0, 2)
 
 	for range 2 {

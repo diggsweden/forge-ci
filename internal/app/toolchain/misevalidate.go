@@ -45,12 +45,13 @@ func ValidateMiseInstall(in ValidateMiseInstallInput) error {
 	if err = validateMiseInstallMode(root, locked, hasConfig, in.GithubTokenPresent); err != nil {
 		return err
 	}
+
 	configs, err = selectedMiseTools(configs, strings.Fields(in.Tools))
 	if err != nil {
 		return err
 	}
 
-	checks := []struct{ runtime, backend string }{{"uv", "pipx"}, {toolGo, "go"}, {toolRust, "cargo"}}
+	checks := []struct{ runtime, backend string }{{"uv", "pipx"}, {toolGo, "go"}, {toolRust, miseBackendCargo}}
 	for _, check := range checks {
 		if err := requireRuntimeForLockedBackend(root, configs, locked, check.runtime, check.backend); err != nil {
 			return err
@@ -60,6 +61,8 @@ func ValidateMiseInstall(in ValidateMiseInstallInput) error {
 	return nil
 }
 
+const miseBackendCargo = "cargo"
+
 // selectedMiseTools uses the same selection for validation and runtime bootstrap.
 // A subset also needs its declared backend runtimes, but not unrelated dev tools.
 // Exact pin and file validation still apply to the complete config before this.
@@ -67,25 +70,35 @@ func selectedMiseTools(configs map[string]any, tools []string) (map[string]any, 
 	if len(tools) == 0 {
 		return configs, nil
 	}
+
 	selected := make(map[string]any, len(tools))
 	for _, tool := range tools {
 		if strings.HasPrefix(tool, "-") || !toolDeclared(configs, tool) || toolDeclared(selected, tool) {
 			return nil, fmt.Errorf("requested tools must be a unique subset of [tools] declarations: %w", errs.ErrUsage)
 		}
+
 		selected[tool] = configs[tool]
 	}
-	for _, dependency := range []struct{ backend, runtime string }{{"pipx", "uv"}, {"go", toolGo}, {"cargo", toolRust}} {
+
+	addMiseBackendRuntimes(configs, selected)
+
+	return selected, nil
+}
+
+func addMiseBackendRuntimes(configs, selected map[string]any) {
+	for _, dependency := range []struct{ backend, runtime string }{{"pipx", "uv"}, {"go", toolGo}, {miseBackendCargo, toolRust}} {
 		if !backendDeclared(selected, dependency.backend) {
 			continue
 		}
+
 		if value, ok := configs[dependency.runtime]; ok {
 			selected[dependency.runtime] = value
 		}
-		if dependency.backend == "cargo" && rustupDeclared(configs) {
+
+		if dependency.backend == miseBackendCargo && rustupDeclared(configs) {
 			selected["aqua:rust-lang/rustup"] = configs["aqua:rust-lang/rustup"]
 		}
 	}
-	return selected, nil
 }
 
 // validateMiseInstallMode enforces the locked-vs-token contract before installs run.
@@ -311,7 +324,7 @@ func validateToolchainEvidence(root string, locked bool) error {
 // partial triples) are syntax-checked, not an inventory of native support.
 var rustToolchainSelector = regexp.MustCompile(`^([0-9]+\.[0-9]+\.[0-9]+|stable|beta|nightly)(-[0-9]{4}-[0-9]{2}-[0-9]{2})?(-[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)?$`)
 
-func validateRustToolchain(root string) error { //nolint:cyclop // optional evidence, TOML shape, immutable base, date and host syntax stay in one preflight.
+func validateRustToolchain(root string) error {
 	body, err := readToolchainFile(root, "rust-toolchain.toml")
 	if os.IsNotExist(err) {
 		return nil

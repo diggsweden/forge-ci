@@ -83,17 +83,17 @@ func TestSink_RejectsEmptyStage(t *testing.T) {
 	t.Parallel()
 
 	fsys := testfs.NewReal(t)
-	s := manifest.New(fsys.Root)
+	sink := manifest.New(fsys.Root)
 	ctx := context.Background()
 
 	// Both write paths. The stage name becomes the filename, so an empty
 	// one would write "-result.json" -- a file no consumer globs for and
 	// that every stage would then overwrite in turn.
-	if err := s.Write(ctx, "", nil); !errors.Is(err, errs.ErrUsage) {
+	if err := sink.Write(ctx, "", nil); !errors.Is(err, errs.ErrUsage) {
 		t.Errorf("Write err = %v, want ErrUsage", err)
 	}
 
-	if err := s.WriteJSON(ctx, "", jsonBody(`{}`)); !errors.Is(err, errs.ErrUsage) {
+	if err := sink.WriteJSON(ctx, "", jsonBody(`{}`)); !errors.Is(err, errs.ErrUsage) {
 		t.Errorf("WriteJSON err = %v, want ErrUsage", err)
 	}
 

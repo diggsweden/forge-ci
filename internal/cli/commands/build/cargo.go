@@ -53,17 +53,15 @@ EXAMPLE:
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error {
 				return appbuild.CargoReleaseBuild(ctx, d.SummarySink, cargo.New(), os.Stderr, os.Stderr, appbuild.CargoReleaseBuildInput{
-					ReleaseBuildOptions: appbuild.ReleaseBuildOptions{
-						Dir:             cmd.String(flagWorkingDir),
-						ArtifactName:    cmd.String(flagArtifactName),
-						SkipTests:       cmd.Bool(flagSkipTests),
-						EnableBuildSBOM: cmd.Bool(flagBuildSBOM),
-					},
-					BinaryName: cmd.String(flagBinaryName),
-					Version:    cmd.String(flagVersion),
-					RefName:    cmd.String(flagRefName),
-					Commit:     cmd.String("commit"),
-					Platforms:  cmd.String(flagPlatforms),
+					Dir:             cmd.String(flagWorkingDir),
+					ArtifactName:    cmd.String(flagArtifactName),
+					SkipTests:       cmd.Bool(flagSkipTests),
+					EnableBuildSBOM: cmd.Bool(flagBuildSBOM),
+					BinaryName:      cmd.String(flagBinaryName),
+					Version:         cmd.String(flagVersion),
+					RefName:         cmd.String(flagRefName),
+					Commit:          cmd.String("commit"),
+					Platforms:       cmd.String(flagPlatforms),
 				})
 			})
 		},

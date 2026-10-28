@@ -343,7 +343,7 @@ func writeReleaseBinary(tr *tar.Reader, size int64, binary releaseBinary, destDi
 
 	installPath := filepath.Join(destDir, binary.install)
 
-	out, err := os.CreateTemp(destDir, "."+binary.install+"-*") //nolint:gosec // destination is caller-selected and opened as an os.Root above.
+	out, err := os.CreateTemp(destDir, "."+binary.install+"-*")
 	if err != nil {
 		return "", fmt.Errorf("create temporary %s binary in %s: %w", binary.tool, destDir, err)
 	}
@@ -366,7 +366,7 @@ func writeReleaseBinary(tr *tar.Reader, size int64, binary releaseBinary, destDi
 		return "", fmt.Errorf("close %s: %w", installPath, err)
 	}
 
-	if err := root.Chmod(tempName, 0o755); err != nil { //nolint:gosec // the tool must be executable by the runner.
+	if err := root.Chmod(tempName, 0o755); err != nil {
 		return "", fmt.Errorf("set executable mode on %s: %w", installPath, err)
 	}
 

@@ -114,7 +114,7 @@ func Generate(
 	mvn MavenOps,
 	gitRepo GitOps,
 	gen BuildSBOMGenerator,
-	w, stderr io.Writer, //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	out, stderr io.Writer,
 	in GenerateInput,
 ) error {
 	ws, err := newWorkspace(in)
@@ -139,19 +139,19 @@ func Generate(
 		return fmt.Errorf("invalid --project-type %q: %s: %w", in.ProjectType, parseErr, errs.ErrUsage)
 	}
 
-	emitGenerateHeader(w, ws.root, in.ProjectType, layers)
+	emitGenerateHeader(out, ws.root, in.ProjectType, layers)
 
-	projectType := resolveProjectType(ws, in.ProjectType, w)
+	projectType := resolveProjectType(ws, in.ProjectType, out)
 
 	resolvedName, resolvedVersion, err := resolveNameAndVersion(ctx, ws, mvn, projectType, in.Name, in.Version)
 	if err != nil {
 		return err
 	}
 
-	_, _ = fmt.Fprintln(w, "Project Information:")
-	_, _ = fmt.Fprintf(w, "  Name: %s\n", resolvedName)
-	_, _ = fmt.Fprintf(w, "  Version: %s\n", resolvedVersion)
-	_, _ = fmt.Fprintf(w, "  Type: %s\n\n", projectType)
+	_, _ = fmt.Fprintln(out, "Project Information:")
+	_, _ = fmt.Fprintf(out, "  Name: %s\n", resolvedName)
+	_, _ = fmt.Fprintf(out, "  Version: %s\n", resolvedVersion)
+	_, _ = fmt.Fprintf(out, "  Type: %s\n\n", projectType)
 
 	// Short SHA for filename traceability (best-effort).
 	sha, _ := gitRepo.Run(ctx, "rev-parse", "--short", "HEAD")
@@ -165,25 +165,25 @@ func Generate(
 		sha:     sha,
 	}
 
-	deps := layerDeps{ws: ws, syft: syft, gen: gen, w: w, stderr: stderr}
+	deps := layerDeps{ws: ws, syft: syft, gen: gen, w: out, stderr: stderr}
 
 	if err := generateLayers(ctx, deps, parsedLayers, projectType, subj, in.ContainerImage); err != nil {
 		return err
 	}
 
-	return generateSummary(w, ws, resolvedName, resolvedVersion, in.CreateZip)
+	return generateSummary(out, ws, resolvedName, resolvedVersion, in.CreateZip)
 }
 
-func emitGenerateHeader(w io.Writer, root, projectTypeIn, layers string) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
-	_, _ = fmt.Fprintln(w, "================================================")
-	_, _ = fmt.Fprintln(w, "SBOM Assembly")
-	_, _ = fmt.Fprintln(w, "================================================")
-	_, _ = fmt.Fprintf(w, "Working directory: %s\n", root)
-	_, _ = fmt.Fprintf(w, "Project type: %s\n", cmp.Or(projectTypeIn, string(projecttype.Auto)))
-	_, _ = fmt.Fprintf(w, "Requested layers: %s\n\n", layers)
+func emitGenerateHeader(out io.Writer, root, projectTypeIn, layers string) {
+	_, _ = fmt.Fprintln(out, "================================================")
+	_, _ = fmt.Fprintln(out, "SBOM Assembly")
+	_, _ = fmt.Fprintln(out, "================================================")
+	_, _ = fmt.Fprintf(out, "Working directory: %s\n", root)
+	_, _ = fmt.Fprintf(out, "Project type: %s\n", cmp.Or(projectTypeIn, string(projecttype.Auto)))
+	_, _ = fmt.Fprintf(out, "Requested layers: %s\n\n", layers)
 }
 
-func resolveProjectType(ws workspace, projectTypeIn string, w io.Writer) projecttype.Type { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func resolveProjectType(ws workspace, projectTypeIn string, out io.Writer) projecttype.Type {
 	projectType := projecttype.Type(projectTypeIn)
 	if projectType != "" && projectType != projecttype.Auto {
 		return projectType
@@ -197,7 +197,7 @@ func resolveProjectType(ws workspace, projectTypeIn string, w io.Writer) project
 	}
 
 	projectType = domainsbom.DetectProjectType(names)
-	_, _ = fmt.Fprintf(w, "Auto-detected project type: %s\n", projectType)
+	_, _ = fmt.Fprintf(out, "Auto-detected project type: %s\n", projectType)
 
 	return projectType
 }
@@ -233,7 +233,7 @@ func resolveNameAndVersion(ctx context.Context, ws workspace, mvn MavenOps, proj
 	return resolvedName, resolvedVersion, nil
 }
 
-func readCargoVersion(ws workspace) (string, error) { //nolint:cyclop // Bounded ancestor discovery keeps Cargo workspace resolution explicit.
+func readCargoVersion(ws workspace) (string, error) {
 	body, err := ws.readFile("Cargo.toml")
 	if err != nil {
 		return "", nil //nolint:nilerr // A missing/unreadable project manifest retains the existing unknown-version fallback.
@@ -320,11 +320,11 @@ func generateLayers(
 // files / call distinct domain functions, so abstracting the shared
 // shape behind a table-driven helper would obscure rather than clarify.
 //
-//nolint:dupl,cyclop // parallel to readName; version-source dispatch with one branch per project type.
+//nolint:cyclop // parallel to readName; version-source dispatch with one branch per project type.
 func readVersion(ctx context.Context, ws workspace, mvn MavenOps, projectType projecttype.Type) string {
 	switch projectType {
 	case projecttype.Maven:
-		if v := readMavenPOMField(ws, mavenPOMVersion); v != "" { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+		if v := readMavenPOMField(ws, mavenPOMVersion); v != "" {
 			if domainbuild.POMHasUnresolvedProperty(v) && mvn != nil {
 				expanded, _ := mvn.EvalExpression(ctx, "project.version")
 
@@ -374,11 +374,11 @@ func readVersion(ctx context.Context, ws workspace, mvn MavenOps, projectType pr
 
 // readName fetches the project name per project type.
 //
-//nolint:dupl,cyclop // parallel to readVersion; name-source dispatch with one branch per project type.
+//nolint:cyclop // parallel to readVersion; name-source dispatch with one branch per project type.
 func readName(ctx context.Context, ws workspace, mvn MavenOps, projectType projecttype.Type) string {
 	switch projectType {
 	case projecttype.Maven:
-		if v := readMavenPOMField(ws, mavenPOMArtifactID); v != "" { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+		if v := readMavenPOMField(ws, mavenPOMArtifactID); v != "" {
 			if domainbuild.POMHasUnresolvedProperty(v) && mvn != nil {
 				expanded, _ := mvn.EvalExpression(ctx, "project.artifactId")
 
@@ -433,10 +433,10 @@ func readName(ctx context.Context, ws workspace, mvn MavenOps, projectType proje
 
 // generateSummary mirrors the `generate_summary` function: lists the
 // SBOMs produced in the working dir, optionally zips them.
-func generateSummary(w io.Writer, ws workspace, projectName, ver string, createZip bool) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
-	_, _ = fmt.Fprintln(w, "================================================")
-	_, _ = fmt.Fprintln(w, "SBOM Assembly Complete")
-	_, _ = fmt.Fprintln(w, "================================================")
+func generateSummary(out io.Writer, ws workspace, projectName, ver string, createZip bool) error {
+	_, _ = fmt.Fprintln(out, "================================================")
+	_, _ = fmt.Fprintln(out, "SBOM Assembly Complete")
+	_, _ = fmt.Fprintln(out, "================================================")
 
 	matches, err := listSBOMs(ws, ".")
 	if err != nil {
@@ -447,51 +447,51 @@ func generateSummary(w io.Writer, ws workspace, projectName, ver string, createZ
 		// Name the fix — `assemble` runs AFTER the build, so an empty result
 		// almost always means a missing input rather than a tool failure. The
 		// concise wrapped error carries the exit code; this hint carries the why.
-		_, _ = fmt.Fprintln(w, "No SBOM layers were produced. `sbom assemble` runs AFTER the build:")
-		_, _ = fmt.Fprintln(w, "  • build              — harvests the BOM your build emits (cyclonedx-gomod / build-go.yml); run that first.")
-		_, _ = fmt.Fprintln(w, "  • analyzed-artifact  — syft-scans a built artifact; build one first.")
-		_, _ = fmt.Fprintln(w, "  • analyzed-container — syft-scans an image; pass --container-image.")
+		_, _ = fmt.Fprintln(out, "No SBOM layers were produced. `sbom assemble` runs AFTER the build:")
+		_, _ = fmt.Fprintln(out, "  • build              — harvests the BOM your build emits (cyclonedx-gomod / build-go.yml); run that first.")
+		_, _ = fmt.Fprintln(out, "  • analyzed-artifact  — syft-scans a built artifact; build one first.")
+		_, _ = fmt.Fprintln(out, "  • analyzed-container — syft-scans an image; pass --container-image.")
 
 		return fmt.Errorf("no SBOM layers produced: %w", errs.ErrValidation)
 	}
 
-	_, _ = fmt.Fprintf(w, "%s Successfully generated %d SBOM files\n\n", clicolor.Check(w), len(matches))
-	_, _ = fmt.Fprintln(w, "Generated files:")
+	_, _ = fmt.Fprintf(out, "%s Successfully generated %d SBOM files\n\n", clicolor.Check(out), len(matches))
+	_, _ = fmt.Fprintln(out, "Generated files:")
 
-	for _, m := range matches { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	for _, m := range matches {
 		info, err := ws.outputInfo(m)
 		if err != nil {
 			return fmt.Errorf("stat generated SBOM %s: %w", m, err)
 		}
 
-		_, _ = fmt.Fprintf(w, "  %8d  %s\n", info.Size(), m)
+		_, _ = fmt.Fprintf(out, "  %8d  %s\n", info.Size(), m)
 	}
 
-	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(out)
 
 	if createZip {
 		zipName := domainsbom.ZipName(version.SanitizePathToken(projectName), version.SanitizePathToken(ver))
 
-		_, _ = fmt.Fprintln(w, "📦 Creating SBOM ZIP archive...")
+		_, _ = fmt.Fprintln(out, "📦 Creating SBOM ZIP archive...")
 
 		if err := zipFiles(ws, zipName, matches); err != nil {
-			_, _ = fmt.Fprintf(w, "   ⚠️  Failed to create SBOM ZIP: %v\n", err)
+			_, _ = fmt.Fprintf(out, "   ⚠️  Failed to create SBOM ZIP: %v\n", err)
 
 			return fmt.Errorf("create SBOM ZIP %s: %w", zipName, err)
 		}
 
-		_, _ = fmt.Fprintf(w, "%s Created: %s\n\n", clicolor.Check(w), zipName)
+		_, _ = fmt.Fprintf(out, "%s Created: %s\n\n", clicolor.Check(out), zipName)
 		// Match the bash `unzip -l` listing.
-		for _, m := range matches { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+		for _, m := range matches {
 			info, err := ws.outputInfo(m)
 			if err != nil {
 				return fmt.Errorf("stat archived SBOM %s: %w", m, err)
 			}
 
-			_, _ = fmt.Fprintf(w, "  %8d  %s\n", info.Size(), m)
+			_, _ = fmt.Fprintf(out, "  %8d  %s\n", info.Size(), m)
 		}
 
-		_, _ = fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(out)
 	}
 
 	return nil
@@ -564,7 +564,7 @@ func zipFiles(ws workspace, outputPath string, files []string) error {
 	return nil
 }
 
-func addFileToZip(ws workspace, w *zip.Writer, name string) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func addFileToZip(ws workspace, zipWriter *zip.Writer, name string) error {
 	src, err := ws.openOutputRegular(name)
 	if err != nil {
 		return err
@@ -585,7 +585,7 @@ func addFileToZip(ws workspace, w *zip.Writer, name string) error { //nolint:var
 	hdr.Name = path.Base(name)
 	hdr.Method = zip.Deflate
 
-	dst, err := w.CreateHeader(hdr)
+	dst, err := zipWriter.CreateHeader(hdr)
 	if err != nil {
 		return err
 	}
@@ -604,16 +604,16 @@ func walkAllFiles(ws workspace, root string) ([]string, error) {
 
 	var out []string
 
-	err := fs.WalkDir(ws.fsys, cleanFSPath(root), func(name string, d fs.DirEntry, err error) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	err := fs.WalkDir(ws.fsys, cleanFSPath(root), func(name string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		if d.IsDir() {
+		if entry.IsDir() {
 			return nil
 		}
 
-		info, err := d.Info()
+		info, err := entry.Info()
 		if err != nil {
 			return err
 		}

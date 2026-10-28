@@ -43,7 +43,7 @@ func TestRun_EnvReplacesRatherThanExtends(t *testing.T) {
 	stub := filepath.Join(dir, "mise-stub")
 
 	script := "#!/bin/sh\nprintf 'marker=%s custom=%s\\n' \"${AMBIENT_MARKER:-unset}\" \"${CUSTOM:-unset}\"\n"
-	if err := os.WriteFile(stub, []byte(script), 0o700); err != nil { //nolint:gosec // test-owned stub must be executable.
+	if err := os.WriteFile(stub, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 

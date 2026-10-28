@@ -65,7 +65,7 @@ func (g *androidCommandGradle) RunInDirEnvInherit(ctx context.Context, dir strin
 	return g.run(ctx, dir, env, stdout, stderr, args)
 }
 
-func TestGradleAndroidRun_BindsSigningEnvironmentAndBlobSources(t *testing.T) { //nolint:gocognit,gocyclo,maintidx // one CLI-to-app oracle contrasts sources, flag precedence and both native failure positions.
+func TestGradleAndroidRun_BindsSigningEnvironmentAndBlobSources(t *testing.T) {
 	for _, source := range []string{"env", "dated_env", "file", "stdin"} {
 		for _, fail := range []string{"", "build", "sbom"} {
 			t.Run(source+"/fail_"+fail, func(t *testing.T) {
@@ -179,7 +179,7 @@ func TestGradleAndroidRun_BindsSigningEnvironmentAndBlobSources(t *testing.T) { 
 					ctx, cancel := context.WithCancel(t.Context())
 					defer cancel()
 
-					buildCause, sbomCause := errors.New("owned CLI build failure"), errors.New("owned CLI SBOM failure") //nolint:err113 // distinct native error identities must survive the CLI.
+					buildCause, sbomCause := errors.New("owned CLI build failure"), errors.New("owned CLI SBOM failure")
 
 					var (
 						keyPath, initPath string

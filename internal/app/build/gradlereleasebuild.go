@@ -57,9 +57,7 @@ type gradleDeps struct {
 // (Design Rule 1). Every Gradle invocation uses the selected project directory.
 // Enabled Build SBOM generation is mandatory: a
 // failure is summarized and returned so the release fails closed.
-//
-//nolint:varnamelen // idiomatic short names (w/in) — testing/http/io conventions, matching the sibling build funcs.
-func GradleReleaseBuild(ctx context.Context, summarySink ci.SummarySink, ops GradleOps, w, stderr io.Writer, in GradleReleaseBuildInput) error {
+func GradleReleaseBuild(ctx context.Context, summarySink ci.SummarySink, ops GradleOps, out, stderr io.Writer, in GradleReleaseBuildInput) error {
 	dir, err := filepath.Abs(defaultDir(in.Dir))
 	if err != nil {
 		return err
@@ -81,13 +79,13 @@ func GradleReleaseBuild(ctx context.Context, summarySink ci.SummarySink, ops Gra
 	}
 
 	version := resolveGradleVersion(in.Dir)
-	_, _ = fmt.Fprintf(w, "Gradle release build: version=%s tasks=%s\n", version, in.Tasks)
+	_, _ = fmt.Fprintf(out, "Gradle release build: version=%s tasks=%s\n", version, in.Tasks)
 
-	if err := GradleApplication(ctx, ops, w, stderr, GradleApplicationInput{Tasks: in.Tasks, SkipTests: in.SkipTests}); err != nil {
+	if err := GradleApplication(ctx, ops, out, stderr, GradleApplicationInput{Tasks: in.Tasks, SkipTests: in.SkipTests}); err != nil {
 		return fmt.Errorf("gradle build: %w", err)
 	}
 
-	if err := gradleSBOMStep(ctx, gradleDeps{summary: summarySink, ops: ops, w: w, stderr: stderr}, in); err != nil {
+	if err := gradleSBOMStep(ctx, gradleDeps{summary: summarySink, ops: ops, w: out, stderr: stderr}, in); err != nil {
 		return err
 	}
 

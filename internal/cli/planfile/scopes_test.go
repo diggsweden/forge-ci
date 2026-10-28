@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -78,7 +79,7 @@ func findFlag(t *testing.T, root *urfavecli.Command, scope, name string) urfavec
 
 	cmd := root
 
-	for _, part := range strings.Fields(scope) {
+	for part := range strings.FieldsSeq(scope) {
 		var next *urfavecli.Command
 
 		for _, sub := range cmd.Commands {
@@ -94,10 +95,8 @@ func findFlag(t *testing.T, root *urfavecli.Command, scope, name string) urfavec
 	}
 
 	for _, flag := range cmd.Flags {
-		for _, n := range flag.Names() {
-			if n == name {
-				return flag
-			}
+		if slices.Contains(flag.Names(), name) {
+			return flag
 		}
 	}
 

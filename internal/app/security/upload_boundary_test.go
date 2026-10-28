@@ -109,9 +109,13 @@ func TestTrivyTransformBoundary_RefusalPreservesDestinations(t *testing.T) {
 		{"sarif", func(in appsecurity.TransformInput) (int, error) { return 0, appsecurity.TrivyToSARIF(in) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			for _, body := range []string{"null", "{", `{"Results":42}`, "{}", `{"unexpected":true}`, "missing"} {
 				for _, seeded := range []bool{false, true} {
 					t.Run(fmt.Sprintf("%s/seeded=%t", body, seeded), func(t *testing.T) {
+						t.Parallel()
+
 						assertTrivyRefusal(t, tc.transform, body, seeded)
 					})
 				}

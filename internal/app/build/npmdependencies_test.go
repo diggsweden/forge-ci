@@ -7,18 +7,20 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	appbuild "github.com/diggsweden/forge-ci/internal/app/build"
-	"github.com/diggsweden/forge-ci/internal/domain/output"
-	"github.com/diggsweden/forge-ci/internal/domain/errs"
-	"github.com/stretchr/testify/require"
 	"io"
 	"os"
 	"strings"
 	"testing"
+
+	appbuild "github.com/diggsweden/forge-ci/internal/app/build"
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/output"
+	"github.com/stretchr/testify/require"
 )
 
 type npmDependencyProbe struct {
 	fakeNPMRunner
+
 	t         *testing.T
 	config    string
 	authCalls int
@@ -75,8 +77,8 @@ func TestNPMDependencyCredentialsArePhaseScoped(t *testing.T) {
 			var out bytes.Buffer
 
 			err := appbuild.NPMReleaseBuild(t.Context(), &recordingSummarySink{}, probe, &fakeNPMRunner{}, output.Annotator{}, &out, &out, appbuild.NPMReleaseBuildInput{
-				ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newNPMDir(t)},
-				DependencyAccess:    &appbuild.NPMDependencyAccess{Registry: "https://registry.example/private", Token: "synthetic-private-token", Environment: []string{"PATH=/fixture"}},
+				Dir:              newNPMDir(t),
+				DependencyAccess: &appbuild.NPMDependencyAccess{Registry: "https://registry.example/private", Token: "synthetic-private-token", Environment: []string{"PATH=/fixture"}},
 			})
 			if fail {
 				require.Error(t, err)

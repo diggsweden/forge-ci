@@ -38,13 +38,13 @@ func TestSignAssembled_SignsOnlyCanonicalSBOMs(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	for _, f := range []string{
+	for _, value := range []string{
 		"app-1.0-build-sbom.spdx.json",        // sign
 		"app-1.0-build-sbom.cyclonedx.json",   // sign
 		"app-1.0-build-sbom.spdx.json.bundle", // skip (a signature sidecar)
 		"readme.txt",                          // skip (not an SBOM)
 	} {
-		if err := os.WriteFile(filepath.Join(dir, f), []byte("{}"), 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, value), []byte("{}"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}

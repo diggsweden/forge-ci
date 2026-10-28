@@ -18,7 +18,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/testutil/testfs"
 )
 
-func TestMiseExposure_PreflightPreservesState(t *testing.T) { //nolint:gocognit,gocyclo // each late refusal shares exact earlier-source, destination and PATH canaries.
+func TestMiseExposure_PreflightPreservesState(t *testing.T) {
 	t.Parallel()
 
 	for _, scenario := range []string{
@@ -29,6 +29,8 @@ func TestMiseExposure_PreflightPreservesState(t *testing.T) { //nolint:gocognit,
 		"late rustup collision", "late rustup empty", "late rustup relative", "late rustup multiline", "late rustup missing", "late rustup non-executable",
 	} {
 		t.Run(scenario, func(t *testing.T) {
+			t.Parallel()
+
 			root := t.TempDir()
 			first, later := filepath.Join(root, "first"), filepath.Join(root, "later")
 			writeExecutable(t, filepath.Join(first, "early"))
@@ -141,11 +143,13 @@ func TestMiseExposure_PreflightPreservesState(t *testing.T) { //nolint:gocognit,
 	}
 }
 
-func TestMiseExposure_SameFileAndSourceLinks(t *testing.T) { //nolint:gocognit // the source/destination alias matrix shares rerun and byte-preservation checks.
+func TestMiseExposure_SameFileAndSourceLinks(t *testing.T) {
 	t.Parallel()
 
 	for _, scenario := range []string{"same directory", "hardlink destination", "same target symlink", "relative source link", "absolute source link", "linked source directory", "same-file duplicate", "rustup source links"} {
 		t.Run(scenario, func(t *testing.T) {
+			t.Parallel()
+
 			root := testfs.NewReal(t).Root
 			source := filepath.Join(root, "source bin")
 			binHome := filepath.Join(root, "bin")
@@ -317,6 +321,8 @@ func TestMiseExposure_PublicationFailurePreservesKnownGoodState(t *testing.T) {
 
 	for _, stage := range []string{"PATH open", "link create"} {
 		t.Run(stage, func(t *testing.T) {
+			t.Parallel()
+
 			root := t.TempDir()
 			source, binHome := filepath.Join(root, "source"), filepath.Join(root, "bin")
 			writeExecutable(t, filepath.Join(source, "early"))
@@ -363,7 +369,7 @@ func TestMiseExposure_PublicationFailurePreservesKnownGoodState(t *testing.T) {
 	}
 }
 
-func TestMiseExposure_DestinationSymlinkParentResolution(t *testing.T) { //nolint:gocognit // inverse hardlink canaries discriminate true and false same-file resolution with identical link spelling.
+func TestMiseExposure_DestinationSymlinkParentResolution(t *testing.T) {
 	t.Parallel()
 
 	for _, sameFile := range []bool{false, true} {
@@ -373,6 +379,8 @@ func TestMiseExposure_DestinationSymlinkParentResolution(t *testing.T) { //nolin
 		}
 
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
 			root := testfs.NewReal(t).Root
 			fixtures := filepath.Join(root, "fixtures")
 			source := filepath.Join(fixtures, "source", "tool")
@@ -384,7 +392,7 @@ func TestMiseExposure_DestinationSymlinkParentResolution(t *testing.T) { //nolin
 			} {
 				writeExecutable(t, fixture.path)
 
-				if err := os.WriteFile(fixture.path, []byte(fixture.body), 0o755); err != nil { //nolint:gosec // owned executable canaries are never executed.
+				if err := os.WriteFile(fixture.path, []byte(fixture.body), 0o755); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -452,11 +460,13 @@ func TestMiseExposure_DestinationSymlinkParentResolution(t *testing.T) { //nolin
 	}
 }
 
-func TestMiseExposure_PATHInsideNewBinHome(t *testing.T) { //nolint:gocognit // the shared combined-mise/rustup plan has positive and late-refusal controls.
+func TestMiseExposure_PATHInsideNewBinHome(t *testing.T) {
 	t.Parallel()
 
 	for _, scenario := range []string{"success", "late source conflict", "late PATH collision", "late rustup conflict"} {
 		t.Run(scenario, func(t *testing.T) {
+			t.Parallel()
+
 			root := testfs.NewReal(t).Root
 			fixtures := filepath.Join(root, "fixtures")
 			first, later, cargo := filepath.Join(fixtures, "first"), filepath.Join(fixtures, "later"), filepath.Join(fixtures, "rustup")

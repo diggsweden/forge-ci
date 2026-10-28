@@ -82,10 +82,13 @@ func mavenBuildInputs(artifact pipeline.PlannedArtifact, inputs map[string]any) 
 // out over its running targets and items: one `include:` of the matching
 // `build-<eco>` component per item. It refuses targets that have no Catalog
 // component instead of silently dropping planned work.
-//
-//nolint:cyclop,gocognit,gocyclo // guards for targets the Catalog cannot express, then one addTargetIncludes call per ecosystem — a flat fan-out, not nested logic.
 func BuildStagePipeline(plan pipeline.ReleaseBuildStagePlan, opts BuildPipelineOptions) (ChildPipeline, error) {
 	if err := validateComponentCoordinate(opts); err != nil {
+		return ChildPipeline{}, err
+	}
+
+	tgt := plan.Targets
+	if err := validateBuildStageTargets(tgt, opts.Version); err != nil {
 		return ChildPipeline{}, err
 	}
 
@@ -96,7 +99,46 @@ func BuildStagePipeline(plan pipeline.ReleaseBuildStagePlan, opts BuildPipelineO
 
 	out := ChildPipeline{Stages: []string{stage}}
 
-	tgt := plan.Targets
+	// Each running target contributes one component include per item. Go and
+	// Cargo components also take the artifact name and release version.
+	for _, include := range []struct {
+		component string
+		target    pipeline.TargetPlan[pipeline.PlannedArtifact]
+		binaries  bool
+		inputs    func(pipeline.PlannedArtifact, map[string]any) map[string]any
+	}{
+		{"build-maven", tgt.Maven, false, mavenBuildInputs},
+		{"build-npm", tgt.NPM, false, npmBuildInputs},
+		{"build-gradle", tgt.Gradle, false, func(artifact pipeline.PlannedArtifact, inputs map[string]any) map[string]any {
+			return gradleBuildInputs(artifact, inputs, opts.Version)
+		}},
+		{"build-gradle-android", tgt.GradleAndroid, false, func(artifact pipeline.PlannedArtifact, inputs map[string]any) map[string]any {
+			return gradleAndroidBuildInputs(artifact, inputs, opts.Version)
+		}},
+		{"build-go", tgt.Go, true, goBuildInputs},
+		{"build-cargo", tgt.Cargo, true, cargoBuildInputs},
+	} {
+		err := addTargetIncludes(&out, include.component, include.target, opts, artifactName, include.binaries, include.binaries, func(artifact pipeline.PlannedArtifact) map[string]any {
+			return include.inputs(artifact, map[string]any{
+				"working-directory": dirOrDot(artifact.WorkingDirectory),
+				"enable-build-sbom": hasBuildSBOM(artifact),
+			})
+		})
+		if err != nil {
+			return ChildPipeline{}, err
+		}
+	}
+
+	if err := out.validate(); err != nil {
+		return ChildPipeline{}, err
+	}
+
+	return out, nil
+}
+
+// validateBuildStageTargets refuses targets the Catalog components cannot
+// express before any include is rendered.
+func validateBuildStageTargets(tgt pipeline.ReleaseBuildTargets, version string) error {
 	for _, contract := range []struct {
 		component   string
 		projectType projecttype.Type
@@ -110,154 +152,119 @@ func BuildStagePipeline(plan pipeline.ReleaseBuildStagePlan, opts BuildPipelineO
 		{component: "build-cargo", projectType: projecttype.Cargo, target: tgt.Cargo},
 	} {
 		if err := validateArtifactTarget(contract.component, contract.target, contract.projectType); err != nil {
-			return ChildPipeline{}, err
+			return err
 		}
 	}
 
 	if targetPlanned(tgt.XcodeIOS) {
-		return ChildPipeline{}, unsupportedTarget("build", "xcode-ios", "build-xcode-ios")
+		return unsupportedTarget("build", "xcode-ios", "build-xcode-ios")
 	}
 
 	if err := validateGoTargetRepresentable(tgt.Go); err != nil {
-		return ChildPipeline{}, err
+		return err
 	}
 
 	for _, artifact := range slices.Concat(tgt.Gradle.Items, tgt.GradleAndroid.Items) {
-		if artifact.PublicationArtifactName != "" && opts.Version == "" {
-			return ChildPipeline{}, fmt.Errorf("gradle publication export requires an explicit release version before generating a pipeline: %w", errs.ErrInvalidConfig)
+		if artifact.PublicationArtifactName != "" && version == "" {
+			return fmt.Errorf("gradle publication export requires an explicit release version before generating a pipeline: %w", errs.ErrInvalidConfig)
 		}
 	}
 
-	if err := validateCargoTargetRepresentable(tgt.Cargo); err != nil {
-		return ChildPipeline{}, err
-	}
+	return validateCargoTargetRepresentable(tgt.Cargo)
+}
 
-	// Each running target contributes one component include per item.
-	workdir := func(artifact pipeline.PlannedArtifact) map[string]any {
-		return map[string]any{
-			"working-directory": dirOrDot(artifact.WorkingDirectory),
-			"enable-build-sbom": hasBuildSBOM(artifact),
+func npmBuildInputs(artifact pipeline.PlannedArtifact, inputs map[string]any) map[string]any {
+	if artifact.NPM != nil {
+		inputs["node-version"] = artifact.NPM.NodeVersion
+		if artifact.NPM.PrivateDependencies {
+			inputs["private-dependencies"] = true
+			inputs["dependency-registry"] = artifact.NPM.DependencyRegistry
 		}
 	}
 
-	if err := addTargetIncludes(&out, "build-maven", tgt.Maven, opts, artifactName, false, false, func(artifact pipeline.PlannedArtifact) map[string]any {
-		return mavenBuildInputs(artifact, workdir(artifact))
-	}); err != nil {
-		return ChildPipeline{}, err
+	return inputs
+}
+
+func gradleBuildInputs(artifact pipeline.PlannedArtifact, inputs map[string]any, version string) map[string]any {
+	if artifact.Gradle != nil {
+		inputs["gradle-tasks"] = artifact.Gradle.GradleTasks
+
+		inputs["java-version"] = artifact.Gradle.JavaVersion
+		if artifact.Gradle.PrivateDependencies {
+			inputs["private-dependencies"] = true
+		}
 	}
 
-	if err := addTargetIncludes(&out, "build-npm", tgt.NPM, opts, artifactName, false, false, func(artifact pipeline.PlannedArtifact) map[string]any {
-		inputs := workdir(artifact)
-		if artifact.NPM != nil {
-			inputs["node-version"] = artifact.NPM.NodeVersion
-			if artifact.NPM.PrivateDependencies {
-				inputs["private-dependencies"] = true
-				inputs["dependency-registry"] = artifact.NPM.DependencyRegistry
-			}
-		}
+	return gradlePublicationInputs(artifact, inputs, version)
+}
 
+func gradleAndroidBuildInputs(artifact pipeline.PlannedArtifact, inputs map[string]any, version string) map[string]any {
+	if artifact.BuildType == config.BuildTypeLibrary {
+		inputs["library"] = true
+	}
+
+	inputs = gradlePublicationInputs(artifact, inputs, version)
+
+	if artifact.GradleAndroid == nil {
 		return inputs
-	}); err != nil {
-		return ChildPipeline{}, err
 	}
 
-	if err := addTargetIncludes(&out, "build-gradle", tgt.Gradle, opts, artifactName, false, false, func(artifact pipeline.PlannedArtifact) map[string]any {
-		inputs := workdir(artifact)
-		if artifact.Gradle != nil {
-			inputs["gradle-tasks"] = artifact.Gradle.GradleTasks
+	android := artifact.GradleAndroid
+	inputs["build-module"] = android.BuildModule
+	inputs["product-flavor"] = android.ProductFlavor
+	inputs["build-types"] = android.BuildTypes
+	inputs["include-aab"] = artifact.BuildType != config.BuildTypeLibrary && (android.IncludeAAB == nil || *android.IncludeAAB)
+	inputs["enable-signing"] = artifact.BuildType != config.BuildTypeLibrary && android.EnableAndroidSigning != nil && *android.EnableAndroidSigning
 
-			inputs["java-version"] = artifact.Gradle.JavaVersion
-			if artifact.Gradle.PrivateDependencies {
-				inputs["private-dependencies"] = true
-			}
-		}
+	return inputs
+}
 
-		if artifact.PublicationArtifactName != "" {
-			inputs["export-publications"] = true
-			inputs["version"] = opts.Version
-			inputs["central-publication"] = slices.Contains(artifact.PublishTo, config.PublishMavenCentral)
-		}
-
-		return inputs
-	}); err != nil {
-		return ChildPipeline{}, err
+// gradlePublicationInputs asks a Gradle build to export its publications for
+// the release version when the artifact publishes them.
+func gradlePublicationInputs(artifact pipeline.PlannedArtifact, inputs map[string]any, version string) map[string]any {
+	if artifact.PublicationArtifactName != "" {
+		inputs["export-publications"] = true
+		inputs["version"] = version
+		inputs["central-publication"] = slices.Contains(artifact.PublishTo, config.PublishMavenCentral)
 	}
 
-	if err := addTargetIncludes(&out, "build-gradle-android", tgt.GradleAndroid, opts, artifactName, false, false, func(artifact pipeline.PlannedArtifact) map[string]any {
-		inputs := workdir(artifact)
-		if artifact.BuildType == config.BuildTypeLibrary {
-			inputs["library"] = true
+	return inputs
+}
+
+func goBuildInputs(artifact pipeline.PlannedArtifact, inputs map[string]any) map[string]any {
+	platforms := "linux/amd64,linux/arm64,darwin/amd64,darwin/arm64"
+
+	if artifact.Go != nil {
+		if artifact.Go.Platforms != "" {
+			platforms = artifact.Go.Platforms
 		}
 
-		if artifact.PublicationArtifactName != "" {
-			inputs["export-publications"] = true
-			inputs["version"] = opts.Version
-			inputs["central-publication"] = slices.Contains(artifact.PublishTo, config.PublishMavenCentral)
+		inputs["skip-tests"] = artifact.Go.SkipTests
+
+		if artifact.Go.MainPackage != "" {
+			inputs["main-package"] = artifact.Go.MainPackage
 		}
-
-		if artifact.GradleAndroid == nil {
-			return inputs
-		}
-
-		android := artifact.GradleAndroid
-		inputs["build-module"] = android.BuildModule
-		inputs["product-flavor"] = android.ProductFlavor
-		inputs["build-types"] = android.BuildTypes
-		inputs["include-aab"] = artifact.BuildType != config.BuildTypeLibrary && (android.IncludeAAB == nil || *android.IncludeAAB)
-		inputs["enable-signing"] = artifact.BuildType != config.BuildTypeLibrary && android.EnableAndroidSigning != nil && *android.EnableAndroidSigning
-
-		return inputs
-	}); err != nil {
-		return ChildPipeline{}, err
 	}
 
-	if err := addTargetIncludes(&out, "build-go", tgt.Go, opts, artifactName, true, true, func(artifact pipeline.PlannedArtifact) map[string]any {
-		inputs := workdir(artifact)
-		platforms := "linux/amd64,linux/arm64,darwin/amd64,darwin/arm64"
+	inputs["platforms"] = platforms
 
-		if artifact.Go != nil {
-			if artifact.Go.Platforms != "" {
-				platforms = artifact.Go.Platforms
-			}
+	return inputs
+}
 
-			inputs["skip-tests"] = artifact.Go.SkipTests
+func cargoBuildInputs(artifact pipeline.PlannedArtifact, inputs map[string]any) map[string]any {
+	platforms := "linux/amd64"
 
-			if artifact.Go.MainPackage != "" {
-				inputs["main-package"] = artifact.Go.MainPackage
-			}
+	if artifact.Cargo != nil {
+		if artifact.Cargo.Platforms != "" {
+			platforms = artifact.Cargo.Platforms
 		}
 
-		inputs["platforms"] = platforms
-
-		return inputs
-	}); err != nil {
-		return ChildPipeline{}, err
+		inputs["skip-tests"] = artifact.Cargo.SkipTests
 	}
 
-	if err := addTargetIncludes(&out, "build-cargo", tgt.Cargo, opts, artifactName, true, true, func(artifact pipeline.PlannedArtifact) map[string]any {
-		inputs := workdir(artifact)
-		platforms := "linux/amd64"
+	inputs["platforms"] = platforms
 
-		if artifact.Cargo != nil {
-			if artifact.Cargo.Platforms != "" {
-				platforms = artifact.Cargo.Platforms
-			}
-
-			inputs["skip-tests"] = artifact.Cargo.SkipTests
-		}
-
-		inputs["platforms"] = platforms
-
-		return inputs
-	}); err != nil {
-		return ChildPipeline{}, err
-	}
-
-	if err := out.validate(); err != nil {
-		return ChildPipeline{}, err
-	}
-
-	return out, nil
+	return inputs
 }
 
 // artifactName extracts the plan item's name (works for PlannedArtifact).
@@ -289,8 +296,6 @@ func (c ChildPipeline) validate() error {
 // Generic over the item type so build and publish PlannedArtifact targets share
 // one fan-out helper. artifact-name and version are emitted only when the
 // selected component declares them; extra carries target-specific inputs.
-//
-//nolint:cyclop // validates the target plan, then emits one include per item — phases of one operation.
 func addTargetIncludes[T any](
 	out *ChildPipeline,
 	component string,
@@ -397,8 +402,6 @@ func validateArtifactTarget(component string, target pipeline.TargetPlan[pipelin
 // the Catalog's build-go component cannot express. The component builds the
 // selected main package artifact-first with the artifact's own name. A distinct
 // binary name, build tags or ldflags would be silently dropped from the pipeline.
-//
-//nolint:cyclop // one flat predicate per setting the component cannot express; cyclop counts each || as a decision, but there is only one.
 func validateGoTargetRepresentable(target pipeline.TargetPlan[pipeline.PlannedArtifact]) error {
 	for _, artifact := range target.Items {
 		if artifact.GoBuildMode != "" && artifact.GoBuildMode != config.GoBuildModeArtifactFirst {

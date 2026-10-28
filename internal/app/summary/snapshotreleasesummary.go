@@ -44,7 +44,7 @@ type SnapshotReleaseSummaryInput struct {
 // prints a short w banner.
 //
 //nolint:cyclop // renders one summary block per snapshot-release artifact category.
-func SnapshotReleaseSummary(ctx context.Context, sink ci.SummarySink, w io.Writer, in SnapshotReleaseSummaryInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func SnapshotReleaseSummary(ctx context.Context, sink ci.SummarySink, out io.Writer, in SnapshotReleaseSummaryInput) error {
 	now := in.Now
 	if now.IsZero() {
 		now = time.Now()
@@ -87,14 +87,14 @@ func SnapshotReleaseSummary(ctx context.Context, sink ci.SummarySink, w io.Write
 		return fmt.Errorf("successful NPM publication has incomplete artifact metadata: %w", errs.ErrMalformedInput)
 	}
 
-	_, _ = fmt.Fprintf(w, "================================================\n")
-	_, _ = fmt.Fprintf(w, "Generating Dev Release Summary\n")
-	_, _ = fmt.Fprintf(w, "================================================\n")
+	_, _ = fmt.Fprintf(out, "================================================\n")
+	_, _ = fmt.Fprintf(out, "Generating Dev Release Summary\n")
+	_, _ = fmt.Fprintf(out, "================================================\n")
 	// The banner goes to the job log, where a line break would start a new
 	// line the runner may read as a workflow command.
-	_, _ = fmt.Fprintf(w, "Project Type: %s\n", domainsummary.SanitizeCell(string(in.ProjectType)))
-	_, _ = fmt.Fprintf(w, "Branch: %s\n", domainsummary.SanitizeCell(in.ReleaseRef))
-	_, _ = fmt.Fprintf(w, "Commit: %s\n", short)
+	_, _ = fmt.Fprintf(out, "Project Type: %s\n", domainsummary.SanitizeCell(string(in.ProjectType)))
+	_, _ = fmt.Fprintf(out, "Branch: %s\n", domainsummary.SanitizeCell(in.ReleaseRef))
+	_, _ = fmt.Fprintf(out, "Commit: %s\n", short)
 
 	pkgLabel := npmPackageName
 	if pkgLabel == "" {
@@ -106,29 +106,29 @@ func SnapshotReleaseSummary(ctx context.Context, sink ci.SummarySink, w io.Write
 		verLabel = "none"
 	}
 
-	_, _ = fmt.Fprintf(w, "NPM Package: %s@%s\n\n", pkgLabel, verLabel)
+	_, _ = fmt.Fprintf(out, "NPM Package: %s@%s\n\n", pkgLabel, verLabel)
 
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var builder strings.Builder
 
-	_, _ = fmt.Fprintf(&b, "# Dev Release Summary\n\n")
-	_, _ = fmt.Fprintf(&b, "## Build Information\n")
-	_, _ = fmt.Fprintf(&b, "| Property | Value |\n")
-	_, _ = fmt.Fprintf(&b, "|----------|-------|\n")
-	_, _ = fmt.Fprintf(&b, "| **Project Type** | `%s` |\n", domainsummary.SanitizeCell(string(in.ProjectType)))
-	_, _ = fmt.Fprintf(&b, "| **Branch** | `%s` |\n", domainsummary.SanitizeCell(in.ReleaseRef))
-	_, _ = fmt.Fprintf(&b, "| **Commit** | `%s` |\n", domainsummary.SanitizeCell(short))
-	_, _ = fmt.Fprintf(&b, "| **Built By** | @%s |\n", domainsummary.SanitizeCell(in.ReleaseActor))
-	_, _ = fmt.Fprintf(&b, "| **Built At** | %s |\n\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
-	_, _ = fmt.Fprintf(&b, "## Job Status\n")
-	_, _ = fmt.Fprintf(&b, "| Job | Status |\n")
-	_, _ = fmt.Fprintf(&b, "|-----|--------|\n")
-	_, _ = fmt.Fprintf(&b, "| Build Maven | %s |\n", domainsummary.StatusIcon(buildMavenStatus))
-	_, _ = fmt.Fprintf(&b, "| Build NPM | %s |\n", domainsummary.StatusIcon(buildNPMStatus))
-	_, _ = fmt.Fprintf(&b, "| Build Gradle | %s |\n", domainsummary.StatusIcon(buildGradleStatus))
-	_, _ = fmt.Fprintf(&b, "| Build Go | %s |\n", domainsummary.StatusIcon(buildGoStatus))
-	_, _ = fmt.Fprintf(&b, "| Build Cargo | %s |\n", domainsummary.StatusIcon(buildCargoStatus))
-	_, _ = fmt.Fprintf(&b, "| Build Gradle Android | %s |\n", domainsummary.StatusIcon(buildGradleAndroidStatus))
-	_, _ = fmt.Fprintf(&b, "| Build Xcode | %s |\n", domainsummary.StatusIcon(buildXcodeStatus))
+	_, _ = fmt.Fprintf(&builder, "# Dev Release Summary\n\n")
+	_, _ = fmt.Fprintf(&builder, "## Build Information\n")
+	_, _ = fmt.Fprintf(&builder, "| Property | Value |\n")
+	_, _ = fmt.Fprintf(&builder, "|----------|-------|\n")
+	_, _ = fmt.Fprintf(&builder, "| **Project Type** | `%s` |\n", domainsummary.SanitizeCell(string(in.ProjectType)))
+	_, _ = fmt.Fprintf(&builder, "| **Branch** | `%s` |\n", domainsummary.SanitizeCell(in.ReleaseRef))
+	_, _ = fmt.Fprintf(&builder, "| **Commit** | `%s` |\n", domainsummary.SanitizeCell(short))
+	_, _ = fmt.Fprintf(&builder, "| **Built By** | @%s |\n", domainsummary.SanitizeCell(in.ReleaseActor))
+	_, _ = fmt.Fprintf(&builder, "| **Built At** | %s |\n\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
+	_, _ = fmt.Fprintf(&builder, "## Job Status\n")
+	_, _ = fmt.Fprintf(&builder, "| Job | Status |\n")
+	_, _ = fmt.Fprintf(&builder, "|-----|--------|\n")
+	_, _ = fmt.Fprintf(&builder, "| Build Maven | %s |\n", domainsummary.StatusIcon(buildMavenStatus))
+	_, _ = fmt.Fprintf(&builder, "| Build NPM | %s |\n", domainsummary.StatusIcon(buildNPMStatus))
+	_, _ = fmt.Fprintf(&builder, "| Build Gradle | %s |\n", domainsummary.StatusIcon(buildGradleStatus))
+	_, _ = fmt.Fprintf(&builder, "| Build Go | %s |\n", domainsummary.StatusIcon(buildGoStatus))
+	_, _ = fmt.Fprintf(&builder, "| Build Cargo | %s |\n", domainsummary.StatusIcon(buildCargoStatus))
+	_, _ = fmt.Fprintf(&builder, "| Build Gradle Android | %s |\n", domainsummary.StatusIcon(buildGradleAndroidStatus))
+	_, _ = fmt.Fprintf(&builder, "| Build Xcode | %s |\n", domainsummary.StatusIcon(buildXcodeStatus))
 
 	if in.ProjectType == projecttype.NPM {
 		row := fmt.Sprintf("| Publish NPM Package | %s |\n", domainsummary.StatusIcon(npmStatus))
@@ -139,56 +139,55 @@ func SnapshotReleaseSummary(ctx context.Context, sink ci.SummarySink, w io.Write
 				domainsummary.StatusIcon(npmStatus))
 		}
 
-		b.WriteString(row)
+		builder.WriteString(row)
 	}
 
-	_, _ = fmt.Fprintf(&b, "| Cargo SBOM | %s |\n", domainsummary.StatusIcon(cargoSBOMStatus))
-	_, _ = fmt.Fprintf(&b, "| Go SBOM | %s |\n", domainsummary.StatusIcon(goSBOMStatus))
-	_, _ = fmt.Fprintf(&b, "| Dev SBOMs | %s |\n", domainsummary.StatusIcon(sbomStatus))
+	_, _ = fmt.Fprintf(&builder, "| Cargo SBOM | %s |\n", domainsummary.StatusIcon(cargoSBOMStatus))
+	_, _ = fmt.Fprintf(&builder, "| Go SBOM | %s |\n", domainsummary.StatusIcon(goSBOMStatus))
+	_, _ = fmt.Fprintf(&builder, "| Dev SBOMs | %s |\n", domainsummary.StatusIcon(sbomStatus))
 
-	_, _ = fmt.Fprintf(&b, "\n## Published Artifacts\n")
+	_, _ = fmt.Fprintf(&builder, "\n## Published Artifacts\n")
 
 	if in.ProjectType == projecttype.NPM {
 		switch {
 		case npmPackageName != "" && npmPackageVersion != "" && npmStatus == string(domainsummary.ResultSuccess):
-			_, _ = fmt.Fprintf(&b, "\n### NPM Package\n")
+			_, _ = fmt.Fprintf(&builder, "\n### NPM Package\n")
 
 			if npmPublishStatus == "already-exists" {
-				_, _ = fmt.Fprintf(&b, "> **Note:** Version already existed in registry — publish was skipped (same commit SHA).\n\n")
+				_, _ = fmt.Fprintf(&builder, "> **Note:** Version already existed in registry — publish was skipped (same commit SHA).\n\n")
 			}
 
-			_, _ = fmt.Fprintf(&b, "```\n%s@%s\n```\n\n", npmPackageName, npmPackageVersion)
-			_, _ = fmt.Fprintf(&b, "```bash\nnpm install %s@%s\nnpm install %s@dev\n```\n",
+			_, _ = fmt.Fprintf(&builder, "```\n%s@%s\n```\n\n", npmPackageName, npmPackageVersion)
+			_, _ = fmt.Fprintf(&builder, "```bash\nnpm install %s@%s\nnpm install %s@dev\n```\n",
 				npmPackageName, npmPackageVersion, npmPackageName)
 		case npmStatus == string(domainsummary.ResultSuccess):
-			_, _ = fmt.Fprintf(&b, "\n### NPM Package\nPublished; package metadata unavailable\n")
+			_, _ = fmt.Fprintf(&builder, "\n### NPM Package\nPublished; package metadata unavailable\n")
 		default:
-			_, _ = fmt.Fprintf(&b, "\n### NPM Package\nNot published\n")
+			_, _ = fmt.Fprintf(&builder, "\n### NPM Package\nNot published\n")
 		}
 	}
 
-	_, _ = fmt.Fprintf(&b, "\n## Resources\n")
-	b.WriteString(resourceLine("Packages", domainsummary.PackagesURL(in.URLs, in.ServerURL, in.ReleaseRepository)))
-	b.WriteString(resourceLine("Workflow Run", in.RunURL))
-	b.WriteString("\n")
-	_, _ = fmt.Fprintf(&b, "These are development artifacts tagged with `dev` and are not intended for production use.\n")
+	_, _ = fmt.Fprintf(&builder, "\n## Resources\n")
+	builder.WriteString(resourceLine("Packages", domainsummary.PackagesURL(in.URLs, in.ServerURL, in.ReleaseRepository)))
+	builder.WriteString(resourceLine("Workflow Run", in.RunURL))
+	builder.WriteString("\n")
+	_, _ = fmt.Fprintf(&builder, "These are development artifacts tagged with `dev` and are not intended for production use.\n")
 
-	if err := sink.Append(ctx, b.String()); err != nil {
+	if err := sink.Append(ctx, builder.String()); err != nil {
 		return err
 	}
 
-	_, _ = fmt.Fprintf(w, "✓ Dev release summary generated successfully\n")
+	_, _ = fmt.Fprintf(out, "✓ Dev release summary generated successfully\n")
 
 	return nil
 }
 
 type snapshotMetadata struct {
-	Name    string `json:"npm_package_name"`    //nolint:tagliatelle // published artifact contract.
-	Version string `json:"npm_package_version"` //nolint:tagliatelle // published artifact contract.
-	Status  string `json:"npm_publish_status"`  //nolint:tagliatelle // published artifact contract.
+	Name    string `json:"npm_package_name"`
+	Version string `json:"npm_package_version"`
+	Status  string `json:"npm_publish_status"`
 }
 
-//nolint:gochecknoglobals // immutable npm package-name grammar; shell/fence metacharacters are not package names.
 var snapshotPackageName = regexp.MustCompile(`^(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$`)
 
 func parseSnapshotMetadata(value string) (snapshotMetadata, error) {

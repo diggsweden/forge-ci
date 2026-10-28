@@ -25,25 +25,25 @@ func TestCentralStreamsBundleAndObservesExactDeployment(t *testing.T) {
 
 	var uploads, observations atomic.Int64
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "Bearer "+base64.StdEncoding.EncodeToString([]byte("fixture:synthetic-token")), r.Header.Get("Authorization"))
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		assert.Equal(t, http.MethodPost, request.Method)
+		assert.Equal(t, "Bearer "+base64.StdEncoding.EncodeToString([]byte("fixture:synthetic-token")), request.Header.Get("Authorization"))
 
-		switch r.URL.Path {
+		switch request.URL.Path {
 		case "/upload":
 			uploads.Add(1)
-			assert.Equal(t, "AUTOMATIC", r.URL.Query().Get("publishingType"))
+			assert.Equal(t, "AUTOMATIC", request.URL.Query().Get("publishingType"))
 
-			reader, err := r.MultipartReader()
+			reader, err := request.MultipartReader()
 			if !assert.NoError(t, err) {
-				w.WriteHeader(http.StatusBadRequest)
+				response.WriteHeader(http.StatusBadRequest)
 
 				return
 			}
 
 			part, err := reader.NextPart()
 			if !assert.NoError(t, err) {
-				w.WriteHeader(http.StatusBadRequest)
+				response.WriteHeader(http.StatusBadRequest)
 
 				return
 			}
@@ -53,14 +53,14 @@ func TestCentralStreamsBundleAndObservesExactDeployment(t *testing.T) {
 			assert.Equal(t, "bundle", part.FormName())
 			assert.Equal(t, "fixture bundle", string(body))
 
-			_, _ = io.WriteString(w, "deployment-1")
+			_, _ = io.WriteString(response, "deployment-1")
 		case "/status":
 			observations.Add(1)
-			assert.Equal(t, "deployment-1", r.URL.Query().Get("id"))
+			assert.Equal(t, "deployment-1", request.URL.Query().Get("id"))
 
-			_, _ = io.WriteString(w, `{"deploymentState":"PUBLISHED"}`)
+			_, _ = io.WriteString(response, `{"deploymentState":"PUBLISHED"}`)
 		default:
-			w.WriteHeader(http.StatusNotFound)
+			response.WriteHeader(http.StatusNotFound)
 		}
 	}))
 	defer server.Close()
@@ -128,6 +128,8 @@ func TestCentralRejectsUnsafeOriginsBeforeSendingCredentials(t *testing.T) {
 		"https://central.example/api#fragment",
 	} {
 		t.Run(origin, func(t *testing.T) {
+			t.Parallel()
+
 			client := central.Client{BaseURL: origin, Username: "fixture", Password: "synthetic-token"}
 			_, err := client.State(t.Context(), "deployment-1")
 			require.ErrorIs(t, err, errs.ErrInvalidConfig)

@@ -45,11 +45,11 @@ func TestAndroidReleaseBuild_RunsSequenceAndEmitsNames(t *testing.T) {
 			sink := fakeoutputsink.New(t)
 
 			err := appbuild.AndroidReleaseBuild(context.Background(), sink, &recordingSummarySink{}, ops, output.Annotator{}, io.Discard, io.Discard, appbuild.AndroidReleaseBuildInput{
-				ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newGradleDir(t), EnableBuildSBOM: false},
-				IncludeDateStamp:    false,
-				RepoName:            "app",
-				BuildTypes:          tc.buildTypes,
-				BuildModule:         "app",
+				Dir: newGradleDir(t), EnableBuildSBOM: false,
+				IncludeDateStamp: false,
+				RepoName:         "app",
+				BuildTypes:       tc.buildTypes,
+				BuildModule:      "app",
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -86,11 +86,11 @@ func TestAndroidReleaseBuild_DateStampPrefixesEveryName(t *testing.T) {
 	sink := fakeoutputsink.New(t)
 
 	err := appbuild.AndroidReleaseBuild(context.Background(), sink, &recordingSummarySink{}, &recordingGradle{}, output.Annotator{}, io.Discard, io.Discard, appbuild.AndroidReleaseBuildInput{
-		ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newGradleDir(t), EnableBuildSBOM: false},
-		IncludeDateStamp:    true,
-		RepoName:            "app",
-		BuildTypes:          "release",
-		BuildModule:         "app",
+		Dir: newGradleDir(t), EnableBuildSBOM: false,
+		IncludeDateStamp: true,
+		RepoName:         "app",
+		BuildTypes:       "release",
+		BuildModule:      "app",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -112,9 +112,9 @@ func TestAndroidReleaseBuild_SigningWithoutKeystoreFails(t *testing.T) {
 	summary := &recordingSummarySink{}
 
 	err := appbuild.AndroidReleaseBuild(context.Background(), sink, summary, ops, output.Annotator{}, io.Discard, io.Discard, appbuild.AndroidReleaseBuildInput{
-		ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newGradleDir(t)},
-		RepoName:            "app",
-		EnableSigning:       true, // no keystore-base64
+		Dir:           newGradleDir(t),
+		RepoName:      "app",
+		EnableSigning: true, // no keystore-base64
 	})
 
 	// ErrPermissionDenied, not a generic failure: a missing signing secret
@@ -141,8 +141,8 @@ func TestAndroidLibraryBuildUsesAARContract(t *testing.T) {
 	sink := fakeoutputsink.New(t)
 
 	input := appbuild.AndroidReleaseBuildInput{
-		ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newGradleDir(t), ArtifactName: "library"},
-		Library:             true, BuildModule: "lib", ProductFlavor: "demo", BuildTypes: "debug,release", IncludeAAB: true,
+		Dir: newGradleDir(t), ArtifactName: "library",
+		Library: true, BuildModule: "lib", ProductFlavor: "demo", BuildTypes: "debug,release", IncludeAAB: true,
 	}
 	if err := appbuild.AndroidReleaseBuild(t.Context(), sink, &recordingSummarySink{}, ops, output.Annotator{}, io.Discard, io.Discard, input); err != nil {
 		t.Fatal(err)

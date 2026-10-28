@@ -29,21 +29,21 @@ func walkMatching(ws workspace, root string, predicate func(basename string) boo
 
 	var out []string
 
-	err := fs.WalkDir(ws.fsys, cleanFSPath(root), func(path string, d fs.DirEntry, err error) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	err := fs.WalkDir(ws.fsys, cleanFSPath(root), func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		if d.IsDir() {
+		if entry.IsDir() {
 			return nil
 		}
 
-		info, err := d.Info()
+		info, err := entry.Info()
 		if err != nil {
 			return err
 		}
 
-		if info.Mode().IsRegular() && predicate(d.Name()) {
+		if info.Mode().IsRegular() && predicate(entry.Name()) {
 			out = append(out, path)
 		}
 
@@ -101,14 +101,14 @@ func listExecutableNoDebugInfo(ws workspace, root string) ([]string, error) {
 // file the SBOM scanner should read. Split out of the walk closure so the
 // "which files count" rule reads on its own, and so the walk itself is only
 // about walking.
-func keepExecutableEntry(d fs.DirEntry, filter func(name string) bool) (bool, error) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
-	if d.IsDir() {
+func keepExecutableEntry(entry fs.DirEntry, filter func(name string) bool) (bool, error) {
+	if entry.IsDir() {
 		return false, nil
 	}
 
-	info, err := d.Info()
+	info, err := entry.Info()
 	if err != nil {
-		return false, err //nolint:wrapcheck // surfaced verbatim by the walker.
+		return false, err
 	}
 
 	// 0o100 = owner-executable bit, like find -executable.
@@ -116,7 +116,7 @@ func keepExecutableEntry(d fs.DirEntry, filter func(name string) bool) (bool, er
 		return false, nil
 	}
 
-	return filter == nil || filter(d.Name()), nil
+	return filter == nil || filter(entry.Name()), nil
 }
 
 func walkExecutableWithFilter(ws workspace, root string, filter func(name string) bool) ([]string, error) {
@@ -130,7 +130,7 @@ func walkExecutableWithFilter(ws workspace, root string, filter func(name string
 
 	var out []string
 
-	err := fs.WalkDir(ws.fsys, cleanFSPath(root), func(path string, d fs.DirEntry, err error) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	err := fs.WalkDir(ws.fsys, cleanFSPath(root), func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}

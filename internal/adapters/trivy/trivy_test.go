@@ -19,9 +19,9 @@ import (
 func TestAdapter_RunInheritPassesArgs(t *testing.T) {
 	t.Parallel()
 
-	m := mockbinary.New(t)
-	m.Add("trivy", `printf 'trivy %s\n' "$*"`)
-	a := &trivy.Adapter{Bin: m.Path("trivy")}
+	mock := mockbinary.New(t)
+	mock.Add("trivy", `printf 'trivy %s\n' "$*"`)
+	a := &trivy.Adapter{Bin: mock.Path("trivy")}
 
 	var stdout bytes.Buffer
 
@@ -35,7 +35,7 @@ func TestAdapter_RunInheritPassesArgs(t *testing.T) {
 	}
 
 	want := []string{"image", "alpine"}
-	if got := m.Invocations("trivy")[0].Args; !slices.Equal(got, want) {
+	if got := mock.Invocations("trivy")[0].Args; !slices.Equal(got, want) {
 		t.Errorf("args = %v, want %v", got, want)
 	}
 }
@@ -44,8 +44,8 @@ func TestAdapter_RunInheritPassesArgs(t *testing.T) {
 // the forge token: the adapter must not hand it, or any other credential it
 // is told to drop, to trivy.
 func TestAdapter_RunInheritUnsetsCredentials(t *testing.T) {
-	m := mockbinary.New(t)
-	m.Add("trivy", `
+	mock := mockbinary.New(t)
+	mock.Add("trivy", `
 if [ -n "${GITHUB_TOKEN:-}" ] || [ -n "${REGISTRY_TOKEN:-}" ]; then
   exit 42
 fi
@@ -56,7 +56,7 @@ fi
 	t.Setenv("KEEP_ME", "kept")
 
 	a := trivy.New("GITHUB_TOKEN", "REGISTRY_TOKEN")
-	a.Bin = m.Path("trivy")
+	a.Bin = mock.Path("trivy")
 
 	code, err := a.RunInherit(context.Background(), &bytes.Buffer{}, &bytes.Buffer{}, "image", "alpine")
 	if err != nil || code != 0 {

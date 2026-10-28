@@ -26,7 +26,7 @@ func newMavenDir(t *testing.T) string {
   <version>1.2.3</version>
 </project>`)
 
-	if err := os.WriteFile(filepath.Join(dir, "pom.xml"), pom, 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(filepath.Join(dir, "pom.xml"), pom, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -42,14 +42,14 @@ func mavenSteps(t *testing.T, runs [][]string, opts []string) [][]string {
 
 	out := make([][]string, 0, len(runs))
 
-	for _, r := range runs {
-		if len(r) < len(opts) || !slices.Equal(r[:len(opts)], opts) {
-			t.Errorf("CLI opts not forwarded to mvn call: %v", r)
+	for _, reader := range runs {
+		if len(reader) < len(opts) || !slices.Equal(reader[:len(opts)], opts) {
+			t.Errorf("CLI opts not forwarded to mvn call: %v", reader)
 
 			continue
 		}
 
-		out = append(out, r[len(opts):])
+		out = append(out, reader[len(opts):])
 	}
 
 	return out
@@ -121,11 +121,11 @@ func TestMavenReleaseBuild_RunsStepsInOrder(t *testing.T) {
 			var out bytes.Buffer
 
 			err := appbuild.MavenReleaseBuild(context.Background(), &recordingSummarySink{}, ops, &out, &out, appbuild.MavenReleaseBuildInput{
-				ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newMavenDir(t), SkipTests: tc.skipTests, EnableBuildSBOM: tc.sbom},
-				BuildType:           tc.buildType,
-				Profile:             tc.profile,
-				CLIOpts:             opts,
-				SBOMToolVersion:     "2.9.1",
+				Dir: newMavenDir(t), SkipTests: tc.skipTests, EnableBuildSBOM: tc.sbom,
+				BuildType:       tc.buildType,
+				Profile:         tc.profile,
+				CLIOpts:         opts,
+				SBOMToolVersion: "2.9.1",
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -149,8 +149,8 @@ func TestMavenReleaseBuild_RejectsUnknownBuildType(t *testing.T) {
 	summary := &recordingSummarySink{}
 
 	err := appbuild.MavenReleaseBuild(context.Background(), summary, ops, &bytes.Buffer{}, &bytes.Buffer{}, appbuild.MavenReleaseBuildInput{
-		ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newMavenDir(t)},
-		BuildType:           "fatjar",
+		Dir:       newMavenDir(t),
+		BuildType: "fatjar",
 	})
 	if !errors.Is(err, errs.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
@@ -186,9 +186,9 @@ func TestMavenReleaseBuild_ExpectVersion(t *testing.T) {
 			ops := &fakeMaven{}
 
 			err := appbuild.MavenReleaseBuild(context.Background(), &recordingSummarySink{}, ops, &bytes.Buffer{}, &bytes.Buffer{}, appbuild.MavenReleaseBuildInput{
-				ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newMavenDir(t)},
-				BuildType:           "app",
-				ExpectVersion:       tc.expect,
+				Dir:           newMavenDir(t),
+				BuildType:     "app",
+				ExpectVersion: tc.expect,
 			})
 			if tc.ok {
 				if err != nil {

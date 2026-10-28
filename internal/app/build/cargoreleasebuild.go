@@ -45,9 +45,7 @@ func CargoBuildSBOM(ctx context.Context, tool CargoTool, w, stderr io.Writer, di
 // (Design Rule 1). Metadata is threaded in-process (no $CI_OUTPUT round-trip);
 // enabled Build SBOM generation is mandatory: failures are summarized and
 // returned so the release fails closed.
-//
-//nolint:varnamelen // idiomatic short names (w/in) — testing/http/io conventions, matching the sibling build funcs.
-func CargoReleaseBuild(ctx context.Context, summarySink ci.SummarySink, tool CargoTool, w, stderr io.Writer, in CargoReleaseBuildInput) error {
+func CargoReleaseBuild(ctx context.Context, summarySink ci.SummarySink, tool CargoTool, out, stderr io.Writer, in CargoReleaseBuildInput) error {
 	meta, err := resolveCargoMetadata(ctx, tool, CargoMetadataInput{
 		Dir:          in.Dir,
 		ArtifactName: in.ArtifactName,
@@ -59,14 +57,14 @@ func CargoReleaseBuild(ctx context.Context, summarySink ci.SummarySink, tool Car
 		return err
 	}
 
-	_, _ = fmt.Fprintf(w, "Cargo release build: binary=%s package=%s version=%s\n", meta.binaryName, meta.packageName, meta.version)
+	_, _ = fmt.Fprintf(out, "Cargo release build: binary=%s package=%s version=%s\n", meta.binaryName, meta.packageName, meta.version)
 
-	if err := CargoFetch(ctx, tool, w, stderr, in.Dir); err != nil {
+	if err := CargoFetch(ctx, tool, out, stderr, in.Dir); err != nil {
 		return fmt.Errorf("cargo fetch: %w", err)
 	}
 
 	if !in.SkipTests {
-		if err := CargoTest(ctx, tool, w, stderr, CargoTestInput{Dir: in.Dir}); err != nil {
+		if err := CargoTest(ctx, tool, out, stderr, CargoTestInput{Dir: in.Dir}); err != nil {
 			return fmt.Errorf("cargo test: %w", err)
 		}
 	}
@@ -77,7 +75,7 @@ func CargoReleaseBuild(ctx context.Context, summarySink ci.SummarySink, tool Car
 
 	if in.EnableBuildSBOM {
 		outcome = outcomeSuccess
-		if err := CargoBuildSBOM(ctx, tool, w, stderr, in.Dir); err != nil {
+		if err := CargoBuildSBOM(ctx, tool, out, stderr, in.Dir); err != nil {
 			outcome = outcomeFailure
 			generationErr = fmt.Errorf("cargo Build SBOM generation failed: %w", err)
 		}
@@ -89,7 +87,7 @@ func CargoReleaseBuild(ctx context.Context, summarySink ci.SummarySink, tool Car
 		}))
 	}
 
-	if err := CargoBuildBinaries(ctx, tool, w, stderr, CargoBuildBinariesInput{
+	if err := CargoBuildBinaries(ctx, tool, out, stderr, CargoBuildBinariesInput{
 		Dir:             in.Dir,
 		BinaryName:      meta.binaryName,
 		CrateBinaryName: meta.crateBinaryName,

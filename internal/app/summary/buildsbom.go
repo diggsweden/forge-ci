@@ -41,25 +41,25 @@ func BuildSBOMStatus(ctx context.Context, sink ci.SummarySink, in BuildSBOMStatu
 		workDir = "."
 	}
 
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var builder strings.Builder
 
-	_, _ = fmt.Fprintf(&b, "### Build SBOM\n")
+	_, _ = fmt.Fprintf(&builder, "### Build SBOM\n")
 
 	switch in.Outcome {
 	case string(domainsummary.ResultSuccess):
 		bom := locateBuildSBOM(workDir, preset)
 		if bom != "" {
-			_, _ = fmt.Fprintf(&b, "- ✓ %s: `%s`\n", preset.successLabel, bom)
+			_, _ = fmt.Fprintf(&builder, "- ✓ %s: `%s`\n", preset.successLabel, bom)
 		} else {
-			_, _ = fmt.Fprintf(&b, "- ⚠️ %s\n", preset.missingMessage)
+			_, _ = fmt.Fprintf(&builder, "- ⚠️ %s\n", preset.missingMessage)
 		}
 	case string(domainsummary.ResultSkipped):
-		_, _ = fmt.Fprintf(&b, "- ⊘ Generation disabled; release continues without a build SBOM\n")
+		_, _ = fmt.Fprintf(&builder, "- ⊘ Generation disabled; release continues without a build SBOM\n")
 	default:
-		_, _ = fmt.Fprintf(&b, "- ⚠️ Generation failed; release blocked until the Build SBOM succeeds or is explicitly disabled\n")
+		_, _ = fmt.Fprintf(&builder, "- ⚠️ Generation failed; release blocked until the Build SBOM succeeds or is explicitly disabled\n")
 	}
 
-	return sink.Append(ctx, b.String())
+	return sink.Append(ctx, builder.String())
 }
 
 type buildSBOMStatusPreset struct {

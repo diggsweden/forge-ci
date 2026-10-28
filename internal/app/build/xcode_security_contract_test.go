@@ -272,7 +272,7 @@ func TestXcodeSecurityContract_ProcessCaptureRestoresGlobals(t *testing.T) {
 	}
 }
 
-func TestXcodeSecurityContract_EveryFailureStopsAndDoesNotLeak(t *testing.T) { //nolint:gocognit // one six-stage matrix checks both app boundaries, cancellation, exact prefixes and all diagnostic channels.
+func TestXcodeSecurityContract_EveryFailureStopsAndDoesNotLeak(t *testing.T) {
 	stages := []string{"create-keychain", "set-keychain-settings", "unlock-keychain", "security import", "set-key-partition-list", "read list-keychain", "list-keychain"}
 	for failureAt, stage := range stages {
 		for _, boundary := range []string{"setup", "release"} {
@@ -309,7 +309,7 @@ func TestXcodeSecurityContract_EveryFailureStopsAndDoesNotLeak(t *testing.T) { /
 					ctx, cancel := context.WithCancel(t.Context())
 					defer cancel()
 
-					cause := errors.New("unique security failure " + t.Name()) //nolint:err113 // per-stage identity is the contract.
+					cause := errors.New("unique security failure " + t.Name())
 
 					classified := errors.Join(cause, errs.ErrDependencyUnavailable)
 					if cancellation {
@@ -612,7 +612,7 @@ func TestXcodeSecurityContract_InformationalWriterIsBestEffort(t *testing.T) {
 
 			sec, out := &recordingXcodeSecurity{}, &xcodeSecurityWriter{}
 			if kind == "error" {
-				out.err = errors.New("synthetic writer failure\n" + xcodeSecurityCanaries(in)) //nolint:err113 // injected writer cause.
+				out.err = errors.New("synthetic writer failure\n" + xcodeSecurityCanaries(in))
 			} else {
 				out.short = true
 			}

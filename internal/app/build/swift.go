@@ -67,7 +67,7 @@ func SwiftFormatLint(
 	files SwiftFilesLister,
 	sf SwiftFormatOps,
 	summary ci.SummarySink,
-	w, stderr io.Writer, //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	out, stderr io.Writer,
 	annot output.Annotator,
 	in SwiftFormatLintInput,
 ) error {
@@ -85,22 +85,22 @@ func SwiftFormatLint(
 
 	swiftFiles := splitNonEmptyLines(listed)
 	if len(swiftFiles) == 0 {
-		_, _ = fmt.Fprintf(w, "No Swift files found matching pattern: %s\n", pattern)
+		_, _ = fmt.Fprintf(out, "No Swift files found matching pattern: %s\n", pattern)
 
 		return appendSwiftFormatBlock(ctx, summary, build.SwiftLintNoFiles, "")
 	}
 
-	_, _ = fmt.Fprintf(w, "Running swift-format on %d files...\n", len(swiftFiles))
+	_, _ = fmt.Fprintf(out, "Running swift-format on %d files...\n", len(swiftFiles))
 
 	output, exitCode, err := sf.Lint(ctx, dir, swiftFiles)
 	if err != nil {
 		return fmt.Errorf("swift-format lint: %w", err)
 	}
 
-	_, _ = fmt.Fprint(w, output)
+	_, _ = fmt.Fprint(out, output)
 
 	if !strings.HasSuffix(output, "\n") {
-		_, _ = fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(out)
 	}
 
 	if exitCode != 0 {
@@ -113,7 +113,7 @@ func SwiftFormatLint(
 		return fmt.Errorf("swift-format reported issues: %w", errs.ErrValidation)
 	}
 
-	_, _ = fmt.Fprintf(w, "%s swift-format passed\n", clicolor.Check(w))
+	_, _ = fmt.Fprintf(out, "%s swift-format passed\n", clicolor.Check(out))
 
 	return appendSwiftFormatBlock(ctx, summary, build.SwiftLintPassed, "")
 }
@@ -136,7 +136,7 @@ func SwiftLintLint(
 	ctx context.Context,
 	sl SwiftLintOps,
 	summary ci.SummarySink,
-	w, stderr io.Writer, //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	out, stderr io.Writer,
 	annot output.Annotator,
 	in SwiftLintLintInput,
 ) error {
@@ -150,9 +150,9 @@ func SwiftLintLint(
 		if exists, err := fileExists(resolved); err != nil {
 			return err
 		} else if exists {
-			_, _ = fmt.Fprintf(w, "Using SwiftLint configuration: %s\n", configPath)
+			_, _ = fmt.Fprintf(out, "Using SwiftLint configuration: %s\n", configPath)
 		} else {
-			_, _ = fmt.Fprintln(w, "No SwiftLint configuration found, using defaults")
+			_, _ = fmt.Fprintln(out, "No SwiftLint configuration found, using defaults")
 
 			configPath = ""
 		}
@@ -163,14 +163,14 @@ func SwiftLintLint(
 		return fmt.Errorf("swiftlint lint: %w", err)
 	}
 
-	_, _ = fmt.Fprint(w, output)
+	_, _ = fmt.Fprint(out, output)
 
 	if !strings.HasSuffix(output, "\n") {
-		_, _ = fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(out)
 	}
 
 	if exitCode == 0 {
-		_, _ = fmt.Fprintf(w, "%s SwiftLint passed\n", clicolor.Check(w))
+		_, _ = fmt.Fprintf(out, "%s SwiftLint passed\n", clicolor.Check(out))
 
 		return summary.Append(ctx, build.RenderSwiftLintBlock(build.SwiftLintPassed, ""))
 	}

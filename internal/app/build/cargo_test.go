@@ -67,7 +67,7 @@ func (f *fakeCargoTool) Run(_ context.Context, in appbuild.CargoRunInput) error 
 
 		for _, name := range f.binaryNames {
 			path := filepath.Join(releaseDir, name)
-			if err := os.WriteFile(path, []byte("ELFish:"+triple+":"+name), 0o755); err != nil { //nolint:gosec // test fixture
+			if err := os.WriteFile(path, []byte("ELFish:"+triple+":"+name), 0o755); err != nil {
 				return err
 			}
 		}

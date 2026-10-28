@@ -58,9 +58,9 @@ func TestNewAndNewNpx_ChooseTheirOwnBinary(t *testing.T) {
 func TestAdapter_RunInherit(t *testing.T) {
 	t.Parallel()
 
-	m := mockbinary.New(t)
-	m.Add("npm", `printf 'npm %s\n' "$*"; printf 'warn\n' >&2`)
-	a := &npm.Adapter{Bin: m.Path("npm")}
+	mock := mockbinary.New(t)
+	mock.Add("npm", `printf 'npm %s\n' "$*"; printf 'warn\n' >&2`)
+	a := &npm.Adapter{Bin: mock.Path("npm")}
 
 	var stdout, stderr bytes.Buffer
 	if err := a.RunInherit(context.Background(), "", &stdout, &stderr, "version", "1.2.3", "--no-git-tag-version"); err != nil {
@@ -76,7 +76,7 @@ func TestAdapter_RunInherit(t *testing.T) {
 	}
 
 	want := []string{"version", "1.2.3", "--no-git-tag-version"}
-	if got := m.Invocations("npm")[0].Args; !slices.Equal(got, want) {
+	if got := mock.Invocations("npm")[0].Args; !slices.Equal(got, want) {
 		t.Errorf("args = %v, want %v", got, want)
 	}
 }

@@ -91,7 +91,7 @@ func seedXcodeCanaries(t *testing.T, fsys *testfs.Real) {
 
 	for _, path := range []string{"TMPDIR/certificate.p12", "TMPDIR/pp.mobileprovision", "TMPDIR/app-signing.keychain-db", "TMPDIR/ci-canary.xcconfig", "HOME/Library/MobileDevice/Provisioning Profiles/pp.mobileprovision", "checkout/export-options.plist", "checkout/build/unrelated/old.ipa"} {
 		fsys.WriteFile(path, []byte("preserve "+path))
-		require.NoError(t, os.Chmod(fsys.Path(path), 0o640)) //nolint:gosec // owned canary deliberately has a mode distinct from newly staged secrets.
+		require.NoError(t, os.Chmod(fsys.Path(path), 0o640))
 	}
 }
 

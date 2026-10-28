@@ -27,6 +27,7 @@ type GradleOps interface {
 // Release orchestration binds cwd-based Gradle steps to its selected project.
 type projectGradle struct {
 	GradleOps
+
 	dir string
 }
 
@@ -74,13 +75,13 @@ type GradleApplicationInput struct {
 // GradleApplication runs `./gradlew <tasks>` in the current working
 // directory, appending `-x test` when SkipTests is true. At least one
 // task is required; an empty tasks string fails with ErrUsage.
-func GradleApplication(ctx context.Context, ops GradleOps, w, stderr io.Writer, in GradleApplicationInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func GradleApplication(ctx context.Context, ops GradleOps, out, stderr io.Writer, in GradleApplicationInput) error {
 	tasks := strings.Fields(in.Tasks)
 	if len(tasks) == 0 {
 		return fmt.Errorf("at least one gradle task is required: %w", errs.ErrUsage)
 	}
 
-	_, _ = fmt.Fprintf(w, "Running Gradle tasks: %s\n", strings.Join(tasks, " "))
+	_, _ = fmt.Fprintf(out, "Running Gradle tasks: %s\n", strings.Join(tasks, " "))
 
 	args := tasks
 	if in.SkipTests {
@@ -89,7 +90,7 @@ func GradleApplication(ctx context.Context, ops GradleOps, w, stderr io.Writer, 
 
 	// Adapter already labels its error with the binary + first task;
 	// wrapping with the full task list here would double-prefix.
-	return ops.RunInherit(ctx, w, stderr, args...)
+	return ops.RunInherit(ctx, out, stderr, args...)
 }
 
 // GradleSBOM applies the cyclonedx-gradle-plugin via a throwaway init
@@ -98,9 +99,7 @@ func GradleApplication(ctx context.Context, ops GradleOps, w, stderr io.Writer, 
 //
 // Init-script cleanup is attempted before return regardless of success.
 // Removal errors are returned alongside any native Gradle failure.
-//
-//nolint:cyclop // executes 4 gradle phases each gated on detected config.
-func GradleSBOM(ctx context.Context, ops GradleOps, w, stderr io.Writer, in GradleSBOMInput) (err error) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func GradleSBOM(ctx context.Context, ops GradleOps, out, stderr io.Writer, in GradleSBOMInput) (err error) {
 	if in.CycloneDXVersion == "" {
 		return fmt.Errorf("cyclonedx-gradle version is required: pass --cyclonedx-version <ver> or set $CYCLONEDX_GRADLE_VERSION: %w", errs.ErrUsage)
 	}
@@ -153,7 +152,7 @@ func GradleSBOM(ctx context.Context, ops GradleOps, w, stderr io.Writer, in Grad
 	// Adapter labels its error with the first non-flag arg
 	// ("cyclonedxBom"); wrapping again here would double-prefix and
 	// shadow the more useful adapter label.
-	return ops.RunInDirInherit(ctx, wd, w, stderr, "--init-script", initPath, "cyclonedxBom")
+	return ops.RunInDirInherit(ctx, wd, out, stderr, "--init-script", initPath, "cyclonedxBom")
 }
 
 // SBOM scratch follows the OS temp selection, independently of signing TempDir.

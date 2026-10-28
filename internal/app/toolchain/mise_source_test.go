@@ -89,7 +89,7 @@ func TestInstallMise_DefaultSourceThroughMemoryTransport(t *testing.T) {
 }
 
 // credentialedMirror is a synthetic credential on a non-resolving host.
-const credentialedMirror = "https://mirror-user:mirror-secret@mirror.example.invalid/mise" //nolint:gosec // synthetic fixture credential.
+const credentialedMirror = "https://mirror-user:mirror-secret@mirror.example.invalid/mise"
 
 // TestInstallMise_RefusesACredentialBearingBaseURL refuses a base URL with
 // userinfo before any request, since the address is quoted in download errors.

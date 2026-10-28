@@ -31,8 +31,8 @@ import (
 // tool's cause wins, because that is the one an operator has to act on.
 
 var (
-	errSinkFull  = errors.New("step summary is full")   //nolint:err113 // injected identity is the contract.
-	errToolBroke = errors.New("the tool itself failed") //nolint:err113 // injected identity is the contract.
+	errSinkFull  = errors.New("step summary is full")
+	errToolBroke = errors.New("the tool itself failed")
 )
 
 type failingSummarySink struct {
@@ -82,9 +82,9 @@ func TestBuild_ASummarySinkFailureIsNotASuccessfulBuild(t *testing.T) {
 
 			err := appbuild.NPMReleaseBuild(context.Background(), sink, npm, npm, output.Annotator{}, &stdout, &stdout,
 				appbuild.NPMReleaseBuildInput{
-					ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newNPMDir(t), EnableBuildSBOM: tc.sbom},
-					PackageScope:        "@org",
-					SBOMToolVersion:     "4.2.1",
+					Dir: newNPMDir(t), EnableBuildSBOM: tc.sbom,
+					PackageScope:    "@org",
+					SBOMToolVersion: "4.2.1",
 				})
 
 			require.Positivef(t, sink.appends, "the build never tried to publish a summary: %s", tc.why)
@@ -119,9 +119,9 @@ func TestBuild_AFailingToolOutranksAFailingSink(t *testing.T) {
 
 	err := appbuild.NPMReleaseBuild(context.Background(), sink, npm, npm, output.Annotator{}, &stdout, &stdout,
 		appbuild.NPMReleaseBuildInput{
-			ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newNPMDir(t), EnableBuildSBOM: true},
-			PackageScope:        "@org",
-			SBOMToolVersion:     "4.2.1",
+			Dir: newNPMDir(t), EnableBuildSBOM: true,
+			PackageScope:    "@org",
+			SBOMToolVersion: "4.2.1",
 		})
 
 	require.Error(t, err)
@@ -166,11 +166,11 @@ func TestBuild_AFailingAnnotationStreamDoesNotChangeTheOutcome(t *testing.T) {
 			var stdout bytes.Buffer
 
 			err := appbuild.NPMReleaseBuild(context.Background(), &recordingSummarySink{}, npm, npm,
-				output.NewAnnotator(failingWriter{err: errors.New("stream closed")}, output.FormatGitHub), //nolint:err113 // injected.
+				output.NewAnnotator(failingWriter{err: errors.New("stream closed")}, output.FormatGitHub),
 				&stdout, &stdout, appbuild.NPMReleaseBuildInput{
-					ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newNPMDir(t), EnableBuildSBOM: true},
-					PackageScope:        "@org",
-					SBOMToolVersion:     "4.2.1",
+					Dir: newNPMDir(t), EnableBuildSBOM: true,
+					PackageScope:    "@org",
+					SBOMToolVersion: "4.2.1",
 				})
 
 			if tc.wantErr == nil {

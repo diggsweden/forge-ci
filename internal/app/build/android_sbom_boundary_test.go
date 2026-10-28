@@ -25,15 +25,15 @@ import (
 	"github.com/diggsweden/forge-ci/internal/testutil/testfs"
 )
 
-func TestAndroidReleaseBuild_SBOMTempPreflight(t *testing.T) { //nolint:gocognit // compare early refusals with enabled alias and disabled invalid-parent controls.
+func TestAndroidReleaseBuild_SBOMTempPreflight(t *testing.T) {
 	for _, name := range []string{"missing", "readonly", "valid", "alias", "disabled_missing", "disabled_readonly"} {
 		t.Run(name, func(t *testing.T) {
 			fsys := testfs.NewReal(t)
 			fsys.WriteFile("project/gradlew", []byte("inert wrapper"))
 			fsys.WriteFile("signing/caller", []byte("signing canary"))
 			in := appbuild.AndroidReleaseBuildInput{
-				ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: fsys.Path("project"), EnableBuildSBOM: !strings.HasPrefix(name, "disabled_")},
-				RepoName:            "wallet", BuildTypes: "release", SBOMToolVersion: "2.3.4",
+				Dir: fsys.Path("project"), EnableBuildSBOM: !strings.HasPrefix(name, "disabled_"),
+				RepoName: "wallet", BuildTypes: "release", SBOMToolVersion: "2.3.4",
 				EnableSigning: true, KeystoreBase64: "aw==", KeystorePassword: "store", KeyAlias: "alias", KeyPassword: "key",
 				TempDir: fsys.Path("signing"), SecretsPropertiesBase64: "cA==",
 			}
@@ -46,8 +46,8 @@ func TestAndroidReleaseBuild_SBOMTempPreflight(t *testing.T) { //nolint:gocognit
 			}
 
 			if strings.HasSuffix(name, "readonly") {
-				t.Cleanup(func() { require.NoError(t, os.Chmod(tempDir, 0o700)) }) //nolint:gosec // restore the owned temp parent before fixture cleanup.
-				require.NoError(t, os.Chmod(tempDir, 0o500))                       //nolint:gosec // known nonwritable owned directory.
+				t.Cleanup(func() { require.NoError(t, os.Chmod(tempDir, 0o700)) })
+				require.NoError(t, os.Chmod(tempDir, 0o500))
 			}
 
 			selected := tempDir
@@ -122,12 +122,12 @@ func TestAndroidReleaseBuild_SBOMCleanupErrors(t *testing.T) {
 			t.Setenv("TMPDIR", sbomTemp)
 
 			in := appbuild.AndroidReleaseBuildInput{
-				ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: fsys.Path("project"), EnableBuildSBOM: true},
-				RepoName:            "wallet", BuildTypes: "release", SBOMToolVersion: "2.3.4",
+				Dir: fsys.Path("project"), EnableBuildSBOM: true,
+				RepoName: "wallet", BuildTypes: "release", SBOMToolVersion: "2.3.4",
 				EnableSigning: true, KeystoreBase64: "aw==", KeystorePassword: "store", KeyAlias: "alias", KeyPassword: "key",
 				TempDir: fsys.MkdirAll("signing"), SecretsPropertiesBase64: "cA==",
 			}
-			cause := errors.New("owned native SBOM failure") //nolint:err113 // independent native-run sentinel.
+			cause := errors.New("owned native SBOM failure")
 
 			var (
 				initPath string
@@ -135,7 +135,7 @@ func TestAndroidReleaseBuild_SBOMCleanupErrors(t *testing.T) {
 			)
 
 			t.Cleanup(func() {
-				require.NoError(t, os.Chmod(sbomTemp, 0o700)) //nolint:gosec // restore the owned nonsecret script parent.
+				require.NoError(t, os.Chmod(sbomTemp, 0o700))
 
 				if initPath != "" {
 					require.NoError(t, os.Remove(initPath))
@@ -165,7 +165,7 @@ func TestAndroidReleaseBuild_SBOMCleanupErrors(t *testing.T) {
 				require.NoError(t, err)
 				require.Contains(t, string(initBody), "org.cyclonedx:cyclonedx-gradle-plugin:2.3.4")
 				fsys.WriteFile("project/build/reports/bom.json", []byte(`{"bomFormat":"CycloneDX","specVersion":"1.6","version":1}`))
-				require.NoError(t, os.Chmod(sbomTemp, 0o500)) //nolint:gosec // only the SBOM parent loses write permission, not the keystore parent.
+				require.NoError(t, os.Chmod(sbomTemp, 0o500))
 
 				if nativeFailure {
 					return cause
@@ -235,8 +235,8 @@ func TestAndroidReleaseBuild_IntegratedArtifactNames(t *testing.T) {
 
 				sink, ops := fakeoutputsink.New(t), &androidGradleRecorder{}
 				err := appbuild.AndroidReleaseBuild(t.Context(), sink, &recordingSummarySink{}, ops, output.Annotator{}, io.Discard, io.Discard, appbuild.AndroidReleaseBuildInput{
-					ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: fsys.Path("project"), ArtifactName: testCase.override},
-					ArtifactNamePrefix:  "agency", RepoName: "wallet", ProductFlavor: "demoFree", IncludeDateStamp: testCase.includeDate,
+					Dir: fsys.Path("project"), ArtifactName: testCase.override,
+					ArtifactNamePrefix: "agency", RepoName: "wallet", ProductFlavor: "demoFree", IncludeDateStamp: testCase.includeDate,
 					BuildTypes: "release", IncludeAAB: true, BuildModule: "application",
 				})
 				require.NoError(t, err)

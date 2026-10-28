@@ -129,7 +129,7 @@ func androidKeystoreTempDir(chosen, project string) (string, error) {
 // Keep the created file open until cleanup so an unlinked inode cannot be reused
 // and mistaken for ours. Stable caller replacements are refused, not deleted.
 // This identity check is not a sandbox against a hostile concurrent build.
-func createAndroidProperties(root *os.Root, body []byte) (func() error, error) { //nolint:cyclop // create-only write with all-exit, identity-checked cleanup.
+func createAndroidProperties(root *os.Root, body []byte) (func() error, error) {
 	const name = "secrets.properties"
 
 	file, err := root.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)

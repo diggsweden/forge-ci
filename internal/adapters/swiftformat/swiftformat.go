@@ -10,8 +10,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/diggsweden/forge-ci/internal/safeexec"
 	"os/exec"
+
+	"github.com/diggsweden/forge-ci/internal/safeexec"
 )
 
 // Adapter wraps the swift-format binary. Bin is overridable for tests.
@@ -42,8 +43,7 @@ func (a *Adapter) Lint(ctx context.Context, dir string, files []string) (string,
 		return buf.String(), 0, nil
 	}
 
-	var exitErr *exec.ExitError
-	if errors.As(runErr, &exitErr) {
+	if exitErr, ok := errors.AsType[*exec.ExitError](runErr); ok {
 		return buf.String(), exitErr.ExitCode(), nil
 	}
 

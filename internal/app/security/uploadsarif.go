@@ -63,9 +63,7 @@ type UploadSARIFInput struct {
 // URL; the commit SHA and ref travel in the JSON body and are validated by
 // the Code Scanning API, whose rejection the adapter classifies. A failure
 // message never carries the token.
-//
-//nolint:cyclop // SARIF upload flow: discover → gzip → enrich → upload → summary.
-func UploadSARIF(ctx context.Context, prov provider.SARIFUploader, w io.Writer, annot output.Annotator, in UploadSARIFInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func UploadSARIF(ctx context.Context, prov provider.SARIFUploader, out io.Writer, annot output.Annotator, in UploadSARIFInput) error {
 	if in.Token == "" {
 		annot.Noticef("SARIF upload to Code Scanning skipped — CODE_SCANNING_TOKEN secret is not configured")
 
@@ -88,7 +86,7 @@ func UploadSARIF(ctx context.Context, prov provider.SARIFUploader, w io.Writer, 
 
 			annot.Noticef("SARIF file not found: %s — skipping upload", in.SARIFFile)
 
-			return nil //nolint:nilerr // soft-skip: notice already emitted
+			return nil
 		}
 	}
 
@@ -126,10 +124,10 @@ func UploadSARIF(ctx context.Context, prov provider.SARIFUploader, w io.Writer, 
 	shortSHA := provider.ShortSHA(in.SHA)
 
 	if in.Category != "" {
-		_, _ = fmt.Fprintf(w, "Uploading %s to Code Scanning [%s] (%s @ %s)\n",
+		_, _ = fmt.Fprintf(out, "Uploading %s to Code Scanning [%s] (%s @ %s)\n",
 			in.SARIFFile, in.Category, in.Repository, shortSHA)
 	} else {
-		_, _ = fmt.Fprintf(w, "Uploading %s to Code Scanning (%s @ %s)\n",
+		_, _ = fmt.Fprintf(out, "Uploading %s to Code Scanning (%s @ %s)\n",
 			in.SARIFFile, in.Repository, shortSHA)
 	}
 
@@ -147,7 +145,7 @@ func UploadSARIF(ctx context.Context, prov provider.SARIFUploader, w io.Writer, 
 		return fmt.Errorf("upload sarif: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(w, "%s SARIF accepted by Code Scanning (results appear after async processing)\n", clicolor.Check(w))
+	_, _ = fmt.Fprintf(out, "%s SARIF accepted by Code Scanning (results appear after async processing)\n", clicolor.Check(out))
 
 	return nil
 }

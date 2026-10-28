@@ -70,10 +70,10 @@ func TestOneFlagNamePerRunContextConcept(t *testing.T) {
 			continue
 		}
 
-		var b strings.Builder
+		var builder strings.Builder
 
 		for _, name := range sortedKeys(spellings) {
-			b.WriteString("\n      --" + name + ": " + strings.Join(spellings[name], ", "))
+			builder.WriteString("\n      --" + name + ": " + strings.Join(spellings[name], ", "))
 		}
 
 		t.Errorf(
@@ -81,7 +81,7 @@ func TestOneFlagNamePerRunContextConcept(t *testing.T) {
 				"    One concept, one flag name. Pick the spelling most commands already\n"+
 				"    use, rename the others to it, and keep each former spelling in\n"+
 				"    Aliases so no caller breaks.",
-			concept, len(spellings), b.String(),
+			concept, len(spellings), builder.String(),
 		)
 	}
 }

@@ -68,7 +68,7 @@ func (f *projectGradleRecorder) RunInDirInherit(_ context.Context, dir string, o
 	return nil
 }
 
-func TestProjectDirectoryBoundary_GradleAndAndroid(t *testing.T) { //nolint:gocognit // the two public builders share one deliberately conflicting cwd/project fixture.
+func TestProjectDirectoryBoundary_GradleAndAndroid(t *testing.T) {
 	fsys := testfs.NewReal(t)
 	t.Setenv("TMPDIR", fsys.MkdirAll("fallback"))
 	fsys.Chdir()
@@ -89,14 +89,14 @@ func TestProjectDirectoryBoundary_GradleAndAndroid(t *testing.T) { //nolint:goco
 			err         error
 		)
 
-		if android { //nolint:nestif // each builder has distinct metadata assertions in the same directory-boundary fixture.
+		if android {
 			ops.checkAndroidProperties = func(calledDir string) {
 				if calledDir != dir || string(fsys.ReadFile("nested project/secrets.properties")) != "fixture=owned\n" {
 					t.Fatal("Android call lost exact properties bytes or selected directory")
 				}
 			}
 
-			err = appbuild.AndroidReleaseBuild(t.Context(), sink, summary, ops, output.Annotator{}, &out, &stderr, appbuild.AndroidReleaseBuildInput{ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: "nested project/.", SkipTests: true, EnableBuildSBOM: true}, RepoName: "mobile", GradleTasksOverride: "assembleWidget bundleWidget", SBOMToolVersion: "2.1.0", SecretsPropertiesBase64: base64.StdEncoding.EncodeToString([]byte("fixture=owned\n"))})
+			err = appbuild.AndroidReleaseBuild(t.Context(), sink, summary, ops, output.Annotator{}, &out, &stderr, appbuild.AndroidReleaseBuildInput{Dir: "nested project/.", SkipTests: true, EnableBuildSBOM: true, RepoName: "mobile", GradleTasksOverride: "assembleWidget bundleWidget", SBOMToolVersion: "2.1.0", SecretsPropertiesBase64: base64.StdEncoding.EncodeToString([]byte("fixture=owned\n"))})
 			if sink.Single("version") != "9.8.7" || sink.Single("version-code") != "41" {
 				t.Fatalf("Android metadata=%v", sink.AllScalar())
 			}
@@ -105,7 +105,7 @@ func TestProjectDirectoryBoundary_GradleAndAndroid(t *testing.T) { //nolint:goco
 				t.Fatal("injected properties survived Android return")
 			}
 		} else {
-			err = appbuild.GradleReleaseBuild(t.Context(), summary, ops, &out, &stderr, appbuild.GradleReleaseBuildInput{ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: "nested project/.", SkipTests: true, EnableBuildSBOM: true}, Tasks: "assembleWidget bundleWidget", SBOMToolVersion: "2.1.0"})
+			err = appbuild.GradleReleaseBuild(t.Context(), summary, ops, &out, &stderr, appbuild.GradleReleaseBuildInput{Dir: "nested project/.", SkipTests: true, EnableBuildSBOM: true, Tasks: "assembleWidget bundleWidget", SBOMToolVersion: "2.1.0"})
 			if !strings.Contains(summary.buf.String(), "2.3.4") {
 				t.Fatalf("summary=%s", &summary.buf)
 			}
@@ -145,6 +145,7 @@ func TestProjectDirectoryBoundary_GradleAndAndroid(t *testing.T) { //nolint:goco
 
 type interpolationMaven struct {
 	fakeMaven
+
 	expressions     []string
 	failAt, emptyAt int
 }
@@ -169,7 +170,7 @@ func TestMavenInterpolationBoundary_AllFieldsAndRefusals(t *testing.T) {
 	want := []string{"project.version", "project.groupId", "project.artifactId"}
 	for position := range len(want) + 1 {
 		for _, empty := range []bool{false, true} {
-			ops := &interpolationMaven{fakeMaven: fakeMaven{answers: map[string]string{"project.version": "7.8.9", "project.groupId": "gov.example", "project.artifactId": "component"}}}
+			ops := &interpolationMaven{answers: map[string]string{"project.version": "7.8.9", "project.groupId": "gov.example", "project.artifactId": "component"}}
 			if empty {
 				ops.emptyAt = position
 			} else {
@@ -191,7 +192,7 @@ func TestMavenInterpolationBoundary_AllFieldsAndRefusals(t *testing.T) {
 					cause = errs.ErrMalformedInput
 				}
 
-				if !errors.Is(err, cause) || !strings.Contains(err.Error(), want[position-1]) || !slices.Equal(ops.expressions, want[:position]) || len(sink.Keys()) != 0 || out.Len() != 0 { //nolint:gosec // position is 1..len(want) in this branch of the bounded loop.
+				if !errors.Is(err, cause) || !strings.Contains(err.Error(), want[position-1]) || !slices.Equal(ops.expressions, want[:position]) || len(sink.Keys()) != 0 || out.Len() != 0 {
 					t.Fatalf("err=%v expressions=%v keys=%v out=%s", err, ops.expressions, sink.Keys(), &out)
 				}
 			}
@@ -218,6 +219,7 @@ func (f *failingSummary) Append(_ context.Context, body string) error {
 
 type sbomMaven struct {
 	fakeMaven
+
 	generation error
 }
 
@@ -240,35 +242,37 @@ func TestBuildSummaryBoundary_AllSummaryPositions(t *testing.T) {
 		{"go", 1, func(t *testing.T, s ci.SummarySink, _ error) error {
 			t.Helper()
 
-			return appbuild.GoReleaseBuild(t.Context(), s, &fakeGoTool{}, &fakeCycloneDXGoModTool{}, io.Discard, io.Discard, appbuild.GoReleaseBuildInput{ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newGoModDir(t)}, Version: "1.2.3"})
+			return appbuild.GoReleaseBuild(t.Context(), s, &fakeGoTool{}, &fakeCycloneDXGoModTool{}, io.Discard, io.Discard, appbuild.GoReleaseBuildInput{Dir: newGoModDir(t), Version: "1.2.3"})
 		}},
 		{"cargo", 1, func(t *testing.T, s ci.SummarySink, generation error) error {
 			t.Helper()
 
-			return appbuild.CargoReleaseBuild(t.Context(), s, &fakeCargoTool{metadata: sampleCargoMetadata, binaryNames: []string{"hello"}, failOn: "cyclonedx", runErr: generation}, io.Discard, io.Discard, appbuild.CargoReleaseBuildInput{ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: t.TempDir(), EnableBuildSBOM: true}, Version: "1.2.3"})
+			return appbuild.CargoReleaseBuild(t.Context(), s, &fakeCargoTool{metadata: sampleCargoMetadata, binaryNames: []string{"hello"}, failOn: "cyclonedx", runErr: generation}, io.Discard, io.Discard, appbuild.CargoReleaseBuildInput{Dir: t.TempDir(), EnableBuildSBOM: true, Version: "1.2.3"})
 		}},
 		{"maven", 2, func(t *testing.T, s ci.SummarySink, generation error) error {
 			t.Helper()
 
-			return appbuild.MavenReleaseBuild(t.Context(), s, &sbomMaven{generation: generation}, io.Discard, io.Discard, appbuild.MavenReleaseBuildInput{ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newMavenDir(t), EnableBuildSBOM: true}, BuildType: "app", SBOMToolVersion: "2.9.1"})
+			return appbuild.MavenReleaseBuild(t.Context(), s, &sbomMaven{generation: generation}, io.Discard, io.Discard, appbuild.MavenReleaseBuildInput{Dir: newMavenDir(t), EnableBuildSBOM: true, BuildType: "app", SBOMToolVersion: "2.9.1"})
 		}},
 		{"gradle", 2, func(t *testing.T, s ci.SummarySink, generation error) error {
 			t.Helper()
 
-			return appbuild.GradleReleaseBuild(t.Context(), s, &projectGradleRecorder{sbomErr: generation}, io.Discard, io.Discard, appbuild.GradleReleaseBuildInput{ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newGradleDir(t), EnableBuildSBOM: true}, Tasks: "assemble", SBOMToolVersion: "2.1.0"})
+			return appbuild.GradleReleaseBuild(t.Context(), s, &projectGradleRecorder{sbomErr: generation}, io.Discard, io.Discard, appbuild.GradleReleaseBuildInput{Dir: newGradleDir(t), EnableBuildSBOM: true, Tasks: "assemble", SBOMToolVersion: "2.1.0"})
 		}},
 		{"android", 1, func(t *testing.T, s ci.SummarySink, generation error) error {
 			t.Helper()
 
-			return appbuild.AndroidReleaseBuild(t.Context(), fakeoutputsink.New(t), s, &projectGradleRecorder{sbomErr: generation}, output.Annotator{}, io.Discard, io.Discard, appbuild.AndroidReleaseBuildInput{ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newGradleDir(t), EnableBuildSBOM: true}, RepoName: "mobile", BuildTypes: "release", BuildModule: "app", SBOMToolVersion: "2.1.0"})
+			return appbuild.AndroidReleaseBuild(t.Context(), fakeoutputsink.New(t), s, &projectGradleRecorder{sbomErr: generation}, output.Annotator{}, io.Discard, io.Discard, appbuild.AndroidReleaseBuildInput{Dir: newGradleDir(t), EnableBuildSBOM: true, RepoName: "mobile", BuildTypes: "release", BuildModule: "app", SBOMToolVersion: "2.1.0"})
 		}},
 		{"npm", 2, func(t *testing.T, s ci.SummarySink, generation error) error {
 			t.Helper()
 
-			return appbuild.NPMReleaseBuild(t.Context(), s, &fakeNPMRunner{}, &fakeNPMRunner{failOn: map[string]error{"--yes": generation}}, output.Annotator{}, io.Discard, io.Discard, appbuild.NPMReleaseBuildInput{ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newNPMDir(t), EnableBuildSBOM: true}, SBOMToolVersion: "4.2.1"})
+			return appbuild.NPMReleaseBuild(t.Context(), s, &fakeNPMRunner{}, &fakeNPMRunner{failOn: map[string]error{"--yes": generation}}, output.Annotator{}, io.Discard, io.Discard, appbuild.NPMReleaseBuildInput{Dir: newNPMDir(t), EnableBuildSBOM: true, SBOMToolVersion: "4.2.1"})
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			for position := 0; position <= tc.positions; position++ {
 				summary := &failingSummary{failAt: position}
 

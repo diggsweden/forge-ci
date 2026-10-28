@@ -31,7 +31,7 @@ import (
 // reaches the caller rather than being swallowed, and that the build reports
 // failure rather than success with an incomplete output set.
 
-var errSinkRefused = errors.New("output sink refused the write") //nolint:err113 // injected identity is the contract.
+var errSinkRefused = errors.New("output sink refused the write")
 
 // failAtSink fails the nth Set/SetBool/SetMultiline call, counting from one,
 // so a test can place the failure anywhere in the flush.
@@ -134,14 +134,14 @@ func unsignedXcodeRelease(t *testing.T) (*testfs.Real, appbuild.XcodeReleaseBuil
 	return fsys, input
 }
 
-func itoaBuild(n int) string {
-	if n == 0 {
+func itoaBuild(index int) string {
+	if index == 0 {
 		return "0"
 	}
 
 	digits := ""
-	for ; n > 0; n /= 10 {
-		digits = string(rune('0'+n%10)) + digits
+	for ; index > 0; index /= 10 {
+		digits = string(rune('0'+index%10)) + digits
 	}
 
 	return digits

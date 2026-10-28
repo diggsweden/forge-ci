@@ -45,7 +45,7 @@ func reportEnrichSARIFCmd() *cli.Command {
 		Description: `EXAMPLE:
    forge-ci security report enrich-sarif --sarif-file results.sarif`,
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: flagSARIFFile, Sources: cli.EnvVars("SARIF_FILE"), Usage: "SARIF file to read, enrich, and write back (\"-\" reads stdin)"}, //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
+			&cli.StringFlag{Name: flagSARIFFile, Sources: cli.EnvVars("SARIF_FILE"), Usage: "SARIF file to read, enrich, and write back (\"-\" reads stdin)"},
 		},
 		Action: func(_ context.Context, cmd *cli.Command) error {
 			annot := deps.Annotator(cmd)
@@ -132,7 +132,7 @@ func reportToGitLabContainerCmd() *cli.Command {
 				Usage:   "fully qualified image (registry/owner/name@sha256:…); falls back to ArtifactName from the Trivy JSON when empty",
 			},
 			&cli.StringFlag{
-				Name:    "trivy-version", //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
+				Name:    "trivy-version",
 				Sources: cli.EnvVars("TRIVY_VERSION"),
 				Usage:   "Trivy version embedded in scan.scanner.version of the GitLab report (default: unknown)",
 			},
@@ -140,7 +140,7 @@ func reportToGitLabContainerCmd() *cli.Command {
 		Action: func(_ context.Context, cmd *cli.Command) error {
 			out := cmd.String(flagOutput)
 
-			n, err := appsecurity.TrivyToGitLabContainer(appsecurity.TransformInput{ //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+			n, err := appsecurity.TrivyToGitLabContainer(appsecurity.TransformInput{
 				InputPath:    cmd.String(flagInput),
 				OutputPath:   out,
 				TrivyVersion: cmd.String("trivy-version"),
@@ -186,7 +186,7 @@ EXAMPLE:
 		Action: func(_ context.Context, cmd *cli.Command) error {
 			out := cmd.String(flagOutput)
 
-			n, err := appsecurity.SARIFToGitLabSAST(appsecurity.TransformInput{ //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+			n, err := appsecurity.SARIFToGitLabSAST(appsecurity.TransformInput{
 				InputPath:  cmd.String(flagInput),
 				OutputPath: out,
 			})

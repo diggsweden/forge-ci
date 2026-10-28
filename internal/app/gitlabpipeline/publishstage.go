@@ -21,8 +21,6 @@ const componentPublishContainer = "publish-container"
 // components are refused until the generator can wire their needs/dependencies
 // to sibling build jobs; emitting them without that handoff would create jobs
 // that cannot access the files they publish.
-//
-//nolint:cyclop // one "include this component if the target runs" guard per publish target — a flat dispatch table written out.
 func PublishStagePipeline(plan pipeline.ReleasePublishStagePlan, opts BuildPipelineOptions) (ChildPipeline, error) {
 	if err := validateComponentCoordinate(opts); err != nil {
 		return ChildPipeline{}, err

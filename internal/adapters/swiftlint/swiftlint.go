@@ -10,8 +10,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/diggsweden/forge-ci/internal/safeexec"
 	"os/exec"
+
+	"github.com/diggsweden/forge-ci/internal/safeexec"
 )
 
 // Adapter wraps the swiftlint binary. Bin is overridable for tests.
@@ -57,8 +58,7 @@ func (a *Adapter) Lint(ctx context.Context, in LintInput) (string, int, error) {
 		return buf.String(), 0, nil
 	}
 
-	var exitErr *exec.ExitError
-	if errors.As(runErr, &exitErr) {
+	if exitErr, ok := errors.AsType[*exec.ExitError](runErr); ok {
 		return buf.String(), exitErr.ExitCode(), nil
 	}
 

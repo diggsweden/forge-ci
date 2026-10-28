@@ -73,7 +73,7 @@ func TestExposeMiseTools_AppendsBinPathsAndSymlinksExecutables(t *testing.T) {
 		t.Fatalf("ExposeMiseTools: %v", err)
 	}
 
-	body, err := os.ReadFile(pathFile) //nolint:gosec // test-owned path.
+	body, err := os.ReadFile(pathFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestExposeMiseTools_ExposesLockedRustupCargoBins(t *testing.T) {
 		t.Fatalf("locked env missing: %#v", gotCall.env)
 	}
 
-	body, err := os.ReadFile(pathFile) //nolint:gosec // test-owned path.
+	body, err := os.ReadFile(pathFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func writeExecutable(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755); err != nil { //nolint:gosec // test-owned path.
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 }

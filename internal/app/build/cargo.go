@@ -80,7 +80,7 @@ func CargoFetch(ctx context.Context, tool CargoTool, w, stderr io.Writer, dir st
 // CargoTest runs `cargo test --locked` against the workspace. Tests
 // remain caller-owned in pull-request quality flows; this is the release
 // build's pre-compile gate, opt-out via --skip-tests.
-func CargoTest(ctx context.Context, tool CargoTool, w, stderr io.Writer, in CargoTestInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func CargoTest(ctx context.Context, tool CargoTool, w, stderr io.Writer, in CargoTestInput) error {
 	return tool.Run(ctx, CargoRunInput{
 		Dir:    defaultCargoDir(in.Dir),
 		Args:   []string{"test", flagCargoLocked, "--all-targets"},
@@ -98,37 +98,12 @@ func CargoTest(ctx context.Context, tool CargoTool, w, stderr io.Writer, in Carg
 // `rustup target add <triple>` and the matching cross-linker. We don't
 // model that here — `cargo build` produces a precise error when a target
 // is missing, which surfaces in the workflow log.
-func CargoBuildBinaries(ctx context.Context, tool CargoTool, w, stderr io.Writer, in CargoBuildBinariesInput) error { //nolint:cyclop,gocognit,varnamelen // matrix loop keeps each target's source cleanup, build and checked copy together.
+func CargoBuildBinaries(ctx context.Context, tool CargoTool, out, stderr io.Writer, in CargoBuildBinariesInput) error {
 	dir := defaultCargoDir(in.Dir)
 
-	binaryName := strings.TrimSpace(in.BinaryName)
-	crateBinary := strings.TrimSpace(in.CrateBinaryName)
-
-	if binaryName == "" || crateBinary == "" {
-		meta, err := readCargoMetadata(ctx, tool, dir)
-		if err != nil {
-			return err
-		}
-
-		if crateBinary == "" {
-			crateBinary = meta.crateBinaryName
-		}
-
-		if binaryName == "" {
-			binaryName = crateBinary
-		}
-	}
-
-	// Reject scalar shapes that would break the GHA output contract or
-	// allow injection of fake ldflags-style lines (mirrors Go path).
-	if err := validateScalarValue(binaryName); err != nil {
-		return fmt.Errorf("binary-name: %w", err)
-	}
-
-	for _, name := range []string{binaryName, crateBinary} {
-		if !pathsafe.Relative(name) || name == "." || filepath.Base(name) != name {
-			return fmt.Errorf("cargo binary names must be plain basenames: %w", errs.ErrUsage)
-		}
+	binaryName, crateBinary, err := cargoBinaryNames(ctx, tool, dir, in)
+	if err != nil {
+		return err
 	}
 
 	version := domainversion.StripVPrefix(strings.TrimSpace(in.Version))
@@ -166,71 +141,136 @@ func CargoBuildBinaries(ctx context.Context, tool CargoTool, w, stderr io.Writer
 		}
 	}
 
+	build := cargoTargetBuild{
+		tool: tool, out: out, stderr: stderr, dist: root, dir: dir,
+		binaryName: binaryName, crateBinary: crateBinary,
+		env: []string{"FORGE_CI_VERSION=" + version, "FORGE_CI_COMMIT=" + strings.TrimSpace(in.Commit)},
+	}
 	for _, platform := range platforms {
-		goos, goarch, _ := parseCargoPlatform(platform)
-		triple := domainbuild.CargoTargetTriple(platform)
-
-		outDir := filepath.Join(dir, "dist", goos+"-"+goarch)
-		if err := root.MkdirAll(goos+"-"+goarch, 0o755); err != nil {
-			return fmt.Errorf("mkdir %s: %w", outDir, err)
-		}
-
-		outName := fmt.Sprintf("%s-%s-%s", binaryName, goos, goarch)
-		if goos == archGOOSWindows {
-			outName += extExe
-		}
-
-		_, _ = fmt.Fprintf(w, "Building %s -> %s\n", triple, filepath.Join(outDir, outName))
-
-		sourceName := crateBinary
-		if goos == archGOOSWindows {
-			sourceName += extExe
-		}
-
-		source := filepath.Join(dir, "target", triple, "release", sourceName)
-
-		parent, parentErr := pathsafe.OpenRoot(filepath.Dir(source))
-		if parentErr != nil && !errors.Is(parentErr, os.ErrNotExist) {
-			return parentErr
-		}
-
-		if parent != nil {
-			removeErr := parent.Remove(sourceName)
-			_ = parent.Close()
-
-			if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-				return fmt.Errorf("remove previous Cargo binary: %w", removeErr)
-			}
-		}
-
-		args := []string{
-			subCmdBuild, "--release", flagCargoLocked,
-			"--target", triple,
-			"--bin", crateBinary,
-			"--target-dir", filepath.Join(dir, "target"),
-		}
-		if err := tool.Run(ctx, CargoRunInput{
-			Dir:    dir,
-			Env:    []string{"FORGE_CI_VERSION=" + version, "FORGE_CI_COMMIT=" + strings.TrimSpace(in.Commit)},
-			Args:   args,
-			Stdout: w,
-			Stderr: stderr,
-		}); err != nil {
+		if err := build.target(ctx, platform); err != nil {
 			return err
 		}
+	}
 
-		// Cargo writes target/<triple>/release/<crate_name>(.exe). Locate
-		// it and copy to the dist/ layout. The crate name (which may differ
-		// from the --binary-name override) names the source; the
-		// destination uses binaryName per the GHA output contract.
-		built, err := locateCargoBinary(dir, triple, goos, crateBinary)
+	return nil
+}
+
+// cargoBinaryNames returns the published binary name and the crate binary
+// Cargo builds, reading cargo metadata only for a name not given.
+func cargoBinaryNames(ctx context.Context, tool CargoTool, dir string, in CargoBuildBinariesInput) (string, string, error) {
+	binaryName := strings.TrimSpace(in.BinaryName)
+	crateBinary := strings.TrimSpace(in.CrateBinaryName)
+
+	if binaryName == "" || crateBinary == "" {
+		meta, err := readCargoMetadata(ctx, tool, dir)
 		if err != nil {
-			return err
+			return "", "", err
 		}
 
-		if err := copyFile(built, filepath.Join(outDir, outName)); err != nil {
-			return err
+		if crateBinary == "" {
+			crateBinary = meta.crateBinaryName
 		}
+
+		if binaryName == "" {
+			binaryName = crateBinary
+		}
+	}
+
+	// Reject scalar shapes that would break the GHA output contract or
+	// allow injection of fake ldflags-style lines (mirrors Go path).
+	if err := validateScalarValue(binaryName); err != nil {
+		return "", "", fmt.Errorf("binary-name: %w", err)
+	}
+
+	for _, name := range []string{binaryName, crateBinary} {
+		if !pathsafe.Relative(name) || name == "." || filepath.Base(name) != name {
+			return "", "", fmt.Errorf("cargo binary names must be plain basenames: %w", errs.ErrUsage)
+		}
+	}
+
+	return binaryName, crateBinary, nil
+}
+
+// cargoTargetBuild builds the crate binary for one platform at a time and
+// copies it into dist/<goos>-<goarch>/.
+type cargoTargetBuild struct {
+	tool        CargoTool
+	out, stderr io.Writer
+	dist        *os.Root
+	dir         string
+	binaryName  string
+	crateBinary string
+	env         []string
+}
+
+func (b cargoTargetBuild) target(ctx context.Context, platform string) error {
+	goos, goarch, _ := parseCargoPlatform(platform)
+	triple := domainbuild.CargoTargetTriple(platform)
+
+	outDir := filepath.Join(b.dir, "dist", goos+"-"+goarch)
+	if err := b.dist.MkdirAll(goos+"-"+goarch, 0o755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", outDir, err)
+	}
+
+	outName := fmt.Sprintf("%s-%s-%s", b.binaryName, goos, goarch)
+	sourceName := b.crateBinary
+
+	if goos == archGOOSWindows {
+		outName += extExe
+		sourceName += extExe
+	}
+
+	_, _ = fmt.Fprintf(b.out, "Building %s -> %s\n", triple, filepath.Join(outDir, outName))
+
+	if err := removeCargoSource(filepath.Join(b.dir, "target", triple, "release", sourceName)); err != nil {
+		return err
+	}
+
+	args := []string{
+		subCmdBuild, "--release", flagCargoLocked,
+		"--target", triple,
+		"--bin", b.crateBinary,
+		"--target-dir", filepath.Join(b.dir, "target"),
+	}
+	if err := b.tool.Run(ctx, CargoRunInput{
+		Dir:    b.dir,
+		Env:    b.env,
+		Args:   args,
+		Stdout: b.out,
+		Stderr: b.stderr,
+	}); err != nil {
+		return err
+	}
+
+	// Cargo writes target/<triple>/release/<crate_name>(.exe). Locate
+	// it and copy to the dist/ layout. The crate name (which may differ
+	// from the --binary-name override) names the source; the
+	// destination uses binaryName per the GHA output contract.
+	built, err := locateCargoBinary(b.dir, triple, goos, b.crateBinary)
+	if err != nil {
+		return err
+	}
+
+	return copyFile(built, filepath.Join(outDir, outName))
+}
+
+// removeCargoSource removes a binary an earlier build left at source, so a
+// failed build cannot be mistaken for a fresh one.
+func removeCargoSource(source string) error {
+	parent, err := pathsafe.OpenRoot(filepath.Dir(source))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+
+	if err != nil {
+		return err
+	}
+
+	removeErr := parent.Remove(filepath.Base(source))
+	_ = parent.Close()
+
+	if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+		return fmt.Errorf("remove previous Cargo binary: %w", removeErr)
 	}
 
 	return nil
@@ -240,8 +280,6 @@ func CargoBuildBinaries(ctx context.Context, tool CargoTool, w, stderr io.Writer
 // binary-name + version precedence. CargoReleaseBuild threads the values
 // through the build. The returned cargoMetadata carries the *resolved*
 // binary-name/version.
-//
-//nolint:cyclop // input-validation flow mirrors resolveGoMetadata.
 func resolveCargoMetadata(ctx context.Context, tool CargoTool, in CargoMetadataInput) (cargoMetadata, error) {
 	meta, err := readCargoMetadata(ctx, tool, defaultCargoDir(in.Dir))
 	if err != nil {
@@ -294,7 +332,7 @@ type cargoMetadata struct {
 type cargoPackage struct {
 	Name         string `json:"name"`
 	Version      string `json:"version"`
-	ManifestPath string `json:"manifest_path"` //nolint:tagliatelle // schema field is exactly this.
+	ManifestPath string `json:"manifest_path"`
 	Targets      []struct {
 		Name string   `json:"name"`
 		Kind []string `json:"kind"`
@@ -319,8 +357,8 @@ func readCargoMetadata(ctx context.Context, tool CargoTool, dir string) (cargoMe
 
 	var doc struct {
 		Packages      []cargoPackage `json:"packages"`
-		WorkspaceRoot string         `json:"workspace_root"`    //nolint:tagliatelle // schema field is exactly this.
-		WorkspaceMems []string       `json:"workspace_members"` //nolint:tagliatelle // schema field is exactly this.
+		WorkspaceRoot string         `json:"workspace_root"`
+		WorkspaceMems []string       `json:"workspace_members"`
 		Resolve       any            `json:"resolve"`
 	}
 

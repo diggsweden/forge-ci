@@ -64,7 +64,7 @@ func systemDependencyPackages(raw string) ([]string, error) {
 
 	var packages []string
 
-	for _, pkg := range strings.Fields(strings.ReplaceAll(raw, "\n", " ")) {
+	for pkg := range strings.FieldsSeq(strings.ReplaceAll(raw, "\n", " ")) {
 		if !aptPackageNameRE.MatchString(pkg) {
 			return nil, fmt.Errorf("unsafe apt package name: %s: %w", pkg, errs.ErrUsage)
 		}

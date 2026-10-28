@@ -85,9 +85,9 @@ func TestAnnotations_CarryNoToolOutput(t *testing.T) {
 			_ = appbuild.NPMReleaseBuild(context.Background(), &recordingSummarySink{}, npm, npm,
 				output.NewAnnotator(&annotations, format), &stdout, &stdout,
 				appbuild.NPMReleaseBuildInput{
-					ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newNPMDir(t), EnableBuildSBOM: true},
-					PackageScope:        "@org",
-					SBOMToolVersion:     "4.2.1",
+					Dir: newNPMDir(t), EnableBuildSBOM: true,
+					PackageScope:    "@org",
+					SBOMToolVersion: "4.2.1",
 				})
 
 			require.NotContainsf(t, annotations.String(), annotationCanary,
@@ -162,9 +162,9 @@ func TestNPMFailureReturnsStatusWithoutCopyingOutput(t *testing.T) {
 	err := appbuild.NPMReleaseBuild(context.Background(), &recordingSummarySink{}, npm, npm,
 		output.NewAnnotator(&annotations, output.FormatGitHub), &stdout, &stdout,
 		appbuild.NPMReleaseBuildInput{
-			ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newNPMDir(t), EnableBuildSBOM: true},
-			PackageScope:        "@org",
-			SBOMToolVersion:     "4.2.1",
+			Dir: newNPMDir(t), EnableBuildSBOM: true,
+			PackageScope:    "@org",
+			SBOMToolVersion: "4.2.1",
 		})
 
 	require.ErrorIs(t, err, errExitStatus)

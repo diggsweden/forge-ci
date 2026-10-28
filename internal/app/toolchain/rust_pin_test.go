@@ -17,7 +17,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
-func TestRustPin_RefusesBeforeEffects(t *testing.T) { //nolint:gocognit,gocyclo // every invalid document shares all public entries and complete no-effect assertions.
+func TestRustPin_RefusesBeforeEffects(t *testing.T) {
 	home, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -143,7 +143,7 @@ channel="1.90.0\u0085"
 	}
 }
 
-func TestRustPin_ImmutableAndOptionalControls(t *testing.T) { //nolint:gocognit,gocyclo // independent request vectors and publication state cover pins and optional Rust through all entries.
+func TestRustPin_ImmutableAndOptionalControls(t *testing.T) {
 	home, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

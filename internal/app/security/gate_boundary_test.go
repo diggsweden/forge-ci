@@ -111,7 +111,7 @@ func TestContainerReportBoundary_CompleteFindingAssociations(t *testing.T) {
 	}
 }
 
-func TestContainerReportBoundary_StatusShapeAndAliases(t *testing.T) { //nolint:gocognit // one owned fixture independently exercises process, data and file-identity failures.
+func TestContainerReportBoundary_StatusShapeAndAliases(t *testing.T) {
 	t.Parallel()
 
 	for _, mode := range []string{"status", "null", "malformed", "alias", "hardlink"} {
@@ -205,11 +205,11 @@ func TestContainerReportBoundary_OneFailedReportLeavesItsSibling(t *testing.T) {
 				in.GitLabReportFile = filepath.Join(readOnly, "report.json")
 			}
 
-			if err := os.Chmod(readOnly, 0o500); err != nil { //nolint:gosec // a read-only directory keeps its search bit.
+			if err := os.Chmod(readOnly, 0o500); err != nil {
 				t.Fatal(err)
 			}
 
-			t.Cleanup(func() { _ = os.Chmod(readOnly, 0o700) }) //nolint:gosec // a directory needs its search bit; restores access so the temp dir can be removed.
+			t.Cleanup(func() { _ = os.Chmod(readOnly, 0o700) })
 
 			scanner := &scanRecorder{run: func(_ context.Context, args []string) (int, error) {
 				return 0, os.WriteFile(scanOutput(args), []byte(boundaryTrivyJSON), 0o600)

@@ -14,7 +14,6 @@ import (
 	appsummary "github.com/diggsweden/forge-ci/internal/app/summary"
 )
 
-//nolint:gocognit // Eight boundary cases share one fixture and complete report/call oracle.
 func TestExtractedBinaries_FileListBoundaries(t *testing.T) {
 	const metadata = "### Extracted Binaries - boundary-demo (linux/amd64)\n\n" +
 		"- **Stage:** export-binary\n- **Artifact:** boundary-artifact\n" +
@@ -32,7 +31,7 @@ func TestExtractedBinaries_FileListBoundaries(t *testing.T) {
 		nestedLine = "<code>bin&#92;deep&#92;tool&#96;</code>\n"
 	}
 
-	sentinel := errors.New("extracted binaries append sentinel") //nolint:err113 // Injected error identity, not a production error.
+	sentinel := errors.New("extracted binaries append sentinel")
 	for _, tc := range []struct {
 		name      string
 		limit     int
@@ -116,7 +115,7 @@ func TestExtractedBinaries_FileListBoundaries(t *testing.T) {
 				ExtractTarget: "export-binary", ArtifactName: "boundary-artifact",
 				ExpectedNames: "metadata-only-name", Limit: tc.limit,
 			})
-			if err != tc.sinkError { //nolint:err113,errorlint // Require the exact sentinel, not a wrapper or same-text replacement.
+			if err != tc.sinkError { //nolint:errorlint // Require the exact sentinel, not a wrapper or same-text replacement.
 				t.Errorf("append error = %v, want unchanged error %v", err, tc.sinkError)
 			}
 

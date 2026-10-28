@@ -65,8 +65,8 @@ func TestAndroidReleaseBuild_KnownRefusalsPreserveState(t *testing.T) {
 			t.Setenv("ANDROID_KEYSTORE_PATH", "parent-canary")
 
 			in := appbuild.AndroidReleaseBuildInput{
-				ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: fsys.MkdirAll("project")},
-				RepoName:            "mobile", BuildTypes: "release", TempDir: fsys.MkdirAll("scratch"),
+				Dir:      fsys.MkdirAll("project"),
+				RepoName: "mobile", BuildTypes: "release", TempDir: fsys.MkdirAll("scratch"),
 			}
 			if name != "missing_wrapper" {
 				fsys.WriteFile("project/gradlew", []byte("inert wrapper"))
@@ -120,7 +120,7 @@ func TestAndroidReleaseBuild_PropertiesLifetime(t *testing.T) {
 		return nil
 	}}
 	err := appbuild.AndroidReleaseBuild(t.Context(), fakeoutputsink.New(t), &recordingSummarySink{}, ops, output.Annotator{}, io.Discard, io.Discard, appbuild.AndroidReleaseBuildInput{
-		ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir}, RepoName: "mobile", BuildTypes: "release", SecretsPropertiesBase64: "cA==",
+		Dir: dir, RepoName: "mobile", BuildTypes: "release", SecretsPropertiesBase64: "cA==",
 	})
 	require.NoError(t, err)
 	require.Len(t, ops.calls, 1)
@@ -136,7 +136,7 @@ func TestAndroidReleaseBuild_SigningDoesNotChangeParent(t *testing.T) {
 	dir := fsys.MkdirAll("project")
 	fsys.WriteFile("project/gradlew", []byte("inert wrapper"))
 	err := appbuild.AndroidReleaseBuild(t.Context(), fakeoutputsink.New(t), &recordingSummarySink{}, &androidGradleRecorder{}, output.Annotator{}, io.Discard, io.Discard, appbuild.AndroidReleaseBuildInput{
-		ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir}, RepoName: "mobile", BuildTypes: "release", EnableSigning: true, KeystoreBase64: "aw==", TempDir: fsys.MkdirAll("scratch"),
+		Dir: dir, RepoName: "mobile", BuildTypes: "release", EnableSigning: true, KeystoreBase64: "aw==", TempDir: fsys.MkdirAll("scratch"),
 		KeystorePassword: "store password", KeyAlias: "alias", KeyPassword: "key password",
 	})
 	require.NoError(t, err)
@@ -149,6 +149,7 @@ func TestAndroidReleaseBuild_SigningDoesNotChangeParent(t *testing.T) {
 
 type androidLifecycleSink struct {
 	*fakeoutputsink.Sink
+
 	events         *[]string
 	fail           string
 	cause          error
@@ -189,7 +190,7 @@ func (s *androidLifecycleSink) Append(ctx context.Context, body string) error {
 	return nil
 }
 
-func TestAndroidReleaseBuild_SignedCallPrefixesAndCleanup(t *testing.T) { //nolint:gocognit,gocyclo,maintidx // complete ordered effect prefixes and inside-call file checks share the same signed fixture.
+func TestAndroidReleaseBuild_SignedCallPrefixesAndCleanup(t *testing.T) {
 	wantEvents := []string{"debug-name", "release-name", "aab-name", "sbom-name", "version", "version-code", "build", "sbom", "summary"}
 	for _, fail := range append([]string{"", "v3", "sbom_missing", "missing_metadata", "sbom_and_summary", "cancel_build", "cancel_sbom"}, wantEvents...) {
 		t.Run("fail_"+fail, func(t *testing.T) {
@@ -218,8 +219,8 @@ func TestAndroidReleaseBuild_SignedCallPrefixesAndCleanup(t *testing.T) { //noli
 			decoy := ownedTree(t, fsys.Path("decoy"))
 			fallbackBefore := ownedTree(t, fsys.Path("fallback"))
 			in := appbuild.AndroidReleaseBuildInput{
-				ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: "project/.", EnableBuildSBOM: true, SkipTests: true},
-				RepoName:            "mobile", GradleTasksOverride: " assembleChosen\t:widget:bundleChosen ", BuildTypes: "ignored-invalid",
+				Dir: "project/.", EnableBuildSBOM: true, SkipTests: true,
+				RepoName: "mobile", GradleTasksOverride: " assembleChosen\t:widget:bundleChosen ", BuildTypes: "ignored-invalid",
 				EnableSigning: true, KeystoreBase64: base64.StdEncoding.EncodeToString([]byte("owned-keystore\x00\xff\n")),
 				KeystorePassword: " store-password \r\n", KeyAlias: " alias-canary ", KeyPassword: "\tkey-password\n",
 				SecretsPropertiesBase64: base64.StdEncoding.EncodeToString([]byte("token=owned-properties\n")),
@@ -228,7 +229,7 @@ func TestAndroidReleaseBuild_SignedCallPrefixesAndCleanup(t *testing.T) { //noli
 
 			causes := map[string]error{}
 			for _, step := range wantEvents {
-				causes[step] = errors.New("owned " + step + " failure") //nolint:err113 // independent per-port error identities.
+				causes[step] = errors.New("owned " + step + " failure")
 			}
 
 			ctx, cancel := context.WithCancelCause(t.Context())
@@ -503,7 +504,7 @@ func TestAndroidReleaseBuild_CredentialRefusals(t *testing.T) {
 				fsys.WriteFile("project/gradlew", []byte("inert wrapper"))
 				fsys.WriteFile("scratch/release.keystore", []byte("caller-canary"))
 				in := appbuild.AndroidReleaseBuildInput{
-					ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: fsys.Path("project")}, RepoName: "mobile", BuildTypes: "release",
+					Dir: fsys.Path("project"), RepoName: "mobile", BuildTypes: "release",
 					EnableSigning: true, KeystoreBase64: "aw==", KeystorePassword: "store", KeyAlias: "alias", KeyPassword: "key", TempDir: fsys.Path("scratch"), SecretsPropertiesBase64: "cA==",
 				}
 
@@ -540,7 +541,7 @@ func TestAndroidReleaseBuild_CredentialRefusals(t *testing.T) {
 	}
 }
 
-func TestAndroidReleaseBuild_PathRefusals(t *testing.T) { //nolint:gocognit // one snapshot oracle for the known root, wrapper, metadata and secret destination refusals.
+func TestAndroidReleaseBuild_PathRefusals(t *testing.T) {
 	for _, name := range []string{"project_link", "wrapper_link", "wrapper_directory", "wrapper_unreadable", "metadata_directory", "metadata_unreadable", "scratch_missing", "scratch_file", "scratch_link", "scratch_readonly", "scratch_in_project", "properties_link", "properties_directory", "project_readonly"} {
 		t.Run(name, func(t *testing.T) {
 			fsys := testfs.NewReal(t)
@@ -551,7 +552,7 @@ func TestAndroidReleaseBuild_PathRefusals(t *testing.T) { //nolint:gocognit // o
 			fsys.WriteFile("scratch/caller", []byte("caller scratch bytes"))
 			fsys.WriteFile("caller", []byte("caller target bytes"))
 			in := appbuild.AndroidReleaseBuildInput{
-				ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: fsys.Path("project")}, RepoName: "mobile", BuildTypes: "release",
+				Dir: fsys.Path("project"), RepoName: "mobile", BuildTypes: "release",
 				EnableSigning: true, KeystoreBase64: "aw==", KeystorePassword: "store", KeyAlias: "alias", KeyPassword: "key", TempDir: fsys.Path("scratch"), SecretsPropertiesBase64: "cA==",
 			}
 			want := errs.ErrValidation
@@ -635,7 +636,7 @@ func TestAndroidReleaseBuild_PathRefusals(t *testing.T) { //nolint:gocognit // o
 	}
 }
 
-func TestAndroidReleaseBuild_OptionalControls(t *testing.T) { //nolint:gocognit // contrasting signed, unsigned and fallback controls share one lifecycle oracle.
+func TestAndroidReleaseBuild_OptionalControls(t *testing.T) {
 	for _, name := range []string{"unsigned", "existing_properties", "signed_without_properties", "fallback", "fallback_alias", "default_dir_module", "debug_aab", "skip_tests"} {
 		t.Run(name, func(t *testing.T) {
 			testenv.New(t)
@@ -653,7 +654,7 @@ func TestAndroidReleaseBuild_OptionalControls(t *testing.T) { //nolint:gocognit 
 			t.Setenv("ANDROID_KEYSTORE_PATH", "ambient-canary")
 			fsys.WriteFile("project/gradlew", []byte("inert wrapper"))
 			in := appbuild.AndroidReleaseBuildInput{
-				ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: "project"}, RepoName: "mobile", ProductFlavor: "demoFree", BuildModule: "widget", BuildTypes: "release,debug", IncludeAAB: true,
+				Dir: "project", RepoName: "mobile", ProductFlavor: "demoFree", BuildModule: "widget", BuildTypes: "release,debug", IncludeAAB: true,
 				EnableSigning: true, KeystoreBase64: "aw==", KeystorePassword: " \t\n", KeyAlias: " alias ", KeyPassword: "\r\n ", TempDir: fsys.MkdirAll("scratch"),
 			}
 			wantArgs := []string{"widget:test", "assembleDemoFreeDebug", "assembleDemoFreeRelease", "widget:bundleDemoFreeRelease"}
@@ -682,7 +683,7 @@ func TestAndroidReleaseBuild_OptionalControls(t *testing.T) { //nolint:gocognit 
 
 			if name == "existing_properties" {
 				fsys.WriteFile("project/secrets.properties", []byte("caller properties\n"))
-				require.NoError(t, os.Chmod(fsys.Path("project/secrets.properties"), 0o640)) //nolint:gosec // caller-owned broad-mode preservation fixture.
+				require.NoError(t, os.Chmod(fsys.Path("project/secrets.properties"), 0o640))
 			}
 
 			parentEnv := os.Environ()
@@ -736,7 +737,7 @@ func TestAndroidReleaseBuild_OptionalControls(t *testing.T) { //nolint:gocognit 
 	}
 }
 
-func TestAndroidReleaseBuild_CleanupErrorsPreservePrimaryAndCallerFiles(t *testing.T) { //nolint:gocognit // both primary outcomes for each owned cleanup failure.
+func TestAndroidReleaseBuild_CleanupErrorsPreservePrimaryAndCallerFiles(t *testing.T) {
 	for _, name := range []string{"properties_replaced", "properties_unlink_failure", "keystore_remove_failure"} {
 		for _, failBuild := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/build_failure_%t", name, failBuild), func(t *testing.T) {
@@ -744,17 +745,17 @@ func TestAndroidReleaseBuild_CleanupErrorsPreservePrimaryAndCallerFiles(t *testi
 				t.Setenv("TMPDIR", fsys.MkdirAll("fallback"))
 				fsys.WriteFile("project/gradlew", []byte("inert wrapper"))
 				in := appbuild.AndroidReleaseBuildInput{
-					ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: fsys.Path("project")}, RepoName: "mobile", BuildTypes: "release",
+					Dir: fsys.Path("project"), RepoName: "mobile", BuildTypes: "release",
 					EnableSigning: true, KeystoreBase64: "aw==", KeystorePassword: "store", KeyAlias: "alias", KeyPassword: "key", TempDir: fsys.MkdirAll("scratch"), SecretsPropertiesBase64: "cA==",
 				}
-				cause := errors.New("owned Gradle failure") //nolint:err113 // independent primary sentinel.
+				cause := errors.New("owned Gradle failure")
 				properties := fsys.Path("project/secrets.properties")
 
 				var keyPath string
 
 				t.Cleanup(func() {
-					require.NoError(t, os.Chmod(in.Dir, 0o700))     //nolint:gosec // restore test-owned directory for fixture cleanup.
-					require.NoError(t, os.Chmod(in.TempDir, 0o700)) //nolint:gosec // restore test-owned directory for fixture cleanup.
+					require.NoError(t, os.Chmod(in.Dir, 0o700))
+					require.NoError(t, os.Chmod(in.TempDir, 0o700))
 				})
 
 				ops := &androidGradleRecorder{run: func(call androidGradleCall) error {
@@ -764,11 +765,11 @@ func TestAndroidReleaseBuild_CleanupErrorsPreservePrimaryAndCallerFiles(t *testi
 					case "properties_replaced":
 						require.NoError(t, os.Rename(properties, fsys.Path("caller-retained-original")))
 						fsys.WriteFile("project/secrets.properties", []byte("caller replacement"))
-						require.NoError(t, os.Chmod(properties, 0o640)) //nolint:gosec // caller-owned broad-mode preservation fixture.
+						require.NoError(t, os.Chmod(properties, 0o640))
 					case "properties_unlink_failure":
-						require.NoError(t, os.Chmod(in.Dir, 0o500)) //nolint:gosec // remove write permission on an owned directory to force unlink failure.
+						require.NoError(t, os.Chmod(in.Dir, 0o500))
 					case "keystore_remove_failure":
-						require.NoError(t, os.Chmod(in.TempDir, 0o500)) //nolint:gosec // remove write permission on an owned directory to force removal failure.
+						require.NoError(t, os.Chmod(in.TempDir, 0o500))
 					}
 
 					if failBuild {
@@ -818,7 +819,7 @@ func TestAndroidReleaseBuild_LatePropertiesCollisionCleansKeystoreOnly(t *testin
 	t.Setenv("ANDROID_KEYSTORE_PATH", "ambient-canary")
 	fsys.WriteFile("project/gradlew", []byte("inert wrapper"))
 	in := appbuild.AndroidReleaseBuildInput{
-		ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: fsys.Path("project")}, RepoName: "mobile", BuildTypes: "release",
+		Dir: fsys.Path("project"), RepoName: "mobile", BuildTypes: "release",
 		EnableSigning: true, KeystoreBase64: "aw==", KeystorePassword: "store", KeyAlias: "alias", KeyPassword: "key", TempDir: fsys.MkdirAll("scratch"), SecretsPropertiesBase64: "cA==",
 	}
 

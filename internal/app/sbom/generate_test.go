@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -42,9 +43,7 @@ type syftCall struct {
 func (f *fakeSyft) Generate(_ context.Context, target string, outputs map[string]string, _ io.Writer) error {
 	// Defensive copy so caller mutations don't affect the recorded call.
 	recorded := make(map[string]string, len(outputs))
-	for k, v := range outputs {
-		recorded[k] = v
-	}
+	maps.Copy(recorded, outputs)
 
 	f.calls = append(f.calls, syftCall{target: target, outputs: recorded})
 	if f.err != nil {
@@ -53,7 +52,7 @@ func (f *fakeSyft) Generate(_ context.Context, target string, outputs map[string
 
 	for format, outputFile := range outputs {
 		body := []byte(`{"target":"` + target + `","format":"` + format + `"}`)
-		if err := os.WriteFile(outputFile, body, 0o644); err != nil { //nolint:gosec // test fixture
+		if err := os.WriteFile(outputFile, body, 0o644); err != nil {
 			return err
 		}
 	}
@@ -67,12 +66,12 @@ type fakeMaven struct {
 
 func (f *fakeMaven) EvalExpression(_ context.Context, expr string) (string, error) {
 	if f.answers == nil {
-		return "", errors.New("no answers configured") //nolint:err113 // test mock error
+		return "", errors.New("no answers configured")
 	}
 
 	v, ok := f.answers[expr]
 	if !ok {
-		return "", errors.New("unknown expr") //nolint:err113 // test mock error
+		return "", errors.New("unknown expr")
 	}
 
 	return v, nil
@@ -94,6 +93,7 @@ type failingBuildSBOMGenerator struct{ err error }
 
 type failingReadDirFS struct {
 	fs.FS
+
 	err error
 }
 
@@ -108,7 +108,7 @@ func (f failingBuildSBOMGenerator) GenerateBuildSBOM(context.Context, projecttyp
 func (g *fakeGit) Run(_ context.Context, args ...string) (string, error) {
 	if len(args) >= 2 && args[0] == "rev-parse" && args[1] == "--short" {
 		if g.sha == "" {
-			return "", errors.New("not a git repo") //nolint:err113 // test mock error
+			return "", errors.New("not a git repo")
 		}
 
 		return g.sha, nil
@@ -181,7 +181,7 @@ func TestGenerate_GoArtifactLayer_ScansExecutableFromReleaseArtifacts(t *testing
 	fsys := testfs.NewReal(t)
 
 	bin := fsys.WriteFile(filepath.Join("release-artifacts", "demo"), []byte("binary"))
-	if err := os.Chmod(bin, 0o755); err != nil { //nolint:gosec // test fixture
+	if err := os.Chmod(bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -282,7 +282,7 @@ func TestGenerate_CargoArtifactLayer_FallsBackToTargetReleaseAndSkipsDebugInfo(t
 
 	debugInfo := fsys.WriteFile(filepath.Join("target", "release", "demo.d"), []byte("debug info"))
 	for _, path := range []string{bin, debugInfo} {
-		if err := os.Chmod(path, 0o755); err != nil { //nolint:gosec // test fixture
+		if err := os.Chmod(path, 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -942,7 +942,7 @@ func TestGenerate_CargoArtifactLayer_IgnoresBuildScriptsUnderTargetRelease(t *te
 	script := fsys.WriteFile(filepath.Join("target", "release", "build", "demo-abc", "build-script-build"), []byte("script"))
 
 	for _, path := range []string{bin, script} {
-		if err := os.Chmod(path, 0o755); err != nil { //nolint:gosec // test fixture
+		if err := os.Chmod(path, 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}

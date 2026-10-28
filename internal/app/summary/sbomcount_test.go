@@ -143,7 +143,7 @@ func TestSBOMCountStatus_CountsWhatItCanRead(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) }) //nolint:gosec // a directory needs its search bit; restores access so the temp dir can be removed.
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
 
 	sink := &fakeSummarySink{}
 

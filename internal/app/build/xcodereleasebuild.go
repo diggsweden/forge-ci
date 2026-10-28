@@ -114,8 +114,8 @@ type XcodeReleaseBuildInput struct {
 // in the forge YAML — it is not forge-ci's to own — so this consolidates the
 // `forge-ci build xcode-ios *` steps, not the whole job.
 //
-//nolint:cyclop,varnamelen // linear preflight/effect/publication sequence; writer convention.
-func XcodeReleaseBuild(ctx context.Context, sink ci.OutputSink, sec XcodeSecurityOps, buildOps XcodeBuildOps, annot output.Annotator, w, stderr io.Writer, in XcodeReleaseBuildInput) (err error) {
+//nolint:cyclop // linear preflight/effect/publication sequence; writer convention.
+func XcodeReleaseBuild(ctx context.Context, sink ci.OutputSink, sec XcodeSecurityOps, buildOps XcodeBuildOps, annot output.Annotator, out, stderr io.Writer, in XcodeReleaseBuildInput) (err error) {
 	pending := &pendingXcodeOutput{}
 
 	var banner bytes.Buffer
@@ -175,9 +175,9 @@ func XcodeReleaseBuild(ctx context.Context, sink ci.OutputSink, sec XcodeSecurit
 		return fmt.Errorf("release outputs: %w", err)
 	}
 
-	_, _ = io.Copy(w, &banner)
+	_, _ = io.Copy(out, &banner)
 	if in.EnableCodeSigning {
-		state, setupErr := setupXcodeSigning(ctx, sec, w, signing, cert, profile)
+		state, setupErr := setupXcodeSigning(ctx, sec, out, signing, cert, profile)
 		if setupErr != nil {
 			return fmt.Errorf("set up code signing: %w", setupErr)
 		}
@@ -200,7 +200,7 @@ func XcodeReleaseBuild(ctx context.Context, sink ci.OutputSink, sec XcodeSecurit
 		defer func() { err = errors.Join(err, removeRunOwnedXcconfig(archive.XcconfigPath)) }()
 	}
 
-	if err = runXcodeArchive(ctx, buildOps, w, stderr, archive); err != nil {
+	if err = runXcodeArchive(ctx, buildOps, out, stderr, archive); err != nil {
 		return fmt.Errorf("archive: %w", err)
 	}
 
@@ -210,7 +210,7 @@ func XcodeReleaseBuild(ctx context.Context, sink ci.OutputSink, sec XcodeSecurit
 	}
 
 	containErr := containedArchiveBundle(archiveDir)
-	identityErr := verifyArchiveScheme(archiveDir, archive.Scheme, w)
+	identityErr := verifyArchiveScheme(archiveDir, archive.Scheme, out)
 	_ = archiveDir.Close()
 
 	if containErr != nil {
@@ -224,7 +224,7 @@ func XcodeReleaseBuild(ctx context.Context, sink ci.OutputSink, sec XcodeSecurit
 	artifacts := []string{"build/app.xcarchive"}
 
 	if in.EnableCodeSigning {
-		if err := exportXcodeIPA(ctx, buildOps, w, stderr, exportOptions); err != nil {
+		if err := exportXcodeIPA(ctx, buildOps, out, stderr, exportOptions); err != nil {
 			return fmt.Errorf("export IPA: %w", err)
 		}
 
@@ -236,9 +236,9 @@ func XcodeReleaseBuild(ctx context.Context, sink ci.OutputSink, sec XcodeSecurit
 		artifacts = append(artifacts, ipa)
 	}
 
-	_, _ = fmt.Fprintln(w, "Built artifacts:")
+	_, _ = fmt.Fprintln(out, "Built artifacts:")
 	for _, path := range artifacts {
-		_, _ = fmt.Fprintln(w, path)
+		_, _ = fmt.Fprintln(out, path)
 	}
 
 	return publishXcodeOutputs(ctx, pending, sink)
@@ -340,7 +340,7 @@ func preflightXcodeReleaseOutputs(signed bool) error {
 	return nil
 }
 
-func xcodeReleaseIPA() (string, error) { //nolint:cyclop // rooted discovery checks links, type, size and cardinality before returning a path.
+func xcodeReleaseIPA() (string, error) {
 	root, err := pathsafe.OpenRoot("build/export")
 	if err != nil {
 		return "", fmt.Errorf("expected build/export directory: %w: %w", err, errs.ErrValidation)
@@ -407,10 +407,10 @@ func xcodeReleaseIPA() (string, error) { //nolint:cyclop // rooted discovery che
 // than over a wrong archive — a guess dressed as a check. Whether the bundle is
 // well-formed at all is a different question, answered by
 // containedArchiveBundle and the artifact listing.
-func verifyArchiveScheme(root *os.Root, selected string, w io.Writer) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func verifyArchiveScheme(root *os.Root, selected string, out io.Writer) error {
 	body, err := root.ReadFile("Info.plist")
 	if err != nil {
-		_, _ = fmt.Fprintf(w, "Note: the archive has no readable Info.plist (%v); "+
+		_, _ = fmt.Fprintf(out, "Note: the archive has no readable Info.plist (%v); "+
 			"the built scheme was not verified against %q\n", err, selected)
 
 		return nil
@@ -418,14 +418,14 @@ func verifyArchiveScheme(root *os.Root, selected string, w io.Writer) error { //
 
 	recorded, err := build.ArchiveSchemeName(body)
 	if err != nil {
-		_, _ = fmt.Fprintf(w, "Note: the archive's recorded scheme could not be read (%v); "+
+		_, _ = fmt.Fprintf(out, "Note: the archive's recorded scheme could not be read (%v); "+
 			"the built scheme was not verified against %q\n", err, selected)
 
 		return nil
 	}
 
 	if recorded == "" {
-		_, _ = fmt.Fprintf(w, "Note: the archive records no SchemeName; "+
+		_, _ = fmt.Fprintf(out, "Note: the archive records no SchemeName; "+
 			"the built scheme was not verified against %q\n", selected)
 
 		return nil
@@ -436,7 +436,7 @@ func verifyArchiveScheme(root *os.Root, selected string, w io.Writer) error { //
 			recorded, selected, errs.ErrValidation)
 	}
 
-	_, _ = fmt.Fprintf(w, "Archive scheme verified: %s\n", recorded)
+	_, _ = fmt.Fprintf(out, "Archive scheme verified: %s\n", recorded)
 
 	return nil
 }

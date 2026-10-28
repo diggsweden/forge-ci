@@ -94,11 +94,9 @@ EXAMPLE:
 			return dependencyDiagnostics(environment.token, func(out, stderr io.Writer) error {
 				return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error {
 					return appbuild.MavenReleaseBuild(ctx, d.SummarySink, &maven.Adapter{Env: environment.authenticated, Options: options}, out, stderr, appbuild.MavenReleaseBuildInput{
-						ReleaseBuildOptions: appbuild.ReleaseBuildOptions{
-							Dir:             cmd.String(flagWorkingDir),
-							SkipTests:       cmd.Bool(flagSkipTests),
-							EnableBuildSBOM: cmd.Bool(flagBuildSBOM),
-						},
+						Dir:             cmd.String(flagWorkingDir),
+						SkipTests:       cmd.Bool(flagSkipTests),
+						EnableBuildSBOM: cmd.Bool(flagBuildSBOM),
 						BuildType:       cmd.String("build-type"),
 						CLIOpts:         strings.Fields(cmd.String(flagCLIOpts)),
 						Profile:         cmd.String("profile"),
@@ -114,7 +112,7 @@ EXAMPLE:
 
 func mavenMetadataCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "metadata", //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
+		Name:  "metadata",
 		Usage: "parse pom.xml for {version,groupId,artifactId} and emit CI outputs (falls back to `mvn help:evaluate` only for ${property} references)",
 		Description: `EXAMPLE:
    forge-ci build maven metadata --working-dir .`,

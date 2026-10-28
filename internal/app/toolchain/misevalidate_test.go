@@ -106,6 +106,7 @@ maven = "3.9.16"
 "aqua:aquasecurity/trivy" = "0.76.0"
 "pipx:reuse" = "6.2.0"
 `)
+
 	for _, tc := range []struct {
 		tools string
 		want  error
@@ -118,14 +119,21 @@ maven = "3.9.16"
 		{"--all", errs.ErrUsage},
 	} {
 		t.Run(tc.tools, func(t *testing.T) {
+			t.Parallel()
+
 			err := toolchain.ValidateMiseInstall(toolchain.ValidateMiseInstallInput{Root: root, Locked: "true", Tools: tc.tools})
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("selection %q: got %v, want %v", tc.tools, err, tc.want)
 			}
 		})
 	}
-	writeToolchainFile(t, root, ".mise.toml", "[tools]\nuv = \"0.9.0\"\n\"pipx:reuse\" = \"6.2.0\"\n")
-	if err := toolchain.ValidateMiseInstall(toolchain.ValidateMiseInstallInput{Root: root, Locked: "true", Tools: "pipx:reuse"}); err != nil {
+
+	// Parallel subtests read root after this function returns; use another.
+	declared := t.TempDir()
+	writeToolchainFile(t, declared, "mise.lock", "locked\n")
+	writeToolchainFile(t, declared, ".mise.toml", "[tools]\nuv = \"0.9.0\"\n\"pipx:reuse\" = \"6.2.0\"\n")
+
+	if err := toolchain.ValidateMiseInstall(toolchain.ValidateMiseInstallInput{Root: declared, Locked: "true", Tools: "pipx:reuse"}); err != nil {
 		t.Fatalf("selected backend with declared runtime must pass: %v", err)
 	}
 }
@@ -138,7 +146,7 @@ func writeToolchainFile(t *testing.T, root, rel, body string) {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil { //nolint:gosec // test-owned path.
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

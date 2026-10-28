@@ -203,4 +203,4 @@ func TestXcodeIOSRun_SigningInputsReachTheSecurityCLI(t *testing.T) {
 }
 
 // errSigningRefused stands in for the macOS security CLI rejecting the import.
-var errSigningRefused = errors.New("security: import refused") //nolint:err113 // test fixture sentinel.
+var errSigningRefused = errors.New("security: import refused")

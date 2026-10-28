@@ -41,7 +41,7 @@ func (f mavenPreflightSummary) Append(ctx context.Context, body string) error {
 	return f(ctx, body)
 }
 
-func TestMavenLocalPreflight_RefusesBeforeEffects(t *testing.T) { //nolint:gocognit // the two public paths share the complete refusal-state oracle and owned fixtures.
+func TestMavenLocalPreflight_RefusesBeforeEffects(t *testing.T) {
 	const (
 		completePOM = `<project><version>${revision}</version><groupId>gov.fixture</groupId><artifactId>child</artifactId></project>`
 		declaration = `<?xml version="1.0"?>`
@@ -109,10 +109,10 @@ func TestMavenLocalPreflight_RefusesBeforeEffects(t *testing.T) { //nolint:gocog
 
 				beforeTree := ownedTree(t, fsys.Root)
 				in := appbuild.MavenReleaseBuildInput{
-					ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir, EnableBuildSBOM: true},
-					BuildType:           "app",
-					CLIOpts:             []string{"--batch-mode", "-f", "native-selected.xml", "-Drevision=4.5.6"},
-					SBOMToolVersion:     "2.9.1",
+					Dir: dir, EnableBuildSBOM: true,
+					BuildType:       "app",
+					CLIOpts:         []string{"--batch-mode", "-f", "native-selected.xml", "-Drevision=4.5.6"},
+					SBOMToolVersion: "2.9.1",
 				}
 				beforeInput := in
 				beforeInput.CLIOpts = slices.Clone(in.CLIOpts)
@@ -182,7 +182,7 @@ func TestMavenLocalPreflight_RefusesBeforeEffects(t *testing.T) { //nolint:gocog
 	}
 }
 
-func TestMavenReleaseBuild_LocalPreflightPreservesNativeOrder(t *testing.T) { //nolint:gocognit // literal, inherited and interpolated controls pin the same full native/reporting boundary.
+func TestMavenReleaseBuild_LocalPreflightPreservesNativeOrder(t *testing.T) {
 	for _, tc := range []struct {
 		name, pom, identity string
 		evals               []string
@@ -202,10 +202,10 @@ func TestMavenReleaseBuild_LocalPreflightPreservesNativeOrder(t *testing.T) { //
 			fsys.WriteFile("cwd/target/prior.jar", []byte("preserve native artifact"))
 			before := ownedTree(t, fsys.Root)
 			in := appbuild.MavenReleaseBuildInput{
-				ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: "../metadata/.", SkipTests: true},
-				BuildType:           "app",
-				CLIOpts:             []string{"--batch-mode", "-f", "native-selected.xml", "-Drevision=4.5.6-SNAPSHOT", "-Pnative-profile"},
-				JavaVersion:         "25",
+				Dir: "../metadata/.", SkipTests: true,
+				BuildType:   "app",
+				CLIOpts:     []string{"--batch-mode", "-f", "native-selected.xml", "-Drevision=4.5.6-SNAPSHOT", "-Pnative-profile"},
+				JavaVersion: "25",
 			}
 			beforeInput := in
 			beforeInput.CLIOpts = slices.Clone(in.CLIOpts)
@@ -363,9 +363,9 @@ func TestMavenReleaseBuild_LocalPreflightCapturesLiteralsButEvaluatesCurrentMode
 func TestMavenReleaseBuild_LocalPreflightDefersNativeFailures(t *testing.T) {
 	t.Parallel()
 
-	installFailure := errors.New("owned install failure") //nolint:err113 // distinct native boundary sentinel.
+	installFailure := errors.New("owned install failure")
 
-	expansionFailure := errors.New("owned expansion failure") //nolint:err113 // distinct native boundary sentinel.
+	expansionFailure := errors.New("owned expansion failure")
 	for _, tc := range []struct {
 		name, answer, message string
 		runErr, evalErr, want error
@@ -376,6 +376,8 @@ func TestMavenReleaseBuild_LocalPreflightDefersNativeFailures(t *testing.T) {
 		{"empty expansion", " \n\t", "expand project.version returned an empty value", nil, nil, errs.ErrMalformedInput, []string{"run install", "eval project.version"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			fsys := testfs.NewReal(t)
 			fsys.WriteFile("pom.xml", []byte(`<project><version>${revision}</version><groupId>gov.fixture</groupId><artifactId>child</artifactId></project>`))
 			before := ownedTree(t, fsys.Root)
@@ -402,8 +404,8 @@ func TestMavenReleaseBuild_LocalPreflightDefersNativeFailures(t *testing.T) {
 			stdout, stderr := bytes.NewBufferString("prior stdout\n"), bytes.NewBufferString("prior stderr\n")
 
 			err := appbuild.MavenReleaseBuild(t.Context(), summary, ops, stdout, stderr, appbuild.MavenReleaseBuildInput{
-				ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: fsys.Root},
-				BuildType:           "app",
+				Dir:       fsys.Root,
+				BuildType: "app",
 			})
 			if !errors.Is(err, tc.want) || !strings.Contains(err.Error(), tc.message) || !slices.Equal(events, tc.events) {
 				t.Errorf("err=%v events=%v, want %v / %v", err, events, tc.want, tc.events)

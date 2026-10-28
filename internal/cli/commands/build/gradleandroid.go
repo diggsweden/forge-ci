@@ -91,13 +91,11 @@ EXAMPLE:
 
 			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error {
 				return appbuild.AndroidReleaseBuild(ctx, d.OutputSink, d.SummarySink, buildOps, deps.Annotator(cmd), os.Stderr, os.Stderr, appbuild.AndroidReleaseBuildInput{
-					Library: cmd.Bool("library"),
-					ReleaseBuildOptions: appbuild.ReleaseBuildOptions{
-						Dir:             cmd.String(flagWorkingDir),
-						ArtifactName:    cmd.String("name-override"),
-						SkipTests:       cmd.Bool(flagSkipTests),
-						EnableBuildSBOM: cmd.Bool(flagBuildSBOM),
-					},
+					Library:                 cmd.Bool("library"),
+					Dir:                     cmd.String(flagWorkingDir),
+					ArtifactName:            cmd.String("name-override"),
+					SkipTests:               cmd.Bool(flagSkipTests),
+					EnableBuildSBOM:         cmd.Bool(flagBuildSBOM),
 					TempDir:                 cmd.String(flagTempDir),
 					IncludeDateStamp:        cmd.Bool("include-date-stamp"),
 					ArtifactNamePrefix:      cmd.String("prefix"),

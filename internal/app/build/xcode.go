@@ -33,7 +33,7 @@ type XcodeArtifactNameInput struct {
 }
 
 // XcodeArtifactName computes and emits the IPA upload-artifact name.
-func XcodeArtifactName(ctx context.Context, sink ci.OutputSink, w io.Writer, in XcodeArtifactNameInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func XcodeArtifactName(ctx context.Context, sink ci.OutputSink, out io.Writer, in XcodeArtifactNameInput) error {
 	baseName := firstNonEmpty(in.ArtifactName, in.RepositoryName)
 	if baseName == "" {
 		return fmt.Errorf("artifact name or repository name is required: %w", errs.ErrUsage)
@@ -48,7 +48,7 @@ func XcodeArtifactName(ctx context.Context, sink ci.OutputSink, w io.Writer, in 
 		return fmt.Errorf("set ipa-name: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(w, "IPA artifact: %s\n", name)
+	_, _ = fmt.Fprintf(out, "IPA artifact: %s\n", name)
 
 	return nil
 }
@@ -77,7 +77,7 @@ func writeXcodeXCConfig(body []byte, tempDir string) (string, error) {
 		tempDir = os.TempDir()
 	}
 
-	f, err := os.CreateTemp(tempDir, "ci-*.xcconfig") //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	f, err := os.CreateTemp(tempDir, "ci-*.xcconfig")
 	if err != nil {
 		return "", fmt.Errorf("create xcconfig tempfile: %w", err)
 	}
@@ -235,20 +235,10 @@ func readXcodeMetadataFile(root, identity, suffix, name string) ([]byte, error) 
 // location is relative to its parent; top-level refs are relative to the
 // workspace's containing directory, NOT its basename or bundle directory.
 // No scheme interpreter, basename guess, or global project search is safe here.
-func xcodeWorkspaceProject(body []byte, base string) (string, error) { //nolint:cyclop,gocognit,gocyclo // explicit bounded XML state machine refuses unsupported or ambiguous selection.
-	const fileRef = "FileRef"
-
+func xcodeWorkspaceProject(body []byte, base string) (string, error) {
 	body = bytes.TrimPrefix(body, []byte("\xef\xbb\xbf"))
 	decoder := xml.NewDecoder(bytes.NewReader(body))
-
-	type group struct{ element, path string }
-
-	var (
-		stack   []group
-		project string
-	)
-
-	seenWorkspace := false
+	parser := xcodeWorkspaceParser{base: base}
 
 	for {
 		firstToken := decoder.InputOffset() == 0
@@ -264,73 +254,117 @@ func xcodeWorkspaceProject(body []byte, base string) (string, error) { //nolint:
 
 		switch node := token.(type) {
 		case xml.StartElement:
-			if node.Name.Space != "" || len(stack) >= 64 {
-				return "", fmt.Errorf("unsupported workspace XML namespace or depth: %w", errs.ErrValidation)
-			}
-
-			if node.Name.Local == "Workspace" && !seenWorkspace {
-				seenWorkspace = true
-
-				stack = append(stack, group{"Workspace", base})
-
-				continue
-			}
-
-			if len(stack) == 0 || stack[len(stack)-1].element == fileRef || (node.Name.Local != "Group" && node.Name.Local != fileRef) {
-				return "", fmt.Errorf("unsupported workspace XML element %q: %w", node.Name.Local, errs.ErrValidation)
-			}
-
-			var location string
-
-			locations := 0
-
-			for _, attr := range node.Attr {
-				if attr.Name.Local == "location" {
-					locations++
-					if locations > 1 || attr.Name.Space != "" {
-						return "", fmt.Errorf("ambiguous workspace location: %w", errs.ErrValidation)
-					}
-
-					location = attr.Value
-				}
-			}
-
-			rel, supported := strings.CutPrefix(location, "group:")
-			if !supported || filepath.IsAbs(rel) {
-				return "", fmt.Errorf("unsupported workspace location %q: %w", location, errs.ErrValidation)
-			}
-
-			path := filepath.Join(stack[len(stack)-1].path, rel)
-			if node.Name.Local == fileRef {
-				if filepath.Ext(path) != ".xcodeproj" || (project != "" && project != path) {
-					return "", fmt.Errorf("workspace must select a single project: %w", errs.ErrValidation)
-				}
-
-				project = path
-			}
-
-			stack = append(stack, group{node.Name.Local, path})
+			err = parser.start(node)
 		case xml.EndElement:
-			stack = stack[:len(stack)-1]
-		case xml.CharData:
-			if strings.TrimSpace(string(node)) != "" {
-				return "", fmt.Errorf("unexpected workspace XML text: %w", errs.ErrValidation)
-			}
-		case xml.ProcInst:
-			// Token accepts declarations anywhere; XML permits one only at the start.
-			if strings.EqualFold(node.Target, "xml") && (node.Target != "xml" || !firstToken) {
-				return "", fmt.Errorf("misplaced or reserved-case workspace XML declaration: %w", errs.ErrValidation)
-			}
-		case xml.Directive:
-			return "", fmt.Errorf("unsupported workspace XML directive: %w", errs.ErrValidation)
+			parser.stack = parser.stack[:len(parser.stack)-1]
+		default:
+			err = checkWorkspaceToken(token, firstToken)
+		}
+
+		if err != nil {
+			return "", err
 		}
 	}
 
-	if !seenWorkspace || len(stack) != 0 || project == "" {
+	if !parser.seenWorkspace || len(parser.stack) != 0 || parser.project == "" {
 		return "", fmt.Errorf("workspace must select a single project: %w", errs.ErrValidation)
 	}
 
-	return project, nil
+	return parser.project, nil
+}
+
+const xcodeFileRef = "FileRef"
+
+// xcodeWorkspaceParser holds the open Workspace/Group/FileRef elements, each
+// with the directory its children resolve against, and the project selected.
+type xcodeWorkspaceParser struct {
+	base          string
+	stack         []xcodeWorkspaceGroup
+	project       string
+	seenWorkspace bool
+}
+
+type xcodeWorkspaceGroup struct{ element, path string }
+
+func (p *xcodeWorkspaceParser) start(node xml.StartElement) error {
+	if node.Name.Space != "" || len(p.stack) >= 64 {
+		return fmt.Errorf("unsupported workspace XML namespace or depth: %w", errs.ErrValidation)
+	}
+
+	if node.Name.Local == "Workspace" && !p.seenWorkspace {
+		p.seenWorkspace = true
+		p.stack = append(p.stack, xcodeWorkspaceGroup{"Workspace", p.base})
+
+		return nil
+	}
+
+	if len(p.stack) == 0 || p.stack[len(p.stack)-1].element == xcodeFileRef || (node.Name.Local != "Group" && node.Name.Local != xcodeFileRef) {
+		return fmt.Errorf("unsupported workspace XML element %q: %w", node.Name.Local, errs.ErrValidation)
+	}
+
+	rel, err := workspaceGroupLocation(node.Attr)
+	if err != nil {
+		return err
+	}
+
+	path := filepath.Join(p.stack[len(p.stack)-1].path, rel)
+	if node.Name.Local == xcodeFileRef {
+		if filepath.Ext(path) != ".xcodeproj" || (p.project != "" && p.project != path) {
+			return fmt.Errorf("workspace must select a single project: %w", errs.ErrValidation)
+		}
+
+		p.project = path
+	}
+
+	p.stack = append(p.stack, xcodeWorkspaceGroup{node.Name.Local, path})
+
+	return nil
+}
+
+// workspaceGroupLocation returns the single relative "group:" location of a
+// Group or FileRef element.
+func workspaceGroupLocation(attrs []xml.Attr) (string, error) {
+	var location string
+
+	locations := 0
+
+	for _, attr := range attrs {
+		if attr.Name.Local == "location" {
+			locations++
+			if locations > 1 || attr.Name.Space != "" {
+				return "", fmt.Errorf("ambiguous workspace location: %w", errs.ErrValidation)
+			}
+
+			location = attr.Value
+		}
+	}
+
+	rel, supported := strings.CutPrefix(location, "group:")
+	if !supported || filepath.IsAbs(rel) {
+		return "", fmt.Errorf("unsupported workspace location %q: %w", location, errs.ErrValidation)
+	}
+
+	return rel, nil
+}
+
+// checkWorkspaceToken refuses text, directives and misplaced declarations
+// between workspace elements.
+func checkWorkspaceToken(token xml.Token, firstToken bool) error {
+	switch node := token.(type) {
+	case xml.CharData:
+		if strings.TrimSpace(string(node)) != "" {
+			return fmt.Errorf("unexpected workspace XML text: %w", errs.ErrValidation)
+		}
+	case xml.ProcInst:
+		// Token accepts declarations anywhere; XML permits one only at the start.
+		if strings.EqualFold(node.Target, "xml") && (node.Target != "xml" || !firstToken) {
+			return fmt.Errorf("misplaced or reserved-case workspace XML declaration: %w", errs.ErrValidation)
+		}
+	case xml.Directive:
+		return fmt.Errorf("unsupported workspace XML directive: %w", errs.ErrValidation)
+	}
+
+	return nil
 }
 
 // findFirstXcodeproj returns the first *.xcodeproj directory found
@@ -339,14 +373,14 @@ func xcodeWorkspaceProject(body []byte, base string) (string, error) { //nolint:
 func findFirstXcodeproj(root string) string {
 	var first string
 
-	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			slog.Debug("findFirstXcodeproj: skipping unreadable entry", "path", path, "err", err)
 
 			return nil
 		}
 
-		if d.IsDir() && strings.HasSuffix(path, ".xcodeproj") {
+		if entry.IsDir() && strings.HasSuffix(path, ".xcodeproj") {
 			first = path
 
 			return filepath.SkipAll

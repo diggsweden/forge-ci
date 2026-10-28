@@ -44,11 +44,11 @@ func newGradleDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 
-	if err := os.WriteFile(filepath.Join(dir, "gradlew"), []byte("#!/bin/sh\n"), 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(filepath.Join(dir, "gradlew"), []byte("#!/bin/sh\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(filepath.Join(dir, "gradle.properties"), []byte("version=1.0.0\n"), 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(filepath.Join(dir, "gradle.properties"), []byte("version=1.0.0\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -79,9 +79,9 @@ func TestGradleReleaseBuild_RunsTasksAndMakesWrapperExecutable(t *testing.T) {
 	var out bytes.Buffer
 
 	err := appbuild.GradleReleaseBuild(context.Background(), &recordingSummarySink{}, ops, &out, &out, appbuild.GradleReleaseBuildInput{
-		ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir, EnableBuildSBOM: false},
-		Tasks:               "assemble check",
-		JavaVersion:         "25",
+		Dir: dir, EnableBuildSBOM: false,
+		Tasks:       "assemble check",
+		JavaVersion: "25",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -115,8 +115,8 @@ func TestGradleReleaseBuild_SkipTestsAppendsFlag(t *testing.T) {
 	ops := &recordingGradle{}
 
 	err := appbuild.GradleReleaseBuild(context.Background(), &recordingSummarySink{}, ops, io.Discard, io.Discard, appbuild.GradleReleaseBuildInput{
-		ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newGradleDir(t), SkipTests: true, EnableBuildSBOM: false},
-		Tasks:               "assemble",
+		Dir: newGradleDir(t), SkipTests: true, EnableBuildSBOM: false,
+		Tasks: "assemble",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -133,8 +133,8 @@ func TestGradleReleaseBuild_MissingWrapperFails(t *testing.T) {
 	summary := &recordingSummarySink{}
 
 	err := appbuild.GradleReleaseBuild(context.Background(), summary, ops, io.Discard, io.Discard, appbuild.GradleReleaseBuildInput{
-		ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: t.TempDir()},
-		Tasks:               "assemble",
+		Dir:   t.TempDir(),
+		Tasks: "assemble",
 	})
 	if !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("err = %v, want a not-exist error", err)
@@ -166,8 +166,8 @@ func TestGradleReleaseBuild_MissingSBOMVersionRefusesBeforeBuild(t *testing.T) {
 	// EnableBuildSBOM with no SBOMToolVersion: the version is required, so
 	// generation fails before the tool is reached.
 	err := appbuild.GradleReleaseBuild(context.Background(), summary, ops, io.Discard, &stderr, appbuild.GradleReleaseBuildInput{
-		ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir, EnableBuildSBOM: true},
-		Tasks:               "assemble",
+		Dir: dir, EnableBuildSBOM: true,
+		Tasks: "assemble",
 	})
 	if !errors.Is(err, errs.ErrUsage) {
 		t.Fatalf("failed Build SBOM error = %v, want ErrUsage", err)

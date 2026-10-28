@@ -41,6 +41,7 @@ const (
 // change.
 const (
 	flagMiseRoot = "root"
+	flagTools    = "tools"
 	flagLocked   = "locked"
 	flagBinHome  = "bin-home"
 	flagPathFile = "path-file"
@@ -75,13 +76,13 @@ func cacheDiscriminatorCmd() *cli.Command {
 		Name:  "cache-discriminator",
 		Usage: "emit setup-toolchain's stable tool-cache discriminator",
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "tools", Sources: cli.EnvVars("TOOLSET_TOOLS"), Usage: "whitespace-separated mise tool selectors requested by the caller"},
+			&cli.StringFlag{Name: flagTools, Sources: cli.EnvVars("TOOLSET_TOOLS"), Usage: "whitespace-separated mise tool selectors requested by the caller"},
 			&cli.StringFlag{Name: "install-dev-tools", Sources: cli.EnvVars("TOOLSET_INSTALL_DEV_TOOLS"), Usage: "whether consumer dev-tool installers are enabled"},
 			&cli.StringFlag{Name: "extra-cache-paths", Sources: cli.EnvVars("TOOLSET_EXTRA_CACHE_PATHS"), Usage: "additional newline-separated cache paths"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			hash := apptoolchain.CacheDiscriminator(apptoolchain.CacheDiscriminatorInput{
-				Tools:           cmd.String("tools"),
+				Tools:           cmd.String(flagTools),
 				InstallDevTools: cmd.String("install-dev-tools"),
 				ExtraCachePaths: cmd.String("extra-cache-paths"),
 			})
@@ -137,7 +138,7 @@ scope (flag > plan > env > default).`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: flagMiseRoot, Value: ".", Sources: planfile.Vars(planScopeInstallMiseTools, flagMiseRoot, "MISE_PROJECT_ROOT"), Usage: usageMiseRoot},
 			&cli.StringFlag{Name: flagLocked, Value: lockedDefault, Sources: planfile.Vars(planScopeInstallMiseTools, flagLocked, "MISE_LOCKED_INSTALL"), Usage: "whether mise install should use locked mode: true|false"},
-			&cli.StringFlag{Name: "tools", Sources: planfile.Vars(planScopeInstallMiseTools, "tools", "TOOLS_SUBSET", "MISE_TOOLS"), Usage: "whitespace-separated mise tool selectors to install instead of the full config"},
+			&cli.StringFlag{Name: flagTools, Sources: planfile.Vars(planScopeInstallMiseTools, flagTools, "TOOLSET_TOOLS"), Usage: "whitespace-separated mise tool selectors to install instead of the full config"},
 			&cli.StringFlag{Name: "mise-bin", Sources: planfile.Vars(planScopeInstallMiseTools, "mise-bin", "MISE_BIN"), Usage: "mise binary path (default: $HOME/.local/bin/mise when present, else mise from PATH)"},
 			&cli.IntFlag{Name: "retry-attempts", Value: 3, Sources: planfile.Vars(planScopeInstallMiseTools, "retry-attempts", "MISE_INSTALL_RETRY_ATTEMPTS"), Usage: "attempts for each mise install and rustup toolchain download"},
 			&cli.IntFlag{Name: "retry-delay-seconds", Value: 10, Sources: planfile.Vars(planScopeInstallMiseTools, "retry-delay-seconds", "MISE_INSTALL_RETRY_DELAY_SECONDS"), Usage: "seconds between mise install retry attempts"},
@@ -150,7 +151,7 @@ scope (flag > plan > env > default).`,
 			return apptoolchain.InstallMiseTools(ctx, runner, os.Stdout, apptoolchain.InstallMiseToolsInput{
 				Root:          cmd.String(flagMiseRoot),
 				Locked:        cmd.String(flagLocked),
-				Tools:         cmd.String("tools"),
+				Tools:         cmd.String(flagTools),
 				RetryAttempts: cmd.Int("retry-attempts"),
 				RetryDelay:    time.Duration(cmd.Int("retry-delay-seconds")) * time.Second,
 				HTTPTimeout:   time.Duration(cmd.Int("http-timeout-seconds")) * time.Second,
@@ -210,7 +211,7 @@ or as a selected go: tool's dependency; an omitted runtime fails before env writ
 			&cli.StringFlag{Name: flagMiseRoot, Value: ".", Sources: cli.EnvVars("MISE_PROJECT_ROOT"), Usage: usageMiseRoot},
 			&cli.StringFlag{Name: flagPathFile, Required: true, Sources: cli.EnvVars("FORGEJO_PATH", "GITHUB_PATH"), Usage: "runner path file to append GOPATH/bin to"},
 			&cli.StringFlag{Name: "env-file", Required: true, Sources: cli.EnvVars("FORGEJO_ENV", "GITHUB_ENV"), Usage: "runner env file receiving GOTOOLCHAIN"},
-			&cli.StringFlag{Name: "tools", Sources: cli.EnvVars("TOOLS_SUBSET"), Usage: "mise tool subset used by the install step; empty selects all declared tools"},
+			&cli.StringFlag{Name: "tools", Sources: cli.EnvVars("TOOLSET_TOOLS"), Usage: "mise tool subset used by the install step; empty selects all declared tools"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			provider, err := apptoolchain.SetupGoEnv(apptoolchain.SetupGoEnvInput{
@@ -346,7 +347,7 @@ requires a committed mise.lock, unlocked repositories with mise config require t
 caller to confirm a GitHub rate-limit token is present, and locked backend tools
 must pin their runtime (uv for pipx, go for go, rust or rustup+rust-toolchain for cargo).`,
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "tools", Sources: cli.EnvVars("TOOLS_SUBSET"), Usage: "whitespace-separated tool subset to validate; empty validates all declared tools"},
+			&cli.StringFlag{Name: flagTools, Sources: cli.EnvVars("TOOLSET_TOOLS"), Usage: "whitespace-separated tool subset to validate; empty validates all declared tools"},
 			&cli.StringFlag{Name: flagMiseRoot, Value: ".", Sources: cli.EnvVars("MISE_PROJECT_ROOT"), Usage: usageMiseRoot},
 			&cli.StringFlag{Name: flagLocked, Value: lockedDefault, Sources: cli.EnvVars("MISE_LOCKED_INSTALL"), Usage: "whether mise install will run in locked mode: true|false"},
 			&cli.BoolFlag{Name: "github-token-present", Sources: cli.EnvVars("MISE_GITHUB_TOKEN_PRESENT"), Usage: "whether the caller has a GitHub rate-limit token; pass presence only, never the token"},
@@ -356,7 +357,7 @@ must pin their runtime (uv for pipx, go for go, rust or rustup+rust-toolchain fo
 				Root:               cmd.String(flagMiseRoot),
 				Locked:             cmd.String(flagLocked),
 				GithubTokenPresent: cmd.Bool("github-token-present"),
-				Tools:              cmd.String("tools"),
+				Tools:              cmd.String(flagTools),
 			})
 		},
 	}

@@ -68,9 +68,9 @@ func TestCargoReleaseBuild_RunsStepsInOrder(t *testing.T) {
 			var out bytes.Buffer
 
 			err := appbuild.CargoReleaseBuild(context.Background(), &recordingSummarySink{}, tool, &out, &out, appbuild.CargoReleaseBuildInput{
-				ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: t.TempDir(), SkipTests: tc.skipTests, EnableBuildSBOM: tc.sbom},
-				Version:             "1.2.3",
-				Platforms:           "linux/amd64",
+				Dir: t.TempDir(), SkipTests: tc.skipTests, EnableBuildSBOM: tc.sbom,
+				Version:   "1.2.3",
+				Platforms: "linux/amd64",
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -106,21 +106,21 @@ func TestCargoReleaseBuild_UsesTheLockfileAsWritten(t *testing.T) {
 	var out bytes.Buffer
 
 	err := appbuild.CargoReleaseBuild(context.Background(), &recordingSummarySink{}, tool, &out, &out, appbuild.CargoReleaseBuildInput{
-		ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: t.TempDir()},
-		Version:             "1.2.3",
-		Platforms:           "linux/amd64",
+		Dir:       t.TempDir(),
+		Version:   "1.2.3",
+		Platforms: "linux/amd64",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	for _, c := range tool.calls {
-		if len(c.Args) == 0 || c.Args[0] == "metadata" {
+	for _, cfg := range tool.calls {
+		if len(cfg.Args) == 0 || cfg.Args[0] == "metadata" {
 			continue // metadata resolves nothing
 		}
 
-		if !slices.Contains(c.Args, "--locked") {
-			t.Errorf("cargo %v ran without --locked", c.Args)
+		if !slices.Contains(cfg.Args, "--locked") {
+			t.Errorf("cargo %v ran without --locked", cfg.Args)
 		}
 	}
 }
@@ -138,9 +138,9 @@ func TestCargoReleaseBuild_BuildSBOMFailureBlocksRelease(t *testing.T) {
 	dir := t.TempDir()
 
 	err := appbuild.CargoReleaseBuild(context.Background(), summary, tool, &bytes.Buffer{}, &bytes.Buffer{}, appbuild.CargoReleaseBuildInput{
-		ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir, EnableBuildSBOM: true},
-		Version:             "1.2.3",
-		Platforms:           "linux/amd64",
+		Dir: dir, EnableBuildSBOM: true,
+		Version:   "1.2.3",
+		Platforms: "linux/amd64",
 	})
 	if !errors.Is(err, errCycloneDXFailed) {
 		t.Fatalf("Build SBOM error = %v, want wrapped tool error", err)

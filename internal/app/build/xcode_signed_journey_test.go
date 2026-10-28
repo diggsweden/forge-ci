@@ -22,6 +22,7 @@ import (
 
 type xcodeJourneySecurity struct {
 	fakeSecurity
+
 	observe func([]string)
 }
 
@@ -33,6 +34,7 @@ func (sec *xcodeJourneySecurity) Run(ctx context.Context, args ...string) (strin
 
 type xcodeJourneySink struct {
 	*fakeoutputsink.Sink
+
 	events *[]string
 }
 
@@ -55,7 +57,7 @@ func assertXcodeSecret(t *testing.T, path, want string) {
 	require.EqualValues(t, 0o600, info.Mode().Perm())
 }
 
-func TestXcodeReleaseBuild_SignedJourneyPublishesOnlyValidatedReleaseSet(t *testing.T) { //nolint:gocognit // one event stream observes real signed setup, captured metadata, artifacts and final publication across selector variants.
+func TestXcodeReleaseBuild_SignedJourneyPublishesOnlyValidatedReleaseSet(t *testing.T) {
 	for _, name := range []string{"workspace_fresh", "project_empty_build", "workspace_empty_export", "explicit_missing_PBX", "blank_optional_xcconfig"} {
 		t.Run(name, func(t *testing.T) {
 			fsys, in := xcodeReleaseFixture(t)
@@ -75,7 +77,7 @@ func TestXcodeReleaseBuild_SignedJourneyPublishesOnlyValidatedReleaseSet(t *test
 				fsys.MkdirAll("checkout/build/export")
 				fsys.WriteFile("checkout/build/unrelated/old.ipa", []byte("unrelated old IPA"))
 				fsys.MkdirAll("checkout/build/unrelated/old.xcarchive")
-				require.NoError(t, os.Chmod(fsys.Path("checkout/build/unrelated/old.ipa"), 0o640)) //nolint:gosec // deliberate owned canary mode.
+				require.NoError(t, os.Chmod(fsys.Path("checkout/build/unrelated/old.ipa"), 0o640))
 			}
 
 			if name == "blank_optional_xcconfig" {
@@ -239,7 +241,7 @@ func TestXcodeReleaseBuild_BoundedBlobsReachFirstSecurityEffect(t *testing.T) {
 
 				setXcodeBlob(t, &in, field, value)
 
-				stop := errors.New("intentional first security effect") //nolint:err113 // per-test cause.
+				stop := errors.New("intentional first security effect")
 				sec, ops, sink := &fakeSecurity{err: stop}, &fakeXcodeBuild{}, fakeoutputsink.New(t)
 
 				var stdout, stderr bytes.Buffer
@@ -308,7 +310,7 @@ func TestXcodeReleaseBuild_SignedBuildFailureStopsBeforePublication(t *testing.T
 		stage, failure := testCase.stage, testCase.failure
 		t.Run(stage+"/"+failure, func(t *testing.T) {
 			fsys, in := xcodeReleaseFixture(t)
-			cause := errors.New("owned fake build failure") //nolint:err113 // distinct per-test port cause.
+			cause := errors.New("owned fake build failure")
 			ops := &fakeXcodeBuild{}
 
 			var (

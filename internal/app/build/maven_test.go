@@ -35,7 +35,7 @@ func (f *fakeMaven) EvalExpression(_ context.Context, expr string) (string, erro
 
 	v, ok := f.answers[expr]
 	if !ok {
-		return "", fmt.Errorf("unexpected expr: %s", expr) //nolint:err113 // test mock error
+		return "", fmt.Errorf("unexpected expr: %s", expr)
 	}
 
 	return v, nil
@@ -56,7 +56,7 @@ func TestMavenMetadata_WritesAllOutputsAndStatusLineFromPOM(t *testing.T) {
   <artifactId>demo</artifactId>
   <version>1.2.3-SNAPSHOT</version>
 </project>`)
-	if err := os.WriteFile(filepath.Join(dir, "pom.xml"), pomBody, 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(filepath.Join(dir, "pom.xml"), pomBody, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -102,7 +102,7 @@ func TestMavenMetadata_ReleaseVersionIsNotSnapshot(t *testing.T) {
 	dir := t.TempDir()
 
 	pomBody := []byte(`<?xml version="1.0"?><project><groupId>g</groupId><artifactId>a</artifactId><version>1.0.0</version></project>`)
-	if err := os.WriteFile(filepath.Join(dir, "pom.xml"), pomBody, 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(filepath.Join(dir, "pom.xml"), pomBody, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -125,7 +125,7 @@ func TestMavenMetadata_PropertyInterpolationFallsBackToMvn(t *testing.T) {
   <artifactId>a</artifactId>
   <version>${revision}</version>
 </project>`)
-	if err := os.WriteFile(filepath.Join(dir, "pom.xml"), pomBody, 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(filepath.Join(dir, "pom.xml"), pomBody, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -157,7 +157,7 @@ func TestMavenMetadata_InheritsFromParent(t *testing.T) {
   </parent>
   <artifactId>child-module</artifactId>
 </project>`)
-	if err := os.WriteFile(filepath.Join(dir, "pom.xml"), pomBody, 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(filepath.Join(dir, "pom.xml"), pomBody, 0o644); err != nil {
 		t.Fatal(err)
 	}
 

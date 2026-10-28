@@ -216,7 +216,7 @@ func TestUploadSARIF_StampsEachRunAndLeavesTheFile(t *testing.T) {
 func TestUploadSARIF_FailureNeverShowsTheToken(t *testing.T) {
 	t.Parallel()
 
-	const token = "ghs_SyntheticUploadToken0123456789" //nolint:gosec // synthetic token that must never appear in output.
+	const token = "ghs_SyntheticUploadToken0123456789"
 
 	for name, echoed := range map[string]string{
 		"verbatim":        token,

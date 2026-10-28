@@ -74,7 +74,7 @@ func writeChangelogCanary(t *testing.T, path, body string, mode os.FileMode) {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(path, []byte(body), mode); err != nil { //nolint:gosec // owned inert canaries, never executed.
+	if err := os.WriteFile(path, []byte(body), mode); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -115,7 +115,7 @@ func changelogUnchanged(t *testing.T, root string) func() {
 			case info.Mode().IsRegular():
 				var data []byte
 
-				data, err = os.ReadFile(path) //nolint:gosec // test-owned tree is not concurrently modified.
+				data, err = os.ReadFile(path)
 				body = string(data)
 			case info.Mode()&os.ModeSymlink != 0:
 				body, err = os.Readlink(path)

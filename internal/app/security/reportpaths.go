@@ -16,7 +16,7 @@ import (
 
 // Report paths are explicit caller destinations, not a confinement root. They
 // must nevertheless be distinct regular files with real directory parents.
-func validateReportPaths(paths ...string) error { //nolint:cyclop // spelling, parent, type and identity checks must all precede retirement/publication.
+func validateReportPaths(paths ...string) error {
 	seen := make(map[string]bool, len(paths))
 
 	var files []os.FileInfo

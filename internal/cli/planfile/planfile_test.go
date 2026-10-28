@@ -128,13 +128,13 @@ func (h *recordingHandler) warnings() []string {
 
 	var out []string
 
-	for _, r := range h.records {
-		if r.Level != slog.LevelWarn {
+	for _, record := range h.records {
+		if record.Level != slog.LevelWarn {
 			continue
 		}
 
-		line := r.Message
-		r.Attrs(func(a slog.Attr) bool {
+		line := record.Message
+		record.Attrs(func(a slog.Attr) bool {
 			line += " " + a.Key + "=" + a.Value.String()
 
 			return true
@@ -173,7 +173,6 @@ func TestPlanFile_MalformedPlanWarnsOnceAndSafely(t *testing.T) {
 	// outlives any single test.
 	path := filepath.Join(dir, "malformed-"+t.Name()+".json")
 
-	//nolint:gosec // G101: a synthetic canary, not a credential.
 	const secretish = "CANARY-PLAN-VALUE-3f81ad"
 
 	require.NoError(t, os.WriteFile(path, []byte(`{"container build": {"context": "`+secretish+`"`), 0o600))

@@ -45,7 +45,7 @@ func TestCacheTupleBoundary_UnambiguousKnownAnswers(t *testing.T) {
 	}
 }
 
-func TestRuntimeCompletenessBoundary_AllBackendsAndFiles(t *testing.T) { //nolint:gocognit // one table covers both filenames, every backend/runtime pair and the two-part rustup alternative.
+func TestRuntimeCompletenessBoundary_AllBackendsAndFiles(t *testing.T) {
 	t.Parallel()
 
 	for _, file := range []string{".mise.toml", "mise.toml"} {

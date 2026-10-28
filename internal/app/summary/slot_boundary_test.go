@@ -91,7 +91,7 @@ func TestSnapshotMetadataBoundary_ShapeAndSnippetGrammar(t *testing.T) {
 		err := appsummary.SnapshotReleaseSummary(t.Context(), sink, &out, appsummary.SnapshotReleaseSummaryInput{ProjectType: projecttype.NPM, PublishStageJSON: stageResultJSON(t, "dev-publish", map[string]string{"npm": "success"}), SnapshotArtifactsJSON: body, Now: fixedNow()})
 
 		valid := body == "" || strings.Contains(body, `"extra":7`)
-		if !valid { //nolint:nestif // malformed, absent and complete successful metadata intentionally have different output contracts.
+		if !valid {
 			if !errors.Is(err, errs.ErrMalformedInput) || sink.buf.Len() != 0 || out.Len() != 0 {
 				t.Fatalf("bad metadata=%s err=%v summary=%s out=%s", body, err, &sink.buf, &out)
 			}
@@ -116,6 +116,8 @@ func TestPRCancellationBoundary_BothEngines(t *testing.T) {
 
 	for _, engine := range []string{"nanolinter", "megalinter"} {
 		t.Run(engine, func(t *testing.T) {
+			t.Parallel()
+
 			for _, status := range []string{"success", "failure", "cancelled", "skipped"} {
 				sink := &fakeSummarySink{}
 				if err := appsummary.PRSummary(t.Context(), sink, appsummary.PRSummaryInput{Now: fixedNow(), QualityStageResultJSON: stageResultJSON(t, "pr-quality", map[string]string{engine: status})}); err != nil {

@@ -62,7 +62,7 @@ func TestStageIntegrityBoundary_ReservedFieldsAndRoundTrip(t *testing.T) {
 	}
 }
 
-func TestJobAliasBoundary_ConflictsNeverBecomeSuccess(t *testing.T) { //nolint:gocognit // compare both spellings, permutations and map/store sources with the same independent failure expectation.
+func TestJobAliasBoundary_ConflictsNeverBecomeSuccess(t *testing.T) {
 	t.Parallel()
 
 	for _, target := range []string{"gradle_android", "gradle-android"} {
@@ -75,13 +75,13 @@ func TestJobAliasBoundary_ConflictsNeverBecomeSuccess(t *testing.T) { //nolint:g
 
 				store := fakejobresultstore.New(t)
 
-				for i, job := range jobs {
+				for index, job := range jobs {
 					body, err := json.Marshal(job)
 					if err != nil {
 						t.Fatal(err)
 					}
 
-					store.Seed(strconv.Itoa(i), string(body))
+					store.Seed(strconv.Itoa(index), string(body))
 				}
 
 				in := appsummary.StageResultInput{StagePlanJSON: fmt.Sprintf(`{"version":1,"stage":"build","targets":{%q:{"runs":true}}}`, target)}

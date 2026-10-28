@@ -83,28 +83,28 @@ func ReleaseSummary(ctx context.Context, sink ci.SummarySink, in ReleaseSummaryI
 		return result
 	}
 
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var builder strings.Builder
 
-	_, _ = fmt.Fprintf(&b, "# Release Summary\n\n")
-	_, _ = fmt.Fprintf(&b, "## Release Overview\n")
-	_, _ = fmt.Fprintf(&b, "| Property | Value |\n")
-	_, _ = fmt.Fprintf(&b, "|----------|-------|\n")
-	_, _ = fmt.Fprintf(&b, "| **Version** | `%s` |\n", domainsummary.SanitizeCell(in.ReleaseVersion))
+	_, _ = fmt.Fprintf(&builder, "# Release Summary\n\n")
+	_, _ = fmt.Fprintf(&builder, "## Release Overview\n")
+	_, _ = fmt.Fprintf(&builder, "| Property | Value |\n")
+	_, _ = fmt.Fprintf(&builder, "|----------|-------|\n")
+	_, _ = fmt.Fprintf(&builder, "| **Version** | `%s` |\n", domainsummary.SanitizeCell(in.ReleaseVersion))
 	// A value the forge cannot report, such as the commit of a release cut
 	// from a request tag, leaves its row out instead of an empty cell.
 	if in.ReleaseBranch != "" {
-		_, _ = fmt.Fprintf(&b, "| **Branch** | `%s` |\n", domainsummary.SanitizeCell(in.ReleaseBranch))
+		_, _ = fmt.Fprintf(&builder, "| **Branch** | `%s` |\n", domainsummary.SanitizeCell(in.ReleaseBranch))
 	}
 
 	if in.ReleaseCommit != "" {
-		_, _ = fmt.Fprintf(&b, "| **Commit** | `%s` |\n", domainsummary.SanitizeCell(in.ReleaseCommit))
+		_, _ = fmt.Fprintf(&builder, "| **Commit** | `%s` |\n", domainsummary.SanitizeCell(in.ReleaseCommit))
 	}
 
-	_, _ = fmt.Fprintf(&b, "| **Released By** | @%s |\n", domainsummary.LiteralText(in.ReleaseActor))
-	_, _ = fmt.Fprintf(&b, "| **Released At** | %s |\n\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
-	_, _ = fmt.Fprintf(&b, "## Job Status\n")
-	_, _ = fmt.Fprintf(&b, "| Job | Status |\n")
-	_, _ = fmt.Fprintf(&b, "|-----|--------|\n")
+	_, _ = fmt.Fprintf(&builder, "| **Released By** | @%s |\n", domainsummary.LiteralText(in.ReleaseActor))
+	_, _ = fmt.Fprintf(&builder, "| **Released At** | %s |\n\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
+	_, _ = fmt.Fprintf(&builder, "## Job Status\n")
+	_, _ = fmt.Fprintf(&builder, "| Job | Status |\n")
+	_, _ = fmt.Fprintf(&builder, "|-----|--------|\n")
 
 	rows := []struct {
 		label  string
@@ -131,20 +131,20 @@ func ReleaseSummary(ctx context.Context, sink ci.SummarySink, in ReleaseSummaryI
 		{"Forge Release", in.CreateReleaseResult},
 	}
 	if len(in.Jobs) > 0 {
-		writeJobRows(&b, in.Jobs)
+		writeJobRows(&builder, in.Jobs)
 	} else {
 		for _, r := range rows {
-			_, _ = fmt.Fprintf(&b, "| %s | %s |\n", r.label, icon(r.result))
+			_, _ = fmt.Fprintf(&builder, "| %s | %s |\n", r.label, icon(r.result))
 		}
 	}
 
-	_, _ = fmt.Fprintf(&b, "\n## Resources\n")
-	b.WriteString(resourceLine("Release", domainsummary.ReleaseURL(in.URLs, in.ServerURL, in.Repository, in.ReleaseVersion)))
-	b.WriteString(resourceLine("Packages", domainsummary.PackagesURL(in.URLs, in.ServerURL, in.Repository)))
-	b.WriteString(resourceLine("Workflow Run", in.RunURL))
-	b.WriteString("\n")
+	_, _ = fmt.Fprintf(&builder, "\n## Resources\n")
+	builder.WriteString(resourceLine("Release", domainsummary.ReleaseURL(in.URLs, in.ServerURL, in.Repository, in.ReleaseVersion)))
+	builder.WriteString(resourceLine("Packages", domainsummary.PackagesURL(in.URLs, in.ServerURL, in.Repository)))
+	builder.WriteString(resourceLine("Workflow Run", in.RunURL))
+	builder.WriteString("\n")
 
-	return sink.Append(ctx, b.String())
+	return sink.Append(ctx, builder.String())
 }
 
 // Empty slots are intentionally skipped; a supplied envelope must identify the

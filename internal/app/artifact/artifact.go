@@ -23,7 +23,7 @@ import (
 // Download validates the request, delegates to the provider's
 // RunArtifactDownloader, and records the result. The resolved name and
 // totals are written to the sink; a one-line summary goes to w (stderr).
-func Download(ctx context.Context, dl provider.RunArtifactDownloader, sink domainci.OutputSink, w io.Writer, in provider.RunArtifactDownload) (provider.RunArtifactInfo, error) { //nolint:cyclop,varnamelen // selector and pattern guards precede every provider/output effect.
+func Download(ctx context.Context, dl provider.RunArtifactDownloader, sink domainci.OutputSink, out io.Writer, in provider.RunArtifactDownload) (provider.RunArtifactInfo, error) {
 	// Pattern selects a set of artifacts by glob; a single named artifact
 	// is the exact-match case. Exactly one of the two must be given.
 	switch {
@@ -59,7 +59,7 @@ func Download(ctx context.Context, dl provider.RunArtifactDownloader, sink domai
 		return provider.RunArtifactInfo{}, err
 	}
 
-	if err := emit(ctx, sink, w, info, "Downloaded", in.Dir); err != nil {
+	if err := emit(ctx, sink, out, info, "Downloaded", in.Dir); err != nil {
 		return provider.RunArtifactInfo{}, err
 	}
 
@@ -68,7 +68,7 @@ func Download(ctx context.Context, dl provider.RunArtifactDownloader, sink domai
 
 // Upload validates the request, delegates to the provider's
 // RunArtifactUploader, and records the result.
-func Upload(ctx context.Context, up provider.RunArtifactUploader, sink domainci.OutputSink, w io.Writer, in provider.RunArtifactUpload) (provider.RunArtifactInfo, error) { //nolint:varnamelen // idiomatic short names (testing/http/io conventions).
+func Upload(ctx context.Context, up provider.RunArtifactUploader, sink domainci.OutputSink, out io.Writer, in provider.RunArtifactUpload) (provider.RunArtifactInfo, error) {
 	if err := domainartifact.ValidateName(in.Name); err != nil {
 		return provider.RunArtifactInfo{}, err
 	}
@@ -93,7 +93,7 @@ func Upload(ctx context.Context, up provider.RunArtifactUploader, sink domainci.
 		return provider.RunArtifactInfo{}, err
 	}
 
-	if err := emit(ctx, sink, w, info, "Uploaded", ""); err != nil {
+	if err := emit(ctx, sink, out, info, "Uploaded", ""); err != nil {
 		return provider.RunArtifactInfo{}, err
 	}
 

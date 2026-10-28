@@ -22,7 +22,6 @@ import (
 	"github.com/diggsweden/forge-ci/internal/testutil/fakeoutputsink"
 )
 
-//nolint:gocognit // Keep each append contract and the snapshot positive control in one table.
 func TestSummary_AppendFailureContract(t *testing.T) {
 	t.Parallel()
 
@@ -104,7 +103,7 @@ func TestSummary_AppendFailureContract(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			ctx := t.Context()
-			sentinel := errors.New(tc.name + " append sentinel") //nolint:err113 // Each row needs a distinct injected error identity.
+			sentinel := errors.New(tc.name + " append sentinel")
 
 			var (
 				attempts []string
@@ -179,7 +178,6 @@ func (sink appendFailureSink) Append(ctx context.Context, markdown string) error
 	return sink(ctx, markdown)
 }
 
-//nolint:gocognit // The six failure prefixes share one success sequence and retained-state oracle.
 func TestStageResult_SinkFailureContract(t *testing.T) {
 	t.Parallel()
 
@@ -321,7 +319,7 @@ func newResultFailurePorts(t *testing.T, failAt int) *resultFailurePorts {
 	ctx := t.Context()
 
 	return &resultFailurePorts{
-		t: t, failAt: failAt, sentinel: errors.New(t.Name() + " sink sentinel"), //nolint:err113 // Each row needs a distinct injected error identity.
+		t: t, failAt: failAt, sentinel: errors.New(t.Name() + " sink sentinel"),
 		checkContext: func(got context.Context) {
 			t.Helper()
 

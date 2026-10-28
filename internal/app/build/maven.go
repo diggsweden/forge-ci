@@ -112,7 +112,7 @@ func resolveMavenMetadata(ctx context.Context, ops MavenOps, pom build.POM) (mav
 }
 
 // MavenMetadata reads project.{version,groupId,artifactId} and emits them.
-func MavenMetadata(ctx context.Context, sink ci.OutputSink, ops MavenOps, w io.Writer, in MavenMetadataInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func MavenMetadata(ctx context.Context, sink ci.OutputSink, ops MavenOps, out io.Writer, in MavenMetadataInput) error {
 	pom, err := loadMavenPOM(in)
 	if err != nil {
 		return err
@@ -143,7 +143,7 @@ func MavenMetadata(ctx context.Context, sink ci.OutputSink, ops MavenOps, w io.W
 		return fmt.Errorf("set is-snapshot: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(w, "Project: %s:%s:%s\n", groupID, artifactID, version)
+	_, _ = fmt.Fprintf(out, "Project: %s:%s:%s\n", groupID, artifactID, version)
 
 	return nil
 }
@@ -200,8 +200,8 @@ type MavenApplicationInput struct {
 // MavenApplication builds a Maven application: `mvn $CLI_OPTS clean package
 // [-DskipTests]`. Subsumes the SKIP_TESTS branching in build-maven.yml so
 // the decision lives in Go, not shell.
-func MavenApplication(ctx context.Context, ops MavenOps, w, stderr io.Writer, in MavenApplicationInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
-	_, _ = fmt.Fprintln(w, "Building Maven application...")
+func MavenApplication(ctx context.Context, ops MavenOps, out, stderr io.Writer, in MavenApplicationInput) error {
+	_, _ = fmt.Fprintln(out, "Building Maven application...")
 
 	args := make([]string, 0, len(in.CLIOpts)+3)
 	args = append(args, in.CLIOpts...)
@@ -213,20 +213,20 @@ func MavenApplication(ctx context.Context, ops MavenOps, w, stderr io.Writer, in
 
 	// The mvn adapter already labels its error with the subcommand
 	// ("mvn clean: …"); wrapping again here would double-prefix.
-	return ops.RunInherit(ctx, w, stderr, args...)
+	return ops.RunInherit(ctx, out, stderr, args...)
 }
 
 // MavenLibrary runs the library lifecycle and optional profile. The project
 // POM/profile owns any attached sources or javadoc artifacts; this function
 // deliberately does not invoke unpinned plugin goals. w receives the status
 // banner and mvn's output streams via ops.RunInherit.
-func MavenLibrary(ctx context.Context, ops MavenOps, w, stderr io.Writer, in MavenLibraryInput) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
-	_, _ = fmt.Fprintln(w, "Building Maven library lifecycle...")
+func MavenLibrary(ctx context.Context, ops MavenOps, writer, stderr io.Writer, in MavenLibraryInput) error {
+	_, _ = fmt.Fprintln(writer, "Building Maven library lifecycle...")
 
 	profileArg := ""
 	if in.Profile != "" {
 		profileArg = "-P" + in.Profile
-		_, _ = fmt.Fprintf(w, "Using Maven profile: %s\n", in.Profile)
+		_, _ = fmt.Fprintf(writer, "Using Maven profile: %s\n", in.Profile)
 	}
 
 	mvn := func(extra ...string) []string {
@@ -242,24 +242,24 @@ func MavenLibrary(ctx context.Context, ops MavenOps, w, stderr io.Writer, in Mav
 	}
 
 	// mvn $MAVEN_CLI_OPTS clean compile $PROFILE_ARG
-	if err := ops.RunInherit(ctx, w, stderr, mvn("clean", "compile")...); err != nil {
+	if err := ops.RunInherit(ctx, writer, stderr, mvn("clean", "compile")...); err != nil {
 		return err
 	}
 
 	if !in.SkipTests {
-		_, _ = fmt.Fprintf(w, "Running tests...\n")
+		_, _ = fmt.Fprintf(writer, "Running tests...\n")
 		// mvn $MAVEN_CLI_OPTS test $PROFILE_ARG
-		if err := ops.RunInherit(ctx, w, stderr, mvn("test")...); err != nil {
+		if err := ops.RunInherit(ctx, writer, stderr, mvn("test")...); err != nil {
 			return err
 		}
 	}
 
-	_, _ = fmt.Fprintln(w, "Packaging library with project-configured artifacts...")
+	_, _ = fmt.Fprintln(writer, "Packaging library with project-configured artifacts...")
 	// mvn $MAVEN_CLI_OPTS package -DskipTests=$SKIP_TESTS $PROFILE_ARG -Dgpg.skip=true
 	pkgArgs := mvn("package", "-DskipTests="+strconv.FormatBool(in.SkipTests))
 
 	pkgArgs = append(pkgArgs, "-Dgpg.skip=true")
-	if err := ops.RunInherit(ctx, w, stderr, pkgArgs...); err != nil {
+	if err := ops.RunInherit(ctx, writer, stderr, pkgArgs...); err != nil {
 		return err
 	}
 

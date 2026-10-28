@@ -32,7 +32,6 @@ type Client struct {
 	HTTP                        *http.Client
 }
 
-//nolint:gochecknoglobals // deployment IDs are opaque API coordinates, never URLs.
 var deploymentID = regexp.MustCompile(`^[A-Za-z0-9-]{1,128}$`)
 
 func apiURL(base, endpoint string, query url.Values) (string, error) {

@@ -40,24 +40,24 @@ func ExtractedBinaries(ctx context.Context, sink ci.SummarySink, in ExtractedBin
 		limit = 50
 	}
 
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var builder strings.Builder
 
-	_, _ = fmt.Fprintf(&b, "### Extracted Binaries - %s (%s)\n\n", domsummary.LiteralText(in.DisplayName), domsummary.LiteralText(in.Platform))
-	_, _ = fmt.Fprintf(&b, "- **Stage:** %s\n", domsummary.LiteralText(in.ExtractTarget))
-	_, _ = fmt.Fprintf(&b, "- **Artifact:** %s\n", domsummary.LiteralText(in.ArtifactName))
-	_, _ = fmt.Fprintf(&b, "- **Platform:** %s\n", domsummary.LiteralText(in.Platform))
+	_, _ = fmt.Fprintf(&builder, "### Extracted Binaries - %s (%s)\n\n", domsummary.LiteralText(in.DisplayName), domsummary.LiteralText(in.Platform))
+	_, _ = fmt.Fprintf(&builder, "- **Stage:** %s\n", domsummary.LiteralText(in.ExtractTarget))
+	_, _ = fmt.Fprintf(&builder, "- **Artifact:** %s\n", domsummary.LiteralText(in.ArtifactName))
+	_, _ = fmt.Fprintf(&builder, "- **Platform:** %s\n", domsummary.LiteralText(in.Platform))
 
 	if strings.TrimSpace(in.ExpectedNames) != "" {
-		_, _ = fmt.Fprintf(&b, "- **Binaries:** %s\n", domsummary.LiteralText(in.ExpectedNames))
+		_, _ = fmt.Fprintf(&builder, "- **Binaries:** %s\n", domsummary.LiteralText(in.ExpectedNames))
 	}
 
-	_, _ = fmt.Fprintf(&b, "\nFiles in extracted-binaries/:\n\n")
+	_, _ = fmt.Fprintf(&builder, "\nFiles in extracted-binaries/:\n\n")
 
 	for _, path := range firstFiles(dir, limit) {
-		_, _ = fmt.Fprintf(&b, "%s\n", domsummary.InlineCode(path))
+		_, _ = fmt.Fprintf(&builder, "%s\n", domsummary.InlineCode(path))
 	}
 
-	return sink.Append(ctx, b.String())
+	return sink.Append(ctx, builder.String())
 }
 
 func firstFiles(root string, limit int) []string {

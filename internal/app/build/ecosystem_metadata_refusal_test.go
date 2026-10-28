@@ -34,6 +34,8 @@ import (
 // file, and whatever a native resolver would say about it, stays the tool's
 // business and is not emulated here.
 func TestEcosystemMetadata_RefusesLocallyDecidableInputBeforeAnyTool(t *testing.T) {
+	t.Parallel()
+
 	for _, testCase := range []struct {
 		name    string
 		arrange func(t *testing.T, dir string)
@@ -61,9 +63,9 @@ func TestEcosystemMetadata_RefusesLocallyDecidableInputBeforeAnyTool(t *testing.
 				t.Helper()
 
 				return appbuild.GoReleaseBuild(context.Background(), &recordingSummarySink{}, rec, rec, stdout, stdout, appbuild.GoReleaseBuildInput{
-					ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir},
-					Version:             "1.2.3\nrelease",
-					Platforms:           "linux/amd64",
+					Dir:       dir,
+					Version:   "1.2.3\nrelease",
+					Platforms: "linux/amd64",
 				})
 			},
 		},
@@ -73,10 +75,10 @@ func TestEcosystemMetadata_RefusesLocallyDecidableInputBeforeAnyTool(t *testing.
 				t.Helper()
 
 				return appbuild.GoReleaseBuild(context.Background(), &recordingSummarySink{}, rec, rec, stdout, stdout, appbuild.GoReleaseBuildInput{
-					ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir},
-					BinaryName:          "app\x00name",
-					Version:             "1.2.3",
-					Platforms:           "linux/amd64",
+					Dir:        dir,
+					BinaryName: "app\x00name",
+					Version:    "1.2.3",
+					Platforms:  "linux/amd64",
 				})
 			},
 		},
@@ -105,9 +107,9 @@ func runGoRelease(t *testing.T, rec *toolrecorder.Recorder, dir string, stdout *
 	t.Helper()
 
 	return appbuild.GoReleaseBuild(context.Background(), &recordingSummarySink{}, rec, rec, stdout, stdout, appbuild.GoReleaseBuildInput{
-		ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir},
-		Version:             "1.2.3",
-		Platforms:           "linux/amd64",
+		Dir:       dir,
+		Version:   "1.2.3",
+		Platforms: "linux/amd64",
 	})
 }
 
@@ -115,6 +117,8 @@ func runGoRelease(t *testing.T, rec *toolrecorder.Recorder, dir string, stdout *
 // ecosystems whose identity lives in a file with a shape of its own, so a
 // malformed one is a different failure from a missing field.
 func TestEcosystemMetadata_NPMAndGradleRefuseTheirOwnFiles(t *testing.T) {
+	t.Parallel()
+
 	for _, testCase := range []struct {
 		name    string
 		file    string
@@ -138,8 +142,8 @@ func TestEcosystemMetadata_NPMAndGradleRefuseTheirOwnFiles(t *testing.T) {
 			var stdout bytes.Buffer
 
 			err := appbuild.NPMReleaseBuild(context.Background(), &recordingSummarySink{}, npm, npm, output.Annotator{}, &stdout, &stdout, appbuild.NPMReleaseBuildInput{
-				ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir},
-				PackageScope:        "@org",
+				Dir:          dir,
+				PackageScope: "@org",
 			})
 
 			if !testCase.refused {
@@ -218,15 +222,15 @@ func TestAndroidMetadata_RefusesNoncredentialInputBeforeAnyGradleCall(t *testing
 		t.Run(testCase.name, func(t *testing.T) {
 			fsys := testfs.NewReal(t)
 			wrapper := fsys.WriteFile("project/gradlew", []byte("inert wrapper; fake Gradle only\n"))
-			require.NoError(t, os.Chmod(wrapper, 0o755)) //nolint:gosec // the wrapper must be executable.
+			require.NoError(t, os.Chmod(wrapper, 0o755))
 			fsys.WriteFile("project/gradle.properties", []byte("versionName=1.2.3\nversionCode=42\n"))
 
 			in := appbuild.AndroidReleaseBuildInput{
-				ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: fsys.Path("project"), EnableBuildSBOM: true, SkipTests: true},
-				RepoName:            "wallet",
-				BuildTypes:          "release",
-				SBOMToolVersion:     "2.3.4",
-				TempDir:             fsys.MkdirAll("scratch"),
+				Dir: fsys.Path("project"), EnableBuildSBOM: true, SkipTests: true,
+				RepoName:        "wallet",
+				BuildTypes:      "release",
+				SBOMToolVersion: "2.3.4",
+				TempDir:         fsys.MkdirAll("scratch"),
 			}
 			testCase.mutate(&in)
 
@@ -261,6 +265,8 @@ func TestAndroidMetadata_RefusesNoncredentialInputBeforeAnyGradleCall(t *testing
 // called, so each combination is asserted by exact value, and the override is
 // asserted to displace all of it.
 func TestAndroidSelection_NamesEveryPublishedArtifact(t *testing.T) {
+	t.Parallel()
+
 	for _, testCase := range []struct {
 		name   string
 		mutate func(in *appbuild.AndroidReleaseBuildInput)
@@ -310,10 +316,10 @@ func TestAndroidSelection_NamesEveryPublishedArtifact(t *testing.T) {
 			rec := toolrecorder.New(t)
 			sink := fakeoutputsink.New(t)
 			in := appbuild.AndroidReleaseBuildInput{
-				ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newGradleDir(t), SkipTests: true},
-				RepoName:            "wallet",
-				BuildTypes:          "release",
-				BuildModule:         "app",
+				Dir: newGradleDir(t), SkipTests: true,
+				RepoName:    "wallet",
+				BuildTypes:  "release",
+				BuildModule: "app",
 			}
 			testCase.mutate(&in)
 

@@ -483,15 +483,15 @@ func TestGoBuildBinaries_BuildsPlatforms(t *testing.T) {
 	// GOARCH asserted, and the first call's flags were never looked at.
 	wantLDFlags := "-s -w -X main.version=1.2.3 -X main.commit=abc123 -X main.date=2023-11-14T22:13:20Z -X main.extra=value"
 
-	for i, want := range []struct {
+	for index, want := range []struct {
 		env []string
 		out string
 	}{
 		{env: []string{"CGO_ENABLED=0", "GOOS=linux", "GOARCH=amd64"}, out: filepath.Join(fsys.Root, "dist", "linux-amd64", "app-linux-amd64")},
 		{env: []string{"CGO_ENABLED=0", "GOOS=windows", "GOARCH=arm64"}, out: filepath.Join(fsys.Root, "dist", "windows-arm64", "app-windows-arm64.exe")},
 	} {
-		if !slices.Equal(tool.calls[i].Env, want.env) {
-			t.Errorf("call %d env = %q, want %q", i, tool.calls[i].Env, want.env)
+		if !slices.Equal(tool.calls[index].Env, want.env) {
+			t.Errorf("call %d env = %q, want %q", index, tool.calls[index].Env, want.env)
 		}
 
 		wantArgs := []string{
@@ -501,8 +501,8 @@ func TestGoBuildBinaries_BuildsPlatforms(t *testing.T) {
 			"-o", want.out,
 			"./cmd/app",
 		}
-		if !slices.Equal(tool.calls[i].Args, wantArgs) {
-			t.Errorf("call %d args =\n%q\nwant\n%q", i, tool.calls[i].Args, wantArgs)
+		if !slices.Equal(tool.calls[index].Args, wantArgs) {
+			t.Errorf("call %d args =\n%q\nwant\n%q", index, tool.calls[index].Args, wantArgs)
 		}
 	}
 

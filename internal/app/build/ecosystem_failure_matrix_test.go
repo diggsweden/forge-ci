@@ -38,9 +38,9 @@ func ecosystemRuns() []ecosystemRun {
 				t.Helper()
 
 				return appbuild.GoReleaseBuild(context.Background(), summary, rec, rec, stdout, stdout, appbuild.GoReleaseBuildInput{
-					ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newGoModDir(t), EnableBuildSBOM: true},
-					Version:             "1.2.3",
-					Platforms:           "linux/amd64",
+					Dir: newGoModDir(t), EnableBuildSBOM: true,
+					Version:   "1.2.3",
+					Platforms: "linux/amd64",
 				})
 			},
 		},
@@ -51,9 +51,9 @@ func ecosystemRuns() []ecosystemRun {
 				dir := t.TempDir()
 
 				return appbuild.CargoReleaseBuild(context.Background(), summary, rec.Respond(cargoToolResponses(rec)), stdout, stdout, appbuild.CargoReleaseBuildInput{
-					ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: dir, EnableBuildSBOM: true},
-					Version:             "1.2.3",
-					Platforms:           "linux/amd64",
+					Dir: dir, EnableBuildSBOM: true,
+					Version:   "1.2.3",
+					Platforms: "linux/amd64",
 				})
 			},
 		},
@@ -63,9 +63,9 @@ func ecosystemRuns() []ecosystemRun {
 				t.Helper()
 
 				return appbuild.MavenReleaseBuild(context.Background(), summary, rec, stdout, stdout, appbuild.MavenReleaseBuildInput{
-					ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newMavenDir(t), EnableBuildSBOM: true},
-					BuildType:           "app",
-					SBOMToolVersion:     "2.9.1",
+					Dir: newMavenDir(t), EnableBuildSBOM: true,
+					BuildType:       "app",
+					SBOMToolVersion: "2.9.1",
 				})
 			},
 		},
@@ -75,9 +75,9 @@ func ecosystemRuns() []ecosystemRun {
 				t.Helper()
 
 				return appbuild.GradleReleaseBuild(context.Background(), summary, rec, stdout, stdout, appbuild.GradleReleaseBuildInput{
-					ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newGradleDir(t)},
-					Tasks:               "assemble check",
-					JavaVersion:         "25",
+					Dir:         newGradleDir(t),
+					Tasks:       "assemble check",
+					JavaVersion: "25",
 				})
 			},
 		},
@@ -89,9 +89,9 @@ func ecosystemRuns() []ecosystemRun {
 				npm := toolrecorder.NPMView{Recorder: rec.Respond(npmToolResponses(rec))}
 
 				return appbuild.NPMReleaseBuild(context.Background(), summary, npm, npm, output.Annotator{}, stdout, stdout, appbuild.NPMReleaseBuildInput{
-					ReleaseBuildOptions: appbuild.ReleaseBuildOptions{Dir: newNPMDir(t), EnableBuildSBOM: true},
-					PackageScope:        "@org",
-					SBOMToolVersion:     "4.2.1",
+					Dir: newNPMDir(t), EnableBuildSBOM: true,
+					PackageScope:    "@org",
+					SBOMToolVersion: "4.2.1",
 				})
 			},
 		},
@@ -114,7 +114,7 @@ func TestEcosystemToolFailures_StopWithTheirOwnIdentity(t *testing.T) {
 
 			for index := range calls {
 				t.Run("call_"+strconv.Itoa(index), func(t *testing.T) {
-					cause := errors.New("owned " + ecosystem.name + " refusal at call " + strconv.Itoa(index)) //nolint:err113 // one identity per position is the contract.
+					cause := errors.New("owned " + ecosystem.name + " refusal at call " + strconv.Itoa(index))
 					rec := toolrecorder.New(t).FailAt(index, cause)
 					summary := &recordingSummarySink{}
 
@@ -253,7 +253,7 @@ func TestEcosystemToolOutput_StaysOutOfAppOwnedChannels(t *testing.T) {
 						Stderr: "tool warned about " + canary + "\n",
 					}
 					if failing && len(call.Args) > 0 && call.Args[0] == "pack" {
-						response.Err = errors.New("tool failed carrying " + canary) //nolint:err113 // the canary is the point.
+						response.Err = errors.New("tool failed carrying " + canary)
 					}
 
 					return response

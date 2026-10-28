@@ -21,12 +21,16 @@ func TestSink_FilesystemBoundaryRefusesLinksAndNonregularTargets(t *testing.T) {
 
 	for _, kind := range []string{"Write", "WriteJSON", "WriteJob"} {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+
 			for _, boundary := range []string{"root-link", "ancestor-link", "root-file", "jobs-link", "leaf-link", "confined-leaf-link", "dangling-leaf-link", "leaf-directory", "leaf-fifo"} {
 				if boundary == "jobs-link" && kind != "WriteJob" {
 					continue
 				}
 
 				t.Run(boundary, func(t *testing.T) {
+					t.Parallel()
+
 					outer := t.TempDir()
 					results := filepath.Join(outer, "results")
 					outside := filepath.Join(outer, "outside")
@@ -81,6 +85,8 @@ func TestSink_FilesystemBoundaryReplacementDoesNotTruncateHardlink(t *testing.T)
 
 	for _, kind := range []string{"Write", "WriteJSON", "WriteJob"} {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+
 			for _, hardlink := range []bool{false, true} {
 				outer := t.TempDir()
 				results := filepath.Join(outer, "results")
@@ -139,6 +145,8 @@ func TestSink_CollectionBoundaryRefusesSymlinksAndNonregularFiles(t *testing.T) 
 
 	for _, boundary := range []string{"root-file", "jobs-file", "root-link", "ancestor-link", "jobs-link", "leaf-link", "confined-leaf-link", "dangling-leaf-link", "leaf-fifo"} {
 		t.Run(boundary, func(t *testing.T) {
+			t.Parallel()
+
 			outer := t.TempDir()
 			results := filepath.Join(outer, "results")
 			outside := filepath.Join(outer, "outside")

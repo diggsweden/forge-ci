@@ -23,7 +23,7 @@ const (
 	miseStateKey   = "MISE_STATE_DIR"
 )
 
-func TestSetupMiseEnv_LocalRefusalHasNoEffects(t *testing.T) { //nolint:gocognit // each obstacle shares a complete owned-tree snapshot.
+func TestSetupMiseEnv_LocalRefusalHasNoEffects(t *testing.T) {
 	// Sequential: HOME and cwd are process-wide.
 	for _, scenario := range []string{
 		"ENV directory", "ENV missing parent", "ENV symlink", "PATH symlink", "linked parent",
@@ -136,7 +136,7 @@ func TestSetupMiseEnv_LocalRefusalHasNoEffects(t *testing.T) { //nolint:gocognit
 	}
 }
 
-func TestSetupMiseEnv_ExactExportsAndAppendOnlyReruns(t *testing.T) { //nolint:gocognit // all modes and planned parents share exact byte/mode/identity assertions.
+func TestSetupMiseEnv_ExactExportsAndAppendOnlyReruns(t *testing.T) {
 	for _, cache := range []string{"", setupCacheOn, setupCacheOff} {
 		for _, planned := range []bool{false, true} {
 			t.Run(cache+"/planned="+map[bool]string{false: setupCacheOff, true: setupCacheOn}[planned], func(t *testing.T) {

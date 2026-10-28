@@ -27,28 +27,28 @@ func MavenCentralPublish(ctx context.Context, sink ci.SummarySink, in MavenCentr
 		now = time.Now()
 	}
 
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var builder strings.Builder
 
-	_, _ = fmt.Fprintf(&b, "## Maven Central deployment command completed\n\n")
-	_, _ = fmt.Fprintf(&b, "- **Version:** %s\n", domainsummary.LiteralText(in.Version))
+	_, _ = fmt.Fprintf(&builder, "## Maven Central deployment command completed\n\n")
+	_, _ = fmt.Fprintf(&builder, "- **Version:** %s\n", domainsummary.LiteralText(in.Version))
 
 	if in.IsSnapshot {
-		_, _ = fmt.Fprintf(&b, "- **Type:** SNAPSHOT\n")
+		_, _ = fmt.Fprintf(&builder, "- **Type:** SNAPSHOT\n")
 	} else {
-		_, _ = fmt.Fprintf(&b, "- **Type:** Release\n")
+		_, _ = fmt.Fprintf(&builder, "- **Type:** Release\n")
 	}
 
 	if in.IsSnapshot {
-		_, _ = fmt.Fprintf(&b, "- **Registry:** [Central snapshots](https://central.sonatype.com/repository/maven-snapshots/)\n\n")
-		_, _ = fmt.Fprintf(&b, "The project's Maven profile reported completion. Snapshot availability was not independently observed; verify the snapshot repository before consuming this version.\n")
+		_, _ = fmt.Fprintf(&builder, "- **Registry:** [Central snapshots](https://central.sonatype.com/repository/maven-snapshots/)\n\n")
+		_, _ = fmt.Fprintf(&builder, "The project's Maven profile reported completion. Snapshot availability was not independently observed; verify the snapshot repository before consuming this version.\n")
 	} else {
-		_, _ = fmt.Fprintf(&b, "- **Registry:** [Maven Central](https://central.sonatype.com/)\n\n")
-		_, _ = fmt.Fprintf(&b, "The project's Maven profile reported completion. Publication state was not independently observed; check the Central Portal before treating this version as publicly available.\n")
+		_, _ = fmt.Fprintf(&builder, "- **Registry:** [Maven Central](https://central.sonatype.com/)\n\n")
+		_, _ = fmt.Fprintf(&builder, "The project's Maven profile reported completion. Publication state was not independently observed; check the Central Portal before treating this version as publicly available.\n")
 	}
 
-	_, _ = fmt.Fprintf(&b, "\n*Command completed at %s*\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
+	_, _ = fmt.Fprintf(&builder, "\n*Command completed at %s*\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
 
-	return sink.Append(ctx, b.String())
+	return sink.Append(ctx, builder.String())
 }
 
 // ForgePackagesPublishInput drives ForgePackagesPublish.
@@ -76,13 +76,13 @@ func ForgePackagesPublish(ctx context.Context, sink ci.SummarySink, in ForgePack
 		registry = "the forge package registry"
 	}
 
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var builder strings.Builder
 
-	_, _ = fmt.Fprintf(&b, "## Published to %s 📦\n\n", registry)
-	_, _ = fmt.Fprintf(&b, "- **Package Type:** %s\n", domainsummary.LiteralText(in.PackageType))
-	_, _ = fmt.Fprintf(&b, "- **Registry:** %s\n", registry)
-	_, _ = fmt.Fprintf(&b, "- **Repository:** %s\n\n", domainsummary.LiteralText(in.Repository))
-	_, _ = fmt.Fprintf(&b, "*Published at %s*\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
+	_, _ = fmt.Fprintf(&builder, "## Published to %s 📦\n\n", registry)
+	_, _ = fmt.Fprintf(&builder, "- **Package Type:** %s\n", domainsummary.LiteralText(in.PackageType))
+	_, _ = fmt.Fprintf(&builder, "- **Registry:** %s\n", registry)
+	_, _ = fmt.Fprintf(&builder, "- **Repository:** %s\n\n", domainsummary.LiteralText(in.Repository))
+	_, _ = fmt.Fprintf(&builder, "*Published at %s*\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
 
-	return sink.Append(ctx, b.String())
+	return sink.Append(ctx, builder.String())
 }

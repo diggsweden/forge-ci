@@ -189,17 +189,17 @@ func swapStdin(t *testing.T, f *os.File) {
 //
 // Not parallel: swaps os.Stdin.
 func TestResolve_StdinDash(t *testing.T) {
-	r, w, err := os.Pipe()
+	reader, writer, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Cleanup(func() { _ = r.Close() })
-	swapStdin(t, r)
+	t.Cleanup(func() { _ = reader.Close() })
+	swapStdin(t, reader)
 
 	go func() {
-		_, _ = w.WriteString("piped-secret\r\n")
-		_ = w.Close()
+		_, _ = writer.WriteString("piped-secret\r\n")
+		_ = writer.Close()
 	}()
 
 	got, err := secret.Resolve("-", "RELEASE_TOKEN")
@@ -227,13 +227,13 @@ func TestResolve_StdinDash(t *testing.T) {
 //
 // Not parallel: swaps os.Stdin.
 func TestResolve_StdinDashRefusesATerminal(t *testing.T) {
-	f, err := os.Open(os.DevNull)
+	file, err := os.Open(os.DevNull)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Cleanup(func() { _ = f.Close() })
-	swapStdin(t, f)
+	t.Cleanup(func() { _ = file.Close() })
+	swapStdin(t, file)
 
 	got, err := secret.Resolve("-", "RELEASE_TOKEN")
 	if !errors.Is(err, errs.ErrUsage) {

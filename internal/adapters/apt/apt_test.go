@@ -70,8 +70,8 @@ func TestInstall_SetsNoninteractiveFrontend(t *testing.T) {
 func TestInstall_UpdateFailureStopsBeforeInstalling(t *testing.T) {
 	t.Parallel()
 
-	m := mockbinary.New(t)
-	m.Add("apt-get", `
+	mock := mockbinary.New(t)
+	mock.Add("apt-get", `
 printf '%s\n' "$*"
 case "$1" in
   update) exit 100 ;;
@@ -80,7 +80,7 @@ esac
 
 	var out bytes.Buffer
 
-	a := newAdapter(t, m, image{})
+	a := newAdapter(t, mock, image{})
 	if err := a.Install(context.Background(), []string{"jq"}, &out); err == nil {
 		t.Fatal("a failed update must be an error")
 	}
@@ -198,12 +198,12 @@ func sourceOptions(t *testing.T, args []string, command string) []string {
 func TestInstall_FetchesOfficialSourcesOverHTTPS(t *testing.T) {
 	t.Parallel()
 
-	m := mockbinary.New(t)
-	m.Add("apt-get", sourcesStub)
+	mock := mockbinary.New(t)
+	mock.Add("apt-get", sourcesStub)
 
 	var out bytes.Buffer
 
-	adapter := newAdapter(t, m, image{
+	adapter := newAdapter(t, mock, image{
 		sourceList: mirrorList,
 		parts:      map[string]string{"debian.sources": debianSources, "notes.txt": "http://deb.debian.org/ignored\n"},
 		caBundle:   caBundle,
@@ -212,7 +212,7 @@ func TestInstall_FetchesOfficialSourcesOverHTTPS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	calls := m.Invocations("apt-get")
+	calls := mock.Invocations("apt-get")
 	if len(calls) != 2 {
 		t.Fatalf("apt-get ran %d times, want 2", len(calls))
 	}
@@ -264,15 +264,15 @@ func TestInstall_FetchesOfficialSourcesOverHTTPS(t *testing.T) {
 func TestInstall_NoTrustOptionIsEverPassed(t *testing.T) {
 	t.Parallel()
 
-	m := mockbinary.New(t)
-	m.Add("apt-get", ":")
+	mock := mockbinary.New(t)
+	mock.Add("apt-get", ":")
 
-	adapter := newAdapter(t, m, image{parts: map[string]string{"debian.sources": debianSources}, caBundle: caBundle})
+	adapter := newAdapter(t, mock, image{parts: map[string]string{"debian.sources": debianSources}, caBundle: caBundle})
 	if err := adapter.Install(context.Background(), []string{"jq"}, nil); err != nil {
 		t.Fatal(err)
 	}
 
-	for _, call := range m.Invocations("apt-get") {
+	for _, call := range mock.Invocations("apt-get") {
 		for index, arg := range call.Args {
 			lower := strings.ToLower(arg)
 			if strings.Contains(lower, "allow") || strings.Contains(lower, "verify") || strings.Contains(lower, "trusted") || strings.Contains(lower, "insecure") {
@@ -317,16 +317,16 @@ func TestInstall_KeepsTheConfiguredSources(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			m := mockbinary.New(t)
-			m.Add("apt-get", ":")
+			mock := mockbinary.New(t)
+			mock.Add("apt-get", ":")
 
 			var out bytes.Buffer
 
-			if err := newAdapter(t, m, tc.image).Install(context.Background(), []string{"jq"}, &out); err != nil {
+			if err := newAdapter(t, mock, tc.image).Install(context.Background(), []string{"jq"}, &out); err != nil {
 				t.Fatal(err)
 			}
 
-			calls := m.Invocations("apt-get")
+			calls := mock.Invocations("apt-get")
 			if len(calls) != 2 {
 				t.Fatalf("apt-get ran %d times, want 2", len(calls))
 			}
@@ -357,10 +357,10 @@ func TestInstall_KeepsTheConfiguredSources(t *testing.T) {
 func TestInstall_AnEmptyCABundleIsNoBundle(t *testing.T) {
 	t.Parallel()
 
-	m := mockbinary.New(t)
-	m.Add("apt-get", ":")
+	mock := mockbinary.New(t)
+	mock.Add("apt-get", ":")
 
-	adapter := newAdapter(t, m, image{parts: map[string]string{"debian.sources": debianSources}, caBundle: caBundle})
+	adapter := newAdapter(t, mock, image{parts: map[string]string{"debian.sources": debianSources}, caBundle: caBundle})
 	if err := os.Truncate(adapter.CABundle, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -371,7 +371,7 @@ func TestInstall_AnEmptyCABundleIsNoBundle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := m.Invocations("apt-get")[0].Args; !slices.Equal(got, []string{"update"}) {
+	if got := mock.Invocations("apt-get")[0].Args; !slices.Equal(got, []string{"update"}) {
 		t.Errorf("update ran as %q against an empty CA bundle", got)
 	}
 
@@ -386,10 +386,10 @@ func TestInstall_AnEmptyCABundleIsNoBundle(t *testing.T) {
 func TestInstall_UnreadableSourcesKeepTheConfiguredOnes(t *testing.T) {
 	t.Parallel()
 
-	m := mockbinary.New(t)
-	m.Add("apt-get", ":")
+	mock := mockbinary.New(t)
+	mock.Add("apt-get", ":")
 
-	adapter := newAdapter(t, m, image{parts: map[string]string{"debian.sources": debianSources}, caBundle: caBundle})
+	adapter := newAdapter(t, mock, image{parts: map[string]string{"debian.sources": debianSources}, caBundle: caBundle})
 
 	// A directory with a sources name: os.ReadFile fails on it for any user.
 	if err := os.Mkdir(adapter.SourceList, 0o700); err != nil {
@@ -402,7 +402,7 @@ func TestInstall_UnreadableSourcesKeepTheConfiguredOnes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := m.Invocations("apt-get")[0].Args; !slices.Equal(got, []string{"update"}) {
+	if got := mock.Invocations("apt-get")[0].Args; !slices.Equal(got, []string{"update"}) {
 		t.Errorf("update ran as %q", got)
 	}
 

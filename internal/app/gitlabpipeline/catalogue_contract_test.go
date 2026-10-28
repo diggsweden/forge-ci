@@ -55,7 +55,7 @@ func assertCatalogueContract(t *testing.T, include gitlabpipeline.IncludeEntry) 
 		t.Fatalf("invalid generated component coordinate %q", include.Component)
 	}
 
-	body, err := os.ReadFile(filepath.Join(reporoot.Path(t), "templates", component+".yml")) //nolint:gosec // checked-in contract fixture.
+	body, err := os.ReadFile(filepath.Join(reporoot.Path(t), "templates", component+".yml"))
 	if err != nil {
 		t.Fatalf("generated component %q has no catalogue template: %v", component, err)
 	}

@@ -44,7 +44,7 @@ func GenerateContainer(
 	syft SyftOps,
 	mvn MavenOps,
 	gitRepo GitOps,
-	w, stderr io.Writer, //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	out, stderr io.Writer,
 	in GenerateContainerInput,
 ) error {
 	if in.RefName == "" {
@@ -84,18 +84,18 @@ func GenerateContainer(
 	// the same two files repeatedly, each run overwriting the last, at the
 	// cost of a full image scan apiece.
 	if declared := declaredArtifactTypes(in.ArtifactTypes); len(declared) == 0 {
-		_, _ = fmt.Fprintln(w, "No artifact dependencies - generating SBOM from container image only")
+		_, _ = fmt.Fprintln(out, "No artifact dependencies - generating SBOM from container image only")
 	} else {
-		for _, t := range declared { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
-			_, _ = fmt.Fprintf(w, "Generating SBOM for artifact type: %s\n", t)
+		for _, t := range declared {
+			_, _ = fmt.Fprintf(out, "Generating SBOM for artifact type: %s\n", t)
 		}
 	}
 
-	if err := Generate(ctx, syft, mvn, gitRepo, nil, w, stderr, gen); err != nil {
+	if err := Generate(ctx, syft, mvn, gitRepo, nil, out, stderr, gen); err != nil {
 		return err
 	}
 
-	_, _ = fmt.Fprintf(w, "%s Container SBOM generation completed\n", clicolor.Check(w))
+	_, _ = fmt.Fprintf(out, "%s Container SBOM generation completed\n", clicolor.Check(out))
 
 	return nil
 }
@@ -105,7 +105,7 @@ func GenerateContainer(
 func declaredArtifactTypes(raw string) []string {
 	out := make([]string, 0, 4)
 
-	for _, t := range listval.Tokens(raw) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	for _, t := range listval.Tokens(raw) {
 		if t = strings.TrimSpace(t); t != "" {
 			out = append(out, t)
 		}

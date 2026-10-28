@@ -30,13 +30,15 @@ func reportFlag(args []string, flag string) string {
 	return ""
 }
 
-func TestContainerFreshness_NoOldEvidenceOrPartialPublication(t *testing.T) { //nolint:gocognit // independent process/data/type outcomes share the same owned publication fixture.
+func TestContainerFreshness_NoOldEvidenceOrPartialPublication(t *testing.T) {
 	t.Parallel()
 
-	cause := errors.New("owned scanner failure") //nolint:err113 // independent tool cause.
+	cause := errors.New("owned scanner failure")
 
 	for _, mode := range []string{"no-write", "empty", "malformed", "empty-object", "unknown-only", "status", "tool-error", "link", "oversized", "clean", "clean-empty-array", "clean-named-omitted", "clean-named-null", "findings"} {
 		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
+
 			clean := strings.HasPrefix(mode, "clean")
 			root := t.TempDir()
 
@@ -156,6 +158,8 @@ func TestScanFreshness_InvalidPathsPreservePreviousReports(t *testing.T) {
 
 	for _, mode := range []string{"alias", "trailing-separator"} {
 		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
+
 			root := t.TempDir()
 			raw := filepath.Join(root, "raw.json")
 			require.NoError(t, os.WriteFile(raw, []byte("OLD-CANARY"), 0600))

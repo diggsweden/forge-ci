@@ -17,9 +17,9 @@ import (
 )
 
 func TestEvalExpression_ReturnsTrimmedStdout(t *testing.T) {
-	m := mockbinary.New(t)
-	m.OnPath()
-	m.Add("mvn", `printf '1.2.3-SNAPSHOT\n'`)
+	mock := mockbinary.New(t)
+	mock.OnPath()
+	mock.Add("mvn", `printf '1.2.3-SNAPSHOT\n'`)
 
 	got, err := maven.New().EvalExpression(context.Background(), "project.version")
 	if err != nil {
@@ -30,7 +30,7 @@ func TestEvalExpression_ReturnsTrimmedStdout(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 
-	invs := m.Invocations("mvn")
+	invs := mock.Invocations("mvn")
 	if len(invs) != 1 {
 		t.Fatalf("expected 1 invocation, got %d", len(invs))
 	}
@@ -127,13 +127,13 @@ func TestEvalExpression_ValueIsStdoutAlone(t *testing.T) {
 func TestRunInheritIn_RunsInsideTheGivenDirectory(t *testing.T) {
 	t.Parallel()
 
-	m := mockbinary.New(t)
-	m.Add("mvn", `pwd`)
+	mock := mockbinary.New(t)
+	mock.Add("mvn", `pwd`)
 
 	dir := t.TempDir()
 
 	var stdout bytes.Buffer
-	if err := (&maven.Adapter{MvnBin: m.Path("mvn")}).RunInheritIn(context.Background(), dir, &stdout, &bytes.Buffer{}, "package"); err != nil {
+	if err := (&maven.Adapter{MvnBin: mock.Path("mvn")}).RunInheritIn(context.Background(), dir, &stdout, &bytes.Buffer{}, "package"); err != nil {
 		t.Fatal(err)
 	}
 

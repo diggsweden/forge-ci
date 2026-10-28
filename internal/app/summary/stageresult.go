@@ -227,7 +227,7 @@ func buildResultMap(
 
 	resolved := domainsummary.ResolveTargetResults(targetNames, records)
 
-	m := make(map[string]string, len(resolved)) //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	m := make(map[string]string, len(resolved))
 	for name, result := range resolved {
 		m[name] = string(result)
 	}

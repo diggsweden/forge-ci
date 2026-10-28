@@ -64,11 +64,9 @@ EXAMPLE:
 			return dependencyDiagnostics(environment.token, func(out, stderr io.Writer) error {
 				return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error {
 					return appbuild.GradleReleaseBuild(ctx, d.SummarySink, &gradle.Adapter{Env: environment.authenticated, NoDaemon: cmd.Bool("private-dependencies")}, out, stderr, appbuild.GradleReleaseBuildInput{
-						ReleaseBuildOptions: appbuild.ReleaseBuildOptions{
-							Dir:             cmd.String(flagWorkingDir),
-							SkipTests:       cmd.Bool(flagSkipTests),
-							EnableBuildSBOM: cmd.Bool(flagBuildSBOM),
-						},
+						Dir:             cmd.String(flagWorkingDir),
+						SkipTests:       cmd.Bool(flagSkipTests),
+						EnableBuildSBOM: cmd.Bool(flagBuildSBOM),
 						Tasks:           cmd.String(flagTasks),
 						SBOMToolVersion: cmd.String(flagSBOMToolVersion),
 						JavaVersion:     cmd.String("java-version"),

@@ -9,9 +9,10 @@ package xcode
 import (
 	"context"
 	"errors"
-	"github.com/diggsweden/forge-ci/internal/safeexec"
 	"io"
 	"os/exec"
+
+	"github.com/diggsweden/forge-ci/internal/safeexec"
 )
 
 // Build wraps the `xcodebuild` binary.
@@ -34,8 +35,7 @@ func (a *Build) RunInherit(ctx context.Context, stdout, stderr io.Writer, args .
 		return 0, nil
 	}
 
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		return exitErr.ExitCode(), nil
 	}
 

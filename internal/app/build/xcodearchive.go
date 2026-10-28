@@ -33,7 +33,7 @@ type XcodeArchiveInput struct {
 	BuildNumber   string
 }
 
-func validateXcodeArchive(in XcodeArchiveInput) error { //nolint:cyclop // linear checks for required argv and the selected identity.
+func validateXcodeArchive(in XcodeArchiveInput) error {
 	for _, value := range []string{in.Workspace, in.Project, in.Scheme, in.Configuration, in.Destination, in.BuildNumber} {
 		if strings.ContainsRune(value, 0) {
 			return fmt.Errorf("xcode archive inputs must not contain NUL: %w", errs.ErrUsage)
@@ -87,7 +87,7 @@ func validateXcodeArchive(in XcodeArchiveInput) error { //nolint:cyclop // linea
 }
 
 // runXcodeArchive runs `xcodebuild archive` and streams its output through.
-func runXcodeArchive(ctx context.Context, ops XcodeBuildOps, w, stderr io.Writer, in XcodeArchiveInput) error { //nolint:varnamelen // writer convention.
+func runXcodeArchive(ctx context.Context, ops XcodeBuildOps, out, stderr io.Writer, in XcodeArchiveInput) error {
 	in.Workspace = strings.TrimSpace(in.Workspace)
 	in.Project = strings.TrimSpace(in.Project)
 	args := []string{"archive"}
@@ -118,9 +118,9 @@ func runXcodeArchive(ctx context.Context, ops XcodeBuildOps, w, stderr io.Writer
 		return fmt.Errorf("mkdir build: %w", mkdirErr)
 	}
 
-	_, _ = fmt.Fprintf(w, "Running: xcodebuild %s\n", strings.Join(args, " "))
+	_, _ = fmt.Fprintf(out, "Running: xcodebuild %s\n", strings.Join(args, " "))
 
-	code, err := ops.RunInherit(ctx, w, stderr, args...)
+	code, err := ops.RunInherit(ctx, out, stderr, args...)
 	if err != nil {
 		return fmt.Errorf("xcodebuild archive: %w", err)
 	}

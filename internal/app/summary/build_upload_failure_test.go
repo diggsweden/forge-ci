@@ -99,7 +99,7 @@ func TestBuildUploadSummary_AppendFailureContract(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			ctx := t.Context()
-			sentinel := errors.New(tc.name + " append sentinel") //nolint:err113 // Distinct error identity for each injected failure.
+			sentinel := errors.New(tc.name + " append sentinel")
 
 			var attempts []string
 
@@ -118,7 +118,7 @@ func TestBuildUploadSummary_AppendFailureContract(t *testing.T) {
 				t.Errorf("append error = %v, want identity and text %q", err, tc.prefix+sentinel.Error())
 			}
 
-			if tc.prefix == "" && err != sentinel { //nolint:err113,errorlint // Direct wrappers must return the exact sink error.
+			if tc.prefix == "" && err != sentinel { //nolint:errorlint // Direct wrappers must return the exact sink error.
 				t.Errorf("append error = %v, want unchanged sentinel", err)
 			}
 

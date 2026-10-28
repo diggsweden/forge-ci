@@ -25,14 +25,14 @@ func TestResolveContext_FromInjectedEnv(t *testing.T) {
 	envFunc := func(m map[string]string) func(string) string {
 		return func(k string) string { return m[k] }
 	}
-	p := &local.Provider{Env: envFunc(map[string]string{
+	localProvider := &local.Provider{Env: envFunc(map[string]string{
 		"CI_REF_NAME": "main",
 		"CI_COMMIT":   "abcdef0123456789",
 		"CI_BRANCH":   "main",
 		"CI_REPO":     "owner/repo",
 	})}
 
-	evt, err := p.ResolveContext(context.Background())
+	evt, err := localProvider.ResolveContext(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,20 +91,20 @@ func TestFetchRepoMetadata_ReturnsEmptyMetadata(t *testing.T) {
 func TestProvider_DoesNotImplementUnsupportedRoles(t *testing.T) {
 	t.Parallel()
 
-	p := local.New()
-	if _, ok := any(p).(provider.TokenValidator); ok {
+	localProvider := local.New()
+	if _, ok := any(localProvider).(provider.TokenValidator); ok {
 		t.Error("local.Provider should not implement TokenValidator")
 	}
 
-	if _, ok := any(p).(provider.ReleaseCreator); ok {
+	if _, ok := any(localProvider).(provider.ReleaseCreator); ok {
 		t.Error("local.Provider should not implement ReleaseCreator")
 	}
 
-	if _, ok := any(p).(provider.ReleaseAssetUploader); ok {
+	if _, ok := any(localProvider).(provider.ReleaseAssetUploader); ok {
 		t.Error("local.Provider should not implement ReleaseAssetUploader")
 	}
 
-	if _, ok := any(p).(provider.SARIFUploader); ok {
+	if _, ok := any(localProvider).(provider.SARIFUploader); ok {
 		t.Error("local.Provider should not implement SARIFUploader")
 	}
 }

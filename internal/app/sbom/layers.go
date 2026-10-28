@@ -76,7 +76,7 @@ func generateDualSBOMs(
 		return fmt.Errorf("generate sboms for %s: %w", scanTarget, err)
 	}
 
-	for _, f := range []string{spdxFile, cdxFile} { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	for _, f := range []string{spdxFile, cdxFile} {
 		info, statErr := deps.ws.outputInfo(f)
 		if statErr != nil || !info.Mode().IsRegular() || info.Size() == 0 {
 			_, _ = fmt.Fprintf(deps.stderr, "   %s Failed to generate: %s\n", clicolor.Cross(deps.stderr), f)
@@ -469,7 +469,7 @@ func scanArtifacts(
 		return fmt.Errorf("%s: %w", scan.missingWarn, errs.ErrMissingInput)
 	}
 
-	for _, a := range artifacts { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	for _, a := range artifacts {
 		_, _ = fmt.Fprintf(deps.w, "   Scanning: %s\n", a)
 
 		base := filepath.Base(filepath.FromSlash(a))
@@ -501,7 +501,7 @@ func scanPythonWheels(ctx context.Context, deps layerDeps, subj subject) error {
 		return fmt.Errorf("no Python wheel or source distribution found: %w", errs.ErrMissingInput)
 	}
 
-	for _, a := range artifacts { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	for _, a := range artifacts {
 		_, _ = fmt.Fprintf(deps.w, "   Scanning: %s\n", a)
 		base := filepath.Base(filepath.FromSlash(a))
 		base = strings.TrimSuffix(base, ".whl")

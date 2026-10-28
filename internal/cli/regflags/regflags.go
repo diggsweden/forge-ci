@@ -38,12 +38,11 @@ const (
 	// DefaultAuthFileEnv sources --auth-file unless the verb overrides it
 	// (signer-image verbs) or drops it (login/logout).
 	DefaultAuthFileEnv = "FORGE_CI_REGISTRY_AUTH_FILE"
-	// EnvUser is the primary --registry-username env source.
+	// EnvUser is the single --registry-username env source.
 	EnvUser = "REGISTRY_USER"
 
-	envUserFallback = "REGISTRY_USERNAME"
-	envToken        = "REGISTRY_TOKEN"
-	envPassword     = "REGISTRY_PASSWORD"
+	envToken    = "REGISTRY_TOKEN"
+	envPassword = "REGISTRY_PASSWORD"
 )
 
 // CredUsername and CredPassword are the errs.Credential "What" wordings
@@ -106,7 +105,7 @@ func Username() cli.Flag {
 // UsernameFor is the --registry-username flag of a verb whose password is not
 // --registry-password-file, such as a verb logging in with its API token.
 func UsernameFor(usage string) cli.Flag {
-	return &cli.StringFlag{Name: FlagUsername, Sources: cli.EnvVars(EnvUser, envUserFallback), Usage: usage}
+	return &cli.StringFlag{Name: FlagUsername, Sources: cli.EnvVars(EnvUser), Usage: usage}
 }
 
 // PasswordFile returns the shared --registry-password-file flag of the

@@ -18,16 +18,16 @@ import (
 func TestAdapter_RunInheritAndAvailable(t *testing.T) {
 	t.Parallel()
 
-	m := mockbinary.New(t)
-	m.Add("cargo", `printf 'cargo %s\n' "$*"; printf 'warn\n' >&2`)
-	a := &cargo.Adapter{Bin: m.Path("cargo")}
+	mock := mockbinary.New(t)
+	mock.Add("cargo", `printf 'cargo %s\n' "$*"; printf 'warn\n' >&2`)
+	adapter := &cargo.Adapter{Bin: mock.Path("cargo")}
 
-	if !a.Available() {
+	if !adapter.Available() {
 		t.Fatal("expected mocked cargo to be available")
 	}
 
 	var stdout, stderr bytes.Buffer
-	if err := a.RunInherit(context.Background(), "", &stdout, &stderr, "update", "--workspace"); err != nil {
+	if err := adapter.RunInherit(context.Background(), "", &stdout, &stderr, "update", "--workspace"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -39,7 +39,7 @@ func TestAdapter_RunInheritAndAvailable(t *testing.T) {
 		t.Errorf("stderr = %q", stderr.String())
 	}
 
-	if got := m.Invocations("cargo")[0].Args; len(got) != 2 || got[0] != "update" || got[1] != "--workspace" {
+	if got := mock.Invocations("cargo")[0].Args; len(got) != 2 || got[0] != "update" || got[1] != "--workspace" {
 		t.Errorf("args = %v", got)
 	}
 }
@@ -61,15 +61,15 @@ func TestAdapter_AvailableFalseForMissingBinary(t *testing.T) {
 // home, its PATH and the runner's credentials. The working directory and
 // the output streams travel with the request.
 func TestAdapter_RunForwardsEnvOnTopOfTheEnvironment(t *testing.T) {
-	m := mockbinary.New(t)
-	m.Add("cargo", `printf 'linker=%s marker=%s cwd=%s\n' "${CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER:-unset}" "${FORGE_CI_TEST_MARKER:-unset}" "$(pwd)"; printf 'warn\n' >&2`)
+	mock := mockbinary.New(t)
+	mock.Add("cargo", `printf 'linker=%s marker=%s cwd=%s\n' "${CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER:-unset}" "${FORGE_CI_TEST_MARKER:-unset}" "$(pwd)"; printf 'warn\n' >&2`)
 	t.Setenv("FORGE_CI_TEST_MARKER", "inherited")
 
 	dir := testfs.NewReal(t).Root
 
 	var stdout, stderr bytes.Buffer
 
-	err := (&cargo.Adapter{Bin: m.Path("cargo")}).Run(context.Background(), domainbuild.GoRunInput{
+	err := (&cargo.Adapter{Bin: mock.Path("cargo")}).Run(context.Background(), domainbuild.GoRunInput{
 		Args: []string{"build", "--release"}, Dir: dir,
 		Env:    []string{"CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc"},
 		Stdout: &stdout, Stderr: &stderr,

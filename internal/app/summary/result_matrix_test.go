@@ -512,6 +512,7 @@ func assertResultMatrixRefusal(t *testing.T, env *domainsummary.StageResultEnvel
 
 type resultMatrixStore struct {
 	*fakejobresultstore.Store
+
 	t             *testing.T
 	poisonCollect bool
 	collectCalls  int
@@ -535,7 +536,7 @@ func (s *resultMatrixStore) CollectJobs(ctx context.Context) ([][]byte, error) {
 	}
 
 	if s.poisonCollect {
-		return nil, errors.New("unused result store was collected") //nolint:err113 // Poison for a source that must never be consulted.
+		return nil, errors.New("unused result store was collected")
 	}
 
 	return s.Store.CollectJobs(ctx)

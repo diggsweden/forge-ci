@@ -70,7 +70,7 @@ func findNPMTarballs(ws workspace) ([]string, error) {
 func findGradleJARs(ws workspace, name string) ([]string, error) {
 	prefix := name + "-"
 
-	return walkMatching(ws, "build/libs", func(n string) bool { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	return walkMatching(ws, "build/libs", func(n string) bool {
 		if !strings.HasSuffix(n, ".jar") {
 			return false
 		}
@@ -112,7 +112,7 @@ func findGoExecutables(ws workspace, name string) ([]string, error) {
 	return walkMatching(ws, ".", func(n string) bool { return n == name })
 }
 
-func isGoBinaryName(n, name string) bool { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func isGoBinaryName(n, name string) bool {
 	if name == "" {
 		return false
 	}
@@ -159,7 +159,7 @@ func findCargoExecutables(ws workspace, name string) ([]string, error) {
 	return listExecutableNoDebugInfo(ws, "target/release")
 }
 
-func isRustBinaryName(n, name string) bool { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func isRustBinaryName(n, name string) bool {
 	if name == "" {
 		return false
 	}

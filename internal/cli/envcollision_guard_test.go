@@ -26,8 +26,6 @@ import (
 // legitimately consumes with matching semantics (GITHUB_*, CI_*,
 // SOURCE_DATE_EPOCH, JAVA_VERSION, …) are fine and intentionally absent
 // here.
-//
-//nolint:gochecknoglobals // test fixture: a read-only denylist.
 var reservedExternalEnvVars = map[string]string{
 	"GIT_CONFIG_GLOBAL":    "git: path to the global config file",
 	"GIT_CONFIG_SYSTEM":    "git: path to the system config file",
@@ -59,7 +57,7 @@ func TestNoFlagSourcesCollideWithReservedEnvVars(t *testing.T) {
 	var walk func(cmd *ucli.Command, path string)
 
 	walk = func(cmd *ucli.Command, path string) {
-		for _, f := range cmd.Flags {
+		for _, flag := range cmd.Flags {
 			// cliflags.Sources rather than a GetEnvVars type assertion. The
 			// assertion skipped any flag whose type did not satisfy it, so a
 			// flag the guard could not read was indistinguishable from one
@@ -69,7 +67,7 @@ func TestNoFlagSourcesCollideWithReservedEnvVars(t *testing.T) {
 			// four CLI surface guards already use. Every flag type in the tree
 			// satisfies GetEnvVars today, so this closes a latent hole rather
 			// than a live one: both traversals read the same 1452 values.
-			for _, src := range cliflags.Sources(t, f).Chain {
+			for _, src := range cliflags.Sources(t, flag).Chain {
 				env, ok := src.(interface{ Key() string })
 				if !ok {
 					continue
@@ -81,7 +79,7 @@ func TestNoFlagSourcesCollideWithReservedEnvVars(t *testing.T) {
 				if why, reserved := reservedExternalEnvVars[env.Key()]; reserved {
 					t.Errorf("`%s` flag %v sources reserved env $%s (%s) — "+
 						"forge-ci must not repurpose an external tool's variable; "+
-						"use a $FORGE_CI_-prefixed name", path, f.Names(), env.Key(), why)
+						"use a $FORGE_CI_-prefixed name", path, flag.Names(), env.Key(), why)
 				}
 			}
 		}

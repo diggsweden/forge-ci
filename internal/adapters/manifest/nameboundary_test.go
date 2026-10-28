@@ -20,6 +20,8 @@ func TestSink_NameBoundaryRefusesBeforeMarshalOrFilesystem(t *testing.T) {
 
 	for _, kind := range []string{"Write", "WriteJSON", "WriteJob"} {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+
 			for _, name := range []string{
 				"", "   ", ".", "..", "../canary", "../../canary", "nested/job", "sub/../canary",
 				`..\canary`, `nested\job`, "absolute",
@@ -27,6 +29,8 @@ func TestSink_NameBoundaryRefusesBeforeMarshalOrFilesystem(t *testing.T) {
 				"job\x7fname", "job\u0085name", "job\xffname", "job\n",
 			} {
 				t.Run(name, func(t *testing.T) {
+					t.Parallel()
+
 					for _, existing := range []bool{false, true} {
 						outer := t.TempDir()
 						root := filepath.Join(outer, "R")
@@ -67,9 +71,11 @@ func TestSink_NameBoundaryPreservesDistinctFlatNamesAndReplacement(t *testing.T)
 
 	for _, kind := range []string{"Write", "WriteJSON", "WriteJob"} {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+
 			root := t.TempDir()
 			reference := filepath.Join(root, "reference")
-			require.NoError(t, os.WriteFile(reference, nil, 0o644)) //nolint:gosec // owned reference measures permissions after the inherited umask.
+			require.NoError(t, os.WriteFile(reference, nil, 0o644))
 			referenceInfo, referenceErr := os.Lstat(reference)
 			require.NoError(t, referenceErr)
 
@@ -116,6 +122,8 @@ func TestSink_NameBoundaryPreservesCaseInSeparateRoots(t *testing.T) {
 
 	for _, kind := range []string{"Write", "WriteJSON", "WriteJob"} {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+
 			for _, name := range []string{"Build", "build"} {
 				// Separate roots check spelling without assuming case-sensitive storage.
 				root := t.TempDir()
@@ -138,6 +146,8 @@ func TestSink_NameBoundaryMarshalFailurePreservesCauseAndState(t *testing.T) {
 
 	for _, kind := range []string{"Write", "WriteJSON", "WriteJob"} {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+
 			for _, existing := range []bool{false, true} {
 				root := t.TempDir()
 

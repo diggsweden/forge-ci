@@ -23,7 +23,7 @@ func stubGradlew(t *testing.T, body string) string {
 	fsys := testfs.NewReal(t)
 
 	path := fsys.Path("gradlew")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil { //nolint:gosec // test fixture; must be exec'able.
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 

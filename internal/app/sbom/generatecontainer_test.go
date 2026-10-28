@@ -80,13 +80,13 @@ func TestGenerateContainer_VPrefixStripped(t *testing.T) {
 
 	found := false
 
-	for _, e := range matches {
-		if strings.Contains(e.Name(), "-9.8.7-") {
+	for _, entry := range matches {
+		if strings.Contains(entry.Name(), "-9.8.7-") {
 			found = true
 		}
 
-		if strings.Contains(e.Name(), "-v9.8.7-") {
-			t.Errorf("expected v-prefix to be stripped, got: %s", e.Name())
+		if strings.Contains(entry.Name(), "-v9.8.7-") {
+			t.Errorf("expected v-prefix to be stripped, got: %s", entry.Name())
 		}
 	}
 

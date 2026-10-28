@@ -49,9 +49,9 @@ func TestXcodeBuild_RunInheritReturnsExitCode(t *testing.T) {
 func TestSecurity_RunReturnsCombinedOutput(t *testing.T) {
 	t.Parallel()
 
-	m := mockbinary.New(t)
-	m.Add("security", `printf 'out'; printf 'err' >&2`)
-	a := &xcode.Security{Bin: m.Path("security")}
+	mock := mockbinary.New(t)
+	mock.Add("security", `printf 'out'; printf 'err' >&2`)
+	a := &xcode.Security{Bin: mock.Path("security")}
 
 	out, err := a.Run(context.Background(), "find-identity")
 	if err != nil {
@@ -63,7 +63,7 @@ func TestSecurity_RunReturnsCombinedOutput(t *testing.T) {
 	}
 
 	want := []string{"find-identity"}
-	if got := m.Invocations("security")[0].Args; !slices.Equal(got, want) {
+	if got := mock.Invocations("security")[0].Args; !slices.Equal(got, want) {
 		t.Errorf("args = %v, want %v", got, want)
 	}
 }
@@ -77,14 +77,14 @@ func TestSecurity_RunReturnsCombinedOutput(t *testing.T) {
 func TestSecurity_RunRedactsPEMOutput(t *testing.T) {
 	t.Parallel()
 
-	m := mockbinary.New(t)
-	m.Add("security", `cat <<EOF
+	mock := mockbinary.New(t)
+	mock.Add("security", `cat <<EOF
 some context line
 -----BEGIN RSA PRIVATE KEY-----
 NEVER-SHOULD-LEAK
 -----END RSA PRIVATE KEY-----
 EOF`)
-	a := &xcode.Security{Bin: m.Path("security")}
+	a := &xcode.Security{Bin: mock.Path("security")}
 
 	out, err := a.Run(context.Background(), "export", "-k", "build.keychain")
 	if err != nil {
