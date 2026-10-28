@@ -41,8 +41,8 @@ func supplyChainViolations(body []byte) []string {
 				continue
 			}
 
-			if strings.HasPrefix(ref, "docker://") {
-				if !domaincontainer.ValidDigestReference(strings.TrimPrefix(ref, "docker://")) {
+			if after, ok := strings.CutPrefix(ref, "docker://"); ok {
+				if !domaincontainer.ValidDigestReference(after) {
 					failures = append(failures, "unpinned container action: "+ref)
 				}
 

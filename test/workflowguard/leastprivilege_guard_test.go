@@ -50,7 +50,7 @@ func TestJobPrivilegePolicy(t *testing.T) {
 	policy := map[string][]string{}
 
 	for _, path := range files {
-		body, readErr := os.ReadFile(path) //nolint:gosec // test reads repo-local workflow.
+		body, readErr := os.ReadFile(path)
 		require.NoErrorf(t, readErr, "read %s", path)
 
 		for job, scopes := range privilegedJobs(t, body) {
@@ -71,7 +71,7 @@ func TestJobPrivilegePolicy(t *testing.T) {
 		return
 	}
 
-	want, err := os.ReadFile(snapshot) //nolint:gosec // test reads repo-local snapshot.
+	want, err := os.ReadFile(snapshot)
 	require.NoErrorf(t, err, "privilege snapshot missing; generate it deliberately with "+
 		regeneratePolicyEnv+"=1 go test ./test/workflowguard -run TestJobPrivilegePolicy")
 
@@ -103,14 +103,14 @@ func privilegedJobs(t *testing.T, body []byte) map[string][]string {
 
 	found := map[string][]string{}
 
-	for i := 0; i+1 < len(jobs.Content); i += 2 {
+	for index := 0; index+1 < len(jobs.Content); index += 2 {
 		scopes := workflow
-		if own := mappingChild(jobs.Content[i+1], "permissions"); own != nil {
+		if own := mappingChild(jobs.Content[index+1], "permissions"); own != nil {
 			scopes = privilegedScopes(own)
 		}
 
 		if len(scopes) > 0 {
-			found[jobs.Content[i].Value] = scopes
+			found[jobs.Content[index].Value] = scopes
 		}
 	}
 

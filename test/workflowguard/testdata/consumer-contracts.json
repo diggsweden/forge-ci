@@ -143,11 +143,12 @@
         "type": "string",
         "default": ""
       },
-      "release-publisher": {
+      "release-policy": {
         "required": false,
-        "type": "string"
+        "type": "string",
+        "default": "stable"
       },
-      "release-type": {
+      "release-publisher": {
         "required": false,
         "type": "string"
       },

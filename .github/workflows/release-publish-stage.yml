@@ -5,6 +5,10 @@ name: Release Publish Stage
 on:
   workflow_call: # yamllint disable-line rule:truthy
     inputs:
+      release-policy:
+        description: "Accepted release versions: stable or stable-prerelease"
+        type: string
+        default: "stable"
       branch:
         required: true
         type: string
@@ -182,6 +186,7 @@ jobs:
       RELEASE_GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
     uses: ./.github/workflows/publish-maven-central.yml
     with:
+      release-policy: ${{ inputs['release-policy'] }}
       working-directory: ${{ matrix.artifact.working_directory }}
       branch: ${{ inputs.branch }}
       artifact-source: ${{ matrix.artifact.publication_artifact_name || matrix.artifact.build_artifact_name }}

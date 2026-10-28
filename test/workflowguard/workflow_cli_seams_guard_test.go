@@ -68,7 +68,7 @@ func TestPublishContainerValidatesNamespaceForSelectedRegistry(t *testing.T) {
 func workflowStepEnv(t *testing.T, workflowName, jobName, stepName string) map[string]string {
 	t.Helper()
 
-	body, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".github", "workflows", workflowName)) //nolint:gosec // repository contract fixture.
+	body, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".github", "workflows", workflowName))
 	require.NoError(t, err)
 
 	var workflow struct {

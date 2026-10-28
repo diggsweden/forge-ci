@@ -27,7 +27,7 @@
 #
 # Required Permissions:
 #   actions: read     # Download workflow artifacts
-#   contents: write   # Create releases + upload assets
+#   contents: read    # Read exact release source; RELEASE_TOKEN owns publication
 #   packages: read    # Pull a private runtime image when configured
 #   id-token: write   # Sigstore-keyless signing when configured
 #
@@ -39,6 +39,10 @@ name: Create GitHub Release
 on:
   workflow_call: # yamllint disable-line rule:truthy
     inputs:
+      release-policy:
+        description: "Accepted release versions: stable or stable-prerelease"
+        type: string
+        default: "stable"
       release-name:
         description: "Release title shown in GitHub Releases"
         required: false
@@ -146,6 +150,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/generate-changelog.yml
     with:
+      release-policy: ${{ inputs['release-policy'] }}
       branch: ${{ inputs['checkout-ref'] }}
       runtime-image: ${{ inputs['runtime-image'] }}
       git-cliff-args: "--latest"
@@ -169,6 +174,7 @@ jobs:
       packages: read
     outputs:
       source-date-epoch: ${{ steps.epoch.outputs.source-date-epoch }}
+      release-sha: ${{ steps.epoch.outputs.release-sha }}
     steps:
       - name: Harden GitHub runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
@@ -186,9 +192,11 @@ jobs:
       - name: Set deterministic release epoch
         id: epoch
         run: |
-          epoch="$(git log -1 --format=%ct HEAD)"
+          sha="$(git rev-parse --verify 'HEAD^{commit}')"
+          epoch="$(git log -1 --format=%ct "$sha")"
           printf 'SOURCE_DATE_EPOCH=%s\n' "$epoch" >>"$GITHUB_ENV"
           printf 'source-date-epoch=%s\n' "$epoch" >>"$GITHUB_OUTPUT"
+          printf 'release-sha=%s\n' "$sha" >>"$GITHUB_OUTPUT"
       - name: Download Release Changelog
         continue-on-error: true
         env:
@@ -258,21 +266,22 @@ jobs:
           include-hidden-files: true
           retention-days: "1"
           if-no-files-found: error
-  create-release:
-    # Signing and publishing run on the plain runner with the forge-ci binary
-    # pinned by forge-ci-binary-ref, like the release commit in the prepare
-    # stage. A job container could not turn swap off: it starts before the
-    # first step, and GitHub-hosted runners have swap on. release sign refuses
-    # to load a private key while swap is active (docs/verification.md#swap-policy).
-    name: "Publish: release"
+  sign-release:
+    # A failed publisher reuses these exact bytes instead of generating new
+    # Sigstore bundles. This plain runner can disable swap before loading keys.
+    name: "Sign: release files"
     needs: [assemble-release]
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
       actions: read
-      contents: write
+      contents: read
       id-token: write
+    outputs:
+      artifact-name: ${{ steps.signed-state.outputs.artifact-name }}
+      digest: ${{ steps.signed-state.outputs.digest }}
     env:
+      RELEASE_POLICY: ${{ inputs['release-policy'] }}
       # Deterministic OpenPGP signatures use the release commit's time.
       SOURCE_DATE_EPOCH: ${{ needs.assemble-release.outputs.source-date-epoch }}
     steps:
@@ -294,10 +303,8 @@ jobs:
           FORGE_CI_BINARY_REF: ${{ inputs['forge-ci-binary-ref'] }}
           FORGE_CI_REPOSITORY: ${{ vars.FORGE_CI_REPOSITORY || 'diggsweden/forge-ci' }}
         run: bash .github-shared/scripts/bootstrap/install-forge-ci.sh "$FORGE_CI_BINARY_REF"
-      # Defense-in-depth: refuse PR-context triggers. RELEASE_TOKEN and the
-      # signing keys land in env on this job and must never run with PR-HEAD
-      # code.
-      - name: Refuse PR-context trigger (publish/release secrets in scope)
+      # Defense-in-depth: signing keys must never run with PR-HEAD code.
+      - name: Refuse PR-context trigger (signing secrets in scope)
         run: forge-ci validate event-context
       - name: Install cosign
         if: ${{ inputs['sign-artifacts'] }}
@@ -386,7 +393,88 @@ jobs:
           RELEASE_VERSION: ${{ inputs['release-name'] }}
           RELEASE_COMMIT: ${{ inputs['checkout-ref'] }}
         run: forge-ci release notes
+      - name: Stage signed release payload
+        id: signed-state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir signed-release
+          mkdir signed-release/.forge-ci
+          cp -- .forge-ci/release-assembly.json signed-release/.forge-ci/
+          cp -a -- release-files signed-release/
+          cp -- release-notes.md signed-release/
+          digest=$(forge-ci release dist-digest --dist-dir signed-release --manifest-root .)
+          forge-ci release validate-dist --dist-dir signed-release --manifest-root . --expected-digest "$digest"
+          printf 'digest=%s\n' "$digest" >>"$GITHUB_OUTPUT"
+          printf 'artifact-name=release-signed-%s-%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >>"$GITHUB_OUTPUT"
+      - name: Upload signed release payload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.signed-state.outputs.artifact-name }}
+          path: signed-release/
+          include-hidden-files: true
+          retention-days: "30"
+          if-no-files-found: error
+      - name: Cleanup GPG key
+        if: always()
+        env:
+          GPG_FINGERPRINT: ${{ steps.import-gpg.outputs.fingerprint }}
+        run: forge-ci release gpg cleanup
+  create-release:
+    name: "Publish: release"
+    needs: [assemble-release, sign-release]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: read
+    env:
+      RELEASE_POLICY: ${{ inputs['release-policy'] }}
+    steps:
+      - name: Harden GitHub runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: ${{ inputs['egress-policy'] }}
+          allowed-endpoints: ${{ inputs['egress-allowed-endpoints'] }}
+      - name: Checkout exact release source
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ needs.assemble-release.outputs.release-sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Checkout forge-ci bootstrap installers
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: ${{ vars.FORGE_CI_REPOSITORY || 'diggsweden/forge-ci' }}
+          ref: ${{ inputs['forge-ci-binary-ref'] }}
+          path: .github-shared
+          sparse-checkout: scripts/bootstrap
+          persist-credentials: false
+      - name: Install forge-ci binary
+        env:
+          FORGE_CI_BINARY_REF: ${{ inputs['forge-ci-binary-ref'] }}
+          FORGE_CI_REPOSITORY: ${{ vars.FORGE_CI_REPOSITORY || 'diggsweden/forge-ci' }}
+        run: bash .github-shared/scripts/bootstrap/install-forge-ci.sh "$FORGE_CI_BINARY_REF"
+      - name: Refuse PR-context trigger (release token in scope)
+        run: forge-ci validate event-context
+      - name: Download signed release payload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: ${{ needs.sign-release.outputs.artifact-name }}
+          ARTIFACT_DIR: signed-release
+        run: forge-ci artifact download
+      - name: Verify signed release payload
+        env:
+          EXPECTED_DIGEST: ${{ needs.sign-release.outputs.digest }}
+        run: forge-ci release validate-dist --dist-dir signed-release --manifest-root . --expected-digest "$EXPECTED_DIGEST"
+      - name: Revalidate release tag before publication
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ needs.assemble-release.outputs.release-sha }}
+          TAG_NAME: ${{ inputs['release-name'] }}
+        run: forge-ci release validate-tag --release-policy "$RELEASE_POLICY"
       - name: Create GitHub Release
+        working-directory: signed-release
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           TAG_NAME: ${{ inputs['release-name'] }}
@@ -396,28 +484,11 @@ jobs:
           MAKE_LATEST: ${{ inputs['make-latest'] }}
           RELEASE_ASSEMBLY: .forge-ci/release-assembly.json
           RELEASE_NOTES_FILE: release-notes.md
-        run: forge-ci release publish --strategy=recreate
+        run: forge-ci release publish --release-policy "$RELEASE_POLICY" --strategy=recreate
       - name: Trim older releases to their checksums and signatures
         if: ${{ inputs['release-asset-retention'] != '' }}
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           REPOSITORY: ${{ github.repository }}
           KEEP_RELEASES: ${{ inputs['release-asset-retention'] }}
-        run: forge-ci release asset-retention --keep "${KEEP_RELEASES}" --dry-run=false
-      - name: Upload release artifacts summary
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: release-artifacts-${{ github.run_id }}
-          path: |
-            .forge-ci/release-assembly.json
-            release-files/
-            ReleasenotesTmp
-            release-notes.md
-          retention-days: "30"
-          if-no-files-found: ignore
-      - name: Cleanup GPG key
-        if: always()
-        env:
-          GPG_FINGERPRINT: ${{ steps.import-gpg.outputs.fingerprint }}
-        run: forge-ci release gpg cleanup
+        run: forge-ci release asset-retention --keep "$KEEP_RELEASES" --dry-run=false

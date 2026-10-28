@@ -358,7 +358,7 @@ func loadLineageWorkflows(t *testing.T) map[string]lineageWorkflow {
 			continue
 		}
 
-		body, readErr := os.ReadFile(filepath.Join(dir, entry.Name())) //nolint:gosec // repository workflow fixture.
+		body, readErr := os.ReadFile(filepath.Join(dir, entry.Name()))
 		if readErr != nil {
 			t.Fatalf("read %s: %v", entry.Name(), readErr)
 		}

@@ -17,7 +17,7 @@ import (
 
 // notRunnerVariables are GITHUB_-prefixed names a workflow may set: a secret,
 // and a name GitHub does not define.
-var notRunnerVariables = map[string]bool{"GITHUB_TOKEN": true, "GITHUB_REPO": true} //nolint:gochecknoglobals // read-only table.
+var notRunnerVariables = map[string]bool{"GITHUB_TOKEN": true, "GITHUB_REPO": true}
 
 // Actions ignores a workflow's value for a GITHUB_* variable the runner sets.
 // The release orchestrator passed the derived tag as GITHUB_REF_NAME; the
@@ -37,7 +37,7 @@ func TestWorkflowsSetNoRunnerOwnedVariable(t *testing.T) {
 			continue
 		}
 
-		body, err := os.ReadFile(filepath.Join(dir, entry.Name())) //nolint:gosec // repository contract fixture.
+		body, err := os.ReadFile(filepath.Join(dir, entry.Name()))
 		require.NoError(t, err)
 
 		var workflow struct {

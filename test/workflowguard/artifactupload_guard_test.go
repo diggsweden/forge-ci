@@ -36,7 +36,7 @@ func TestUploadArtifactPathsAreNarrow(t *testing.T) {
 			continue
 		}
 
-		body, readErr := os.ReadFile(filepath.Join(dir, entry.Name())) //nolint:gosec // workflow files under repo root.
+		body, readErr := os.ReadFile(filepath.Join(dir, entry.Name()))
 		require.NoErrorf(t, readErr, "read %s", entry.Name())
 
 		audited++
@@ -272,8 +272,8 @@ func isWorkspaceWideUploadPath(candidate string) bool {
 		return false
 	}
 
-	if strings.HasPrefix(candidate, "!") {
-		candidate = strings.TrimPrefix(candidate, "!")
+	if after, ok := strings.CutPrefix(candidate, "!"); ok {
+		candidate = after
 		if candidate == "" || strings.HasPrefix(candidate, "!") {
 			return true
 		}
@@ -293,8 +293,8 @@ func isWorkspaceWideUploadPath(candidate string) bool {
 		return true
 	}
 
-	segments := strings.Split(strings.TrimPrefix(cleaned, "/"), "/")
-	for _, segment := range segments {
+	segments := strings.SplitSeq(strings.TrimPrefix(cleaned, "/"), "/")
+	for segment := range segments {
 		if strings.Trim(segment, "*?") != "" {
 			return false
 		}

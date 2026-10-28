@@ -60,9 +60,10 @@ on:
         default: ".forge-ci/artifacts.yml"
         type: string
       # === SHARED CONFIGURATION ===
-      release-type:
-        description: "Release type override. Production releases are stable-only; omit this or set stable. Prerelease request tags are rejected before planning."
+      release-policy:
+        description: "Accepted signed request versions: stable or stable-prerelease. Classification comes from the version tag."
         required: false
+        default: "stable"
         type: string
       branch:
         description: "Explicit branch or ref to prepare and release"
@@ -400,8 +401,8 @@ jobs:
         # owns the parsing; bash never strips refs.
         env:
           RELEASE_CONTEXT_REQUIRE_REQUEST: "true"
-          RELEASE_CONTEXT_REQUIRE_STABLE: "true"
-        run: forge-ci version derive-release
+          RELEASE_POLICY: ${{ inputs['release-policy'] }}
+        run: forge-ci version derive-release --release-policy "$RELEASE_POLICY"
       - name: Parse artifacts.yml
         id: parse
         run: forge-ci config parse-artifacts
@@ -415,7 +416,7 @@ jobs:
           # Explicit workflow-call inputs.
           BRANCH: ${{ inputs.branch }}
           FILE_PATTERN: ${{ inputs['file-pattern'] }}
-          RELEASE_TYPE: ${{ inputs['release-type'] }}
+          RELEASE_POLICY: ${{ inputs['release-policy'] }}
           RELEASE_PUBLISHER: ${{ inputs['release-publisher'] }}
           RELEASE_REQUIRE_ALLOWLISTED_SIGNER: ${{ inputs['release.requireallowlistedsigner'] }}
           RELEASE_DRAFT: ${{ inputs['release.draft'] }}
@@ -432,7 +433,7 @@ jobs:
           # which saw release-request/vX.Y.Z and planned a draft that was not
           # the latest release.
           TAG_NAME: ${{ steps.relctx.outputs.release-tag }}
-        run: forge-ci plan release
+        run: forge-ci plan release --release-policy "$RELEASE_POLICY"
   # ===== Stage 1: Validation =====
   validate-prerequisites:
     name: "Check: release request"
@@ -480,6 +481,7 @@ jobs:
       RELEASE_SSH_SIGNING_KEY: ${{ secrets.RELEASE_SSH_SIGNING_KEY }}
     uses: ./.github/workflows/release-prepare-stage.yml
     with:
+      release-policy: ${{ inputs['release-policy'] }}
       branch: ${{ inputs.branch }}
       authorized-source-sha: ${{ github.sha }}
       existing-release-sha: ${{ needs.validate-prerequisites.outputs.existing-release-sha }}
@@ -516,6 +518,7 @@ jobs:
         # ambient forge credential, so without it a private repository's
         # ls-remote asks for a username and fails. No write token is needed.
         env:
+          RELEASE_POLICY: ${{ inputs['release-policy'] }}
           RELEASE_SHA: ${{ needs.execute-prepare-stage.outputs.release-sha }}
           TAG_NAME: ${{ needs.parse-config.outputs.release-tag }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -593,6 +596,7 @@ jobs:
       FORGE_CI_BUILD_SECRETS_JSON: ${{ secrets.FORGE_CI_BUILD_SECRETS_JSON }}
     uses: ./.github/workflows/release-publish-stage.yml
     with:
+      release-policy: ${{ inputs['release-policy'] }}
       branch: ${{ needs.execute-prepare-stage.outputs.release-sha }}
       release-tag: ${{ needs.parse-config.outputs.release-tag }}
       release-sha: ${{ needs.execute-prepare-stage.outputs.release-sha }}
@@ -624,7 +628,7 @@ jobs:
   promote-dev:
     name: "Publish: images to dev"
     needs: [parse-config, execute-publish-stage]
-    if: ${{ !failure() && !cancelled() && fromJson(needs.parse-config.outputs['publish-stage-plan-json']).targets.containers.runs }}
+    if: ${{ !failure() && !cancelled() && !fromJson(needs.parse-config.outputs['release-plan-json']).policy.prerelease && fromJson(needs.parse-config.outputs['publish-stage-plan-json']).targets.containers.runs }}
     permissions:
       actions: read
       contents: read
@@ -637,7 +641,7 @@ jobs:
   promote-staging:
     name: "Publish: images to staging"
     needs: [parse-config, execute-publish-stage, promote-dev]
-    if: ${{ !failure() && !cancelled() && fromJson(needs.parse-config.outputs['publish-stage-plan-json']).targets.containers.runs }}
+    if: ${{ !failure() && !cancelled() && !fromJson(needs.parse-config.outputs['release-plan-json']).policy.prerelease && fromJson(needs.parse-config.outputs['publish-stage-plan-json']).targets.containers.runs }}
     permissions:
       actions: read
       contents: read
@@ -651,7 +655,7 @@ jobs:
   promote-release:
     name: "Publish: images to release"
     needs: [parse-config, execute-publish-stage, promote-staging]
-    if: ${{ !failure() && !cancelled() && fromJson(needs.parse-config.outputs['publish-stage-plan-json']).targets.containers.runs }}
+    if: ${{ !failure() && !cancelled() && !fromJson(needs.parse-config.outputs['release-plan-json']).policy.prerelease && fromJson(needs.parse-config.outputs['publish-stage-plan-json']).targets.containers.runs }}
     permissions:
       actions: read
       contents: read
@@ -678,7 +682,7 @@ jobs:
     if: ${{ fromJson(needs.parse-config.outputs['release-plan-json']).policy.create_release }}
     permissions:
       actions: read
-      contents: write
+      contents: read
       packages: read
       id-token: write
     secrets:
@@ -689,6 +693,7 @@ jobs:
       RELEASE_COSIGN_PASSPHRASE: ${{ secrets.RELEASE_COSIGN_PASSPHRASE }}
     uses: ./.github/workflows/release-create-github.yml
     with:
+      release-policy: ${{ inputs['release-policy'] }}
       release-name: "${{ needs.parse-config.outputs.release-tag }}"
       checkout-ref: ${{ needs.execute-prepare-stage.outputs.release-sha }}
       attach-artifacts: ${{ inputs['release.attachartifacts'] }}

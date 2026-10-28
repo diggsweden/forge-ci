@@ -34,7 +34,7 @@ func TestExampleReleaseWorkflowsDoNotGrantGitHubAttestations(t *testing.T) {
 
 		count++
 
-		body, readErr := os.ReadFile(path) //nolint:gosec // repository fixture.
+		body, readErr := os.ReadFile(path)
 		if readErr != nil {
 			return readErr
 		}

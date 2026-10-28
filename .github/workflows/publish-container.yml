@@ -640,7 +640,7 @@ jobs:
         # Password rides REGISTRY_PASSWORD (a secret), never argv.
         env:
           CONTAINER_REGISTRY: ${{ inputs.registry }}
-          REGISTRY_USERNAME: ${{ inputs['registry-username'] || github.actor }}
+          REGISTRY_USER: ${{ inputs['registry-username'] || github.actor }}
           REGISTRY_PASSWORD: ${{ inputs['use-ci-token'] && secrets.GITHUB_TOKEN || secrets['registry-password'] }}
         run: forge-ci container login --auth-file "${REGISTRY_AUTH_FILE:-${DOCKER_CONFIG:-${HOME:?}/.docker}/config.json}"
       # Unpacks the FORGE_CI_BUILD_SECRETS_JSON envelope into per-secret
@@ -917,7 +917,7 @@ jobs:
         id: registry-login
         env:
           CONTAINER_REGISTRY: ${{ inputs.registry }}
-          REGISTRY_USERNAME: ${{ inputs['registry-username'] || github.actor }}
+          REGISTRY_USER: ${{ inputs['registry-username'] || github.actor }}
           REGISTRY_PASSWORD: ${{ inputs['use-ci-token'] && secrets.GITHUB_TOKEN || secrets['registry-password'] }}
         run: forge-ci container login --auth-file "${REGISTRY_AUTH_FILE:-${DOCKER_CONFIG:-${HOME:?}/.docker}/config.json}"
       - name: Verify all layouts and publish their exact digests
@@ -972,7 +972,7 @@ jobs:
       - name: Log in to Container Registry
         env:
           CONTAINER_REGISTRY: ${{ inputs.registry }}
-          REGISTRY_USERNAME: ${{ inputs['registry-username'] || github.actor }}
+          REGISTRY_USER: ${{ inputs['registry-username'] || github.actor }}
           REGISTRY_PASSWORD: ${{ inputs['use-ci-token'] && secrets.GITHUB_TOKEN || secrets['registry-password'] }}
         run: forge-ci container login
       - name: Export published digest
@@ -1111,7 +1111,7 @@ jobs:
       - name: Log in to Container Registry
         env:
           CONTAINER_REGISTRY: ${{ inputs.registry }}
-          REGISTRY_USERNAME: ${{ inputs['registry-username'] || github.actor }}
+          REGISTRY_USER: ${{ inputs['registry-username'] || github.actor }}
           REGISTRY_PASSWORD: ${{ inputs['use-ci-token'] && secrets.GITHUB_TOKEN || secrets['registry-password'] }}
         run: forge-ci container login
       - name: Create manifest list and push

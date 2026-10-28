@@ -54,7 +54,7 @@ func TestExampleCallersGrantWhatTheCalledWorkflowsAsk(t *testing.T) {
 			return walkErr
 		}
 
-		body, err := os.ReadFile(path) //nolint:gosec // repository fixture.
+		body, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}
@@ -130,7 +130,7 @@ func loadPermissionWorkflows(t *testing.T, dir string) map[string]permissionCall
 			continue
 		}
 
-		body, err := os.ReadFile(filepath.Join(dir, entry.Name())) //nolint:gosec // repository workflow fixture.
+		body, err := os.ReadFile(filepath.Join(dir, entry.Name()))
 		require.NoError(t, err)
 
 		var workflow permissionCaller

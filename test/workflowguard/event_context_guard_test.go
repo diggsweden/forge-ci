@@ -22,8 +22,6 @@ import (
 // that a credential cannot be disclosed. Record why the value is public or why
 // its limited-purpose use is permitted in PR jobs. Unclassified secret names
 // remain privileged.
-//
-//nolint:gochecknoglobals // policy constant — read-only set.
 var benignSecrets = map[string]string{
 	"CODE_SCANNING_TOKEN": "SARIF upload from PR quality runs; those workflows are " +
 		"triggered by pull_request by design, which is exactly what the guard refuses. " +
@@ -39,8 +37,6 @@ var benignSecrets = map[string]string{
 //
 // Direct privileged use is forbidden by the parsed guard even on this list.
 // A workflow that gains its own guarded secret-consuming job must leave the list.
-//
-//nolint:gochecknoglobals // policy constant — read-only set.
 var forwarderWorkflows = map[string]bool{
 	"release-build-stage.yml":            true,
 	"release-snapshot-build-stage.yml":   true,
@@ -88,7 +84,7 @@ func TestPrivilegedWorkflowsHaveEventContextGuard(t *testing.T) {
 			continue
 		}
 
-		body, err := os.ReadFile(filepath.Join(dir, entry.Name())) //nolint:gosec // workflow files under repo root.
+		body, err := os.ReadFile(filepath.Join(dir, entry.Name()))
 		if err != nil {
 			t.Fatalf("read %s: %v", entry.Name(), err)
 		}
@@ -133,10 +129,8 @@ func hasEventContextGuard(body []byte) bool {
 	}
 
 	for _, job := range workflow.Jobs {
-		for _, step := range job.Steps {
-			if canonicalEventGuard(step) {
-				return true
-			}
+		if slices.ContainsFunc(job.Steps, canonicalEventGuard) {
+			return true
 		}
 	}
 
@@ -146,7 +140,7 @@ func hasEventContextGuard(body []byte) bool {
 func TestSLSAAttestorGuardsBeforeSecrets(t *testing.T) {
 	t.Parallel()
 
-	body, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".github", "workflows", "slsa-attestor.yml")) //nolint:gosec // repository fixture.
+	body, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".github", "workflows", "slsa-attestor.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}

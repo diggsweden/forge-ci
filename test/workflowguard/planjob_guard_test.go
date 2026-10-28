@@ -191,7 +191,7 @@ func auditPlanJobs(t *testing.T, dir string, tree *urfavecli.Command, scoped map
 			continue
 		}
 
-		body, err := os.ReadFile(filepath.Join(dir, entry.Name())) //nolint:gosec // walked under the workflows dir.
+		body, err := os.ReadFile(filepath.Join(dir, entry.Name()))
 		require.NoErrorf(t, err, "read %s", entry.Name())
 
 		auditWorkflow(t, entry.Name(), body, tree, scoped, &audit)
@@ -434,8 +434,8 @@ func isAssignment(token string) bool {
 func stripShellComment(line string) string {
 	quote := byte(0)
 
-	for i := range len(line) {
-		char := line[i]
+	for index := range len(line) {
+		char := line[index]
 		switch {
 		case quote != 0:
 			if char == quote {
@@ -443,8 +443,8 @@ func stripShellComment(line string) string {
 			}
 		case char == '\'' || char == '"':
 			quote = char
-		case char == '#' && (i == 0 || line[i-1] == ' ' || line[i-1] == '\t'):
-			return line[:i]
+		case char == '#' && (index == 0 || line[index-1] == ' ' || line[index-1] == '\t'):
+			return line[:index]
 		}
 	}
 
@@ -503,14 +503,14 @@ func binaryVariables(nodes ...*yaml.Node) map[string]bool {
 			continue
 		}
 
-		for i := 0; i+1 < len(env.Content); i += 2 {
-			value := env.Content[i+1]
+		for index := 0; index+1 < len(env.Content); index += 2 {
+			value := env.Content[index+1]
 			if value.Kind != yaml.ScalarNode {
 				continue
 			}
 
 			if trimmed := strings.Trim(value.Value, `"'`); trimmed == binaryName || strings.HasSuffix(trimmed, "/"+binaryName) {
-				vars[env.Content[i].Value] = true
+				vars[env.Content[index].Value] = true
 			}
 		}
 	}

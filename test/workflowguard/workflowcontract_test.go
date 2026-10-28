@@ -73,7 +73,7 @@ func TestMegaLinterImageFailsClosedUnlessDigestPinned(t *testing.T) {
 	root := reporoot.Path(t)
 	workflowPath := filepath.Join(root, ".github", "workflows", "lint-megalinter.yml")
 
-	body, readErr := os.ReadFile(workflowPath) //nolint:gosec // repository fixture.
+	body, readErr := os.ReadFile(workflowPath)
 	if readErr != nil {
 		t.Fatal(readErr)
 	}
@@ -199,7 +199,7 @@ func TestMegaLinterImageFailsClosedUnlessDigestPinned(t *testing.T) {
 		".github/workflows/pullrequest-quality-stage.yml",
 		"templates/megalinter.yml",
 	} {
-		content, readErr := os.ReadFile(filepath.Join(root, relative)) //nolint:gosec // repository fixture.
+		content, readErr := os.ReadFile(filepath.Join(root, relative))
 		if readErr != nil {
 			t.Fatal(readErr)
 		}
@@ -209,7 +209,7 @@ func TestMegaLinterImageFailsClosedUnlessDigestPinned(t *testing.T) {
 		}
 	}
 
-	template, err := os.ReadFile(filepath.Join(root, "templates", "megalinter.yml")) //nolint:gosec // repository fixture.
+	template, err := os.ReadFile(filepath.Join(root, "templates", "megalinter.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +246,7 @@ func TestNanolinterImageDefaultsFollowTheFlavourResolver(t *testing.T) {
 		".github/workflows/lint-nanolinter.yml",
 		"templates/nanolinter.yml",
 	} {
-		content, err := os.ReadFile(filepath.Join(root, relative)) //nolint:gosec // repository fixture.
+		content, err := os.ReadFile(filepath.Join(root, relative))
 		require.NoError(t, err)
 
 		if !strings.Contains(string(content), `default: "`+coreImage+`"`) {
@@ -254,7 +254,7 @@ func TestNanolinterImageDefaultsFollowTheFlavourResolver(t *testing.T) {
 		}
 	}
 
-	quality, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "pullrequest-quality-stage.yml")) //nolint:gosec // repository fixture.
+	quality, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "pullrequest-quality-stage.yml"))
 	require.NoError(t, err)
 
 	if !strings.Contains(string(quality), "nanolinter-image: ${{ fromJson(inputs['pr-plan-json']).policy.nanolinter_image }}") {
@@ -265,7 +265,7 @@ func TestNanolinterImageDefaultsFollowTheFlavourResolver(t *testing.T) {
 func TestPublishContainerAlwaysRemovesMaterializedBuildSecrets(t *testing.T) {
 	t.Parallel()
 
-	body, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".github", "workflows", "publish-container.yml")) //nolint:gosec // repository fixture.
+	body, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".github", "workflows", "publish-container.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +286,7 @@ func TestPinnedCompanionSuiteUsesStrictBlackboxContract(t *testing.T) {
 	var sharedPin string
 
 	for _, workflow := range []string{"self-pullrequest.yml", "self-release.yml"} {
-		body, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".github", "workflows", workflow)) //nolint:gosec // repository fixture.
+		body, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".github", "workflows", workflow))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -439,7 +439,7 @@ func TestReleaseGateRunsTheStrictIntegrationTier(t *testing.T) {
 	load := func(name string) eventWorkflow {
 		t.Helper()
 
-		body, err := os.ReadFile(filepath.Join(root, ".github", "workflows", name)) //nolint:gosec // repository fixture.
+		body, err := os.ReadFile(filepath.Join(root, ".github", "workflows", name))
 		require.NoErrorf(t, err, "read %s", name)
 
 		var workflow eventWorkflow
@@ -470,7 +470,7 @@ func TestReleaseGateRunsTheStrictIntegrationTier(t *testing.T) {
 		t.Errorf("self-pullrequest.yml runs %q in %v; the contributor gate stays in the default profile", strictRecipe, gates)
 	}
 
-	justfile, err := os.ReadFile(filepath.Join(root, "justfile")) //nolint:gosec // repository fixture.
+	justfile, err := os.ReadFile(filepath.Join(root, "justfile"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -541,7 +541,7 @@ func jobNeeds(job eventJob) []string {
 func TestPromoteWorkflowResolvesDryRunAsBoolean(t *testing.T) {
 	t.Parallel()
 
-	body, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".github", "workflows", "promote-stage.yml")) //nolint:gosec // repository fixture.
+	body, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".github", "workflows", "promote-stage.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -578,16 +578,16 @@ func githubReleaseCallers(t *testing.T, root string) []string {
 
 	var examples, githubDirs []string
 
-	err := filepath.WalkDir(filepath.Join(root, "examples"), func(path string, d fs.DirEntry, walkErr error) error {
+	err := filepath.WalkDir(filepath.Join(root, "examples"), func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 
-		if d.IsDir() && d.Name() == "github" {
+		if entry.IsDir() && entry.Name() == "github" {
 			githubDirs = append(githubDirs, path)
 		}
 
-		if !d.IsDir() && d.Name() == "release-workflow.yml" {
+		if !entry.IsDir() && entry.Name() == "release-workflow.yml" {
 			if filepath.Base(filepath.Dir(path)) != "github" {
 				t.Errorf("%s is a GitHub release caller outside a github/ directory", path)
 			}
@@ -626,7 +626,7 @@ func TestProductionReleaseCeremonyUsesRequestThenFinalTag(t *testing.T) {
 
 	paths = append(paths, examples...)
 	for _, path := range paths {
-		body, readErr := os.ReadFile(path) //nolint:gosec // repository fixture.
+		body, readErr := os.ReadFile(path)
 		if readErr != nil {
 			t.Fatal(readErr)
 		}
@@ -636,7 +636,7 @@ func TestProductionReleaseCeremonyUsesRequestThenFinalTag(t *testing.T) {
 		}
 	}
 
-	orchestrator, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "release-orchestrator.yml")) //nolint:gosec // repository fixture.
+	orchestrator, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "release-orchestrator.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -657,7 +657,7 @@ func TestProductionReleaseCeremonyUsesRequestThenFinalTag(t *testing.T) {
 		t.Fatal("release creation must check out the validated immutable release SHA")
 	}
 
-	runtimeWorkflow, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "self-runtime-container.yml")) //nolint:gosec // repository fixture.
+	runtimeWorkflow, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "self-runtime-container.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -700,7 +700,7 @@ func TestReleasePreparationSerializesBumpsAndTagsOnce(t *testing.T) {
 
 	root := reporoot.Path(t)
 
-	body, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "release-prepare-stage.yml")) //nolint:gosec // repository fixture.
+	body, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "release-prepare-stage.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -708,8 +708,8 @@ func TestReleasePreparationSerializesBumpsAndTagsOnce(t *testing.T) {
 	text := string(body)
 	require.Empty(t, preparationViolations(body))
 
-	if got := strings.Count(text, "run: forge-ci version bump-plan"); got != 1 {
-		t.Fatalf("serialized complete-plan bump steps = %d, want exactly 1", got)
+	if got := strings.Count(text, "run: forge-ci version bump-plan"); got != 2 {
+		t.Fatalf("complete-plan steps = %d, want one key-free preparation and one verified application", got)
 	}
 
 	if got := strings.Count(text, "run: forge-ci version commit-push"); got != 1 {
@@ -733,7 +733,7 @@ func TestReleasePreparationSerializesBumpsAndTagsOnce(t *testing.T) {
 	}
 
 	for _, relative := range []string{"docs/artifacts-reference.md", "examples/monorepo/README.md"} {
-		doc, readErr := os.ReadFile(filepath.Join(root, relative)) //nolint:gosec // repository fixture.
+		doc, readErr := os.ReadFile(filepath.Join(root, relative))
 		if readErr != nil {
 			t.Fatal(readErr)
 		}
@@ -751,7 +751,7 @@ func TestReleaseRecoveryAndIdentityContracts(t *testing.T) {
 	readWorkflow := func(name string) string {
 		t.Helper()
 
-		body, err := os.ReadFile(filepath.Join(root, ".github", "workflows", name)) //nolint:gosec // repository fixture.
+		body, err := os.ReadFile(filepath.Join(root, ".github", "workflows", name))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -816,7 +816,7 @@ func TestReleaseRecoveryAndIdentityContracts(t *testing.T) {
 func TestRuntimeContainerfileExternalFromImagesAreDigestPinned(t *testing.T) {
 	t.Parallel()
 
-	body, err := os.ReadFile(filepath.Join(reporoot.Path(t), "containers", "runtime", "Containerfile")) //nolint:gosec // repository fixture.
+	body, err := os.ReadFile(filepath.Join(reporoot.Path(t), "containers", "runtime", "Containerfile"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -915,7 +915,7 @@ func TestSelfGatesProveTheForgejoLayerBinary(t *testing.T) {
 	load := func(name string) eventWorkflow {
 		t.Helper()
 
-		body, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".github", "workflows", name)) //nolint:gosec // repository fixture.
+		body, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".github", "workflows", name))
 		require.NoErrorf(t, err, "read %s", name)
 
 		var workflow eventWorkflow

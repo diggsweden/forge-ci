@@ -52,7 +52,7 @@ func TestArtifactDownloadJobsDeclareActionsRead(t *testing.T) {
 			continue
 		}
 
-		body, readErr := os.ReadFile(filepath.Join(dir, entry.Name())) //nolint:gosec // repository workflow fixture.
+		body, readErr := os.ReadFile(filepath.Join(dir, entry.Name()))
 		if readErr != nil {
 			t.Fatalf("read %s: %v", entry.Name(), readErr)
 		}
@@ -158,7 +158,6 @@ func TestStepLeavesTheRunForAnArtifact_JudgesTheReachNotTheSpelling(t *testing.T
 		},
 		{
 			name: "download-artifact with an explicit token", want: true,
-			//nolint:gosec // G101: a workflow expression in a fixture, not a credential.
 			step: artifactDownloadStep{Uses: action, With: map[string]string{"name": "dist", "github-token": "${{ github.token }}"}},
 			why:  "a supplied token means the REST API too",
 		},
@@ -214,7 +213,7 @@ func TestArtifactDownloadGuard_SeesBothKindsOfDownloadInTheTree(t *testing.T) {
 			continue
 		}
 
-		body, readErr := os.ReadFile(filepath.Join(dir, entry.Name())) //nolint:gosec // repository workflow fixture.
+		body, readErr := os.ReadFile(filepath.Join(dir, entry.Name()))
 		if readErr != nil {
 			t.Fatalf("read %s: %v", entry.Name(), readErr)
 		}
@@ -322,13 +321,7 @@ func artifactDownloadPermissionViolations(workflows map[string]artifactDownloadW
 // miss the day one of them gains a `run-id`. Hence: see every step, and judge
 // it by whether it leaves the run.
 func jobDownloadsArtifact(job artifactDownloadJob) bool {
-	for _, step := range job.Steps {
-		if stepLeavesTheRunForAnArtifact(step) {
-			return true
-		}
-	}
-
-	return false
+	return slices.ContainsFunc(job.Steps, stepLeavesTheRunForAnArtifact)
 }
 
 func stepLeavesTheRunForAnArtifact(step artifactDownloadStep) bool {

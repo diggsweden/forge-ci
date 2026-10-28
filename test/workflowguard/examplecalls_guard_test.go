@@ -49,7 +49,7 @@ func TestExampleCallsMatchTheCalledWorkflows(t *testing.T) {
 			return walkErr
 		}
 
-		body, err := os.ReadFile(path) //nolint:gosec // repository example fixture.
+		body, err := os.ReadFile(path)
 		require.NoError(t, err)
 
 		var example struct {
@@ -71,7 +71,7 @@ func TestExampleCallsMatchTheCalledWorkflows(t *testing.T) {
 
 			contract, known := contracts[match[1]]
 			if !known {
-				called, readErr := os.ReadFile(filepath.Join(root, ".github", "workflows", match[1])) //nolint:gosec // repository workflow.
+				called, readErr := os.ReadFile(filepath.Join(root, ".github", "workflows", match[1]))
 				require.NoError(t, readErr, "%s job %q calls a workflow this repository does not have", path, jobName)
 				require.NoError(t, yaml.Unmarshal(called, &contract), match[1])
 				contracts[match[1]] = contract

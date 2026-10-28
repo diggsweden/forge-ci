@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+const preparedBumpPlanRun = `forge-ci version bump-plan --patch "$RUNNER_TEMP/prepared-version-bumps/native.patch" --patch-sha256 "$PATCH_DIGEST"`
+
 func preparationViolations(body []byte) []string {
 	doc, err := effectiveWorkflow(body)
 	if err != nil {
@@ -21,12 +23,28 @@ func preparationViolations(body []byte) []string {
 	}
 
 	needs := mappingChild(job, "needs")
-	if needs == nil || needs.Kind != yaml.SequenceNode || len(needs.Content) != 2 || needs.Content[0].Value != "generate-full-changelog" || needs.Content[1].Value != "generate-minimal-changelog" {
-		return []string{"preparation needs both changelog jobs"}
+	if needs == nil || needs.Kind != yaml.SequenceNode || len(needs.Content) != 3 || needs.Content[0].Value != "generate-full-changelog" || needs.Content[1].Value != "generate-minimal-changelog" || needs.Content[2].Value != "prepare-version-files" {
+		return []string{"preparation needs both changelog jobs and the key-free version job"}
 	}
 
-	if scalarChild(job, "if") != "${{ !cancelled() && needs.generate-full-changelog.result != 'failure' && needs.generate-minimal-changelog.result != 'failure' }}" {
+	if scalarChild(job, "if") != "${{ !cancelled() && needs.generate-full-changelog.result != 'failure' && needs.generate-minimal-changelog.result != 'failure' && needs.prepare-version-files.result != 'failure' && needs.prepare-version-files.result != 'cancelled' }}" {
 		return []string{"preparation job failure condition changed"}
+	}
+
+	preparation := mappingChild(mappingChild(doc, "jobs"), "prepare-version-files")
+	prepareSteps := mappingChild(preparation, "steps")
+	nativeRuns := 0
+
+	if prepareSteps != nil {
+		for _, step := range prepareSteps.Content {
+			if scalarChild(step, "run") == "forge-ci version bump-plan" {
+				nativeRuns++
+			}
+		}
+	}
+
+	if nativeRuns != 1 {
+		return []string{"native version plan must run once in the key-free job"}
 	}
 
 	steps := mappingChild(job, "steps")
@@ -37,7 +55,7 @@ func preparationViolations(body []byte) []string {
 	const condition = "${{ inputs['existing-release-sha'] == '' && fromJson(inputs['prepare-stage-plan-json']).targets.version_bump.runs }}"
 
 	// The push target is passed explicitly: the flag has no environment source.
-	wanted := []string{"forge-ci version bump-plan", `forge-ci version commit-push --branch "$BRANCH"`, "forge-ci version tag-release"}
+	wanted := []string{preparedBumpPlanRun, `forge-ci version commit-push --branch "$BRANCH"`, "forge-ci version tag-release"}
 
 	var (
 		got        []string

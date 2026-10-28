@@ -154,7 +154,7 @@ func collectAttestInvocations(t *testing.T) []attestInvocation {
 			continue
 		}
 
-		body, readErr := os.ReadFile(filepath.Join(dir, entry.Name())) //nolint:gosec // repository workflow fixture.
+		body, readErr := os.ReadFile(filepath.Join(dir, entry.Name()))
 		if readErr != nil {
 			t.Fatalf("read %s: %v", entry.Name(), readErr)
 		}
@@ -262,7 +262,7 @@ func workflowInputExpression(envVar string, env *yaml.Node) string {
 func workflowCallInput(t *testing.T, workflow, input string) *yaml.Node {
 	t.Helper()
 
-	body, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".github", "workflows", workflow)) //nolint:gosec // repository workflow fixture.
+	body, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".github", "workflows", workflow))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -191,7 +191,7 @@ jobs:
       - name: Log in to Container Registry
         env:
           CONTAINER_REGISTRY: ${{ inputs.registry }}
-          REGISTRY_USERNAME: ${{ inputs['registry-username'] || github.actor }}
+          REGISTRY_USER: ${{ inputs['registry-username'] || github.actor }}
           REGISTRY_PASSWORD: ${{ inputs['use-ci-token'] && secrets.GITHUB_TOKEN || secrets['registry-password'] }}
         run: forge-ci container login
       # Cross-registry (sovereignty) promotion only: a second login so cosign
@@ -203,7 +203,7 @@ jobs:
         if: ${{ inputs['stage-repo'] != '' && inputs['stage-registry'] != '' }}
         env:
           CONTAINER_REGISTRY: ${{ inputs['stage-registry'] }}
-          REGISTRY_USERNAME: ${{ inputs['stage-registry-username'] }}
+          REGISTRY_USER: ${{ inputs['stage-registry-username'] }}
           REGISTRY_PASSWORD: ${{ secrets['stage-registry-password'] }}
         run: forge-ci container login
       - name: Install cosign (cross-registry copy)

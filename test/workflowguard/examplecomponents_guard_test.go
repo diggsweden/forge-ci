@@ -45,24 +45,24 @@ func TestExampleIncludesMatchTheComponentSpecs(t *testing.T) {
 	specs := map[string]componentSpec{}
 	pipelines, includes := 0, 0
 
-	err := filepath.WalkDir(filepath.Join(root, "examples"), func(path string, d fs.DirEntry, walkErr error) error {
+	err := filepath.WalkDir(filepath.Join(root, "examples"), func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 
-		if d.IsDir() && d.Name() == "gitlab" {
+		if entry.IsDir() && entry.Name() == "gitlab" {
 			if _, statErr := os.Stat(filepath.Join(path, ".gitlab-ci.yml")); statErr != nil {
 				t.Errorf("%s has no .gitlab-ci.yml: %v", path, statErr)
 			}
 		}
 
-		if d.IsDir() || d.Name() != ".gitlab-ci.yml" {
+		if entry.IsDir() || entry.Name() != ".gitlab-ci.yml" {
 			return nil
 		}
 
 		pipelines++
 
-		body, err := os.ReadFile(path) //nolint:gosec // repository example fixture.
+		body, err := os.ReadFile(path)
 		require.NoError(t, err)
 
 		var pipeline struct {
@@ -102,7 +102,7 @@ func TestExampleIncludesMatchTheComponentSpecs(t *testing.T) {
 func loadComponentSpec(t *testing.T, path string) componentSpec {
 	t.Helper()
 
-	body, err := os.ReadFile(path) //nolint:gosec // repository component.
+	body, err := os.ReadFile(path)
 	require.NoError(t, err, "an example includes a component this repository does not have")
 
 	// The spec is the first YAML document of a component; the jobs follow it.

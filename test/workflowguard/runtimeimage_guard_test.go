@@ -80,7 +80,7 @@ func TestRuntimeImageTagsShareOneVersion(t *testing.T) {
 // "rel:line" under its tag, skipping the local-only ":verify" tag in
 // allowlisted files.
 func collectRuntimeTagSites(rel, content string, verifyTagAllowedFiles map[string]bool, sites map[string][]string) {
-	for i, line := range strings.Split(content, "\n") {
+	for index, line := range strings.Split(content, "\n") {
 		for _, tag := range runtimetags.Tags(line) {
 			if tag == "verify" && verifyTagAllowedFiles[rel] {
 				continue
@@ -90,7 +90,7 @@ func collectRuntimeTagSites(rel, content string, verifyTagAllowedFiles map[strin
 				continue
 			}
 
-			sites[tag] = append(sites[tag], rel+":"+strconv.Itoa(i+1))
+			sites[tag] = append(sites[tag], rel+":"+strconv.Itoa(index+1))
 		}
 	}
 }
@@ -367,14 +367,14 @@ func collectReleaseRevisions(t *testing.T, rel string, content []byte, refs map[
 		return
 	}
 
-	for i := 0; i+1 < len(inputs.Content); i += 2 {
-		value := mappingChild(inputs.Content[i+1], "default")
+	for index := 0; index+1 < len(inputs.Content); index += 2 {
+		value := mappingChild(inputs.Content[index+1], "default")
 		if value == nil || value.Kind != yaml.ScalarNode {
 			continue
 		}
 
 		site := rel + ":" + strconv.Itoa(value.Line)
-		if inputs.Content[i].Value == binaryRefInput {
+		if inputs.Content[index].Value == binaryRefInput {
 			refs[value.Value] = append(refs[value.Value], site)
 
 			continue

@@ -5,9 +5,10 @@ package workflowguard
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"gopkg.in/yaml.v3"
-	"strings"
 )
 
 // Decode through values so yaml.v3 resolves aliases and merge keys; subsequent

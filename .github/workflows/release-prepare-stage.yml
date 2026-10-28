@@ -5,6 +5,10 @@ name: Release Prepare Stage
 on:
   workflow_call: # yamllint disable-line rule:truthy
     inputs:
+      release-policy:
+        description: "Accepted release versions: stable or stable-prerelease"
+        type: string
+        default: "stable"
       branch:
         required: true
         type: string
@@ -103,6 +107,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/generate-changelog.yml
     with:
+      release-policy: ${{ inputs['release-policy'] }}
       branch: ${{ inputs['authorized-source-sha'] }}
       runtime-image: ${{ inputs['runtime-image'] }}
       upload-as-artifact: true
@@ -117,6 +122,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/generate-changelog.yml
     with:
+      release-policy: ${{ inputs['release-policy'] }}
       branch: ${{ inputs['authorized-source-sha'] }}
       runtime-image: ${{ inputs['runtime-image'] }}
       upload-as-artifact: true
@@ -124,10 +130,81 @@ jobs:
       git-cliff-args: "--latest --strip header"
       output-file: "minimal-changelog.txt"
       artifact-name: "minimal-changelog"
+  prepare-version-files:
+    name: "Prepare: version files without signing keys"
+    needs: [generate-full-changelog]
+    if: ${{ inputs['existing-release-sha'] == '' && fromJson(inputs['prepare-stage-plan-json']).targets.version_bump.runs }}
+    runs-on: ubuntu-26.04
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      patch-digest: ${{ steps.patch.outputs.digest }}
+    steps:
+      - name: Checkout immutable authorized source
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ inputs['authorized-source-sha'] }}
+          persist-credentials: false
+      - name: Checkout forge-ci bootstrap installers
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: ${{ vars.FORGE_CI_REPOSITORY || 'diggsweden/forge-ci' }}
+          ref: ${{ inputs['forge-ci-binary-ref'] }}
+          path: .github-shared
+          sparse-checkout: scripts/bootstrap
+          persist-credentials: false
+      - name: Install forge-ci binary
+        env:
+          FORGE_CI_BINARY_REF: ${{ inputs['forge-ci-binary-ref'] }}
+          FORGE_CI_REPOSITORY: ${{ vars.FORGE_CI_REPOSITORY || 'diggsweden/forge-ci' }}
+        run: bash .github-shared/scripts/bootstrap/install-forge-ci.sh "$FORGE_CI_BINARY_REF"
+      - name: Refuse PR-context trigger
+        run: forge-ci validate event-context
+      - name: Derive release context
+        id: relctx
+        env:
+          RELEASE_CONTEXT_REQUIRE_REQUEST: "true"
+          RELEASE_POLICY: ${{ inputs['release-policy'] }}
+        run: forge-ci version derive-release --release-policy "$RELEASE_POLICY"
+      - name: Download Full Changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: full-changelog
+          ARTIFACT_DIR: .
+        run: forge-ci artifact download
+      - name: Prepare version files
+        env:
+          PREPARE_STAGE_PLAN_JSON: ${{ inputs['prepare-stage-plan-json'] }}
+          VERSION: ${{ steps.relctx.outputs.version }}
+          MAVEN_CLI_OPTS: "--batch-mode --no-transfer-progress --errors --fail-at-end -Dstyle.color=always"
+        run: forge-ci version bump-plan
+      - name: Upload native version changes
+        id: patch
+        run: |
+          set -euo pipefail
+          handoff="${RUNNER_TEMP:?}/prepared-version-bump"
+          mkdir -p "${handoff}"
+          git -c core.quotePath=true diff --binary --no-ext-diff --no-textconv --no-color --no-renames \
+            --src-prefix=a/ --dst-prefix=b/ -- \
+            ':(glob)**/pom.xml' ':(glob)**/package.json' ':(glob)**/package-lock.json' \
+            ':(glob)**/npm-shrinkwrap.json' ':(glob)**/Cargo.toml' ':(glob)**/Cargo.lock' >"${handoff}/native.patch"
+          digest=$(sha256sum "${handoff}/native.patch")
+          printf 'digest=%s\n' "${digest%% *}" >>"${GITHUB_OUTPUT:?}"
+      - name: Upload version patch artifact
+        # GitHub exposes the runtime upload token to actions, not run steps.
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: prepared-version-bumps
+          path: ${{ runner.temp }}/prepared-version-bump/native.patch
+          retention-days: "1"
+          if-no-files-found: error
   version-bump:
     name: "Prepare: version, release commit and tag"
-    needs: [generate-full-changelog, generate-minimal-changelog]
-    if: ${{ !cancelled() && needs.generate-full-changelog.result != 'failure' && needs.generate-minimal-changelog.result != 'failure' }}
+    env:
+      RELEASE_POLICY: ${{ inputs['release-policy'] }}
+    needs: [generate-full-changelog, generate-minimal-changelog, prepare-version-files]
+    if: ${{ !cancelled() && needs.generate-full-changelog.result != 'failure' && needs.generate-minimal-changelog.result != 'failure' && needs.prepare-version-files.result != 'failure' && needs.prepare-version-files.result != 'cancelled' }}
     runs-on: ubuntu-26.04
     permissions:
       actions: read
@@ -160,8 +237,7 @@ jobs:
         id: relctx
         env:
           RELEASE_CONTEXT_REQUIRE_REQUEST: "true"
-          RELEASE_CONTEXT_REQUIRE_STABLE: "true"
-        run: forge-ci version derive-release
+        run: forge-ci version derive-release --release-policy "$RELEASE_POLICY"
       - name: Revalidate exact-tag recovery lease
         if: ${{ inputs['existing-release-sha'] != '' }}
         env:
@@ -192,11 +268,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ARTIFACT_NAME: full-changelog
-          ARTIFACT_DIR: .
+          ARTIFACT_DIR: ${{ runner.temp }}/version-full-changelog
         run: forge-ci artifact download
       - name: Verify Full Changelog
         if: ${{ inputs['existing-release-sha'] == '' && fromJson(inputs['prepare-stage-plan-json']).targets.version_bump.runs }}
-        run: forge-ci validate changelog --path CHANGELOG.md --required
+        run: |
+          set -euo pipefail
+          source_file="${RUNNER_TEMP:?}/version-full-changelog/CHANGELOG.md"
+          test -f "${source_file}" && test ! -L "${source_file}"
+          cp --remove-destination -- "${source_file}" CHANGELOG.md
+          forge-ci validate changelog --path CHANGELOG.md --required
+      - name: Download prepared version changes
+        if: ${{ inputs['existing-release-sha'] == '' && fromJson(inputs['prepare-stage-plan-json']).targets.version_bump.runs }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: forge-ci artifact download --name prepared-version-bumps --dir "$RUNNER_TEMP/prepared-version-bumps"
+      - name: Require a regular version patch
+        if: ${{ inputs['existing-release-sha'] == '' && fromJson(inputs['prepare-stage-plan-json']).targets.version_bump.runs }}
+        run: test -f "$RUNNER_TEMP/prepared-version-bumps/native.patch" && test ! -L "$RUNNER_TEMP/prepared-version-bumps/native.patch"
       - name: Apply complete version-bump plan
         id: bump-plan
         if: ${{ inputs['existing-release-sha'] == '' && fromJson(inputs['prepare-stage-plan-json']).targets.version_bump.runs }}
@@ -204,18 +293,21 @@ jobs:
           PREPARE_STAGE_PLAN_JSON: ${{ inputs['prepare-stage-plan-json'] }}
           VERSION: ${{ steps.relctx.outputs.version }}
           MAVEN_CLI_OPTS: "--batch-mode --no-transfer-progress --errors --fail-at-end -Dstyle.color=always"
-        run: forge-ci version bump-plan
+          PATCH_DIGEST: ${{ needs.prepare-version-files.outputs.patch-digest }}
+        # Native tools ran only in prepare-version-files. The engine validates
+        # their patch; other ecosystems use its existing pure text writers.
+        run: forge-ci version bump-plan --patch "$RUNNER_TEMP/prepared-version-bumps/native.patch" --patch-sha256 "$PATCH_DIGEST"
       - name: Download Minimal Changelog
         if: ${{ inputs['existing-release-sha'] == '' && fromJson(inputs['prepare-stage-plan-json']).targets.version_bump.runs }}
         env:
           GH_TOKEN: ${{ github.token }}
           ARTIFACT_NAME: minimal-changelog
-          ARTIFACT_DIR: .
+          ARTIFACT_DIR: ${{ runner.temp }}/version-minimal-changelog
         run: forge-ci artifact download
       - name: Read Minimal Changelog
         id: minimal-changelog
         if: ${{ inputs['existing-release-sha'] == '' && fromJson(inputs['prepare-stage-plan-json']).targets.version_bump.runs }}
-        run: forge-ci validate changelog --path minimal-changelog.txt
+        run: forge-ci validate changelog --path "$RUNNER_TEMP/version-minimal-changelog/minimal-changelog.txt"
       - name: Commit complete release preparation
         if: ${{ inputs['existing-release-sha'] == '' && fromJson(inputs['prepare-stage-plan-json']).targets.version_bump.runs }}
         env:

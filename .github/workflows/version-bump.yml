@@ -114,7 +114,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/generate-changelog.yml
     with:
-      branch: ${{ inputs.branch }}
+      branch: ${{ github.sha }}
       runtime-image: ${{ inputs['runtime-image'] }}
       upload-as-artifact: true
       changelog-config: "/opt/forge-ci/templates/gitcliff/keepachangelog.toml"
@@ -128,16 +128,69 @@ jobs:
       contents: read
     uses: ./.github/workflows/generate-changelog.yml
     with:
-      branch: ${{ inputs.branch }}
+      branch: ${{ github.sha }}
       runtime-image: ${{ inputs['runtime-image'] }}
       upload-as-artifact: true
       changelog-config: "/opt/forge-ci/templates/gitcliff/minimal.toml"
       git-cliff-args: "--latest --strip header"
       output-file: "minimal-changelog.txt"
       artifact-name: "minimal-changelog"
+  prepare-version-files:
+    name: "Prepare: native version files without signing keys"
+    runs-on: ubuntu-26.04
+    container:
+      image: ${{ inputs['runtime-image'] }}
+    permissions:
+      contents: read
+    outputs:
+      patch-digest: ${{ steps.patch.outputs.digest }}
+      patch-artifact: ${{ steps.patch.outputs.artifact }}
+    steps:
+      - name: Refuse PR-context trigger
+        run: forge-ci validate event-context
+      - name: Checkout immutable request source
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CHECKOUT_REF: ${{ github.sha }}
+          CHECKOUT_FETCH_ALL_REFS: "true"
+        run: forge-ci platform checkout
+      - name: Derive release context
+        id: relctx
+        run: forge-ci version derive-release
+      - name: Bump native project version
+        if: ${{ contains(fromJSON('["maven","npm","cargo"]'), inputs['project-type']) }}
+        env:
+          PROJECT_TYPE: ${{ inputs['project-type'] }}
+          VERSION: ${{ steps.relctx.outputs.version }}
+          WORKING_DIRECTORY: ${{ inputs['working-directory'] }}
+          MAVEN_CLI_OPTS: "--batch-mode --no-transfer-progress --errors --fail-at-end -Dstyle.color=always"
+        run: forge-ci version bump
+      - name: Upload native version changes
+        id: patch
+        env:
+          PROJECT_TYPE: ${{ inputs['project-type'] }}
+          WORKING_DIRECTORY: ${{ inputs['working-directory'] }}
+        run: |
+          set -euo pipefail
+          handoff="${RUNNER_TEMP:?}/prepared-version-bump"
+          mkdir -p "${handoff}"
+          git -c core.quotePath=true diff --binary --no-ext-diff --no-textconv --no-color --no-renames \
+            --src-prefix=a/ --dst-prefix=b/ >"${handoff}/native.patch"
+          digest=$(sha256sum "${handoff}/native.patch")
+          scope=$(printf '%s\n%s\n' "${PROJECT_TYPE:?}" "${WORKING_DIRECTORY:?}" | sha256sum)
+          artifact="version-bump-${scope%% *}"
+          printf 'digest=%s\nartifact=%s\n' "${digest%% *}" "${artifact}" >>"${GITHUB_OUTPUT:?}"
+      - name: Upload version patch artifact
+        # GitHub exposes the runtime upload token to actions, not run steps.
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.patch.outputs.artifact }}
+          path: ${{ runner.temp }}/prepared-version-bump/native.patch
+          retention-days: "1"
+          if-no-files-found: error
   bump-version:
     name: "Prepare: version and release commit"
-    needs: [generate-full-changelog, generate-minimal-changelog]
+    needs: [generate-full-changelog, generate-minimal-changelog, prepare-version-files]
     runs-on: ubuntu-26.04
     container:
       image: ${{ inputs['runtime-image'] }}
@@ -158,7 +211,7 @@ jobs:
           # tag use RELEASE_TOKEN; its repository and operation scope are the
           # operator's responsibility.
           GITHUB_TOKEN: ${{ github.token }}
-          CHECKOUT_REF: ${{ inputs.branch }}
+          CHECKOUT_REF: ${{ github.sha }}
           CHECKOUT_FETCH_ALL_REFS: "true"
         run: forge-ci platform checkout
       - name: Derive release context from request tag
@@ -188,6 +241,7 @@ jobs:
           FORGE_CI_GIT_CONFIG_GLOBAL: "true"
         run: forge-ci release ssh setup
       - name: Bump project version
+        if: ${{ !contains(fromJSON('["maven","npm","cargo"]'), inputs['project-type']) }}
         env:
           PROJECT_TYPE: ${{ inputs['project-type'] }}
           MAVEN_CLI_OPTS: "--batch-mode --no-transfer-progress --errors --fail-at-end -Dstyle.color=always"
@@ -196,25 +250,47 @@ jobs:
           XCODE_VERSION_FILE: ${{ inputs['xcode-version-file'] }}
         run: |
           VERSION="${{ steps.relctx.outputs.version }}" forge-ci version bump
+      - name: Verify native version changes
+        if: ${{ contains(fromJSON('["maven","npm","cargo"]'), inputs['project-type']) }}
+        env:
+          PATCH_DIGEST: ${{ needs.prepare-version-files.outputs.patch-digest }}
+          PATCH_ARTIFACT: ${{ needs.prepare-version-files.outputs.patch-artifact }}
+          PROJECT_TYPE: ${{ inputs['project-type'] }}
+          VERSION: ${{ steps.relctx.outputs.version }}
+          WORKING_DIRECTORY: ${{ inputs['working-directory'] }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          handoff=$(mktemp -d "${RUNNER_TEMP:?}/version-bump.XXXXXX")
+          forge-ci artifact download --name "${PATCH_ARTIFACT:?}" --dir "${handoff}"
+          test -f "${handoff}/native.patch" && test ! -L "${handoff}/native.patch"
+          forge-ci version apply-bump --project-type "${PROJECT_TYPE:?}" --version "${VERSION:?}" \
+            --working-dir "${WORKING_DIRECTORY:?}" --patch "${handoff}/native.patch" \
+            --sha256 "${PATCH_DIGEST:?}" --paths-file "${handoff}/paths.txt"
       - name: Download Full Changelog
         env:
           GH_TOKEN: ${{ github.token }}
           ARTIFACT_NAME: full-changelog
-          ARTIFACT_DIR: ${{ inputs['working-directory'] }}
+          ARTIFACT_DIR: ${{ runner.temp }}/version-full-changelog
         run: forge-ci artifact download
       - name: Verify Full Changelog
         working-directory: ${{ inputs['working-directory'] }}
-        run: forge-ci validate changelog --path CHANGELOG.md --required
+        run: |
+          set -euo pipefail
+          source_file="${RUNNER_TEMP:?}/version-full-changelog/CHANGELOG.md"
+          test -f "${source_file}" && test ! -L "${source_file}"
+          cp --remove-destination -- "${source_file}" CHANGELOG.md
+          forge-ci validate changelog --path CHANGELOG.md --required
       - name: Download Minimal Changelog
         env:
           GH_TOKEN: ${{ github.token }}
           ARTIFACT_NAME: minimal-changelog
-          ARTIFACT_DIR: ${{ inputs['working-directory'] }}
+          ARTIFACT_DIR: ${{ runner.temp }}/version-minimal-changelog
         run: forge-ci artifact download
       - name: Read Minimal Changelog
         id: minimal-changelog
         working-directory: ${{ inputs['working-directory'] }}
-        run: forge-ci validate changelog --path minimal-changelog.txt
+        run: forge-ci validate changelog --path "$RUNNER_TEMP/version-minimal-changelog/minimal-changelog.txt"
       - name: Determine file pattern
         id: file-pattern
         env:
@@ -224,6 +300,7 @@ jobs:
       - name: Commit and Push Changes
         env:
           BRANCH: ${{ inputs.branch }}
+          AUTHORIZED_SOURCE_SHA: ${{ github.sha }}
           RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           # gpg derives the committer from the imported key; ssh has no key
           # identity, so fall back to the caller-supplied bot inputs.

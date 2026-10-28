@@ -27,6 +27,10 @@ name: Publish Maven Central
 on:
   workflow_call:
     inputs:
+      release-policy:
+        description: "Accepted release versions: stable or stable-prerelease"
+        type: string
+        default: "stable"
       artifact-source:
         description: "Name of workflow artifact containing built library JARs"
         required: true
@@ -113,6 +117,7 @@ jobs:
       contents: read
       packages: read
     env:
+      RELEASE_POLICY: ${{ inputs['release-policy'] }}
       RELEASE_REQUEST_TAG: ${{ github.ref_name }}
       RELEASE_SHA: ${{ inputs.branch }}
       FORGE_CI_AUTHORIZATION_DIR: ${{ github.workspace }}

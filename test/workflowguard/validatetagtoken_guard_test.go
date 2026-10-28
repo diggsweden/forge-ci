@@ -35,7 +35,7 @@ func TestValidateTagStepsPassTheJobToken(t *testing.T) {
 			continue
 		}
 
-		body, err := os.ReadFile(filepath.Join(dir, entry.Name())) //nolint:gosec // repository contract fixture.
+		body, err := os.ReadFile(filepath.Join(dir, entry.Name()))
 		require.NoError(t, err)
 
 		var workflow struct {

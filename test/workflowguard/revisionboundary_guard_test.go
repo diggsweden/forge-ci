@@ -29,7 +29,7 @@ func TestReusableWorkflowsDoNotPinNestedForgeCIAction(t *testing.T) {
 			continue
 		}
 
-		body, err := os.ReadFile(filepath.Join(workflowsDir, entry.Name())) //nolint:gosec // repository contract fixture.
+		body, err := os.ReadFile(filepath.Join(workflowsDir, entry.Name()))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -68,7 +68,7 @@ func TestPublicWorkflowsDoNotDefaultBranchesToMain(t *testing.T) {
 			continue
 		}
 
-		body, err := os.ReadFile(filepath.Join(workflowsDir, entry.Name())) //nolint:gosec // repository contract fixture.
+		body, err := os.ReadFile(filepath.Join(workflowsDir, entry.Name()))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -119,7 +119,7 @@ func TestMutationWorkflowsRequireExplicitRef(t *testing.T) {
 	t.Parallel()
 
 	for workflow, input := range declaredMutationWorkflows() {
-		body, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".github", "workflows", workflow)) //nolint:gosec // repository contract fixture.
+		body, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".github", "workflows", workflow))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -216,7 +216,7 @@ func discoverMutationAuthority(t *testing.T) (map[string][]mutationFinding, int)
 			continue
 		}
 
-		body, readErr := os.ReadFile(filepath.Join(dir, entry.Name())) //nolint:gosec // repository contract fixture.
+		body, readErr := os.ReadFile(filepath.Join(dir, entry.Name()))
 		if readErr != nil {
 			t.Fatalf("read %s: %v", entry.Name(), readErr)
 		}

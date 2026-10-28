@@ -56,10 +56,10 @@ on:
         type: string
         default: "ghcr.io"
       runs-on:
-        description: "Runner label for the attestor job. Use an ephemeral pool when the caller's threat model requires job isolation."
+        description: 'JSON array of runner labels for the attestor job, for example ["self-hosted","linux","x64"]. All labels must match; select an appropriately isolated pool.'
         required: false
         type: string
-        default: "ubuntu-26.04"
+        default: '["ubuntu-26.04"]'
       forge-ci-binary-ref:
         description: "forge-ci ref/version whose bootstrap installers + CLI to use."
         required: false
@@ -86,7 +86,7 @@ permissions:
 jobs:
   attest:
     name: Attest provenance (cosign + KMS)
-    runs-on: ${{ inputs.runs-on }}
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
@@ -126,7 +126,7 @@ jobs:
       - name: Log in to registry
         env:
           CONTAINER_REGISTRY: ${{ inputs.registry }}
-          REGISTRY_USERNAME: ${{ github.actor }}
+          REGISTRY_USER: ${{ github.actor }}
           REGISTRY_PASSWORD: ${{ secrets.registry-password || github.token }}
         run: forge-ci container login
       - name: Attest SLSA provenance (cosign + KMS)

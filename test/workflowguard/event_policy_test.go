@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -195,10 +196,8 @@ func protectedDependency(jobs map[string]eventJob, name string, seen map[string]
 		return false
 	}
 
-	for _, step := range job.Steps {
-		if canonicalEventGuard(step) {
-			return true
-		}
+	if slices.ContainsFunc(job.Steps, canonicalEventGuard) {
+		return true
 	}
 
 	for _, dep := range eventNeeds(job.Needs) {

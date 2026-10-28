@@ -14,7 +14,7 @@ func TestEventPolicyBoundary_RejectsCommentsAndBypasses(t *testing.T) {
 
 	const head = "on:\n  workflow_call:\npermissions:\n  packages: write\njobs:\n  publish:\n    steps:\n"
 
-	const secret = "      - env:\n          TOKEN: ${{ github.token }}\n        run: publish\n" //nolint:gosec // workflow expression fixture, not a credential.
+	const secret = "      - env:\n          TOKEN: ${{ github.token }}\n        run: publish\n"
 	for _, guard := range []string{"# forge-ci validate event-context", "false && forge-ci validate event-context", "echo forge-ci validate event-context", "forge-ci validate event-context || true"} {
 		body := head + "      - run: |\n          " + guard + "\n" + secret
 		require.NotEmpty(t, eventContextViolations([]byte(body), false), guard)

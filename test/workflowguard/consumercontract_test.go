@@ -96,7 +96,7 @@ func TestConsumerContractSnapshot(t *testing.T) {
 		return
 	}
 
-	want, err := os.ReadFile(snapshot) //nolint:gosec // test reads repo-local snapshot.
+	want, err := os.ReadFile(snapshot)
 	require.NoErrorf(t, err,
 		"consumer-contract snapshot missing; generate it deliberately with "+
 			regenerateContractsEnv+"=1 go test ./test/workflowguard -run TestConsumerContractSnapshot")
@@ -114,7 +114,7 @@ func TestConsumerContractSnapshot(t *testing.T) {
 func parseConsumerContract(t *testing.T, path string) consumerContract {
 	t.Helper()
 
-	body, err := os.ReadFile(path) //nolint:gosec // test reads repo-local workflow.
+	body, err := os.ReadFile(path)
 	require.NoErrorf(t, err, "read %s", path)
 
 	doc, err := effectiveWorkflow(body)
@@ -131,17 +131,17 @@ func parseConsumerContract(t *testing.T, path string) consumerContract {
 	}
 
 	if inputs := mappingChild(call, "inputs"); inputs != nil && inputs.Kind == yaml.MappingNode {
-		for i := 0; i < len(inputs.Content); i += 2 {
-			spec := inputs.Content[i+1]
+		for index := 0; index < len(inputs.Content); index += 2 {
+			spec := inputs.Content[index+1]
 
-			contract.Inputs[inputs.Content[i].Value] = consumerInput{
+			contract.Inputs[inputs.Content[index].Value] = consumerInput{
 				Required: scalarChild(spec, "required") == "true",
 				Type:     scalarChild(spec, "type"),
 			}
 			if value := mappingChild(spec, "default"); value != nil {
-				input := contract.Inputs[inputs.Content[i].Value]
+				input := contract.Inputs[inputs.Content[index].Value]
 				require.NoError(t, value.Decode(&input.Default))
-				contract.Inputs[inputs.Content[i].Value] = input
+				contract.Inputs[inputs.Content[index].Value] = input
 			}
 		}
 	}
