@@ -58,6 +58,10 @@ type Config struct {
 	// Retry-After Date parsing.
 	// Tests inject a fake; production leaves nil → real clock.
 	Clock Clock
+	// RetryInternalServerErrors opts safe reads into HTTP 500 retries for
+	// services which use that status for temporary failures. Mutations still
+	// run once. The default policy deliberately leaves HTTP 500 terminal.
+	RetryInternalServerErrors bool
 }
 
 // Clock is the minimal interface the retry loop needs from a clock.
@@ -123,6 +127,21 @@ func NewTransport(cfg Config) *Transport {
 	return &Transport{cfg: cfg}
 }
 
+// WithInternalServerErrorRetries derives a transport for services whose reads
+// can transiently return HTTP 500. An existing retry transport is copied, not
+// nested, preserving its clock and retry budgets without multiplying attempts.
+// Other transports become the inner transport of the standard bounded policy.
+func WithInternalServerErrorRetries(inner http.RoundTripper) *Transport {
+	cfg := Config{Inner: inner}
+	if existing, ok := inner.(*Transport); ok {
+		cfg = existing.cfg
+	}
+
+	cfg.RetryInternalServerErrors = true
+
+	return NewTransport(cfg)
+}
+
 // RoundTrip implements http.RoundTripper.
 //
 // Only GET and HEAD are retried. A request with a body is retryable only when
@@ -159,7 +178,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 		resp, err = t.cfg.Inner.RoundTrip(req)
 
-		retryReason = retryDecision(resp, err)
+		retryReason = t.retryDecision(resp, err)
 		if retryReason == "" {
 			return resp, SafeError(err)
 		}
@@ -240,7 +259,7 @@ func retrySentinel(status int) error {
 	switch status {
 	case http.StatusTooManyRequests:
 		return errs.ErrRateLimited
-	case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+	case http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
 		return errs.ErrDependencyUnavailable
 	}
 
@@ -304,7 +323,7 @@ const maxDrainBytes = 64 << 10
 
 // retryDecision returns a short non-empty reason when the response/error
 // pair indicates a retryable failure, or "" when the result is final.
-func retryDecision(resp *http.Response, err error) string {
+func (t *Transport) retryDecision(resp *http.Response, err error) string {
 	if err != nil {
 		// RoundTrip reaches this decision only for replayable GET/HEAD
 		// requests; mutations bypass the retry loop entirely.
@@ -318,6 +337,10 @@ func retryDecision(resp *http.Response, err error) string {
 	switch resp.StatusCode {
 	case http.StatusTooManyRequests:
 		return "429 Too Many Requests"
+	case http.StatusInternalServerError:
+		if t.cfg.RetryInternalServerErrors {
+			return "500 Internal Server Error"
+		}
 	case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
 		return strconv.Itoa(resp.StatusCode) + " " + http.StatusText(resp.StatusCode)
 	}
@@ -349,7 +372,7 @@ func (t *Transport) computeDelay(attempt int, resp *http.Response) time.Duration
 	// is enforced here rather than assumed at the call site.
 	upper := t.cfg.MaxDelay
 	if base := t.cfg.BaseDelay; base > 0 && attempt >= 0 && attempt < bits.LeadingZeros64(uint64(base)) {
-		if shifted := base << uint(attempt); shifted < upper { //nolint:gosec // bounded by the guard above.
+		if shifted := base << uint(attempt); shifted < upper {
 			upper = shifted
 		}
 	}
@@ -375,7 +398,7 @@ func (t *Transport) retryAfterDelay(resp *http.Response) (time.Duration, bool) {
 		return 0, false
 	}
 
-	h := strings.TrimSpace(resp.Header.Get("Retry-After")) //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	h := strings.TrimSpace(resp.Header.Get("Retry-After"))
 	if h == "" {
 		return 0, false
 	}

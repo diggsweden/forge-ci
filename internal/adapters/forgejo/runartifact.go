@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/diggsweden/forge-ci/internal/adapters/httpretry"
 	domainartifact "github.com/diggsweden/forge-ci/internal/domain/artifact"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
@@ -77,8 +78,6 @@ func fileMD5Base64(r io.Reader) (string, error) {
 // Credentials live only in per-request Bearer headers (never argv, never
 // disk); every entry path is gated by domain/artifact.SafeJoin and each
 // file is size-capped.
-//
-//nolint:cyclop // input, repository/run authority, credentials and download modes are independent guards.
 func (p *Provider) DownloadRunArtifact(ctx context.Context, in provider.RunArtifactDownload) (provider.RunArtifactInfo, error) {
 	if _, err := path.Match(in.Pattern, ""); err != nil {
 		return provider.RunArtifactInfo{}, fmt.Errorf("invalid artifact pattern: %w", errs.ErrUsage)
@@ -349,7 +348,7 @@ func (p *Provider) downloadContainer(
 
 		dest := filepath.FromSlash(rel)
 
-		if mkErr := root.MkdirAll(filepath.Dir(dest), 0o755); mkErr != nil { //nolint:gosec,mnd // os.Root contains artifact dirs.
+		if mkErr := root.MkdirAll(filepath.Dir(dest), 0o755); mkErr != nil {
 			return provider.RunArtifactInfo{}, fmt.Errorf("mkdir %q: %w", filepath.Dir(dest), mkErr)
 		}
 
@@ -367,7 +366,7 @@ func (p *Provider) downloadContainer(
 
 		n, err := p.writeEntry(ctx, entry.ContentLocation, entryToken, root, dest, entry.FileLength, limit)
 		if err != nil {
-			return provider.RunArtifactInfo{}, err
+			return provider.RunArtifactInfo{}, fmt.Errorf("artifact %q entry %q: %w", name, rel, err)
 		}
 
 		info.Bytes += n
@@ -442,7 +441,7 @@ func (p *Provider) downloadFile(ctx context.Context, contentLocation, token stri
 		return 0, fmt.Errorf("replace %q: %w", dest, removeErr)
 	}
 
-	out, err := root.OpenFile(dest, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600) //nolint:gosec // os.Root contains dest.
+	out, err := root.OpenFile(dest, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		return 0, fmt.Errorf("create %q: %w", dest, err)
 	}
@@ -520,8 +519,6 @@ func newRuntimeRequest(ctx context.Context, rawURL, token, accept string) (*http
 // authorizeRuntimeResource returns the token a returned runtime URL may
 // receive. Authenticated URLs must remain on the secure runtime origin;
 // cross-origin content URLs are accepted only as HTTPS tokenless resources.
-//
-//nolint:cyclop // URL parsing and origin policy stay together at this trust boundary.
 func authorizeRuntimeResource(runtimeURL, rawURL, token string, allowTokenlessCrossOrigin bool) (string, error) {
 	base, err := url.Parse(runtimeURL)
 	if err != nil {
@@ -579,6 +576,10 @@ func isLoopbackHost(host string) bool {
 
 func (p *Provider) doRuntimeRequest(req *http.Request, token string) (*http.Response, error) {
 	client := *p.httpClient()
+	// Forgejo's artifact service can transiently return 500 on reads even
+	// after acknowledging an upload. Reuse bounded safe-read retries; never
+	// replay upload or finalization mutations automatically.
+	client.Transport = httpretry.WithInternalServerErrorRetries(client.Transport)
 	if token == "" {
 		client.Jar = nil
 	}
@@ -609,7 +610,16 @@ func (p *Provider) doRuntimeRequest(req *http.Request, token string) (*http.Resp
 		return nil
 	}
 
-	return client.Do(req)
+	resp, err := client.Do(req)
+
+	// net/http wraps transport and redirect errors with the requested URL,
+	// which may contain an object-store signature. Keep the underlying cause
+	// (including cancellation/timeout identity), but never log that URL.
+	if requestErr, ok := errors.AsType[*url.Error](err); ok {
+		err = requestErr.Err
+	}
+
+	return resp, err
 }
 
 func classifyStatus(code int) error {
@@ -875,5 +885,5 @@ func (p *Provider) runtimeSend(ctx context.Context, method, rawURL, token, conte
 		req.Header.Set(k, v)
 	}
 
-	return p.doRuntimeRequest(req, token) //nolint:wrapcheck // callers wrap with operation context.
+	return p.doRuntimeRequest(req, token)
 }

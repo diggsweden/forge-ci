@@ -28,8 +28,8 @@ import (
 // is a different bug with a different fix. A unique error identity separates them.
 
 var (
-	errRewindRefused   = errors.New("this body cannot be rewound") //nolint:err113 // the identity is the contract.
-	errTransportBroken = errors.New("the inner transport gave up") //nolint:err113 // the identity is the contract.
+	errRewindRefused   = errors.New("this body cannot be rewound")
+	errTransportBroken = errors.New("the inner transport gave up")
 )
 
 func TestRoundTrip_ARewindFailureIsDistinguishableFromATransportFailure(t *testing.T) {

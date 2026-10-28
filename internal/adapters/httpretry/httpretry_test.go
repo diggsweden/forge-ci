@@ -103,21 +103,21 @@ type transportTestError struct{}
 func (*transportTestError) Error() string { return "ambiguous write result" }
 
 func (f *flakyServer) Handler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+	return func(response http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.attempts++
 		current := f.attempts
 		f.mu.Unlock()
 
 		if int(current) <= f.failuresBeforeSuccess {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			_, _ = w.Write([]byte(`{"error":"try again"}`))
+			response.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = response.Write([]byte(`{"error":"try again"}`))
 
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"ok":true}`))
+		response.WriteHeader(http.StatusOK)
+		_, _ = response.Write([]byte(`{"ok":true}`))
 	}
 }
 
@@ -231,20 +231,20 @@ func TestRoundTrip_HonoursRetryAfter(t *testing.T) {
 				attempt int
 			)
 
-			inner := serveInMemory(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			inner := serveInMemory(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
 				mu.Lock()
 				attempt++
 				first := attempt == 1
 				mu.Unlock()
 
 				if first {
-					w.Header().Set("Retry-After", testCase.retryAfter())
-					w.WriteHeader(http.StatusTooManyRequests)
+					response.Header().Set("Retry-After", testCase.retryAfter())
+					response.WriteHeader(http.StatusTooManyRequests)
 
 					return
 				}
 
-				w.WriteHeader(http.StatusOK)
+				response.WriteHeader(http.StatusOK)
 			}))
 
 			clock := newFakeClock()
@@ -350,13 +350,13 @@ func TestRoundTrip_StopsWhenTheCumulativeDelayBudgetWouldBeExceeded(t *testing.T
 		attempts int
 	)
 
-	inner := serveInMemory(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	inner := serveInMemory(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
 		mu.Lock()
 		attempts++
 		mu.Unlock()
 
-		w.Header().Set("Retry-After", "3")
-		w.WriteHeader(http.StatusTooManyRequests)
+		response.Header().Set("Retry-After", "3")
+		response.WriteHeader(http.StatusTooManyRequests)
 	}))
 
 	clock := newFakeClock()
@@ -471,7 +471,7 @@ func TestRoundTrip_RewindsReplayableReadBody(t *testing.T) {
 		mu  sync.Mutex
 	)
 
-	inner := serveInMemory(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	inner := serveInMemory(http.HandlerFunc(func(response http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 
 		mu.Lock()
@@ -482,12 +482,12 @@ func TestRoundTrip_RewindsReplayableReadBody(t *testing.T) {
 		mu.Unlock()
 
 		if attempt < 2 {
-			w.WriteHeader(http.StatusServiceUnavailable)
+			response.WriteHeader(http.StatusServiceUnavailable)
 
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
+		response.WriteHeader(http.StatusOK)
 	}))
 
 	transport := httpretry.NewTransport(httpretry.Config{Inner: inner, MaxAttempts: 3, BaseDelay: time.Nanosecond})

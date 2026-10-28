@@ -5,7 +5,7 @@ package forgejo_test
 
 import (
 	"context"
-	"crypto/md5" //nolint:gosec // asserting the protocol's transport checksum, not security.
+	"crypto/md5"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -73,23 +73,23 @@ func runtimeServer(t *testing.T, entries map[string]string, matchCount int) runt
 func runtimeServerWith(t *testing.T, name string, entries map[string]string, matchCount int) runtimeService {
 	t.Helper()
 
-	return serveRuntime(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer "+runtimeToken {
-			w.WriteHeader(http.StatusUnauthorized)
+	return serveRuntime(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") != "Bearer "+runtimeToken {
+			response.WriteHeader(http.StatusUnauthorized)
 
 			return
 		}
 
 		base := runtimeFakeURL
 
-		switch r.URL.Path {
+		switch request.URL.Path {
 		case "/_apis/pipelines/workflows/7/artifacts":
 			arts := make([]jsonObj, 0, matchCount)
 			for range matchCount {
 				arts = append(arts, jsonObj{"name": name, "fileContainerResourceUrl": base + "/container"})
 			}
 
-			writeJSON(w, jsonObj{"value": arts})
+			writeJSON(response, jsonObj{"value": arts})
 
 		case "/container":
 			vals := make([]jsonObj, 0, len(entries))
@@ -100,20 +100,20 @@ func runtimeServerWith(t *testing.T, name string, entries map[string]string, mat
 				})
 			}
 
-			writeJSON(w, jsonObj{"value": vals})
+			writeJSON(response, jsonObj{"value": vals})
 
 		case "/file":
-			body, ok := entries[r.URL.Query().Get("p")]
+			body, ok := entries[request.URL.Query().Get("p")]
 			if !ok {
-				w.WriteHeader(http.StatusNotFound)
+				response.WriteHeader(http.StatusNotFound)
 
 				return
 			}
 
-			_, _ = w.Write([]byte(body))
+			_, _ = response.Write([]byte(body))
 
 		default:
-			w.WriteHeader(http.StatusNotFound)
+			response.WriteHeader(http.StatusNotFound)
 		}
 	}))
 }
@@ -177,20 +177,20 @@ func TestDownloadRunArtifact_RejectsOversizedDeclaredTotalBeforeContentRequest(t
 
 	contentRequested := false
 
-	srv := serveRuntime(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := serveRuntime(http.HandlerFunc(func(response http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/_apis/pipelines/workflows/7/artifacts":
-			writeJSON(w, jsonObj{"value": []jsonObj{{"name": "dist", "fileContainerResourceUrl": runtimeFakeURL + "/container"}}})
+			writeJSON(response, jsonObj{"value": []jsonObj{{"name": "dist", "fileContainerResourceUrl": runtimeFakeURL + "/container"}}})
 		case "/container":
-			writeJSON(w, jsonObj{"value": []jsonObj{{
+			writeJSON(response, jsonObj{"value": []jsonObj{{
 				"path": "dist/huge", "itemType": "file",
 				"contentLocation": runtimeFakeURL + "/file", "fileLength": domainartifact.MaxTotalBytes + 1,
 			}}})
 		case "/file":
 			contentRequested = true
-			_, _ = io.WriteString(w, "unexpected")
+			_, _ = io.WriteString(response, "unexpected")
 		default:
-			w.WriteHeader(http.StatusNotFound)
+			response.WriteHeader(http.StatusNotFound)
 		}
 	}))
 
@@ -273,23 +273,23 @@ func TestDownloadRunArtifact_StripsTokenFromCrossOriginContentURL(t *testing.T) 
 	}))
 	t.Cleanup(blob.Close)
 
-	runtime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer "+runtimeToken {
-			w.WriteHeader(http.StatusUnauthorized)
+	runtime := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") != "Bearer "+runtimeToken {
+			response.WriteHeader(http.StatusUnauthorized)
 
 			return
 		}
 
-		base := "http://" + r.Host
-		switch r.URL.Path {
+		base := "http://" + request.Host
+		switch request.URL.Path {
 		case "/_apis/pipelines/workflows/7/artifacts":
-			writeJSON(w, jsonObj{"value": []jsonObj{{"name": "dist", "fileContainerResourceUrl": base + "/container"}}})
+			writeJSON(response, jsonObj{"value": []jsonObj{{"name": "dist", "fileContainerResourceUrl": base + "/container"}}})
 		case "/container":
-			writeJSON(w, jsonObj{"value": []jsonObj{{
+			writeJSON(response, jsonObj{"value": []jsonObj{{
 				"path": "dist/value", "itemType": "file", "contentLocation": blob.URL + "/value", "fileLength": 7,
 			}}})
 		default:
-			w.WriteHeader(http.StatusNotFound)
+			response.WriteHeader(http.StatusNotFound)
 		}
 	}))
 	t.Cleanup(runtime.Close)
@@ -315,21 +315,21 @@ func TestDownloadRunArtifact_TokenlessRedirectsStayHTTPSAndCredentialFree(t *tes
 		blob    *httptest.Server
 	)
 
-	blob = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	blob = httptest.NewTLSServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		mu.Lock()
 
-		headers = append(headers, r.Header.Get("Authorization"))
+		headers = append(headers, request.Header.Get("Authorization"))
 		mu.Unlock()
 
-		switch r.URL.Path {
+		switch request.URL.Path {
 		case "/first":
-			http.Redirect(w, r, blob.URL+"/second", http.StatusFound)
+			http.Redirect(response, request, blob.URL+"/second", http.StatusFound)
 		case "/second":
-			http.Redirect(w, r, blob.URL+"/value", http.StatusTemporaryRedirect)
+			http.Redirect(response, request, blob.URL+"/value", http.StatusTemporaryRedirect)
 		case "/value":
-			_, _ = w.Write([]byte("payload"))
+			_, _ = response.Write([]byte("payload"))
 		default:
-			w.WriteHeader(http.StatusNotFound)
+			response.WriteHeader(http.StatusNotFound)
 		}
 	}))
 	t.Cleanup(blob.Close)
@@ -420,23 +420,23 @@ func TestDownloadRunArtifact_BoundsTokenlessRedirectCount(t *testing.T) {
 func downloadRuntimeContentURL(t *testing.T, contentURL string, client *http.Client) error {
 	t.Helper()
 
-	runtime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer "+runtimeToken {
-			w.WriteHeader(http.StatusUnauthorized)
+	runtime := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") != "Bearer "+runtimeToken {
+			response.WriteHeader(http.StatusUnauthorized)
 
 			return
 		}
 
-		base := "http://" + r.Host
-		switch r.URL.Path {
+		base := "http://" + request.Host
+		switch request.URL.Path {
 		case "/_apis/pipelines/workflows/7/artifacts":
-			writeJSON(w, jsonObj{"value": []jsonObj{{"name": "dist", "fileContainerResourceUrl": base + "/container"}}})
+			writeJSON(response, jsonObj{"value": []jsonObj{{"name": "dist", "fileContainerResourceUrl": base + "/container"}}})
 		case "/container":
-			writeJSON(w, jsonObj{"value": []jsonObj{{
+			writeJSON(response, jsonObj{"value": []jsonObj{{
 				"path": "dist/value", "itemType": "file", "contentLocation": contentURL, "fileLength": 7,
 			}}})
 		default:
-			w.WriteHeader(http.StatusNotFound)
+			response.WriteHeader(http.StatusNotFound)
 		}
 	}))
 	t.Cleanup(runtime.Close)
@@ -473,13 +473,13 @@ func TestDownloadRunArtifact_RejectsCrossOriginAuthenticatedContainerURL(t *test
 func TestDownloadRunArtifact_RejectsInsecureNonLoopbackRuntimeURL(t *testing.T) {
 	t.Parallel()
 
-	p := &forgejo.Provider{Env: envMap(map[string]string{
+	forgejoProvider := &forgejo.Provider{Env: envMap(map[string]string{
 		"ACTIONS_RUNTIME_URL":   "http://example.com",
 		"ACTIONS_RUNTIME_TOKEN": runtimeToken,
 		"FORGEJO_RUN_ID":        "7",
 	})}
 
-	_, err := p.DownloadRunArtifact(context.Background(), provider.RunArtifactDownload{Name: "dist", Dir: t.TempDir()})
+	_, err := forgejoProvider.DownloadRunArtifact(context.Background(), provider.RunArtifactDownload{Name: "dist", Dir: t.TempDir()})
 	if !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("insecure runtime URL error = %v, want ErrValidation", err)
 	}
@@ -640,46 +640,46 @@ func uploadServer(t *testing.T, rec *uploadRecorder) *httptest.Server {
 	rec.puts = map[string]string{}
 	rec.putWire = map[string]putWire{}
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer "+runtimeToken {
-			w.WriteHeader(http.StatusUnauthorized)
+	srv := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") != "Bearer "+runtimeToken {
+			response.WriteHeader(http.StatusUnauthorized)
 
 			return
 		}
 
 		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/_apis/pipelines/workflows/7/artifacts":
-			writeJSON(w, jsonObj{"fileContainerResourceUrl": "http://" + r.Host + "/upload"})
+		case request.Method == http.MethodPost && request.URL.Path == "/_apis/pipelines/workflows/7/artifacts":
+			writeJSON(response, jsonObj{"fileContainerResourceUrl": "http://" + request.Host + "/upload"})
 
-		case r.Method == http.MethodPut && r.URL.Path == "/upload":
-			body, _ := io.ReadAll(r.Body)
+		case request.Method == http.MethodPut && request.URL.Path == "/upload":
+			body, _ := io.ReadAll(request.Body)
 
 			rec.mu.Lock()
-			rec.puts[r.URL.Query().Get("itemPath")] = string(body)
-			rec.putWire[r.URL.Query().Get("itemPath")] = putWire{
-				contentLength:    r.ContentLength,
-				transferEncoding: r.TransferEncoding,
-				contentRange:     r.Header.Get("Content-Range"),
+			rec.puts[request.URL.Query().Get("itemPath")] = string(body)
+			rec.putWire[request.URL.Query().Get("itemPath")] = putWire{
+				contentLength:    request.ContentLength,
+				transferEncoding: request.TransferEncoding,
+				contentRange:     request.Header.Get("Content-Range"),
 			}
 			rec.mu.Unlock()
 
-			w.WriteHeader(http.StatusCreated)
+			response.WriteHeader(http.StatusCreated)
 
-		case r.Method == http.MethodPatch && r.URL.Path == "/_apis/pipelines/workflows/7/artifacts":
+		case request.Method == http.MethodPatch && request.URL.Path == "/_apis/pipelines/workflows/7/artifacts":
 			var final struct {
 				Size int64 `json:"Size"`
 			}
 
-			_ = json.NewDecoder(r.Body).Decode(&final)
+			_ = json.NewDecoder(request.Body).Decode(&final)
 
 			rec.mu.Lock()
 			rec.finalSize = final.Size
 			rec.mu.Unlock()
 
-			w.WriteHeader(http.StatusOK)
+			response.WriteHeader(http.StatusOK)
 
 		default:
-			w.WriteHeader(http.StatusNotFound)
+			response.WriteHeader(http.StatusNotFound)
 		}
 	}))
 	t.Cleanup(srv.Close)
@@ -852,14 +852,14 @@ func TestUploadRunArtifact_BackendProtocolContract(t *testing.T) {
 		puts       = map[string]putRec{}
 	)
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		switch {
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/artifacts"):
+		case request.Method == http.MethodPost && strings.HasSuffix(request.URL.Path, "/artifacts"):
 			var body struct {
 				RetentionDays int64 `json:"RetentionDays"`
 			}
 
-			_ = json.NewDecoder(r.Body).Decode(&body)
+			_ = json.NewDecoder(request.Body).Decode(&body)
 
 			mu.Lock()
 
@@ -868,33 +868,33 @@ func TestUploadRunArtifact_BackendProtocolContract(t *testing.T) {
 			mu.Unlock()
 
 			// Mirror Codeberg: the container URL already carries a query.
-			writeJSON(w, jsonObj{"fileContainerResourceUrl": "http://" + r.Host + "/upload?retentionDays=1"})
+			writeJSON(response, jsonObj{"fileContainerResourceUrl": "http://" + request.Host + "/upload?retentionDays=1"})
 
-		case r.Method == http.MethodPut && r.URL.Path == "/upload":
-			_, _ = io.Copy(io.Discard, r.Body)
+		case request.Method == http.MethodPut && request.URL.Path == "/upload":
+			_, _ = io.Copy(io.Discard, request.Body)
 
 			mu.Lock()
 
-			puts[r.URL.Query().Get("itemPath")] = putRec{
-				rawQuery:     r.URL.RawQuery,
-				md5:          r.Header.Get("x-actions-results-md5"),
-				contentRange: r.Header.Get("Content-Range"),
+			puts[request.URL.Query().Get("itemPath")] = putRec{
+				rawQuery:     request.URL.RawQuery,
+				md5:          request.Header.Get("x-actions-results-md5"),
+				contentRange: request.Header.Get("Content-Range"),
 			}
 
 			mu.Unlock()
 
-			w.WriteHeader(http.StatusCreated)
+			response.WriteHeader(http.StatusCreated)
 
-		case r.Method == http.MethodPatch:
-			w.WriteHeader(http.StatusOK)
+		case request.Method == http.MethodPatch:
+			response.WriteHeader(http.StatusOK)
 
 		default:
-			w.WriteHeader(http.StatusNotFound)
+			response.WriteHeader(http.StatusNotFound)
 		}
 	}))
 	t.Cleanup(srv.Close)
 
-	p := &forgejo.Provider{
+	forgejoProvider := &forgejo.Provider{
 		Env: envMap(map[string]string{
 			"ACTIONS_RUNTIME_URL":   srv.URL,
 			"ACTIONS_RUNTIME_TOKEN": runtimeToken,
@@ -903,7 +903,7 @@ func TestUploadRunArtifact_BackendProtocolContract(t *testing.T) {
 		HTTPClient: srv.Client(),
 	}
 
-	if _, err := p.UploadRunArtifact(context.Background(), provider.RunArtifactUpload{Name: "dist", Dir: dir, RetentionDays: 5}); err != nil {
+	if _, err := forgejoProvider.UploadRunArtifact(context.Background(), provider.RunArtifactUpload{Name: "dist", Dir: dir, RetentionDays: 5}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -912,7 +912,7 @@ func TestUploadRunArtifact_BackendProtocolContract(t *testing.T) {
 	}
 
 	// Zero asks for the forge default, which Forgejo cannot take as absent.
-	if _, err := p.UploadRunArtifact(context.Background(), provider.RunArtifactUpload{Name: "dist", Dir: dir}); err != nil {
+	if _, err := forgejoProvider.UploadRunArtifact(context.Background(), provider.RunArtifactUpload{Name: "dist", Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -921,7 +921,7 @@ func TestUploadRunArtifact_BackendProtocolContract(t *testing.T) {
 	}
 
 	md5b64 := func(content string) string {
-		sum := md5.Sum([]byte(content)) //nolint:gosec // protocol checksum.
+		sum := md5.Sum([]byte(content))
 
 		return base64.StdEncoding.EncodeToString(sum[:])
 	}
@@ -1001,9 +1001,9 @@ func TestUploadRunArtifact_EmptyFileWireShape(t *testing.T) {
 func multiArtifactServer(t *testing.T, artifacts map[string]map[string]string) runtimeService {
 	t.Helper()
 
-	return serveRuntime(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer "+runtimeToken {
-			w.WriteHeader(http.StatusUnauthorized)
+	return serveRuntime(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") != "Bearer "+runtimeToken {
+			response.WriteHeader(http.StatusUnauthorized)
 
 			return
 		}
@@ -1011,16 +1011,16 @@ func multiArtifactServer(t *testing.T, artifacts map[string]map[string]string) r
 		base := runtimeFakeURL
 
 		switch {
-		case r.URL.Path == "/_apis/pipelines/workflows/7/artifacts":
+		case request.URL.Path == "/_apis/pipelines/workflows/7/artifacts":
 			arts := make([]jsonObj, 0, len(artifacts))
 			for name := range artifacts {
 				arts = append(arts, jsonObj{"name": name, "fileContainerResourceUrl": base + "/container/" + name})
 			}
 
-			writeJSON(w, jsonObj{"value": arts})
+			writeJSON(response, jsonObj{"value": arts})
 
-		case strings.HasPrefix(r.URL.Path, "/container/"):
-			name := strings.TrimPrefix(r.URL.Path, "/container/")
+		case strings.HasPrefix(request.URL.Path, "/container/"):
+			name := strings.TrimPrefix(request.URL.Path, "/container/")
 
 			vals := make([]jsonObj, 0)
 			for itemPath, body := range artifacts[name] {
@@ -1031,20 +1031,20 @@ func multiArtifactServer(t *testing.T, artifacts map[string]map[string]string) r
 				})
 			}
 
-			writeJSON(w, jsonObj{"value": vals})
+			writeJSON(response, jsonObj{"value": vals})
 
-		case r.URL.Path == "/file":
-			body, ok := artifacts[r.URL.Query().Get("a")][r.URL.Query().Get("p")]
+		case request.URL.Path == "/file":
+			body, ok := artifacts[request.URL.Query().Get("a")][request.URL.Query().Get("p")]
 			if !ok {
-				w.WriteHeader(http.StatusNotFound)
+				response.WriteHeader(http.StatusNotFound)
 
 				return
 			}
 
-			_, _ = w.Write([]byte(body))
+			_, _ = response.Write([]byte(body))
 
 		default:
-			w.WriteHeader(http.StatusNotFound)
+			response.WriteHeader(http.StatusNotFound)
 		}
 	}))
 }

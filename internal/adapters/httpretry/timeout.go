@@ -38,7 +38,7 @@ func ParseClientTimeout(raw string) time.Duration {
 		return DefaultClientTimeout
 	}
 
-	d, err := time.ParseDuration(raw) //nolint:varnamelen // idiomatic short name for a duration.
+	d, err := time.ParseDuration(raw)
 	if err != nil || d <= 0 {
 		slog.Warn("ignoring invalid "+timeoutEnv+"; using default",
 			"value", raw, "default", DefaultClientTimeout.String())

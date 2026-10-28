@@ -34,14 +34,14 @@ type trackedBody struct {
 }
 
 func (b *trackedBody) Read(p []byte) (int, error) {
-	n, err := b.Reader.Read(p)
+	index, err := b.Reader.Read(p)
 	if errors.Is(err, io.EOF) {
 		b.mu.Lock()
 		b.eof = true
 		b.mu.Unlock()
 	}
 
-	return n, err
+	return index, err
 }
 
 func (b *trackedBody) Close() error {
