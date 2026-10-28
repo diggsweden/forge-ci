@@ -2362,6 +2362,33 @@ EXAMPLE:
 | `--action-repository` | the calling action's repository (printed in the debug block) | string | `""` | `$ACTION_REPOSITORY` |
 | `--action-ref` | the calling action's ref (printed in the debug block) | string | `""` | `$ACTION_REF` |
 
+### `forge-ci platform request-runner`
+
+ask a lender for one ephemeral runner before a job that builds container images
+
+```
+A runner pool that shares its kernel between tenants denies user namespaces, which rootless Buildah and Podman need. The first job of such a workflow runs this command on the pool; a lender starts one runner on a machine that permits them, registered to this forge for exactly one job with the labels of CI_RUNNER_LABEL_CONTAINER (or its _ARM64 variant), and the container job waits on those labels. With --lender none, or no lender configured, nothing is requested: the container runners exist already.
+
+The lender's token is read from a file or stdin, never from the runner's own credentials: those stay with the forge that issued them.
+
+EXAMPLES:
+   # Ask the GitHub repository acme/lender for an arm64 runner
+   printf '%s' "$CI_RUNNER_LENDER_TOKEN" | forge-ci platform request-runner --lender github --lender-repository acme/lender --arch arm64 --token-file -
+
+   # An installation with its own container runners
+   forge-ci platform request-runner --lender none --arch amd64
+```
+
+| Flag | Description | Type | Default | Env vars |
+|------|-------------|------|---------|----------|
+| `--lender` | github, or none; unset means none: the container runners exist already | string | `""` | `$CI_RUNNER_LENDER` |
+| `--lender-repository` | github: owner/repository holding lend-runner.yml | string | `""` | `$CI_RUNNER_LENDER_REPOSITORY` |
+| `--lender-ref` | github: the branch lend-runner.yml is dispatched on | string | `"main"` | `$CI_RUNNER_LENDER_REF` |
+| `--lender-api-url` | github: the API root of an enterprise server (default: api.github.com; never the runner's $GITHUB_API_URL) | string | `""` | `$CI_RUNNER_LENDER_API_URL` |
+| `--arch` | architecture of the container job: amd64 or arm64 (required) | string | `""` | n/a |
+| `--ttl-minutes` | how long the lent runner waits for its job before the machine is released | int | `20` | n/a |
+| `--token-file` | The lender's token. Read from a file ("-" for stdin); trailing CR/LF is trimmed. Explicit input overrides environment credentials; empty content supplies no token. Omit for environment selection, with runner-issued tokens scoped to their server. | string | `""` | n/a |
+
 ### `forge-ci platform resolve-ref`
 
 resolve a remote git ref to a commit SHA output

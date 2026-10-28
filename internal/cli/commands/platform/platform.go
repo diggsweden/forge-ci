@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 // SPDX-License-Identifier: EUPL-1.2 OR GPL-3.0-or-later
 
-// Package platform wires `forge-ci platform <subcmd>` — git + workspace
-// operations against the CI runtime (GitHub Actions / GitLab CI / local) the
-// binary is executing inside: check out a repository, resolve a ref to a SHA,
-// and inspect the workspace.
+// Package platform wires `forge-ci platform <subcmd>` — git, workspace and
+// runner operations against the CI runtime (GitHub Actions / GitLab CI /
+// local) the binary is executing inside: check out a repository, resolve a
+// ref to a SHA, inspect the workspace, and ask a lender for an ephemeral
+// runner.
 package platform
 
 import (
@@ -50,6 +51,7 @@ func New() *cli.Command {
 			resolveRefCmd(),
 			checkoutCmd(),
 			stagePublicKeyCmd(),
+			requestRunnerCmd(),
 		},
 	}
 }
