@@ -147,6 +147,22 @@ func TestRetentionRule_RefusesARuleThatKeepsNothing(t *testing.T) {
 	}
 }
 
+func TestPinnedRecentDigestStillCountsInRecentWindow(t *testing.T) {
+	t.Parallel()
+
+	rule := runtimeRule()
+	rule.RecentCount = 1
+	rule.KeepDigests = []string{digest('b')}
+
+	roots, err := container.RetentionRoots([]container.PackageVersion{
+		{Digest: digest('a'), Tags: []string{"sha-aaaa"}, Created: time.Unix(1, 0)},
+		{Digest: digest('b'), Tags: []string{"sha-bbbb"}, Created: time.Unix(2, 0)},
+	}, rule)
+	if err != nil || len(roots) != 1 || roots[digest('b')] != "consumer-pinned digest" {
+		t.Fatalf("pin changed the recent window: %v %v", roots, err)
+	}
+}
+
 func TestManifestReferences(t *testing.T) {
 	t.Parallel()
 

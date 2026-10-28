@@ -27,6 +27,7 @@ const (
 	flagRecentTags          = "recent-tags"
 	flagRecentCount         = "recent-count"
 	flagPackagesTokenFile   = "token-file"
+	flagKeepDigest          = "keep-digest"
 
 	// defaultKeepTags keeps release and pre-release tags such as v1.2.3,
 	// v1.2, v1 and v1.0.0-rc.1, and a rolling tag such as v0.90.0-pre; a
@@ -50,6 +51,10 @@ Cosign signature, attestation or SBOM tag, or an OCI referrers index). The rest
 is deleted, untagged leftovers of interrupted pushes included. A manifest that
 cannot be read stops the pass.
 
+--keep-digest protects an exact consumer pin and its manifest/signature closure,
+even if its tag is old or absent. It requires exactly one --repository. A
+protected digest missing from the complete package inventory refuses the pass.
+
 The token is $GITHUB_TOKEN with packages: write for packages linked to the
 repository, or a classic token with read:packages and delete:packages.
 
@@ -59,6 +64,7 @@ EXAMPLE:
    forge-ci container package-retention \
      --repository-prefix ghcr.io/acme/forge-ci-runtime --recent-count 10`,
 		Flags: []cli.Flag{
+			&cli.StringSliceFlag{Name: flagKeepDigest, Usage: "consumer-pinned sha256 digest to preserve regardless of tag age; repeatable with one --repository"},
 			&cli.StringSliceFlag{Name: flagRetentionRepository, Usage: "package to prune, as ghcr.io/<owner>/<name>; repeatable"},
 			&cli.StringFlag{Name: flagRetentionPrefix, Sources: cli.EnvVars("PACKAGE_RETENTION_PREFIX"), Usage: "prune every container package of the owner whose name starts with this, given as ghcr.io/<owner>/<name-prefix>"},
 			&cli.StringFlag{Name: flagKeepTags, Value: defaultKeepTags, Sources: cli.EnvVars("PACKAGE_RETENTION_KEEP_TAGS"), Usage: "regular expression of tags kept whatever their age"},
@@ -123,7 +129,11 @@ EXAMPLE:
 }
 
 func retentionRuleFromCmd(cmd *cli.Command) (domaincontainer.RetentionRule, error) {
-	rule := domaincontainer.RetentionRule{RecentCount: cmd.Int(flagRecentCount)}
+	if len(cmd.StringSlice(flagKeepDigest)) != 0 && (len(cmd.StringSlice(flagRetentionRepository)) != 1 || cmd.String(flagRetentionPrefix) != "") {
+		return domaincontainer.RetentionRule{}, fmt.Errorf("package retention: --keep-digest requires exactly one --repository and no prefix: %w", errs.ErrUsage)
+	}
+
+	rule := domaincontainer.RetentionRule{RecentCount: cmd.Int(flagRecentCount), KeepDigests: cmd.StringSlice(flagKeepDigest)}
 
 	for flag, target := range map[string]**regexp.Regexp{flagKeepTags: &rule.Keep, flagRecentTags: &rule.Recent} {
 		pattern := strings.TrimSpace(cmd.String(flag))

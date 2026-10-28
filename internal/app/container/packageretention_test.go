@@ -127,6 +127,33 @@ func TestApplyPackageRetention_DryRunDeletesNothing(t *testing.T) {
 	}
 }
 
+func TestPackageRetentionProtectsOldConsumerPinAndItsEvidence(t *testing.T) {
+	t.Parallel()
+
+	versions := append(retentionVersions(),
+		domaincontainer.PackageVersion{ID: 6, Digest: retentionDigest('f'), Tags: []string{"sha256-" + strings.Repeat("c", 64) + ".sig"}},
+		domaincontainer.PackageVersion{ID: 7, Digest: retentionDigest('0')})
+	store := &fakePackageStore{versions: versions}
+	rule := retentionRule()
+	rule.KeepDigests = []string{retentionDigest('c')}
+
+	_, err := appcontainer.ApplyPackageRetention(t.Context(), store, &fakeManifests{indexes: map[string][]string{
+		retentionDigest('a'): {retentionDigest('b')}, retentionDigest('c'): {retentionDigest('d')},
+	}}, io.Discard, appcontainer.PackageRetentionInput{Repository: "ghcr.io/acme/runtime", Rule: rule})
+	if err != nil || !slices.Equal(store.deleted, []int64{7}) {
+		t.Fatalf("consumer pin or evidence was lost: deleted=%v err=%v", store.deleted, err)
+	}
+
+	store.deleted = nil
+	rule.KeepDigests = []string{retentionDigest('9')}
+
+	_, err = appcontainer.ApplyPackageRetention(t.Context(), store, &fakeManifests{}, io.Discard,
+		appcontainer.PackageRetentionInput{Repository: "ghcr.io/acme/runtime", Rule: rule})
+	if !errors.Is(err, errs.ErrValidation) || len(store.deleted) != 0 {
+		t.Fatal("missing consumer pin did not stop deletion")
+	}
+}
+
 func TestApplyPackageRetention_Refusals(t *testing.T) {
 	t.Parallel()
 

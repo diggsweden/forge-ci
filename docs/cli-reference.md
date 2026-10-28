@@ -1632,6 +1632,10 @@ Cosign signature, attestation or SBOM tag, or an OCI referrers index). The rest
 is deleted, untagged leftovers of interrupted pushes included. A manifest that
 cannot be read stops the pass.
 
+--keep-digest protects an exact consumer pin and its manifest/signature closure,
+even if its tag is old or absent. It requires exactly one --repository. A
+protected digest missing from the complete package inventory refuses the pass.
+
 The token is $GITHUB_TOKEN with packages: write for packages linked to the
 repository, or a classic token with read:packages and delete:packages.
 
@@ -1644,6 +1648,7 @@ EXAMPLE:
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
+| `--keep-digest` | consumer-pinned sha256 digest to preserve regardless of tag age; repeatable with one --repository | string | `""` | n/a |
 | `--repository` | package to prune, as ghcr.io/<owner>/<name>; repeatable | string | `""` | n/a |
 | `--repository-prefix` | prune every container package of the owner whose name starts with this, given as ghcr.io/<owner>/<name-prefix> | string | `""` | `$PACKAGE_RETENTION_PREFIX` |
 | `--keep-tags` | regular expression of tags kept whatever their age | string | `"^v[0-9]+(\\.[0-9]+){0,2}(-[0-9A-Za-z.]+)?$"` | `$PACKAGE_RETENTION_KEEP_TAGS` |

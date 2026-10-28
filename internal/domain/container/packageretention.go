@@ -7,6 +7,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -34,6 +35,8 @@ type RetentionRule struct {
 	Keep        *regexp.Regexp
 	Recent      *regexp.Regexp
 	RecentCount int
+	// KeepDigests protects consumer pins even when their tags age out.
+	KeepDigests []string
 }
 
 // RetainedVersion is a version the plan keeps, and why.
@@ -62,12 +65,18 @@ func (r RetentionRule) Validate() error {
 		return fmt.Errorf("package retention: the number of recent versions to keep is negative (%d): %w", r.RecentCount, errs.ErrUsage)
 	}
 
-	if r.Keep == nil && (r.Recent == nil || r.RecentCount == 0) {
+	if r.Keep == nil && (r.Recent == nil || r.RecentCount == 0) && len(r.KeepDigests) == 0 {
 		return fmt.Errorf("package retention: the rule keeps no tags and would delete every version: %w", errs.ErrUsage)
 	}
 
 	if r.Recent != nil && r.RecentCount == 0 {
 		return fmt.Errorf("package retention: a recent-tag pattern needs a count above zero: %w", errs.ErrUsage)
+	}
+
+	for _, digest := range r.KeepDigests {
+		if !strings.HasPrefix(digest, "sha256:") || !ValidSHA256Hex(strings.TrimPrefix(digest, "sha256:")) {
+			return fmt.Errorf("package retention: a protected digest must be sha256 followed by 64 lowercase hex characters: %w", errs.ErrUsage)
+		}
 	}
 
 	return nil
@@ -83,11 +92,26 @@ func RetentionRoots(versions []PackageVersion, rule RetentionRule) (map[string]s
 
 	roots := make(map[string]string)
 
+	present := make(map[string]bool, len(versions))
+	for _, version := range versions {
+		present[version.Digest] = true
+	}
+
+	for _, digest := range rule.KeepDigests {
+		if !present[digest] {
+			return nil, fmt.Errorf("package retention: protected digest %s is absent from the complete package inventory: %w", digest, errs.ErrValidation)
+		}
+
+		roots[digest] = "consumer-pinned digest"
+	}
+
 	var recent []PackageVersion
 
 	for _, version := range versions {
 		if tag, ok := firstMatch(rule.Keep, version.Tags); ok {
-			roots[version.Digest] = "holds kept tag " + tag
+			if _, pinned := roots[version.Digest]; !pinned {
+				roots[version.Digest] = "holds kept tag " + tag
+			}
 
 			continue
 		}
@@ -101,7 +125,9 @@ func RetentionRoots(versions []PackageVersion, rule RetentionRule) (map[string]s
 
 	for _, version := range recent[:min(rule.RecentCount, len(recent))] {
 		tag, _ := firstMatch(rule.Recent, version.Tags)
-		roots[version.Digest] = fmt.Sprintf("holds %s, one of the %d newest recent tags", tag, rule.RecentCount)
+		if _, pinned := roots[version.Digest]; !pinned {
+			roots[version.Digest] = fmt.Sprintf("holds %s, one of the %d newest recent tags", tag, rule.RecentCount)
+		}
 	}
 
 	return roots, nil
@@ -115,9 +141,7 @@ func RetentionRoots(versions []PackageVersion, rule RetentionRule) (map[string]s
 // unknown is empty the closure is complete.
 func RetainedClosure(versions []PackageVersion, roots map[string]string, references map[string][]string) (map[string]string, []string) {
 	kept := make(map[string]string, len(roots))
-	for digest, reason := range roots {
-		kept[digest] = reason
-	}
+	maps.Copy(kept, roots)
 
 	present := make(map[string]bool, len(versions))
 	for _, version := range versions {
