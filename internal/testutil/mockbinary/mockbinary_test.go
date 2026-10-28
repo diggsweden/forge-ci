@@ -15,10 +15,10 @@ import (
 func TestMock_EmptyScriptSucceedsAndStillRecords(t *testing.T) {
 	t.Parallel()
 
-	m := mockbinary.New(t)
-	m.Add("tool", "")
+	mock := mockbinary.New(t)
+	mock.Add("tool", "")
 
-	out, err := exec.CommandContext(t.Context(), m.Path("tool"), "--flag").CombinedOutput() //nolint:gosec // mockbinary stub path is test-generated.
+	out, err := exec.CommandContext(t.Context(), mock.Path("tool"), "--flag").CombinedOutput()
 	if err != nil {
 		t.Fatalf("empty stub failed: %v\n%s", err, out)
 	}
@@ -27,7 +27,7 @@ func TestMock_EmptyScriptSucceedsAndStillRecords(t *testing.T) {
 		t.Errorf("empty stub wrote %q", out)
 	}
 
-	if calls := m.Invocations("tool"); len(calls) != 1 || len(calls[0].Args) != 1 || calls[0].Args[0] != "--flag" {
+	if calls := mock.Invocations("tool"); len(calls) != 1 || len(calls[0].Args) != 1 || calls[0].Args[0] != "--flag" {
 		t.Errorf("invocations = %#v, want one call with --flag", calls)
 	}
 }

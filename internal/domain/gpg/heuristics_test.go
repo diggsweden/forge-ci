@@ -44,7 +44,7 @@ func TestIsArmored_IgnoresLeadingWhitespaceBeforeTheHeader(t *testing.T) {
 func TestDecodeKey_Armored(t *testing.T) {
 	t.Parallel()
 
-	armored := "-----BEGIN PGP PRIVATE KEY BLOCK-----\nstuff\n-----END PGP PRIVATE KEY BLOCK-----" //nolint:gosec // synthetic placeholder; not a real key.
+	armored := "-----BEGIN PGP PRIVATE KEY BLOCK-----\nstuff\n-----END PGP PRIVATE KEY BLOCK-----"
 
 	out, err := gpg.DecodeKey(armored)
 	if err != nil {
@@ -59,7 +59,7 @@ func TestDecodeKey_Armored(t *testing.T) {
 func TestDecodeKey_Base64(t *testing.T) {
 	t.Parallel()
 
-	original := "-----BEGIN PGP PRIVATE KEY BLOCK-----\nactual key body\n-----END PGP PRIVATE KEY BLOCK-----" //nolint:gosec // synthetic placeholder; not a real key.
+	original := "-----BEGIN PGP PRIVATE KEY BLOCK-----\nactual key body\n-----END PGP PRIVATE KEY BLOCK-----"
 	encoded := base64.StdEncoding.EncodeToString([]byte(original))
 
 	out, err := gpg.DecodeKey(encoded)
@@ -168,7 +168,7 @@ func TestAgentConfig_HasExpectedDirectives(t *testing.T) {
 func TestDecodeKey_Base64WrappedWithCRLFOrTabs(t *testing.T) {
 	t.Parallel()
 
-	const armored = "-----BEGIN PGP PRIVATE KEY BLOCK-----\nbody\n-----END PGP PRIVATE KEY BLOCK-----" //nolint:gosec // armor framing around a placeholder body, no key material
+	const armored = "-----BEGIN PGP PRIVATE KEY BLOCK-----\nbody\n-----END PGP PRIVATE KEY BLOCK-----"
 
 	encoded := base64.StdEncoding.EncodeToString([]byte(armored))
 	half := len(encoded) / 2

@@ -75,7 +75,7 @@ func TestReadBoundary_RootedErrorsIgnoreCWD(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = file.Close() })
 
-	failure := errors.New("rooted descriptor read failure") //nolint:err113 // unique sentinel distinguishes the read failure from path policy.
+	failure := errors.New("rooted descriptor read failure")
 	for _, test := range []struct {
 		name  string
 		cause error
@@ -126,7 +126,7 @@ func TestReadBoundary_PartialReadError(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = file.Close() })
 
-	failure := errors.New("read failure after bytes") //nolint:err113 // unique sentinel distinguishes this read failure from type/size guards.
+	failure := errors.New("read failure after bytes")
 
 	for _, source := range []string{"file", "stdin"} {
 		t.Run(source, func(t *testing.T) {
@@ -246,6 +246,7 @@ func TestReadBoundary_StdinErrors(t *testing.T) {
 
 type readBoundaryFile struct {
 	fs.File
+
 	read func([]byte) (int, error)
 }
 

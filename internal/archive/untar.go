@@ -85,8 +85,6 @@ func defaultTarLimits() tarLimits {
 //   - Per-entry writes are bounded explicitly via io.CopyN(_, _, hdr.Size).
 //   - Aggregate uncompressed size is bounded by maxTarballUncompressedSize.
 //   - Entries are validated in private staging before any destination replacement.
-//
-//nolint:cyclop // extraction keeps each archive safety invariant explicit.
 func UntarStripOne(archive, dest string) error {
 	return untarStripOne(archive, dest, defaultTarLimits())
 }
@@ -262,7 +260,7 @@ func writeRegularEntry(root *os.Root, tr *tar.Reader, hdr *tar.Header, target st
 		return 0, fmt.Errorf("tar: archive exceeds %d uncompressed bytes: %w", limits.uncompressedSize, errs.ErrValidation)
 	}
 
-	if err := root.MkdirAll(filepath.Dir(target), 0o755); err != nil { //nolint:gosec // tar dest dir read by consumer; os.Root contains it.
+	if err := root.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return 0, fmt.Errorf("mkdir %s: %w", filepath.Dir(target), err)
 	}
 
@@ -288,7 +286,7 @@ func writeRegularEntry(root *os.Root, tr *tar.Reader, hdr *tar.Header, target st
 	// io.CopyN with hdr.Size makes the per-entry cap explicit
 	// (tar.Reader already enforces it internally, but stating
 	// it here removes the G110 false-positive cleanly).
-	n, err := io.CopyN(out, tr, hdr.Size) //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	n, err := io.CopyN(out, tr, hdr.Size)
 	if err != nil {
 		return 0, fmt.Errorf("copy %s: %w", target, err)
 	}
@@ -340,10 +338,10 @@ func stripFirstComponent(name string) (string, error) {
 
 	clean := path.Clean(name)
 
-	idx := strings.IndexByte(clean, '/')
-	if idx < 0 {
+	_, after, ok := strings.Cut(clean, "/")
+	if !ok {
 		return "", nil
 	}
 
-	return clean[idx+1:], nil
+	return after, nil
 }

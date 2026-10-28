@@ -123,10 +123,12 @@ func ResolveAndroidBuildTasks(in ResolveAndroidBuildTasksInput) (string, error) 
 	}
 
 	flavorCap := capitalizeFirst(in.Flavor)
+
 	var parts []string
 	if in.RunTests {
 		parts = append(parts, module+":test")
 	}
+
 	if in.Library {
 		return strings.Join(append(parts, module+":assemble"+flavorCap+"Release"), " "), nil
 	}
@@ -254,50 +256,50 @@ type AndroidSummaryInput struct {
 
 // RenderAndroidSummary is the pure markdown body of.
 func RenderAndroidSummary(in AndroidSummaryInput, now time.Time) string {
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var builder strings.Builder
 
 	if in.Library {
 		in.BuildTypes, in.IncludeAAB, in.Signing = "release (library)", false, false
 	}
 
-	_, _ = fmt.Fprintf(&b, "## Android Variants Build Summary 📱\n\n")
+	_, _ = fmt.Fprintf(&builder, "## Android Variants Build Summary 📱\n\n")
 
-	_, _ = fmt.Fprintf(&b, "### Configuration\n")
-	_, _ = fmt.Fprintf(&b, "| Setting | Value |\n")
-	_, _ = fmt.Fprintf(&b, "|---------|-------|\n")
-	_, _ = fmt.Fprintf(&b, "| **Java** | %s (%s) |\n", summary.LiteralText(in.JavaVersion), summary.LiteralText(in.JDKDist))
-	_, _ = fmt.Fprintf(&b, "| **Module** | %s |\n", summary.LiteralText(in.BuildModule))
+	_, _ = fmt.Fprintf(&builder, "### Configuration\n")
+	_, _ = fmt.Fprintf(&builder, "| Setting | Value |\n")
+	_, _ = fmt.Fprintf(&builder, "|---------|-------|\n")
+	_, _ = fmt.Fprintf(&builder, "| **Java** | %s (%s) |\n", summary.LiteralText(in.JavaVersion), summary.LiteralText(in.JDKDist))
+	_, _ = fmt.Fprintf(&builder, "| **Module** | %s |\n", summary.LiteralText(in.BuildModule))
 
 	flavor := in.Flavor
 	if flavor == "" {
 		flavor = "default"
 	}
 
-	_, _ = fmt.Fprintf(&b, "| **Flavor** | %s |\n", summary.LiteralText(flavor))
-	_, _ = fmt.Fprintf(&b, "| **Build Types** | %s |\n", summary.LiteralText(in.BuildTypes))
-	_, _ = fmt.Fprintf(&b, "| **Include AAB** | %s |\n", checkmark(in.IncludeAAB))
-	_, _ = fmt.Fprintf(&b, "| **Signing** | %s |\n", boolStatus(in.Signing))
+	_, _ = fmt.Fprintf(&builder, "| **Flavor** | %s |\n", summary.LiteralText(flavor))
+	_, _ = fmt.Fprintf(&builder, "| **Build Types** | %s |\n", summary.LiteralText(in.BuildTypes))
+	_, _ = fmt.Fprintf(&builder, "| **Include AAB** | %s |\n", checkmark(in.IncludeAAB))
+	_, _ = fmt.Fprintf(&builder, "| **Signing** | %s |\n", boolStatus(in.Signing))
 
 	if in.SkipTests {
-		_, _ = fmt.Fprintf(&b, "| **Tests** | ⊘ Skipped |\n")
+		_, _ = fmt.Fprintf(&builder, "| **Tests** | ⊘ Skipped |\n")
 	} else {
-		_, _ = fmt.Fprintf(&b, "| **Tests** | ✓ Executed |\n")
+		_, _ = fmt.Fprintf(&builder, "| **Tests** | ✓ Executed |\n")
 	}
 
 	if in.Version != "" && in.Version != "unknown" {
 		if in.Library {
-			_, _ = fmt.Fprintf(&b, "| **Version** | %s |\n", summary.LiteralText(in.Version))
+			_, _ = fmt.Fprintf(&builder, "| **Version** | %s |\n", summary.LiteralText(in.Version))
 		} else {
-			_, _ = fmt.Fprintf(&b, "| **Version** | %s (%s) |\n", summary.LiteralText(in.Version), summary.LiteralText(in.VersionCode))
+			_, _ = fmt.Fprintf(&builder, "| **Version** | %s (%s) |\n", summary.LiteralText(in.Version), summary.LiteralText(in.VersionCode))
 		}
 	}
 
-	_, _ = fmt.Fprintf(&b, "\n### Artifacts Generated\n")
+	_, _ = fmt.Fprintf(&builder, "\n### Artifacts Generated\n")
 
-	_, _ = b.WriteString(androidArtifactSummary(in))
-	_, _ = fmt.Fprintf(&b, "\n*Build completed at %s*\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
+	_, _ = builder.WriteString(androidArtifactSummary(in))
+	_, _ = fmt.Fprintf(&builder, "\n*Build completed at %s*\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
 
-	return b.String()
+	return builder.String()
 }
 
 func androidArtifactSummary(in AndroidSummaryInput) string {

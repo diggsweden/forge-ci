@@ -152,7 +152,7 @@ func writeFileAtomic(path string, data []byte, perm fs.FileMode) error {
 
 	// The temp must share the destination's directory (hence filesystem)
 	// for the rename to be atomic.
-	tmp, err := os.CreateTemp(dir, base+".tmp-*") //nolint:varnamelen // 'tmp' is the idiomatic name for the temp file.
+	tmp, err := os.CreateTemp(dir, base+".tmp-*")
 	if err != nil {
 		return fmt.Errorf("create temp for %s: %w", path, err)
 	}

@@ -4,6 +4,7 @@
 package output_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/domain/output"
@@ -21,15 +22,7 @@ func FuzzParseOutputFormat(f *testing.F) {
 			return
 		}
 
-		valid := false
-
-		for _, candidate := range output.All() {
-			if parsed == candidate {
-				valid = true
-
-				break
-			}
-		}
+		valid := slices.Contains(output.All(), parsed)
 
 		if !valid {
 			t.Fatalf("Parse returned unknown format %q for %q", parsed, in)

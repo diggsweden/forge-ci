@@ -57,8 +57,6 @@ const (
 )
 
 // concrete is the resolved (post-Resolve) format set, in display order.
-//
-//nolint:gochecknoglobals // resolved-format enumeration — read-only.
 var concrete = []Format{FormatText, FormatJSON, FormatGitHub, FormatForgejo, FormatGitLab}
 
 // All returns every accepted flag value including "auto". Used for the
@@ -78,7 +76,7 @@ var ErrUnknownFormat = errors.New("unknown output format")
 // Parse parses a user-supplied string into a Format. Case-insensitive.
 // Empty input is rejected — callers should pass FormatAuto explicitly
 // rather than relying on zero-value behaviour.
-func Parse(s string) (Format, error) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func Parse(s string) (Format, error) {
 	lower := strings.ToLower(strings.TrimSpace(s))
 	if lower == "" {
 		return "", fmt.Errorf("%w: empty (want one of %s)", ErrUnknownFormat, joinFormats(All()))
@@ -141,7 +139,7 @@ func Resolve(f Format, runner provider.RunnerKind) Format {
 }
 
 func joinFormats(fs []Format) string {
-	s := make([]string, len(fs)) //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	s := make([]string, len(fs))
 	for i, f := range fs {
 		s[i] = string(f)
 	}

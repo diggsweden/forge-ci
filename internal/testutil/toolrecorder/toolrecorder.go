@@ -317,7 +317,7 @@ func (r *Recorder) writeArtifacts(dir string, artifacts map[string]string, mode 
 			r.t.Fatalf("toolrecorder: create %s: %v", filepath.Dir(path), err)
 		}
 
-		if err := os.WriteFile(path, []byte(artifacts[name]), mode); err != nil { //nolint:gosec // the mode is the fixture's contract.
+		if err := os.WriteFile(path, []byte(artifacts[name]), mode); err != nil {
 			r.t.Fatalf("toolrecorder: write %s: %v", path, err)
 		}
 	}

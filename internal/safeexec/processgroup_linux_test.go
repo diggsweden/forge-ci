@@ -21,7 +21,7 @@ import (
 // A cancelled command took only its direct child with it: a grandchild, such
 // as a build step's own process, kept running after a timeout or a runner's
 // cancellation. Off a terminal the whole process group goes.
-func TestCommand_CancellationKillsTheProcessGroup(t *testing.T) { //nolint:paralleltest // replaces the package's terminal check.
+func TestCommand_CancellationKillsTheProcessGroup(t *testing.T) {
 	safeexec.UseInteractive(t, false)
 
 	ctx, cancel := context.WithCancel(t.Context())
@@ -66,7 +66,7 @@ func TestCommand_CancellationKillsTheProcessGroup(t *testing.T) { //nolint:paral
 
 // On a terminal the command stays in the foreground process group, where
 // Ctrl-C reaches it and it may read the terminal.
-func TestCommand_StaysInTheForegroundGroupOnATerminal(t *testing.T) { //nolint:paralleltest // replaces the package's terminal check.
+func TestCommand_StaysInTheForegroundGroupOnATerminal(t *testing.T) {
 	safeexec.UseInteractive(t, true)
 
 	cmd := safeexec.Command(t.Context(), "/bin/true")

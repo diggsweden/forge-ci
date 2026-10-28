@@ -15,7 +15,7 @@ import (
 )
 
 // interactive reports whether this process reads a terminal. Tests replace it.
-var interactive = func() bool { return term.IsTerminal(int(os.Stdin.Fd())) } //nolint:gochecknoglobals // test seam for the terminal check.
+var interactive = func() bool { return term.IsTerminal(int(os.Stdin.Fd())) }
 
 // configureProcessGroup makes a cancelled command take its whole process
 // tree with it. exec's default cancellation kills the direct child only, so

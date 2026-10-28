@@ -20,6 +20,7 @@ import (
 // ErrUnsupported).
 type multilineSink struct {
 	ci.OutputSink
+
 	lines      map[string][]string
 	rejectWith error
 }
@@ -42,6 +43,7 @@ func (s *multilineSink) SetMultiline(_ context.Context, key string, lines []stri
 // falls back to.
 type recordingManifest struct {
 	ci.ManifestSink
+
 	stage  string
 	result map[string]any
 	writes int

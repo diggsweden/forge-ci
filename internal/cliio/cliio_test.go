@@ -69,7 +69,7 @@ func TestWriteFile_AtomicReplaceCorrectPermNoLeftover(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := os.ReadFile(path) //nolint:gosec // test fixture path
+	got, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,26 +108,26 @@ func TestWriteFile_FailureLeavesExistingIntact(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "f.json")
 
-	if err := os.WriteFile(path, []byte("ORIGINAL"), 0o600); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(path, []byte("ORIGINAL"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
 	// A read-only directory makes the temp creation fail; the original
 	// file must survive untouched (the atomicity guarantee that keeps a
 	// re-run recoverable). Directories need the exec bit, hence 0o500/0o700.
-	if err := os.Chmod(dir, 0o500); err != nil { //nolint:gosec // intentionally read-only directory for the test
+	if err := os.Chmod(dir, 0o500); err != nil {
 		t.Fatal(err)
 	}
 
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) }) //nolint:gosec // restore writable test dir
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
 
 	if err := cliio.WriteFile(path, []byte("NEW"), 0o600); err == nil {
 		t.Fatal("expected write to fail when the temp cannot be created")
 	}
 
-	_ = os.Chmod(dir, 0o700) //nolint:gosec // restore writable test dir
+	_ = os.Chmod(dir, 0o700)
 
-	got, err := os.ReadFile(path) //nolint:gosec // test fixture path
+	got, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,15 +159,15 @@ func TestReadFile_StdSentinelRefusesCharDevice(t *testing.T) {
 	// /dev/null is a character device on the platforms we target.
 	// Substituting it for os.Stdin exercises the clig.dev guard
 	// without needing an actual TTY in the test process.
-	f, err := os.Open(os.DevNull)
+	file, err := os.Open(os.DevNull)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Cleanup(func() { _ = f.Close() })
+	t.Cleanup(func() { _ = file.Close() })
 
 	orig := os.Stdin
-	os.Stdin = f
+	os.Stdin = file
 
 	t.Cleanup(func() { os.Stdin = orig })
 
@@ -182,22 +182,22 @@ func TestReadFile_StdSentinelRefusesCharDevice(t *testing.T) {
 }
 
 func TestReadFile_StdSentinelReadsStdin(t *testing.T) {
-	r, w, err := os.Pipe()
+	reader, writer, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Cleanup(func() { _ = r.Close() })
+	t.Cleanup(func() { _ = reader.Close() })
 
 	orig := os.Stdin
-	os.Stdin = r
+	os.Stdin = reader
 
 	t.Cleanup(func() { os.Stdin = orig })
 
 	go func() {
-		defer func() { _ = w.Close() }()
+		defer func() { _ = writer.Close() }()
 
-		_, _ = w.WriteString("piped content")
+		_, _ = writer.WriteString("piped content")
 	}()
 
 	got, err := cliio.ReadFile(cliio.StdSentinel)
@@ -218,7 +218,7 @@ func TestWriteFile_ToDisk(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := os.ReadFile(path) //nolint:gosec // test fixture
+	got, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,24 +243,24 @@ func TestCreateWriter_StreamsToDisk(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "stream.txt")
 
-	w, err := cliio.CreateWriter(path, 0o600)
+	out, err := cliio.CreateWriter(path, 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if _, writeErr := w.Write([]byte("chunk-1 ")); writeErr != nil {
+	if _, writeErr := out.Write([]byte("chunk-1 ")); writeErr != nil {
 		t.Fatal(writeErr)
 	}
 
-	if _, writeErr := w.Write([]byte("chunk-2")); writeErr != nil {
+	if _, writeErr := out.Write([]byte("chunk-2")); writeErr != nil {
 		t.Fatal(writeErr)
 	}
 
-	if closeErr := w.Close(); closeErr != nil {
+	if closeErr := out.Close(); closeErr != nil {
 		t.Fatal(closeErr)
 	}
 
-	got, err := os.ReadFile(path) //nolint:gosec // test fixture
+	got, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,20 +272,20 @@ func TestCreateWriter_StreamsToDisk(t *testing.T) {
 
 func TestCreateWriter_StdSentinelStreamsStdout(t *testing.T) {
 	got := captureStdout(t, func() {
-		w, err := cliio.CreateWriter(cliio.StdSentinel, 0o600)
+		out, err := cliio.CreateWriter(cliio.StdSentinel, 0o600)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if _, err := w.Write([]byte("streamed-")); err != nil {
+		if _, err := out.Write([]byte("streamed-")); err != nil {
 			t.Fatal(err)
 		}
 
-		if _, err := w.Write([]byte("stdout")); err != nil {
+		if _, err := out.Write([]byte("stdout")); err != nil {
 			t.Fatal(err)
 		}
 		// Stdout closer is a no-op; safe to defer-and-call.
-		if err := w.Close(); err != nil {
+		if err := out.Close(); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -305,27 +305,27 @@ func TestCreateWriter_StdSentinelStreamsStdout(t *testing.T) {
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 
-	r, w, err := os.Pipe()
+	reader, writer, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
-		_ = r.Close()
-		_ = w.Close()
+		_ = reader.Close()
+		_ = writer.Close()
 	})
 
 	orig := os.Stdout
-	os.Stdout = w
+	os.Stdout = writer
 
 	defer func() { os.Stdout = orig }()
 
 	fn()
 
-	_ = w.Close()
+	_ = writer.Close()
 
 	var buf bytes.Buffer
-	if _, err := buf.ReadFrom(r); err != nil {
+	if _, err := buf.ReadFrom(reader); err != nil {
 		t.Fatal(err)
 	}
 

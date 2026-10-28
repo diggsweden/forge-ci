@@ -28,6 +28,8 @@ func TestParseTrivyReport_RejectsObjectsWithoutReportEvidence(t *testing.T) {
 		{"null-report", `null`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			report, err := security.ParseTrivyReport([]byte(tc.body))
 			require.ErrorIs(t, err, errs.ErrMalformedInput)
 			require.Nil(t, report)
@@ -50,6 +52,8 @@ func TestParseTrivyReport_AcceptsSupportedCleanSubsets(t *testing.T) {
 		{"name-preserved", `{"ArtifactName":" image \t","Future":true}`, security.TrivyReport{ArtifactName: " image \t"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			report, err := security.ParseTrivyReport([]byte(tc.body))
 			require.NoError(t, err)
 			require.Equal(t, &tc.want, report)
@@ -82,6 +86,8 @@ func TestParseTrivyReport_RetainsJSONDecodeCauses(t *testing.T) {
 		{"references", `{"Results":[{"Vulnerabilities":[{"References":[42]}]}]}`, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			report, err := security.ParseTrivyReport([]byte(tc.body))
 			require.ErrorIs(t, err, errs.ErrMalformedInput)
 			require.Nil(t, report)
@@ -182,9 +188,11 @@ func TestClassifyTrivyFindings_PreservesAffectedBinaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(got.Fixable) != 2 {
 		t.Fatalf("want one finding per affected binary, got %+v", got)
 	}
+
 	if got.Fixable[0].Target != "usr/bin/another-helper" || got.Fixable[1].Target != "usr/bin/pebble" {
 		t.Fatalf("affected binaries lost or unsorted: %+v", got.Fixable)
 	}
@@ -192,6 +200,7 @@ func TestClassifyTrivyFindings_PreservesAffectedBinaries(t *testing.T) {
 
 func TestClassifyTrivyFindings_IdentifiesNestedPackage(t *testing.T) {
 	t.Parallel()
+
 	got, err := security.ClassifyTrivyFindings([]byte(`{"Results":[{
 		"Target":"Java","Vulnerabilities":[{
 			"VulnerabilityID":"CVE-JAR","PkgName":"jackson-core",
@@ -201,6 +210,7 @@ func TestClassifyTrivyFindings_IdentifiesNestedPackage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(got.Fixable) != 1 || got.Fixable[0].Target != "app/application.jar/BOOT-INF/lib/jackson-core-3.1.5.jar" {
 		t.Fatalf("want actionable nested package path rather than generic Java target, got %+v", got)
 	}

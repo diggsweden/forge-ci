@@ -16,12 +16,12 @@ func TestWriterRedactsSplitAndOversizedDiagnostics(t *testing.T) {
 
 	var out bytes.Buffer
 
-	w := secrettext.NewWriter(&out, "synthetic-secret-token")
+	writer := secrettext.NewWriter(&out, "synthetic-secret-token")
 	for _, part := range []string{"token=synthetic-", "secret-token\n", strings.Repeat("x", 70<<10), "synthetic-secret-token\n", "done synthetic-secret-token"} {
-		_, err := w.Write([]byte(part))
+		_, err := writer.Write([]byte(part))
 		require.NoError(t, err)
 	}
 
-	require.NoError(t, w.Close())
+	require.NoError(t, writer.Close())
 	require.Equal(t, "token=[redacted]\n[oversized diagnostic line suppressed]\ndone [redacted]", out.String())
 }

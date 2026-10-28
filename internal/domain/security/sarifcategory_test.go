@@ -14,6 +14,7 @@ import (
 
 func TestSetSARIFCategory_ProducesActualGitHubCategoryComponents(t *testing.T) {
 	t.Parallel()
+
 	for _, test := range []struct {
 		body       string
 		categories []string
@@ -25,13 +26,16 @@ func TestSetSARIFCategory_ProducesActualGitHubCategoryComponents(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		for index, expected := range test.categories {
 			id := runID(t, body, index)
-			lastSlash := strings.LastIndexByte(id, '/')
+			before, _, ok := strings.CutLast(id, "/")
+
 			category := ""
-			if lastSlash >= 0 {
-				category = id[:lastSlash]
+			if ok {
+				category = before
 			}
+
 			if category != expected || !strings.HasSuffix(id, "/") {
 				t.Fatalf("automation id %q resolves to GitHub category %q, want %q", id, category, expected)
 			}
@@ -41,17 +45,19 @@ func TestSetSARIFCategory_ProducesActualGitHubCategoryComponents(t *testing.T) {
 
 func TestSetSARIFCategory_DoesNotCollideWithAProducerCategoryHavingItsOwnRunID(t *testing.T) {
 	t.Parallel()
+
 	body, err := security.SetSARIFCategory([]byte(`{"runs":[{"automationDetails":{"id":"cat/1/2026-10-20"}},{"tool":{}}]}`), "cat")
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if producer, generated := runID(t, body, 0), runID(t, body, 1); producer != "cat/1/2026-10-20" || generated != "cat/1/1/" {
 		t.Fatalf("producer category was overwritten or collided: %s", body)
 	}
 }
 
 // runID parses a SARIF body and returns runs[i].automationDetails.id.
-func runID(t *testing.T, body []byte, i int) string {
+func runID(t *testing.T, body []byte, index int) string {
 	t.Helper()
 
 	var doc struct {
@@ -65,11 +71,11 @@ func runID(t *testing.T, body []byte, i int) string {
 		t.Fatalf("parse: %v", err)
 	}
 
-	if i >= len(doc.Runs) {
-		t.Fatalf("run %d out of range (%d runs)", i, len(doc.Runs))
+	if index >= len(doc.Runs) {
+		t.Fatalf("run %d out of range (%d runs)", index, len(doc.Runs))
 	}
 
-	return doc.Runs[i].AutomationDetails.ID
+	return doc.Runs[index].AutomationDetails.ID
 }
 
 func TestSetSARIFCategory_SingleRun(t *testing.T) {

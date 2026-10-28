@@ -33,8 +33,6 @@ type UploadEntry struct {
 // can never smuggle a link out of the workspace. When includeHidden is false,
 // dotfiles and dot-directories below that artifact root are skipped. External
 // ancestors of the directory or least common parent do not affect selection.
-//
-//nolint:cyclop // directory and exact-file collection share normalization checks.
 func CollectUploadEntries(dir string, files []string, includeHidden bool) ([]UploadEntry, error) {
 	if dir != "" {
 		return walkDir(dir, includeHidden)

@@ -82,25 +82,25 @@ type GradleSummaryInput struct {
 
 // RenderGradleSummary returns the markdown block written by.
 func RenderGradleSummary(in GradleSummaryInput, now time.Time) string {
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var builder strings.Builder
 
-	_, _ = fmt.Fprintf(&b, "## Gradle Build Summary 🔨\n")
-	_, _ = fmt.Fprintf(&b, "\n")
-	_, _ = fmt.Fprintf(&b, "- **Java:** %s\n", summary.LiteralText(in.JavaVersion))
-	_, _ = fmt.Fprintf(&b, "- **Tasks:** %s\n", summary.LiteralText(in.GradleTasks))
+	_, _ = fmt.Fprintf(&builder, "## Gradle Build Summary 🔨\n")
+	_, _ = fmt.Fprintf(&builder, "\n")
+	_, _ = fmt.Fprintf(&builder, "- **Java:** %s\n", summary.LiteralText(in.JavaVersion))
+	_, _ = fmt.Fprintf(&builder, "- **Tasks:** %s\n", summary.LiteralText(in.GradleTasks))
 
 	if in.SkipTests {
-		_, _ = fmt.Fprintf(&b, "- **Tests:** ⊘ Skipped\n")
+		_, _ = fmt.Fprintf(&builder, "- **Tests:** ⊘ Skipped\n")
 	} else {
-		_, _ = fmt.Fprintf(&b, "- **Tests:** ✓ Executed\n")
+		_, _ = fmt.Fprintf(&builder, "- **Tests:** ✓ Executed\n")
 	}
 
 	if in.Version != "" {
-		_, _ = fmt.Fprintf(&b, "- **Version:** %s\n", summary.LiteralText(in.Version))
+		_, _ = fmt.Fprintf(&builder, "- **Version:** %s\n", summary.LiteralText(in.Version))
 	}
 
-	_, _ = fmt.Fprintf(&b, "\n")
-	_, _ = fmt.Fprintf(&b, "*Build completed at %s*\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
+	_, _ = fmt.Fprintf(&builder, "\n")
+	_, _ = fmt.Fprintf(&builder, "*Build completed at %s*\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
 
-	return b.String()
+	return builder.String()
 }

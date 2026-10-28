@@ -59,16 +59,16 @@ func TestOutputPaths_RefuseASymlinkedDestination(t *testing.T) {
 			refuses: true,
 			why:     "used to truncate and overwrite the link's TARGET",
 			write: func(path string) error {
-				w, err := cliio.CreateWriter(path, 0o600)
+				out, err := cliio.CreateWriter(path, 0o600)
 				if err != nil {
 					return err
 				}
 
-				if _, err := w.Write([]byte("NEW\n")); err != nil {
-					return errors.Join(err, w.Close())
+				if _, err := out.Write([]byte("NEW\n")); err != nil {
+					return errors.Join(err, out.Close())
 				}
 
-				return w.Close()
+				return out.Close()
 			},
 		},
 		{
@@ -103,7 +103,7 @@ func TestOutputPaths_RefuseASymlinkedDestination(t *testing.T) {
 			}
 
 			// The shared property, whichever mechanism got there.
-			body, readErr := os.ReadFile(target) //nolint:gosec // owned temporary file.
+			body, readErr := os.ReadFile(target)
 			require.NoError(t, readErr)
 			require.Equalf(t, original, string(body),
 				"the symlink's target was modified by a write aimed at the link: %s", tc.why)
@@ -179,7 +179,7 @@ func TestWriteFile_ShorterContentReplacesLonger(t *testing.T) {
 func readBack(t *testing.T, path string) string {
 	t.Helper()
 
-	body, err := os.ReadFile(path) //nolint:gosec // owned temporary file.
+	body, err := os.ReadFile(path)
 	require.NoError(t, err)
 
 	return string(body)
@@ -195,14 +195,14 @@ type failingCloser struct {
 	closed   int
 }
 
-func (f *failingCloser) Write(p []byte) (int, error) {
+func (f *failingCloser) Write(data []byte) (int, error) {
 	if f.writeErr != nil {
 		return 0, f.writeErr
 	}
 
-	f.written = append(f.written, string(p))
+	f.written = append(f.written, string(data))
 
-	return len(p), nil
+	return len(data), nil
 }
 
 func (f *failingCloser) Close() error {
@@ -217,8 +217,8 @@ func (f *failingCloser) Close() error {
 func TestWriteLinesAndClose_ReportsBothFailures(t *testing.T) {
 	t.Parallel()
 
-	writeFailure := errors.New("write failed") //nolint:err113 // injected identity is the contract.
-	closeFailure := errors.New("close failed") //nolint:err113 // injected identity is the contract.
+	writeFailure := errors.New("write failed")
+	closeFailure := errors.New("close failed")
 
 	for _, tc := range []struct {
 		name      string

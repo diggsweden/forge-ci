@@ -26,7 +26,7 @@ func env(m map[string]string) func(string) string {
 func TestCredential_GitHubTokenNeverLeavesGitHub(t *testing.T) {
 	t.Parallel()
 
-	e := env(map[string]string{ //nolint:gosec // G101: invented values in a fixture; the real secrets are names only.
+	getenv := env(map[string]string{
 		"GITHUB_ACTIONS":     "true",
 		"GITHUB_TOKEN":       "ghs_github_job_token",
 		"GITHUB_SERVER_URL":  "https://github.com",
@@ -34,7 +34,7 @@ func TestCredential_GitHubTokenNeverLeavesGitHub(t *testing.T) {
 		"FORGEJO_TOKEN":      "", // an unset ${{ secrets.X }} interpolates to ""
 	})
 
-	cred := runcontext.Token().Resolve(e)
+	cred := runcontext.Token().Resolve(getenv)
 
 	if got := cred.For("https://third-party.example/o/r"); got != "" {
 		t.Errorf("GitHub's job token must not be sent to a third-party host; got %q", got)
@@ -51,7 +51,7 @@ func TestCredential_GitHubTokenNeverLeavesGitHub(t *testing.T) {
 func TestCredential_DeliberateTokenCrossesForges(t *testing.T) {
 	t.Parallel()
 
-	e := env(map[string]string{ //nolint:gosec // G101: invented values in a fixture; the real secrets are names only.
+	getenv := env(map[string]string{
 		"GITHUB_ACTIONS":     "true", // a GitHub runner...
 		"GITHUB_TOKEN":       "ghs_github_job_token",
 		"GITHUB_SERVER_URL":  "https://github.com",
@@ -61,7 +61,7 @@ func TestCredential_DeliberateTokenCrossesForges(t *testing.T) {
 
 	// FORGEJO_TOKEN precedes GITHUB_TOKEN in the chain, so it wins and is
 	// unrestricted -- GitHub never sets it, so whoever did meant it.
-	if got := runcontext.Token().Resolve(e).For("https://codeberg.org/o/r"); got != "forgejo_pat" {
+	if got := runcontext.Token().Resolve(getenv).For("https://codeberg.org/o/r"); got != "forgejo_pat" {
 		t.Errorf("a deliberately-set token must reach its forge; got %q", got)
 	}
 }
@@ -76,13 +76,13 @@ func TestCredential_ForgejoNativeTokensStayOnForgejo(t *testing.T) {
 		marker string
 		token  string
 	}{
-		{name: "forgejo", marker: "FORGEJO_ACTIONS", token: "FORGEJO_TOKEN"}, //nolint:gosec // G101: environment variable name, not a credential.
-		{name: "gitea", marker: "GITEA_ACTIONS", token: "GITEA_TOKEN"},       //nolint:gosec // G101: environment variable name, not a credential.
+		{name: "forgejo", marker: "FORGEJO_ACTIONS", token: "FORGEJO_TOKEN"},
+		{name: "gitea", marker: "GITEA_ACTIONS", token: "GITEA_TOKEN"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			values := map[string]string{ //nolint:gosec // G101: invented values in a fixture.
+			values := map[string]string{
 				"GITHUB_ACTIONS":     "true",
 				"FORGEJO_SERVER_URL": "https://code.example",
 				tc.marker:            "true",
@@ -106,7 +106,7 @@ func TestCredential_ForgejoNativeTokensStayOnForgejo(t *testing.T) {
 func TestCredential_CITokenIsAnOrchestratedOverride(t *testing.T) {
 	t.Parallel()
 
-	e := env(map[string]string{ //nolint:gosec // G101: invented values in a fixture.
+	getenv := env(map[string]string{
 		"GITHUB_ACTIONS":     "true",
 		"FORGEJO_ACTIONS":    "true",
 		"FORGEJO_SERVER_URL": "https://code.example",
@@ -114,7 +114,7 @@ func TestCredential_CITokenIsAnOrchestratedOverride(t *testing.T) {
 		"FORGEJO_TOKEN":      "native-job-token",
 	})
 
-	if got := runcontext.Token().Resolve(e).For("https://mirror.example/o/r"); got != "orchestrated-token" {
+	if got := runcontext.Token().Resolve(getenv).For("https://mirror.example/o/r"); got != "orchestrated-token" {
 		t.Errorf("orchestrated CI_TOKEN must retain its operator-selected audience; got %q", got)
 	}
 }
@@ -126,14 +126,14 @@ func TestCredential_CITokenIsAnOrchestratedOverride(t *testing.T) {
 func TestCredential_ActRunnerGitHubAliasIsItsOwn(t *testing.T) {
 	t.Parallel()
 
-	e := env(map[string]string{ //nolint:gosec // G101: invented values in a fixture; the real secrets are names only.
+	getenv := env(map[string]string{
 		"GITHUB_ACTIONS":     "true",
 		"FORGEJO_ACTIONS":    "true",
 		"GITHUB_TOKEN":       "forgejo_job_token",
 		"FORGEJO_SERVER_URL": "https://codeberg.org",
 	})
 
-	if got := runcontext.Token().Resolve(e).For("https://codeberg.org/o/r"); got != "forgejo_job_token" {
+	if got := runcontext.Token().Resolve(getenv).For("https://codeberg.org/o/r"); got != "forgejo_job_token" {
 		t.Errorf("act_runner's GitHub-aliased job token must work at its own server; got %q", got)
 	}
 }
@@ -145,7 +145,7 @@ func TestCredential_ActRunnerGitHubAliasIsItsOwn(t *testing.T) {
 func TestCredential_OriginIsComparedNotPrefixed(t *testing.T) {
 	t.Parallel()
 
-	e := env(map[string]string{ //nolint:gosec // G101: invented values in a fixture; the real secrets are names only.
+	e := env(map[string]string{
 		"GITHUB_ACTIONS":    "true",
 		"GITHUB_TOKEN":      "ghs_secret",
 		"GITHUB_SERVER_URL": "https://github.com",
@@ -172,13 +172,13 @@ func TestCredential_OriginIsComparedNotPrefixed(t *testing.T) {
 func TestCredential_FailsClosedWithoutAttestedServer(t *testing.T) {
 	t.Parallel()
 
-	e := env(map[string]string{ //nolint:gosec // G101: invented values in a fixture; the real secrets are names only.
+	getenv := env(map[string]string{
 		"GITHUB_ACTIONS": "true",
 		"GITHUB_TOKEN":   "ghs_secret",
 		// no GITHUB_SERVER_URL
 	})
 
-	cred := runcontext.Token().Resolve(e)
+	cred := runcontext.Token().Resolve(getenv)
 	if got := cred.For("https://github.com/o/r"); got != "" {
 		t.Errorf("an ambient token with no attested server must be usable nowhere; got %q", got)
 	}
@@ -316,7 +316,7 @@ func TestCredential_OperatorCredentialIsUnrestricted(t *testing.T) {
 func TestCredential_EmptyReleaseTokenFallsThrough(t *testing.T) {
 	t.Parallel()
 
-	e := env(map[string]string{ //nolint:gosec // G101: invented values in a fixture; the real secrets are names only.
+	getenv := env(map[string]string{
 		"RELEASE_TOKEN":      "", // unset secret resolved to "" (the trap)
 		"CI_TOKEN":           "",
 		"FORGEJO_TOKEN":      "forgejo-tok", // forge-generic fallback
@@ -324,7 +324,7 @@ func TestCredential_EmptyReleaseTokenFallsThrough(t *testing.T) {
 		"FORGEJO_SERVER_URL": "https://codeberg.org",
 	})
 
-	if got := runcontext.ReleaseToken().Resolve(e).For("https://codeberg.org/o/r"); got != "forgejo-tok" {
+	if got := runcontext.ReleaseToken().Resolve(getenv).For("https://codeberg.org/o/r"); got != "forgejo-tok" {
 		t.Errorf("empty RELEASE_TOKEN must fall through; got %q", got)
 	}
 }
@@ -335,18 +335,18 @@ func TestCredential_EmptyReleaseTokenFallsThrough(t *testing.T) {
 func TestCredential_DedicatedReleaseTokenWins(t *testing.T) {
 	t.Parallel()
 
-	e := env(map[string]string{ //nolint:gosec // G101: invented values in a fixture; the real secrets are names only.
+	getenv := env(map[string]string{
 		"GITHUB_ACTIONS":    "true",
 		"RELEASE_TOKEN":     "release-tok",
 		"GITHUB_TOKEN":      "github-tok",
 		"GITHUB_SERVER_URL": "https://github.com",
 	})
 
-	if got := runcontext.ReleaseToken().Resolve(e).For("https://github.com/o/r"); got != "release-tok" {
+	if got := runcontext.ReleaseToken().Resolve(getenv).For("https://github.com/o/r"); got != "release-tok" {
 		t.Errorf("dedicated write token must win; got %q", got)
 	}
 
-	if got := runcontext.ReleaseToken().Resolve(e).For("https://mirror.example/o/r"); got != "release-tok" {
+	if got := runcontext.ReleaseToken().Resolve(getenv).For("https://mirror.example/o/r"); got != "release-tok" {
 		t.Errorf("a deliberately-configured release token must still reach a mirror; got %q", got)
 	}
 }
@@ -364,14 +364,14 @@ func TestCredential_DedicatedReleaseTokenWins(t *testing.T) {
 func TestCredential_ActRunnerGitHubAliasIsDeniedElsewhere(t *testing.T) {
 	t.Parallel()
 
-	e := env(map[string]string{ //nolint:gosec // G101: invented values in a fixture; the real secrets are names only.
+	getenv := env(map[string]string{
 		"GITHUB_ACTIONS":     "true",
 		"FORGEJO_ACTIONS":    "true",
 		"GITHUB_TOKEN":       "forgejo_job_token",
 		"FORGEJO_SERVER_URL": "https://codeberg.org",
 	})
 
-	resolved := runcontext.Token().Resolve(e)
+	resolved := runcontext.Token().Resolve(getenv)
 
 	for _, destination := range []string{
 		"https://github.com/o/r",

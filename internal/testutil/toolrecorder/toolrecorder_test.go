@@ -53,7 +53,7 @@ func TestRecorder_NormalizesEveryPortIntoOneSequence(t *testing.T) {
 func TestRecorder_FailsOneCallAndLeavesTheRestAlone(t *testing.T) {
 	t.Parallel()
 
-	stop := errors.New("owned tool refusal") //nolint:err113 // per-test cause.
+	stop := errors.New("owned tool refusal")
 	rec := toolrecorder.New(t).FailAt(1, stop)
 
 	require.NoError(t, rec.RunInherit(t.Context(), nil, nil, "first"))

@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
@@ -81,7 +82,7 @@ type stagedTree struct {
 	links []string
 }
 
-func inspectStagedTree(root *os.Root, allowRelativeSymlinks bool) (stagedTree, error) { //nolint:cyclop // path, type and optional confined-link checks precede every installation.
+func inspectStagedTree(root *os.Root, allowRelativeSymlinks bool) (stagedTree, error) {
 	var tree stagedTree
 
 	err := fs.WalkDir(root.FS(), ".", func(path string, entry fs.DirEntry, walkErr error) error {
@@ -191,22 +192,21 @@ func (tx *installTransaction) backupPath(rel string) string {
 func (tx *installTransaction) rollback() error {
 	var failures []error
 
-	for i := len(tx.installed) - 1; i >= 0; i-- {
-		if err := tx.root.Remove(tx.installed[i]); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			failures = append(failures, fmt.Errorf("remove replacement %q: %w", tx.installed[i], err))
+	for _, v := range slices.Backward(tx.installed) {
+		if err := tx.root.Remove(v); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			failures = append(failures, fmt.Errorf("remove replacement %q: %w", v, err))
 		}
 	}
 
-	for i := len(tx.backedUp) - 1; i >= 0; i-- {
-		rel := tx.backedUp[i]
+	for _, rel := range slices.Backward(tx.backedUp) {
 		if err := tx.root.Rename(tx.backupPath(rel), rel); err != nil {
 			failures = append(failures, fmt.Errorf("restore %q: %w", rel, err))
 		}
 	}
 
-	for i := len(tx.createdDirs) - 1; i >= 0; i-- {
-		if err := tx.root.Remove(tx.createdDirs[i]); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			failures = append(failures, fmt.Errorf("remove created directory %q: %w", tx.createdDirs[i], err))
+	for _, v := range slices.Backward(tx.createdDirs) {
+		if err := tx.root.Remove(v); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			failures = append(failures, fmt.Errorf("remove created directory %q: %w", v, err))
 		}
 	}
 

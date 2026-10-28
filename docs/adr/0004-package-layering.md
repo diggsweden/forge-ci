@@ -36,7 +36,7 @@ Environment-based provider detection belongs in `adapters/platform`.
 
 ## Enforcement
 
-The `layer-*` depguard rules in `.golangci.yml` reject outward production imports.
+The `layer-*` depguard rules in `development/golangci-lint/golangci.yml` reject outward production imports.
 `test/archguard` supplements them with effect and ownership checks. Build variants
 excluded on the current host are covered by the variant-eligibility checks.
 

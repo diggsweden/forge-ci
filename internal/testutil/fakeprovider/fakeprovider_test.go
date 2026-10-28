@@ -24,7 +24,7 @@ func TestFake_ReleaseRecordingOwnership(t *testing.T) {
 		t.Run(method, func(t *testing.T) {
 			t.Parallel()
 
-			wantErr := errors.New("release rejected") //nolint:err113 // test mock error
+			wantErr := errors.New("release rejected")
 			fake := fakeprovider.New(t).WithCreateReleaseError(wantErr).WithPublishReleaseError(wantErr)
 			invoke, snapshot := fake.CreateRelease, fake.CreateReleaseCalls
 			wantCount := fakeprovider.Calls{CreateRelease: 4}
@@ -76,7 +76,7 @@ func TestFake_ReleaseRecordingOwnership(t *testing.T) {
 func TestFake_SARIFRecordingOwnership(t *testing.T) {
 	t.Parallel()
 
-	wantErr := errors.New("upload rejected") //nolint:err113 // test mock error
+	wantErr := errors.New("upload rejected")
 	fake := fakeprovider.New(t).WithUploadSARIFError(wantErr)
 	require.Empty(t, fake.UploadSARIFCalls())
 
@@ -132,7 +132,6 @@ func TestFake_RecordedArgumentsAreDetachedSnapshots(t *testing.T) {
 	fake := fakeprovider.New(t).WithPlatform(provider.ForgeGitHub)
 
 	for _, repo := range []string{"owner/one", "owner/two"} {
-		//nolint:gosec // G101: fake token literal, not a credential.
 		if err := fake.ValidateToken(t.Context(), "github_pat_fixture", repo); err != nil {
 			t.Fatal(err)
 		}
@@ -185,7 +184,6 @@ func TestFake_CountersCountEachCallExactlyOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	//nolint:gosec // G101: fake token literal, not a credential.
 	if err := fake.ValidateToken(t.Context(), "github_pat_fixture", "owner/repo"); err != nil {
 		t.Fatal(err)
 	}

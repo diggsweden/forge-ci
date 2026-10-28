@@ -35,7 +35,7 @@ func Sources(t *testing.T, flag urfavecli.Flag) urfavecli.ValueSourceChain {
 		t.Fatalf("flag %v has no Sources field; cannot audit its value sources", flag.Names())
 	}
 
-	chain, ok := field.Interface().(urfavecli.ValueSourceChain)
+	chain, ok := reflect.TypeAssert[urfavecli.ValueSourceChain](field)
 	if !ok {
 		t.Fatalf("flag %v Sources is not a ValueSourceChain; cannot audit its value sources", flag.Names())
 	}

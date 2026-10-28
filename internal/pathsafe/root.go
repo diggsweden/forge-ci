@@ -62,7 +62,7 @@ func openRoot(name string, perm fs.FileMode, create bool) (*os.Root, error) {
 // command files; then it returns the path through the link's target for the
 // caller to walk again.
 //
-//nolint:cyclop,gocognit // every path component is identity-checked around optional creation.
+//nolint:cyclop // every path component is identity-checked around optional creation.
 func walkRoot(abs, name string, perm fs.FileMode, create bool) (*os.Root, string, error) {
 	volumeRoot := filepath.VolumeName(abs) + string(filepath.Separator)
 

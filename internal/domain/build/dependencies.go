@@ -5,10 +5,11 @@ package build
 
 import (
 	"fmt"
-	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"net"
 	"net/url"
 	"strings"
+
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
 // NPMDependencyAuthConfig authenticates only the named host/path. It deliberately

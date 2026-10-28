@@ -35,15 +35,15 @@ func TestAnnotator_GitHubFormat_EmitsWorkflowCommands(t *testing.T) {
 func TestAnnotator_NonGitHubFormats_EmitPlainPrefix(t *testing.T) {
 	t.Parallel()
 
-	for _, f := range []output.Format{
+	for _, format := range []output.Format{
 		output.FormatText, output.FormatJSON, output.FormatGitLab, output.FormatForgejo, output.FormatAuto,
 	} {
-		t.Run(string(f), func(t *testing.T) {
+		t.Run(string(format), func(t *testing.T) {
 			t.Parallel()
 
 			var buf bytes.Buffer
 
-			a := output.NewAnnotator(&buf, f)
+			a := output.NewAnnotator(&buf, format)
 			a.Errorf("boom")
 			a.Warningf("careful")
 			a.Noticef("FYI")
@@ -63,13 +63,13 @@ func TestAnnotator_NonGitHubFormats_EmitPlainPrefix(t *testing.T) {
 func TestAnnotator_ZeroValue_DiscardsWrites(t *testing.T) {
 	t.Parallel()
 
-	var a output.Annotator
+	var annotator output.Annotator
 
-	a.Errorf("boom")
-	a.Warningf("watch out")
-	a.Noticef("FYI")
-	a.ErrorAt(output.Annotation{File: "f.yml", Line: 6}, "bad value")
-	a.WarningAt(output.Annotation{Title: "Heads up"}, "watch out")
+	annotator.Errorf("boom")
+	annotator.Warningf("watch out")
+	annotator.Noticef("FYI")
+	annotator.ErrorAt(output.Annotation{File: "f.yml", Line: 6}, "bad value")
+	annotator.WarningAt(output.Annotation{Title: "Heads up"}, "watch out")
 }
 
 func TestAnnotator_FormatString_PassedThrough(t *testing.T) {
@@ -185,20 +185,20 @@ func TestAnnotatorFromFlag_ResolvesFormat(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	a := output.AnnotatorFromFlag(&buf, "auto", provider.RunnerGitHub)
-	a.Warningf("watch out")
+	annotator := output.AnnotatorFromFlag(&buf, "auto", provider.RunnerGitHub)
+	annotator.Warningf("watch out")
 	require.Equal(t, "::warning::watch out\n", buf.String())
 
 	buf.Reset()
-	a = output.AnnotatorFromFlag(&buf, "bogus", provider.RunnerGitHub)
-	a.Warningf("watch out")
+	annotator = output.AnnotatorFromFlag(&buf, "bogus", provider.RunnerGitHub)
+	annotator.Warningf("watch out")
 	require.Equal(t, "Warning: watch out\n", buf.String())
 
 	// Forgejo resolves to FormatForgejo, which takes the plain branch —
 	// no unrenderable ::warning:: workflow command (go-gitea/gitea#27898).
 	buf.Reset()
-	a = output.AnnotatorFromFlag(&buf, "auto", provider.RunnerForgejo)
-	a.Warningf("watch out")
+	annotator = output.AnnotatorFromFlag(&buf, "auto", provider.RunnerForgejo)
+	annotator.Warningf("watch out")
 	require.Equal(t, "Warning: watch out\n", buf.String())
 }
 
@@ -226,13 +226,9 @@ func TestAnnotator_ConcurrentSerialisesWrites(t *testing.T) {
 	var wg sync.WaitGroup
 
 	for i := range writers {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			annot.Errorf("message %d", i)
-		}()
+		})
 	}
 
 	wg.Wait()

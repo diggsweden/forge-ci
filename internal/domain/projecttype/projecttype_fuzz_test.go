@@ -14,8 +14,6 @@ import (
 // knownManifests lists every basename DetectFromEntries recognises. It is the
 // set of names, not their priority, so the properties below can check the
 // detector without re-implementing its ordering.
-//
-//nolint:gochecknoglobals // read-only fixture shared by the fuzz properties.
 var knownManifests = []string{
 	"pom.xml", "package.json", "build.gradle", "build.gradle.kts", "go.mod",
 	"Cargo.toml", "pyproject.toml", "requirements.txt", "setup.py",

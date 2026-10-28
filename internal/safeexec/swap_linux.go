@@ -16,8 +16,6 @@ import (
 
 // procSwapsPath is the kernel-published list of active swap areas. Unit tests
 // in this package point it at a fixture; nothing else changes it.
-//
-//nolint:gochecknoglobals // package-private test seam for the kernel file.
 var procSwapsPath = "/proc/swaps"
 
 // procSwapsOverrideEnv names a file read instead of /proc/swaps. It is the

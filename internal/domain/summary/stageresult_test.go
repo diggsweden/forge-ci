@@ -125,14 +125,14 @@ func TestStageResultEnvelope_JSON(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 
-			b, err := testCase.envelope.MarshalJSON()
+			data, err := testCase.envelope.MarshalJSON()
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			var got map[string]any
-			if err := json.Unmarshal(b, &got); err != nil {
-				t.Fatalf("invalid JSON %s: %v", b, err)
+			if err := json.Unmarshal(data, &got); err != nil {
+				t.Fatalf("invalid JSON %s: %v", data, err)
 			}
 
 			if got["version"] != float64(summary.StageResultEnvelopeVersion) || got["stage"] != "build" || got["result"] != testCase.wantResult || got["ran"] != testCase.wantRan {

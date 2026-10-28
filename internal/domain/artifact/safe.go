@@ -78,8 +78,6 @@ func CopyAtMost(dst io.Writer, src io.Reader, maxBytes int64) (int64, error) {
 // OpenUploadEntry reopens a collected upload without following a replaced
 // leaf symlink. The identity and size checks bind validation to the same file
 // descriptor the transport will read.
-//
-//nolint:cyclop // descriptor identity checks intentionally fail at each filesystem boundary.
 func OpenUploadEntry(entry UploadEntry) (*os.File, error) {
 	root, err := os.OpenRoot(filepath.Dir(entry.Abs))
 	if err != nil {

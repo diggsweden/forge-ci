@@ -5,12 +5,13 @@ package reporoot
 
 import (
 	"fmt"
-	"github.com/diggsweden/forge-ci/internal/cliio"
-	"github.com/diggsweden/forge-ci/internal/domain/errs"
-	"github.com/diggsweden/forge-ci/internal/pathsafe"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/diggsweden/forge-ci/internal/cliio"
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/pathsafe"
 )
 
 // ReadFile reads a repository-relative regular file without accepting linked

@@ -9,6 +9,7 @@ package fakeoutputsink
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -138,9 +139,7 @@ func (s *Sink) AllScalar() map[string]string {
 	defer s.mu.Unlock()
 
 	cp := make(map[string]string, len(s.scalar))
-	for k, v := range s.scalar {
-		cp[k] = v
-	}
+	maps.Copy(cp, s.scalar)
 
 	return cp
 }
@@ -200,10 +199,8 @@ var _ ci.OutputSink = (*Sink)(nil)
 // note records key in insertion order on first sight, mirroring how
 // jsonsink positions it.
 func (s *Sink) note(key string) {
-	for _, seen := range s.order {
-		if seen == key {
-			return
-		}
+	if slices.Contains(s.order, key) {
+		return
 	}
 
 	s.order = append(s.order, key)

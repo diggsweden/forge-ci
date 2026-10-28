@@ -40,22 +40,22 @@ func TestSink_MultilineOwnershipAndAbsence(t *testing.T) {
 func TestSink_RejectsAfterClose(t *testing.T) {
 	t.Parallel()
 
-	s := fakeoutputsink.New(t)
+	sink := fakeoutputsink.New(t)
 	ctx := context.Background()
 
-	if err := s.Close(ctx); err != nil {
+	if err := sink.Close(ctx); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := s.Set(ctx, "k", "v"); err == nil {
+	if err := sink.Set(ctx, "k", "v"); err == nil {
 		t.Errorf("Set after Close did not return error")
 	}
 
-	if err := s.SetMultiline(ctx, "k", []string{"v"}); err == nil {
+	if err := sink.SetMultiline(ctx, "k", []string{"v"}); err == nil {
 		t.Errorf("SetMultiline after Close did not return error")
 	}
 
-	if got := s.CloseCount(); got != 1 {
+	if got := sink.CloseCount(); got != 1 {
 		t.Errorf("CloseCount = %d, want 1", got)
 	}
 }
@@ -63,13 +63,13 @@ func TestSink_RejectsAfterClose(t *testing.T) {
 func TestSink_AllScalar_IsCopy(t *testing.T) {
 	t.Parallel()
 
-	s := fakeoutputsink.New(t)
-	_ = s.Set(context.Background(), "k", "v")
+	sink := fakeoutputsink.New(t)
+	_ = sink.Set(context.Background(), "k", "v")
 
-	all := s.AllScalar()
+	all := sink.AllScalar()
 	all["k"] = "tampered"
 
-	if got := s.Single("k"); got != "v" {
+	if got := sink.Single("k"); got != "v" {
 		t.Errorf("AllScalar mutation leaked into sink: got %q", got)
 	}
 }

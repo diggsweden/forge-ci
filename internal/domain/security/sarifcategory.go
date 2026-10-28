@@ -79,9 +79,10 @@ func SetSARIFCategory(body []byte, category string) ([]byte, error) {
 }
 
 func sarifAnalysisCategory(id string) string {
-	if slash := strings.LastIndexByte(id, '/'); slash >= 0 {
-		return id[:slash]
+	if before, _, ok := strings.CutLast(id, "/"); ok {
+		return before
 	}
+
 	return ""
 }
 

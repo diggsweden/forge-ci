@@ -90,8 +90,6 @@ func ParseJobResultEnvelope(data []byte) (JobResultEnvelope, error) {
 // way to read sibling `uses:` job results; the shape is not vendor-specific, so
 // it is named for what it is. Each status is normalised fail-closed
 // (NormalizeJobStatus), and records sort by name for deterministic output.
-//
-//nolint:cyclop // Keep outer duplicate-job preservation and each child's member/typed checks together.
 func ParseJobResultsMap(data []byte) ([]JobResultEnvelope, error) {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 

@@ -39,7 +39,7 @@ go = "1.27.3"
 # runs the configured checks. See nanolinter.toml for the plan.
 # Published binaries are Linux-only; on macOS/BSD build the pinned source
 # as described in docs/DEVELOPMENT.md instead of installing the source archive as a tool.
-"forgejo:itiquette/nanolinter" = { version = "0.8.6", os = ["linux"] }
+"forgejo:itiquette/nanolinter" = { version = "0.8.6", os = ["linux"], api_url = "https://codefloe.com/api/v1" }
 
 # Per-check tools nanolinter delegates to. Inline comments name the
 # nanolinter check ID each tool backs.
@@ -48,7 +48,7 @@ go = "1.27.3"
 "aqua:google/yamlfmt" = "v0.21.0"             # yaml
 "aqua:rhysd/actionlint" = "v1.7.12"
 "aqua:zricethezav/gitleaks" = "v8.30.1"       # secrets
-"forgejo:itiquette/gommitlint" = "0.9.12"
+"forgejo:itiquette/gommitlint" = { version = "0.93.0", api_url = "https://codefloe.com/api/v1" }
 "aqua:koalaman/shellcheck" = "v0.11.0"        # shell
 "aqua:mvdan/sh" = "v3.14.1"
 "aqua:hadolint/hadolint" = "v2.15.1"          # container

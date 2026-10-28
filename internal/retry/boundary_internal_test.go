@@ -22,7 +22,7 @@ func TestRetryBoundary_CancellationIndependentOfDelay(t *testing.T) {
 			}
 
 			calls := 0
-			cause := errors.New("owned retry cause") //nolint:err113 // distinct callback failure, never a dependency call.
+			cause := errors.New("owned retry cause")
 			_, err := Do(ctx, nil, 3, delay, func() (int, error) {
 				calls++
 

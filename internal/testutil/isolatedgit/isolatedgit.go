@@ -28,7 +28,7 @@ import (
 )
 
 // processIsolated is set by Main before any test runs and only read after.
-var processIsolated bool //nolint:gochecknoglobals // one-way latch between TestMain and NewRepo.
+var processIsolated bool
 
 // Main isolates the process environment (HOME, XDG, Git, GPG, SSH, proxies,
 // locale, colour and every CI/forge/credential variable, as
@@ -73,7 +73,7 @@ func NewRepo(t *testing.T) *Repo {
 			"func TestMain(m *testing.M) { os.Exit(isolatedgit.Main(m.Run)) }")
 	}
 
-	r := &Repo{t: t, Dir: t.TempDir(), Home: t.TempDir()} //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	r := &Repo{t: t, Dir: t.TempDir(), Home: t.TempDir()}
 
 	r.gitInWorkdir("init", "-q", "-b", "main")
 	r.gitInWorkdir("config", "user.name", "Test Bot")

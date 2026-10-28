@@ -11,6 +11,9 @@
 # after the field.
 fpr = "fpr"
 
+# COSE (CBOR Object Signing and Encryption), including the cose-lib project.
+cose = "cose"
+
 # `anc` and `desc` are the matching short locals used in the
 # ancestor/descendant resolution helper in internal/adapters/git.
 # Keeping them symmetric reads better than longer names.

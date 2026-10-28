@@ -16,7 +16,6 @@ type expressionRef struct {
 	offset  int
 }
 
-//nolint:gochecknoglobals // immutable literal member grammar.
 var expressionMember = regexp.MustCompile(`^(?:\s*\.\s*([A-Za-z_][A-Za-z0-9_-]*)|\s*\[\s*'([^']*)'\s*\]|\s*\[\s*"([^"]*)"\s*\])`)
 
 func expressionReferences(text, contextName string, bare bool) []expressionRef {
@@ -58,7 +57,7 @@ func expressionReferences(text, contextName string, bare bool) []expressionRef {
 	return refs
 }
 
-func contextMemberRefs(text, contextName string, baseOffset int) []expressionRef { //nolint:cyclop // one bounded lexical walk distinguishes strings, root identifiers and literal member paths.
+func contextMemberRefs(text, contextName string, baseOffset int) []expressionRef {
 	var refs []expressionRef
 
 	end := len(text)

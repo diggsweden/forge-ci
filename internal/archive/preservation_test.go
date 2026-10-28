@@ -7,13 +7,14 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
-	"github.com/diggsweden/forge-ci/internal/archive"
-	"github.com/diggsweden/forge-ci/internal/domain/errs"
-	"github.com/stretchr/testify/require"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/diggsweden/forge-ci/internal/archive"
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTarTransaction_RefusalsPreserveOriginalBytes(t *testing.T) {
@@ -21,6 +22,8 @@ func TestTarTransaction_RefusalsPreserveOriginalBytes(t *testing.T) {
 
 	for _, kind := range []string{"traversal", "later-hardlink", "truncated", "composed-link-escape", "success"} {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+
 			root := t.TempDir()
 			dest := filepath.Join(root, "dest")
 			require.NoError(t, os.Mkdir(dest, 0o700))

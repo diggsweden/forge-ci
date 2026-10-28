@@ -8,11 +8,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
+	"strings"
+
 	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/ProtonMail/go-crypto/openpgp/armor"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
-	"io"
-	"strings"
 )
 
 // Static parse failures of a keyring bundle. Both are wrapped by

@@ -170,15 +170,15 @@ func ClassifyTrivyFindings(body []byte) (TrivyFindings, error) {
 }
 
 // severityRank orders Trivy's severities, the most severe first.
-var severityRank = map[string]int{"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "UNKNOWN": 4} //nolint:gochecknoglobals // read-only table.
+var severityRank = map[string]int{"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "UNKNOWN": 4}
 
-func compareFindings(a, b TrivyFinding) int {
+func compareFindings(left, right TrivyFinding) int {
 	return cmp.Or(
-		cmp.Compare(rankOf(a.Severity), rankOf(b.Severity)),
-		strings.Compare(a.ID, b.ID),
-		strings.Compare(a.Package, b.Package),
-		strings.Compare(a.Installed, b.Installed),
-		strings.Compare(a.Target, b.Target),
+		cmp.Compare(rankOf(left.Severity), rankOf(right.Severity)),
+		strings.Compare(left.ID, right.ID),
+		strings.Compare(left.Package, right.Package),
+		strings.Compare(left.Installed, right.Installed),
+		strings.Compare(left.Target, right.Target),
 	)
 }
 

@@ -1,179 +1,58 @@
+# SPDX-FileCopyrightText: The Forge CI Authors
 # SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+#
 # SPDX-License-Identifier: CC0-1.0
 #
-# golangci-lint v2 config. See https://golangci-lint.run/usage/configuration/.
+# GolangCI-Lint baseline adapted from the shared Gommitlint configuration.
+# Project-specific settings belong in the sections marked local, with
+# each line explaining its reason. A project that enables a disabled linter removes it
+# from `disable` and lists it under a local `enable:` (golangci-lint refuses a
+# linter that is both), and deletes any marker it leaves empty: yamlfmt
+# re-indents a marker that follows a list.
+# Review it alongside changes to the golangci-lint pin.
+#
+# Every linter golangci-lint ships is on unless it is disabled below with a
+# reason, so a linter a new release adds is evaluated at the next bump rather
+# than silently skipped.
 version: "2"
-
 run:
   timeout: 5m
-  # Include the live conformance tier in static analysis; default build
-  # constraints otherwise exclude every //go:build live file.
+  # Keep paths stable when this file moves within development/.
+  relative-path-mode: gomod
+  # Local to this project: include the live conformance tier in static
+  # analysis; default build constraints otherwise exclude every //go:build live file.
   build-tags:
     - live
-
 output:
   formats:
     text:
       path: stdout
-      print-issued-lines: true
       print-linter-name: true
-      colors: true
-  path-prefix: ""
-
+      print-issued-lines: true
 issues:
   uniq-by-line: true
-
 linters:
-  default: none
-  exclusions:
-    paths:
-      - generated
-    rules:
-      # Tests use fixture strings, short loop / mock vars, and
-      # naturally branching table-driven cases. The corresponding
-      # production-code findings still surface; this only quiets the
-      # patterns that are by-design in test code.
-      - path: "_test\\.go$"
-        linters:
-          - cyclop # table-driven tests have many subcases
-          - dupl # parallel happy/sad-path blocks mirror each other
-          - goconst # repeated fixture strings, often one-off
-          - varnamelen # short locals / loop vars / mock receivers
-          - ireturn # mocks return interfaces
-      # paralleltest, scoped rather than blanket. A test that mutates process
-      # state cannot be parallel: t.Setenv and t.Chdir panic under it, and a
-      # swapped os.Stdin or working directory is shared by every goroutine.
-      # This is the list of packages that do -- directly, or through a testutil
-      # helper that does it on their behalf (ghaenv, glabenv, gpgkey,
-      # isolatedenv, mockbinary's OnPath, testenv, testfs).
-      # Regenerate this list from the tree rather than appending to it by hand:
-      # a helper that starts calling t.Setenv adds its callers to this set.
-      - path: "^(cmd/forge-ci/|scripts/bootstrap/|internal/adapters/buildah/|internal/adapters/cargo/|internal/adapters/changelog/|internal/adapters/cosign/|internal/adapters/ghaoutput/|internal/adapters/git/|internal/adapters/gitlaboutput/|internal/adapters/gotool/|internal/adapters/gpg/|internal/adapters/gradle/|internal/adapters/httpretry/|internal/adapters/manifest/|internal/adapters/maven/|internal/adapters/mise/|internal/adapters/npm/|internal/adapters/openpgp/|internal/adapters/osfs/|internal/adapters/platform/|internal/adapters/stepsummary/|internal/adapters/syft/|internal/app/build/|internal/app/config/|internal/app/container/|internal/app/platform/|internal/app/publish/|internal/app/release/|internal/app/sbom/|internal/app/security/|internal/app/summary/|internal/app/toolchain/|internal/app/validate/|internal/app/version/|internal/archive/|internal/cli/|internal/cli/cienv/|internal/cli/clitoken/|internal/cli/commands/build/|internal/cli/commands/container/|internal/cli/commands/plan/|internal/cli/commands/release/|internal/cli/commands/report/|internal/cli/commands/sbom/|internal/cli/commands/validate/|internal/cli/commands/version/|internal/cli/deps/|internal/cli/planfile/|internal/cli/secret/|internal/cliio/|internal/livetest/|internal/safeexec/|internal/testutil/ghaenv/|internal/testutil/glabenv/|internal/testutil/golden/|internal/testutil/gpgkey/|internal/testutil/isolatedenv/|internal/testutil/isolatedgit/|internal/testutil/mockbinary/|internal/testutil/testenv/|internal/testutil/testfs/|internal/testutil/toolrecorder/)"
-        linters:
-          - paralleltest
-      # redact_test.go's whole point is to assert that PEM markers
-      # get redacted from subprocess output. The literal PEM blocks
-      # in the fixtures are the test contract.
-      - path: "internal/safeexec/redact_test\\.go$"
-        linters:
-          - gosec
-      # The GPG import-via-stdin test ships a throwaway PGP private
-      # key fixture so it can exercise the real `gpg --import` path
-      # end-to-end. The key is generated for that test and not used
-      # anywhere else.
-      - path: "internal/adapters/gpg/import_stdin_test\\.go$"
-        linters:
-          - gosec
-      # Test-only directory perms (0755 fixtures via os.MkdirAll) are
-      # acceptable for ephemeral t.TempDir() roots.
-      - path: "_test\\.go$"
-        text: "G301"
-        linters:
-          - gosec
-      # Test files read fixture paths from t.TempDir() and friends;
-      # the G304 "file inclusion via variable" pattern is unavoidable.
-      - path: "_test\\.go$"
-        text: "G304"
-        linters:
-          - gosec
-      # The live-target contract module is consumed from a sibling checkout
-      # until its v0.1.0 is published; then drop the replace in go.mod and
-      # this allowance together. Scoped to that one module so any other local
-      # replacement is still reported.
-      - path: "^go\\.mod$"
-        text: "local replacement are not allowed: codefloe.com/itiquette/forge-lab-contract"
-        linters:
-          - gomoddirectives
-  enable:
-    - asasalint
-    - asciicheck
-    - bidichk
-    - bodyclose
-    - containedctx
-    - contextcheck
-    - copyloopvar
-    - cyclop
-    - decorder
-    - dogsled
-    - dupl
-    - durationcheck
-    - errcheck
-    - err113
-    - errchkjson
-    - errname
-    - errorlint
-    - exhaustive
-    - exptostd
-    - fatcontext
-    - forcetypeassert
-    - funcorder
-    - ginkgolinter
-    - gocheckcompilerdirectives
-    - gochecknoglobals
-    - gochecknoinits
-    - gochecksumtype
-    - gocognit
-    - goconst
-    - gocritic
-    - gocyclo
-    - godot
-    - godox
-    - goheader
-    - gomoddirectives
-    - goprintffuncname
-    - gosec
-    - govet
-    - grouper
-    - iface
-    - importas
-    - inamedparam
-    - ineffassign
-    - interfacebloat
-    - intrange
-    - loggercheck
-    - maintidx
-    - makezero
-    - mirror
-    - misspell
-    - musttag
-    - nakedret
-    - nestif
-    - nilerr
-    - nilnil
-    - nlreturn
-    - noctx
-    - nonamedreturns
-    - nosprintfhostport
-    - paralleltest
-    - perfsprint
-    - prealloc
-    - predeclared
-    - promlinter
-    - protogetter
-    - reassign
-    - revive
-    - rowserrcheck
-    - sloglint
-    - sqlclosecheck
-    - staticcheck
-    - tagalign
-    - testableexamples
-    - testifylint
-    - thelper
-    - unconvert
-    - unparam
-    - unused
-    - usestdlibvars
-    - usetesting
-    - depguard
-    - varnamelen
-    - wastedassign
-    # Whitespace rules run here rather than as the standalone wsl tool, whose
-    # analysis library cannot read Go 1.27 packages; nanolinter then drops
-    # its separate go-wsl check as covered.
-    - wsl_v5
-    - zerologlint
-
+  default: all
+  disable:
+    - canonicalheader # net/http canonicalises names on Get/Set; provider docs spell headers such as PRIVATE-TOKEN.
+    - dupword # Repeated words are mostly false positives in prose doc comments.
+    - exhaustruct # Deprecated; replaced by exhaustruct_v5.
+    - exhaustruct_v5 # Most structs are deliberately partially initialised.
+    - forbidigo # Forbidden calls are per project; a project with rules enables it locally.
+    - funlen # cyclop, gocognit and maintidx already bound function size.
+    - gochecknoglobals # Package-level regexps, lookup tables and sentinel values are idiomatic Go.
+    - gomodguard # Deprecated; replaced by gomodguard_v2.
+    - gosmopolitan # Times show in the user's zone on purpose, and non-Latin literals are deliberate Unicode test data.
+    - ireturn # Factories and adapters legitimately return interfaces.
+    - lll # Long lines are prose and URLs; gofmt owns layout.
+    - mnd # Sizes, modes and statuses are named where the name adds meaning.
+    - noinlineerr # `if err := f(); err != nil` is idiomatic Go.
+    - paralleltest # Parallelism is chosen per test; t.Setenv and t.Chdir forbid it. tparallel keeps it consistent.
+    - tagliatelle # JSON and YAML tag names are external contracts.
+    - testpackage # Tests live in the package to exercise unexported seams.
+    - wrapcheck # Errors are wrapped where a caller gains context, not at every boundary.
+    - wsl # Deprecated; replaced by wsl_v5.
+    # Local to this project:
   settings:
     depguard:
       rules:
@@ -259,7 +138,7 @@ linters:
             - pkg: github.com/diggsweden/forge-ci/internal/cli/
               desc: a shared utility receives values, not CLI flags or composition code
         # The live tier's oracle only means anything if it shares no code with
-        # what it observes. An adapter that mis-parsed its own writes would
+        # what it observes. An adapter that misread its own writes would
         # otherwise agree with itself and the scenario would pass while the
         # forge held something else. Keeping the import out makes that
         # independence a build failure rather than a habit.
@@ -271,27 +150,57 @@ linters:
               desc: the raw oracle must not use the adapters it is the oracle for
             - pkg: github.com/diggsweden/forge-ci/internal/domain
               desc: keep the oracle on wire types, so a domain change cannot reshape what the forge is said to hold
+    cyclop:
+      # CLI and configuration boundaries branch by explicit error class.
+      max-complexity: 15
     exhaustive:
       default-signifies-exhaustive: true
-    govet:
-      enable:
-        - shadow
+    nolintlint:
+      # A suppression that silences nothing is noise the next change copies;
+      # one without a named linter and a reason cannot be reviewed.
+      allow-unused: false
+      require-specific: true
+      require-explanation: true
+    # govet's shadow analyzer stays off: it flags the idiomatic scoped rebind
+    # `if err := f(); err != nil` and `if _, ok := m[k]; !ok`.
     varnamelen:
       min-name-length: 2
-    paralleltest:
-      ignore-missing: false
-      ignore-missing-subtests: true
+      max-distance: 15
     revive:
-      severity: warning
+      severity: "warning"
       confidence: 0.8
+      # Local to this project: Name() implements an interface whose contract
+      # documents it; no superfluous else after a returning branch keeps the
+      # happy path on the left edge.
       rules:
         - name: exported
           disabled: false
           exclude: ["Name"]
-        # Flag a superfluous `else` after an if-branch that already
-        # returns (or breaks/continues) — keeps the happy path on the
-        # left edge (100 Go Mistakes #2).
         - name: indent-error-flow
           disabled: false
         - name: superfluous-else
           disabled: false
+  exclusions:
+    generated: lax
+    paths:
+      - generated
+    rules:
+      - path: "_test\\.go"
+        linters:
+          - cyclop # A test walks one behavioural contract end to end; splitting it hides the sequence being proved.
+          - dupl # Parallel table cases look alike by design.
+          - err113 # Fakes fabricate the failure under test, often carrying a canary that must not leak.
+          - forcetypeassert # A wrong type in a fixture tree panics, which fails the test as plainly as t.Fatal.
+          - gocognit # As cyclop.
+          - goconst # Repeated literals keep table-driven fixtures readable.
+          - gocyclo # As cyclop.
+          - gosec # Tests deliberately exercise paths, URLs and secret-shaped values.
+          - maintidx # Parent tests group related subtests as one readable contract.
+          - nestif # Table cases nest their expectations under the case they belong to.
+      # Local to this project: live conformance scenarios run one after
+      # another while their per-forge subtests run in parallel, so each lab
+      # forge and its single runner serve one scenario at a time
+      # (docs/testing.md, "Within one scenario").
+      - path: "internal/livetest/conformance/.*_test\\.go"
+        linters:
+          - tparallel

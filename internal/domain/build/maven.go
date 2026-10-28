@@ -184,24 +184,24 @@ type MavenSummaryInput struct {
 
 // RenderMavenSummary returns the markdown block written by.
 func RenderMavenSummary(in MavenSummaryInput, now time.Time) string {
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var builder strings.Builder
 
-	_, _ = fmt.Fprintf(&b, "## Maven Build Summary 🔨\n")
-	_, _ = fmt.Fprintf(&b, "\n")
-	_, _ = fmt.Fprintf(&b, "- **Type:** %s\n", summary.LiteralText(in.BuildType))
-	_, _ = fmt.Fprintf(&b, "- **Artifact:** %s\n",
+	_, _ = fmt.Fprintf(&builder, "## Maven Build Summary 🔨\n")
+	_, _ = fmt.Fprintf(&builder, "\n")
+	_, _ = fmt.Fprintf(&builder, "- **Type:** %s\n", summary.LiteralText(in.BuildType))
+	_, _ = fmt.Fprintf(&builder, "- **Artifact:** %s\n",
 		summary.InlineCode(in.GroupID+":"+in.ArtifactID+":"+in.Version))
-	_, _ = fmt.Fprintf(&b, "- **Java:** %s\n", summary.LiteralText(in.JavaVersion))
+	_, _ = fmt.Fprintf(&builder, "- **Java:** %s\n", summary.LiteralText(in.JavaVersion))
 
 	if in.SkipTests {
-		_, _ = fmt.Fprintf(&b, "- **Tests:** ⊘ Skipped\n")
+		_, _ = fmt.Fprintf(&builder, "- **Tests:** ⊘ Skipped\n")
 	} else {
-		_, _ = fmt.Fprintf(&b, "- **Tests:** ✓ Executed\n")
+		_, _ = fmt.Fprintf(&builder, "- **Tests:** ✓ Executed\n")
 	}
 
-	_, _ = fmt.Fprintf(&b, "- **Snapshot:** %t\n", in.IsSnapshot)
-	_, _ = fmt.Fprintf(&b, "\n")
-	_, _ = fmt.Fprintf(&b, "*Build completed at %s*\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
+	_, _ = fmt.Fprintf(&builder, "- **Snapshot:** %t\n", in.IsSnapshot)
+	_, _ = fmt.Fprintf(&builder, "\n")
+	_, _ = fmt.Fprintf(&builder, "*Build completed at %s*\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
 
-	return b.String()
+	return builder.String()
 }

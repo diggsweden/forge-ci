@@ -23,6 +23,8 @@ func TestTarStreamBoundary_IntegrityBeforeInstall(t *testing.T) {
 
 	for _, kind := range []string{"valid", "crc", "truncated-trailer", "padding-at-cap", "padding-over-cap"} {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+
 			root := t.TempDir()
 			dest := filepath.Join(root, "dest")
 			require.NoError(t, os.Mkdir(dest, 0o700))

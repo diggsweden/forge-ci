@@ -26,18 +26,14 @@ func TestWithLock_SerializesReadModifyWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	const n = 50
+	const count = 50
 
 	var wg sync.WaitGroup
 
-	for range n {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+	for range count {
+		wg.Go(func() {
 			err := cliio.WithLock(counter, func() error {
-				b, err := os.ReadFile(counter) //nolint:gosec // test fixture path
+				b, err := os.ReadFile(counter)
 				if err != nil {
 					return err
 				}
@@ -52,12 +48,12 @@ func TestWithLock_SerializesReadModifyWrite(t *testing.T) {
 			if err != nil {
 				t.Errorf("increment counter: %v", err)
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
 
-	b, err := os.ReadFile(counter) //nolint:gosec // test fixture path
+	b, err := os.ReadFile(counter)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +63,7 @@ func TestWithLock_SerializesReadModifyWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got != n {
-		t.Errorf("counter = %d, want %d — lost updates mean locking is broken", got, n)
+	if got != count {
+		t.Errorf("counter = %d, want %d — lost updates mean locking is broken", got, count)
 	}
 }

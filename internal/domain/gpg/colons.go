@@ -39,7 +39,7 @@ func ParseKeygrips(text string) []string {
 
 // colonField returns the n-th colon-separated field (1-indexed). Returns ""
 // when n is out of range.
-func colonField(line string, n int) string { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func colonField(line string, n int) string {
 	parts := strings.Split(line, ":")
 	if n < 1 || n > len(parts) {
 		return ""

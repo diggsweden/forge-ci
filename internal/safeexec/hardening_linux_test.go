@@ -48,7 +48,6 @@ func TestHardenProcess_DisablesCoreDumpsAndPtrace(t *testing.T) {
 	// The child is selected by an anchored name and gets only its marker in
 	// the environment, so neither a sibling test nor an inherited variable
 	// decides what it runs.
-	//nolint:gosec // os.Args[0] is this test binary.
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestHardenProcess_DisablesCoreDumpsAndPtrace$", "-test.v", "-test.count=1")
 	cmd.Env = []string{hardenChildEnv + "=1"}
 
@@ -85,13 +84,13 @@ func hardenChildOutcome(out string) (string, string) {
 	const name = "TestHardenProcess_DisablesCoreDumpsAndPtrace"
 
 	lines := strings.Split(out, "\n")
-	for i, line := range lines {
+	for index, line := range lines {
 		switch {
 		case strings.HasPrefix(line, "--- PASS: "+name+" "):
 			return "pass", ""
 		case strings.HasPrefix(line, "--- SKIP: "+name+" "):
-			if i+1 < len(lines) {
-				return "skip", strings.TrimSpace(lines[i+1])
+			if index+1 < len(lines) {
+				return "skip", strings.TrimSpace(lines[index+1])
 			}
 
 			return "skip", ""

@@ -279,14 +279,14 @@ func TestEnrichGitHubSARIF_EnrichesEveryResultInEveryRun(t *testing.T) {
 		t.Fatalf("runs = %d, want %d", len(doc.Runs), len(want))
 	}
 
-	for i, wantRun := range want {
-		if len(doc.Runs[i].Results) != len(wantRun) {
-			t.Fatalf("run %d results = %d, want %d", i, len(doc.Runs[i].Results), len(wantRun))
+	for index, wantRun := range want {
+		if len(doc.Runs[index].Results) != len(wantRun) {
+			t.Fatalf("run %d results = %d, want %d", index, len(doc.Runs[index].Results), len(wantRun))
 		}
 
 		for j, wantHash := range wantRun {
-			if got := doc.Runs[i].Results[j].PartialFingerprints["primaryLocationLineHash"]; got != wantHash {
-				t.Errorf("run %d result %d hash = %q, want %q", i, j, got, wantHash)
+			if got := doc.Runs[index].Results[j].PartialFingerprints["primaryLocationLineHash"]; got != wantHash {
+				t.Errorf("run %d result %d hash = %q, want %q", index, j, got, wantHash)
 			}
 		}
 	}

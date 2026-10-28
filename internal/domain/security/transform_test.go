@@ -135,20 +135,20 @@ func TestTrivyToGitLabContainer_DeterministicUUIDs(t *testing.T) {
 
 	seen := map[string]int{}
 
-	for i := range first.Vulnerabilities {
-		id := first.Vulnerabilities[i].ID
-		if id != second.Vulnerabilities[i].ID {
-			t.Errorf("UUID for vuln %d not deterministic: %q vs %q", i, id, second.Vulnerabilities[i].ID)
+	for index := range first.Vulnerabilities {
+		id := first.Vulnerabilities[index].ID
+		if id != second.Vulnerabilities[index].ID {
+			t.Errorf("UUID for vuln %d not deterministic: %q vs %q", index, id, second.Vulnerabilities[index].ID)
 		}
 
 		// Two findings sharing an id collapse into one GitLab
 		// vulnerability. A constant id passes the determinism check above
 		// perfectly, so distinctness has to be asserted separately.
 		if prev, dup := seen[id]; dup {
-			t.Errorf("vulns %d and %d share id %q", prev, i, id)
+			t.Errorf("vulns %d and %d share id %q", prev, index, id)
 		}
 
-		seen[id] = i
+		seen[id] = index
 	}
 }
 

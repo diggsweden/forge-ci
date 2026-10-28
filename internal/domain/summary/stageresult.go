@@ -22,16 +22,12 @@ const StageResultEnvelopeVersion = 1
 // priority: failure > cancelled > success. Empty input → success
 // .
 func AggregateResults(results []Result) Result {
-	for _, r := range results {
-		if r == ResultFailure {
-			return ResultFailure
-		}
+	if slices.Contains(results, ResultFailure) {
+		return ResultFailure
 	}
 
-	for _, r := range results {
-		if r == ResultCancelled {
-			return ResultCancelled
-		}
+	if slices.Contains(results, ResultCancelled) {
+		return ResultCancelled
 	}
 
 	return ResultSuccess
@@ -272,7 +268,7 @@ func writeKV(buf *bytes.Buffer, k, vRaw string) {
 func writeTargets(buf *bytes.Buffer, targets []Target) {
 	buf.WriteString(`"targets":{`)
 
-	for i, t := range targets { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	for i, t := range targets {
 		if i > 0 {
 			buf.WriteByte(',')
 		}
@@ -286,7 +282,7 @@ func writeTargets(buf *bytes.Buffer, targets []Target) {
 }
 
 func quote(s string) string {
-	b, err := json.Marshal(s) //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	b, err := json.Marshal(s)
 	if err != nil {
 		// json.Marshal of a string never fails; defensive fallback
 		// keeps the call total without poisoning the caller.

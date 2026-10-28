@@ -40,21 +40,21 @@ func TestParseTagFormat_StableReleases(t *testing.T) {
 		{"v0.1.0", "0", "1", "0"},
 		{"v100.200.300", "100", "200", "300"},
 	}
-	for _, c := range cases {
-		tf, err := validate.ParseTagFormat(c.tag)
+	for _, cfg := range cases {
+		tf, err := validate.ParseTagFormat(cfg.tag)
 		if err != nil {
-			t.Errorf("%s: unexpected error %v", c.tag, err)
+			t.Errorf("%s: unexpected error %v", cfg.tag, err)
 
 			continue
 		}
 
 		if !tf.IsStable() {
-			t.Errorf("%s: should be stable, got prerelease %q", c.tag, tf.Prerelease)
+			t.Errorf("%s: should be stable, got prerelease %q", cfg.tag, tf.Prerelease)
 		}
 
-		if tf.Major != c.major || tf.Minor != c.minor || tf.Patch != c.patch {
+		if tf.Major != cfg.major || tf.Minor != cfg.minor || tf.Patch != cfg.patch {
 			t.Errorf("%s: %s.%s.%s, want %s.%s.%s",
-				c.tag, tf.Major, tf.Minor, tf.Patch, c.major, c.minor, c.patch)
+				cfg.tag, tf.Major, tf.Minor, tf.Patch, cfg.major, cfg.minor, cfg.patch)
 		}
 	}
 }
@@ -75,24 +75,24 @@ func TestParseTagFormat_StandardPrereleases(t *testing.T) {
 		{"v1.0.0-beta", "beta"},
 		{"v1.0.0-rc.10", "rc.10"},
 	}
-	for _, c := range cases {
-		tf, err := validate.ParseTagFormat(c.tag)
+	for _, cfg := range cases {
+		tf, err := validate.ParseTagFormat(cfg.tag)
 		if err != nil {
-			t.Errorf("%s: unexpected error %v", c.tag, err)
+			t.Errorf("%s: unexpected error %v", cfg.tag, err)
 
 			continue
 		}
 
-		if tf.Prerelease != c.prerelease {
-			t.Errorf("%s: prerelease %q, want %q", c.tag, tf.Prerelease, c.prerelease)
+		if tf.Prerelease != cfg.prerelease {
+			t.Errorf("%s: prerelease %q, want %q", cfg.tag, tf.Prerelease, cfg.prerelease)
 		}
 
 		if !tf.PrereleaseStandard {
-			t.Errorf("%s: PrereleaseStandard should be true for %q", c.tag, c.prerelease)
+			t.Errorf("%s: PrereleaseStandard should be true for %q", cfg.tag, cfg.prerelease)
 		}
 
 		if tf.IsStable() {
-			t.Errorf("%s: should NOT be stable", c.tag)
+			t.Errorf("%s: should NOT be stable", cfg.tag)
 		}
 	}
 }
@@ -109,20 +109,20 @@ func TestParseTagFormat_BuildMetadata(t *testing.T) {
 		{"v1.0.0-rc.1+sha.abc123", "rc.1", "sha.abc123"},
 		{"v2.3.4+meta-only", "", "meta-only"},
 	}
-	for _, c := range cases {
-		tf, err := validate.ParseTagFormat(c.tag)
+	for _, cfg := range cases {
+		tf, err := validate.ParseTagFormat(cfg.tag)
 		if err != nil {
-			t.Errorf("%s: unexpected error %v", c.tag, err)
+			t.Errorf("%s: unexpected error %v", cfg.tag, err)
 
 			continue
 		}
 
-		if tf.Prerelease != c.prerelease {
-			t.Errorf("%s: prerelease %q, want %q", c.tag, tf.Prerelease, c.prerelease)
+		if tf.Prerelease != cfg.prerelease {
+			t.Errorf("%s: prerelease %q, want %q", cfg.tag, tf.Prerelease, cfg.prerelease)
 		}
 
-		if tf.Build != c.build {
-			t.Errorf("%s: build %q, want %q", c.tag, tf.Build, c.build)
+		if tf.Build != cfg.build {
+			t.Errorf("%s: build %q, want %q", cfg.tag, tf.Build, cfg.build)
 		}
 	}
 }

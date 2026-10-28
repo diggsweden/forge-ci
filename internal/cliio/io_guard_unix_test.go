@@ -69,7 +69,7 @@ func TestLockGuardChild(t *testing.T) {
 
 	_, err := fmt.Fprintln(os.Stdout, "ready")
 	require.NoError(t, err)
-	require.NoError(t, WithLock(os.Getenv("RC_LOCK_PATH"), func() error { return os.WriteFile(os.Getenv("RC_LOCK_ENTERED"), []byte("entered"), 0o600) })) //nolint:gosec // closed child environment supplies only parent-owned fixture paths.
+	require.NoError(t, WithLock(os.Getenv("RC_LOCK_PATH"), func() error { return os.WriteFile(os.Getenv("RC_LOCK_ENTERED"), []byte("entered"), 0o600) }))
 }
 
 func TestLockGuard_SerializesOwnedChild(t *testing.T) {
@@ -82,7 +82,7 @@ func TestLockGuard_SerializesOwnedChild(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
-	child := exec.CommandContext(ctx, binary, "-test.run=^TestLockGuardChild$") //nolint:gosec // current test binary only, fixed helper selection.
+	child := exec.CommandContext(ctx, binary, "-test.run=^TestLockGuardChild$")
 	child.Env = []string{"HOME=" + root, "TMPDIR=" + root, "RC_LOCK_CHILD=1", "RC_LOCK_PATH=" + path, "RC_LOCK_ENTERED=" + entered}
 	stdout, err := child.StdoutPipe()
 	require.NoError(t, err)
@@ -133,7 +133,7 @@ func TestReadFileGuard_BoundsFilesAliasesAndRejectsFIFO(t *testing.T) {
 
 	fifo := filepath.Join(root, "pipe")
 	require.NoError(t, syscall.Mkfifo(fifo, 0o600))
-	peer, err := os.OpenFile(fifo, os.O_RDWR|syscall.O_NONBLOCK, 0) //nolint:gosec // owned FIFO; supplies EOF even when replaying the old reader.
+	peer, err := os.OpenFile(fifo, os.O_RDWR|syscall.O_NONBLOCK, 0)
 	require.NoError(t, err)
 
 	defer func() { _ = peer.Close() }()

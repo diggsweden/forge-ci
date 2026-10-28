@@ -26,22 +26,22 @@ import (
 // single space, turns backticks into apostrophes, and escapes pipes.
 // Ordinary identifiers pass through unchanged.
 func SanitizeCell(s string) string {
-	var b strings.Builder //nolint:varnamelen // idiomatic short name for a string builder.
+	var builder strings.Builder
 
-	b.Grow(len(s))
+	builder.Grow(len(s))
 
-	for _, r := range s { //nolint:varnamelen // idiomatic short name for a rune.
+	for _, r := range s {
 		switch {
 		case r == '`':
-			b.WriteByte('\'')
+			builder.WriteByte('\'')
 		case r == '|':
-			b.WriteString(`\|`)
+			builder.WriteString(`\|`)
 		case unicode.IsControl(r):
-			b.WriteByte(' ')
+			builder.WriteByte(' ')
 		default:
-			b.WriteRune(r)
+			builder.WriteRune(r)
 		}
 	}
 
-	return b.String()
+	return builder.String()
 }

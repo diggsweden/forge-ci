@@ -19,8 +19,6 @@ import (
 //
 // Markers are matched as substrings, case-sensitive. Listed in
 // canonical RFC/spec form.
-//
-//nolint:gochecknoglobals // immutable lookup table.
 var privateKeyMarkers = [][]byte{
 	[]byte("BEGIN PGP PRIVATE KEY"),
 	[]byte("BEGIN OPENSSH PRIVATE KEY"),

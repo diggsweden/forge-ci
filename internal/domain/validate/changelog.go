@@ -12,7 +12,7 @@ func CountLines(content []byte) int {
 		return 0
 	}
 
-	n := 0 //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	n := 0
 
 	for _, b := range content {
 		if b == '\n' {

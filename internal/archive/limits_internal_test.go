@@ -52,7 +52,7 @@ func tarballWithBodies(t *testing.T, entries []*tar.Header, bodies map[int]strin
 
 	path := filepath.Join(t.TempDir(), "archive.tar.gz")
 
-	out, err := os.Create(path) //nolint:gosec // test fixture in t.TempDir().
+	out, err := os.Create(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestTarLimits_TrailingPaddingBoundary(t *testing.T) {
 
 		path := filepath.Join(t.TempDir(), "archive.tar.gz")
 
-		out, err := os.Create(path) //nolint:gosec // test fixture in t.TempDir().
+		out, err := os.Create(path)
 		if err != nil {
 			t.Fatal(err)
 		}

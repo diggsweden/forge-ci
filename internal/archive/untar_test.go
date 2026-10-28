@@ -27,7 +27,7 @@ import (
 func writeTarball(t *testing.T, path string, entries []tarEntry) {
 	t.Helper()
 
-	out, err := os.Create(path) //nolint:gosec // test fixture
+	out, err := os.Create(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,18 +35,18 @@ func writeTarball(t *testing.T, path string, entries []tarEntry) {
 	gz := gzip.NewWriter(out)
 	tw := tar.NewWriter(gz)
 
-	for _, e := range entries {
-		hdr := e.hdr
+	for _, entry := range entries {
+		hdr := entry.hdr
 		if hdr.Typeflag == tar.TypeReg {
-			hdr.Size = int64(len(e.body))
+			hdr.Size = int64(len(entry.body))
 		}
 
 		if err := tw.WriteHeader(&hdr); err != nil {
 			t.Fatal(err)
 		}
 
-		if len(e.body) > 0 {
-			if _, err := tw.Write([]byte(e.body)); err != nil {
+		if len(entry.body) > 0 {
+			if _, err := tw.Write([]byte(entry.body)); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -302,7 +302,6 @@ func TestUntarStripOne_RejectsATamperedGzipTrailerWithoutPublishing(t *testing.T
 
 	body[len(body)-8] ^= 0xff
 
-	//nolint:gosec // G703: archivePath is this test's own t.TempDir() fixture.
 	if writeErr := os.WriteFile(archivePath, body, 0o600); writeErr != nil {
 		t.Fatal(writeErr)
 	}

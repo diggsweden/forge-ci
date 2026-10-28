@@ -18,7 +18,6 @@ import (
 	"path/filepath"
 )
 
-//nolint:gochecknoglobals // flag.Bool requires package-level storage.
 var update = flag.Bool("update", false, "refresh golden files (test-only)")
 
 // T is the slice of *testing.T that golden uses. Defining it as an interface

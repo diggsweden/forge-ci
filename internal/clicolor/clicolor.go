@@ -41,8 +41,6 @@ const (
 // command's flag wiring is bypassed (library use, tests). --no-color
 // flips it via Disable. There is deliberately no re-enable: an explicit
 // opt-out must win.
-//
-//nolint:gochecknoglobals // process-wide color policy, resolved once.
 var disabled = os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb"
 
 // Disable turns color off for the rest of the process. Called by the root

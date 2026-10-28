@@ -53,7 +53,6 @@ func terminalWriter(t *testing.T) *os.File {
 	return tty
 }
 
-//nolint:paralleltest // shares process-wide state (the spool directory / the colour policy).
 func TestColorize_EmitsColourOnlyForAnEnabledTerminal(t *testing.T) {
 	tty := terminalWriter(t)
 
@@ -100,8 +99,6 @@ func TestColorize_EmitsColourOnlyForAnEnabledTerminal(t *testing.T) {
 // TestDisable_IsOneWayForTheProcess pins what the --no-color flag does. It is
 // deliberately not reversible: the flag is read once at startup and the policy
 // applies to everything the run prints afterwards.
-//
-//nolint:paralleltest // shares process-wide state (the spool directory / the colour policy).
 func TestDisable_IsOneWayForTheProcess(t *testing.T) {
 	withPolicy(t, false)
 

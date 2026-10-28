@@ -62,7 +62,7 @@ func TestSwapEnabled_RefusesFIFOWithoutAWriter(t *testing.T) {
 
 	// Only this owned child can block on the FIFO; CommandContext kills and
 	// Wait reaps it on timeout. No writer, host proc file or other tool is used.
-	cmd := exec.CommandContext(ctx, binary, "-test.v", "-test.run=^TestSwapInputFIFOChild$") //nolint:gosec // owned test executable and exact helper selection.
+	cmd := exec.CommandContext(ctx, binary, "-test.v", "-test.run=^TestSwapInputFIFOChild$")
 	cmd.Dir = root
 	cmd.Env = []string{"HOME=" + root, "TMPDIR=" + root, "FORGE_CI_SWAP_INPUT_CHILD=1", "FORGE_CI_PROC_SWAPS=" + path}
 	cmd.WaitDelay = time.Second
@@ -114,10 +114,10 @@ func TestSwapEnabled_PreservesLiteralPathsAndRegularAliases(t *testing.T) {
 	}
 
 	previous := os.Stdin
-	os.Stdin = stdin //nolint:reassign // serial test; an owned stdin canary detects accidental '-' sentinel handling.
+	os.Stdin = stdin
 
 	t.Cleanup(func() {
-		os.Stdin = previous //nolint:reassign // restore the test process's stdin before closing the canary.
+		os.Stdin = previous
 		_ = stdin.Close()
 	})
 

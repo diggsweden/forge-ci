@@ -62,7 +62,7 @@ type JobGraphViolation struct {
 // A provably-safe edge is acknowledged by a `# job-graph-guard: allow reason=…`
 // comment anywhere in the consumer job's block. Pure: caller supplies the YAML
 // and owns IO/annotation.
-func CheckJobGraph(workflowYAML []byte) ([]JobGraphViolation, error) { //nolint:cyclop // jobs, effective scalar input references and exemptions have separate refusal paths.
+func CheckJobGraph(workflowYAML []byte) ([]JobGraphViolation, error) {
 	var doc struct {
 		Jobs yaml.Node `yaml:"jobs"`
 	}
@@ -127,8 +127,8 @@ func CheckJobGraph(workflowYAML []byte) ([]JobGraphViolation, error) { //nolint:
 					refs = append(refs, producersIn(node.Value, false)...)
 				}
 
-				for index := len(node.Content) - 1; index >= 0; index-- {
-					pending = append(pending, node.Content[index])
+				for _, v := range slices.Backward(node.Content) {
+					pending = append(pending, v)
 				}
 			}
 		}

@@ -48,7 +48,7 @@ func (s *AllowedFingerprintSet) Add(fp string) bool {
 
 // Has reports whether fp (case-insensitive, with or without spaces) is
 // in the set.
-func (s AllowedFingerprintSet) Has(fp string) bool {
+func (s *AllowedFingerprintSet) Has(fp string) bool {
 	if s.fingerprints == nil {
 		return false
 	}
@@ -60,7 +60,7 @@ func (s AllowedFingerprintSet) Has(fp string) bool {
 
 // Len returns the number of unique fingerprints. Useful for summary
 // rendering ("3 authorised GPG signers").
-func (s AllowedFingerprintSet) Len() int { return len(s.fingerprints) }
+func (s *AllowedFingerprintSet) Len() int { return len(s.fingerprints) }
 
 // normaliseFingerprint strips whitespace and uppercases the hex.
 // Idempotent. Accepts the various GPG renderings — "ABCD EFGH …",
@@ -69,7 +69,7 @@ func (s AllowedFingerprintSet) Len() int { return len(s.fingerprints) }
 func normaliseFingerprint(fp string) string {
 	var buf strings.Builder
 
-	buf.Grow(40) //nolint:mnd // GPG primary-key fingerprint length, fixed by RFC 4880bis.
+	buf.Grow(40)
 
 	for _, chr := range fp {
 		switch {

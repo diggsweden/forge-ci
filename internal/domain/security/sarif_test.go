@@ -140,13 +140,13 @@ func TestTrivyToSARIF_SeverityLevelIsPerResult(t *testing.T) {
 
 	got := map[string]string{}
 
-	for _, r := range doc.Runs[0].Results {
+	for _, result := range doc.Runs[0].Results {
 		id := ""
-		if r.RuleID != nil {
-			id = *r.RuleID
+		if result.RuleID != nil {
+			id = *result.RuleID
 		}
 
-		got[id] = r.Level
+		got[id] = result.Level
 	}
 
 	want := map[string]string{
@@ -273,22 +273,22 @@ func strOrEmpty(p *string) string {
 func resultByRuleID(t *testing.T, doc *sarif.Report, ruleID string) (string, string) {
 	t.Helper()
 
-	for _, r := range doc.Runs[0].Results {
-		if r.RuleID == nil || *r.RuleID != ruleID {
+	for _, result := range doc.Runs[0].Results {
+		if result.RuleID == nil || *result.RuleID != ruleID {
 			continue
 		}
 
 		msg := ""
-		if r.Message.Text != nil {
-			msg = *r.Message.Text
+		if result.Message.Text != nil {
+			msg = *result.Message.Text
 		}
 
 		uri := ""
-		if len(r.Locations) > 0 &&
-			r.Locations[0].PhysicalLocation != nil &&
-			r.Locations[0].PhysicalLocation.ArtifactLocation != nil &&
-			r.Locations[0].PhysicalLocation.ArtifactLocation.URI != nil {
-			uri = *r.Locations[0].PhysicalLocation.ArtifactLocation.URI
+		if len(result.Locations) > 0 &&
+			result.Locations[0].PhysicalLocation != nil &&
+			result.Locations[0].PhysicalLocation.ArtifactLocation != nil &&
+			result.Locations[0].PhysicalLocation.ArtifactLocation.URI != nil {
+			uri = *result.Locations[0].PhysicalLocation.ArtifactLocation.URI
 		}
 
 		return msg, uri

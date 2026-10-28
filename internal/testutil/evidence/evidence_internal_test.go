@@ -4,6 +4,7 @@
 package evidence
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -91,7 +92,7 @@ func TestReport_AppendsToTheFileTheRunnerAsked(t *testing.T) {
 
 	require.Contains(t, stderr.String(), "NOT PROVEN: buildah.test")
 
-	written, err := os.ReadFile(path) //nolint:gosec // test-owned temporary path.
+	written, err := os.ReadFile(path)
 	require.NoError(t, err)
 	require.Equal(t,
 		"NOT PROVEN: buildah.test: 1 test(s) skipped\nNOT PROVEN: trivy.test: 2 test(s) skipped\n",
@@ -102,7 +103,7 @@ func TestReport_AppendsToTheFileTheRunnerAsked(t *testing.T) {
 func TestRequireTool_ReturnsThePathOfAToolThatIsPresent(t *testing.T) {
 	dir := t.TempDir()
 	tool := filepath.Join(dir, "evidence-fixture-tool")
-	require.NoError(t, os.WriteFile(tool, []byte("#!/bin/sh\nexit 0\n"), 0o700)) //nolint:gosec // an executable is the point of the fixture.
+	require.NoError(t, os.WriteFile(tool, []byte("#!/bin/sh\nexit 0\n"), 0o700))
 	t.Setenv("PATH", dir)
 
 	before := tallySnapshot()
@@ -176,9 +177,7 @@ func tallySnapshot() map[string]int {
 	defer notProven.mu.Unlock()
 
 	copied := make(map[string]int, len(notProven.counts))
-	for reason, count := range notProven.counts {
-		copied[reason] = count
-	}
+	maps.Copy(copied, notProven.counts)
 
 	return copied
 }
@@ -186,7 +185,7 @@ func tallySnapshot() map[string]int {
 func TestRequireWorkingTool_ReturnsThePathOfAToolThatRuns(t *testing.T) {
 	dir := t.TempDir()
 	tool := filepath.Join(dir, "evidence-fixture-working-tool")
-	require.NoError(t, os.WriteFile(tool, []byte("#!/bin/sh\nexit 0\n"), 0o700)) //nolint:gosec // an executable is the point of the fixture.
+	require.NoError(t, os.WriteFile(tool, []byte("#!/bin/sh\nexit 0\n"), 0o700))
 	t.Setenv("PATH", dir)
 
 	before := tallySnapshot()
@@ -200,7 +199,7 @@ func TestRequireWorkingTool_ReturnsThePathOfAToolThatRuns(t *testing.T) {
 func TestRequireWorkingTool_SkipsAndTalliesWhenTheToolIsPresentButBroken(t *testing.T) {
 	dir := t.TempDir()
 	tool := filepath.Join(dir, "evidence-fixture-broken-tool")
-	require.NoError(t, os.WriteFile(tool, []byte("#!/bin/sh\necho 'no default is configured' >&2\nexit 1\n"), 0o700)) //nolint:gosec // an executable is the point of the fixture.
+	require.NoError(t, os.WriteFile(tool, []byte("#!/bin/sh\necho 'no default is configured' >&2\nexit 1\n"), 0o700))
 	t.Setenv("PATH", dir)
 	useProfile(t, "")
 

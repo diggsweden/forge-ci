@@ -35,7 +35,7 @@ func ParseXcodeVersionFromPbxproj(body string) XcodeVersionInfo {
 	out := XcodeVersionInfo{Version: "unknown", Build: "unknown"} //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
 
 	for line := range strings.SplitSeq(body, "\n") {
-		m := xcodePbxKeyValue.FindStringSubmatch(line) //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+		m := xcodePbxKeyValue.FindStringSubmatch(line)
 		if m == nil {
 			continue
 		}
@@ -76,31 +76,31 @@ type XcodeSummaryInput struct {
 
 // RenderXcodeSummary returns the markdown block written by.
 func RenderXcodeSummary(in XcodeSummaryInput, now time.Time) string {
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var builder strings.Builder
 
-	_, _ = fmt.Fprintf(&b, "## Xcode Build Summary 📱\n\n")
-	_, _ = fmt.Fprintf(&b, "### Configuration\n")
-	_, _ = fmt.Fprintf(&b, "| Setting | Value |\n")
-	_, _ = fmt.Fprintf(&b, "|---------|-------|\n")
-	_, _ = fmt.Fprintf(&b, "| **Xcode** | %s |\n", summary.LiteralText(in.XcodeVersion))
-	_, _ = fmt.Fprintf(&b, "| **Scheme** | %s |\n", summary.LiteralText(in.Scheme))
-	_, _ = fmt.Fprintf(&b, "| **Configuration** | %s |\n", summary.LiteralText(in.Configuration))
-	_, _ = fmt.Fprintf(&b, "| **Destination** | %s |\n", summary.LiteralText(in.Destination))
-	_, _ = fmt.Fprintf(&b, "| **Signing** | %s |\n", boolStatus(in.Signing))
+	_, _ = fmt.Fprintf(&builder, "## Xcode Build Summary 📱\n\n")
+	_, _ = fmt.Fprintf(&builder, "### Configuration\n")
+	_, _ = fmt.Fprintf(&builder, "| Setting | Value |\n")
+	_, _ = fmt.Fprintf(&builder, "|---------|-------|\n")
+	_, _ = fmt.Fprintf(&builder, "| **Xcode** | %s |\n", summary.LiteralText(in.XcodeVersion))
+	_, _ = fmt.Fprintf(&builder, "| **Scheme** | %s |\n", summary.LiteralText(in.Scheme))
+	_, _ = fmt.Fprintf(&builder, "| **Configuration** | %s |\n", summary.LiteralText(in.Configuration))
+	_, _ = fmt.Fprintf(&builder, "| **Destination** | %s |\n", summary.LiteralText(in.Destination))
+	_, _ = fmt.Fprintf(&builder, "| **Signing** | %s |\n", boolStatus(in.Signing))
 
 	if in.Version != "" && in.Version != "unknown" {
-		_, _ = fmt.Fprintf(&b, "| **Version** | %s (%s) |\n", summary.LiteralText(in.Version), summary.LiteralText(in.BuildNumber))
+		_, _ = fmt.Fprintf(&builder, "| **Version** | %s (%s) |\n", summary.LiteralText(in.Version), summary.LiteralText(in.BuildNumber))
 	}
 
-	_, _ = fmt.Fprintf(&b, "\n### Artifacts Generated\n")
+	_, _ = fmt.Fprintf(&builder, "\n### Artifacts Generated\n")
 
 	if in.Signing {
-		_, _ = fmt.Fprintf(&b, "✓ IPA: %s\n", summary.InlineCode(in.IPAName))
+		_, _ = fmt.Fprintf(&builder, "✓ IPA: %s\n", summary.InlineCode(in.IPAName))
 	} else {
-		_, _ = fmt.Fprintf(&b, "✓ Archive: %s\n", summary.InlineCode(in.IPAName+"-archive"))
+		_, _ = fmt.Fprintf(&builder, "✓ Archive: %s\n", summary.InlineCode(in.IPAName+"-archive"))
 	}
 
-	_, _ = fmt.Fprintf(&b, "\n*Build completed at %s*\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
+	_, _ = fmt.Fprintf(&builder, "\n*Build completed at %s*\n", now.UTC().Format("2006-01-02 15:04:05 UTC"))
 
-	return b.String()
+	return builder.String()
 }

@@ -44,7 +44,7 @@ func TestExitCodeFromError_MapsSentinelsToExitCodes(t *testing.T) {
 		{name: "permission_denied", err: errs.ErrPermissionDenied, want: errs.ExitCodeNoPerm, wraps: true},
 		{name: "dependency_unavailable", err: errs.ErrDependencyUnavailable, want: errs.ExitCodeUnavailable, wraps: true},
 		{name: "rate_limited", err: errs.ErrRateLimited, want: errs.ExitCodeUnavailable, wraps: true},
-		{name: "plain_error", err: errors.New("boom"), want: errs.ExitCodeSoftware}, //nolint:err113 // test mock error
+		{name: "plain_error", err: errors.New("boom"), want: errs.ExitCodeSoftware},
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -66,7 +66,7 @@ func TestExitCodeFromError_MapsSentinelsToExitCodes(t *testing.T) {
 func TestExitCodeFromError_NetworkErrorsAreUnavailable(t *testing.T) {
 	t.Parallel()
 
-	refused := &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connect: connection refused")} //nolint:err113 // test mock error
+	refused := &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connect: connection refused")}
 	dnsFail := &net.DNSError{Err: "no such host", Name: "nonexistent.invalid"}
 	urlErr := &url.Error{Op: "Get", URL: "http://127.0.0.1:1/x", Err: refused}
 
@@ -123,7 +123,7 @@ func TestExitCodeFromError_AMalformedURLIsNotAnOutage(t *testing.T) {
 func TestExitCodeFromError_SentinelWinsOverNetwork(t *testing.T) {
 	t.Parallel()
 
-	netErr := &net.OpError{Op: "dial", Err: errors.New("refused")} //nolint:err113 // test mock error
+	netErr := &net.OpError{Op: "dial", Err: errors.New("refused")}
 	// 401 → ErrPermissionDenied wrapped around a transport error.
 	wrapped := fmt.Errorf("auth failed (%w): %w", errs.ErrPermissionDenied, netErr)
 

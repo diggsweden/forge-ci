@@ -170,20 +170,20 @@ func TestSARIFToGitLabSAST_DeterministicUUIDs(t *testing.T) {
 
 	seen := map[string]int{}
 
-	for i := range first.Vulnerabilities {
-		if first.Vulnerabilities[i].ID != second.Vulnerabilities[i].ID {
+	for index := range first.Vulnerabilities {
+		if first.Vulnerabilities[index].ID != second.Vulnerabilities[index].ID {
 			t.Errorf("UUID for vuln %d not deterministic: %q vs %q",
-				i, first.Vulnerabilities[i].ID, second.Vulnerabilities[i].ID)
+				index, first.Vulnerabilities[index].ID, second.Vulnerabilities[index].ID)
 		}
 
 		// Two findings must not share an id, or GitLab collapses them
 		// into one vulnerability. A constant id satisfies the
 		// determinism check above perfectly.
-		if prev, dup := seen[first.Vulnerabilities[i].ID]; dup {
-			t.Errorf("vulns %d and %d share id %q", prev, i, first.Vulnerabilities[i].ID)
+		if prev, dup := seen[first.Vulnerabilities[index].ID]; dup {
+			t.Errorf("vulns %d and %d share id %q", prev, index, first.Vulnerabilities[index].ID)
 		}
 
-		seen[first.Vulnerabilities[i].ID] = i
+		seen[first.Vulnerabilities[index].ID] = index
 	}
 
 	if len(first.Vulnerabilities) < 2 {

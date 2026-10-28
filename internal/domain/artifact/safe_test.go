@@ -107,7 +107,7 @@ func TestCopyAtMost_LimitAndIOBoundaries(t *testing.T) {
 		}
 	}
 
-	cause := errors.New("owned copy failure") //nolint:err113 // independent I/O cause.
+	cause := errors.New("owned copy failure")
 
 	var dst bytes.Buffer
 	if n, err := artifact.CopyAtMost(&dst, iotest.ErrReader(cause), 5); n != 0 || !errors.Is(err, cause) || dst.Len() != 0 {

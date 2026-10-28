@@ -218,4 +218,4 @@ func TestDigest_FailsClosedOnAReadError(t *testing.T) {
 	}
 }
 
-var errUnreadable = errors.New("artifact test: file cannot be read") //nolint:err113 // test fixture sentinel.
+var errUnreadable = errors.New("artifact test: file cannot be read")

@@ -169,7 +169,7 @@ func buildJobSecretViolations(jobs map[string]yaml.Node, cfg IsolationConfig) ([
 	return violations, nil
 }
 
-func prepareOrderingViolations(jobs map[string]yaml.Node, cfg IsolationConfig) ([]IsolationViolation, error) { //nolint:cyclop // Detect checkout, then attribute each secret-bearing scalar without losing traversal errors.
+func prepareOrderingViolations(jobs map[string]yaml.Node, cfg IsolationConfig) ([]IsolationViolation, error) {
 	if cfg.PrepareJob == "" || len(cfg.SigningSecrets) == 0 {
 		return nil, nil
 	}

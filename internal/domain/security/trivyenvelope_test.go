@@ -71,7 +71,7 @@ func consumedTrivyFields() []string {
 func TestTrivyEnvelope_InventoryMatchesTheStructsThatDecodeIt(t *testing.T) {
 	t.Parallel()
 
-	got := jsonFieldPaths(reflect.TypeOf(security.TrivyReport{}), "")
+	got := jsonFieldPaths(reflect.TypeFor[security.TrivyReport](), "")
 	want := consumedTrivyFields()
 
 	slices.Sort(got)
@@ -120,9 +120,7 @@ func jsonFieldPaths(typ reflect.Type, prefix string) []string {
 
 	var paths []string
 
-	for i := range typ.NumField() {
-		field := typ.Field(i)
-
+	for field := range typ.Fields() {
 		tag, ok := field.Tag.Lookup("json")
 		if !ok {
 			continue
@@ -166,7 +164,7 @@ func TestTrivyEnvelope_NoFixtureClaimsToBeNativeOutput(t *testing.T) {
 
 		checked++
 
-		body, readErr := os.ReadFile(path) //nolint:gosec // repository fixture under a walked testdata directory.
+		body, readErr := os.ReadFile(path)
 		if readErr != nil {
 			return readErr
 		}

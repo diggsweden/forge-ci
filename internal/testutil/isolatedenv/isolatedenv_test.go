@@ -137,7 +137,7 @@ func TestIsolate_AHostTemplateHookDoesNotReachAScratchRepo(t *testing.T) {
 	// Isolate, exactly as a developer's shell or a CI image would have it.
 	hostile := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(hostile, "hooks"), 0o700))
-	require.NoError(t, os.WriteFile( //nolint:gosec // 0700: the hook must be executable or it proves nothing.
+	require.NoError(t, os.WriteFile(
 		filepath.Join(hostile, "hooks", "pre-commit"),
 		[]byte("#!/bin/sh\nexit 1\n"), 0o700))
 	t.Setenv("GIT_TEMPLATE_DIR", hostile)
@@ -145,7 +145,7 @@ func TestIsolate_AHostTemplateHookDoesNotReachAScratchRepo(t *testing.T) {
 	isolatedenv.Isolate(t)
 
 	repo := t.TempDir()
-	cmd := exec.CommandContext(t.Context(), "git", "init", "-q", "-b", "main", repo) //nolint:gosec // fixed argv; repo is this test's own t.TempDir().
+	cmd := exec.CommandContext(t.Context(), "git", "init", "-q", "-b", "main", repo)
 	cmd.Env = os.Environ()
 
 	out, err := cmd.CombinedOutput()

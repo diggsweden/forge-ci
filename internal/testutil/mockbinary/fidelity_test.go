@@ -34,11 +34,10 @@ import (
 func runStub(t *testing.T, stdin string, args ...string) mockbinary.Invocation {
 	t.Helper()
 
-	m := mockbinary.New(t)
-	m.Add("probe", "exit 0")
+	mock := mockbinary.New(t)
+	mock.Add("probe", "exit 0")
 
-	//nolint:gosec // G204: the binary is this helper's own stub under t.TempDir(); the arguments are the fixture under test.
-	cmd := exec.CommandContext(context.Background(), m.Path("probe"), args...)
+	cmd := exec.CommandContext(context.Background(), mock.Path("probe"), args...)
 	if stdin != "" {
 		cmd.Stdin = strings.NewReader(stdin)
 	}
@@ -47,7 +46,7 @@ func runStub(t *testing.T, stdin string, args ...string) mockbinary.Invocation {
 		t.Fatalf("run stub: %v", err)
 	}
 
-	got := m.Invocations("probe")
+	got := mock.Invocations("probe")
 	if len(got) != 1 {
 		t.Fatalf("recorded %d invocations, want 1", len(got))
 	}
@@ -79,6 +78,8 @@ func TestMockbinary_RecordsArgvExactly(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := runStub(t, "", tc.args...)
 
 			want := tc.args
@@ -110,6 +111,8 @@ func TestMockbinary_RecordsStdinExactly(t *testing.T) {
 		{name: "leading whitespace", stdin: "  indented\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			if got := runStub(t, tc.stdin).Stdin; got != tc.stdin {
 				t.Errorf("recorded stdin %q, want %q: %s", got, tc.stdin, tc.why)
 			}
@@ -125,18 +128,17 @@ func TestMockbinary_RecordsTheDirectoryItRanIn(t *testing.T) {
 
 	dir := t.TempDir()
 
-	m := mockbinary.New(t)
-	m.Add("probe", "exit 0")
+	mock := mockbinary.New(t)
+	mock.Add("probe", "exit 0")
 
-	//nolint:gosec // G204: the binary is this helper's own stub under t.TempDir().
-	cmd := exec.CommandContext(context.Background(), m.Path("probe"))
+	cmd := exec.CommandContext(context.Background(), mock.Path("probe"))
 	cmd.Dir = dir
 
 	if err := cmd.Run(); err != nil {
 		t.Fatal(err)
 	}
 
-	got := m.Invocations("probe")[0].Cwd
+	got := mock.Invocations("probe")[0].Cwd
 	if strings.HasSuffix(got, "\n") {
 		t.Errorf("cwd %q ends with a newline the shell added", got)
 	}

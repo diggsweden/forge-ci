@@ -83,8 +83,6 @@ func Permanent(err error) error {
 // exhaustion, the unwrapped error when fn returns a Permanent(err), or
 // ctx.Err() on cancellation. When out is non-nil and no OnRetry hook is set, a
 // generic progress line is written before each wait.
-//
-//nolint:cyclop // the single-source retry loop deliberately handles success, permanent errors, exhaustion, backoff, and cancellation in one place.
 func Do[T any](ctx context.Context, out io.Writer, attempts int, delay time.Duration, fn func() (T, error), opts ...Option) (T, error) {
 	cfg := config{backoff: Linear}
 	for _, opt := range opts {
@@ -124,8 +122,7 @@ func Do[T any](ctx context.Context, out io.Writer, attempts int, delay time.Dura
 			return result, nil
 		}
 
-		var perm permanent
-		if errors.As(runErr, &perm) {
+		if perm, ok := errors.AsType[permanent](runErr); ok {
 			var zero T
 
 			return zero, perm.err

@@ -121,8 +121,6 @@ func TestOpenRoot_OpensAnOrdinaryDirectory(t *testing.T) {
 // TestOpenRoot_AcceptsARelativePath pins that the name is resolved against the
 // working directory rather than rejected. Callers pass workspace-relative paths
 // ("dist", "build/reports"), so refusing them would break every one.
-//
-//nolint:paralleltest // t.Chdir changes the process working directory.
 func TestOpenRoot_AcceptsARelativePath(t *testing.T) {
 	// Not parallel: t.Chdir changes the process working directory.
 	dir := t.TempDir()

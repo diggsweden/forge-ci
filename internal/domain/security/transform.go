@@ -123,11 +123,11 @@ func nameOf(v TrivyVulnerability) string {
 	case v.VulnerabilityID != "":
 		return v.VulnerabilityID
 	default:
-		return "Unknown" //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
+		return "Unknown"
 	}
 }
 
-func containerSolution(v TrivyVulnerability) string { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func containerSolution(v TrivyVulnerability) string {
 	if v.FixedVersion == "" {
 		return ""
 	}
@@ -151,7 +151,7 @@ func linksFor(v TrivyVulnerability) []GitLabLink { //nolint:varnamelen // idioma
 
 	var ordered []string
 
-	add := func(s string) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	add := func(s string) {
 		if s == "" {
 			return
 		}

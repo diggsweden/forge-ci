@@ -46,8 +46,6 @@ import (
 // is scoped to the user because two people on one machine have no reason to
 // block each other, and because a name every user can create is a name any user
 // can plant a symlink at.
-//
-//nolint:gochecknoglobals // process-singleton lock; intentional.
 var (
 	// tempRoot is the temporary root the process started with, captured
 	// before TestMain or per-test isolation nests TMPDIR. It holds the lock

@@ -14,7 +14,6 @@ import (
 	"unicode/utf8"
 )
 
-//nolint:gochecknoglobals // immutable token-shape matcher.
 var compactJWS = regexp.MustCompile(`([A-Za-z0-9_-]+)\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*`)
 
 // ContainsJWT recognizes compact JWS-shaped text with a JSON algorithm header.

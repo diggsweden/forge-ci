@@ -23,8 +23,6 @@ import (
 // flag on `forge-ci validate event-context`. There is no env-var
 // bypass — overrides must be explicit at the call site, audited like any
 // other workflow input.
-//
-//nolint:gochecknoglobals // policy constant — read-only and ordered.
 var DefaultAllowedEvents = []string{
 	"push",
 	"workflow_dispatch",
@@ -65,10 +63,8 @@ func RequireAllowedEvent(eventName string, allowed []string) error {
 		allowed = DefaultAllowedEvents
 	}
 
-	for _, ok := range allowed {
-		if ok == eventName {
-			return nil
-		}
+	if slices.Contains(allowed, eventName) {
+		return nil
 	}
 
 	// Copy + sort the allowlist for deterministic error output. Adopters

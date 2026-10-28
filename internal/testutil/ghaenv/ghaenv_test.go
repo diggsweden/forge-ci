@@ -15,25 +15,25 @@ import (
 )
 
 func TestReaders_DeclarationBoundaries(t *testing.T) {
-	e := ghaenv.Setup(t)
+	env := ghaenv.Setup(t)
 	payload := "version=payload\nwanted<<INNER\nnot an output\nINNER\nabsent=payload\nphantom<<INNER\ninside\nINNER"
 	output := "message<<OUTER\n" + payload + "\nOUTER\n" +
 		"version= real=version << literal \n" +
 		"wanted<<END=marker\n\n first \nEND=marker suffix\nlast\n\nEND=marker\n" +
 		"empty=\nempty-block<<STOP\nSTOP\nlast=no newline"
-	require.NoError(t, os.WriteFile(e.OutputPath, []byte(output), 0o600))
+	require.NoError(t, os.WriteFile(env.OutputPath, []byte(output), 0o600))
 
-	require.Equal(t, " real=version << literal ", e.Output("version"))
-	require.Equal(t, "\n first \nEND=marker suffix\nlast\n", e.Multiline("wanted"))
-	require.Equal(t, payload, e.Multiline("message"))
-	require.Equal(t, "no newline", e.Output("last"))
+	require.Equal(t, " real=version << literal ", env.Output("version"))
+	require.Equal(t, "\n first \nEND=marker suffix\nlast\n", env.Multiline("wanted"))
+	require.Equal(t, payload, env.Multiline("message"))
+	require.Equal(t, "no newline", env.Output("last"))
 
 	for _, key := range []string{"absent", "phantom", "missing", "message", "wanted", "empty", "empty-block"} {
-		require.Empty(t, e.Output(key), key)
+		require.Empty(t, env.Output(key), key)
 	}
 
 	for _, key := range []string{"absent", "phantom", "missing", "version", "empty", "empty-block"} {
-		require.Empty(t, e.Multiline(key), key)
+		require.Empty(t, env.Multiline(key), key)
 	}
 }
 

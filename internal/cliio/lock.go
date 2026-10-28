@@ -32,8 +32,6 @@ import (
 // WithLock is Unix-only, like the release targets (linux and darwin). There
 // is deliberately no no-op fallback: a lock that silently does not lock would
 // run the read-modify-write it exists to serialise.
-//
-//nolint:cyclop // validates target and sidecar aliases, then descriptor identity before locking.
 func WithLock(path string, fn func() error) error {
 	return withLockUsing(path, lockExclusive, unlock, fn)
 }

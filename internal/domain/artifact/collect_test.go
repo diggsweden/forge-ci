@@ -160,7 +160,7 @@ func TestCollectUploadEntries_HiddenAncestorsVersusMembers(t *testing.T) {
 	}
 }
 
-func TestCollectUpload_DirectoryIdentitySurvivesCWDChange(t *testing.T) { //nolint:paralleltest // t.Chdir restores process-wide cwd; this case must stay serial.
+func TestCollectUpload_DirectoryIdentitySurvivesCWDChange(t *testing.T) {
 	root := t.TempDir()
 	file := filepath.Join(root, "out", "value.txt")
 	writeFile(t, file)

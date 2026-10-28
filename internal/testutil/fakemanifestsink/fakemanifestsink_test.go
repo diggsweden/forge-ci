@@ -13,7 +13,7 @@ import (
 )
 
 // errMarshal stands in for a result the real sink could not encode.
-var errMarshal = errors.New("cannot marshal") //nolint:err113 // test fixture sentinel.
+var errMarshal = errors.New("cannot marshal")
 
 type failingBody struct{}
 

@@ -155,8 +155,6 @@ func decodeSARIF(body []byte) (any, error) {
 // extractURIAndStartLine pulls the artifact URI and starting line from the
 // first physicalLocation in a SARIF result. Missing/typed-wrong nodes
 // fall through to the "unknown" / 0 defaults.
-//
-//nolint:cyclop // SARIF extraction: one branch per location/region/snippet position.
 func extractURIAndStartLine(result map[string]any) (string, int) {
 	locations, ok := result["locations"].([]any)
 	if !ok || len(locations) == 0 {

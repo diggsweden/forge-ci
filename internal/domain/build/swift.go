@@ -30,54 +30,54 @@ const (
 // RenderSwiftFormatBlock returns the markdown block written to
 // $GITHUB_STEP_SUMMARY for a swift-format invocation.
 func RenderSwiftFormatBlock(outcome SwiftLintOutcome, output string) string {
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var builder strings.Builder
 
 	switch outcome {
 	case SwiftLintPassed:
-		_, _ = fmt.Fprintln(&b, "## Swift Format ✓")
-		_, _ = fmt.Fprintln(&b, "")
-		_, _ = fmt.Fprintln(&b, "All Swift files are properly formatted.")
+		_, _ = fmt.Fprintln(&builder, "## Swift Format ✓")
+		_, _ = fmt.Fprintln(&builder, "")
+		_, _ = fmt.Fprintln(&builder, "All Swift files are properly formatted.")
 	case SwiftLintFailed:
-		_, _ = fmt.Fprintln(&b, "## Swift Format Issues 🔴")
-		_, _ = fmt.Fprintln(&b, "")
-		writeFenced(&b, output)
+		_, _ = fmt.Fprintln(&builder, "## Swift Format Issues 🔴")
+		_, _ = fmt.Fprintln(&builder, "")
+		writeFenced(&builder, output)
 	case SwiftLintNoFiles:
-		_, _ = fmt.Fprintln(&b, "## Swift Format ⊘")
-		_, _ = fmt.Fprintln(&b, "")
-		_, _ = fmt.Fprintln(&b, "No Swift files matched the configured pattern; nothing to lint.")
+		_, _ = fmt.Fprintln(&builder, "## Swift Format ⊘")
+		_, _ = fmt.Fprintln(&builder, "")
+		_, _ = fmt.Fprintln(&builder, "No Swift files matched the configured pattern; nothing to lint.")
 	case SwiftLintWarned:
 		// swift-format has no warning level — never produced for this
 		// outcome. Block left empty so the caller emits nothing.
 	}
 
-	return b.String()
+	return builder.String()
 }
 
 // RenderSwiftLintBlock returns the markdown block written to
 // $GITHUB_STEP_SUMMARY for a SwiftLint invocation.
 func RenderSwiftLintBlock(outcome SwiftLintOutcome, output string) string {
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var builder strings.Builder
 
 	switch outcome {
 	case SwiftLintPassed:
-		_, _ = fmt.Fprintln(&b, "## SwiftLint ✓")
-		_, _ = fmt.Fprintln(&b, "")
-		_, _ = fmt.Fprintln(&b, "No SwiftLint violations found.")
+		_, _ = fmt.Fprintln(&builder, "## SwiftLint ✓")
+		_, _ = fmt.Fprintln(&builder, "")
+		_, _ = fmt.Fprintln(&builder, "No SwiftLint violations found.")
 	case SwiftLintFailed:
-		_, _ = fmt.Fprintln(&b, "## SwiftLint Issues 🔴")
-		_, _ = fmt.Fprintln(&b, "")
-		writeFenced(&b, output)
+		_, _ = fmt.Fprintln(&builder, "## SwiftLint Issues 🔴")
+		_, _ = fmt.Fprintln(&builder, "")
+		writeFenced(&builder, output)
 	case SwiftLintWarned:
-		_, _ = fmt.Fprintln(&b, "## SwiftLint Warnings ⚠️")
-		_, _ = fmt.Fprintln(&b, "")
-		writeFenced(&b, output)
+		_, _ = fmt.Fprintln(&builder, "## SwiftLint Warnings ⚠️")
+		_, _ = fmt.Fprintln(&builder, "")
+		writeFenced(&builder, output)
 	case SwiftLintNoFiles:
 		// SwiftLint walks the directory tree itself — there is no
 		// caller-side "no files" path. Block left empty so the caller
 		// emits nothing.
 	}
 
-	return b.String()
+	return builder.String()
 }
 
 // SwiftLintSummaryInput drives RenderSwiftLintSummary.
@@ -92,22 +92,22 @@ type SwiftLintSummaryInput struct {
 // summary job. Byte-for-byte compatible with the bash output so any
 // pinned screenshots / changelog excerpts still match.
 func RenderSwiftLintSummary(in SwiftLintSummaryInput) string {
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var builder strings.Builder
 
-	_, _ = fmt.Fprintln(&b, "## Swift Linting Summary")
-	_, _ = fmt.Fprintln(&b, "")
-	_, _ = fmt.Fprintln(&b, "| Linter | Status |")
-	_, _ = fmt.Fprintln(&b, "|--------|--------|")
-	_, _ = fmt.Fprintf(&b, "| swift-format | %s |\n", swiftLinterRow(in.SwiftFormatEnabled, in.SwiftFormatResult))
-	_, _ = fmt.Fprintf(&b, "| SwiftLint | %s |\n", swiftLinterRow(in.SwiftLintEnabled, in.SwiftLintResult))
+	_, _ = fmt.Fprintln(&builder, "## Swift Linting Summary")
+	_, _ = fmt.Fprintln(&builder, "")
+	_, _ = fmt.Fprintln(&builder, "| Linter | Status |")
+	_, _ = fmt.Fprintln(&builder, "|--------|--------|")
+	_, _ = fmt.Fprintf(&builder, "| swift-format | %s |\n", swiftLinterRow(in.SwiftFormatEnabled, in.SwiftFormatResult))
+	_, _ = fmt.Fprintf(&builder, "| SwiftLint | %s |\n", swiftLinterRow(in.SwiftLintEnabled, in.SwiftLintResult))
 
 	if SwiftLintAggregateFailed(in) {
-		_, _ = fmt.Fprintln(&b, "")
-		_, _ = fmt.Fprintln(&b, "### ✗ Linting failed")
-		_, _ = fmt.Fprintln(&b, "Please fix the issues above.")
+		_, _ = fmt.Fprintln(&builder, "")
+		_, _ = fmt.Fprintln(&builder, "### ✗ Linting failed")
+		_, _ = fmt.Fprintln(&builder, "Please fix the issues above.")
 	}
 
-	return b.String()
+	return builder.String()
 }
 
 // SwiftLintAggregateFailed reports whether the summary should signal a
@@ -150,13 +150,13 @@ func swiftLinterRow(enabled bool, result string) string {
 // after it rendered as Markdown in the step summary. CommonMark closes a fence
 // only on a run at least as long as the opener, so a longer opener keeps the
 // output literal without altering a byte of it.
-func writeFenced(b *strings.Builder, output string) { //nolint:varnamelen // b is the builder, as in every renderer in this package.
+func writeFenced(builder *strings.Builder, output string) {
 	fence := summary.CodeFence(output)
 
-	b.WriteString(fence)
-	b.WriteByte('\n')
-	b.WriteString(strings.TrimRight(output, "\n"))
-	b.WriteByte('\n')
-	b.WriteString(fence)
-	b.WriteByte('\n')
+	builder.WriteString(fence)
+	builder.WriteByte('\n')
+	builder.WriteString(strings.TrimRight(output, "\n"))
+	builder.WriteByte('\n')
+	builder.WriteString(fence)
+	builder.WriteByte('\n')
 }

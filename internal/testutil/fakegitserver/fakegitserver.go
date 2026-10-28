@@ -119,7 +119,7 @@ func (s *Server) Requests() []Request {
 
 // roundTrip runs the same routing the HTTP handler did, against an in-memory
 // recorder, and returns the recorded result as a response.
-func (s *Server) roundTrip(r *http.Request) (*http.Response, error) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func (s *Server) roundTrip(r *http.Request) (*http.Response, error) {
 	// A client request built with a nil body has Body == nil; a server handler
 	// is always given one. Normalising here keeps handle identical to what it
 	// was when a real listener fed it.
@@ -164,7 +164,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) { //nolint:varna
 
 	s.mu.Lock()
 	s.requests = append(s.requests, req.clone())
-	h, ok := s.routes[upperASCII(r.Method)+" "+path] //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	h, ok := s.routes[upperASCII(r.Method)+" "+path]
 	s.mu.Unlock()
 
 	if !ok {
@@ -192,7 +192,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) { //nolint:varna
 
 func upperASCII(s string) string {
 	out := make([]byte, len(s))
-	for i := range len(s) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	for i := range len(s) {
 		c := s[i]
 		if c >= 'a' && c <= 'z' {
 			c -= 32

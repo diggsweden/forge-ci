@@ -51,7 +51,7 @@ func TestLockBoundary_UnlockBeforeClose(t *testing.T) {
 
 func TestLockBoundary_CallbackError(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "data")
-	failure := errors.New("callback failure") //nolint:err113 // unique sentinel proves unchanged callback error identity.
+	failure := errors.New("callback failure")
 	calls := 0
 	err := WithLock(path, func() error {
 		calls++

@@ -66,7 +66,7 @@ func TestDo_RetriesThenSucceedsAndLogs(t *testing.T) {
 func TestDo_ExhaustsAndReturnsLastErrorAndZero(t *testing.T) {
 	t.Parallel()
 
-	causes := []error{errors.New("first attempt"), errors.New("middle attempt"), errors.New("last attempt")} //nolint:err113 // independent attempt sentinels must remain distinguishable.
+	causes := []error{errors.New("first attempt"), errors.New("middle attempt"), errors.New("last attempt")}
 	calls := 0
 
 	got, err := retry.Do(t.Context(), io.Discard, 3, 0, func() (string, error) {
@@ -288,7 +288,7 @@ func TestAttempts_ClampsNegativeValues(t *testing.T) {
 func TestDo_HookSeesEachFailedAttemptWithItsOwnError(t *testing.T) {
 	t.Parallel()
 
-	failures := []error{errors.New("first"), errors.New("second")} //nolint:err113 // distinct fixture causes.
+	failures := []error{errors.New("first"), errors.New("second")}
 
 	type hookCall struct {
 		attempt, total int

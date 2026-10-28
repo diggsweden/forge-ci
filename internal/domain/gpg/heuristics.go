@@ -54,7 +54,7 @@ func DecodeKey(key string) ([]byte, error) {
 	}
 	// Tolerate whitespace in the base64 (some workflow callers wrap their
 	// secrets across multiple lines).
-	cleaned := strings.Map(func(r rune) rune { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	cleaned := strings.Map(func(r rune) rune {
 		switch r {
 		case ' ', '\t', '\n', '\r':
 			return -1

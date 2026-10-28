@@ -13,8 +13,6 @@ package build
 // targets and cross-linkers it supports, and `cargo build` will fail
 // loudly when a linker is missing. Keeping the mapping broad lets us
 // extend runtime-image support without touching this code.
-//
-//nolint:gochecknoglobals // canonical lookup table — read-only.
 var CargoTargetTriples = map[string]string{
 	"linux/amd64":   "x86_64-unknown-linux-gnu",
 	"linux/arm64":   "aarch64-unknown-linux-gnu",

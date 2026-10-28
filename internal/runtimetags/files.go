@@ -5,11 +5,12 @@ package runtimetags
 
 import (
 	"fmt"
-	"github.com/diggsweden/forge-ci/internal/domain/errs"
-	"github.com/diggsweden/forge-ci/internal/pathsafe"
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/pathsafe"
 )
 
 // Files is the shared shipped surface for checking and rewriting runtime pins.

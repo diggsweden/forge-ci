@@ -89,7 +89,7 @@ const (
 // SARIF emitter so Code Scanning's severity colouring stays unchanged.
 func trivySeverityLevel(severity string) string {
 	switch strings.ToUpper(severity) {
-	case "CRITICAL", "HIGH": //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
+	case "CRITICAL", "HIGH":
 		return sarifLevelError
 	case "MEDIUM":
 		return sarifLevelWarning
@@ -103,7 +103,7 @@ func trivySeverityLevel(severity string) string {
 // buildSARIFResult constructs one SARIF Result from a Trivy
 // vulnerability finding. imageRef populates the result's physical
 // location so Code Scanning anchors the finding to the right image.
-func buildSARIFResult(v *TrivyVulnerability, imageRef string) *sarif.Result { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func buildSARIFResult(v *TrivyVulnerability, imageRef string) *sarif.Result {
 	loc := sarif.NewLocation().WithPhysicalLocation(
 		sarif.NewPhysicalLocation().
 			WithArtifactLocation(sarif.NewSimpleArtifactLocation(physicalLocationURI(imageRef, v))).
@@ -121,39 +121,39 @@ func buildSARIFResult(v *TrivyVulnerability, imageRef string) *sarif.Result { //
 // "<Title> — <pkg>@<version> (fix: <fixed>)" with sane fall-backs when
 // Title is missing.
 func vulnerabilityMessage(v *TrivyVulnerability) string { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var builder strings.Builder
 
 	title := strings.TrimSpace(v.Title)
 	if title == "" {
 		title = v.VulnerabilityID
 	}
 
-	b.WriteString(title)
+	builder.WriteString(title)
 
 	if v.PkgName != "" {
-		b.WriteString(" — ")
-		b.WriteString(v.PkgName)
+		builder.WriteString(" — ")
+		builder.WriteString(v.PkgName)
 
 		if v.InstalledVersion != "" {
-			b.WriteString("@")
-			b.WriteString(v.InstalledVersion)
+			builder.WriteString("@")
+			builder.WriteString(v.InstalledVersion)
 		}
 	}
 
 	if v.FixedVersion != "" {
-		b.WriteString(" (fix: ")
-		b.WriteString(v.FixedVersion)
-		b.WriteString(")")
+		builder.WriteString(" (fix: ")
+		builder.WriteString(v.FixedVersion)
+		builder.WriteString(")")
 	}
 
-	return b.String()
+	return builder.String()
 }
 
 // physicalLocationURI picks the URI for a finding's location. Container
 // scans get the image ref so Code Scanning's "this finding is in image
 // X" grouping works; if no image ref is set we fall back to the package
 // name (still a stable identifier per finding).
-func physicalLocationURI(imageRef string, v *TrivyVulnerability) string { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func physicalLocationURI(imageRef string, v *TrivyVulnerability) string {
 	if imageRef != "" {
 		return imageRef
 	}

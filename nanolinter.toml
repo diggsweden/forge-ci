@@ -70,7 +70,7 @@ block = [
 [verify.filters.container]
 exclude = '\.containerignore$'
 
-# Match .golangci.yml's bounded five-minute budget for cold-cache analysis.
+# Match development/golangci-lint/golangci.yml's bounded five-minute budget for cold-cache analysis.
 # The wrapper's default 60 seconds otherwise kills it before it can report.
 [linters.go-golangci]
 timeout_secs = 300

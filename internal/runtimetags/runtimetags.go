@@ -23,7 +23,6 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/version"
 )
 
-//nolint:gochecknoglobals // shared compiled pattern — read-only.
 var refPattern = regexp.MustCompile("forge-ci-runtime(?:-[a-z0-9.]+)*:([^\\s\"'`,;(){}\\[\\]<>]+)")
 
 // ValidVersion reports whether a published runtime tag is the repository's

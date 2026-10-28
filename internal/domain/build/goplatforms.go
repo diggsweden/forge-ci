@@ -16,8 +16,6 @@ const DefaultPlatform = "linux/amd64"
 // forge-ci binary).
 //
 // Update when bumping the Go version pin in `.mise.toml`.
-//
-//nolint:gochecknoglobals // canonical enumeration — read-only.
 var GoPlatforms = map[string]struct{}{
 	"aix/ppc64":       {},
 	"android/386":     {},

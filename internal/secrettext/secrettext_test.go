@@ -57,7 +57,7 @@ func TestJWTBoundary_JSONSpellingAndBenignControls(t *testing.T) {
 func TestRedact_RemovesASecretSplitByControlCharacters(t *testing.T) {
 	t.Parallel()
 
-	const secret = "token-value-DO-NOT-LOG" //nolint:gosec // fixture string standing in for a secret, not a credential.
+	const secret = "token-value-DO-NOT-LOG"
 
 	for _, test := range []struct {
 		name    string

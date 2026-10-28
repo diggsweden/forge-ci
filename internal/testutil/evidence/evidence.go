@@ -77,8 +77,6 @@ var errNotProven = errors.New("strict profile: evidence may not be skipped")
 // quietly demote itself to the permissive default in the tests it was turned
 // on for. The profile is a property of the run, so it is captured once, where
 // no test can reach it.
-//
-//nolint:gochecknoglobals // captured at load: see above, a test's scrubbed environment must not change the run's profile.
 var (
 	runProfile = os.Getenv(ProfileEnv)
 
@@ -130,7 +128,7 @@ func RequireWorkingTool(t *testing.T, name string, args ...string) string {
 
 	path := RequireTool(t, name)
 
-	cmd := exec.CommandContext(t.Context(), path, args...)
+	cmd := exec.CommandContext(t.Context(), path, args...) //nolint:gosec // G204: test helper executes the caller-selected tool directly, without a shell.
 	if out, err := cmd.CombinedOutput(); err != nil {
 		NotProvenf(t, "%s is on PATH but failed to run: %v\n%s", name, err, out)
 	}
@@ -217,7 +215,6 @@ type tally struct {
 	counts map[string]int
 }
 
-//nolint:gochecknoglobals // one tally per test binary: the helpers record, Main summarises.
 var notProven = tally{counts: map[string]int{}}
 
 func (t *tally) record(reason string) {

@@ -274,7 +274,7 @@ func TestArtifactStagingDoesNotReopenDestinationPath(t *testing.T) {
 func assertFileBody(t *testing.T, path, want string) {
 	t.Helper()
 
-	body, err := os.ReadFile(path) //nolint:gosec // test-controlled path.
+	body, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -578,11 +578,11 @@ func TestArtifactStagingCloseReportsAFailedCleanupWithItsCause(t *testing.T) {
 	}
 
 	stageDir := filepath.Join(destination, stage.stageName)
-	if err := os.Chmod(stageDir, 0o500); err != nil { //nolint:gosec // owned temp directory made unwritable on purpose.
+	if err := os.Chmod(stageDir, 0o500); err != nil {
 		t.Fatal(err)
 	}
 
-	t.Cleanup(func() { _ = os.Chmod(stageDir, 0o700) }) //nolint:gosec // restore the owned temp directory for removal.
+	t.Cleanup(func() { _ = os.Chmod(stageDir, 0o700) })
 
 	closeErr := stage.Close()
 	if !errors.Is(closeErr, os.ErrPermission) {
@@ -593,7 +593,7 @@ func TestArtifactStagingCloseReportsAFailedCleanupWithItsCause(t *testing.T) {
 		t.Fatalf("the refused cleanup should have left the staged file: %v", statErr)
 	}
 
-	if err := os.Chmod(stageDir, 0o700); err != nil { //nolint:gosec // owned temp directory.
+	if err := os.Chmod(stageDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 

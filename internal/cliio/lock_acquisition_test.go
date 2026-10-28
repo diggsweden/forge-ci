@@ -25,9 +25,9 @@ import (
 // look like a successful run.
 
 var (
-	errAcquireRefused = errors.New("lock could not be acquired") //nolint:err113 // injected identity is the contract.
-	errReleaseFailed  = errors.New("lock could not be released") //nolint:err113 // injected identity is the contract.
-	errCallbackFailed = errors.New("the guarded work failed")    //nolint:err113 // injected identity is the contract.
+	errAcquireRefused = errors.New("lock could not be acquired")
+	errReleaseFailed  = errors.New("lock could not be released")
+	errCallbackFailed = errors.New("the guarded work failed")
 )
 
 func TestWithLock_AFailedAcquisitionDoesNotRunTheGuardedWork(t *testing.T) {
