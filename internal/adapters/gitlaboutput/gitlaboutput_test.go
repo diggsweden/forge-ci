@@ -33,12 +33,12 @@ func TestSet_WritesDotenvScalar(t *testing.T) {
 
 func TestSet_RejectsInvalidDotenvData(t *testing.T) {
 	fsys := testfs.NewReal(t)
-	s := gitlaboutput.New(fsys.WriteFile("out.env", nil))
+	sink := gitlaboutput.New(fsys.WriteFile("out.env", nil))
 
 	// A leading dash or digit is rejected too: the result has to be a
 	// usable shell variable name, and _FOO or 1FOO is not.
 	for _, key := range []string{"", "1bad", "bad key", "bad=value", "bad\nkey", "bad\rkey", "-lead", "bad.key"} {
-		if err := s.Set(context.Background(), key, "value"); !errors.Is(err, errs.ErrValidation) {
+		if err := sink.Set(context.Background(), key, "value"); !errors.Is(err, errs.ErrValidation) {
 			t.Errorf("key %q: err = %v, want ErrValidation", key, err)
 		}
 	}
@@ -46,7 +46,7 @@ func TestSet_RejectsInvalidDotenvData(t *testing.T) {
 	// The dotenv file is line-oriented, so either terminator would forge
 	// a further variable.
 	for _, value := range []string{"one\ntwo", "one\rtwo", "one\r\ntwo"} {
-		if err := s.Set(context.Background(), "bad", value); !errors.Is(err, errs.ErrValidation) {
+		if err := sink.Set(context.Background(), "bad", value); !errors.Is(err, errs.ErrValidation) {
 			t.Errorf("value %q: err = %v, want ErrValidation", value, err)
 		}
 	}
@@ -71,17 +71,17 @@ func TestSet_RefusesTwoKeysThatBecomeOneVariable(t *testing.T) {
 	fsys := testfs.NewReal(t)
 	path := fsys.WriteFile("out.env", nil)
 
-	s := gitlaboutput.New(path)
-	require.NoError(t, s.Set(context.Background(), "image-digest", "first"))
+	sink := gitlaboutput.New(path)
+	require.NoError(t, sink.Set(context.Background(), "image-digest", "first"))
 
-	err := s.Set(context.Background(), "image_digest", "second")
+	err := sink.Set(context.Background(), "image_digest", "second")
 	require.ErrorIs(t, err, errs.ErrValidation)
 	// Both spellings are named: the operator has to rename one, and cannot
 	// without being told which two collided.
 	require.Contains(t, err.Error(), `"image-digest"`)
 	require.Contains(t, err.Error(), `"image_digest"`)
 	require.Contains(t, err.Error(), "IMAGE_DIGEST")
-	require.NoError(t, s.Close(context.Background()))
+	require.NoError(t, sink.Close(context.Background()))
 
 	// The refused value is not written. A second IMAGE_DIGEST line would be
 	// the loss this refusal exists to prevent, reported and then committed
@@ -118,13 +118,13 @@ func TestSetMultiline_Unsupported(t *testing.T) {
 }
 
 func TestSet_MissingCIOutputErrors(t *testing.T) {
-	s := gitlaboutput.New("")
+	sink := gitlaboutput.New("")
 
 	// ErrUsage: the variable is simply not set. Note this differs from
 	// ghaoutput, which falls back to a /dev/null sink when $GITHUB_OUTPUT
 	// is unset so a command can be run locally -- here an unset $CI_OUTPUT
 	// is refused instead.
-	err := s.Set(context.Background(), "key", "value")
+	err := sink.Set(context.Background(), "key", "value")
 	if !errors.Is(err, errs.ErrUsage) {
 		t.Fatalf("Set error = %v, want ErrUsage", err)
 	}
@@ -136,11 +136,11 @@ func TestSet_MissingCIOutputErrors(t *testing.T) {
 
 func TestSetAfterClose_Errors(t *testing.T) {
 	fsys := testfs.NewReal(t)
-	s := gitlaboutput.New(fsys.WriteFile("out.env", nil))
+	sink := gitlaboutput.New(fsys.WriteFile("out.env", nil))
 
-	require.NoError(t, s.Close(context.Background()))
+	require.NoError(t, sink.Close(context.Background()))
 
-	if err := s.Set(context.Background(), "key", "value"); err == nil {
+	if err := sink.Set(context.Background(), "key", "value"); err == nil {
 		t.Fatal("expected Set after Close to error")
 	}
 
@@ -148,7 +148,7 @@ func TestSetAfterClose_Errors(t *testing.T) {
 	// file has no multi-line form -- so this pins the capability gap, not
 	// the closed-sink guard. Asserting only "it errored" would read as
 	// the latter and pass for the wrong reason.
-	if err := s.SetMultiline(context.Background(), "key", []string{"v"}); !errors.Is(err, errs.ErrUnsupported) {
+	if err := sink.SetMultiline(context.Background(), "key", []string{"v"}); !errors.Is(err, errs.ErrUnsupported) {
 		t.Errorf("SetMultiline after Close = %v, want ErrUnsupported", err)
 	}
 

@@ -23,13 +23,13 @@ type recordingWriter struct {
 	body   strings.Builder
 }
 
-func (w *recordingWriter) Write(p []byte) (int, error) {
+func (w *recordingWriter) Write(data []byte) (int, error) {
 	w.writes++
 	if w.fail {
 		return 0, errWriteFailed
 	}
 
-	return w.body.Write(p)
+	return w.body.Write(data)
 }
 
 func (w *recordingWriter) Close() error { return nil }
@@ -47,15 +47,15 @@ func (w *recordingWriter) Close() error { return nil }
 // Before the block was assembled up front, the opener was a committed write of
 // its own and any later failure left exactly that.
 func TestSetMultiline_AFailedWriteCommitsNothing(t *testing.T) {
-	w := &recordingWriter{fail: true}
-	s := &Sink{w: w}
+	out := &recordingWriter{fail: true}
+	s := &Sink{w: out}
 
 	err := s.SetMultiline(context.Background(), "tags", []string{"one", "two"})
 	if !errors.Is(err, errWriteFailed) {
 		t.Fatalf("err = %v, want the writer's own failure", err)
 	}
 
-	if got := w.body.String(); got != "" {
+	if got := out.body.String(); got != "" {
 		t.Errorf("a failed write left %q behind", got)
 	}
 }
@@ -69,15 +69,15 @@ func TestSetMultiline_AFailedWriteCommitsNothing(t *testing.T) {
 // this pins is the part that is this package's to control -- it never emits the
 // opener as a step of its own and then fails.
 func TestSetMultiline_IssuesExactlyOneWrite(t *testing.T) {
-	w := &recordingWriter{}
-	s := &Sink{w: w}
+	out := &recordingWriter{}
+	s := &Sink{w: out}
 
 	if err := s.SetMultiline(context.Background(), "tags", []string{"one", "two", "three"}); err != nil {
 		t.Fatal(err)
 	}
 
-	if w.writes != 1 {
-		t.Errorf("the heredoc took %d writes, want 1", w.writes)
+	if out.writes != 1 {
+		t.Errorf("the heredoc took %d writes, want 1", out.writes)
 	}
 }
 

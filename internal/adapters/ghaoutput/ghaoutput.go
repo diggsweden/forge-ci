@@ -207,14 +207,13 @@ func (s *Sink) ensureOpen() error {
 		return nil
 	}
 
-	f, err := cliio.OpenAppendNoFollow(s.path, 0o644) //nolint:varnamelen // idiomatic for the os.File handle.
+	f, err := cliio.OpenAppendNoFollow(s.path, 0o644)
 	if err != nil {
 		// os.OpenFile already returns "open <path>: <syscall err>" via
 		// *fs.PathError. Adding our own "open <path>:" prefix would
 		// duplicate both the verb and the path; pull the underlying
 		// syscall error out so the chain reads cleanly.
-		var pathErr *fs.PathError
-		if errors.As(err, &pathErr) {
+		if pathErr, ok := errors.AsType[*fs.PathError](err); ok {
 			return fmt.Errorf("$GITHUB_OUTPUT path %q: %w: %w", s.path, pathErr.Err, errs.ErrInvalidConfig)
 		}
 

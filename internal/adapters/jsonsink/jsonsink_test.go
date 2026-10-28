@@ -23,18 +23,18 @@ func TestSink_EmitsKeysInInsertionOrder(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	s := jsonsink.New(&buf)
+	sink := jsonsink.New(&buf)
 	ctx := context.Background()
 
 	// Deliberately not alphabetical: encoding/json would sort these, and
 	// the package exists partly to not do that.
 	for _, k := range []string{"version", "binary-name", "module"} {
-		if err := s.Set(ctx, k, "v-"+k); err != nil {
+		if err := sink.Set(ctx, k, "v-"+k); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	if err := s.Close(ctx); err != nil {
+	if err := sink.Close(ctx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -56,31 +56,31 @@ func TestSink_OutputIsValidJSON(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	s := jsonsink.New(&buf)
+	sink := jsonsink.New(&buf)
 	ctx := context.Background()
 
 	// Values and a key that would break a naive concatenating writer.
-	if err := s.Set(ctx, "quote\"key", `he said "hi"`); err != nil {
+	if err := sink.Set(ctx, "quote\"key", `he said "hi"`); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := s.Set(ctx, "newlines", "one\ntwo\r\nthree"); err != nil {
+	if err := sink.Set(ctx, "newlines", "one\ntwo\r\nthree"); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := s.Set(ctx, "backslash", `C:\path\to`); err != nil {
+	if err := sink.Set(ctx, "backslash", `C:\path\to`); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := s.Set(ctx, "unicode", "räksmörgås 🐟"); err != nil {
+	if err := sink.Set(ctx, "unicode", "räksmörgås 🐟"); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := s.SetBool(ctx, "is-snapshot", true); err != nil {
+	if err := sink.SetBool(ctx, "is-snapshot", true); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := s.Close(ctx); err != nil {
+	if err := sink.Close(ctx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -111,14 +111,14 @@ func TestSink_BoolIsNativeJSON(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	s := jsonsink.New(&buf)
+	sink := jsonsink.New(&buf)
 	ctx := context.Background()
 
-	if err := s.SetBool(ctx, "is-snapshot", false); err != nil {
+	if err := sink.SetBool(ctx, "is-snapshot", false); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := s.Close(ctx); err != nil {
+	if err := sink.Close(ctx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -168,16 +168,16 @@ func TestSink_RewriteKeepsPosition(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	s := jsonsink.New(&buf)
+	sink := jsonsink.New(&buf)
 	ctx := context.Background()
 
 	for _, kv := range [][2]string{{"first", "1"}, {"second", "2"}, {"first", "rewritten"}} {
-		if err := s.Set(ctx, kv[0], kv[1]); err != nil {
+		if err := sink.Set(ctx, kv[0], kv[1]); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	if err := s.Close(ctx); err != nil {
+	if err := sink.Close(ctx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -191,17 +191,17 @@ func TestSink_RejectsEmptyKey(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	s := jsonsink.New(&bytes.Buffer{})
+	sink := jsonsink.New(&bytes.Buffer{})
 
-	if err := s.Set(ctx, "", "v"); !errors.Is(err, errs.ErrValidation) {
+	if err := sink.Set(ctx, "", "v"); !errors.Is(err, errs.ErrValidation) {
 		t.Errorf("Set err = %v, want ErrValidation", err)
 	}
 
-	if err := s.SetBool(ctx, "", true); !errors.Is(err, errs.ErrValidation) {
+	if err := sink.SetBool(ctx, "", true); !errors.Is(err, errs.ErrValidation) {
 		t.Errorf("SetBool err = %v, want ErrValidation", err)
 	}
 
-	if err := s.SetMultiline(ctx, "", []string{"v"}); !errors.Is(err, errs.ErrValidation) {
+	if err := sink.SetMultiline(ctx, "", []string{"v"}); !errors.Is(err, errs.ErrValidation) {
 		t.Errorf("SetMultiline err = %v, want ErrValidation", err)
 	}
 }
@@ -237,18 +237,18 @@ func TestSink_CloseSemantics(t *testing.T) {
 
 		var buf bytes.Buffer
 
-		s := jsonsink.New(&buf)
-		if err := s.Set(ctx, "k", "v"); err != nil {
+		sink := jsonsink.New(&buf)
+		if err := sink.Set(ctx, "k", "v"); err != nil {
 			t.Fatal(err)
 		}
 
-		if err := s.Close(ctx); err != nil {
+		if err := sink.Close(ctx); err != nil {
 			t.Fatal(err)
 		}
 
 		first := buf.String()
 
-		if err := s.Close(ctx); err != nil {
+		if err := sink.Close(ctx); err != nil {
 			t.Errorf("second Close = %v, want nil", err)
 		}
 
@@ -262,20 +262,20 @@ func TestSink_CloseSemantics(t *testing.T) {
 
 		var buf bytes.Buffer
 
-		s := jsonsink.New(&buf)
-		if err := s.Close(ctx); err != nil {
+		sink := jsonsink.New(&buf)
+		if err := sink.Close(ctx); err != nil {
 			t.Fatal(err)
 		}
 
-		if err := s.Set(ctx, "k", "v"); err == nil {
+		if err := sink.Set(ctx, "k", "v"); err == nil {
 			t.Error("Set after Close did not error")
 		}
 
-		if err := s.SetBool(ctx, "k", true); err == nil {
+		if err := sink.SetBool(ctx, "k", true); err == nil {
 			t.Error("SetBool after Close did not error")
 		}
 
-		if err := s.SetMultiline(ctx, "k", []string{"v"}); err == nil {
+		if err := sink.SetMultiline(ctx, "k", []string{"v"}); err == nil {
 			t.Error("SetMultiline after Close did not error")
 		}
 

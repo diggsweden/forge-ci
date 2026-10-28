@@ -141,7 +141,7 @@ func (s *Sink) ensureOpen() error {
 		return fmt.Errorf("gitlaboutput: CI_OUTPUT is required for GitLab dotenv outputs: %w", errs.ErrUsage)
 	}
 
-	f, err := cliio.OpenAppendNoFollow(s.path, 0o644) //nolint:varnamelen // idiomatic for the os.File handle.
+	f, err := cliio.OpenAppendNoFollow(s.path, 0o644)
 	if err != nil {
 		return fmt.Errorf("open %q: %w", s.path, err)
 	}
@@ -151,32 +151,31 @@ func (s *Sink) ensureOpen() error {
 	return nil
 }
 
-//nolint:cyclop // dotenv key validation: one branch per allowed/disallowed rune class.
 func dotenvKey(key string) (string, error) {
 	if key == "" {
 		return "", fmt.Errorf("gitlaboutput: output key is empty: %w", errs.ErrValidation)
 	}
 
-	var b strings.Builder //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	var builder strings.Builder
 
-	for i, r := range key { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+	for i, r := range key {
 		switch {
 		case r >= 'a' && r <= 'z':
-			b.WriteRune(r - 'a' + 'A')
+			builder.WriteRune(r - 'a' + 'A')
 		case r >= 'A' && r <= 'Z':
-			b.WriteRune(r)
+			builder.WriteRune(r)
 		case r == '_':
-			b.WriteRune(r)
+			builder.WriteRune(r)
 		case r == '-' && i > 0:
-			b.WriteByte('_')
+			builder.WriteByte('_')
 		case r >= '0' && r <= '9' && i > 0:
-			b.WriteRune(r)
+			builder.WriteRune(r)
 		default:
 			return "", fmt.Errorf("gitlaboutput: invalid output key %q: %w", key, errs.ErrValidation)
 		}
 	}
 
-	return b.String(), nil
+	return builder.String(), nil
 }
 
 // Compile-time check.

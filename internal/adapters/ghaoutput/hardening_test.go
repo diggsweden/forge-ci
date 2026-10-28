@@ -43,7 +43,7 @@ func TestSink_RefusesASymlinkedOutputPath(t *testing.T) {
 	require.Error(t, err, "the sink wrote through a symlink to a file the runner never named")
 	require.ErrorIs(t, err, errs.ErrValidation, "the refusal must be classified rather than an opaque OS error")
 
-	body, readErr := os.ReadFile(target) //nolint:gosec // owned temporary file.
+	body, readErr := os.ReadFile(target)
 	require.NoError(t, readErr)
 	require.Equal(t, original, string(body), "the link's target was appended to")
 }
@@ -66,7 +66,7 @@ func TestSink_StillAppendsToARealOutputFile(t *testing.T) {
 	require.NoError(t, sink.Set(context.Background(), "first", "1"))
 	require.NoError(t, sink.Set(context.Background(), "second", "2"))
 
-	body, err := os.ReadFile(path) //nolint:gosec // owned temporary file.
+	body, err := os.ReadFile(path)
 	require.NoError(t, err)
 
 	require.True(t, strings.HasPrefix(string(body), earlier), "an earlier step's output was truncated:\n%s", body)

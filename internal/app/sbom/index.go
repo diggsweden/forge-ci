@@ -83,15 +83,19 @@ func ComposeIndex(in IndexBOMInput) (*IndexBOMOutput, error) {
 		return nil, err
 	}
 
-	evidence := make([]string, 0, len(inputs.parts))
-	for _, name := range inputs.files[2:] {
-		evidence = append(evidence, filepath.Join(in.Root, name))
+	return &IndexBOMOutput{Path: in.Output, SHA256: fmt.Sprintf("%x", sha256.Sum256(result)), EvidenceFiles: indexEvidence(in.Root, inputs.files[2:])}, nil
+}
+
+// indexEvidence is the sorted, distinct paths of the platform SBOMs under root.
+func indexEvidence(root string, names []string) []string {
+	evidence := make([]string, 0, len(names))
+	for _, name := range names {
+		evidence = append(evidence, filepath.Join(root, name))
 	}
 
 	slices.Sort(evidence)
-	evidence = slices.Compact(evidence)
 
-	return &IndexBOMOutput{Path: in.Output, SHA256: fmt.Sprintf("%x", sha256.Sum256(result)), EvidenceFiles: evidence}, nil
+	return slices.Compact(evidence)
 }
 
 type indexBOMInputs struct {

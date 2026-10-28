@@ -66,8 +66,8 @@ func TestSetMultiline_DelimiterIsUnpredictable(t *testing.T) {
 
 	seen := map[string]bool{}
 
-	for i := range 20 {
-		path := fsys.WriteFile(fmt.Sprintf("out-%d", i), nil)
+	for index := range 20 {
+		path := fsys.WriteFile(fmt.Sprintf("out-%d", index), nil)
 
 		s := ghaoutput.New(path)
 		if err := s.SetMultiline(context.Background(), "tags", []string{"a"}); err != nil {
@@ -78,7 +78,7 @@ func TestSetMultiline_DelimiterIsUnpredictable(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		first, _, _ := strings.Cut(string(fsys.ReadFile(fmt.Sprintf("out-%d", i))), "\n")
+		first, _, _ := strings.Cut(string(fsys.ReadFile(fmt.Sprintf("out-%d", index))), "\n")
 
 		delim := strings.TrimPrefix(first, "tags<<")
 		if delim == first {
@@ -135,14 +135,14 @@ func TestSetMultiline_ContentCannotCloseTheHeredoc(t *testing.T) {
 
 func TestSet_RejectsInvalidOutputKey(t *testing.T) {
 	fsys := testfs.NewReal(t)
-	s := ghaoutput.New(fsys.WriteFile("out", nil))
+	sink := ghaoutput.New(fsys.WriteFile("out", nil))
 
 	for _, key := range []string{"", "1bad", "bad key", "bad=value", "bad\nkey", "bad\rkey", "bad<<EOF"} {
-		if err := s.Set(context.Background(), key, "value"); !errors.Is(err, errs.ErrValidation) {
+		if err := sink.Set(context.Background(), key, "value"); !errors.Is(err, errs.ErrValidation) {
 			t.Errorf("key %q: Set err = %v, want ErrValidation", key, err)
 		}
 
-		if err := s.SetMultiline(context.Background(), key, []string{"value"}); !errors.Is(err, errs.ErrValidation) {
+		if err := sink.SetMultiline(context.Background(), key, []string{"value"}); !errors.Is(err, errs.ErrValidation) {
 			t.Errorf("key %q: SetMultiline err = %v, want ErrValidation", key, err)
 		}
 	}
@@ -152,14 +152,14 @@ func TestSetAfterClose_Errors(t *testing.T) {
 	fsys := testfs.NewReal(t)
 	path := fsys.WriteFile("out", nil)
 
-	s := ghaoutput.New(path)
-	require.NoError(t, s.Close(context.Background()))
+	sink := ghaoutput.New(path)
+	require.NoError(t, sink.Close(context.Background()))
 
-	if err := s.Set(context.Background(), "k", "v"); err == nil {
+	if err := sink.Set(context.Background(), "k", "v"); err == nil {
 		t.Errorf("Set after Close did not error")
 	}
 
-	if err := s.SetMultiline(context.Background(), "k", []string{"x"}); err == nil {
+	if err := sink.SetMultiline(context.Background(), "k", []string{"x"}); err == nil {
 		t.Errorf("SetMultiline after Close did not error")
 	}
 

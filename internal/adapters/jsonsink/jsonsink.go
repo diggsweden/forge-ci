@@ -151,7 +151,7 @@ func (s *Sink) Close(_ context.Context) error {
 		return fmt.Errorf("jsonsink: write: %w", err)
 	}
 
-	for i, key := range s.keys { //nolint:varnamelen // idiomatic loop index.
+	for i, key := range s.keys {
 		// json.Marshal on a string cannot return a non-nil error per
 		// encoding/json's documented contract; the assignment to err
 		// here keeps the linter honest.

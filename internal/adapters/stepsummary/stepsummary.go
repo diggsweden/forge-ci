@@ -72,7 +72,7 @@ func (s *Sink) Append(_ context.Context, markdown string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	f, err := cliio.OpenAppendNoFollow(s.path, 0o644) //nolint:varnamelen // step-summary file read by GitHub Actions runner.
+	f, err := cliio.OpenAppendNoFollow(s.path, 0o644)
 	if err != nil {
 		return fmt.Errorf("open step summary %q: %w", s.path, err)
 	}
