@@ -157,12 +157,13 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           path: forge-ci
+          ref: ${{ github.sha }}
           persist-credentials: false
       - name: Checkout companion testsuite (pinned)
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ vars.FORGE_CI_TESTSUITE_REPOSITORY || 'diggsweden/forge-ci-blackbox-tests' }}
-          ref: 9dad88b306bda7fdc94f51ccfdb5cc101c0fb77d
+          ref: 194639d102da7f9b3ae1a7db7e7050300d64f071
           path: forge-ci-blackbox-tests
           persist-credentials: false
       - name: Set up Go
@@ -178,6 +179,16 @@ jobs:
       - name: Validate strict companion behavioral contract
         working-directory: forge-ci-blackbox-tests
         run: ./scripts/validate-strict-profile-contract.sh
+
+      - name: Build exact PR candidate
+        working-directory: forge-ci
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${EXPECTED_SOURCE_SHA:?}"
+          go build -trimpath -buildvcs=false -ldflags "-X main.commit=$EXPECTED_SOURCE_SHA" \
+            -o "${RUNNER_TEMP:?}/forge-ci-candidate" ./cmd/forge-ci
 
       - name: Ensure distro toolchains
         run: |
@@ -226,12 +237,14 @@ jobs:
         env:
           FORGE_CI_BLACKBOX_PROFILE: strict
           FORGE_CI_PROC_SWAPS: "/dev/null"
+          FORGE_CI_TEST_BINARY: ${{ runner.temp }}/forge-ci-candidate
         run: go test -tags=blackbox -count=1 -timeout 45m ./tests/blackbox/...
         working-directory: forge-ci-blackbox-tests
 
   go:
     name: Go (build, test, lint)
     runs-on: ubuntu-26.04
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
@@ -244,7 +257,9 @@ jobs:
       - name: go build
         run: go build -o /tmp/forge-ci ./cmd/forge-ci
       - name: go test
-        run: go test -race -timeout 120s ./...
+        # The behavior suite rebuilds both native engine architectures. Each
+        # build has its own 10m bound; a cold two-core runner needs more than 120s.
+        run: go test -race -timeout 15m ./...
       - name: go test smoke
         run: just test-smoke
       - name: go test fuzz seed corpora

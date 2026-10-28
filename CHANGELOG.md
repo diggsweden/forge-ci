@@ -113,6 +113,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Pin PR and release compatibility gates to the upstream companion suite's
+  current release-policy, SSH handshake and registry-authority tests.
+- PR black-box CI explicitly rebuilds the exact source checkout and passes that
+  binary to the companion suite. Go's race-test budget accommodates cold native
+  engine rebuilds on two-core runners while retaining bounded fixture timeouts.
 - Reject per-platform inventory filename collisions before scans or registry
   writes, including inventories in different local directories that would share
   one public release URL.
