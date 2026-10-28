@@ -384,7 +384,7 @@ consumer](#showing-a-consumer) the demo.
 
 #### Running it
 
-The tier needs one input: a neutral live-target contract, version 4, for this
+The tier needs one input: a neutral live-target contract, version 5, for this
 suite's lab account, `forgeci`. Forge Lab writes it to the contract module's default
 path, `$XDG_STATE_HOME/forge-lab/targets/forgeci.json` (`~/.local/state` when
 unset), as JSON data, never sourced, owner-only on disk. Everything else is
@@ -413,7 +413,7 @@ LAB_ROAD=k3s just targets --account forgeci gitlab forgejo
 ```
 
 The final target mint probes Fulcio and records its issuer mappings only when
-reachable. Inspect with `just targets-explain --account forgeci`; if `fulcio` is null,
+reachable. Inspect with `just targets-explain --account forgeci`; if `fulcio` is absent,
 diagnose the selected road's Fulcio deployment and mint again once it is ready.
 The `ready` commands above check providers, not Fulcio. Full needs GitLab
 and Forgejo, both with `workflow-runs`, fixture manifests, OCI registry facts
@@ -424,7 +424,7 @@ Back in the forge-ci checkout, provide the pinned Go toolchain and the
 launcher's host tools: `base64`, `cosign`, `flock`, `jq`, `syft`, `buildah`,
 `git` and `sha256sum`. Buildah must work for the current user. The suite builds
 host binaries and runner binaries for the architecture the contract's
-`runner_arch` names, writes caches/evidence, runs containers
+`runner.arch` names, writes caches/evidence, runs containers
 and trusted runner jobs, may fetch modules/images, and deletes/recreates
 `fci-` resources on the lab.
 
@@ -452,6 +452,51 @@ separate ten-minute normal-profile restoration budget.
 Inspect cleanup errors before restarting; forced termination cannot complete
 cleanup, and an interrupted run is never acceptance evidence. The next run
 uses the same guarded delete-before-create lifecycle for retained fixtures.
+
+#### Local runner-lending lifecycle
+
+The focused Forge CI conformance scenario runs through the same launcher:
+
+```text
+just test-live '^TestRunnerLending_LocalLifecycle/job$'
+just test-live '^TestRunnerLending_LocalLifecycle/(idle|cancel)$'
+```
+
+It requires the `forgeci` Compose Forgejo contract, local rootless Podman and
+the cached digest-pinned Forgejo 13.2.0 runner image named in
+`internal/livetest/lending.go`. `LAB_TARGETS_FILE` selects a dedicated contract
+as usual. No Forge Lab source change, administrator credential, persistent
+runner change, privileged profile, or hosted GitHub dispatch is involved.
+
+Provisioning is a local-container substitute for the hosted provisioning edge.
+The receiving Forgejo, repository-scoped ephemeral registration, runner binary,
+single job and retirement observations are real. The test uses the same
+ephemeral/`one-job --wait` protocol and runner release as the lending script;
+it does **not** execute that script's root bootstrap or registration-token CLI.
+The worker has no engine socket or host mounts, runs as uid 1000 with dropped
+capabilities, and uses host networking only to reach the local forge. Its cache
+listener is disabled. The job selects a unique label belonging to this scratch
+repository. This establishes native host execution only, not ARM64 or Buildah.
+
+`job` checks exactly one successful job, worker exit and automatic registration
+absence. `idle` waits two minutes before SIGINT; `cancel` sends SIGINT after
+online proof without submitting a job. Neither tests cancellation mid-job.
+Both require automatic deregistration rather than counting harness cleanup as
+success. Cleanup runs under the suite's separate grace period, removes the exact
+created container ID, and rechecks the exact runner ID/name before fallback
+revocation. Scratch repository cleanup uses the existing consumer lifecycle.
+
+Observed on 2026-10-25: the job case passed. Idle expiry and waiting-worker
+cancellation exited the runner but left its Forgejo registration behind; both
+cases fail their retirement assertion and then verify exact-ID fallback cleanup.
+The follow-up probe against the supported repository runner deletion endpoint
+returned HTTP 401 when authenticated with the worker's own credential. The
+pinned binary's help has no unregister command; its pinned runner RPC protocol
+has no delete-self operation. The script now fails idle expiry with retirement
+unconfirmed instead of claiming release. These live cases retain their failing
+automatic-retirement assertions until the provisioning contract or upstream
+runner gains a supported retirement mechanism. See
+[Unused-runner retirement limitation](runners.md#unused-runner-retirement-limitation).
 
 For the focused active-job interruption check, set
 `FORGE_CI_LIVE_INTERRUPT_PROBE=gitlab-workflow` and run
@@ -506,6 +551,30 @@ targets --account forgeci all` again). Nothing here revokes a credential: the
 producer that minted it does, when the next generation is minted, and the
 suite refuses a non-expiring credential older than a day and an expiring one
 that is not between five minutes and 31 days from expiry.
+
+For the runtime publisher's private-source authentication contract, run
+`just test-live '^TestInRunner_PrivateSourceBranchAcceptsJobToken$'`. It creates
+a private Forgejo repository, proves its branch API refuses anonymous reads,
+then requires HTTP 200 with the actual runner-issued job token. The separate
+`TestInRunner_ForgeInjectedRegistryCredentialAuthenticates` case checks the
+registry authentication handshake. Neither case claims that a private GHCR
+job image was pulled successfully; that needs its own exact-image execution
+evidence from the relevant runner.
+
+`TestInRunner_PrivateGHCRJobImage` supplies that separate, opt-in evidence.
+Set `FORGE_CI_LIVE_PRIVATE_JOB_IMAGE` to an approved existing private GHCR
+digest reference, plus `FORGE_CI_LIVE_EXTERNAL_REGISTRY_TOKEN_FILE` (an absolute
+private token-file path) and `FORGE_CI_LIVE_EXTERNAL_REGISTRY_USER`. Then run
+`just test-live '^TestInRunner_PrivateGHCRJobImage$'`.
+
+The controller verifies authenticated access, anonymous refusal and a matching
+native architecture before creating a private scratch Forgejo repository.
+Its dynamic-matrix job uses `container.credentials` to pull and execute the
+selected image. The oracle waits for the complete workflow and requires an
+actual pull record identifying the supplied user plus successful execution.
+Choose a digest absent from the runner cache: a cached image does not qualify
+as cold-pull evidence. GHCR access is read-only; the scratch repository and its
+temporary secret are removed through the normal lab lifecycle.
 
 The script builds the product and the runner-side helpers outside the tests
 and hands them over by path, because a suite that compiles its own binary
@@ -642,28 +711,60 @@ signed with a throwaway SSH key and pushed with git, a
 `verify-release-request-signature: 'true'` in the fixture. The minimal
 release keeps the default, an unsigned tag created through the forge's API.
 
-Whether a job may build an image is the runner's to allow, and the contract
-does not say, so the operator does. Nothing set means it may, and a build
-that fails is then a failure: the fixture's first job, `Check that a job can
-build an image`, is the layer's `setup-buildah` alone, so the failure names
-the runner and not the release. `FORGE_CI_LIVE_IMAGE_BUILDS=0` says that this
-runner allows none, and the scenario skips with that reason. On Forge Lab's
-Compose road the ordinary runner builds the image. On its k3s road the
-ordinary runner does not: run the tier there with `FORGE_CI_LIVE_IMAGE_BUILDS=0`,
-and this scenario inside the privileged session, without the variable:
+Rootless Buildah needs user namespaces, which the runner under the
+contract's `runner.label` may deny. The scenarios that build an image with it,
+this one and the container and Rust development scenarios on Forgejo, run
+those jobs on the runner the contract's `runner.privileged_label` names,
+through `CI_RUNNER_LABEL_CONTAINER`, and skip when the contract names none.
+On Forge Lab's Compose road, start its runners with the full-release
+acknowledgement and mint the contract again. A build that fails there is a
+failure: the fixture's first job, `Check that a job can build an image`, is
+the layer's `setup-buildah` alone, so the failure names the runner and not the
+release. Forge Lab's k3s road publishes no such runner, so they skip there.
+The GitLab image scenarios have no such route: their jobs are untagged and
+run on the ordinary runner.
+
+#### Focused resolved-image-plan smoke
+
+`TestForgejoLayer_ResolvedImagePlan` is the smallest live acceptance case for
+the resolved-policy shared image workflow: one public SHA-256 consumer, two
+tiny native linux/amd64 `FROM scratch` images, and no product release or signer job.
+It uses the ordinary restricted runner with the admitted Kaniko job image:
 
 ```text
-K3S_PRIVILEGED_DIND_ACK=trusted-local-fixtures \
-K3S_FORGEJO_FULL_RELEASE_ACK=trusted-local-full-release \
-  just k3s-full-release -- /usr/bin/env \
-    LAB_ROAD=k3s LAB_TARGETS_FILE=/absolute/fci-k3s.json FORGE_CI_LIVE_SIGNER_IMAGE=<reference> \
-    /absolute/just --justfile /absolute/forge-ci/justfile \
-    --working-directory /absolute/forge-ci \
-    test-live 'TestForgejoLayer_RegistrySignerSmoke$'
+export FORGE_CI_LIVE_IMAGE_PLAN_JOB_IMAGE="$(just test-live-kaniko-job-image /absolute/forge-lab)"
+just test-live '^TestForgejoLayer_ResolvedImagePlan$'
 ```
 
-The first line is Forge Lab's, run in its checkout; its how-to says what the
-session permits and that it restores the ordinary runner itself.
+Use a current version-5 `forgeci` lab contract (`LAB_TARGETS_FILE` when needed).
+The existing layer checksum and committed-`.forgejo/` guards apply; an isolated
+committed snapshot is suitable for testing changes before their real commit.
+The image publisher uses the same consumer-trial scratch layer coordinate as
+this scenario. Publish the job image before starting the trial, not while a
+live run holds the account lock.
+
+Three sequential runs exercise bounded architecture slots: `cold` builds both
+`steady` and `changing`; `partial` changes only `changing`'s marker, content
+revision and required input label; `warm` repeats that policy. The shared
+publisher populates the slots through its normal complete-set gates. The host
+requires actual build-job logs: misses must execute Kaniko, and hits must report
+the previously observed immutable cache-child ref without executing Kaniko.
+Equal digests alone are insufficient, because a fresh build can be reproducible.
+
+Each phase omits `scan`, requiring real per-platform Trivy and CycloneDX evidence;
+carries an opaque native builder identity and base-lineage fields; and uses its
+own `resolved-base-review-<phase>` artifact namespace and shared ledger output.
+Both unselected Containerfile stages reference a missing file. The host checks
+the registry-served candidate against the ledger, the delivered premade SBOM
+against its ledger pin and platform inventory, and the actual marker filesystem
+bytes without executing them. Provider-free fixture tests execute the policy,
+admit its plans, and reject missing or contradictory cache/evidence signals.
+Scratch repositories, image packages and temporary engine
+packages use the normal guarded scenario cleanup. The prepared job image is a
+separate reusable lab prerequisite.
+
+This focused case proves that shared build/scan/publication path, not a full
+Nanolinter flavor build, signed-base reuse, or product runtime smoke checks.
 
 #### Trying a consumer
 
@@ -759,15 +860,22 @@ report on this one.
 
 **What is set** on the scratch repository:
 
-- `CI_RUNNER_LABEL` and `FORGE_CI_REPOSITORY`, the layer's own two
-  variables.
+- `CI_RUNNER_LABEL` and `FORGE_CI_REPOSITORY`, the layer's own variables,
+  and for a release `RELEASE_REGISTRY_USER`, the user of the registry token:
+  the scratch repository's owner, or the external registry's user below.
+- For a release, the image repository on the lab's own registry, under the
+  scratch repository's owner, wherever the consumer names its
+  `image-repository`, a literal such as `ghcr.io/owner/app` included, so a
+  trial never writes to the consumer's real registry. An external registry
+  below keeps the consumer's names.
 - For a release, a throwaway Cosign key pair, SSH bot key, registered as the
   repository's deploy key, and GPG key. Each reaches the consumer under the
   name the consumer reads it by: where a workflow passes
   `cosign-public-key: ${{ vars.NAME }}` or
   `RELEASE_TOKEN: ${{ secrets.NAME }}`, the trial sets `NAME`. The two tokens
-  are the lab account's. A fact passed in another form, a key written into
-  the workflow or an expression with a fallback, is refused with the line.
+  are the lab account's. Except for the narrow repository defaults described
+  below, a fact passed in another form, a key written into the workflow or a
+  fallback expression, is refused with the line.
 - The caller's settings, each `key=value`:
 
   | Setting | Meaning |
@@ -799,12 +907,6 @@ report on this one.
   the run log records only the file's path and the user. The repository the
   consumer publishes to is its own variable, given as an ordinary setting:
 
-  **A reused signing key.** Each release trial signs with a key of its own,
-  so a second release cannot verify the bases the first one signed. To try
-  what an organization's second release does, set `FORGE_CI_LIVE_SIGNING_KEY_DIR`
-  to a directory only you can read: the first trial makes the key pair and its
-  passphrase there, and later trials sign with the same key.
-
   ```text
   FORGE_CI_LIVE_EXTERNAL_REGISTRY_TOKEN_FILE=$HOME/.config/forge-lab/hanklankorg-packages.pat \
   FORGE_CI_LIVE_EXTERNAL_REGISTRY_USER=<github user> \
@@ -817,6 +919,31 @@ report on this one.
   on GHCR are private until made public in each package's settings; the
   trial verifies with the token, and the base check, which runs anonymously,
   rebuilds instead of reusing private bases.
+
+  **Separate base and final repositories.** On the local registry the trial
+  binds `base-repository` to the scratch consumer's repository plus `-base`,
+  separately from `image-repository` and `publication-image-repository`.
+  These repository inputs may use a plain variable or the narrow default form
+  `${{ vars.NAME || 'registry/owner/repository' }}`. A base variable forwarded
+  as `image-repository` keeps its base binding. Arbitrary expressions, dynamic
+  defaults and fallback trust/key inputs remain refused. Caller settings cannot
+  override a repository variable the trial already bound, including with a
+  production registry coordinate. This rendering is test-harness behavior and
+  does not change the engine runtime API or its recorded binary hashes.
+
+  **A reused signing key.** Each release trial signs with a key of its own,
+  so a second release cannot verify the bases the first one signed. To try
+  what an organization's second release does, set `FORGE_CI_LIVE_SIGNING_KEY_DIR`
+  to a durable directory only you can read containing the original
+  `lab-cosign.key`, `lab-cosign.pub`, and `lab-cosign.passphrase`.
+  Run `just test-live-signing-inputs` before minting a contract. It checks only
+  file metadata and requires existing nonempty inputs; configured reuse never
+  silently generates a replacement key. Launcher preflight and key use repeat
+  that check, while actual cryptographic validation remains the signer's job.
+  Keep private inputs out of temporary-file cleanup and retain only their
+  protected directory and the public fingerprint in evidence. Unset the
+  variable only for scenarios intentionally using fresh ephemeral authority,
+  not for a trial claiming reuse of already-signed bases.
 
   **A release of chosen images only.** Nanolinter's release builds the
   flavours and standard images its request commit selects, so a lean trial is
@@ -883,10 +1010,9 @@ What the caller brings:
   outside its repository, through a `replace` to a sibling directory for
   example, is tried from a throwaway clone that carries what it needs.
 - **A runner that can do what the workflow does.** A release that builds
-  images needs a runner that lets a job build one, as the smoke scenario
-  above does. Forge Lab's Compose runner built Gommitlint's release images;
-  on its k3s road the trial runs inside the privileged session, wrapped the
-  same way.
+  images needs a runner that lets a job build one. Forge Lab's runner under
+  the contract's label does not; on Compose, try the two image-build cells
+  below.
 
 In order, for a release on a prepared road, from this checkout unless said
 otherwise:
@@ -902,6 +1028,34 @@ just publish-image --account forgeci <package> <local image>
 just test-live-forgejo-consumer /absolute/gommitlint release
 just test-live-forgejo-consumer /absolute/nanolinter-clone release RELEASE_PLATFORMS=linux/amd64
 ```
+
+**Image builds** on Compose are tried in two cells, each public and private
+like every trial, and each needs `FORGE_CI_LIVE_SIGNER_IMAGE` as above:
+
+- **Privileged runner, Buildah.** Start Forge Lab's runners with the
+  full-release acknowledgement,
+  `COMPOSE_FORGEJO_FULL_RELEASE_ACK=trusted-local-full-release just compose-runners forgejo`
+  in its checkout, and mint the contract again. The trial sets
+  `CI_RUNNER_LABEL_CONTAINER` to the contract's `runner.privileged_label`
+  unless `CI_IMAGE_BUILDER=kaniko`, so the image builds go there:
+
+  ```text
+  just test-live-forgejo-consumer /absolute/consumer release
+  ```
+
+- **Restricted runner, kaniko.** Nothing more to start. The image builds run
+  on the restricted runner in the kaniko job image of this commit, which
+  `just test-live-kaniko-job-image` builds and publishes:
+
+  ```text
+  just test-live-forgejo-consumer /absolute/consumer release CI_IMAGE_BUILDER=kaniko \
+    CI_IMAGE_BUILDER_JOB_IMAGE="$(just test-live-kaniko-job-image /absolute/forge-lab)"
+  ```
+
+  A run admits the job image only when its source label names the repository
+  the layer runs from. The recipe labels it with the trial's scratch layer,
+  read from the contract, so a demo trial, which serves the layer from another
+  repository, does not admit it.
 
 The layer is served from `HEAD`. After a change to Go source, `go.mod` or
 `go.sum`, run `just refresh-engine-binary` and commit before a trial; it
@@ -1060,6 +1214,59 @@ the next trial its workflows cannot be rerun, while its runs, release and pull
 request stay. Forge Lab's session cleanup deletes only the repositories it
 created, by ID, so it never removes a demo. A GitHub demo has no lab account;
 its token is the session's personal access token, which the owner revokes.
+
+#### Lightweight prerelease API checks
+
+For admission, native release metadata and immutable-retry checks without
+runner jobs or runtime-image builds, use the focused lab cases:
+
+```text
+just test-live 'TestRelease_(Policy_IsWhatTheForgeRecords|PublishReconcile_RefusesPublishedChanges)$'
+```
+
+For GitHub, use a Forge Lab hosted session with no prepared fixtures, then
+run `test-live-github-release-api <org-id>` inside it. This creates tiny public
+and private scratch repositories, publishes a prerelease asset, retries it,
+rejects changed bytes, and deletes the repositories by their acknowledged IDs.
+It does not push an engine or run the consumer's release workflow.
+
+```text
+# In Forge Lab; supply the acknowledged test organization, PAT path and ID.
+just github run --org <org> --ack-org <org> --token-file /private/github.pat \
+  --prefix fci- --fixtures none -- \
+  just --justfile /absolute/forge-ci/justfile test-live-github-release-api <org-id>
+```
+
+These checks prove provider publication behavior, not runner-driven signing,
+SBOM generation or the full release job graph. Local workflow/handoff tests
+and the full consumer trials cover those separate contracts.
+
+#### Minimal preparation and retention on GitHub
+
+For the standalone and multi-artifact preparation paths without rebuilding the
+runtime-image family, use Forge Lab's hosted session and the focused recipe:
+
+```text
+just github run --org <org> --ack-org <org> --token-file /private/github.pat \
+  --prefix fcm- --fixtures none -- \
+  just --justfile /absolute/forge-ci/justfile test-live-github-minimal \
+    <org-id> /private/packages.pat
+```
+
+This publishes the current production-source working tree into new public test
+repositories, including current uncommitted code. It uploads one temporary CLI
+asset, pins its checksum in fixture-only bootstraps and reuses existing published
+toolchain images. It does not publish runtime images. The npm fixture refuses
+signing-key variables in its version hook; the multi-artifact fixture also checks
+an engine-owned Gradle text edit. The controller verifies one signed child commit
+and, for the multi-artifact path, the signed final tag.
+
+The Packages PAT inspects an existing `fci-prepublication*` package in the same
+organization. Retention protects a real digest, refuses a missing pin and compares
+version identities before/after its read-only preview. Every created repository
+has its ID logged, is deleted through the scoped GitHub client and has deletion
+confirmed. This is preparation/retention acceptance, not a full release-asset,
+container-publication, recovery or multi-platform trial.
 
 #### Trying a consumer on GitHub
 
@@ -1288,7 +1495,7 @@ build environment variables.
 Optional trailing uppercase `KEY=value` arguments set literal environment variables only
 for the key-free consumer build command. Their meaning belongs
 to the consumer, except `RELEASE_PLATFORMS`: a consumer trial on Forgejo or
-GitLab sets it to `linux/<runner_arch>` when it is not given, and refuses a
+GitLab sets it to `linux/<runner.arch>` when it is not given, and refuses a
 selection of another architecture before anything is pushed, because the lab's
 runners build and run what is selected and a release never emulates. Duplicate
 or malformed names are refused;

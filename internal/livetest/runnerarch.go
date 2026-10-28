@@ -55,15 +55,17 @@ func labRunnerArch(lab *labcontract.Contract) (string, error) {
 			continue
 		}
 
+		runnerArch := runnerOf(endpoint).Arch
+
 		switch {
-		case endpoint.RunnerArch == "":
-			return "", fmt.Errorf("endpoint %q runs workflows but its contract publishes no runner_arch; emit the contract again with a Forge Lab that publishes it: %w",
+		case runnerArch == "":
+			return "", fmt.Errorf("endpoint %q runs workflows but its contract publishes no runner.arch; emit the contract again with a Forge Lab that publishes it: %w",
 				endpoint.Name, errs.ErrValidation)
 		case arch == "":
-			arch = endpoint.RunnerArch
-		case endpoint.RunnerArch != arch:
+			arch = runnerArch
+		case runnerArch != arch:
 			return "", fmt.Errorf("the lab's runners execute %s and %s, and this tier builds for one runner architecture: %w",
-				arch, endpoint.RunnerArch, errs.ErrValidation)
+				arch, runnerArch, errs.ErrValidation)
 		}
 	}
 
@@ -80,13 +82,23 @@ func RunnerArch(tb TB, target Target) string {
 	tb.Helper()
 	requireAccepted(tb, target)
 
-	arch := target.endpoint.RunnerArch
+	arch := runnerOf(target.endpoint).Arch
 	if arch == "" {
-		tb.Fatalf("livetest: the contract publishes no runner_arch for endpoint %q; emit it again with a Forge Lab that publishes it",
+		tb.Fatalf("livetest: the contract publishes no runner.arch for endpoint %q; emit it again with a Forge Lab that publishes it",
 			target.endpoint.Name)
 	}
 
 	return arch
+}
+
+// runnerOf is the runner the endpoint's jobs reach, empty when the contract
+// publishes none.
+func runnerOf(endpoint labcontract.Endpoint) labcontract.Runner {
+	if endpoint.Runner == nil {
+		return labcontract.Runner{}
+	}
+
+	return *endpoint.Runner
 }
 
 // NativeReleasePlatforms returns a trial's consumer variables with the release

@@ -44,10 +44,10 @@ func TestGitLabReleaseBranchUpdatesDefaultProtectionWithoutAnUnprotectedWindow(t
 			var calls []string
 
 			current := test.initial
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+			server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 				calls = append(calls, request.Method)
 
-				w.Header().Set("Content-Type", "application/json")
+				response.Header().Set("Content-Type", "application/json")
 
 				if !strings.HasPrefix(request.URL.EscapedPath(), "/api/v4/projects/forgeci%2Ffci-release-consumer/protected_branches") {
 					t.Errorf("unexpected project route: %s", request.URL.EscapedPath())
@@ -55,10 +55,10 @@ func TestGitLabReleaseBranchUpdatesDefaultProtectionWithoutAnUnprotectedWindow(t
 
 				switch request.Method {
 				case http.MethodPost:
-					w.WriteHeader(test.createCode)
-					_, _ = fmt.Fprint(w, `{}`)
+					response.WriteHeader(test.createCode)
+					_, _ = fmt.Fprint(response, `{}`)
 				case http.MethodGet:
-					_, _ = fmt.Fprint(w, current)
+					_, _ = fmt.Fprint(response, current)
 				case http.MethodPatch:
 					var options gitlabapi.UpdateProtectedBranchOptions
 					if err := json.NewDecoder(request.Body).Decode(&options); err != nil {
@@ -73,10 +73,10 @@ func TestGitLabReleaseBranchUpdatesDefaultProtectionWithoutAnUnprotectedWindow(t
 					}
 
 					current = test.updated
-					_, _ = fmt.Fprint(w, current)
+					_, _ = fmt.Fprint(response, current)
 				default:
 					t.Errorf("unexpected protection mutation: %s", request.Method)
-					w.WriteHeader(http.StatusMethodNotAllowed)
+					response.WriteHeader(http.StatusMethodNotAllowed)
 				}
 			}))
 			t.Cleanup(server.Close)

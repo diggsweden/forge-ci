@@ -238,7 +238,7 @@ func TestRequires_EachOutcomeIsDistinct(t *testing.T) {
 	})
 
 	t.Run("a forge absent from the contract is fatal, not a skip", func(t *testing.T) {
-		setCurrentContract(t, writeContract(t, fixtureBody(t, "neutral-targets-v4-github.json")))
+		setCurrentContract(t, writeContract(t, fixtureBody(t, "neutral-targets-v5-github.json")))
 
 		tb := &recordingTB{}
 		if Requires(tb, provider.ForgeGitLab, NeedsInRunner) || !strings.Contains(tb.fatal, "gitlab: no endpoint of that kind") || len(tb.logs) != 0 {

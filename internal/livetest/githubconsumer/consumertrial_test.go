@@ -60,7 +60,7 @@ func TestGitHubLayer_ConsumerTrial(t *testing.T) {
 
 	var words []string
 
-	for _, word := range strings.Split(os.Getenv(settingsEnv), "\n") {
+	for word := range strings.SplitSeq(os.Getenv(settingsEnv), "\n") {
 		if word != "" {
 			words = append(words, word)
 		}
@@ -79,21 +79,27 @@ func TestGitHubLayer_ConsumerTrial(t *testing.T) {
 	}
 
 	trial := livetest.OpenGitHubTrial(t, organizationID)
+
 	engineRoot := os.Getenv("FORGE_CI_LIVE_ENGINE_CHECKOUT")
 	if engineRoot == "" {
 		engineRoot = reporoot.Path(t)
 	} else if !filepath.IsAbs(engineRoot) {
 		t.Fatal("FORGE_CI_LIVE_ENGINE_CHECKOUT must be an absolute committed engine checkout")
 	}
-	controllerCommit, err := exec.CommandContext(t.Context(), "git", "-C", reporoot.Path(t), "rev-parse", "HEAD").Output() //nolint:gosec // Read-only metadata in the located controller checkout; no shell.
+
+	controllerCommit, err := exec.CommandContext(t.Context(), "git", "-C", reporoot.Path(t), "rev-parse", "HEAD").Output()
 	if err != nil {
 		t.Fatalf("read hosted controller revision: %v", err)
 	}
+
 	t.Logf("controller checkout: %s (working tree executed; HEAD %s); engine checkout: %s", reporoot.Path(t), strings.TrimSpace(string(controllerCommit)), engineRoot)
+
 	var engine livetest.GitHubEngine
+
 	switch mode := os.Getenv("FORGE_CI_LIVE_ENGINE_MODE"); mode {
 	case "", "prepare":
 		engine = trial.EnsureEngine(engineRoot, livetest.GitHubEnginePlatforms(settings.Platforms))
+
 		if mode == "prepare" {
 			return
 		}
@@ -156,13 +162,17 @@ func runTrial(t *testing.T, trial *livetest.GitHubTrial, engine livetest.GitHubE
 
 	if settings.Event == livetest.TrialDevRelease {
 		dispatched := trial.DispatchDevelopment(repo, settings.Workflow)
+
 		run := judge(t, trial, repo, settings.Workflow, "workflow_dispatch", tree.Main)
 		if dispatched != 0 && run.GetID() != dispatched {
 			t.Fatal("judged development run differs from the dispatch response")
 		}
+
 		trial.CheckDevelopmentRelease(repo, tree.Main, run.GetID())
+
 		return
 	}
+
 	key := trial.NewTrialGPGKey()
 	secrets := map[string]string{
 		"RELEASE_GPG_PRIVATE_KEY": key.Private,
@@ -196,6 +206,7 @@ func runTrial(t *testing.T, trial *livetest.GitHubTrial, engine livetest.GitHubE
 
 	trial.PushReleaseRequest(repo, tree, key, request, settings.Version)
 	judge(t, trial, repo, settings.Workflow, "push", tree.Main)
+
 	assets := trial.CheckRelease(repo, tree, final, trust)
 	if visibility.Private {
 		trial.CheckPrivateReleaseAssets(repo, assets)
@@ -205,6 +216,7 @@ func runTrial(t *testing.T, trial *livetest.GitHubTrial, engine livetest.GitHubE
 		if visibility.Private {
 			t.Log("private image verification uses the host's registry credentials; provide an isolated DOCKER_CONFIG for GHCR access")
 		}
+
 		for image := range strings.SplitSeq(settings.Image, ",") {
 			verified := trial.CheckImage(repo, image, final, engine, trust)
 			if visibility.Private && verified != "" {
@@ -233,6 +245,7 @@ func consumerRepositoryName(root, visibility, event, workflow string) string {
 
 func TestConsumerRepositoryNamesSeparateConcurrentEvents(t *testing.T) {
 	seen := map[string]bool{}
+
 	for _, visibility := range []string{"public", "private"} {
 		for _, event := range []string{livetest.TrialPullRequest, livetest.TrialDevRelease, livetest.TrialRelease} {
 			for _, workflow := range []string{"release-dev.yml", "release-dev.yaml", "release-dev-test-signed.yml"} {
@@ -240,6 +253,7 @@ func TestConsumerRepositoryNamesSeparateConcurrentEvents(t *testing.T) {
 				if seen[name] {
 					t.Fatalf("concurrent consumer cases share repository identity %q", name)
 				}
+
 				seen[name] = true
 			}
 		}
@@ -251,7 +265,7 @@ func TestConsumerRepositoryNamesSeparateConcurrentEvents(t *testing.T) {
 func keySigned(t *testing.T, root, fixtures string) bool {
 	t.Helper()
 
-	release, err := os.ReadFile(filepath.Join(root, fixtures, "workflows", "release.yml")) //nolint:gosec // the caller's own checkout; settings refuse ".." and absolute paths.
+	release, err := os.ReadFile(filepath.Join(root, fixtures, "workflows", "release.yml"))
 	if err != nil {
 		t.Fatalf("read the fixture's release workflow: %v", err)
 	}
@@ -277,6 +291,7 @@ func judge(t *testing.T, trial *livetest.GitHubTrial, repo, workflow, event, hea
 	default:
 		t.Fatalf("the consumer's %s ended %s", workflow, run.GetConclusion())
 	}
+
 	return run
 }
 
@@ -291,7 +306,7 @@ func fixtureDir(t *testing.T, root, setting string) string {
 	}
 
 	for _, candidate := range candidates {
-		if info, err := os.Stat(filepath.Join(root, candidate, "workflows")); err == nil && info.IsDir() { //nolint:gosec // the caller's own checkout; settings refuse ".." and absolute paths.
+		if info, err := os.Stat(filepath.Join(root, candidate, "workflows")); err == nil && info.IsDir() {
 			return candidate
 		}
 	}

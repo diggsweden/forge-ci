@@ -142,10 +142,12 @@ func writePredicate(t *testing.T, dir string) string {
 
 func requireReleaseImageIdentityRejection(t *testing.T, target livetest.Target, repo string, opts livetest.RunOptions, ref, publicKey, authFile string) {
 	t.Helper()
+
 	wrongKeyDir := filepath.Join(opts.Dir, "wrong-key")
 	if err := os.Mkdir(wrongKeyDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
+
 	_, wrongPublicKey := livetest.CosignKey(t, wrongKeyDir)
 	for _, tc := range []struct {
 		name, source, commit, workflow string
@@ -162,6 +164,7 @@ func requireReleaseImageIdentityRejection(t *testing.T, target livetest.Target, 
 				key = filepath.Join("wrong-key", filepath.Base(wrongPublicKey))
 				reason = "signature verification failed"
 			}
+
 			result := livetest.CLIIn(t, target, repo, opts,
 				"container", "release-images", "validate", "--ref", ref,
 				"--cosign-public-key-path", key, "--auth-file", authFile,
@@ -171,8 +174,10 @@ func requireReleaseImageIdentityRejection(t *testing.T, target livetest.Target, 
 				if result.ExitCode != 0 || strings.TrimSpace(result.Stdout) != "verified" {
 					t.Fatalf("valid signed release image was not verified: exit=%d\n%s\n%s", result.ExitCode, result.Stdout, result.Stderr)
 				}
+
 				return
 			}
+
 			if result.ExitCode != int(errs.ExitCodeValidation) ||
 				!strings.Contains(result.Stderr, reason) {
 				t.Fatalf("wrong identity/key was not rejected for %q: exit=%d\n%s\n%s", reason, result.ExitCode, result.Stdout, result.Stderr)
@@ -188,37 +193,48 @@ func requireReleaseImageSubjectRejection(t *testing.T, target livetest.Target, r
 	t.Run("wrong subject", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(livetest.Context(t), 2*time.Minute)
 		defer cancel()
+
 		cosignRun := func(args ...string) []byte {
 			t.Helper()
-			cmd := exec.CommandContext(ctx, "cosign", args...) //nolint:gosec // Fixture-generated keys, files and exact disposable image refs.
+
+			cmd := exec.CommandContext(ctx, "cosign", args...)
 			cmd.Dir = opts.Dir
-			cmd.Env = livetest.ToolEnvironment(t, target, map[string]string{"DOCKER_CONFIG": authDir, "COSIGN_PASSWORD": ""})
+			cmd.Env = livetest.ToolEnvironment(t, target, map[string]string{"DOCKER_CONFIG": authDir, "COSIGN_PASSWORD": ""}) //nolint:contextcheck // credential proxy lifetime belongs to the test, not this subprocess timeout.
+
 			var stderr strings.Builder
+
 			cmd.Stderr = &stderr
+
 			out, err := cmd.Output()
 			if err != nil {
 				t.Fatalf("cosign %s: %v\n%s", args[0], err, stderr.String())
 			}
+
 			return out
 		}
+
 		other := livetest.PushImage(t, target, repo, "wrong-subject")
 		if other.Digest == digest {
 			t.Fatal("subject rejection requires two distinct image digests")
 		}
+
 		ref := imagePath + "@" + other.Digest
 		// attach uses legacy attestation storage; keep this second image's
 		// evidence in that format rather than mixing it with OCI referrers.
 		cosignRun("sign", "--yes", "--key", privateKey, "--use-signing-config=false", "--tlog-upload=false", "--new-bundle-format=false", ref)
 		cosignRun("attest", "--yes", "--key", privateKey, "--use-signing-config=false", "--tlog-upload=false", "--new-bundle-format=false", "--type", "cyclonedx", "--predicate", writeSBOM(t, opts.Dir, "wrong-subject"), ref)
 		envelope := cosignRun("verify-attestation", "--key", publicKey, "--insecure-ignore-tlog=true", "--type", "slsaprovenance1", imagePath+"@"+digest)
+
 		file := filepath.Join(opts.Dir, "wrong-subject.dsse.json")
 		if err := os.WriteFile(file, envelope, 0o600); err != nil {
 			t.Fatal(err)
 		}
+
 		cosignRun("attach", "attestation", "--attestation", file, ref)
 		// Establish that the attached envelope exists and is cryptographically
 		// valid before asking the real release verifier to enforce its subject.
 		cosignRun("verify-attestation", "--key", publicKey, "--insecure-ignore-tlog=true", "--check-claims=false", "--type", "slsaprovenance1", ref)
+
 		result := livetest.CLIIn(t, target, repo, opts,
 			"container", "release-images", "validate", "--ref", ref,
 			"--cosign-public-key-path", filepath.Base(publicKey), "--auth-file", authFile,
@@ -247,7 +263,7 @@ func verifyCosignSignature(t *testing.T, target livetest.Target, digestRef, publ
 
 	// Every argument is scenario-authored — a generated key path and a digest
 	// read back from the registry — never external input.
-	cmd := exec.CommandContext(ctx, "cosign", "verify", //nolint:gosec // G204: scenario-authored arguments.
+	cmd := exec.CommandContext(ctx, "cosign", "verify",
 		"--key", publicKey,
 		"--insecure-ignore-tlog=true",
 		digestRef,
@@ -282,7 +298,7 @@ func verifyCosignAttestations(t *testing.T, target livetest.Target, digestRef, p
 		ctx, cancel := context.WithTimeout(livetest.Context(t), 2*time.Minute)
 
 		// Every argument is scenario-authored, as in verifyCosignSignature.
-		cmd := exec.CommandContext(ctx, "cosign", "verify-attestation", //nolint:gosec // G204: scenario-authored arguments.
+		cmd := exec.CommandContext(ctx, "cosign", "verify-attestation",
 			"--key", publicKey,
 			"--type", cosignType,
 			"--insecure-ignore-tlog=true",

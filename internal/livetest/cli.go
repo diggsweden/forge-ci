@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -60,9 +61,7 @@ func Binary(tb TB) string {
 		tb.Fatalf("livetest: %s must be the absolute path of the built product; run this through `just test-live`", binaryEnv)
 	}
 
-	// G304: the path is the built product handed over by the recipe, and it is
-	// required to be absolute and executable before anything runs it.
-	info, err := os.Stat(path) //nolint:gosec
+	info, err := os.Stat(path) //nolint:gosec // G304: the recipe's built product, required absolute and executable before it runs.
 	if err != nil || info.IsDir() || info.Mode()&0o111 == 0 {
 		tb.Fatalf("livetest: %s is not an executable file: %s", binaryEnv, path)
 	}
@@ -95,8 +94,6 @@ func CLI(tb TB, target Target, repo string, args ...string) Run {
 
 // usageErrorMarkers are how the CLI framework reports that it could not parse
 // the invocation at all.
-//
-//nolint:gochecknoglobals // read-only table.
 var usageErrorMarkers = []string{
 	"flag provided but not defined",
 	"for available flags",
@@ -130,9 +127,8 @@ func CLIIn(tb TB, target Target, repo string, opts RunOptions, args ...string) R
 	ctx, cancel := context.WithTimeout(Context(tb), timeoutCLI)
 	defer cancel()
 
-	// G204: args are scenario-authored verbs and flags, never external input.
 	// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
-	cmd := exec.CommandContext(ctx, Binary(tb), args...) //nolint:gosec
+	cmd := exec.CommandContext(ctx, Binary(tb), args...) //nolint:gosec // G204: scenario-authored verbs and flags, never external input.
 
 	env := cliEnv(tb, target, repo)
 
@@ -279,15 +275,11 @@ func cliEnv(tb TB, target Target, repo string) []string {
 		}
 	}
 
-	for key, value := range targetTrustEnvironment(target) {
-		values[key] = value
-	}
+	maps.Copy(values, targetTrustEnvironment(target))
 
 	// Runtime only. TLS variables come only from the accepted target above,
 	// never from ambient process trust.
-	for key, value := range runtimeEnvironment(tb) {
-		values[key] = value
-	}
+	maps.Copy(values, runtimeEnvironment(tb))
 
 	env := make([]string, 0, len(values))
 	for key, value := range values {

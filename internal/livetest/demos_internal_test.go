@@ -17,45 +17,57 @@ import (
 
 func TestGitLabImageDemosConsumeActualDotenvOutputs(t *testing.T) {
 	t.Parallel()
+
 	for _, demo := range []string{"hello-maven-service", "hello-cargo-container", "hello-npm-service"} {
 		t.Run(demo, func(t *testing.T) {
 			t.Parallel()
+
 			body, err := os.ReadFile(filepath.Join(reporoot.Path(t), "test", "live", "demos", demo, "consumer", ".gitlab", "build-release.sh"))
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			_, fragment, found := strings.Cut(string(body), "image='' digest=''")
 			if !found {
 				t.Fatal("demo has no image-output consumer")
 			}
+
 			fragment, _, found = strings.Cut(fragment, "--default-sbom")
 			if !found {
 				t.Fatal("demo has no image-ledger hand-off")
 			}
+
 			fragment = "image='' digest=''" + fragment + "--default-sbom\n"
 			dir := t.TempDir()
 			image := "registry.example/trial/service"
 			digest := "sha256:" + strings.Repeat("a", 64)
+
 			sink := gitlaboutput.New(filepath.Join(dir, "image.env"))
-			if err := sink.Set(t.Context(), "image", image); err != nil {
+			if err = sink.Set(t.Context(), "image", image); err != nil {
 				t.Fatal(err)
 			}
-			if err := sink.Set(t.Context(), "digest", digest); err != nil {
+
+			if err = sink.Set(t.Context(), "digest", digest); err != nil {
 				t.Fatal(err)
 			}
-			if err := sink.Close(t.Context()); err != nil {
+
+			if err = sink.Close(t.Context()); err != nil {
 				t.Fatal(err)
 			}
+
 			capture := filepath.Join(dir, "ledger-args")
 			command := exec.CommandContext(t.Context(), "bash", "-c", "set -euo pipefail\nforge-ci() { printf '%s\\n' \"$@\" > \"$CAPTURE\"; }\n"+fragment)
+
 			command.Env = []string{"PATH=/usr/bin:/bin", "auth_dir=" + dir, "CAPTURE=" + capture, "RELEASE_TAG=v1.2.3"}
-			if output, err := command.CombinedOutput(); err != nil {
-				t.Fatalf("demo rejected real GitLab output: %v\n%s", err, output)
+			if output, runErr := command.CombinedOutput(); runErr != nil {
+				t.Fatalf("demo rejected real GitLab output: %v\n%s", runErr, output)
 			}
+
 			args, err := os.ReadFile(capture)
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			want := strings.Join([]string{"container", "ledger", "add", "--role", "runtime", "--image-name", image, "--digest", digest,
 				"--final-tag-name", "v1.2.3", "--tag", "v1.2.3", "--default-sbom"}, "\n") + "\n"
 			if string(args) != want {
@@ -105,6 +117,7 @@ func TestDemosRenderForEveryForgeTheyServe(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			if _, err := config.Parse(artifacts); err != nil {
 				t.Fatalf("artifacts configuration: %v", err)
 			}
@@ -131,7 +144,7 @@ func renderDemo(t *testing.T, consumer string) int {
 		}
 	}
 
-	if gate, err := os.ReadFile(filepath.Join(consumer, GitLabGateFile)); err == nil { //nolint:gosec // repository fixture.
+	if gate, err := os.ReadFile(filepath.Join(consumer, GitLabGateFile)); err == nil {
 		forges++
 
 		layer := Layer{ServerURL: "https://gitlab.example", Repository: "forgeci/fci-engine", Commit: strings.Repeat("b", 40)}
@@ -176,7 +189,7 @@ func demoFiles(t *testing.T, dir string) map[string]string {
 			continue
 		}
 
-		body, err := os.ReadFile(filepath.Join(dir, entry.Name())) //nolint:gosec // repository fixture.
+		body, err := os.ReadFile(filepath.Join(dir, entry.Name()))
 		if err != nil {
 			t.Fatal(err)
 		}

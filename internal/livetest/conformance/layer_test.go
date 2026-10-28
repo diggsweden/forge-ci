@@ -26,6 +26,7 @@ package conformance_test
 // its fixture under testdata/layer.
 
 import (
+	"encoding/json"
 	"slices"
 	"testing"
 
@@ -37,6 +38,10 @@ const (
 	// layerRunnerVariable is the repository variable every workflow of the
 	// layer schedules by.
 	layerRunnerVariable = "CI_RUNNER_LABEL"
+
+	// containerRunnerVariable is the repository variable a job that builds
+	// images with Buildah schedules by instead, when it is set.
+	containerRunnerVariable = "CI_RUNNER_LABEL_CONTAINER"
 
 	// layerMain is the consumer branch a fixture workflow is committed to.
 	layerMain = "main"
@@ -67,7 +72,7 @@ func newLayerScenario(t *testing.T, name string, private bool, objectFormat stri
 	}
 
 	scenario := layerScenario{target: target, label: livetest.RunnerLabel(t, target)}
-	scenario.layer = livetest.PushLayer(t, target, livetest.NewScratchRepo(t, target, name+"-layer"))
+	scenario.layer = livetest.PushLayer(t, target, livetest.NewScratchRepo(t, target, livetest.LayerScenario(name)))
 	scenario.repo = livetest.NewBareScratchRepo(t, target, name, objectFormat, private)
 	seed := livetest.CommitFiles(t, target, scenario.repo, livetest.FileCommit{
 		Branch: layerMain, Message: "test: initialize the layer consumer",
@@ -79,9 +84,35 @@ func newLayerScenario(t *testing.T, name string, private bool, objectFormat stri
 	t.Logf("layer under test: commit %s, binary sha256 %s, runner label %q",
 		scenario.layer.Commit, scenario.layer.BinarySHA256, scenario.label)
 
-	livetest.SetRepoVariable(t, target, scenario.repo, layerRunnerVariable, scenario.label)
+	livetest.SetRepoVariable(t, target, scenario.repo, layerRunnerVariable, runnerLabelsJSON(t, scenario.label))
 
 	return scenario
+}
+
+func runnerLabelsJSON(t *testing.T, label string) string {
+	t.Helper()
+
+	encoded, err := json.Marshal([]string{label})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return string(encoded)
+}
+
+// privilegedRunner is the contract's runner that permits user namespaces, or
+// skips: a scenario that builds images with Buildah cannot run on the
+// ordinary runner, which may deny them.
+func privilegedRunner(t *testing.T, target livetest.Target) string {
+	t.Helper()
+
+	label := livetest.PrivilegedRunnerLabel(t, target)
+	if label == "" {
+		t.Skip("the contract names no runner that permits user namespaces, which rootless Buildah needs; " +
+			"start the lab's runners with the full-release acknowledgement and mint the contract again")
+	}
+
+	return label
 }
 
 // render fills a fixture for this scenario's repository.

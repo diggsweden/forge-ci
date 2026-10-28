@@ -11,7 +11,7 @@
 // The entire value here is sharing nothing with the thing under test. If the
 // oracle called the adapter, an adapter that misread a response would agree
 // with itself and the scenario would pass while the forge held something else
-// entirely. Living in a separate package lets .golangci.yml forbid importing
+// entirely. Living in a separate package lets development/golangci-lint/golangci.yml forbid importing
 // internal/adapters/... here, so the independence is a build failure rather
 // than a habit that erodes.
 //
@@ -69,9 +69,8 @@ type Release struct {
 	Assets []Asset
 
 	// Draft and Prerelease are the policy state the forge recorded. Forgejo
-	// reports both; GitLab has neither concept (a release there is always
-	// published and never a prerelease), so both stay false for it and the
-	// product refuses a prerelease policy on GitLab before any request.
+	// reports both; GitLab has neither native flag, so both stay false there.
+	// Its prerelease classification is represented explicitly in the notes.
 	Draft      bool
 	Prerelease bool
 }
@@ -282,8 +281,7 @@ func (r Reader) do(ctx context.Context, endpoint string) (*http.Response, error)
 // SHA256 digests a local file, so a scenario can state the digest it uploaded
 // without recomputing it by hand.
 func SHA256(path string) (string, int64, error) {
-	// G304: path comes from the scenario's own t.TempDir(), never from input.
-	file, err := os.Open(path) //nolint:gosec
+	file, err := os.Open(path) //nolint:gosec // G304: the scenario's own t.TempDir() file, never input.
 	if err != nil {
 		return "", 0, fmt.Errorf("rawref: open %s: %w", path, err)
 	}

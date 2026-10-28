@@ -113,7 +113,7 @@ func TestInRunnerProbes_RenderValidYAML(t *testing.T) {
 	}
 }
 
-func TestKeylessSignProbe_CapturesAndScopesRunnerCredentials(t *testing.T) { //nolint:gocognit // Each branch asserts one ordered credential boundary.
+func TestKeylessSignProbe_CapturesAndScopesRunnerCredentials(t *testing.T) {
 	t.Parallel()
 
 	const (
@@ -229,7 +229,7 @@ func TestKeylessSignProbe_CapturesAndScopesRunnerCredentials(t *testing.T) { //n
 // product that each verify the exact environment they receive. A second run
 // changes one byte of the staged cosign.gz after its digest was taken and
 // requires the script to stop before anything is decompressed or run.
-func TestKeylessSignProbe_ChildrenReceiveOnlyInvocationScopedCredential(t *testing.T) { //nolint:gocognit,maintidx // One controlled execution of the generated script per forge and asset state.
+func TestKeylessSignProbe_ChildrenReceiveOnlyInvocationScopedCredential(t *testing.T) {
 	const cleanEnvironment = `[ "${SIGSTORE_ID_TOKEN+x}" != x ] || exit 90
 [ "${ACTIONS_ID_TOKEN_REQUEST_URL+x}" != x ] || exit 91
 [ "${ACTIONS_ID_TOKEN_REQUEST_TOKEN+x}" != x ] || exit 92
@@ -369,7 +369,7 @@ while :; do sleep 1; done
 					)
 				}
 
-				command := exec.CommandContext(t.Context(), "/bin/sh", "-ex", scriptPath) //nolint:gosec // Fixed shell executes the test-authored generated fixture.
+				command := exec.CommandContext(t.Context(), "/bin/sh", "-ex", scriptPath)
 				command.Dir = work
 				command.Env = environment
 
@@ -418,7 +418,7 @@ while :; do sleep 1; done
 func writeProbeExecutable(t *testing.T, path, body string) {
 	t.Helper()
 
-	if err := os.WriteFile(path, []byte(body), 0o700); err != nil { //nolint:gosec // Test fixtures must be executable.
+	if err := os.WriteFile(path, []byte(body), 0o700); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -520,7 +520,7 @@ func probeScript(t *testing.T, forge provider.ForgeAPI, body, job string, keyles
 // shell authority guard admits exactly the approved origins, and each proxy
 // trap is armed after the proxy starts, before the proxy is used, and disarmed
 // only after its final stop.
-func TestInRunnerProbes_StructureCarriesTheApprovedScript(t *testing.T) { //nolint:gocognit // One table of structural claims per probe kind.
+func TestInRunnerProbes_StructureCarriesTheApprovedScript(t *testing.T) {
 	for _, forge := range []provider.ForgeAPI{provider.ForgeGitLab, provider.ForgeForgejo} {
 		t.Run(string(forge), func(t *testing.T) {
 			target := probeTarget(t, forge)
@@ -659,7 +659,7 @@ func TestInRunnerProbes_EveryDownloadedExecutableIsDigestCheckedFirst(t *testing
 						t.Fatal(err)
 					}
 
-					command := exec.CommandContext(t.Context(), "/bin/sh", "-c", check) //nolint:gosec // Fixed shell runs the rendered digest check.
+					command := exec.CommandContext(t.Context(), "/bin/sh", "-c", check)
 					command.Dir = dir
 
 					command.Env = append(os.Environ(), "PATH="+testenv.GNUPath(t, "sha256sum")+":"+os.Getenv("PATH"))

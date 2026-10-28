@@ -20,23 +20,30 @@ import (
 
 func developmentArchive(t *testing.T) []byte {
 	t.Helper()
+
 	var data bytes.Buffer
+
 	archive := zip.NewWriter(&data)
+
 	file, err := archive.CreateHeader(&zip.FileHeader{Name: "build/output.txt", Method: zip.Store})
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if _, err := file.Write([]byte("development artifact")); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := archive.Close(); err != nil {
 		t.Fatal(err)
 	}
+
 	return data.Bytes()
 }
 
 func TestDevelopmentAcceptanceChecksArtifactsAndStableState(t *testing.T) {
 	t.Parallel()
+
 	for _, tc := range []struct {
 		name, want                                 string
 		changed, tag, noArtifact, damaged, expired bool
@@ -58,95 +65,117 @@ func TestDevelopmentAcceptanceChecksArtifactsAndStableState(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			data := developmentArchive(t)
 			if tc.damaged {
 				data = []byte("not an archive")
 			}
+
 			if tc.empty {
 				var buffer bytes.Buffer
 				if err := zip.NewWriter(&buffer).Close(); err != nil {
 					t.Fatal(err)
 				}
+
 				data = buffer.Bytes()
 			}
+
 			if tc.badContents {
 				// Stored payload begins after the local header and filename.
 				// Metadata still hashes the downloaded ZIP, so only reading the
 				// complete member and validating its CRC detects this corruption.
 				data[30+len("build/output.txt")] ^= 0xff
 			}
+
 			digest := sha256.Sum256(data)
 			if tc.wrongDigest {
 				digest[0] ^= 0xff
 			}
+
 			var downloads atomic.Int32
-			blob := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+			blob := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, r *http.Request) {
 				if r.Header.Get("Authorization") != "" {
 					t.Error("API credential forwarded to signed artifact URL")
 				}
+
 				if r.URL.Query().Get("signature") != "private-query" {
 					t.Error("artifact URL lost its signing query")
 				}
+
 				downloads.Add(1)
+
 				if tc.badDownload {
-					w.WriteHeader(http.StatusForbidden)
+					response.WriteHeader(http.StatusForbidden)
+
 					return
 				}
-				_, _ = w.Write(data)
+
+				_, _ = response.Write(data)
 			}))
 			defer blob.Close()
-			api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
+
+			api := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+				response.Header().Set("Content-Type", "application/json")
+
 				switch {
-				case strings.Contains(r.URL.Path, "/git/ref/"):
+				case strings.Contains(request.URL.Path, "/git/ref/"):
 					sha := "original"
 					if tc.changed {
 						sha = "changed"
 					}
-					_ = json.NewEncoder(w).Encode(map[string]any{"object": map[string]string{"sha": sha}})
-				case strings.HasSuffix(r.URL.Path, "/tags"):
+
+					_ = json.NewEncoder(response).Encode(map[string]any{"object": map[string]string{"sha": sha}})
+				case strings.HasSuffix(request.URL.Path, "/tags"):
 					if tc.tag {
-						_, _ = w.Write([]byte(`[{"name":"v1.0.0"}]`))
+						_, _ = response.Write([]byte(`[{"name":"v1.0.0"}]`))
 					} else {
-						_, _ = w.Write([]byte(`[]`))
+						_, _ = response.Write([]byte(`[]`))
 					}
-				case strings.HasSuffix(r.URL.Path, "/releases"):
+				case strings.HasSuffix(request.URL.Path, "/releases"):
 					if tc.release {
-						_, _ = w.Write([]byte(`[{"id":1}]`))
+						_, _ = response.Write([]byte(`[{"id":1}]`))
 					} else {
-						_, _ = w.Write([]byte(`[]`))
+						_, _ = response.Write([]byte(`[]`))
 					}
-				case strings.Contains(r.URL.Path, "/actions/runs/") && strings.HasSuffix(r.URL.Path, "/artifacts"):
+				case strings.Contains(request.URL.Path, "/actions/runs/") && strings.HasSuffix(request.URL.Path, "/artifacts"):
 					if tc.noArtifact {
-						_, _ = w.Write([]byte(`{"total_count":0,"artifacts":[]}`))
+						_, _ = response.Write([]byte(`{"total_count":0,"artifacts":[]}`))
+
 						return
 					}
+
 					id, total := 1, 1
 					if tc.paginated {
 						total = 2
-						if r.URL.Query().Get("page") == "2" {
+
+						if request.URL.Query().Get("page") == "2" {
 							id = 2
 						} else {
-							w.Header().Set("Link", "<http://"+r.Host+r.URL.Path+"?page=2>; rel=\"next\"")
+							response.Header().Set("Link", "<http://"+request.Host+request.URL.Path+"?page=2>; rel=\"next\"")
 						}
 					}
-					_ = json.NewEncoder(w).Encode(map[string]any{"total_count": total, "artifacts": []map[string]any{{
+
+					_ = json.NewEncoder(response).Encode(map[string]any{"total_count": total, "artifacts": []map[string]any{{
 						"id": id, "name": "dev-files", "expired": tc.expired, "digest": "sha256:" + hex.EncodeToString(digest[:]),
 					}}})
-				case strings.HasSuffix(r.URL.Path, "/artifacts/1/zip"), strings.HasSuffix(r.URL.Path, "/artifacts/2/zip"):
-					http.Redirect(w, r, blob.URL+"?signature=private-query", http.StatusFound)
+				case strings.HasSuffix(request.URL.Path, "/artifacts/1/zip"), strings.HasSuffix(request.URL.Path, "/artifacts/2/zip"):
+					http.Redirect(response, request, blob.URL+"?signature=private-query", http.StatusFound)
 				default:
-					t.Errorf("unexpected API request: %s", r.URL.Path)
-					w.WriteHeader(http.StatusNotFound)
+					t.Errorf("unexpected API request: %s", request.URL.Path)
+					response.WriteHeader(http.StatusNotFound)
 				}
 			}))
 			defer api.Close()
-			client, err := githubapi.NewClient(githubapi.WithHTTPClient(api.Client()), githubapi.WithAuthToken("inert-api-token"), githubapi.WithURLs(githubapi.Ptr(api.URL+"/"), nil))
+
+			client, err := githubapi.NewClient(githubapi.WithHTTPClient(api.Client()), githubapi.WithAuthToken("inert-api-token"), githubapi.WithURLs(new(api.URL+"/"), nil))
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			trial := &GitHubTrial{tb: stopOnFatalTB{TB: t}, api: client, org: "hanklankorg"}
 			failure := ""
+
 			func() {
 				defer func() {
 					if caught := recover(); caught != nil {
@@ -154,16 +183,20 @@ func TestDevelopmentAcceptanceChecksArtifactsAndStableState(t *testing.T) {
 						if !ok {
 							panic(caught)
 						}
+
 						failure = string(message)
 					}
 				}()
+
 				trial.CheckDevelopmentRelease("fc-development", "original", 7)
 			}()
+
 			if tc.want == "" {
 				wantDownloads := int32(1)
 				if tc.paginated {
 					wantDownloads = 2
 				}
+
 				if failure != "" || downloads.Load() != wantDownloads {
 					t.Fatalf("failure=%s downloads=%d", failure, downloads.Load())
 				}
@@ -176,21 +209,27 @@ func TestDevelopmentAcceptanceChecksArtifactsAndStableState(t *testing.T) {
 
 func TestDevelopmentDispatchIsSentOnceAndReturnsIdentity(t *testing.T) {
 	t.Parallel()
+
 	var calls atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
+
 		var body githubapi.CreateWorkflowDispatchEventRequest
 		if r.Method != http.MethodPost || json.NewDecoder(r.Body).Decode(&body) != nil || body.Ref != "main" || body.ReturnRunDetails == nil || !*body.ReturnRunDetails {
 			t.Error("invalid development dispatch")
 		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"workflow_run_id":7,"html_url":"https://github.com/hanklankorg/fc-development/actions/runs/7"}`))
+
+		response.Header().Set("Content-Type", "application/json")
+		_, _ = response.Write([]byte(`{"workflow_run_id":7,"html_url":"https://github.com/hanklankorg/fc-development/actions/runs/7"}`))
 	}))
 	defer server.Close()
-	client, err := githubapi.NewClient(githubapi.WithHTTPClient(server.Client()), githubapi.WithURLs(githubapi.Ptr(server.URL+"/"), nil))
+
+	client, err := githubapi.NewClient(githubapi.WithHTTPClient(server.Client()), githubapi.WithURLs(new(server.URL+"/"), nil))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	trial := &GitHubTrial{tb: t, api: client, org: "hanklankorg"}
 	if id := trial.DispatchDevelopment("fc-development", "release-dev.yml"); id != 7 || calls.Load() != 1 {
 		t.Fatalf("dispatch id=%d calls=%d", id, calls.Load())

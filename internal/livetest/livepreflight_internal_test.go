@@ -33,7 +33,7 @@ func TestReadCAFile_AcceptsCertificatesAndRefusesEverythingElse(t *testing.T) {
 	}
 
 	// The CA is public material: a world-readable file is fine.
-	got, err := readCAFile(write(t, body, 0o644)) //nolint:gosec // Deliberately public certificate.
+	got, err := readCAFile(write(t, body, 0o644))
 	if err != nil || !bytes.Equal(got, body) {
 		t.Fatalf("readCAFile = %q, %v, want the certificate bytes", got, err)
 	}
@@ -182,11 +182,11 @@ func TestCheckLiveInputs_GuardsWithoutTouchingAProvider(t *testing.T) {
 
 			return withoutWorkflowRuns(t, composeFixtureBody(t))
 		}, env: map[string]string{liveProfileEnv: "full"}, reason: "workflow-runs"},
-		"null ca_file": {body: func(t *testing.T) string {
+		"no ca_file": {body: func(t *testing.T) string {
 			t.Helper()
 
-			return replaceInFixture(t, composeFixtureBody(t), `"ca_file": "/opt/forge-lab/certs/forge-lab-ca.crt"`, `"ca_file": null`)
-		}, reason: "non-null ca_file"},
+			return replaceInFixture(t, composeFixtureBody(t), "  \"ca_file\": \"/opt/forge-lab/certs/forge-lab-ca.crt\",\n", "")
+		}, reason: "require a ca_file"},
 		"missing live capability": {body: func(t *testing.T) string {
 			t.Helper()
 
@@ -195,7 +195,7 @@ func TestCheckLiveInputs_GuardsWithoutTouchingAProvider(t *testing.T) {
 		"no forge this tier drives": {body: func(t *testing.T) string {
 			t.Helper()
 
-			return fixtureBody(t, "neutral-targets-v4-github.json")
+			return fixtureBody(t, "neutral-targets-v5-github.json")
 		}, reason: "carries no endpoint this tier drives"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -260,7 +260,7 @@ func TestCheckLiveInputs_GuardsWithoutTouchingAProvider(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := os.WriteFile(*lab.CAFile, []byte("not a certificate\n"), 0o600); err != nil { //nolint:gosec // The CA path arrangePreflight placed under this test's temporary directory.
+		if err := os.WriteFile(*lab.CAFile, []byte("not a certificate\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 

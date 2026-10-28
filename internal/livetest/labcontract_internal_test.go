@@ -97,7 +97,7 @@ func fixtureBody(t *testing.T, name string) string {
 func composeFixtureBody(t *testing.T) string {
 	t.Helper()
 
-	return fixtureBody(t, "neutral-targets-v4-compose.json")
+	return fixtureBody(t, "neutral-targets-v5-compose.json")
 }
 
 // replaceInFixture replaces the first occurrence of from, failing the test when
@@ -129,13 +129,13 @@ func loadFixture(t *testing.T, body string) *labcontract.Contract {
 func TestAcceptedFixtures_AreReadByTheModule(t *testing.T) {
 	t.Parallel()
 
-	for name, wantNulls := range map[string]bool{"neutral-targets-v4-compose.json": false, "neutral-targets-v4-github.json": true} {
+	for name, wantAbsent := range map[string]bool{"neutral-targets-v5-compose.json": false, "neutral-targets-v5-github.json": true} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
 			contract := loadFixture(t, fixtureBody(t, name))
-			if contract.Version != labcontract.Version || (contract.CAFile == nil) != wantNulls || (contract.Fulcio == nil) != wantNulls {
-				t.Fatalf("projection = %+v, want ca_file and fulcio null=%t", contract, wantNulls)
+			if contract.Version != labcontract.Version || (contract.CAFile == nil) != wantAbsent || (contract.Fulcio == nil) != wantAbsent {
+				t.Fatalf("projection = %+v, want ca_file and fulcio absent=%t", contract, wantAbsent)
 			}
 		})
 	}
@@ -255,7 +255,7 @@ func requireMissingContractHint(t *testing.T, path, source string) {
 // failure, and a malformed one as the module classifies it.
 func TestCurrentLabContract_AppliesTheModuleFilePolicy(t *testing.T) {
 	exposed := writeContract(t, composeFixtureBody(t))
-	if err := os.Chmod(exposed, 0o640); err != nil { //nolint:gosec // The exposure under test.
+	if err := os.Chmod(exposed, 0o640); err != nil {
 		t.Fatal(err)
 	}
 
@@ -265,7 +265,7 @@ func TestCurrentLabContract_AppliesTheModuleFilePolicy(t *testing.T) {
 		t.Fatalf("group-readable contract = %v, want ErrFile", err)
 	}
 
-	setCurrentContract(t, writeContract(t, replaceInFixture(t, composeFixtureBody(t), `"version": 4`, `"version": 3`)))
+	setCurrentContract(t, writeContract(t, replaceInFixture(t, composeFixtureBody(t), `"version": 5`, `"version": 3`)))
 
 	if _, err := currentLabContract(); !errors.Is(err, labcontract.ErrVersion) {
 		t.Fatalf("retired contract = %v, want ErrVersion", err)
@@ -273,7 +273,7 @@ func TestCurrentLabContract_AppliesTheModuleFilePolicy(t *testing.T) {
 }
 
 func TestSelected_MalformedContractCannotBecomeASkip(t *testing.T) {
-	body := replaceInFixture(t, composeFixtureBody(t), `"version": 4`, `"version": 1`)
+	body := replaceInFixture(t, composeFixtureBody(t), `"version": 5`, `"version": 1`)
 	setCurrentContract(t, writeContract(t, body))
 
 	recorder := &fatalRecorder{}
@@ -290,7 +290,7 @@ func TestSelected_MalformedContractCannotBecomeASkip(t *testing.T) {
 // forges selects nothing and fails nothing; one that carries the forge selects
 // it.
 func TestSelected_AbsentForgeIsASkipNotAFailure(t *testing.T) {
-	setCurrentContract(t, writeContract(t, fixtureBody(t, "neutral-targets-v4-github.json")))
+	setCurrentContract(t, writeContract(t, fixtureBody(t, "neutral-targets-v5-github.json")))
 
 	recorder := &fatalRecorder{}
 	if Selected(recorder, provider.ForgeGitLab) || recorder.failed {
@@ -311,7 +311,7 @@ func TestSelected_AbsentForgeIsASkipNotAFailure(t *testing.T) {
 func TestTargetFromContract_ProjectsProducerFacts(t *testing.T) {
 	t.Parallel()
 
-	contract := loadFixture(t, replaceInFixture(t, composeFixtureBody(t), `"version": 4,`, `"version": 4, "fixtures": {"catalog_version": 2},`))
+	contract := loadFixture(t, replaceInFixture(t, composeFixtureBody(t), `"version": 5,`, `"version": 5, "fixtures": {"catalog_version": 2},`))
 
 	forgejoEndpoint, err := contract.Endpoint(labcontract.Forgejo)
 	if err != nil {
@@ -323,7 +323,6 @@ func TestTargetFromContract_ProjectsProducerFacts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	//nolint:gosec // Synthetic fixture credential the projection must carry unchanged.
 	wantForgejo := Target{
 		Forge:              provider.ForgeForgejo,
 		Host:               "forgejo.compose.forgelab:8443",
@@ -381,7 +380,8 @@ func TestTargetFromContract_UnmappedFactsStayEmpty(t *testing.T) {
 	body = replaceInFixture(t, body, `"oci_registry": {
         "base_url": "https://registry.gitlab.compose.forgelab:8443",
         "credential": "endpoint"
-      }`, `"oci_registry": null`)
+      },
+      `, "")
 
 	contract := loadFixture(t, body)
 

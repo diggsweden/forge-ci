@@ -7,10 +7,12 @@ import "testing"
 
 func TestGitLabConsecutiveReleaseSettingsStayOutsideBuildVariables(t *testing.T) {
 	t.Parallel()
+
 	settings, err := ParseGitLabReleaseSettings("version=1.2.3\nnext-version=1.2.4\nversion-bump=npm\nRELEASE_PLATFORMS=linux/amd64")
 	if err != nil || settings.Version != "1.2.3" || settings.NextVersion != "1.2.4" || settings.VersionBump != "npm" || len(settings.Variables) != 1 {
 		t.Fatalf("invalid consecutive release settings: %+v %v", settings, err)
 	}
+
 	for _, invalid := range []string{
 		"next-version=1.2.4", "version=1.2.3\nnext-version=1.2.4",
 		"version=1.2.3\nnext-version=1.2.3\nversion-bump=cargo",

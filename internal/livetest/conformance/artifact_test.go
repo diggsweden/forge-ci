@@ -241,12 +241,15 @@ func TestInRunner_GitLabReleaseHandoffRejectsTamperedBytes(t *testing.T) {
 	if !livetest.Requires(t, provider.ForgeGitLab, livetest.NeedsInRunner) {
 		livetest.NotCoveredf(t, "release handoff rejection requires a GitLab runner")
 	}
+
 	target := livetest.Accept(t, provider.ForgeGitLab)
 	repo := livetest.NewScratchRepo(t, target, "release-handoff-rejection")
+
 	const tag = "v0.0.9-probe"
 	livetest.PrepareTag(t, target, repo, tag)
 	livetest.PublishBinaryAsset(t, target, repo, tag, t.TempDir())
 	prelude := livetest.ProbePrelude(target, livetest.ReleaseAssetURL(t, target, repo, tag, "forge-ci"))
+
 	body, err := yaml.Marshal(map[string]any{
 		"stages":    []string{"produce", "verify"},
 		"variables": map[string]string{"GIT_STRATEGY": "empty"},
@@ -285,6 +288,7 @@ reject_digest "$expected"`},
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if conclusion := livetest.RunWorkflow(t, target, repo, "release-handoff-rejection", string(body)); conclusion != "success" {
 		t.Fatalf("native release handoff rejection concluded %q", conclusion)
 	}

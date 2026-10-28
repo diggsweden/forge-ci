@@ -47,9 +47,9 @@ func TestGitLabPolicy_ConsumerCannotReplaceTheSigningPipeline(t *testing.T) {
 	coordinate := "policy.yml@" + policyProject + ":" + policy.ID
 
 	settings, _, err := client.Projects.EditProject(project, &gitlabapi.EditProjectOptions{
-		CIConfigPath:                           gitlabapi.Ptr(coordinate),
+		CIConfigPath:                           new(coordinate),
 		CIPipelineVariablesMinimumOverrideRole: gitlabapi.Ptr(gitlabapi.CIPipelineVariablesMinimumOverrideRoleValue("no_one_allowed")),
-		CIPushRepositoryForJobTokenAllowed:     gitlabapi.Ptr(false),
+		CIPushRepositoryForJobTokenAllowed:     new(false),
 	}, gitlabapi.WithContext(ctx))
 	if err != nil {
 		t.Fatal(err)
@@ -68,27 +68,27 @@ func TestGitLabPolicy_ConsumerCannotReplaceTheSigningPipeline(t *testing.T) {
 
 	consumer := gitlabPolicyCommit(t, ctx, client, project, ".gitlab-ci.yml", gitlabUntrustedPolicy, gitlabapi.FileCreate)
 	if _, _, seedErr := client.Releases.CreateRelease(project, &gitlabapi.CreateReleaseOptions{
-		TagName: gitlabapi.Ptr("v0.0.0-sentinel"), Ref: gitlabapi.Ptr(consumer.ID), Description: gitlabapi.Ptr("untouched publication sentinel"),
+		TagName: new("v0.0.0-sentinel"), Ref: new(consumer.ID), Description: new("untouched publication sentinel"),
 	}, gitlabapi.WithContext(ctx)); seedErr != nil {
 		t.Fatal(seedErr)
 	}
 
 	if _, _, setErr := client.ProjectVariables.CreateVariable(project, &gitlabapi.CreateProjectVariableOptions{
-		Key: gitlabapi.Ptr("RELEASE_COSIGN_PRIVATE_KEY"), Value: gitlabapi.Ptr("inert-signing-policy-canary"),
-		Protected: gitlabapi.Ptr(true), Masked: gitlabapi.Ptr(true), EnvironmentScope: gitlabapi.Ptr("release-signing"),
+		Key: new("RELEASE_COSIGN_PRIVATE_KEY"), Value: new("inert-signing-policy-canary"),
+		Protected: new(true), Masked: new(true), EnvironmentScope: new("release-signing"),
 	}, gitlabapi.WithContext(ctx)); setErr != nil {
 		t.Fatal(setErr)
 	}
 
 	if _, _, protectErr := client.ProtectedTags.ProtectRepositoryTags(project, &gitlabapi.ProtectRepositoryTagsOptions{
-		Name: gitlabapi.Ptr("release-request/*"), CreateAccessLevel: gitlabapi.Ptr(gitlabapi.MaintainerPermissions),
+		Name: new("release-request/*"), CreateAccessLevel: gitlabapi.Ptr(gitlabapi.MaintainerPermissions),
 	}, gitlabapi.WithContext(ctx)); protectErr != nil {
 		t.Fatal(protectErr)
 	}
 
 	const tag = "release-request/v0.0.1"
 	if _, _, tagErr := client.Tags.CreateTag(project, &gitlabapi.CreateTagOptions{
-		TagName: gitlabapi.Ptr(tag), Ref: gitlabapi.Ptr(consumer.ID), Message: gitlabapi.Ptr("Request the policy fixture release"),
+		TagName: gitlabapi.Ptr(tag), Ref: new(consumer.ID), Message: new("Request the policy fixture release"),
 	}, gitlabapi.WithContext(ctx)); tagErr != nil {
 		t.Fatal(tagErr)
 	}
@@ -130,7 +130,7 @@ func TestGitLabPolicy_ConsumerCannotReplaceTheSigningPipeline(t *testing.T) {
 	}
 
 	_, response, overrideErr := client.Pipelines.CreatePipeline(project, &gitlabapi.CreatePipelineOptions{
-		Ref: gitlabapi.Ptr(tag), Variables: gitlabapi.Ptr([]*gitlabapi.PipelineVariableOptions{{Key: gitlabapi.Ptr("CI_CONFIG_PATH"), Value: gitlabapi.Ptr(".gitlab-ci.yml")}}),
+		Ref: gitlabapi.Ptr(tag), Variables: new([]*gitlabapi.PipelineVariableOptions{{Key: new("CI_CONFIG_PATH"), Value: new(".gitlab-ci.yml")}}),
 	}, gitlabapi.WithContext(ctx))
 	if overrideErr == nil || response == nil || (response.StatusCode != http.StatusBadRequest && response.StatusCode != http.StatusForbidden) ||
 		!strings.Contains(overrideErr.Error(), "pipeline variables") {
@@ -144,8 +144,8 @@ func gitlabPolicyCommit(t *testing.T, ctx context.Context, client *gitlabapi.Cli
 	t.Helper()
 
 	commit, _, err := client.Commits.CreateCommit(project, &gitlabapi.CreateCommitOptions{
-		Branch: gitlabapi.Ptr("main"), CommitMessage: gitlabapi.Ptr("livetest: stage policy fixture"),
-		Actions: []*gitlabapi.CommitActionOptions{{Action: gitlabapi.Ptr(operation), FilePath: gitlabapi.Ptr(path), Content: gitlabapi.Ptr(body)}},
+		Branch: new("main"), CommitMessage: new("livetest: stage policy fixture"),
+		Actions: []*gitlabapi.CommitActionOptions{{Action: new(operation), FilePath: new(path), Content: new(body)}},
 	}, gitlabapi.WithContext(ctx))
 	if err != nil {
 		t.Fatal(err)
@@ -195,18 +195,20 @@ func TestGitLabPolicy_JobTokenCannotWriteThePublicationRegistry(t *testing.T) {
 
 func waitGitLabTagPipeline(t *testing.T, ctx context.Context, client *gitlabapi.Client, project, tag, sha string) *gitlabapi.Pipeline {
 	t.Helper()
+
 	return waitGitLabPushPipeline(t, ctx, client, project, tag, sha)
 }
 
 // Both tag requests and development branches must originate in a native push.
 func waitGitLabPushPipeline(t *testing.T, ctx context.Context, client *gitlabapi.Client, project, ref, sha string) *gitlabapi.Pipeline {
 	t.Helper()
+
 	started := time.Now()
 	lastStatus := ""
 	nextProgress := started
 
 	for {
-		runs, _, err := client.Pipelines.ListProjectPipelines(project, &gitlabapi.ListProjectPipelinesOptions{Ref: gitlabapi.Ptr(ref)}, gitlabapi.WithContext(ctx))
+		runs, _, err := client.Pipelines.ListProjectPipelines(project, &gitlabapi.ListProjectPipelinesOptions{Ref: new(ref)}, gitlabapi.WithContext(ctx))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -224,6 +226,7 @@ func waitGitLabPushPipeline(t *testing.T, ctx context.Context, client *gitlabapi
 			if run.SHA != sha || run.Source != "push" || run.Ref != ref {
 				t.Fatal("the pipeline is not bound to its push event, ref and exact source")
 			}
+
 			if run.Status != lastStatus || !time.Now().Before(nextProgress) {
 				t.Logf("GitLab push %s pipeline %d: %s after %s (%s)", ref, run.ID, run.Status, time.Since(started).Round(time.Second), run.WebURL)
 				lastStatus, nextProgress = run.Status, time.Now().Add(2*time.Minute)

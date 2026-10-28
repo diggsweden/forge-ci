@@ -116,7 +116,7 @@ func TestProbePrelude_ChecksBytesBeforeExecutingFixture(t *testing.T) {
 			require.NoError(t, os.WriteFile(fixture, []byte(binary), 0o600))
 			// The only fetch command is an owned copy stub. CA output is also
 			// redirected into this fixture tree; no shared /tmp or host trust is changed.
-			require.NoError(t, os.WriteFile(filepath.Join(tools, "curl"), []byte("#!/bin/sh\n[ \"$1\" = -fsSL ] && [ \"$2\" = -o ] && [ \"$3\" = forge-ci ] && [ \"$4\" = https://fixture.invalid/forge-ci ] || exit 90\ncp \"$FIXTURE_BINARY\" forge-ci\n"), 0o700)) //nolint:gosec // executable fixture, not a downloaded tool.
+			require.NoError(t, os.WriteFile(filepath.Join(tools, "curl"), []byte("#!/bin/sh\n[ \"$1\" = -fsSL ] && [ \"$2\" = -o ] && [ \"$3\" = forge-ci ] && [ \"$4\" = https://fixture.invalid/forge-ci ] || exit 90\ncp \"$FIXTURE_BINARY\" forge-ci\n"), 0o700))
 			caFile := filepath.Join(root, "source-ca.crt")
 			require.NoError(t, os.WriteFile(caFile, independentCAPEM(t), 0o600))
 			target := Target{CAFile: caFile, accepted: true}
@@ -133,7 +133,7 @@ func TestProbePrelude_ChecksBytesBeforeExecutingFixture(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 
-			cmd := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", script) //nolint:gosec // bounded fixture script, owned curl substitute and closed environment.
+			cmd := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", script)
 			cmd.Dir = root
 			cmd.Env = []string{"PATH=" + tools + ":" + testenv.GNUPath(t, "sha256sum") + ":/usr/bin:/bin", "HOME=" + root, "TMPDIR=" + root, "FIXTURE_BINARY=" + fixture}
 			out, err := cmd.CombinedOutput()

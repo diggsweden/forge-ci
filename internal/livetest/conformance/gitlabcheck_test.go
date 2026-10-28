@@ -61,7 +61,7 @@ func runGitLabCheck(t *testing.T, private bool) {
 		}
 
 		actions = append(actions, &gitlabapi.CommitActionOptions{
-			Action: gitlabapi.Ptr(gitlabapi.FileCreate), FilePath: gitlabapi.Ptr(path), Content: gitlabapi.Ptr(string(body)),
+			Action: gitlabapi.Ptr(gitlabapi.FileCreate), FilePath: new(path), Content: new(string(body)),
 		})
 	}
 
@@ -69,7 +69,7 @@ func runGitLabCheck(t *testing.T, private bool) {
 	defer cancel()
 
 	commit, _, err := client.Commits.CreateCommit(livetest.RepoSlug(target, engine), &gitlabapi.CreateCommitOptions{
-		Branch: gitlabapi.Ptr("main"), CommitMessage: gitlabapi.Ptr("livetest: stage the check component"), Actions: actions,
+		Branch: new("main"), CommitMessage: new("livetest: stage the check component"), Actions: actions,
 	}, gitlabapi.WithContext(ctx))
 	if err != nil {
 		t.Fatal(err)
@@ -84,7 +84,7 @@ func runGitLabCheck(t *testing.T, private bool) {
 		consumer = livetest.NewBareScratchRepo(t, target, "check-consumer", "sha256", true)
 		visibilityContext, visibilityCancel := context.WithTimeout(livetest.Context(t), time.Minute)
 		project, _, visibilityErr := client.Projects.EditProject(livetest.RepoSlug(target, consumer), &gitlabapi.EditProjectOptions{
-			CIPushRepositoryForJobTokenAllowed: gitlabapi.Ptr(false),
+			CIPushRepositoryForJobTokenAllowed: new(false),
 		}, gitlabapi.WithContext(visibilityContext))
 
 		visibilityCancel()

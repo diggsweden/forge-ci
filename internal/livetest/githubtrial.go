@@ -151,10 +151,12 @@ func (trial *GitHubTrial) EnsureEngine(root, platforms string) GitHubEngine {
 // EnsureEngine this does not push, change variables, or register engine cleanup.
 func (trial *GitHubTrial) ReuseEngine(root string) GitHubEngine {
 	trial.tb.Helper()
+
 	commit := strings.TrimSpace(trial.git(root, "rev-parse", "HEAD"))
 	if len(commit) != 40 {
 		trial.tb.Fatalf("livetest: the engine checkout must be SHA-1 for GitHub; HEAD is %q", commit)
 	}
+
 	name := trial.prefix + "forge-ci"
 	for _, refName := range []string{"heads/main", "tags/" + GitHubPrerelease} {
 		ref, _, err := trial.api.Git.GetRef(trial.tb.Context(), trial.org, name, refName)
@@ -162,11 +164,14 @@ func (trial *GitHubTrial) ReuseEngine(root string) GitHubEngine {
 			trial.tb.Fatalf("livetest: prepared engine %s %s is not at %s: %v", name, refName, commit, err)
 		}
 	}
+
 	run := trial.WaitRun(name, githubEngineWorkflow, "push", commit, githubEngineTimeout)
 	if run.GetConclusion() != "success" {
 		trial.tb.Fatalf("livetest: prepared engine build at %s ended %s", commit, run.GetConclusion())
 	}
+
 	trial.tb.Logf("reusing prepared engine without mutations: %s/%s at %s", trial.org, name, commit)
+
 	return GitHubEngine{Owner: trial.org, Repository: name, Commit: commit}
 }
 
@@ -267,7 +272,7 @@ func (trial *GitHubTrial) PushConsumer(repo, root, fixtures string, engine GitHu
 	return GitHubConsumerTree{Dir: dir, Main: strings.TrimSpace(trial.git(dir, "rev-parse", "HEAD"))}
 }
 
-func (trial *GitHubTrial) stageConsumer(root, fixtures string, engine GitHubEngine, overrides map[string]string) (string, string) {
+func (trial *GitHubTrial) stageConsumer(root, fixtures string, engine GitHubEngine, overrides map[string]string) (string, string) { //nolint:funcorder // keep the staging helper beside PushConsumer.
 	trial.tb.Helper()
 
 	dir := trial.tempDir("consumer")
@@ -435,7 +440,7 @@ func (trial *GitHubTrial) ReportRun(repo string, run *github.WorkflowRun) {
 
 	ctx := trial.tb.Context()
 
-	jobs, _, err := trial.api.Actions.ListWorkflowJobs(ctx, trial.org, repo, run.GetID(), &github.ListWorkflowJobsOptions{Filter: "latest", ListOptions: github.ListOptions{PerPage: 100}})
+	jobs, _, err := trial.api.Actions.ListWorkflowJobs(ctx, trial.org, repo, run.GetID(), &github.ListWorkflowJobsOptions{Filter: "latest", PerPage: 100})
 	if err != nil {
 		trial.tb.Errorf("livetest: list jobs of run %d: %v", run.GetID(), err)
 
@@ -459,6 +464,7 @@ func (trial *GitHubTrial) ReportRun(repo string, run *github.WorkflowRun) {
 
 		excerpt := failureOf(ctx, location.String(), 40)
 		trial.tb.Logf("    log at the failure:\n%s", excerpt)
+
 		if strings.HasPrefix(excerpt, "could not fetch the job log") {
 			trial.reportJobAnnotations(ctx, repo, job)
 		}
@@ -468,56 +474,71 @@ func (trial *GitHubTrial) ReportRun(repo string, run *github.WorkflowRun) {
 // Jobs rejected before a runner starts may have no log archive. GitHub records
 // the cause in check annotations; query that exact check through the SDK rather
 // than following a response-provided URL with credentials.
-func (trial *GitHubTrial) reportJobAnnotations(ctx context.Context, repo string, job *github.WorkflowJob) {
+func (trial *GitHubTrial) reportJobAnnotations(ctx context.Context, repo string, job *github.WorkflowJob) { //nolint:funcorder // keep failure diagnostics beside their caller.
 	prefix := "https://api.github.com/repos/" + trial.org + "/" + repo + "/check-runs/"
+
 	value, found := strings.CutPrefix(job.GetCheckRunURL(), prefix)
 	if !found {
 		return
 	}
+
 	id, err := strconv.ParseInt(value, 10, 64)
 	if err != nil || id <= 0 {
 		return
 	}
+
 	annotations, _, err := trial.api.Checks.ListCheckRunAnnotations(ctx, trial.org, repo, id, &github.ListOptions{PerPage: 10})
 	if err != nil {
-		trial.tb.Logf("    check annotations unavailable: %v", err)
-		var responseError *github.ErrorResponse
-		if errors.As(err, &responseError) && responseError.Response != nil && responseError.Response.StatusCode == http.StatusForbidden {
-			trial.tb.Logf("    fine-grained PATs cannot read the Checks API; adding PAT permissions will not enable annotations")
-		}
-		trial.tb.Logf("    inspect Summary > Annotations at https://github.com/%s/%s/actions/runs/%d (disposable trial repositories are removed during cleanup)", trial.org, repo, job.GetRunID())
-		if job.GetRunnerID() == 0 && len(job.Steps) == 0 {
-			trial.tb.Logf("    GitHub reported no runner or steps: the job may have been rejected before execution. Check account payments and Actions spending limits in Billing & plans; billing is a possible cause, not confirmed by missing logs")
-		}
+		trial.reportAnnotationFailure(repo, job, err)
+
 		return
 	}
+
 	for _, annotation := range annotations {
 		message := annotation.GetMessage()
 		if len(message) > 2048 {
 			message = strings.ToValidUTF8(message[:2048], "�") + " [truncated]"
 		}
+
 		trial.tb.Logf("    check annotation: %s", message)
+
 		if strings.Contains(message, "The job was not started because recent account payments have failed or your spending limit needs to be increased") {
 			trial.tb.Logf("    GitHub billing blocked job execution: check failed payments and Actions spending limits in Billing & plans before retrying; consumer code did not run in this job")
 		}
 	}
 }
 
+func (trial *GitHubTrial) reportAnnotationFailure(repo string, job *github.WorkflowJob, err error) { //nolint:funcorder // keep failure diagnostics beside their caller.
+	trial.tb.Logf("    check annotations unavailable: %v", err)
+
+	var responseError *github.ErrorResponse
+	if errors.As(err, &responseError) && responseError.Response != nil && responseError.Response.StatusCode == http.StatusForbidden {
+		trial.tb.Logf("    fine-grained PATs cannot read the Checks API; adding PAT permissions will not enable annotations")
+	}
+
+	trial.tb.Logf("    inspect Summary > Annotations at https://github.com/%s/%s/actions/runs/%d (disposable trial repositories are removed during cleanup)", trial.org, repo, job.GetRunID())
+
+	if job.GetRunnerID() == 0 && len(job.Steps) == 0 {
+		trial.tb.Logf("    GitHub reported no runner or steps: the job may have been rejected before execution. Check account payments and Actions spending limits in Billing & plans; billing is a possible cause, not confirmed by missing logs")
+	}
+}
+
 // failureOf fetches a pre-signed log URL without the token and returns the
 // lines that explain the failure.
 func failureOf(ctx context.Context, location string, lines int) string {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, location, nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, location, nil) //nolint:gosec // G704: pre-signed URL comes from the authenticated GitHub job-log API, not repository content.
 	if err != nil {
 		return "could not prepare the job log request"
 	}
 
-	response, err := (&http.Client{Timeout: time.Minute}).Do(request)
+	response, err := (&http.Client{Timeout: time.Minute}).Do(request) //nolint:gosec // G704: fetch the GitHub-issued pre-signed log URL without an API token.
 	if err != nil {
 		// The URL is pre-signed; transport errors can include its credentials.
 		return "could not fetch the job log"
 	}
 
 	defer func() { _ = response.Body.Close() }()
+
 	if response.StatusCode != http.StatusOK {
 		return fmt.Sprintf("could not fetch the job log: HTTP %d", response.StatusCode)
 	}
@@ -529,11 +550,13 @@ func readFailureExcerpt(reader io.Reader, lines int) string {
 	var all []string
 
 	const maxLogBytes = 32 << 20
+
 	limited := &io.LimitedReader{R: reader, N: maxLogBytes}
 	scanner := bufio.NewScanner(limited)
 	// Progress output can put well over Scanner's default 64 KiB on one line.
 	// Keep reading to the actual error, within the existing total log budget.
 	scanner.Buffer(make([]byte, 64<<10), maxLogBytes)
+
 	for scanner.Scan() {
 		all = append(all, scanner.Text())
 	}
@@ -545,11 +568,13 @@ func readFailureExcerpt(reader io.Reader, lines int) string {
 				" ... [line shortened; see full job log] ... " + strings.ToValidUTF8(line[len(line)-1536:], "�")
 		}
 	}
+
 	if scanner.Err() != nil {
 		excerpt = append(excerpt, "[job log incomplete: could not read the remaining data]")
 	} else if limited.N == 0 {
 		excerpt = append(excerpt, "[job log may be truncated at the 32 MiB read limit]")
 	}
+
 	return strings.Join(excerpt, "\n")
 }
 
@@ -562,6 +587,7 @@ func FailureExcerpt(log []string, lines int) []string {
 	if lines <= 0 {
 		return nil
 	}
+
 	end := len(log)
 
 	for index, line := range log {
@@ -676,7 +702,7 @@ func (trial *GitHubTrial) NewTrialGPGKey() TrialGPGKey {
 
 	trial.run(key.Home, nil, "gpg", append(loopback, "--quick-generate-key", githubTrialAuthor+" <"+githubTrialEmail+">", "ed25519", "sign", "1d")...)
 
-	for _, line := range strings.Split(trial.run(key.Home, nil, "gpg", "--homedir", key.Home, "--batch", "--with-colons", "--list-secret-keys"), "\n") {
+	for line := range strings.SplitSeq(trial.run(key.Home, nil, "gpg", "--homedir", key.Home, "--batch", "--with-colons", "--list-secret-keys"), "\n") {
 		if fields := strings.Split(line, ":"); len(fields) > 9 && fields[0] == "fpr" && key.Fingerprint == "" {
 			key.Fingerprint = fields[9]
 		}
@@ -751,6 +777,7 @@ func (trial *GitHubTrial) CheckRelease(repo string, tree GitHubConsumerTree, fin
 	}
 
 	trial.tb.Logf("release %s: %d assets, %d Cosign bundles verified against %s", final, len(assets), verified, trust)
+
 	return assets
 }
 
@@ -773,6 +800,7 @@ func (trial *GitHubTrial) CheckImage(repo, image, final string, engine GitHubEng
 	}
 
 	trial.tb.Errorf("no promoted tag of %s for %s verifies", reference, final)
+
 	return ""
 }
 

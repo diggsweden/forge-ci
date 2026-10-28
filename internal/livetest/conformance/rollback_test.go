@@ -48,40 +48,40 @@ func TestRollback_FromJournal_RemovesAReleaseTagThePromotionCreated(t *testing.T
 		t.Run(string(forge), func(t *testing.T) {
 			t.Parallel()
 
-			f := newLedgerFixture(t, forge, "rollback-journal")
+			fixture := newLedgerFixture(t, forge, "rollback-journal")
 
 			// Only the candidate is pushed: the release tag is what the
 			// promotion will create, and therefore what rollback may remove.
-			pushed := livetest.PushImage(t, f.target, f.repo, candidateTag)
+			pushed := livetest.PushImage(t, fixture.target, fixture.repo, candidateTag)
 
 			ledger := "release-images.json"
-			journal := filepath.Join(f.work, "promotion-journal.jsonl")
+			journal := filepath.Join(fixture.work, "promotion-journal.jsonl")
 
-			f.mustRun(t, "ledger add",
+			fixture.mustRun(t, "ledger add",
 				"container", "ledger", "add",
-				"--ledger", ledger, "--auth-file", f.authFile, "--tag", releaseTag,
+				"--ledger", ledger, "--auth-file", fixture.authFile, "--tag", releaseTag,
 				"--role", "distroless",
-				"--candidate-tag", f.imagePath+":"+candidateTag,
-				"--final-tag", f.imagePath+":"+releaseTag,
-				"--sbom", writeSBOM(t, f.work, "rollback-journal"),
+				"--candidate-tag", fixture.imagePath+":"+candidateTag,
+				"--final-tag", fixture.imagePath+":"+releaseTag,
+				"--sbom", writeSBOM(t, fixture.work, "rollback-journal"),
 				"--capture-digest",
 			)
 
 			// The journal is only defined for a release promotion using the
 			// ledger's own release tags — the sign-before-publish model.
-			f.mustRun(t, "ledger promote",
+			fixture.mustRun(t, "ledger promote",
 				"container", "ledger", "promote",
-				"--ledger", ledger, "--auth-file", f.authFile, "--tag", releaseTag,
+				"--ledger", ledger, "--auth-file", fixture.authFile, "--tag", releaseTag,
 				"--stage", "release", "--release-tags-from-ledger", "--journal", journal)
 
-			f.assertServes(t, releaseTag, pushed.Digest, "promotion should have published the release tag")
+			fixture.assertServes(t, releaseTag, pushed.Digest, "promotion should have published the release tag")
 
-			f.mustRun(t, "ledger rollback",
+			fixture.mustRun(t, "ledger rollback",
 				"container", "ledger", "rollback",
-				"--auth-file", f.authFile, "--tag", releaseTag, "--journal", journal)
+				"--auth-file", fixture.authFile, "--tag", releaseTag, "--journal", journal)
 
-			f.assertAbsent(t, releaseTag, "the promotion created this tag, so rollback should remove it")
-			f.assertServes(t, candidateTag, pushed.Digest,
+			fixture.assertAbsent(t, releaseTag, "the promotion created this tag, so rollback should remove it")
+			fixture.assertServes(t, candidateTag, pushed.Digest,
 				"the candidate is the promotion source and must survive rollback")
 		})
 	}
@@ -106,7 +106,7 @@ func TestRollback_FromJournal_RestoresAMovingTagToItsPreviousImage(t *testing.T)
 		t.Run(string(forge), func(t *testing.T) {
 			t.Parallel()
 
-			f := newLedgerFixture(t, forge, "rollback-moving")
+			fixture := newLedgerFixture(t, forge, "rollback-moving")
 
 			// The release already in production, and the candidate that is
 			// about to replace it. Distinct images, so a restore is provable.
@@ -120,41 +120,41 @@ func TestRollback_FromJournal_RestoresAMovingTagToItsPreviousImage(t *testing.T)
 			// fixture rather than of rollback.
 			const previousRelease = "v0.0.0"
 
-			previous := livetest.PushImageTags(t, f.target, f.repo, previousRelease, movingTag)
-			candidate := livetest.PushImage(t, f.target, f.repo, candidateTag)
+			previous := livetest.PushImageTags(t, fixture.target, fixture.repo, previousRelease, movingTag)
+			candidate := livetest.PushImage(t, fixture.target, fixture.repo, candidateTag)
 
 			if previous.Digest == candidate.Digest {
 				t.Fatal("fixture pushed identical images; the restore would be unobservable")
 			}
 
 			ledger := "release-images.json"
-			journal := filepath.Join(f.work, "promotion-journal.jsonl")
+			journal := filepath.Join(fixture.work, "promotion-journal.jsonl")
 
-			f.mustRun(t, "ledger add",
+			fixture.mustRun(t, "ledger add",
 				"container", "ledger", "add",
-				"--ledger", ledger, "--auth-file", f.authFile, "--tag", releaseTag,
+				"--ledger", ledger, "--auth-file", fixture.authFile, "--tag", releaseTag,
 				"--role", "distroless",
-				"--candidate-tag", f.imagePath+":"+candidateTag,
-				"--final-tag", f.imagePath+":"+releaseTag,
-				"--moving-tag", f.imagePath+":"+movingTag,
-				"--sbom", writeSBOM(t, f.work, "rollback-moving"),
+				"--candidate-tag", fixture.imagePath+":"+candidateTag,
+				"--final-tag", fixture.imagePath+":"+releaseTag,
+				"--moving-tag", fixture.imagePath+":"+movingTag,
+				"--sbom", writeSBOM(t, fixture.work, "rollback-moving"),
 				"--capture-digest",
 			)
 
-			f.mustRun(t, "ledger promote",
+			fixture.mustRun(t, "ledger promote",
 				"container", "ledger", "promote",
-				"--ledger", ledger, "--auth-file", f.authFile, "--tag", releaseTag,
+				"--ledger", ledger, "--auth-file", fixture.authFile, "--tag", releaseTag,
 				"--stage", "release", "--release-tags-from-ledger", "--journal", journal)
 
-			f.assertServes(t, movingTag, candidate.Digest, "promotion should have moved the pointer to the candidate")
+			fixture.assertServes(t, movingTag, candidate.Digest, "promotion should have moved the pointer to the candidate")
 
-			f.mustRun(t, "ledger rollback",
+			fixture.mustRun(t, "ledger rollback",
 				"container", "ledger", "rollback",
-				"--auth-file", f.authFile, "--tag", releaseTag, "--journal", journal)
+				"--auth-file", fixture.authFile, "--tag", releaseTag, "--journal", journal)
 
-			f.assertServes(t, movingTag, previous.Digest,
+			fixture.assertServes(t, movingTag, previous.Digest,
 				"rollback must put the moving tag back on the previous release, not delete it")
-			f.assertAbsent(t, releaseTag, "the promotion created the release tag, so rollback should remove it")
+			fixture.assertAbsent(t, releaseTag, "the promotion created the release tag, so rollback should remove it")
 		})
 	}
 }

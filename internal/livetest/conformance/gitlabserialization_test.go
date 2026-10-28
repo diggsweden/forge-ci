@@ -47,15 +47,15 @@ func TestGitLabRelease_ResourceGroupSpansTheChild(t *testing.T) {
 
 	policy := gitlabPolicyCommit(t, ctx, client, policyProject, "policy.yml", gitlabSerializationPolicy(t, policyProject, child.ID), gitlabapi.FileCreate)
 	if _, _, err = client.Projects.EditProject(project, &gitlabapi.EditProjectOptions{
-		CIConfigPath:                           gitlabapi.Ptr("policy.yml@" + policyProject + ":" + policy.ID),
+		CIConfigPath:                           new("policy.yml@" + policyProject + ":" + policy.ID),
 		CIPipelineVariablesMinimumOverrideRole: gitlabapi.Ptr(gitlabapi.CIPipelineVariablesMinimumOverrideRoleValue("no_one_allowed")),
-		CIPushRepositoryForJobTokenAllowed:     gitlabapi.Ptr(false),
+		CIPushRepositoryForJobTokenAllowed:     new(false),
 	}, gitlabapi.WithContext(ctx)); err != nil {
 		t.Fatal(err)
 	}
 
 	if _, _, err = client.ProtectedTags.ProtectRepositoryTags(project, &gitlabapi.ProtectRepositoryTagsOptions{
-		Name: gitlabapi.Ptr("release-request/*"), CreateAccessLevel: gitlabapi.Ptr(gitlabapi.MaintainerPermissions),
+		Name: new("release-request/*"), CreateAccessLevel: gitlabapi.Ptr(gitlabapi.MaintainerPermissions),
 	}, gitlabapi.WithContext(ctx)); err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestGitLabRelease_ResourceGroupSpansTheChild(t *testing.T) {
 	create := func(tag string) {
 		t.Helper()
 
-		if _, _, createErr := client.Tags.CreateTag(project, &gitlabapi.CreateTagOptions{TagName: gitlabapi.Ptr(tag), Ref: gitlabapi.Ptr(source.ID)}, gitlabapi.WithContext(ctx)); createErr != nil {
+		if _, _, createErr := client.Tags.CreateTag(project, &gitlabapi.CreateTagOptions{TagName: new(tag), Ref: new(source.ID)}, gitlabapi.WithContext(ctx)); createErr != nil {
 			t.Fatal(createErr)
 		}
 	}
@@ -139,7 +139,7 @@ func waitGitLabReleaseBridge(t *testing.T, ctx context.Context, client *gitlabap
 	var result *gitlabapi.Bridge
 
 	awaitGitLabObservation(t, ctx, func() bool {
-		runs, _, err := client.Pipelines.ListProjectPipelines(project, &gitlabapi.ListProjectPipelinesOptions{Ref: gitlabapi.Ptr(tag)}, gitlabapi.WithContext(ctx))
+		runs, _, err := client.Pipelines.ListProjectPipelines(project, &gitlabapi.ListProjectPipelinesOptions{Ref: new(tag)}, gitlabapi.WithContext(ctx))
 		if err != nil || len(runs) > 1 {
 			t.Fatalf("observe request pipeline: count=%d err=%v", len(runs), err)
 		}

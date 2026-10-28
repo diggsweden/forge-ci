@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -470,27 +471,9 @@ func assertAssetsArrivedIntact(
 	}
 }
 
-// PAR-REL-4: `release publish --strategy reconcile` converges the release's
-// assets on exactly the set it was given.
-//
-// PAR-REL-3 covers the other strategy: recreate deletes and re-creates, so its
-// asset set is whatever the last call uploaded and nothing survives to be
-// reconciled. Reconcile is the default, and it is the harder promise — the
-// release keeps its identity while its assets are brought to match, which means
-// an asset that is no longer wanted has to be actively removed.
-//
-// Removal is the half nothing was testing and the half most likely to be wrong,
-// because the two forges keep assets in different places and delete them through
-// different calls: GitLab attaches links to the release (deleteStaleReleaseLinks),
-// the Gitea family uploads attachments. A reconcile that only ever adds looks
-// perfect on a first release and silently accumulates stale artifacts forever
-// after — which on a release page means shipping the previous version's binaries
-// beside the current ones.
-//
-// So the scenario publishes twice with an overlapping set and asserts all three
-// outcomes at once: kept, added, and gone.
-func TestRelease_PublishReconcile_ConvergesOnTheGivenAssets(t *testing.T) {
-	// Asset convergence is independent of prerelease policy, which GitLab cannot represent.
+// PAR-REL-4: the public CLI preserves completed versions regardless of strategy.
+// A changed desired asset set must be refused, leaving the original files intact.
+func TestRelease_PublishReconcile_RefusesPublishedChanges(t *testing.T) {
 	const tag = "v0.0.4"
 
 	for _, forge := range forgesClaiming(t, alwaysValidatesTokens, "releases") {
@@ -546,20 +529,18 @@ func TestRelease_PublishReconcile_ConvergesOnTheGivenAssets(t *testing.T) {
 				t.Fatalf("%s: after the first publish the release has %v, want [first.txt shared.txt]", forge, got)
 			}
 
-			if run := publish("shared.txt", "second.txt"); run.ExitCode != 0 {
-				t.Fatalf("%s: second publish failed (exit %d)\nstderr: %s", forge, run.ExitCode, run.Stderr)
+			if run := publish("shared.txt", "second.txt"); run.ExitCode == 0 {
+				t.Fatalf("%s: published release accepted a changed asset set", forge)
 			}
 
-			// The claim. first.txt must be gone, second.txt must have arrived, and
-			// shared.txt must have survived without being duplicated.
+			// Refusal must preserve the original assets without adding or removing files.
 			got = livetest.ReleaseAssetNames(t, target, repo, tag)
-			if want := []string{"second.txt", "shared.txt"}; !slices.Equal(got, want) {
-				t.Errorf("%s: reconcile left the release with %v, want %v — a stale asset that is never removed means a release page keeps shipping the previous version's files",
+			if want := []string{"first.txt", "shared.txt"}; !slices.Equal(got, want) {
+				t.Errorf("%s: refused reconcile left assets %v, want %v",
 					forge, got, want)
 			}
 
-			// Reconcile publishes through a staged draft; the forge must hold
-			// the published state at the end, and a plain tag is no prerelease.
+			// Refusal must preserve the published state and stable classification.
 			state, found := rawRelease(t, target, repo, tag)
 			if !found || state.Draft || state.Prerelease {
 				t.Errorf("%s: after reconcile the forge holds found=%v draft=%v prerelease=%v, want a published, non-prerelease release",
@@ -574,9 +555,9 @@ func TestRelease_PublishReconcile_ConvergesOnTheGivenAssets(t *testing.T) {
 // Draft and prerelease are the two things the CLI cannot observe about its own
 // release: it sends them and trusts the answer. PAR-REL-1 and PAR-REL-4 read
 // the recorded state for a plain tag; this scenario covers a prerelease-shaped
-// tag, where policy diverges by forge. Forgejo records a prerelease, first as
-// the default draft and then published; GitLab has no such state, so the
-// product refuses before any request and the forge holds no release at all.
+// tag. Stable-only admission refuses it; explicit opt-in publishes it using
+// native flags where supported and a clear GitLab note otherwise. Verified
+// retries preserve bytes and reject replacement content.
 // writeScenarioFiles writes files into a fresh directory and returns it.
 func writeScenarioFiles(t *testing.T, files map[string]string) string {
 	t.Helper()
@@ -621,37 +602,64 @@ func TestRelease_Policy_IsWhatTheForgeRecords(t *testing.T) {
 			}
 
 			first := publish()
-
-			if forge == provider.ForgeGitLab {
-				if first.ExitCode == 0 {
-					t.Fatalf("%s: a prerelease tag was published on a forge that cannot represent one\nstdout: %s", forge, first.Stdout)
-				}
-
-				if _, found := rawRelease(t, target, repo, tag); found {
-					t.Errorf("%s: the refusal came after a request; the forge holds a release at %s", forge, tag)
-				}
-
-				return
+			if first.ExitCode == 0 {
+				t.Fatal("default stable policy admitted a prerelease")
 			}
 
-			if first.ExitCode != 0 {
-				t.Fatalf("%s: default publish failed (exit %d)\nstderr: %s", forge, first.ExitCode, first.Stderr)
+			if _, found := rawRelease(t, target, repo, tag); found {
+				t.Fatal("policy refusal left a release behind")
+			}
+
+			if forge != provider.ForgeGitLab {
+				if run := publish("--release-policy=stable-prerelease"); run.ExitCode != 0 {
+					t.Fatalf("draft: %s", run.Stderr)
+				}
+
+				state, found := rawRelease(t, target, repo, tag)
+				if !found || !state.Draft || !state.Prerelease {
+					t.Fatalf("prerelease draft not recorded: %+v", state)
+				}
+			}
+
+			for range 2 {
+				if run := publish("--release-policy=stable-prerelease", "--draft=false"); run.ExitCode != 0 {
+					t.Fatalf("publication/retry: %s", run.Stderr)
+				}
 			}
 
 			state, found := rawRelease(t, target, repo, tag)
-			if !found || !state.Draft || !state.Prerelease {
-				t.Errorf("%s: after the default publish the forge holds found=%v draft=%v prerelease=%v, want a prerelease draft",
-					forge, found, state.Draft, state.Prerelease)
+			if !found || state.Draft {
+				t.Fatalf("published release missing: %+v", state)
 			}
 
-			if run := publish("--draft=false"); run.ExitCode != 0 {
-				t.Fatalf("%s: publish --draft=false failed (exit %d)\nstderr: %s", forge, run.ExitCode, run.Stderr)
+			if forge == provider.ForgeGitLab {
+				if !strings.Contains(state.Body, "**Pre-release.**") {
+					t.Fatal("GitLab prerelease label missing")
+				}
+			} else if !state.Prerelease {
+				t.Fatal("native prerelease flag missing")
 			}
 
-			state, found = rawRelease(t, target, repo, tag)
-			if !found || state.Draft || !state.Prerelease {
-				t.Errorf("%s: after --draft=false the forge holds found=%v draft=%v prerelease=%v, want a published prerelease",
-					forge, found, state.Draft, state.Prerelease)
+			asset, exists := state.Asset("policy.txt")
+
+			expected, _, err := rawref.SHA256(filepath.Join(dir, "policy.txt"))
+			if err != nil || !exists || asset.Digest != expected {
+				t.Fatal("published bytes differ from fixture")
+			}
+
+			if err := os.WriteFile(filepath.Join(dir, "policy.txt"), []byte("changed\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			if run := publish("--release-policy=stable-prerelease", "--draft=false"); run.ExitCode == 0 {
+				t.Fatal("published prerelease accepted replacement content")
+			}
+
+			after, found := rawRelease(t, target, repo, tag)
+
+			kept, exists := after.Asset("policy.txt")
+			if !found || !exists || kept.Digest != expected {
+				t.Fatal("refused retry changed published content")
 			}
 		})
 	}
@@ -755,7 +763,7 @@ func TestRelease_LargeAsset_ArrivesIntact(t *testing.T) {
 func writeLargeAsset(t *testing.T, path string, size int64) {
 	t.Helper()
 
-	file, err := os.Create(path) //nolint:gosec // path is this scenario's own t.TempDir().
+	file, err := os.Create(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -768,7 +776,7 @@ func writeLargeAsset(t *testing.T, path string, size int64) {
 
 	// Fixed seed: a failing run must be reproducible. Not a credential and not a
 	// security decision, so a deterministic generator is the right one.
-	source := rand.New(rand.NewPCG(0x5EED, 0x11FE)) //nolint:gosec // test payload, deliberately reproducible.
+	source := rand.New(rand.NewPCG(0x5EED, 0x11FE))
 
 	// Filled a word at a time rather than a byte at a time: no narrowing
 	// conversion to justify to a linter, and eight times fewer calls.

@@ -69,7 +69,7 @@ func runForgejoConsumerTrial(t *testing.T, root string, private bool) {
 	// One setting per line, so a variable's value may hold a space.
 	var words []string
 
-	for _, word := range strings.Split(os.Getenv(consumerSettingsEnv), "\n") {
+	for word := range strings.SplitSeq(os.Getenv(consumerSettingsEnv), "\n") {
 		if word != "" {
 			words = append(words, word)
 		}
@@ -92,7 +92,7 @@ func runForgejoConsumerTrial(t *testing.T, root string, private bool) {
 		t.Fatalf("the consumer has no workflow %s; name the one to judge with workflow=<file>", settings.Workflow)
 	}
 
-	const name = "consumer-trial"
+	const name = livetest.ConsumerTrial
 
 	// A demo shows the whole flow in one repository it keeps: the release,
 	// then a pull request on the released main.
@@ -109,8 +109,10 @@ func runForgejoConsumerTrial(t *testing.T, root string, private bool) {
 	release := settings.Event == livetest.TrialRelease
 	facts := livetest.ConsumerFacts{Inputs: map[string]string{}, Secrets: map[string]string{}}
 
-	var keys releaseKeys
-	var requester livetest.RequestSigner
+	var (
+		keys      releaseKeys
+		requester livetest.RequestSigner
+	)
 
 	external := externalRegistry(t, settings)
 
@@ -118,6 +120,7 @@ func runForgejoConsumerTrial(t *testing.T, root string, private bool) {
 		keys = trialReleaseFacts(t, target, repoName, &facts)
 		requester = livetest.NewRequestSigner(t, t.TempDir())
 		useExternalRegistry(t, external, &facts)
+		useLabRegistry(t, target, repoName, external, &facts)
 	}
 
 	scenario := layerScenario{target: target, label: livetest.RunnerLabel(t, target)}
@@ -144,6 +147,7 @@ func runForgejoConsumerTrial(t *testing.T, root string, private bool) {
 			Files: map[string]string{trialRequestSigners: requester.AllowedSigners},
 		})
 	}
+
 	requireObjectFormats(t, consumer.ObjectFormat, main, scenario.layer.Commit)
 
 	head := ""
@@ -151,13 +155,23 @@ func runForgejoConsumerTrial(t *testing.T, root string, private bool) {
 		head = consumer.PushChange(t, repo, trialBranch, main)
 	}
 
-	// The layer's own two variables, then the consumer's names for the lab's
+	// The layer's own variables, then the consumer's names for the lab's
 	// facts, then the caller's. One name has one source.
-	variables := map[string]string{layerRunnerVariable: scenario.label, "FORGE_CI_REPOSITORY": scenario.layer.Repository}
+	variables := map[string]string{layerRunnerVariable: runnerLabelsJSON(t, scenario.label), "FORGE_CI_REPOSITORY": scenario.layer.Repository}
+	// Buildah's image builds go to the contract's runner that permits user
+	// namespaces; kaniko's stay on the ordinary runner, which may deny them.
+	if privileged := livetest.PrivilegedRunnerLabel(t, target); privileged != "" && settings.Variables["CI_IMAGE_BUILDER"] != "kaniko" {
+		variables[containerRunnerVariable] = runnerLabelsJSON(t, privileged)
+	}
+
+	if release {
+		variables[layerRegistryUserVariable] = registryUser(target, external)
+	}
+
 	for _, more := range []map[string]string{plan.Variables, settings.ResolvedVariables(scenario.layer.Commit, main)} {
 		for variable, value := range more {
 			if _, set := variables[variable]; set {
-				t.Fatalf("variable %s is set by the trial itself, so it cannot be given a second value", variable)
+				t.Fatalf("variable %s is set by the trial itself, from the contract or the layer under test, so it cannot be given a second value", variable)
 			}
 
 			variables[variable] = value
@@ -227,11 +241,13 @@ func runForgejoConsumerTrial(t *testing.T, root string, private bool) {
 		requireReleaseGit(t, target, repo, keys, main, "release-request/v"+settings.Version, "v"+settings.Version)
 		requireSignedRelease(t, target, repo, keys, "v"+settings.Version)
 		requireExternalImages(t, external, keys, settings)
+
 		if settings.NextVersion != "" {
 			_, npmErr := os.Stat(filepath.Join(root, "package.json"))
 			if npmErr != nil && !os.IsNotExist(npmErr) {
 				t.Fatal(npmErr)
 			}
+
 			if npmErr == nil {
 				requireNPMVersionContract(t, target, repo, "v"+settings.Version)
 			}
@@ -241,26 +257,33 @@ func runForgejoConsumerTrial(t *testing.T, root string, private bool) {
 				Branch: layerMain, Message: "test: prepare next release candidate",
 				Files: map[string]string{"next-release-request.txt": "request the next release\n"},
 			})
+
 			previous := settings.ResolvedVariables(scenario.layer.Commit, main)
 			for variable, value := range settings.ResolvedVariables(scenario.layer.Commit, parent) {
 				if value != previous[variable] {
 					livetest.SetRepoVariable(t, target, repo, variable, value)
 				}
 			}
+
 			requestTag, finalTag := "release-request/v"+settings.NextVersion, "v"+settings.NextVersion
 			requester.PushTag(t, target, repo, requestTag, layerMain, "Request release "+finalTag)
 			next := livetest.WaitForConsumerRunAfter(t, target, repo, settings.Workflow, event, run.ID)
 			scenario.logJobs(t, livetest.RunJobs(t, target, repo, next.ID))
+
 			if next.Status != jobSuccess {
 				t.Fatalf("second release run %d ended %q", next.ID, next.Status)
 			}
+
 			requireReleaseGit(t, target, repo, keys, parent, requestTag, finalTag)
 			requireSignedRelease(t, target, repo, keys, finalTag)
+
 			settings.Version = settings.NextVersion
 			requireExternalImages(t, external, keys, settings)
+
 			if npmErr == nil {
 				requireNPMVersionContract(t, target, repo, finalTag)
 			}
+
 			t.Logf("second consecutive Forgejo release %s: run %d, same repository and signing authority", finalTag, next.ID)
 		}
 	}
@@ -282,7 +305,7 @@ func newConsumerRepos(t *testing.T, target livetest.Target, consumer livetest.Co
 		return layer, livetest.NewDemoRepo(t, target, livetest.DemoRepo(demo), consumer.ObjectFormat, false)
 	}
 
-	layer := livetest.PushLayer(t, target, livetest.NewScratchRepo(t, target, name+"-layer"))
+	layer := livetest.PushLayer(t, target, livetest.NewScratchRepo(t, target, livetest.LayerScenario(name)))
 	repo := livetest.NewBareScratchRepo(t, target, name, consumer.ObjectFormat, private)
 
 	// A consumer's release publishes under names of its own choosing.
@@ -392,6 +415,43 @@ func useExternalRegistry(t *testing.T, external *livetest.ExternalRegistry, fact
 	facts.Secrets["RELEASE_REGISTRY_TOKEN"] = external.Token
 
 	t.Logf("images go to an external registry as %s, with the token from FORGE_CI_LIVE_EXTERNAL_REGISTRY_TOKEN_FILE", external.User)
+}
+
+// layerRegistryUserVariable is the user of the layer's RELEASE_REGISTRY_TOKEN
+// secret, which the layer reads when a consumer passes no registry-user.
+const layerRegistryUserVariable = "RELEASE_REGISTRY_USER"
+
+// registryUser is the user the trial's registry token belongs to: the
+// external registry's, or the scratch repository's owner on the lab's own.
+func registryUser(target livetest.Target, external *livetest.ExternalRegistry) string {
+	if external != nil {
+		return external.User
+	}
+
+	return target.Owner
+}
+
+// useLabRegistry publishes the images to the lab's own registry wherever the
+// consumer names its repository: a literal such as ghcr.io/owner/app is
+// replaced like a variable, so a trial never writes to the consumer's real
+// registry. The user is RELEASE_REGISTRY_USER alone, which the layer reads
+// when the consumer's own registry-user is empty in the lab. An external
+// registry keeps the consumer's own names.
+func useLabRegistry(t *testing.T, target livetest.Target, repo string, external *livetest.ExternalRegistry, facts *livetest.ConsumerFacts) {
+	t.Helper()
+
+	if external != nil {
+		return
+	}
+
+	registry, err := livetest.RegistryHost(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	facts.Inputs["image-repository"] = strings.ToLower(registry + "/" + target.Owner + "/" + repo)
+	facts.Inputs["publication-image-repository"] = facts.Inputs["image-repository"]
+	facts.Inputs["base-repository"] = facts.Inputs["image-repository"] + "-base"
 }
 
 // requireExternalImages verifies each image= against the trial's key on the

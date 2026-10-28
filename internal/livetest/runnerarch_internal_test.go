@@ -14,7 +14,7 @@ func TestLabRunnerArch_IsTheOneArchitectureTheRunnersPublish(t *testing.T) {
 	t.Parallel()
 
 	runner := func(kind, arch string) labcontract.Endpoint {
-		return labcontract.Endpoint{Name: kind, Kind: labcontract.Kind(kind), Capabilities: []string{capabilityWorkflowRuns}, RunnerArch: arch}
+		return labcontract.Endpoint{Name: kind, Kind: labcontract.Kind(kind), Capabilities: []string{capabilityWorkflowRuns}, Runner: &labcontract.Runner{Arch: arch}}
 	}
 
 	tests := []struct {

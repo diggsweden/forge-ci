@@ -20,7 +20,7 @@ import (
 func ParseTrialVariables(input string) (map[string]string, error) {
 	variables := make(map[string]string)
 
-	for _, word := range strings.Split(input, "\n") {
+	for word := range strings.SplitSeq(input, "\n") {
 		if word == "" {
 			continue
 		}
@@ -66,29 +66,24 @@ func ParseGitLabReleaseSettings(input string) (GitLabReleaseSettings, error) {
 
 	variables := make([]string, 0)
 
-	for _, word := range strings.Split(input, "\n") {
+	for word := range strings.SplitSeq(input, "\n") {
 		key, value, _ := strings.Cut(word, "=")
 
 		switch key {
 		case settingVersionBump:
-			if settings.VersionBump != "" || (value != "maven" && value != "npm" && value != "cargo") {
+			if settings.VersionBump != "" || !slices.Contains([]string{"maven", "npm", "cargo"}, value) {
 				return GitLabReleaseSettings{}, fmt.Errorf("%s must be given once, as maven, npm or cargo: %w", settingVersionBump, errs.ErrValidation)
 			}
 
 			settings.VersionBump = value
 		case settingVersion:
-			version, valid := trialVersionValue(value)
-			if settings.Version != "" || !valid {
-				return GitLabReleaseSettings{}, fmt.Errorf("%s must be given once, as X.Y.Z: %w", settingVersion, errs.ErrValidation)
+			if err := setTrialVersion(&settings.Version, key, value); err != nil {
+				return GitLabReleaseSettings{}, err
 			}
-
-			settings.Version = version
 		case "next-version":
-			version, valid := trialVersionValue(value)
-			if settings.NextVersion != "" || !valid {
-				return GitLabReleaseSettings{}, fmt.Errorf("next-version must be given once, as X.Y.Z: %w", errs.ErrValidation)
+			if err := setTrialVersion(&settings.NextVersion, key, value); err != nil {
+				return GitLabReleaseSettings{}, err
 			}
-			settings.NextVersion = version
 		default:
 			variables = append(variables, word)
 		}
@@ -100,11 +95,26 @@ func ParseGitLabReleaseSettings(input string) (GitLabReleaseSettings, error) {
 	}
 
 	settings.Variables = parsed
-	if settings.NextVersion != "" && (settings.Version == "" || settings.VersionBump == "" || semver.Compare("v"+settings.NextVersion, "v"+settings.Version) <= 0) {
+	if !validNextTrialVersion(settings) {
 		return GitLabReleaseSettings{}, fmt.Errorf("next-version requires an increasing explicit version and isolated version-bump mode: %w", errs.ErrValidation)
 	}
 
 	return settings, nil
+}
+
+func setTrialVersion(destination *string, key, value string) error {
+	version, valid := trialVersionValue(value)
+	if *destination != "" || !valid {
+		return fmt.Errorf("%s must be given once, as X.Y.Z: %w", key, errs.ErrValidation)
+	}
+
+	*destination = version
+
+	return nil
+}
+
+func validNextTrialVersion(settings GitLabReleaseSettings) bool {
+	return settings.NextVersion == "" || (settings.Version != "" && settings.VersionBump != "" && semver.Compare("v"+settings.NextVersion, "v"+settings.Version) > 0)
 }
 
 // GitLabConsumerBuildCommand scopes literal settings to the consumer's build

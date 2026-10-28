@@ -15,7 +15,7 @@ jobs:
   # checks without executing nanolinter as an external binary.
   lint:
     name: Lint
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     container:
       image: ${{ vars.CI_JOB_IMAGE }}
     timeout-minutes: 25
@@ -39,7 +39,7 @@ jobs:
           reuse lint
   security:
     name: Security
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     container:
       image: ${{ vars.CI_JOB_IMAGE }}
     timeout-minutes: 10
@@ -62,7 +62,7 @@ jobs:
   # forge-ci.
   test:
     name: Test
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     container:
       image: ${{ vars.CI_JOB_IMAGE }}
     timeout-minutes: 15
@@ -123,7 +123,7 @@ jobs:
     # This job builds the Hugo landing site, runs contrast and HTML checks, and
     # uploads `public/` without pushing to `pages`.
     name: Web Preview (landing site)
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     timeout-minutes: 10
     steps:
       - name: Set up forge-ci
@@ -199,7 +199,7 @@ jobs:
   # `dist_digest`.
   release-gate:
     name: Release isolation gate
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     timeout-minutes: 10
     steps:
       - name: Set up forge-ci

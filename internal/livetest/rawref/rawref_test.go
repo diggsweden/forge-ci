@@ -43,29 +43,29 @@ func TestReleaseByTag_ReadsTheRecordedStateFromEachWire(t *testing.T) {
 	sum := sha256.Sum256([]byte(body))
 	wantDigest := hex.EncodeToString(sum[:])
 
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		switch {
-		case r.URL.Path == "/api/v1/repos/org/repo/releases/tags/v1.0.0-rc.1":
-			if r.Header.Get("Authorization") != "token forgejo-token" {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+		case request.URL.Path == "/api/v1/repos/org/repo/releases/tags/v1.0.0-rc.1":
+			if request.Header.Get("Authorization") != "token forgejo-token" {
+				http.Error(response, "unauthorized", http.StatusUnauthorized)
 
 				return
 			}
 
-			_, _ = w.Write([]byte(`{"tag_name":"v1.0.0-rc.1","name":"RC","body":"notes","draft":true,"prerelease":true,` +
+			_, _ = response.Write([]byte(`{"tag_name":"v1.0.0-rc.1","name":"RC","body":"notes","draft":true,"prerelease":true,` +
 				`"assets":[{"name":"a.txt","size":12,"browser_download_url":"https://forge.invalid/dl/a.txt"}]}`))
-		case r.URL.Path == "/api/v4/projects/org%2Frepo/releases/v1.0.0" || r.URL.RawPath == "/api/v4/projects/org%2Frepo/releases/v1.0.0":
-			if r.Header.Get("PRIVATE-TOKEN") != "gitlab-token" {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+		case request.URL.Path == "/api/v4/projects/org%2Frepo/releases/v1.0.0" || request.URL.RawPath == "/api/v4/projects/org%2Frepo/releases/v1.0.0":
+			if request.Header.Get("PRIVATE-TOKEN") != "gitlab-token" {
+				http.Error(response, "unauthorized", http.StatusUnauthorized)
 
 				return
 			}
 
-			_, _ = w.Write([]byte(`{"tag_name":"v1.0.0","name":"One","description":"notes","assets":{"links":[{"name":"a.txt","url":"https://forge.invalid/dl/a.txt"}]}}`))
-		case r.URL.Path == "/dl/a.txt":
-			_, _ = w.Write([]byte(body))
+			_, _ = response.Write([]byte(`{"tag_name":"v1.0.0","name":"One","description":"notes","assets":{"links":[{"name":"a.txt","url":"https://forge.invalid/dl/a.txt"}]}}`))
+		case request.URL.Path == "/dl/a.txt":
+			_, _ = response.Write([]byte(body))
 		default:
-			http.NotFound(w, r)
+			http.NotFound(response, request)
 		}
 	})
 

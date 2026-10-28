@@ -68,7 +68,7 @@ func runProbeShell(t *testing.T, script string, env ...string) error {
 	defer cancel()
 
 	dir := t.TempDir()
-	cmd := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", script) //nolint:gosec // bounded, reviewed fixture script; closed environment and owned working directory.
+	cmd := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", script)
 	cmd.Dir = dir
 	cmd.Env = append([]string{"PATH=/usr/bin:/bin", "HOME=" + dir, "TMPDIR=" + dir, "LC_ALL=C"}, env...)
 
@@ -165,6 +165,7 @@ func TestProbeFixtures_OutputsHaveNativeConsumers(t *testing.T) {
 
 type refusalTB struct {
 	livetest.TB
+
 	failed bool
 }
 

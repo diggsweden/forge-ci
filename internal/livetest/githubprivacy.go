@@ -21,38 +21,53 @@ import (
 // belong to CheckRelease; this checks the access boundary before repo cleanup.
 func (trial *GitHubTrial) CheckPrivateReleaseAssets(repo string, assets map[string]int64) {
 	trial.tb.Helper()
+
 	base, err := url.Parse(trial.api.BaseURL())
 	if err != nil {
 		trial.tb.Errorf("cannot construct anonymous release-asset API endpoint")
+
 		return
 	}
+
 	for name, id := range assets {
 		ctx, cancel := context.WithTimeout(trial.tb.Context(), time.Minute)
+
 		body, _, err := trial.api.Repositories.DownloadReleaseAsset(ctx, trial.org, repo, id, &http.Client{Timeout: 30 * time.Second})
 		if err != nil || body == nil {
 			cancel()
 			trial.tb.Errorf("private release asset %s lacks an authenticated content response", name)
+
 			continue
 		}
+
 		_ = body.Close()
 		coordinate := fmt.Sprintf("repos/%s/%s/releases/assets/%d", url.PathEscape(trial.org), url.PathEscape(repo), id)
 		endpoint := base.ResolveReference(&url.URL{Path: coordinate})
+
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
 		if err != nil {
 			cancel()
 			trial.tb.Errorf("cannot construct anonymous release-asset probe")
+
 			continue
 		}
+
 		request.Header.Set("Accept", "application/octet-stream")
+
 		client := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+
 		response, err := client.Do(request)
 		if err != nil {
 			cancel()
 			trial.tb.Errorf("anonymous release-asset probe did not establish access denial")
+
 			continue
 		}
+
 		_ = response.Body.Close()
+
 		cancel()
+
 		switch response.StatusCode {
 		case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
 			trial.tb.Logf("private release asset %s: authenticated content GET succeeded; same anonymous path denied (HTTP %d)", name, response.StatusCode)
@@ -68,14 +83,17 @@ func (trial *GitHubTrial) CheckPrivateReleaseAssets(repo string, assets map[stri
 // the host's Docker credentials, including those used for the positive check.
 func (trial *GitHubTrial) CheckPrivateImage(verifiedReference string) {
 	trial.tb.Helper()
+
 	ctx, cancel := context.WithTimeout(trial.tb.Context(), time.Minute)
 	defer cancel()
+
 	_, err := ociregistry.NewAnonymous().Manifest(ctx, verifiedReference)
-	var response *transport.Error
-	if errors.As(err, &response) {
+
+	if response, ok := errors.AsType[*transport.Error](err); ok {
 		switch response.StatusCode {
 		case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
 			trial.tb.Logf("private image %s: authenticated verification passed; same anonymous reference denied (HTTP %d)", verifiedReference, response.StatusCode)
+
 			return
 		}
 	}

@@ -164,7 +164,7 @@ func TestLayerFixtures_RenderToWorkflowsThatPinTheLayer(t *testing.T) {
 	layer := sampleLayer()
 
 	for _, path := range fixtures {
-		content, err := os.ReadFile(path) //nolint:gosec // A fixture of this package, found by the glob above.
+		content, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -242,7 +242,6 @@ func TestLayerRenderReleaseExample_IsAWorkflowTheIsolationGateCanRead(t *testing
 func TestLayerGitEnvironment_ScopesTheCredentialToTheLabGitRoot(t *testing.T) {
 	t.Parallel()
 
-	//nolint:gosec // A synthetic credential.
 	env := layerGitEnvironment("https://forgejo.compose.forgelab:8443", "forgeci", "synthetic-token")
 
 	if got, want := env["GIT_CONFIG_KEY_0"], "http.https://forgejo.compose.forgelab:8443/.extraHeader"; got != want {
@@ -399,27 +398,6 @@ func mustLayerGit(t *testing.T, git layerGit, dir string, args ...string) string
 	}
 
 	return out
-}
-
-func TestImageBuilds_AreExpectedUnlessTheOperatorSaysOtherwise(t *testing.T) {
-	for value, want := range map[string]struct{ builds, skipped, refused bool }{
-		"":    {builds: true},
-		"1":   {builds: true},
-		"0":   {skipped: true},
-		"yes": {refused: true},
-	} {
-		t.Setenv(imageBuildsEnv, value)
-
-		tb := &recordingTB{}
-
-		if got := ImageBuilds(tb); got != want.builds || (tb.fatal != "") != want.refused || (len(tb.logs) == 1) != want.skipped {
-			t.Errorf("%s=%q: ImageBuilds = %t, fatal %q, logs %q", imageBuildsEnv, value, got, tb.fatal, tb.logs)
-		}
-
-		if want.skipped && !strings.Contains(tb.logs[0], "k3s-full-release") {
-			t.Errorf("the skip does not say where the scenario runs: %q", tb.logs)
-		}
-	}
 }
 
 // A request tag signed by the kit must be one git verifies against the line

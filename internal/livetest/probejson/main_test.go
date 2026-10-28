@@ -30,6 +30,8 @@ func TestRunExtractsBoundedProbeFields(t *testing.T) {
 
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
 			var output bytes.Buffer
 			if err := run(t.Context(), []string{testCase.mode}, strings.NewReader(testCase.body), &output, nil); err != nil {
 				t.Fatal(err)
@@ -63,6 +65,8 @@ func TestRunInputByteLimit(t *testing.T) {
 	} {
 		for _, extra := range []int{0, 1, 17} {
 			t.Run(fmt.Sprintf("%s/extra=%d", tc.mode, extra), func(t *testing.T) {
+				t.Parallel()
+
 				// A finite input keeps even a removed-limit regression bounded.
 				body := tc.body + strings.Repeat(" ", limit-len(tc.body)+extra)
 				input := &countingReader{Reader: strings.NewReader(body)}
@@ -91,6 +95,7 @@ func TestRunInputByteLimit(t *testing.T) {
 
 type countingReader struct {
 	io.Reader
+
 	bytes int
 }
 
@@ -141,16 +146,16 @@ func registryDouble(t *testing.T, bearer bool) string {
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 
-	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/token", func(response http.ResponseWriter, r *http.Request) {
 		if username, password, ok := r.BasicAuth(); !ok || username != "user" || password != "secret" {
-			w.WriteHeader(http.StatusUnauthorized)
+			response.WriteHeader(http.StatusUnauthorized)
 
 			return
 		}
 
-		_, _ = io.WriteString(w, `{"token":"issued"}`)
+		_, _ = io.WriteString(response, `{"token":"issued"}`)
 	})
-	mux.HandleFunc("/v2/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/v2/", func(response http.ResponseWriter, r *http.Request) {
 		if bearer && r.Header.Get("Authorization") == "Bearer issued" {
 			return
 		}
@@ -160,12 +165,12 @@ func registryDouble(t *testing.T, bearer bool) string {
 		}
 
 		if bearer {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="`+server.URL+`/token",service="double"`)
+			response.Header().Set("WWW-Authenticate", `Bearer realm="`+server.URL+`/token",service="double"`)
 		} else {
-			w.Header().Set("WWW-Authenticate", `Basic realm="double"`)
+			response.Header().Set("WWW-Authenticate", `Basic realm="double"`)
 		}
 
-		w.WriteHeader(http.StatusUnauthorized)
+		response.WriteHeader(http.StatusUnauthorized)
 	})
 
 	return strings.TrimPrefix(server.URL, "http://")

@@ -132,6 +132,8 @@ func assertLayerJobs(t *testing.T, jobs []livetest.RunJob, runID int64, label st
 
 	if len(jobs) != len(names) {
 		t.Fatalf("the run has %d jobs, want %d: %+v", len(jobs), len(names), jobs)
+
+		return
 	}
 
 	seen := make(map[int64]bool, len(jobs))
@@ -143,8 +145,9 @@ func assertLayerJobs(t *testing.T, jobs []livetest.RunJob, runID int64, label st
 
 		seen[job.ID] = true
 
-		if job.Name != names[index] || job.Status != jobSuccess || !slices.Equal(job.RunsOn, []string{label}) {
-			t.Errorf("job %d is %q, %s on %v; want %q, success on [%s]", index, job.Name, job.Status, job.RunsOn, names[index], label)
+		want := names[index]
+		if job.Name != want || job.Status != jobSuccess || !slices.Equal(job.RunsOn, []string{label}) {
+			t.Errorf("job %d is %q, %s on %v; want %q, success on [%s]", index, job.Name, job.Status, job.RunsOn, want, label)
 		}
 	}
 }

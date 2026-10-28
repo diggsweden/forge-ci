@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -21,13 +22,16 @@ import (
 // the builder's success message. This is repeated for both consecutive releases.
 func requireNPMVersionContract(t *testing.T, target livetest.Target, repo, tag string) {
 	t.Helper()
+
 	version := strings.TrimPrefix(tag, "v")
+
 	mirror := livetest.MirrorRepo(t, target, repo)
 	for _, filename := range []string{"package.json", "package-lock.json"} {
 		body, err := mirror.Git(t, "show", tag+":"+filename)
 		if err != nil {
 			t.Fatalf("read signed npm release manifest %s: %v", filename, err)
 		}
+
 		var manifest struct {
 			Version  string `json:"version"`
 			Packages map[string]struct {
@@ -37,36 +41,47 @@ func requireNPMVersionContract(t *testing.T, target livetest.Target, repo, tag s
 		if err := json.Unmarshal([]byte(body), &manifest); err != nil || manifest.Version != version {
 			t.Fatalf("signed %s does not carry %s: %v", filename, version, err)
 		}
+
 		if filename == "package-lock.json" && manifest.Packages[""].Version != version {
 			t.Fatalf("signed lockfile root does not carry %s", version)
 		}
 	}
+
 	packages, sboms := 0, 0
+
 	for _, filename := range livetest.ReleaseAssetNames(t, target, repo, tag) {
 		if !strings.HasSuffix(filename, ".tgz") && !strings.HasSuffix(filename, ".cdx.json") {
 			continue
 		}
+
 		body := livetest.Download(t, target, livetest.ReleaseAssetURL(t, target, repo, tag, filename), maxReleaseFile)
 		if strings.HasSuffix(filename, ".cdx.json") {
 			if buildSBOMVersion(t, body) != version {
 				t.Fatalf("published Build SBOM disagrees with tag %s", tag)
 			}
+
 			sboms++
+
 			continue
 		}
+
 		if npmPackageVersion(t, body) != version {
 			t.Fatalf("published tarball does not carry tag version %s", version)
 		}
+
 		packages++
 	}
+
 	if packages != 1 || sboms == 0 {
 		t.Fatalf("release version proof lacks one package and its Build SBOM: packages=%d sboms=%d", packages, sboms)
 	}
+
 	t.Logf("npm %s: signed manifest/lockfile, published tarball and Build SBOM versions agree", version)
 }
 
 func buildSBOMVersion(t *testing.T, body []byte) string {
 	t.Helper()
+
 	var bom struct {
 		Metadata struct {
 			Component struct {
@@ -77,38 +92,47 @@ func buildSBOMVersion(t *testing.T, body []byte) string {
 	if err := json.Unmarshal(body, &bom); err != nil || bom.Metadata.Component.Version == "" {
 		t.Fatalf("Build SBOM lacks a component version: %v", err)
 	}
+
 	return bom.Metadata.Component.Version
 }
 
 func npmPackageVersion(t *testing.T, body []byte) string {
 	t.Helper()
+
 	stream, err := gzip.NewReader(bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
+
 	archive := tar.NewReader(stream)
 	for {
 		header, err := archive.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			t.Fatal("npm package has no package/package.json")
 		}
+
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		if header.Name != "package/package.json" {
 			continue
 		}
+
 		if header.Size > 1<<20 {
 			t.Fatal("package manifest exceeds bound")
 		}
+
 		data, err := io.ReadAll(io.LimitReader(archive, 1<<20))
+
 		var manifest struct {
 			Version string `json:"version"`
 		}
 		if err != nil || json.Unmarshal(data, &manifest) != nil || manifest.Version == "" {
 			t.Fatal("npm tarball lacks a package version")
 		}
+
 		return manifest.Version
 	}
 }

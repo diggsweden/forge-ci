@@ -93,7 +93,7 @@ func liveLauncherCommand(t *testing.T, ctx context.Context, root, script, mode, 
 	t.Helper()
 
 	if !strings.HasPrefix(mode, "just ") {
-		return exec.CommandContext(ctx, filepath.Join(gnu, "bash"), script, "focused", "^TestSuiteSignalFixture$") //nolint:gosec // Actual launcher under inert tools and an owned fake repository.
+		return exec.CommandContext(ctx, filepath.Join(gnu, "bash"), script, "focused", "^TestSuiteSignalFixture$")
 	}
 
 	just, err := exec.LookPath("just")
@@ -108,13 +108,13 @@ func liveLauncherCommand(t *testing.T, ctx context.Context, root, script, mode, 
 		args = append(args, "test-live", "^TestSuiteSignalFixture$")
 	}
 
-	return exec.CommandContext(ctx, just, args...) //nolint:gosec // Actual Just recipe in the inert launcher fixture.
+	return exec.CommandContext(ctx, just, args...)
 }
 
 func requireLiveLock(t *testing.T, ctx context.Context, path string, held bool) {
 	t.Helper()
 
-	err := exec.CommandContext(ctx, "flock", "-n", path, "true").Run() //nolint:gosec // The launcher's exact owned account lock.
+	err := exec.CommandContext(ctx, "flock", "-n", path, "true").Run()
 	if held {
 		var exit *exec.ExitError
 		if !errors.As(err, &exit) || exit.ExitCode() != 1 {
@@ -136,7 +136,7 @@ func newLauncherFixture(t *testing.T, root string) (string, string) {
 			t.Fatal(err)
 		}
 
-		if err := os.WriteFile(path, []byte(body), 0o700); err != nil { //nolint:gosec // Executable inert collaborators in the test's private directory.
+		if err := os.WriteFile(path, []byte(body), 0o700); err != nil {
 			t.Fatal(err)
 		}
 

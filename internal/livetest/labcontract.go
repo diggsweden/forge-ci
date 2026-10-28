@@ -56,8 +56,9 @@ func hostOf(value string) (string, error) {
 // activeContracts remembers the digest of the first accepted bytes of each
 // contract path, so a contract replaced mid-run (a new generation minted over
 // the one this run holds) is reported as such rather than as a string of 401s.
-var activeContracts = struct { //nolint:gochecknoglobals // Process cache detects mutation after the first accepted contract read.
+var activeContracts = struct {
 	sync.Mutex
+
 	byPath map[string][sha256.Size]byte
 }{byPath: map[string][sha256.Size]byte{}}
 

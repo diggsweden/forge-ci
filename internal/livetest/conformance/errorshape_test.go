@@ -33,7 +33,7 @@ import (
 // refusedToken is the deliberately invalid credential the refused-credential
 // case hands the product; like the target's own token, no form of it may be
 // echoed back.
-const refusedToken = "gpl-0000000000000000000000000000000000000000000000000000000000000bad" //nolint:gosec // Synthetic invalid token.
+const refusedToken = "gpl-0000000000000000000000000000000000000000000000000000000000000bad"
 
 func TestErrors_SameFailureClass_ExitsTheSameOnEveryForge(t *testing.T) {
 	// Each case is a failure every forge can produce, driven through the same

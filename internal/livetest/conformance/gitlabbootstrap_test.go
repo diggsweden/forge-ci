@@ -89,7 +89,7 @@ func publishGitLabBootstrap(t *testing.T, target livetest.Target, repo string) {
 	ctx, cancel := context.WithTimeout(livetest.Context(t), 3*time.Minute)
 	defer cancel()
 
-	command := exec.CommandContext(ctx, "bash", filepath.Join(reporoot.Path(t), "scripts", "ci", "engine-binary.sh"), "publish", "amd64", livetest.LayerBinary(t)) //nolint:gosec // Reviewed repository script and launcher-supplied build, with target-scoped credentials and transport.
+	command := exec.CommandContext(ctx, "bash", filepath.Join(reporoot.Path(t), "scripts", "ci", "engine-binary.sh"), "publish", "amd64", livetest.LayerBinary(t))
 	command.Env = livetest.ToolEnvironment(t, target, map[string]string{
 		"FORGE_CI_PACKAGE_PROVIDER": "gitlab", "CI_SERVER_URL": target.BaseURL(),
 		"FORGE_CI_REPOSITORY_URL": target.BaseURL() + "/" + target.Owner + "/" + repo + ".git",

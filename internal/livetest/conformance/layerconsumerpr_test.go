@@ -24,7 +24,7 @@ var layerConsumerPRFixture string
 const (
 	consumerPRCanary = "consumer-pr-canary.txt"
 
-	consumerPRGoMod = "module example.invalid/consumer-pr-canary\n\ngo 1.27.2\n"
+	consumerPRGoMod = "module example.invalid/consumer-pr-canary\n\ngo 1.27.3\n"
 
 	consumerPRMain = `package main
 

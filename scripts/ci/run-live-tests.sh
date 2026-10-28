@@ -140,7 +140,7 @@ export FORGE_CI_LIVE_LAYER_BIN="$state/forge-ci-layer"
 	# What a consumer recipe was given, so the run can be repeated from its
 	# log. A setting names a variable or a secret and never carries a secret.
 	# An external registry's token stays in its file; its path and user are logged.
-	for input in FORGE_CI_LIVE_DEMO FORGE_CI_LIVE_CONSUMER FORGE_CI_LIVE_CONSUMER_EVENT FORGE_CI_LIVE_CONSUMER_SETTINGS FORGE_CI_LIVE_CONSUMER_VISIBILITY \
+	for input in FORGE_CI_LIVE_DEMO FORGE_CI_LIVE_CONSUMER FORGE_CI_LIVE_CONSUMER_EVENT FORGE_CI_LIVE_CONSUMER_SETTINGS FORGE_CI_LIVE_CONSUMER_VISIBILITY FORGE_CI_LIVE_IMAGE_PLAN_JOB_IMAGE \
 		FORGE_CI_LIVE_EXTERNAL_REGISTRY_TOKEN_FILE FORGE_CI_LIVE_EXTERNAL_REGISTRY_USER; do
 		[[ -z "${!input:-}" ]] || printf '%s=%q\n' "${input,,}" "${!input}"
 	done

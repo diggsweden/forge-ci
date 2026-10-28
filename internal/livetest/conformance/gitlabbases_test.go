@@ -96,15 +96,15 @@ func mergeGitLabNextCandidate(t *testing.T, client *gitlabapi.Client, target liv
 	const branch = "next-release-candidate"
 
 	commit, _, err := client.Commits.CreateCommit(project, &gitlabapi.CreateCommitOptions{
-		Branch: gitlabapi.Ptr(branch), StartBranch: gitlabapi.Ptr("main"), CommitMessage: gitlabapi.Ptr("test: request next release"),
-		Actions: []*gitlabapi.CommitActionOptions{{Action: gitlabapi.Ptr(gitlabapi.FileCreate), FilePath: gitlabapi.Ptr("next-release-request.txt"), Content: gitlabapi.Ptr("release inputs remain unchanged\n")}},
+		Branch: gitlabapi.Ptr(branch), StartBranch: new("main"), CommitMessage: new("test: request next release"),
+		Actions: []*gitlabapi.CommitActionOptions{{Action: gitlabapi.Ptr(gitlabapi.FileCreate), FilePath: new("next-release-request.txt"), Content: new("release inputs remain unchanged\n")}},
 	}, gitlabapi.WithContext(ctx))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	mr, _, err := client.MergeRequests.CreateMergeRequest(project, &gitlabapi.CreateMergeRequestOptions{
-		SourceBranch: gitlabapi.Ptr(branch), TargetBranch: gitlabapi.Ptr("main"), Title: gitlabapi.Ptr("Request next release candidate"),
+		SourceBranch: gitlabapi.Ptr(branch), TargetBranch: new("main"), Title: new("Request next release candidate"),
 	}, gitlabapi.WithContext(ctx))
 	if err != nil {
 		t.Fatal(err)
@@ -126,7 +126,7 @@ func mergeGitLabNextCandidate(t *testing.T, client *gitlabapi.Client, target liv
 	}
 
 	merged, _, err := client.MergeRequests.AcceptMergeRequest(project, mr.IID, &gitlabapi.AcceptMergeRequestOptions{
-		SHA: gitlabapi.Ptr(commit.ID), MergeCommitMessage: gitlabapi.Ptr("test: merge next release candidate"), ShouldRemoveSourceBranch: gitlabapi.Ptr(true),
+		SHA: new(commit.ID), MergeCommitMessage: new("test: merge next release candidate"), ShouldRemoveSourceBranch: new(true),
 	}, gitlabapi.WithContext(ctx))
 	if err != nil || merged.MergeCommitSHA == "" {
 		t.Fatalf("merge next release candidate: %v", err)

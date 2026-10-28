@@ -80,18 +80,21 @@ func runGitLabConsumerTrial(t *testing.T, root string, private bool) {
 		// The standalone MR trial has no release policy to include this gate.
 		// Select the file we render before source publication: GitLab otherwise
 		// reads .gitlab-ci.yml and silently creates no MR pipeline.
-		if _, _, err := client.Projects.EditProject(project, &gitlabapi.EditProjectOptions{
+		if _, _, err = client.Projects.EditProject(project, &gitlabapi.EditProjectOptions{
 			CIConfigPath: gitlabapi.Ptr(livetest.GitLabGateFile),
 		}, gitlabapi.WithContext(ctx)); err != nil {
 			t.Fatal(err)
 		}
-		settings, _, err := client.Projects.GetProject(project, nil, gitlabapi.WithContext(ctx))
-		if err != nil {
-			t.Fatal(err)
+
+		settings, _, settingsErr := client.Projects.GetProject(project, nil, gitlabapi.WithContext(ctx))
+		if settingsErr != nil {
+			t.Fatal(settingsErr)
 		}
+
 		if settings.CIConfigPath != livetest.GitLabGateFile {
 			t.Fatalf("GitLab CI config path = %q, want rendered MR gate %q", settings.CIConfigPath, livetest.GitLabGateFile)
 		}
+
 		t.Logf("standalone MR CI configuration: %s", settings.CIConfigPath)
 	}
 
@@ -105,7 +108,7 @@ func runGitLabConsumerTrial(t *testing.T, root string, private bool) {
 		canary   = "inert-signer-scope-canary"
 	)
 	if _, _, writeErr := client.ProjectVariables.CreateVariable(project, &gitlabapi.CreateProjectVariableOptions{
-		Key: gitlabapi.Ptr(variable), Value: gitlabapi.Ptr(canary), EnvironmentScope: gitlabapi.Ptr("*"),
+		Key: gitlabapi.Ptr(variable), Value: gitlabapi.Ptr(canary), EnvironmentScope: new("*"),
 	}, gitlabapi.WithContext(ctx)); writeErr != nil {
 		t.Fatal(writeErr)
 	}
@@ -124,7 +127,7 @@ func runGitLabConsumerTrial(t *testing.T, root string, private bool) {
 	}
 
 	mr, err := livetest.CreateGitLabMergeRequest(ctx, client, project, &gitlabapi.CreateMergeRequestOptions{
-		SourceBranch: gitlabapi.Ptr(trialBranch), TargetBranch: gitlabapi.Ptr("main"), Title: gitlabapi.Ptr("test: GitLab consumer trial"),
+		SourceBranch: new(trialBranch), TargetBranch: new("main"), Title: new("test: GitLab consumer trial"),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -157,7 +160,7 @@ func runGitLabConsumerTrial(t *testing.T, root string, private bool) {
 	}
 
 	if _, _, writeErr := client.ProjectVariables.UpdateVariable(project, variable, &gitlabapi.UpdateProjectVariableOptions{
-		EnvironmentScope: gitlabapi.Ptr("release-signing"), Protected: gitlabapi.Ptr(true),
+		EnvironmentScope: new("release-signing"), Protected: new(true),
 	}, gitlabapi.WithContext(ctx)); writeErr != nil {
 		t.Fatal(writeErr)
 	}
@@ -211,6 +214,7 @@ func waitGitLabMRPipeline(t *testing.T, ctx context.Context, client *gitlabapi.C
 			if pipeline.SHA != sha || pipeline.Source != "merge_request_event" {
 				t.Fatalf("pipeline %d: source=%q sha=%s; want merge_request_event at %s", id, pipeline.Source, pipeline.SHA, sha)
 			}
+
 			if pipeline.Status != lastStatus || !time.Now().Before(nextProgress) {
 				t.Logf("GitLab MR !%d pipeline %d: %s after %s (%s)", mr, id, pipeline.Status, time.Since(started).Round(time.Second), pipeline.WebURL)
 				lastStatus, nextProgress = pipeline.Status, time.Now().Add(2*time.Minute)
@@ -264,7 +268,7 @@ func gitlabTrialTrace(t *testing.T, ctx context.Context, client *gitlabapi.Clien
 	t.Helper()
 
 	jobs, _, err := client.Jobs.ListPipelineJobs(project, pipeline, &gitlabapi.ListJobsOptions{
-		ListOptions: gitlabapi.ListOptions{PerPage: 100},
+		PerPage: 100,
 	}, gitlabapi.WithContext(ctx))
 	if err != nil {
 		t.Fatal(err)

@@ -125,6 +125,7 @@ func WaitForConsumerRun(tb TB, target Target, repo, file, event, interruptAfter 
 // requests another version in the same repository.
 func WaitForConsumerRunAfter(tb TB, target Target, repo, file, event string, afterID int64) WorkflowRun {
 	tb.Helper()
+
 	return waitForRunOf(tb, target, repo, file, event, timeoutConsumerRun, "", afterID)
 }
 
@@ -137,6 +138,22 @@ func waitForRunOf(tb TB, target Target, repo, file, event string, timeout time.D
 
 	progress := runProgress{started: time.Now(), reported: time.Now()}
 
+	var observed WorkflowRun
+	defer func() {
+		if observed.ID == 0 {
+			return
+		}
+		// Fatal failures can unwind before the wait's context is cancelled.
+		// Settle our observed run on every exit, preserving the primary failure.
+		cleanup, closeCleanup := context.WithTimeout(context.WithoutCancel(ctx), timeoutAPI)
+		defer closeCleanup()
+
+		if err := cancelObservedWorkflowRun(cleanup, target, repo, observed); err != nil {
+			// Provider errors can contain private bodies: report only owned scope.
+			tb.Errorf("livetest: cancellation/terminal observation failed for owned run %d of %s; inspect it before reusing the scratch repository", observed.ID, file)
+		}
+	}()
+
 	for {
 		var payload struct {
 			Runs []WorkflowRun `json:"workflow_runs"`
@@ -148,6 +165,10 @@ func waitForRunOf(tb TB, target Target, repo, file, event string, timeout time.D
 			run, passedOver, err := selectRun(payload.Runs, file, event, afterID)
 			if err != nil {
 				tb.Fatalf("livetest: %v", err)
+			}
+
+			if run.ID != 0 {
+				observed = run
 			}
 
 			if run.ID != 0 && runIsOver(run.Status) {
@@ -167,8 +188,7 @@ func waitForRunOf(tb TB, target Target, repo, file, event string, timeout time.D
 
 		select {
 		case <-ctx.Done():
-			tb.Fatalf("livetest: the %s run of workflow %s was not over after %s; a run that stays waiting usually means no runner takes its label",
-				event, file, timeout)
+			tb.Fatalf("livetest: the %s run of workflow %s wait ended: %v", event, file, ctx.Err())
 
 			return WorkflowRun{}
 		case <-time.After(workflowPollInterval):
@@ -264,13 +284,13 @@ func selectRun(runs []WorkflowRun, file, event string, afterID int64) (WorkflowR
 		}
 
 		switch {
-		case run.Event == event && run.TriggerEvent == event:
+		case runMatchesEvent(run, event):
 			if selected.ID != 0 {
 				return WorkflowRun{}, nil, fmt.Errorf("workflow %s has two %s runs, %d and %d: %w", file, event, selected.ID, run.ID, errs.ErrValidation)
 			}
 
 			selected = run
-		case run.Event == eventPush && run.TriggerEvent == eventPush:
+		case runMatchesEvent(run, eventPush):
 			passedOver = append(passedOver, run)
 		default:
 			return WorkflowRun{}, nil, fmt.Errorf("workflow %s has run %d of event %q (trigger %q), want %s: %w",
@@ -279,6 +299,10 @@ func selectRun(runs []WorkflowRun, file, event string, afterID int64) (WorkflowR
 	}
 
 	return selected, passedOver, nil
+}
+
+func runMatchesEvent(run WorkflowRun, event string) bool {
+	return run.Event == event && run.TriggerEvent == event
 }
 
 // The statuses Forgejo and GitLab both spell this way, for a run and for a job.
@@ -520,13 +544,23 @@ func RunnerLabel(tb TB, target Target) string {
 	tb.Helper()
 	requireAccepted(tb, target)
 
-	label := target.endpoint.RunnerLabel
+	label := runnerOf(target.endpoint).Label
 	if label == "" {
-		tb.Fatalf("livetest: the contract publishes no runner_label for endpoint %q, so a workflow of the layer has nothing to schedule on",
+		tb.Fatalf("livetest: the contract publishes no runner.label for endpoint %q, so a workflow of the layer has nothing to schedule on",
 			target.endpoint.Name)
 	}
 
 	return label
+}
+
+// PrivilegedRunnerLabel is the label the contract says a runner that permits
+// user namespaces takes jobs for, or "" when it names none. Rootless Buildah
+// needs them, and the runner under RunnerLabel may deny them.
+func PrivilegedRunnerLabel(tb TB, target Target) string {
+	tb.Helper()
+	requireAccepted(tb, target)
+
+	return runnerOf(target.endpoint).PrivilegedLabel
 }
 
 // readActions decodes one Actions API answer of the scratch repository.

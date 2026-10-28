@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"codefloe.com/itiquette/forge-lab-contract/labcontract"
 	"github.com/goccy/go-yaml"
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
@@ -97,6 +98,24 @@ func TestParseTrialSettings_ReadsTheCallersWords(t *testing.T) {
 
 	if defaults, _ := ParseTrialSettings(TrialRelease, nil); defaults.Workflow != trialReleaseWorkflow || defaults.Version != "0.0.1" {
 		t.Errorf("a release trial without settings = %+v", defaults)
+	}
+}
+
+func TestConsumerTrialLayerURL_IsTheForgejoScratchLayer(t *testing.T) {
+	t.Parallel()
+
+	lab := &labcontract.Contract{Endpoints: []labcontract.Endpoint{
+		{Name: "gitlab", Kind: "gitlab", WebBaseURL: "https://gitlab.lab.test/", Credential: labcontract.Credential{Username: "other"}},
+		{Name: "forgejo", Kind: "forgejo", WebBaseURL: "https://forgejo.lab.test/", Credential: labcontract.Credential{Username: "forgeci"}},
+	}}
+
+	got, err := consumerTrialLayerURL(lab)
+	if want := "https://forgejo.lab.test/forgeci/fci-consumer-trial-layer"; err != nil || got != want {
+		t.Errorf("consumerTrialLayerURL() = %q, %v; want %q", got, err, want)
+	}
+
+	if _, err := consumerTrialLayerURL(&labcontract.Contract{}); err == nil {
+		t.Error("a contract without a Forgejo endpoint was accepted")
 	}
 }
 
@@ -205,7 +224,7 @@ func TestPlanConsumer_RendersARealRelease(t *testing.T) {
 	for _, want := range []string{
 		"uses: forgeci/fci-layer-artifact/.forgejo/workflows/prepare-release.yml@" + layer.Commit + "\n",
 		"uses: forgeci/fci-layer-artifact/.forgejo/workflows/sign-and-publish-release.yml@" + layer.Commit + "\n",
-		"uses: https://forgejo.compose.forgelab:8443/forgeci/fci-layer-artifact/.forgejo/actions/build-release-image@" + layer.Commit + "\n",
+		"uses: https://forgejo.compose.forgelab:8443/forgeci/fci-layer-artifact/.forgejo/actions/record-release-image@" + layer.Commit + "\n",
 		"      forge-ci-repository: forgeci/fci-layer-artifact\n",
 		"      forge-ci-sha: " + layer.Commit + "\n",
 		"      signer-image: " + labSignerImage + "\n",
@@ -374,6 +393,87 @@ func TestPlanConsumer_RefusesAReferenceLeftPointingAway(t *testing.T) {
 	}
 }
 
+func TestPlanConsumer_SeparatesDefaultedBaseAndFinalRepositories(t *testing.T) {
+	t.Parallel()
+
+	const (
+		call     = "jobs:\n  images:\n    uses: owner/forge-ci/.forgejo/workflows/release-images.yml@" + consumerPinned + "\n    with:\n"
+		base     = "${{ vars.BASE_IMAGE_REPOSITORY || 'ghcr.io/owner/app-base' }}"
+		final    = "${{ vars.IMAGE_REPOSITORY || 'ghcr.io/owner/app' }}"
+		labFinal = "forgejo.compose.forgelab:8443/forgeci/fci-consumer-trial"
+	)
+
+	facts := ConsumerFacts{Inputs: map[string]string{
+		"image-repository": labFinal, "publication-image-repository": labFinal,
+		"base-repository": labFinal + "-base",
+	}}
+	workflows := map[string]string{
+		"a-build-bases.yml": call + "      image-repository: " + base + "\n",
+		"b-release.yml":     call + "      image-repository: " + final + "\n      publication-image-repository: " + final + "\n",
+		"z-sign-bases.yml":  call + "      base-repository: " + base + "\n",
+	}
+
+	plan, err := sampleLayer().PlanConsumer(workflows, facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !maps.Equal(plan.Variables, map[string]string{"BASE_IMAGE_REPOSITORY": labFinal + "-base", "IMAGE_REPOSITORY": labFinal}) {
+		t.Fatalf("repository coordinates collapsed or escaped: %v", plan.Variables)
+	}
+
+	for name, source := range workflows {
+		rendered := plan.Render(source)
+		if err := yaml.Unmarshal([]byte(rendered), new(map[string]any)); err != nil {
+			t.Fatalf("%s rendered invalid YAML: %v", name, err)
+		}
+
+		if strings.Contains(source, "image-repository: "+base) && !strings.Contains(rendered, "image-repository: "+base) {
+			t.Fatalf("base forwarding was rewritten to a final destination: %s", rendered)
+		}
+	}
+	// Caller settings cannot replace these bindings: the trial's existing
+	// duplicate-source guard rejects even a same-named production coordinate.
+	if err := bind(plan.Variables, "variable", "BASE_IMAGE_REPOSITORY", "ghcr.io/production/base"); !errors.Is(err, errs.ErrValidation) {
+		t.Fatal("production override admitted")
+	}
+}
+
+func TestPlanConsumer_RepositoryDefaultsRefuseUnsubstitutableExpressions(t *testing.T) {
+	t.Parallel()
+
+	const call = "jobs:\n  images:\n    uses: owner/forge-ci/.forgejo/workflows/release-images.yml@" + consumerPinned + "\n    with:\n"
+
+	facts := ConsumerFacts{Inputs: map[string]string{
+		"image-repository": "forgejo.compose.forgelab:8443/forgeci/fci-consumer-trial",
+		"base-repository":  "forgejo.compose.forgelab:8443/forgeci/fci-consumer-trial-base",
+	}}
+
+	for _, expression := range []string{
+		"${{ inputs.image-repository }}",
+		"${{ vars.REPO || secrets.REGISTRY }}",
+		"${{ vars.REPO || 'ghcr.io/owner/app' || vars.OTHER }}",
+		"${{ vars.REPO && 'ghcr.io/owner/app' }}",
+		"${{ vars.REPO || 'https://ghcr.io/owner/app' }}",
+		"${{ vars.REPO || 'ghcr.io/owner/app:latest' }}",
+		"${{ vars.REPO || 'ghcr.io/owner/app?query' }}",
+		"${{ format('{0}/app', vars.REGISTRY) }}",
+	} {
+		for _, input := range []string{"base-repository", "image-repository"} {
+			if _, err := sampleLayer().PlanConsumer(map[string]string{"release.yml": call + "      " + input + ": " + expression + "\n"}, facts); !errors.Is(err, errs.ErrValidation) {
+				t.Errorf("admitted %s: %s: %v", input, expression, err)
+			}
+		}
+	}
+	// A repository default must not make fallback signer/key expressions legal.
+	for _, input := range []string{"signer-image", "cosign-public-key"} {
+		facts.Inputs[input] = "lab-value"
+		if _, err := sampleLayer().PlanConsumer(map[string]string{"release.yml": call + "      " + input + ": ${{ vars.TRUST || 'ghcr.io/owner/app' }}\n"}, facts); !errors.Is(err, errs.ErrValidation) {
+			t.Fatalf("admitted defaulted trust input %s", input)
+		}
+	}
+}
+
 // newConsumerCheckout is a throwaway consumer: a workflow that pins the
 // layer, a policy file that repeats the pin, an executable, a binary file
 // and a link, committed twice so there is history the forge should not get.
@@ -389,7 +489,7 @@ func newConsumerCheckout(t *testing.T, objectFormat string) (layerGit, string) {
 	writeLayerFile(t, root, "README.md", "no pin here\n")
 	writeLayerFile(t, root, "logo.bin", "\x00\x01"+consumerPinned)
 
-	if err := os.Chmod(filepath.Join(root, "policy", "pin.sh"), 0o700); err != nil { //nolint:gosec // G302: the fixture's executable.
+	if err := os.Chmod(filepath.Join(root, "policy", "pin.sh"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 

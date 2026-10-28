@@ -20,21 +20,39 @@ import (
 func main() {
 	// `preflight runner-arch` prints only the architecture the lab's runners
 	// execute, which the run script builds the runner binaries for.
-	if len(os.Args) == 2 && os.Args[1] == "runner-arch" {
-		arch, err := livetest.LabRunnerArch()
+	// `preflight consumer-trial-layer` prints only the URL a Forgejo consumer
+	// trial serves the layer under test from, which the lab's kaniko job image
+	// names as its source.
+	if len(os.Args) == 2 {
+		var (
+			fact string
+			err  error
+		)
+
+		switch os.Args[1] {
+		case "signing-inputs":
+			err = livetest.CheckReusedSigningInputs(os.Getenv("FORGE_CI_LIVE_SIGNING_KEY_DIR"))
+			fact = "reused signing input metadata accepted (key validity remains signer-verified)"
+		case "runner-arch":
+			fact, err = livetest.LabRunnerArch()
+		case "consumer-trial-layer":
+			fact, err = livetest.ConsumerTrialLayerURL()
+		default:
+			usage()
+		}
+
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "live preflight: %v\n", err)
 			os.Exit(2)
 		}
 
-		fmt.Println(arch)
+		fmt.Println(fact)
 
 		return
 	}
 
 	if len(os.Args) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: preflight [runner-arch] (reads the lab contract for account forgeci, LAB_TARGETS_FILE when set, and FORGE_CI_LIVE_PROFILE)")
-		os.Exit(2)
+		usage()
 	}
 
 	summary, err := livetest.CheckLiveInputs(time.Now())
@@ -45,4 +63,9 @@ func main() {
 
 	fmt.Printf("live preflight: %d provider(s), generation %s, namespace %s\n\n%s",
 		summary.Selected, summary.Generation, livetest.ResourcePrefix, summary.Explanation)
+}
+
+func usage() {
+	fmt.Fprintln(os.Stderr, "usage: preflight [signing-inputs | runner-arch | consumer-trial-layer] (signing-inputs checks only FORGE_CI_LIVE_SIGNING_KEY_DIR; other modes read the forgeci lab contract)")
+	os.Exit(2)
 }

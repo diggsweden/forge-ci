@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	code.gitea.io/sdk/gitea v0.25.1
-	codefloe.com/itiquette/forge-lab-contract v0.90.1
+	codefloe.com/itiquette/forge-lab-contract v0.92.0
 	github.com/ProtonMail/go-crypto v1.5.2
 	github.com/bmatcuk/doublestar/v4 v4.10.3
 	github.com/creack/pty v1.1.24

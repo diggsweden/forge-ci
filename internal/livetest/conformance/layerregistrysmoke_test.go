@@ -59,11 +59,11 @@ All notable changes to this acceptance fixture will be documented in this file.
 // with an SSH key and pushed with git, the consumer's allowed-signers file
 // names that key, and the fixture asks prepare-release.yml to verify it.
 //
-// A job can build an image only where the runner lets it, and no contract
-// says whether it does, so the operator does: with FORGE_CI_LIVE_IMAGE_BUILDS=0 the
-// scenario skips. Without it a failed build is a failure. The fixture's first
-// job is the layer's setup-buildah alone, so that such a failure can say the
-// runner refused the build.
+// Rootless Buildah needs user namespaces, which the contract's ordinary
+// runner may deny, so the image jobs run on the runner the contract names
+// for them, through CI_RUNNER_LABEL_CONTAINER; without one the scenario
+// skips. The fixture's first job is the layer's setup-buildah alone, so that
+// a failed build can say the runner refused it.
 func TestForgejoLayer_RegistrySignerSmoke(t *testing.T) {
 	for _, visibility := range livetest.ConsumerVisibilities(t) {
 		t.Run(visibility.Name, func(t *testing.T) { runLayerRegistrySignerSmoke(t, visibility.Private) })
@@ -78,9 +78,7 @@ func runLayerRegistrySignerSmoke(t *testing.T, private bool) {
 		name     = "layer-registry-smoke"
 	)
 
-	if !livetest.ImageBuilds(t) {
-		t.Skip("no job on this runner may build an image")
-	}
+	privileged := privilegedRunner(t, livetest.Accept(t, provider.ForgeForgejo))
 
 	signer, ok := livetest.SignerImage(t)
 	if !ok {
@@ -110,6 +108,7 @@ func runLayerRegistrySignerSmoke(t *testing.T, private bool) {
 	keys := newReleaseKeys(t)
 	requester := livetest.NewRequestSigner(t, t.TempDir())
 	livetest.AddDeployKey(t, target, repo, "livetest release bot", keys.sshPublic)
+	livetest.SetRepoVariable(t, target, repo, containerRunnerVariable, runnerLabelsJSON(t, privileged))
 	livetest.SetRepoVariable(t, target, repo, "COSIGN_PUBLIC_KEY", keys.cosignPublic)
 	// The fixture names the serving repository in no call, so this is how
 	// each called workflow finds the layer's files.
@@ -152,8 +151,7 @@ func runLayerRegistrySignerSmoke(t *testing.T, private bool) {
 
 	run := livetest.WaitForLayerRun(t, target, repo, workflow, "push")
 	if run.Status != jobSuccess {
-		t.Logf("where %q is the job that failed, the runner refused the build and the release is not at fault: run the scenario where a job may "+
-			"build an image, or say that this runner allows none with FORGE_CI_LIVE_IMAGE_BUILDS=0", smokeStorageJob)
+		t.Logf("where %q is the job that failed, the runner %q refused the build and the release is not at fault", smokeStorageJob, privileged)
 	}
 
 	scenario.requireStatus(t, run, jobSuccess)

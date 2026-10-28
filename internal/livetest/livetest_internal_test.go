@@ -77,7 +77,7 @@ func TestAcceptTarget_RefusesEachUnsafeRunForItsOwnReason(t *testing.T) {
 		{name: "absent_forge_is_a_skip", sentinel: labcontract.ErrNoEndpoint, reason: "no endpoint of that kind", mutate: func(t *testing.T, r *run) {
 			t.Helper()
 
-			r.body = fixtureBody(t, "neutral-targets-v4-github.json")
+			r.body = fixtureBody(t, "neutral-targets-v5-github.json")
 			r.forge = provider.ForgeGitLab
 		}},
 		{name: "missing_live_capability", sentinel: errs.ErrValidation, reason: `lacks required live capability "artifacts"`, mutate: func(t *testing.T, r *run) {
@@ -212,7 +212,7 @@ func TestDeleteScratchRepo_RefusesForeignNamespace(t *testing.T) {
 	// An accepted target, so the refusal is the lifecycle's own and not the
 	// guard's. Without a CA: the fixture names one this machine does not have,
 	// and the client is built (never used) before the name is judged.
-	body := replaceInFixture(t, composeFixtureBody(t), `"ca_file": "/opt/forge-lab/certs/forge-lab-ca.crt"`, `"ca_file": null`)
+	body := replaceInFixture(t, composeFixtureBody(t), "  \"ca_file\": \"/opt/forge-lab/certs/forge-lab-ca.crt\",\n", "")
 
 	target, err := acceptTarget(loadFixture(t, body), provider.ForgeForgejo, guardNow())
 	if err != nil {

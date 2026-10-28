@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -217,10 +218,8 @@ func decodeFulcioCertificates(body []byte) ([]string, error) {
 		return nil, eofErr
 	}
 
-	for _, certificate := range response.Chains[0].Certificates {
-		if certificate == "" {
-			return nil, fmt.Errorf("%w: response has an empty Fulcio certificate", errInvalidProbeJSON)
-		}
+	if slices.Contains(response.Chains[0].Certificates, "") {
+		return nil, fmt.Errorf("%w: response has an empty Fulcio certificate", errInvalidProbeJSON)
 	}
 
 	return response.Chains[0].Certificates, nil

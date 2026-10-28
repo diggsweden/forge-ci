@@ -69,7 +69,7 @@ func TestSuiteSignalsRunNormalTestCleanup(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 			defer cancel()
 
-			command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestSuiteSignalFixture$") //nolint:gosec // The current test executable, running an inert signal fixture only.
+			command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestSuiteSignalFixture$")
 			command.Env = []string{"FORGE_CI_LIVE_SIGNAL_FIXTURE=" + root}
 
 			var output bytes.Buffer

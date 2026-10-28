@@ -634,7 +634,7 @@ func hostToolBinary(tb TB, name string) string {
 		tb.Fatalf("livetest: %s is required on PATH: %v", name, err)
 	}
 
-	info, err := os.Stat(path) //nolint:gosec // Live preflight validates these host tools before provider work.
+	info, err := os.Stat(path)
 	if err != nil || !info.Mode().IsRegular() || info.Mode()&0o111 == 0 {
 		tb.Fatalf("livetest: %s is not an executable regular file", name)
 	}

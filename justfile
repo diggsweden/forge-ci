@@ -673,7 +673,7 @@ bump-runtime-tags version:
 #
 # Two axes of "update":
 #   1. Go modules: `upgrade-deps` (minor/patch) + `upgrade-major` (semver-major TUI)
-#   2. mise tools: `upgrade-mise` (rewrites .mise.toml pins to latest)
+#   2. mise tools: `upgrade-mise` (rewrites .mise.toml pins to latest, Go excepted)
 #                  vs. `install-dev-tools` (reinstalls per current pin)
 #
 # Use `upgrade-list` first to see what's available before bumping anything.
@@ -701,11 +701,14 @@ upgrade-major: (_require-tool "go-mod-upgrade" "Install: go install github.com/o
 # Rewrite every .mise.toml pin to the latest available version, then
 # install. Review the resulting diff before committing — this is a
 # different operation from `install-dev-tools`, which keeps pins and
-# only installs whatever the current pin spec already allows.
+# only installs whatever the current pin spec already allows. Only this
+# repository's tools move, never the global mise config, and Go stays at
+# go.mod's version: the recorded engine checksums rebuild only with it.
 [doc('Upgrade mise tools; network')]
 [group('dependencies')]
 upgrade-mise:
-    @mise upgrade --bump
+    @TOOLS=$(awk '/^\[tools\]/{t=1; next} /^\[/{t=0} t && /^[^#[:space:]]/ && /=/ { sub(/[[:space:]]*=.*/, ""); gsub(/"/, ""); if ($0 != "go") print }' .mise.toml | tr '\n' ' '); \
+     if [[ -n "$TOOLS" ]]; then mise upgrade --bump $TOOLS; else printf "No mise tools to upgrade\n"; fi
     @mise install
 
 # Show available updates without modifying anything. Combines the two
@@ -812,6 +815,12 @@ test-live scenario="":
 test-live-preflight profile="focused":
     @FORGE_CI_LIVE_PROFILE="$1" exec go run ./internal/livetest/preflight
 
+# Metadata-only: run before minting a contract for a signed-base reuse trial.
+[doc('Live; check restored signing inputs without a provider or contract')]
+[group('live')]
+test-live-signing-inputs:
+    @exec go run ./internal/livetest/preflight signing-inputs
+
 # Build the signer image of this commit and publish it to the lab registry.
 #
 # The release scenarios of the live tier run their signer jobs in the image a
@@ -830,7 +839,27 @@ test-live-preflight profile="focused":
 [doc('Live; build and publish the lab signer image')]
 [group('live')]
 test-live-signer-image forge_lab:
-    @exec bash scripts/ci/publish-live-signer-image.sh "$1"
+    @exec bash scripts/ci/publish-live-image.sh signer "$1"
+
+# Build the kaniko job image of this commit and publish it to the lab registry.
+#
+# A consumer trial with CI_IMAGE_BUILDER=kaniko runs its image builds in
+# containers/kaniko-job/Containerfile of this checkout, the way it runs on a
+# runner pool without user namespaces. A run admits the image only when its
+# source label names the repository the layer runs from, so this recipe labels
+# it with the trial's scratch layer on the lab in the contract, and publishes
+# it under the `forgeci` account:
+#
+#   just test-live-forgejo-consumer <consumer-checkout> release CI_IMAGE_BUILDER=kaniko \
+#     CI_IMAGE_BUILDER_JOB_IMAGE="$(just test-live-kaniko-job-image ~/src/forge-lab)"
+#
+# Needs and prints what test-live-signer-image does. A demo trial uses other
+# layer repositories, which this image does not name.
+[arg('forge_lab', help='Absolute path to the Forge Lab checkout used to publish the kaniko job image')]
+[doc('Live; build and publish the lab kaniko job image')]
+[group('live')]
+test-live-kaniko-job-image forge_lab:
+    @exec bash scripts/ci/publish-live-image.sh kaniko-job "$1"
 
 # Try a consumer repository against this engine checkout, on the lab.
 #
@@ -1068,6 +1097,29 @@ test-live-github-consumer organization_id checkout event *settings:
         FORGE_CI_LIVE_CONSUMER_SETTINGS="$(shift 3; printf '%s\n' "$@")" \
         GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go test -tags=live -count=1 -buildvcs=false -timeout=5h -v \
         -run='^TestGitHubLayer_ConsumerTrial$' ./internal/livetest/githubconsumer/
+
+# Minimal preparation checks: public test snapshots and a temporary CLI asset,
+# existing toolchain images, throwaway SSH keys and read-only package inspection.
+[arg('organization_id', help='Numeric GitHub organization ID authorized by Forge Lab')]
+[arg('packages_token_file', help='Absolute private Packages PAT path; read-only retention preview only')]
+[doc('Live; minimal hosted preparation and retention checks; disposable repositories')]
+[group('live')]
+test-live-github-minimal organization_id packages_token_file:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    state=$(mktemp -d "${TMPDIR:-/tmp}/forge-ci-minimal.XXXXXXXX")
+    trap 'rm -rf -- "$state"' EXIT
+    GOTOOLCHAIN=local CGO_ENABLED=0 go build -trimpath -buildvcs=false -o "$state/forge-ci" ./cmd/forge-ci
+    FORGE_CI_LIVE_GITHUB_ORG_ID="$1" FORGE_CI_LIVE_EXTERNAL_REGISTRY_TOKEN_FILE="$2" FORGE_CI_LIVE_BIN="$state/forge-ci" \
+        GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go test -tags=live -count=1 -buildvcs=false -timeout=75m -v \
+        -run='^TestGitHubMinimalPreparation$' ./internal/livetest/
+
+# API-only prerelease admission/retry checks; no engine image build or runner jobs.
+[arg('organization_id', help='Numeric GitHub organization ID explicitly authorized by the Forge Lab session')]
+[doc('Live; tiny public/private GitHub prerelease API round trips')]
+[group('live')]
+test-live-github-release-api organization_id:
+    FORGE_CI_LIVE_GITHUB_ORG_ID="$1" GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go test -tags=live -count=1 -timeout=10m -v -run='^TestGitHubRelease_PrereleaseAPI$' ./internal/livetest/githubconsumer/
 
 # Run a clean consumer's own GitLab MR gate with a prebuilt Docker image archive.
 # Uses the same lab preflight, serial lock, redacted evidence and scratch cleanup.

@@ -80,16 +80,16 @@ func TestDryRun_DestructiveLedgerVerbs_MutateNothing(t *testing.T) {
 			for _, testCase := range cases {
 				t.Run(testCase.verb, func(t *testing.T) {
 					target := livetest.Accept(t, forge)
-					f := newLedgerFixture(t, forge, "dryrun-"+testCase.verb)
+					fixture := newLedgerFixture(t, forge, "dryrun-"+testCase.verb)
 
-					seedDryRunLedger(t, f, testCase.verb, testCase.promoteFirst)
+					seedDryRunLedger(t, fixture, testCase.verb, testCase.promoteFirst)
 
 					args := append([]string{"container", "ledger"}, testCase.args...)
-					args = append(args, "--auth-file", f.authFile, "--tag", dryRunReleaseTag)
+					args = append(args, "--auth-file", fixture.authFile, "--tag", dryRunReleaseTag)
 
-					before := livetest.RegistrySnapshot(t, target, f.repo)
+					before := livetest.RegistrySnapshot(t, target, fixture.repo)
 
-					preview := f.run(t, append(args, "--dry-run")...)
+					preview := fixture.run(t, append(args, "--dry-run")...)
 					if preview.ExitCode != 0 {
 						t.Fatalf("%s ledger %s --dry-run exited %d\nstderr: %s",
 							forge, testCase.verb, preview.ExitCode, preview.Stderr)
@@ -103,7 +103,7 @@ func TestDryRun_DestructiveLedgerVerbs_MutateNothing(t *testing.T) {
 							forge, testCase.verb, preview.Stdout, preview.Stderr)
 					}
 
-					after := livetest.RegistrySnapshot(t, target, f.repo)
+					after := livetest.RegistrySnapshot(t, target, fixture.repo)
 					if !maps.Equal(before, after) {
 						t.Errorf("%s ledger %s --dry-run mutated the registry\nbefore: %v\nafter:  %v",
 							forge, testCase.verb, before, after)
@@ -111,9 +111,9 @@ func TestDryRun_DestructiveLedgerVerbs_MutateNothing(t *testing.T) {
 
 					// The control. Without it, a verb that did nothing at all
 					// would pass everything above.
-					f.mustRun(t, "ledger "+testCase.verb, args...)
+					fixture.mustRun(t, "ledger "+testCase.verb, args...)
 
-					wet := livetest.RegistrySnapshot(t, target, f.repo)
+					wet := livetest.RegistrySnapshot(t, target, fixture.repo)
 					if maps.Equal(before, wet) {
 						t.Errorf("%s ledger %s changed nothing when run for real, so the dry-run assertion proved nothing\nstate: %v",
 							forge, testCase.verb, wet)
@@ -128,29 +128,29 @@ func TestDryRun_DestructiveLedgerVerbs_MutateNothing(t *testing.T) {
 // really act on. A promoteFirst case pushes only the candidate and runs a
 // journalled release promotion, so the release tag is the promotion's and
 // rollback has it to remove.
-func seedDryRunLedger(t *testing.T, f ledgerFixture, verb string, promoteFirst bool) {
+func seedDryRunLedger(t *testing.T, fixture ledgerFixture, verb string, promoteFirst bool) {
 	t.Helper()
 
 	if promoteFirst {
-		livetest.PushImageTags(t, f.target, f.repo, dryRunCandidateTag)
+		livetest.PushImageTags(t, fixture.target, fixture.repo, dryRunCandidateTag)
 	} else {
-		livetest.PushImageTags(t, f.target, f.repo, dryRunCandidateTag, dryRunReleaseTag)
+		livetest.PushImageTags(t, fixture.target, fixture.repo, dryRunCandidateTag, dryRunReleaseTag)
 	}
 
-	f.mustRun(t, "ledger add",
+	fixture.mustRun(t, "ledger add",
 		"container", "ledger", "add",
-		"--ledger", dryRunLedger, "--auth-file", f.authFile, "--tag", dryRunReleaseTag,
+		"--ledger", dryRunLedger, "--auth-file", fixture.authFile, "--tag", dryRunReleaseTag,
 		"--role", "distroless",
-		"--candidate-tag", f.imagePath+":"+dryRunCandidateTag,
-		"--final-tag", f.imagePath+":"+dryRunReleaseTag,
-		"--sbom", writeSBOM(t, f.work, "dryrun-"+verb),
+		"--candidate-tag", fixture.imagePath+":"+dryRunCandidateTag,
+		"--final-tag", fixture.imagePath+":"+dryRunReleaseTag,
+		"--sbom", writeSBOM(t, fixture.work, "dryrun-"+verb),
 		"--capture-digest",
 	)
 
 	if promoteFirst {
-		f.mustRun(t, "ledger promote",
+		fixture.mustRun(t, "ledger promote",
 			"container", "ledger", "promote",
-			"--ledger", dryRunLedger, "--auth-file", f.authFile, "--tag", dryRunReleaseTag,
+			"--ledger", dryRunLedger, "--auth-file", fixture.authFile, "--tag", dryRunReleaseTag,
 			"--stage", dryRunPromotedTag, "--release-tags-from-ledger", "--journal", dryRunJournal)
 	}
 }

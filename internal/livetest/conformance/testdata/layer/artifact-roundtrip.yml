@@ -22,7 +22,7 @@ env:
 jobs:
   artifact-roundtrip-upload:
     name: Upload deterministic artifact fixture
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     timeout-minutes: 10
     outputs:
       artifact-name: ${{ steps.upload.outputs.artifact-name }}
@@ -113,7 +113,7 @@ jobs:
   artifact-roundtrip-download:
     name: Download and independently compare artifact fixture
     needs: artifact-roundtrip-upload
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     timeout-minutes: 10
     steps:
       - name: Verify fixed acceptance identity

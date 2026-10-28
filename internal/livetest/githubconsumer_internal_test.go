@@ -22,30 +22,38 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
-var trialEngine = GitHubEngine{Owner: "HankLankOrg", Repository: "fc-forge-ci", Commit: strings.Repeat("a", 40)} //nolint:gochecknoglobals // read-only fixture.
+var trialEngine = GitHubEngine{Owner: "HankLankOrg", Repository: "fc-forge-ci", Commit: strings.Repeat("a", 40)}
 
 func TestFailedJobAnnotationsUseExactRepositoryAndBoundOutput(t *testing.T) {
 	calls := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, r *http.Request) {
 		calls++
+
 		if r.URL.Path != "/repos/fixture/fc-app/check-runs/42/annotations" || r.URL.Query().Get("per_page") != "10" {
 			t.Errorf("unexpected check annotation request: %s", r.URL)
 		}
-		_ = json.NewEncoder(w).Encode([]map[string]string{{"message": "Runner unavailable: " + strings.Repeat("x", 3000)}})
+
+		_ = json.NewEncoder(response).Encode([]map[string]string{{"message": "Runner unavailable: " + strings.Repeat("x", 3000)}})
 	}))
 	defer server.Close()
-	api, err := github.NewClient(github.WithHTTPClient(server.Client()), github.WithURLs(github.Ptr(server.URL+"/"), nil))
+
+	api, err := github.NewClient(github.WithHTTPClient(server.Client()), github.WithURLs(new(server.URL+"/"), nil))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	tb := &recordingTB{}
 	trial := GitHubTrial{tb: tb, api: api, org: "fixture"}
-	trial.reportJobAnnotations(t.Context(), "fc-app", &github.WorkflowJob{CheckRunURL: github.Ptr("https://api.github.com/repos/fixture/fc-app/check-runs/42")})
+	trial.reportJobAnnotations(t.Context(), "fc-app", &github.WorkflowJob{CheckRunURL: new("https://api.github.com/repos/fixture/fc-app/check-runs/42")})
+
 	if calls != 1 || len(tb.logs) != 1 || !strings.Contains(tb.logs[0], "Runner unavailable:") || !strings.HasSuffix(tb.logs[0], "[truncated]") || len(tb.logs[0]) > 2200 {
 		t.Fatalf("missing bounded annotation: calls=%d logs=%v", calls, tb.logs)
 	}
-	trial.reportJobAnnotations(t.Context(), "fc-app", &github.WorkflowJob{CheckRunURL: github.Ptr("https://other.invalid/repos/fixture/fc-app/check-runs/42")})
-	trial.reportJobAnnotations(t.Context(), "fc-app", &github.WorkflowJob{CheckRunURL: github.Ptr("https://api.github.com/repos/fixture/another/check-runs/42")})
+
+	trial.reportJobAnnotations(t.Context(), "fc-app", &github.WorkflowJob{CheckRunURL: new("https://other.invalid/repos/fixture/fc-app/check-runs/42")})
+	trial.reportJobAnnotations(t.Context(), "fc-app", &github.WorkflowJob{CheckRunURL: new("https://api.github.com/repos/fixture/another/check-runs/42")})
+
 	if calls != 1 {
 		t.Fatal("unexpected check URL changed the scoped API request")
 	}
@@ -66,26 +74,31 @@ func TestFailedJobBillingDiagnostics(t *testing.T) {
 		{"different rejection", 200, "Runner unavailable", 0, "Runner unavailable", "GitHub billing blocked"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(tc.status)
+			server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, r *http.Request) {
+				response.WriteHeader(tc.status)
+
 				if tc.status == http.StatusOK {
-					_ = json.NewEncoder(w).Encode([]map[string]string{{"message": tc.message}})
+					_ = json.NewEncoder(response).Encode([]map[string]string{{"message": tc.message}})
 				} else {
-					_ = json.NewEncoder(w).Encode(map[string]string{"message": tc.message})
+					_ = json.NewEncoder(response).Encode(map[string]string{"message": tc.message})
 				}
 			}))
 			defer server.Close()
-			api, err := github.NewClient(github.WithHTTPClient(server.Client()), github.WithURLs(github.Ptr(server.URL+"/"), nil))
+
+			api, err := github.NewClient(github.WithHTTPClient(server.Client()), github.WithURLs(new(server.URL+"/"), nil))
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			tb := &recordingTB{}
 			trial := GitHubTrial{tb: tb, api: api, org: "fixture"}
-			trial.reportJobAnnotations(t.Context(), "fc-app", &github.WorkflowJob{RunID: github.Ptr(int64(99)), RunnerID: github.Ptr(tc.runner), CheckRunURL: github.Ptr("https://api.github.com/repos/fixture/fc-app/check-runs/42")})
+			trial.reportJobAnnotations(t.Context(), "fc-app", &github.WorkflowJob{RunID: new(int64(99)), RunnerID: new(tc.runner), CheckRunURL: new("https://api.github.com/repos/fixture/fc-app/check-runs/42")})
+
 			got := strings.Join(tb.logs, "\n")
 			if !strings.Contains(got, tc.want) || strings.Contains(got, tc.absent) {
 				t.Fatalf("unexpected diagnostic: %s", got)
 			}
+
 			if tc.status == http.StatusForbidden && !strings.Contains(got, "https://github.com/fixture/fc-app/actions/runs/99") {
 				t.Fatalf("missing manual inspection URL: %s", got)
 			}
@@ -95,13 +108,16 @@ func TestFailedJobBillingDiagnostics(t *testing.T) {
 
 func TestFailureLogKeepsCauseAfterLargeProgressLine(t *testing.T) {
 	t.Parallel()
+
 	log := "download " + strings.Repeat("progress ", 20000) + "\nAffected target: usr/bin/pebble\n##[error]three blocking vulnerabilities\npost-job cleanup\n"
+
 	got := readFailureExcerpt(strings.NewReader(log), 3)
 	for _, want := range []string{"line shortened", "Affected target: usr/bin/pebble", "##[error]three blocking vulnerabilities"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in %s", want, got)
 		}
 	}
+
 	if len(got) > 4096 || strings.Contains(got, "post-job cleanup") {
 		t.Fatalf("failure excerpt is noisy or unbounded: %d bytes", len(got))
 	}
@@ -109,6 +125,7 @@ func TestFailureLogKeepsCauseAfterLargeProgressLine(t *testing.T) {
 
 func TestFailureLogReportsIncompleteReadWithoutPrivateError(t *testing.T) {
 	t.Parallel()
+
 	got := readFailureExcerpt(iotest.ErrReader(errors.New("private signed URL")), 40)
 	if !strings.Contains(got, "job log incomplete") || strings.Contains(got, "private signed URL") {
 		t.Fatalf("unexpected incomplete-log diagnostic: %s", got)
@@ -332,10 +349,12 @@ func TestParseGitHubTrialSettings(t *testing.T) {
 
 func TestParseGitHubTrialSettings_MultipleImages(t *testing.T) {
 	t.Parallel()
+
 	settings, err := ParseGitHubTrialSettings(TrialRelease, []string{"image=worker,keytool,bff"})
 	if err != nil || settings.Image != "worker,keytool,bff" {
 		t.Fatalf("multi-image selection = %+v, %v", settings, err)
 	}
+
 	for _, value := range []string{"worker,worker", "worker,", ",worker", "worker, keytool", "worker/../other"} {
 		if _, err := ParseGitHubTrialSettings(TrialRelease, []string{"image=" + value}); !errors.Is(err, errs.ErrValidation) {
 			t.Errorf("invalid image selection %q accepted: %v", value, err)
@@ -345,6 +364,7 @@ func TestParseGitHubTrialSettings_MultipleImages(t *testing.T) {
 
 func TestParseGitHubTrialSettings_RejectsRepeatedImageSelectors(t *testing.T) {
 	t.Parallel()
+
 	for _, words := range [][]string{
 		{"image=worker", "image=bff"},
 		{"image=worker", "image=worker"},
@@ -358,10 +378,12 @@ func TestParseGitHubTrialSettings_RejectsRepeatedImageSelectors(t *testing.T) {
 
 func TestParseGitHubTrialSettings_DevelopmentRelease(t *testing.T) {
 	t.Parallel()
+
 	settings, err := ParseGitHubTrialSettings(TrialDevRelease, nil)
 	if err != nil || settings.Workflow != "release-dev.yml" || settings.Version != "" || settings.Image != "" {
 		t.Fatalf("development settings = %+v, %v", settings, err)
 	}
+
 	for _, word := range []string{"version=1.2.3", "image=app"} {
 		if _, err := ParseGitHubTrialSettings(TrialDevRelease, []string{word}); !errors.Is(err, errs.ErrValidation) {
 			t.Errorf("stable-only setting %q accepted for development: %v", word, err)

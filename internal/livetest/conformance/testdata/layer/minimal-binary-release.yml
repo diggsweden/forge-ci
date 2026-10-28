@@ -51,13 +51,13 @@ jobs:
   build:
     name: Build minimal binary release
     needs: prepare
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     # The build brings its own Go rather than trusting the runner label's
     # image to have one: the label is the lab's generic one, whose image is
     # Node. Same Go as go.mod, by digest so the canary cannot change under
     # the scenario.
     container:
-      image: docker.io/library/golang:1.27.2-trixie@sha256:e58d6f83b3416618d8bcac2b3dde1b7f7e3c4a77d25e88637f8bbae81536c48d
+      image: docker.io/library/golang:1.27.3-trixie@sha256:fbb7ae40b62ff8afe31662df570d39b4f5052ac32b90dae8e60d7657a20a74f4
     timeout-minutes: 30
     permissions:
       contents: read

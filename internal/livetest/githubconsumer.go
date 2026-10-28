@@ -215,7 +215,7 @@ var pinnedImage = regexp.MustCompile(`^[a-z0-9][a-z0-9._/:-]*@sha256:[0-9a-f]{64
 
 // githubOverridable are the fixture inputs a setting may replace: the lab's
 // mirrors of images a published fixture names.
-var githubOverridable = map[string]bool{"nanolinter-image": true, "megalinter-image": true} //nolint:gochecknoglobals // read-only table.
+var githubOverridable = map[string]bool{"nanolinter-image": true, "megalinter-image": true}
 
 // ParseGitHubTrialSettings reads the caller's key=value words for an event.
 func ParseGitHubTrialSettings(event string, words []string) (GitHubTrialSettings, error) {
@@ -233,17 +233,26 @@ func ParseGitHubTrialSettings(event string, words []string) (GitHubTrialSettings
 	}
 
 	for _, word := range words {
-		key, value, found := strings.Cut(word, "=")
-		if key == "image" && settings.Image != "" {
-			return GitHubTrialSettings{}, fmt.Errorf("image must be supplied once as image=<name[,name...]>; repeated settings would omit earlier verification targets: %w", errs.ErrValidation)
-		}
-		if !found || value == "" || (!settings.setPlatforms(key, value) && !settings.set(key, value)) {
-			return GitHubTrialSettings{}, fmt.Errorf("setting %q: want workflow=<file>, fixtures=<dir>, version=X.Y.Z or image=<name[,name...]> (release), "+
-				"RELEASE_PLATFORMS=linux/amd64[,linux/arm64], or nanolinter-image=/megalinter-image=<reference>: %w", word, errs.ErrValidation)
+		if err := settings.parseWord(word); err != nil {
+			return GitHubTrialSettings{}, err
 		}
 	}
 
 	return settings, nil
+}
+
+func (settings *GitHubTrialSettings) parseWord(word string) error {
+	key, value, found := strings.Cut(word, "=")
+	if key == "image" && settings.Image != "" {
+		return fmt.Errorf("image must be supplied once as image=<name[,name...]>; repeated settings would omit earlier verification targets: %w", errs.ErrValidation)
+	}
+
+	if !found || value == "" || (!settings.setPlatforms(key, value) && !settings.set(key, value)) {
+		return fmt.Errorf("setting %q: want workflow=<file>, fixtures=<dir>, version=X.Y.Z or image=<name[,name...]> (release), "+
+			"RELEASE_PLATFORMS=linux/amd64[,linux/arm64], or nanolinter-image=/megalinter-image=<reference>: %w", word, errs.ErrValidation)
+	}
+
+	return nil
 }
 
 // setPlatforms takes RELEASE_PLATFORMS and reports whether it was that setting
@@ -277,18 +286,8 @@ func (settings *GitHubTrialSettings) set(key, value string) bool {
 		return release && valid
 	case key == "image":
 		settings.Image = value
-		if !release {
-			return false
-		}
-		seen := map[string]bool{}
-		validName := regexp.MustCompile(`^[a-z0-9][a-z0-9._/-]*$`)
-		for image := range strings.SplitSeq(value, ",") {
-			if !validName.MatchString(image) || seen[image] || strings.Contains("/"+image+"/", "/../") {
-				return false
-			}
-			seen[image] = true
-		}
-		return true
+
+		return release && validTrialImageNames(value)
 	case githubOverridable[key]:
 		settings.Overrides[key] = value
 
@@ -296,4 +295,19 @@ func (settings *GitHubTrialSettings) set(key, value string) bool {
 	default:
 		return false
 	}
+}
+
+func validTrialImageNames(value string) bool {
+	seen := map[string]bool{}
+	validName := regexp.MustCompile(`^[a-z0-9][a-z0-9._/-]*$`)
+
+	for image := range strings.SplitSeq(value, ",") {
+		if !validName.MatchString(image) || seen[image] || strings.Contains("/"+image+"/", "/../") {
+			return false
+		}
+
+		seen[image] = true
+	}
+
+	return true
 }

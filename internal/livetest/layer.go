@@ -176,7 +176,7 @@ func readLayerBinary(tb TB, root string) (string, []byte) {
 		tb.Fatalf("livetest: %v", err)
 	}
 
-	binary, err := os.ReadFile(LayerBinary(tb)) //nolint:gosec // The layer build the guarded launcher supplies.
+	binary, err := os.ReadFile(LayerBinary(tb))
 	if err != nil {
 		tb.Fatalf("livetest: read the layer build: %v", err)
 	}
@@ -234,7 +234,7 @@ func publishLayerBinary(ctx context.Context, target Target, repo, digest string,
 		return fmt.Errorf("configure target HTTP trust: %w", err)
 	}
 
-	resp, err := client.Do(req) //nolint:gosec // G704: the lab transport reaches lab hosts only, and the address is built from the accepted target.
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("PUT %s: %w", redact(endpoint), err)
 	}
@@ -388,6 +388,7 @@ func (git layerGit) snapshot(ctx context.Context, root string) (string, error) {
 	if err := git.requireClean(ctx, root, layerDir); err != nil {
 		return "", err
 	}
+
 	if err := git.requireClean(ctx, root, ".engine"); err != nil {
 		return "", err
 	}

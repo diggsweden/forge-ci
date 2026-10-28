@@ -125,7 +125,7 @@ func git(t *testing.T, dir string, args ...string) string {
 }
 
 func checkoutGitCommand(ctx context.Context, dir, home string, args ...string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir, "-c", "core.hooksPath=" + os.DevNull, "-c", "credential.helper="}, args...)...) //nolint:gosec // scenario-authored read-only Git arguments.
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir, "-c", "core.hooksPath=" + os.DevNull, "-c", "credential.helper="}, args...)...)
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "USERPROFILE=" + home, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=" + os.DevNull, "GIT_TERMINAL_PROMPT=0", "GIT_SSH_COMMAND=false", "GIT_PAGER=cat", "LC_ALL=C"}
 
 	return cmd

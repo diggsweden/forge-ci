@@ -159,7 +159,7 @@ func runLayerMinimalRelease(t *testing.T, private bool, objectFormat string) {
 	request := livetest.CommitFiles(t, target, repo, livetest.FileCommit{
 		Branch: layerMain, Message: "feat: add the minimal signed binary release canary",
 		Files: map[string]string{
-			"go.mod":                                  "module example.invalid/layer-release-canary\n\ngo 1.27.2\n",
+			"go.mod":                                  "module example.invalid/layer-release-canary\n\ngo 1.27.3\n",
 			".chglog/config-keepachangelog.yml":       chglogKeepConfig,
 			".chglog/CHANGELOG-keepachangelog.tpl":    chglogKeepTemplate,
 			".chglog/config-minimal.yml":              chglogMinimalConfig,
@@ -195,7 +195,7 @@ func runLayerMinimalRelease(t *testing.T, private bool, objectFormat string) {
 		log := livetest.JobLog(t, target, repo, job)
 
 		for what, secret := range map[string]string{"SSH signing key": keys.sshPrivate, "Cosign private key": keys.cosignPrivate} {
-			for _, line := range strings.Split(strings.TrimSpace(secret), "\n") {
+			for line := range strings.SplitSeq(strings.TrimSpace(secret), "\n") {
 				if !strings.HasPrefix(line, "-----") && len(line) >= 16 && strings.Contains(log, line) {
 					t.Errorf("the log of job %q holds a line of the %s", job.Name, what)
 				}
@@ -272,21 +272,21 @@ const (
 )
 
 // trialCosignKey returns the passphrase-protected key pair a trial signs
-// with: the reused one in FORGE_CI_LIVE_SIGNING_KEY_DIR, made there on first use,
+// with: the existing one in FORGE_CI_LIVE_SIGNING_KEY_DIR,
 // or a fresh pair in dir.
 func trialCosignKey(t *testing.T, dir string) (string, string) {
 	t.Helper()
 
 	if reused := os.Getenv(signingKeyDirEnv); reused != "" {
-		if !filepath.IsAbs(reused) {
-			t.Fatalf("%s must be an absolute directory, not %q", signingKeyDirEnv, reused)
+		if err := livetest.CheckReusedSigningInputs(reused); err != nil {
+			t.Fatal(err)
 		}
 
-		dir = filepath.Clean(reused)
+		return filepath.Join(reused, "lab-cosign.key"), filepath.Join(reused, "lab-cosign.pub")
 	}
 
 	privatePath, publicPath := filepath.Join(dir, "lab-cosign.key"), filepath.Join(dir, "lab-cosign.pub")
-	if _, err := os.Stat(privatePath); err == nil { //nolint:gosec // the operator's own absolute key directory.
+	if _, err := os.Stat(privatePath); err == nil {
 		return privatePath, publicPath
 	}
 
@@ -296,7 +296,7 @@ func trialCosignKey(t *testing.T, dir string) (string, string) {
 	}
 
 	passphrase := hex.EncodeToString(random)
-	if err := os.WriteFile(filepath.Join(dir, signingKeyPassphraseFile), []byte(passphrase), 0o600); err != nil { //nolint:gosec // the operator's own absolute key directory.
+	if err := os.WriteFile(filepath.Join(dir, signingKeyPassphraseFile), []byte(passphrase), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -493,6 +493,7 @@ func requireReleaseAssets(t *testing.T, scenario layerScenario, keys releaseKeys
 			t.Errorf("the bundle of %s does not verify against the release's public key: %v", name, err)
 		}
 	}
+
 	requireReleaseBundleRejections(t, target, keys.cosignPublicPath, published[releaseChecksums], published[releaseChecksums+bundleSuffix])
 
 	if err := archiveHoldsBinary(published[releaseArchive], "layer-release-canary_0.0.1_linux_amd64/layer-release-canary"); err != nil {
@@ -504,30 +505,39 @@ func requireReleaseAssets(t *testing.T, scenario layerScenario, keys releaseKeys
 // bundle well-formed when changing its signature so a parser refusal cannot pass.
 func requireReleaseBundleRejections(t *testing.T, target livetest.Target, publicKey string, blob, bundle []byte) {
 	t.Helper()
+
 	var document map[string]any
+
 	decoder := json.NewDecoder(bytes.NewReader(bundle))
 	decoder.UseNumber()
+
 	if err := decoder.Decode(&document); err != nil {
 		t.Fatal(err)
 	}
+
 	message, ok := document["messageSignature"].(map[string]any)
 	if !ok {
 		t.Fatal("published bundle has no message signature")
 	}
+
 	encoded, ok := message["signature"].(string)
 	if !ok {
 		t.Fatal("published bundle signature is not a string")
 	}
+
 	signature, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil || len(signature) == 0 {
 		t.Fatalf("published bundle has no decodable signature: %v", err)
 	}
+
 	signature[len(signature)-1] ^= 1
 	message["signature"] = base64.StdEncoding.EncodeToString(signature)
+
 	changedBundle, err := json.Marshal(document)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	_, wrongKey := livetest.CosignKey(t, t.TempDir())
 	for _, tc := range []struct {
 		name, key    string
@@ -539,6 +549,7 @@ func requireReleaseBundleRejections(t *testing.T, target livetest.Target, public
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := livetest.VerifyBlob(t, target, tc.key, tc.blob, tc.bundle)
+
 			var exit *exec.ExitError
 			if !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.Contains(err.Error(), "failed to verify signature") {
 				t.Fatalf("release bundle was not rejected for %s: %v", tc.name, err)

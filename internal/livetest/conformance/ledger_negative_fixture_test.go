@@ -113,7 +113,7 @@ func writeWrongDigestLedger(t *testing.T, path, releaseTag string) string {
 	}
 
 	destination := filepath.Join(filepath.Dir(path), "wrong-digest.json")
-	if err := os.WriteFile(destination, body, 0o600); err != nil { //nolint:gosec // sibling of the fixture's owned ledger, never an operator path.
+	if err := os.WriteFile(destination, body, 0o600); err != nil {
 		t.Fatal(err)
 	}
 

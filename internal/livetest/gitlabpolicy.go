@@ -98,10 +98,10 @@ func RestrictGitLabReleaseBranch(tb TB, target Target, repo string, deployKey in
 }
 
 func restrictGitLabReleaseBranch(ctx context.Context, client *gitlabapi.Client, project string, deployKey int64) error {
-	push := []*gitlabapi.BranchPermissionOptions{{DeployKeyID: gitlabapi.Ptr(deployKey)}}
+	push := []*gitlabapi.BranchPermissionOptions{{DeployKeyID: new(deployKey)}}
 
 	_, response, err := client.ProtectedBranches.ProtectRepositoryBranches(project, &gitlabapi.ProtectRepositoryBranchesOptions{
-		Name: gitlabapi.Ptr(defaultBranch), AllowedToPush: &push, AllowForcePush: gitlabapi.Ptr(false),
+		Name: new(defaultBranch), AllowedToPush: &push, AllowForcePush: new(false),
 	}, gitlabapi.WithContext(ctx))
 	if err != nil && (response == nil || response.StatusCode != http.StatusConflict) {
 		return err
@@ -124,7 +124,7 @@ func restrictGitLabReleaseBranch(ctx context.Context, client *gitlabapi.Client, 
 	}
 
 	if _, _, err = client.ProtectedBranches.UpdateProtectedBranch(project, defaultBranch, &gitlabapi.UpdateProtectedBranchOptions{
-		AllowedToPush: &push, AllowForcePush: gitlabapi.Ptr(false),
+		AllowedToPush: &push, AllowForcePush: new(false),
 	}, gitlabapi.WithContext(ctx)); err != nil {
 		return err
 	}
@@ -146,14 +146,14 @@ func releaseBranchPushPermissions(branch *gitlabapi.ProtectedBranch, deployKey i
 		return nil, fmt.Errorf("main protection is missing its name or push permissions: %w", errs.ErrValidation)
 	}
 
-	push := []*gitlabapi.BranchPermissionOptions{{DeployKeyID: gitlabapi.Ptr(deployKey)}}
+	push := []*gitlabapi.BranchPermissionOptions{{DeployKeyID: new(deployKey)}}
 
 	for _, access := range branch.PushAccessLevels {
 		if access == nil || access.ID <= 0 {
 			return nil, fmt.Errorf("main protection has a push permission without an identity: %w", errs.ErrValidation)
 		}
 
-		push = append(push, &gitlabapi.BranchPermissionOptions{ID: gitlabapi.Ptr(access.ID), Destroy: gitlabapi.Ptr(true)})
+		push = append(push, &gitlabapi.BranchPermissionOptions{ID: new(access.ID), Destroy: new(true)})
 	}
 
 	return push, nil

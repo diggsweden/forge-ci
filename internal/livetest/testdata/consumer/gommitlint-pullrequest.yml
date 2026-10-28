@@ -23,7 +23,7 @@ env:
 jobs:
   lint:
     name: Lint
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     # Run inside nanolinter's prebuilt go-flavour image (as its non-root user):
     # it ships nanolinter, the shared linters and Go, so `nanolinter verify`
     # runs with no toolchain install or source compile. The image has git but
@@ -63,7 +63,7 @@ jobs:
   # The consumer-owned image supplies their exact Go and OS-tool contract.
   repo-gates:
     name: Repo gates
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     container:
       image: ${{ vars.CI_JOB_IMAGE }}
     timeout-minutes: 10
@@ -126,7 +126,7 @@ jobs:
           dist-digest-output: dist_digest
   security:
     name: Security
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     # Same go-flavour image as lint: it ships nanolinter plus govulncheck,
     # osv-scanner and trivy, so the quick security scans run with no toolchain
     # compile. Checkout via the no-node forge-ci helper.
@@ -149,7 +149,7 @@ jobs:
           nanolinter lint trivy-fs
   test:
     name: Test
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     container:
       image: ${{ vars.CI_JOB_IMAGE }}
     timeout-minutes: 15

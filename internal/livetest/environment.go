@@ -65,7 +65,7 @@ const (
 // the environment's own description of itself rather than to a symptom. That is
 // the whole reason this exists: an unmet need used to surface as a queued job or
 // an opaque cosign error, both of which read as product defects.
-func Requires(tb TB, forge provider.ForgeAPI, needs ...Need) bool { //nolint:cyclop // One diagnostic branch per capability.
+func Requires(tb TB, forge provider.ForgeAPI, needs ...Need) bool {
 	tb.Helper()
 
 	contract, err := currentLabContract()

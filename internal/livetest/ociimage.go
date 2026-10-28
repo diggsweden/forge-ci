@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -107,6 +108,7 @@ func PushJobImage(tb TB, target Target, repo, archive string) string {
 // as HTTP requests so interruption can reach the registered fixture cleanup.
 type contextReadCloser struct {
 	io.ReadCloser
+
 	ctx context.Context //nolint:containedctx // io.ReadCloser has no context parameter; this context belongs to one archive stream.
 }
 
@@ -149,53 +151,74 @@ func PushImage(tb TB, target Target, repo, tag string) Image {
 func ImageFileSHA256(tb TB, target Target, repo, digest string, paths []string) map[string]string {
 	tb.Helper()
 	requireAccepted(tb, target)
+
 	if !inRunNamespace(target, repo) || !container.ValidDigest(digest) {
 		tb.Fatalf("image-file verification requires an owned repository and exact digest")
 	}
+
 	host, err := RegistryHost(target)
 	if err != nil {
 		tb.Fatalf("registry host: %v", err)
 	}
+
 	ref, err := name.NewDigest(host + "/" + RepoSlug(target, repo) + "@" + digest)
 	if err != nil {
 		tb.Fatalf("registry digest: %v", err)
 	}
+
 	options, err := registryRemoteOptions(target)
 	if err != nil {
 		tb.Fatalf("registry transport: %v", err)
 	}
+
 	ctx, cancel := context.WithTimeout(Context(tb), timeoutScratch)
 	defer cancel()
+
 	image, err := remote.Image(ref, append(options, remote.WithContext(ctx), remote.WithPlatform(v1.Platform{OS: "linux", Architecture: "amd64"}))...)
 	if err != nil {
 		tb.Fatalf("read exact registry image: %v", err)
 	}
+
 	stream := mutate.Extract(image)
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
+
+	return imageFileHashes(tb, stream, paths)
+}
+
+func imageFileHashes(tb TB, stream io.Reader, paths []string) map[string]string {
+	tb.Helper()
+
 	archive := tar.NewReader(io.LimitReader(stream, 10<<30))
+
 	wanted := make(map[string]bool, len(paths))
 	for _, path := range paths {
 		wanted[strings.TrimPrefix(path, "/")] = true
 	}
+
 	hashes := make(map[string]string, len(wanted))
 	for len(hashes) < len(wanted) {
 		entry, err := archive.Next()
 		if err != nil {
 			tb.Fatalf("published image lacks selected files: %v", err)
 		}
+
 		path := strings.TrimPrefix(strings.TrimPrefix(entry.Name, "./"), "/")
 		if !wanted[path] {
 			continue
 		}
+
 		if entry.Typeflag != tar.TypeReg || entry.Size <= 0 || entry.Size > 512<<20 {
 			tb.Fatalf("published image file %s is not a bounded nonempty regular file", path)
 		}
+
 		hash := sha256.New()
-		if _, err := io.Copy(hash, archive); err != nil {
+		if _, err := io.CopyN(hash, archive, entry.Size); err != nil {
 			tb.Fatalf("read published file: %v", err)
 		}
-		hashes[path] = fmt.Sprintf("%x", hash.Sum(nil))
+
+		hashes[path] = hex.EncodeToString(hash.Sum(nil))
 	}
+
 	return hashes
 }
 

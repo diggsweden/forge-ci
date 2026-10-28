@@ -1,11 +1,11 @@
 # Neutral target fixtures
 
-Two accepted live-target contracts, version 4, that this repository's tests
+Two accepted live-target contracts, version 5, that this repository's tests
 project onto targets and run the destructive guard and the preflight over:
 
-- `neutral-targets-v4-compose.json`: Forge Lab's compose road, with the two
+- `neutral-targets-v5-compose.json`: Forge Lab's compose road, with the two
   forges this tier drives, a gitea endpoint it does not, a CA and Fulcio.
-- `neutral-targets-v4-github.json`: a hosted GitHub endpoint, null CA and no
+- `neutral-targets-v5-github.json`: a hosted GitHub endpoint, no CA and no
   Fulcio; nothing this tier drives, so it exercises the clean skip.
 
 The contract's definition -- the JSON Schema, the Go reader and the corpus of

@@ -133,6 +133,8 @@ func (consumer Consumer) stageGitLabGate(ctx context.Context, file string, layer
 }
 
 func renderGitLabConsumer(body []byte, layer Layer, images GitLabGateImages) (string, error) {
+	const stringTag = "!!str"
+
 	document, entries, err := gitlabGateComponents(body)
 	if err != nil {
 		return "", err
@@ -162,6 +164,26 @@ func renderGitLabConsumer(body []byte, layer Layer, images GitLabGateImages) (st
 		return "", fmt.Errorf("the MR trial requires one pinned check component: %w", errs.ErrValidation)
 	}
 
+	for name, tags := range images.JobTags {
+		job := gitlabMappingValue(document.Content[0], name)
+		if job == nil {
+			job = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+			document.Content[0].Content = append(document.Content[0].Content,
+				&yaml.Node{Kind: yaml.ScalarNode, Tag: stringTag, Value: name}, job)
+		}
+
+		if job.Kind != yaml.MappingNode || gitlabMappingValue(job, "tags") != nil {
+			return "", fmt.Errorf("trial job tags conflict with consumer configuration: %w", errs.ErrValidation)
+		}
+
+		sequence := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+		for _, tag := range tags {
+			sequence.Content = append(sequence.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: stringTag, Value: tag})
+		}
+
+		job.Content = append(job.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: stringTag, Value: "tags"}, sequence)
+	}
+
 	var encoded bytes.Buffer
 
 	encoder := yaml.NewEncoder(&encoded)
@@ -175,7 +197,11 @@ func renderGitLabConsumer(body []byte, layer Layer, images GitLabGateImages) (st
 // the check component, Lint for the nanolinter component. They differ because
 // the job image also runs the release's own jobs, which need tools a lint
 // image does not carry (ssh-keygen verifies the signed release request).
-type GitLabGateImages struct{ Job, Lint string }
+type GitLabGateImages struct {
+	Job, Lint string
+	// JobTags overrides only the named image-building trial job, not lint or signing.
+	JobTags map[string][]string
+}
 
 // gitlabGateImage is, for each component a gate may include, the input that
 // takes its image, the placeholder the consumer writes there, and the image
@@ -185,7 +211,7 @@ type gitlabGateImage struct {
 	image              func(GitLabGateImages) string
 }
 
-var gitlabGateImageInputs = map[string]gitlabGateImage{ //nolint:gochecknoglobals // read-only table.
+var gitlabGateImageInputs = map[string]gitlabGateImage{
 	"check":      {input: "job-image", placeholder: "$CI_JOB_IMAGE", image: func(images GitLabGateImages) string { return images.Job }},
 	"nanolinter": {input: "nanolinter-image", placeholder: "$CI_LINT_IMAGE", image: func(images GitLabGateImages) string { return images.Lint }},
 }

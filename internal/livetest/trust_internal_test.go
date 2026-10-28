@@ -91,6 +91,8 @@ func TestValidateCertificatePEM_CertificateOnlyGrammar(t *testing.T) {
 		{name: "valid_then_invalid_der", body: certificate + string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte("not DER")})), reason: "contains an invalid certificate"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := validateCertificatePEM([]byte(tc.body))
 			if tc.reason == "" {
 				if err != nil {

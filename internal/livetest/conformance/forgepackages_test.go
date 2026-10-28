@@ -173,6 +173,7 @@ export NODE_AUTH_TOKEN="$FORGEJO_TOKEN"`
 		auth = `registry="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/npm/"
 export NODE_AUTH_TOKEN="$CI_JOB_TOKEN"`
 	}
+
 	consume := `set +x
 set -eu
 ` + auth + `
@@ -235,24 +236,30 @@ func TestNPMPublishWorkflow_RenderedShell(t *testing.T) {
 		t.Run(string(forge), func(t *testing.T) {
 			target := livetest.Target{Forge: forge, Host: "fixture.invalid", Owner: "fixture"}
 			body := npmPublishWorkflow(target, "set -eu", "@fixture/package", "1.2.3")
+
 			script := publicationProbeScript(t, forge, body)
 			if !strings.Contains(script, "npm view '@fixture/package@1.2.3' dist-tags --json") {
 				t.Fatal("consumption tag query must select the installed version explicitly")
 			}
+
 			for _, shell := range []string{"sh", "bash"} {
 				command := exec.CommandContext(t.Context(), shell, "-n")
+
 				command.Stdin = strings.NewReader(script)
 				if output, err := command.CombinedOutput(); err != nil {
 					t.Fatalf("%s syntax: %v: %s", shell, err, output)
 				}
 			}
+
 			tagPrefix := "release-"
 			if forge == provider.ForgeForgejo {
 				tagPrefix = "release."
 			}
+
 			if !strings.Contains(script, "run_product publish forge-packages deploy --project-type npm --working-dir pkg --npm-tag '"+tagPrefix+"{version}'") {
 				t.Fatal("deployment escaped the YAML script")
 			}
+
 			if !strings.Contains(script, "assert.equal(require('./dist-tags.json')['"+tagPrefix+"1.2.3'], '1.2.3');") {
 				t.Fatal("dist-tag assertion does not match the selected publication tag")
 			}
@@ -264,6 +271,7 @@ func TestNPMPublishWorkflow_RenderedShell(t *testing.T) {
 			if !ok {
 				t.Fatal("missing consumption script")
 			}
+
 			stub := `set -eu
 origin="$PWD"
 run_product() {
@@ -284,10 +292,12 @@ node() {
   cat > /dev/null
 }
 `
+
 			registry := "https://fixture.invalid/api/packages/fixture/npm/"
 			if forge == provider.ForgeGitLab {
 				registry = "https://fixture.invalid/api/v4/projects/123/packages/npm/"
 			}
+
 			if err := runProbeShell(t, stub+consume,
 				"EXPECTED_REGISTRY="+registry, "CI_API_V4_URL=https://fixture.invalid/api/v4",
 				"CI_PROJECT_ID=123", "CI_JOB_TOKEN=inert", "FORGEJO_TOKEN=inert"); err != nil {
@@ -360,6 +370,7 @@ func TestInRunner_ForgePackages_MavenDeployReachesTheRegistry(t *testing.T) {
 				t.Errorf("%s: the job succeeded but %s:%s is not in the forge's package registry (found %v) — the deploy reported success without the artifact arriving",
 					forge, name, version, after)
 			}
+
 			assertMavenBuildPublication(t, target, repo, groupID, artifactID, version, tag)
 		})
 	}
@@ -438,6 +449,7 @@ sha256sum pom.xml target/` + artifactID + `-` + version + `.jar target/` + artif
 	if target.Forge == provider.ForgeForgejo {
 		deploy += "run_product release attachments upload --tag " + tag + " --pattern build-digests.sha256\n"
 	}
+
 	deploy += `run_product publish forge-packages deploy --project-type maven --from-build --working-dir . --version ` + version
 
 	if target.Forge == provider.ForgeGitLab {
@@ -477,12 +489,14 @@ jobs:
 // result and local repository.
 func assertMavenBuildPublication(t *testing.T, target livetest.Target, repo, group, artifact, version, tag string) {
 	t.Helper()
+
 	var receiptURL string
 	if target.Forge == provider.ForgeGitLab {
 		receiptURL = target.BaseURL() + "/api/v4/projects/" + url.PathEscape(target.Owner+"/"+repo) + "/jobs/artifacts/main/raw/build-digests.sha256?job=publish"
 	} else {
 		receiptURL = livetest.ReleaseAssetURL(t, target, repo, tag, "build-digests.sha256")
 	}
+
 	receipt := livetest.Download(t, target, receiptURL, 4096)
 	stem := artifact + "-" + version
 	files := map[string]string{
@@ -492,20 +506,25 @@ func assertMavenBuildPublication(t *testing.T, target livetest.Target, repo, gro
 		"target/" + stem + "-javadoc.jar": stem + "-javadoc.jar",
 	}
 	base := strings.ReplaceAll(group, ".", "/") + "/" + artifact + "/" + version + "/"
-	for _, line := range strings.Split(strings.TrimSpace(string(receipt)), "\n") {
+
+	for line := range strings.SplitSeq(strings.TrimSpace(string(receipt)), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) != 2 || len(fields[0]) != 64 {
 			t.Fatal("invalid pre-deploy checksum receipt")
 		}
+
 		name, ok := files[fields[1]]
 		if !ok {
 			t.Fatalf("unexpected or duplicate build receipt path %q", fields[1])
 		}
+
 		delete(files, fields[1])
+
 		body := livetest.MavenRegistryFile(t, target, repo, base+name)
 		if fmt.Sprintf("%x", sha256.Sum256(body)) != fields[0] {
 			t.Fatalf("registry %s differs from the pre-deploy build", name)
 		}
+
 		if strings.HasSuffix(name, ".jar") {
 			entry := "Demo.class"
 			if strings.HasSuffix(name, "-sources.jar") {
@@ -513,17 +532,21 @@ func assertMavenBuildPublication(t *testing.T, target livetest.Target, repo, gro
 			} else if strings.HasSuffix(name, "-javadoc.jar") {
 				entry = "Demo.html"
 			}
+
 			archive, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			if _, err := fs.Stat(archive, entry); err != nil {
 				t.Fatalf("registry %s lacks %s: %v", name, entry, err)
 			}
 		}
 	}
+
 	if len(files) != 0 {
 		t.Fatalf("pre-deploy receipt omits %d publication files", len(files))
 	}
+
 	t.Log("registry main/POM/sources/Javadoc match all four pre-deploy build hashes")
 }

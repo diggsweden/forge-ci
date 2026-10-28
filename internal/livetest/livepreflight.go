@@ -36,6 +36,12 @@ type LivePreflightSummary struct {
 // provider. It runs before anything is built so a missing or stale contract is
 // reported in seconds, with where the suite looked for it.
 func CheckLiveInputs(now time.Time) (LivePreflightSummary, error) {
+	if dir := os.Getenv("FORGE_CI_LIVE_SIGNING_KEY_DIR"); dir != "" {
+		if err := CheckReusedSigningInputs(dir); err != nil {
+			return LivePreflightSummary{}, err
+		}
+	}
+
 	lab, err := currentLabContract()
 	if err != nil {
 		return LivePreflightSummary{}, err
@@ -63,7 +69,7 @@ func CheckLiveInputs(now time.Time) (LivePreflightSummary, error) {
 	}
 
 	if lab.CAFile == nil {
-		return LivePreflightSummary{}, fmt.Errorf("live targets require a non-null ca_file: %w", errs.ErrValidation)
+		return LivePreflightSummary{}, fmt.Errorf("live targets require a ca_file: %w", errs.ErrValidation)
 	}
 
 	if _, err := readCAFile(*lab.CAFile); err != nil {
@@ -130,7 +136,7 @@ func validateLiveProfile(lab *labcontract.Contract, selected int) error {
 // readCAFile reads the contract's transport CA: a bounded PEM file holding
 // certificates and nothing else.
 func readCAFile(path string) ([]byte, error) {
-	info, err := os.Stat(path) //nolint:gosec // The contract's own ca_file, which the contract module accepted as a clean absolute path.
+	info, err := os.Stat(path)
 	if err != nil {
 		return nil, fmt.Errorf("inspect ca_file: %w", err)
 	}

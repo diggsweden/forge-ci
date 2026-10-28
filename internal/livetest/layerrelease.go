@@ -77,19 +77,20 @@ func disposableImageHost(host string) error {
 // none.
 //
 // The fingerprint is the contract's. The address is the contract module's
-// runner-side one: git_ssh_base_url is the route from the operator's side, a
+// runner-side one: ssh.base_url is the route from the operator's side, a
 // port the lab publishes on the host, and a job container on the lab's own
 // network reaches the same server, with the same host key, by another name.
 func SSHRoute(tb TB, target Target, repo string) (string, string, bool) {
 	tb.Helper()
 	requireAccepted(tb, target)
 
-	fingerprint := target.endpoint.HostKeyFingerprint
-	if fingerprint == "" {
-		tb.Logf("SKIP %s: the contract publishes no host_key_fingerprint for endpoint %q", target.Forge, target.endpoint.Name)
+	if target.endpoint.SSH == nil {
+		tb.Logf("SKIP %s: the contract publishes no ssh route for endpoint %q", target.Forge, target.endpoint.Name)
 
 		return "", "", false
 	}
+
+	fingerprint := target.endpoint.SSH.HostKeyFingerprint
 
 	authority := labcontract.RunnerSSHAuthority(target.Host)
 	if authority == "" {
@@ -137,37 +138,6 @@ func SSHKey(tb TB, dir string) (string, string) {
 	}
 
 	return string(private), strings.TrimSpace(string(public))
-}
-
-// imageBuildsEnv says whether a job on this runner may build an image. Unset,
-// it may: a scenario that builds one fails where the build fails. `0` is the
-// operator saying that this runner does not allow it, and such a scenario
-// skips.
-const imageBuildsEnv = "FORGE_CI_LIVE_IMAGE_BUILDS"
-
-// ImageBuilds reports whether a scenario may expect a job to build an image,
-// or false after logging why not.
-//
-// The contract does not say what a runner allows its jobs, so the answer is
-// the operator's, as the signer image is. It is asked for only where the
-// answer is no: a runner that builds images needs nothing set, and a failure
-// there is a failure and never a skip.
-func ImageBuilds(tb TB) bool {
-	tb.Helper()
-
-	switch os.Getenv(imageBuildsEnv) {
-	case "", "1":
-		return true
-	case "0":
-		tb.Logf("SKIP: %s=0 says no job on this runner may build an image; on Forge Lab's k3s road, run the scenario inside the privileged session "+
-			"(`just k3s-full-release -- <command>` in the Forge Lab checkout) without the variable", imageBuildsEnv)
-
-		return false
-	default:
-		tb.Fatalf("livetest: %s must be 0 or 1, or unset", imageBuildsEnv)
-
-		return false
-	}
 }
 
 // requestSigner is the name a signed release request is made under. It is the
@@ -276,7 +246,7 @@ func GPGKey(tb TB, dir, passphrase string) (string, string) {
 
 	fingerprint := ""
 
-	for _, line := range strings.Split(gpg("--with-colons", "--list-secret-keys", identity), "\n") {
+	for line := range strings.SplitSeq(gpg("--with-colons", "--list-secret-keys", identity), "\n") {
 		if fields := strings.Split(line, ":"); fields[0] == "fpr" && len(fields) > 9 {
 			fingerprint = fields[9]
 

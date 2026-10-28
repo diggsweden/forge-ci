@@ -14,8 +14,8 @@ import (
 // RunSuite installs these before m.Run starts any tests. Ordinary unit tests
 // use their own testing context and the existing per-operation cleanup bounds.
 var (
-	suiteContext = context.Background() //nolint:gochecknoglobals // Set once by the live TestMain before tests start.
-	cleanupRoot  = context.Background() //nolint:gochecknoglobals // Set once by the live TestMain before tests start.
+	suiteContext = context.Background()
+	cleanupRoot  = context.Background()
 )
 
 // RunSuite lets an interrupted live test unwind through its normal cleanup.

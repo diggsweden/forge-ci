@@ -64,6 +64,30 @@ include:
 		t.Fatal("the trial changed the consumer's check commands")
 	}
 
+	tagged, err := renderGitLabConsumer([]byte(pipeline), layer, GitLabGateImages{
+		Job: image, JobTags: map[string][]string{"Check: Rust development": {"privileged"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var jobs map[string]any
+	if err := yaml.Unmarshal([]byte(tagged), &jobs); err != nil {
+		t.Fatal(err)
+	}
+
+	job, ok := jobs["Check: Rust development"].(map[string]any)
+	if !ok || len(job) != 1 || strings.Count(tagged, "privileged") != 1 || jobs["default"] != nil {
+		t.Fatal("privileged tags were not confined to the image-building job")
+	}
+
+	conflict := pipeline + "\n'Check: Rust development':\n  tags: [consumer-runner]\n"
+	if _, err := renderGitLabConsumer([]byte(conflict), layer, GitLabGateImages{
+		Job: image, JobTags: map[string][]string{"Check: Rust development": {"privileged"}},
+	}); err == nil {
+		t.Fatal("trial silently replaced consumer-owned scheduling")
+	}
+
 	for _, bad := range []string{
 		pipeline + "\n---\nunexpected: job\n",
 		strings.ReplaceAll(pipeline, strings.Repeat("a", 40), "main"),

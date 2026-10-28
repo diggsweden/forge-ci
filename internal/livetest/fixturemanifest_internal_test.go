@@ -90,7 +90,7 @@ func TestPublishedCheckoutFixture_ReadsTheEndpointManifest(t *testing.T) {
 	require.Equal(t, CheckoutFixture{}, PublishedCheckoutFixture(recorder, target))
 	require.True(t, recorder.fatal)
 
-	require.NoError(t, os.WriteFile(path, []byte(checkoutManifestFixture()), 0o644)) //nolint:gosec // Deliberately public: a manifest is not a credential.
+	require.NoError(t, os.WriteFile(path, []byte(checkoutManifestFixture()), 0o644))
 
 	recorder = &fatalRecorder{}
 	require.Equal(t, "fx-tag-behind-head", PublishedCheckoutFixture(recorder, target).Repository)
@@ -118,9 +118,8 @@ func TestContractProjectsFixtureFacts(t *testing.T) {
 		require.True(t, named)
 
 		endpoint["fixture_manifest_file"] = "/private/manifest-" + name + ".json"
-		endpoint["runner_label"] = "ubuntu-latest"
-		endpoint["git_ssh_base_url"] = "ssh://git@forgejo.compose.forgelab:2222"
-		endpoint["host_key_fingerprint"] = "SHA256:fixture"
+		endpoint["runner"] = map[string]any{"label": "ubuntu-latest"}
+		endpoint["ssh"] = map[string]any{"base_url": "ssh://git@forgejo.compose.forgelab:2222", "host_key_fingerprint": "SHA256:fixture"}
 	}
 
 	body, err := json.Marshal(wire)

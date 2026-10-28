@@ -19,11 +19,10 @@ import (
 func TestTargetSecretOutput_FlagsAndRedactsEveryCredentialForm(t *testing.T) {
 	t.Parallel()
 
-	//nolint:gosec // A synthetic credential shaped to exercise every escaped and encoded form.
 	target := Target{Forge: provider.ForgeGitLab, Host: "gitlab.compose.forgelab:8443", Owner: "fixture-user", CredentialUsername: "fixture-user", Token: "glpat-synth/etic+token="}
 	pair := target.CredentialUsername + ":" + target.Token
 
-	for name, leaked := range map[string]string{ //nolint:gosec // Encoded forms of the synthetic credential.
+	for name, leaked := range map[string]string{
 		"token":                  target.Token,
 		"query-escaped token":    "glpat-synth%2Fetic%2Btoken%3D",
 		"path-escaped token":     "glpat-synth%2Fetic+token=",

@@ -208,14 +208,14 @@ func addCapabilityRow(table map[string]map[string]bool, header, cells []string) 
 
 	claims := make(map[string]bool, len(cells)-1)
 
-	for i := 1; i < len(cells); i++ {
-		switch cells[i] {
+	for index := 1; index < len(cells); index++ {
+		switch cells[index] {
 		case "✅":
-			claims[header[i]] = true
+			claims[header[index]] = true
 		case "❌":
-			claims[header[i]] = false
+			claims[header[index]] = false
 		default:
-			return errCapabilityTable("capability row %q has an unreadable cell %q under %q", cells[0], cells[i], header[i])
+			return errCapabilityTable("capability row %q has an unreadable cell %q under %q", cells[0], cells[index], header[index])
 		}
 	}
 
@@ -236,7 +236,7 @@ func splitRow(line string) []string {
 }
 
 func errCapabilityTable(format string, args ...any) error {
-	return fmt.Errorf(format, args...) //nolint:err113 // test-local parse diagnostics, compared by message.
+	return fmt.Errorf(format, args...)
 }
 
 func sortedCopy(values []string) []string {

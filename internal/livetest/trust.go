@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"net"
 	"net/http"
 	"slices"
@@ -361,13 +362,9 @@ func ToolEnvironment(tb TB, target Target, extra map[string]string) []string {
 	requireAccepted(tb, target)
 
 	values := targetTrustEnvironment(target)
-	for key, value := range credentialProxyEnvironment(tb) {
-		values[key] = value
-	}
+	maps.Copy(values, credentialProxyEnvironment(tb))
 
-	for key, value := range runtimeEnvironment(tb) {
-		values[key] = value
-	}
+	maps.Copy(values, runtimeEnvironment(tb))
 
 	for key, value := range extra {
 		if isTrustEnvironmentKey(key) {

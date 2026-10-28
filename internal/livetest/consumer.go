@@ -14,9 +14,11 @@ import (
 	"strings"
 	"time"
 
+	"codefloe.com/itiquette/forge-lab-contract/labcontract"
 	"golang.org/x/mod/semver"
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/provider"
 )
 
 // A consumer trial runs a real repository's own workflow on the lab against
@@ -42,7 +44,7 @@ const (
 	// is written in two parts, so that a licence scanner reading this file
 	// does not take the canary's header for this file's own.
 	consumerCanary     = ".forge-ci-consumer-trial.txt"
-	consumerCanaryText = "# SPDX-FileCopyrightText" + ": 2026 Digg - Agency for Digital Government\n#\n" +
+	consumerCanaryText = "# SPDX-FileCopyrightText" + ": The Forge CI Authors\n#\n" +
 		"# SPDX-License-Identifier" + ": CC0-1.0\n\nA consumer trial of the forge-ci live tier adds this file.\n"
 
 	// The messages of the two commits a trial writes. A consumer lints its
@@ -60,6 +62,39 @@ const (
 	TrialPullRequest = "pull-request"
 	TrialRelease     = "release"
 )
+
+// ConsumerTrial is the scenario name of a Forgejo consumer trial's scratch
+// repositories: the consumer's copy, and LayerScenario of it for the layer
+// under test that its workflows call.
+const ConsumerTrial = "consumer-trial"
+
+// LayerScenario is the scenario name of the scratch repository a scenario
+// pushes the layer under test to, beside its own.
+func LayerScenario(scenario string) string { return scenario + "-layer" }
+
+// ConsumerTrialLayerURL is the web URL of the repository a Forgejo consumer
+// trial pushes the layer under test to, for the publisher of the lab's kaniko
+// job image: a run admits that image only when its source label names the
+// repository the layer's workflows run from.
+func ConsumerTrialLayerURL() (string, error) {
+	lab, err := currentLabContract()
+	if err != nil {
+		return "", err
+	}
+
+	return consumerTrialLayerURL(lab)
+}
+
+// consumerTrialLayerURL is the layer's address as PushLayer serves it: the
+// endpoint's web root, the credential's owner and the scratch repository.
+func consumerTrialLayerURL(lab *labcontract.Contract) (string, error) {
+	endpoint, err := lab.Endpoint(labcontract.Kind(provider.ForgeForgejo))
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSuffix(endpoint.WebBaseURL, "/") + "/" + endpoint.Owner() + "/" + ScratchRepo(LayerScenario(ConsumerTrial)), nil
+}
 
 // The values a repository variable of a trial may refer to, because the
 // caller cannot know them before the run.
@@ -146,13 +181,14 @@ func ParseTrialSettings(event string, words []string) (TrialSettings, error) {
 	if settings.NextVersion != "" && (settings.InterruptAfter != "" || semver.Compare("v"+settings.NextVersion, "v"+settings.Version) <= 0) {
 		return TrialSettings{}, fmt.Errorf("next-version requires an increasing release version and cannot accompany interrupt-after: %w", errs.ErrValidation)
 	}
+
 	return settings, nil
 }
 
 // ResolvedVariables returns the caller's variables with the two references
 // replaced: the commit of the layer under test, and the commit the trial
 // pushed as the consumer's main, which a release trial requests.
-func (settings TrialSettings) ResolvedVariables(layerCommit, requestCommit string) map[string]string {
+func (settings *TrialSettings) ResolvedVariables(layerCommit, requestCommit string) map[string]string {
 	resolved := make(map[string]string, len(settings.Variables))
 
 	for name, value := range settings.Variables {
@@ -198,7 +234,9 @@ func (settings *TrialSettings) setReleaseOnly(key, value string) bool {
 		if settings.NextVersion != "" || !valid {
 			return false
 		}
+
 		settings.NextVersion = version
+
 		return true
 	case settingImage:
 		return appendOnce(&settings.Images, value) && trialImage.MatchString(value)
@@ -362,7 +400,8 @@ type ConsumerPlan struct {
 //
 // Each fact is taken the way the consumer passes it. From a variable or a
 // secret, `input: ${{ vars.NAME }}`, the plan sets NAME. As a literal, the
-// plan replaces the literal. Any other form is refused with the line, because
+// plan replaces the literal. Repository inputs also admit the narrow variable
+// default form below. Other forms are refused with the line, because
 // the trial would then run with the organization's value: a signer image the
 // lab cannot pull, or a key that does not match the lab's signatures.
 func (layer Layer) PlanConsumer(workflows map[string]string, facts ConsumerFacts) (ConsumerPlan, error) {
@@ -372,11 +411,30 @@ func (layer Layer) PlanConsumer(workflows map[string]string, facts ConsumerFacts
 	}
 
 	plan := ConsumerPlan{Pin: pin, Replace: layer.inPlaceOf(pin), Variables: map[string]string{}, Secrets: map[string]string{}}
+	// Establish base coordinates across all wrappers first. A shared image
+	// workflow may receive that same variable as image-repository; it is still
+	// the exact base destination, not the final release destination.
+	if base := facts.Inputs["base-repository"]; base != "" {
+		for _, name := range sortedKeys(workflows) {
+			if err = plan.bindInput(name, foldedExpression.ReplaceAllString(workflows[name], " }}"), "base-repository", base); err != nil {
+				return ConsumerPlan{}, err
+			}
+		}
+	}
 
 	for _, name := range sortedKeys(workflows) {
 		text := foldedExpression.ReplaceAllString(workflows[name], " }}")
 
 		for _, input := range sortedKeys(facts.Inputs) {
+			if input == "base-repository" {
+				continue
+			}
+			// Repository variables already bound by a base declaration keep its
+			// exact coordinate when forwarded through shared image execution.
+			if input == "image-repository" && facts.Inputs["base-repository"] != "" {
+				text = plan.withoutBaseRepositoryForwards(text, facts.Inputs["base-repository"])
+			}
+
 			if err = plan.bindInput(name, text, input, facts.Inputs[input]); err != nil {
 				return ConsumerPlan{}, err
 			}
@@ -419,11 +477,45 @@ func (layer Layer) inPlaceOf(pin ConsumerPin) []string {
 
 // Render applies the plan to the text of one file. No old string begins
 // inside another's match, so the order of the pairs decides nothing.
-func (plan ConsumerPlan) Render(text string) string {
+func (plan *ConsumerPlan) Render(text string) string {
 	return strings.NewReplacer(plan.Replace...).Replace(text)
 }
 
 var variableExpression = regexp.MustCompile(`^\$\{\{\s*vars\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}$`)
+
+// Only repository defaults have this additional admitted form. In particular,
+// keys, signer images and arbitrary expressions do not acquire a fallback path.
+var repositoryDefault = regexp.MustCompile(`^\$\{\{\s*vars\.([A-Za-z_][A-Za-z0-9_]*)\s*\|\|\s*'([a-z0-9.-]+(:[0-9]+)?(/[a-z0-9._-]+)+)'\s*\}\}$`)
+
+func repositoryVariable(written string) string {
+	if match := variableExpression.FindStringSubmatch(written); match != nil {
+		return match[1]
+	}
+
+	if match := repositoryDefault.FindStringSubmatch(written); match != nil {
+		return match[1]
+	}
+
+	return ""
+}
+
+// Omit already-bound base forwarding lines from final-repository admission.
+// The actual rendered source retains its variable, which the trial sets to
+// the exact base coordinate. Other keys/text are untouched.
+func (plan *ConsumerPlan) withoutBaseRepositoryForwards(text, base string) string {
+	line := regexp.MustCompile(`(?m)^([ \t]*image-repository:[ \t]*)(.*?)[ \t]*$`)
+
+	return line.ReplaceAllStringFunc(text, func(written string) string {
+		match := line.FindStringSubmatch(written)
+
+		name := repositoryVariable(match[2])
+		if name != "" && plan.Variables[name] == base {
+			return ""
+		}
+
+		return written
+	})
+}
 
 // bindInput plans one fact for every line of a workflow that passes it.
 func (plan *ConsumerPlan) bindInput(file, text, input, value string) error {
@@ -436,6 +528,10 @@ func (plan *ConsumerPlan) bindInput(file, text, input, value string) error {
 		switch from := variableExpression.FindStringSubmatch(written); {
 		case from != nil:
 			if err := bind(plan.Variables, "variable", from[1], value); err != nil {
+				return err
+			}
+		case (input == "image-repository" || input == "base-repository" || input == "publication-image-repository") && repositoryVariable(written) != "":
+			if err := bind(plan.Variables, "variable", repositoryVariable(written), value); err != nil {
 				return err
 			}
 		case literal == "":
@@ -726,7 +822,7 @@ func (consumer Consumer) workflows(ctx context.Context) (map[string]string, erro
 
 	workflows := map[string]string{}
 
-	for _, path := range strings.Split(strings.TrimSuffix(string(listed), "\x00"), "\x00") {
+	for path := range strings.SplitSeq(strings.TrimSuffix(string(listed), "\x00"), "\x00") {
 		if ext := filepath.Ext(path); ext != ".yml" && ext != ".yaml" {
 			continue
 		}
@@ -773,7 +869,7 @@ func (consumer Consumer) commitRendered(ctx context.Context, plan ConsumerPlan) 
 		return "", err
 	}
 
-	for _, path := range strings.Split(strings.TrimSuffix(string(matched), "\x00"), "\x00") {
+	for path := range strings.SplitSeq(strings.TrimSuffix(string(matched), "\x00"), "\x00") {
 		path = strings.TrimPrefix(path, consumer.Commit+":")
 
 		entry, entryErr := git.run(ctx, stage, "ls-tree", consumer.Commit, "--", path)

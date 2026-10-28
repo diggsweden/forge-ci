@@ -55,7 +55,7 @@ func (demos *GitHubDemos) Close() { demos.client.Close() }
 func (demos *GitHubDemos) List(ctx context.Context) ([]DemoSet, error) {
 	var repositories []DemoRepository
 
-	options := &github.RepositoryListByOrgOptions{ListOptions: github.ListOptions{PerPage: 100}}
+	options := &github.RepositoryListByOrgOptions{PerPage: 100}
 
 	for {
 		page, response, err := demos.api.Repositories.ListByOrg(ctx, demos.org, options)

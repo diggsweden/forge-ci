@@ -184,7 +184,7 @@ func writeBaseLedger(t *testing.T, dir string, entry map[string]string) string {
 func fileSHA256(t *testing.T, path string) string {
 	t.Helper()
 
-	body, err := os.ReadFile(path) //nolint:gosec // G304: a file this scenario wrote in its own temp directory.
+	body, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}

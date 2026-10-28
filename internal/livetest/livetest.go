@@ -118,7 +118,7 @@ const (
 
 // liveForges are the forge kinds this tier drives. A contract may carry
 // other endpoints (gitea); they are never selected.
-var liveForges = []provider.ForgeAPI{provider.ForgeGitLab, provider.ForgeForgejo} //nolint:gochecknoglobals // read-only table.
+var liveForges = []provider.ForgeAPI{provider.ForgeGitLab, provider.ForgeForgejo}
 
 // Target names one selected forge instance and the identity to act as.
 type Target struct {

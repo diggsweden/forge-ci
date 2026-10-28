@@ -52,7 +52,7 @@ const (
 // labClients caches one module client per accepted target. Construction makes
 // no request, but it builds a transport, and each lifecycle step of each
 // scenario would otherwise open a connection pool of its own.
-var labClients sync.Map //nolint:gochecknoglobals // Process cache keyed by forge, host and owner.
+var labClients sync.Map
 
 // ScratchRepo returns the name of a scratch repository for a scenario, always
 // inside the namespace this suite declared it owns.

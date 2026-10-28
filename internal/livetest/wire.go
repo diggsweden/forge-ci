@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 
 	"codefloe.com/itiquette/forge-lab-contract/labcontract"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
@@ -34,7 +35,7 @@ func discard(ctx context.Context, target Target, method, endpoint string, body a
 // decode performs an authenticated request, checks the status against the
 // accepted set, and optionally decodes the body. It returns the status so a
 // caller can distinguish "found" from "absent" without a second call.
-func decode(ctx context.Context, target Target, method, endpoint string, body, into any, accept ...int) (int, error) { //nolint:cyclop // Shared wire decoder classifies each forge response shape.
+func decode(ctx context.Context, target Target, method, endpoint string, body, into any, accept ...int) (int, error) {
 	var reader io.Reader
 
 	if body != nil {
@@ -132,13 +133,7 @@ func fetch(ctx context.Context, target Target, endpoint string, limit int64) ([]
 }
 
 func accepted(status int, accept []int) bool {
-	for _, want := range accept {
-		if status == want {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(accept, status)
 }
 
 // authorize sets the token header the target's kind reads, spelled by the
