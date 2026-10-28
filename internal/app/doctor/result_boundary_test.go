@@ -12,11 +12,13 @@ import (
 	"github.com/diggsweden/forge-ci/internal/app/doctor"
 )
 
-func TestDoctorResultsBoundary_ConfigIndependentChecks(t *testing.T) { //nolint:gocognit // four real config outcomes assert their complete ordered result sets.
+func TestDoctorResultsBoundary_ConfigIndependentChecks(t *testing.T) {
 	t.Parallel()
 
 	for _, kind := range []string{"valid", "missing", "malformed", "derived"} {
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+
 			root := t.TempDir()
 			if err := os.MkdirAll(filepath.Join(root, ".github/workflows"), 0o700); err != nil {
 				t.Fatal(err)

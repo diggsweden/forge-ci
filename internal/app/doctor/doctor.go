@@ -133,7 +133,7 @@ func Run(in Input) ([]Check, error) {
 	checks = append(checks,
 		checkSignBlock(cfg.Sign),
 		checkAllowedSignersIfRequired(root, cfg.Artifacts),
-		checkWorkflowPermissions(root, cfg.Sign),
+		checkWorkflowPermissions(root, cfg.Sign, in.ForgeAPI),
 	)
 
 	if rec, ok := signMethodRecommendation(cfg, in.KeylessAvailable); ok {
@@ -299,13 +299,13 @@ type Report struct {
 // FormatJSON writes the report as indented JSON (one document, trailing
 // newline) to w. The structured counterpart to FormatEnvironment +
 // FormatText, selected by the global --json / --format=json flag.
-func FormatJSON(w io.Writer, report Report) error { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
+func FormatJSON(out io.Writer, report Report) error {
 	body, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return fmt.Errorf("doctor: marshal report: %w", err)
 	}
 
-	if _, err := w.Write(append(body, '\n')); err != nil {
+	if _, err := out.Write(append(body, '\n')); err != nil {
 		return fmt.Errorf("doctor: write report: %w", err)
 	}
 
@@ -360,18 +360,18 @@ type Environment struct {
 // Outside a CI job the forge resolves to local, which has no capability at
 // all; eight alarming "[ no]" rows would then lead the report on every
 // laptop. One line says why they are absent and how to see a forge's table.
-func FormatEnvironment(w io.Writer, env Environment) { //nolint:varnamelen // idiomatic short name (testing/http/io conventions).
-	_, _ = fmt.Fprintf(w, "Environment:\n")
-	_, _ = fmt.Fprintf(w, "  provider (forge API): %s (%s)\n", env.Provider, env.ForgeAPI)
-	_, _ = fmt.Fprintf(w, "  runner conventions:   %s\n", env.Runner)
+func FormatEnvironment(out io.Writer, env Environment) {
+	_, _ = fmt.Fprintf(out, "Environment:\n")
+	_, _ = fmt.Fprintf(out, "  provider (forge API): %s (%s)\n", env.Provider, env.ForgeAPI)
+	_, _ = fmt.Fprintf(out, "  runner conventions:   %s\n", env.Runner)
 
 	if env.ForgeAPI == provider.ForgeLocal.String() {
-		_, _ = fmt.Fprintf(w, "  not in a CI job; capability table skipped, pass --provider github to see it\n")
+		_, _ = fmt.Fprintf(out, "  not in a CI job; capability table skipped, pass --provider github to see it\n")
 
 		return
 	}
 
-	_, _ = fmt.Fprintf(w, "Capabilities:\n")
+	_, _ = fmt.Fprintf(out, "Capabilities:\n")
 
 	rows := []struct {
 		name string
@@ -394,10 +394,10 @@ func FormatEnvironment(w io.Writer, env Environment) { //nolint:varnamelen // id
 			mark = "no"
 		}
 
-		_, _ = fmt.Fprintf(w, "  [%3s] %s\n", mark, row.name)
+		_, _ = fmt.Fprintf(out, "  [%3s] %s\n", mark, row.name)
 
 		if !row.on {
-			_, _ = fmt.Fprintf(w, "        → %s\n", row.hint)
+			_, _ = fmt.Fprintf(out, "        → %s\n", row.hint)
 		}
 	}
 }
@@ -568,13 +568,17 @@ func checkAllowedSignersIfRequired(root string, artifacts []config.Artifact) Che
 	}
 }
 
-func checkWorkflowPermissions(root string, sign config.SignConfig) Check {
+func checkWorkflowPermissions(root string, sign config.SignConfig, forge provider.ForgeAPI) Check {
 	if sign.EffectiveMethod() != domainrelease.SignMethodSigstore {
 		return Check{
 			Name:     "workflow id-token permission (n/a)",
 			Severity: SeverityOK,
 			Message:  "sign.method != sigstore; OIDC token not required",
 		}
+	}
+
+	if useGitLabOIDCCheck(root, forge) {
+		return checkGitLabOIDC(root)
 	}
 
 	// Sigstore-keyless needs the workflow to grant the runner an OIDC
@@ -888,7 +892,7 @@ func findFloatingForgeCIRefs(workflowsDir, repoSlug string) ([]string, error) {
 
 	walkErr := filepath.WalkDir(workflowsDir, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
-			return err //nolint:wrapcheck // walker error type expected upstream.
+			return err
 		}
 
 		if !strings.HasSuffix(path, ".yml") && !strings.HasSuffix(path, ".yaml") {
@@ -950,12 +954,12 @@ func floatingReusableRef(uses, repoSlug string) bool { //nolint:cyclop // exact 
 		return false
 	}
 
-	index := strings.LastIndexByte(uses, '@')
-	if index < 0 {
+	before, after, ok := strings.CutLast(uses, "@")
+	if !ok {
 		return false
 	}
 
-	name, ref := uses[:index], uses[index+1:]
+	name, ref := before, after
 	if ref != "main" && ref != "master" {
 		return false
 	}

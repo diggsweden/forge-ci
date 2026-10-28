@@ -165,24 +165,24 @@ func TestRun_RecordInvariantsHoldForEveryConfiguration(t *testing.T) {
 func assertCheckRecordShape(t *testing.T, checks []doctor.Check) {
 	t.Helper()
 
-	for i, check := range checks {
+	for index, check := range checks {
 		switch check.Severity {
 		case doctor.SeverityOK:
 			if strings.TrimSpace(check.Remediation) != "" {
-				t.Errorf("check %d (%s) is ok but carries remediation; nothing needs fixing", i, check.Name)
+				t.Errorf("check %d (%s) is ok but carries remediation; nothing needs fixing", index, check.Name)
 			}
 		case doctor.SeverityWarn, doctor.SeverityFail:
 			if strings.TrimSpace(check.Remediation) == "" {
 				t.Errorf("check %d (%s) is %s with no remediation; doctor's promise is to say what to do next",
-					i, check.Name, check.Severity)
+					index, check.Name, check.Severity)
 			}
 		default:
 			t.Errorf("check %d (%s) has severity %q, which FormatText and ExitCode do not model",
-				i, check.Name, check.Severity)
+				index, check.Name, check.Severity)
 		}
 
 		if strings.TrimSpace(check.Name) == "" || strings.TrimSpace(check.Message) == "" {
-			t.Errorf("check %d has an empty name or message: %+v", i, check)
+			t.Errorf("check %d has an empty name or message: %+v", index, check)
 		}
 	}
 }

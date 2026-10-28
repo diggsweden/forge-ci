@@ -25,7 +25,7 @@ func writeRepo(t *testing.T, artifactsYAML string, files map[string]string) stri
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(filepath.Join(root, ".forge-ci", "artifacts.yml"), []byte(artifactsYAML), 0o644); err != nil { //nolint:gosec // test fixture.
+	if err := os.WriteFile(filepath.Join(root, ".forge-ci", "artifacts.yml"), []byte(artifactsYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -35,7 +35,7 @@ func writeRepo(t *testing.T, artifactsYAML string, files map[string]string) stri
 			t.Fatal(err)
 		}
 
-		if err := os.WriteFile(full, []byte(body), 0o644); err != nil { //nolint:gosec // test fixture.
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -108,15 +108,15 @@ func TestRun_MissingArtifactsYML_Fails(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c := findCheck(checks, "artifacts.yml present")
-	if c == nil || c.Severity != doctor.SeverityFail {
+	check := findCheck(checks, "artifacts.yml present")
+	if check == nil || check.Severity != doctor.SeverityFail {
 		// Fatalf, not Errorf: the remediation check below dereferences c,
 		// so a missing check would panic instead of reporting.
-		t.Fatalf("missing artifacts.yml must produce a FAIL check; got %+v", c)
+		t.Fatalf("missing artifacts.yml must produce a FAIL check; got %+v", check)
 	}
 
-	if !strings.Contains(c.Remediation, "examples/") {
-		t.Errorf("remediation must reference examples/; got %q", c.Remediation)
+	if !strings.Contains(check.Remediation, "examples/") {
+		t.Errorf("remediation must reference examples/; got %q", check.Remediation)
 	}
 }
 
@@ -124,7 +124,7 @@ func TestRun_MissingArtifactsYML_AutoDerivesSingleManifest(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/acme/widget\n\ngo 1.24\n"), 0o644); err != nil { //nolint:gosec // test fixture.
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/acme/widget\n\ngo 1.24\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -149,7 +149,7 @@ func TestRun_ExplicitMissingArtifactsPathDoesNotAutoDerive(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/acme/widget\n"), 0o644); err != nil { //nolint:gosec // test fixture.
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/acme/widget\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -228,14 +228,14 @@ sign:
 		t.Fatal(err)
 	}
 
-	c := findCheck(checks, "workflow id-token permission")
-	if c == nil || c.Severity != doctor.SeverityFail {
+	check := findCheck(checks, "workflow id-token permission")
+	if check == nil || check.Severity != doctor.SeverityFail {
 		// Fatalf, not Errorf: the remediation check below dereferences c.
-		t.Fatalf("sigstore + no id-token must fail; got %+v", c)
+		t.Fatalf("sigstore + no id-token must fail; got %+v", check)
 	}
 
-	if !strings.Contains(c.Remediation, "id-token: write") {
-		t.Errorf("remediation must mention id-token: write; got %q", c.Remediation)
+	if !strings.Contains(check.Remediation, "id-token: write") {
+		t.Errorf("remediation must mention id-token: write; got %q", check.Remediation)
 	}
 }
 
@@ -378,13 +378,13 @@ artifacts:
 		t.Fatal(err)
 	}
 
-	c := findCheck(checks, recommendationCheck)
-	if c == nil {
+	check := findCheck(checks, recommendationCheck)
+	if check == nil {
 		t.Fatal("expected a keyless recommendation on gpg + keyless-capable forge")
 	}
 
-	if c.Severity != doctor.SeverityOK {
-		t.Errorf("recommendation must be non-failing (OK), got %s", c.Severity)
+	if check.Severity != doctor.SeverityOK {
+		t.Errorf("recommendation must be non-failing (OK), got %s", check.Severity)
 	}
 
 	if doctor.ExitCode(checks) != 0 {
@@ -532,7 +532,7 @@ git-signing:
 `, map[string]string{
 		// Missing principal — the exact bug that caused CI to reject
 		// the tag signature with "signer is not in allowed_signers".
-		".forge-ci/allowed_signers": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFKw6+NIKWOtsi2O+WmFbxgYTmak1rpcEPrvx23EQ3yJ josef.andersson@digg.se\n", // gitleaks:allow — throwaway test key
+		".forge-ci/allowed_signers": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFKw6+NIKWOtsi2O+WmFbxgYTmak1rpcEPrvx23EQ3yJ fixture@example.invalid\n", // gitleaks:allow — throwaway test key
 	})
 
 	checks, err := doctor.Run(doctor.Input{Root: root})

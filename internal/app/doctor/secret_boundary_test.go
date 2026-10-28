@@ -23,6 +23,8 @@ func TestDoctorSecretBoundary_FieldOnlyDiagnostics(t *testing.T) {
 		{"sigstore", "oidc-issuer", "https:invented-issuer-canary"},
 	} {
 		t.Run(tc.method+"/"+tc.value, func(t *testing.T) {
+			t.Parallel()
+
 			config := fmt.Sprintf("artifacts:\n  - name: app\n    project-type: meta\nsign:\n  method: %s\n  %s: %q\n", tc.method, tc.field, tc.value)
 			if tc.method == "kms" && tc.field == "oidc-issuer" {
 				config += "  key: file:fake-public-key\n"
