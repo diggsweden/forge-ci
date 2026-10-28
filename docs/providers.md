@@ -313,7 +313,7 @@ lacks.
 | Job image | runtime images | runtime images; digest-pinned images you supply for `check` and `release` | the consumer's image or `setup-toolchain` |
 | Engine binary | runtime image or verified release archive | runtime image, or the checksum-bound build for `check` and `release` | the checksum-bound build |
 | Plan-driven fan-out from `artifacts.yml` | `release-build-stage.yml` | generated child pipeline | none: the consumer's workflow is the plan |
-| Image build, scan, ledger | `publish-container.yml` | the consumer's `build` commands; `release` imports the ledger | `build-release-image` |
+| Image build, scan, ledger | `publish-container.yml` | the consumer's `build` commands; `release` imports the ledger | `release-images.yml` |
 | Release preparation, signed tag | `release-prepare-stage.yml` | `release` component | `prepare-release.yml` |
 | Release branch | `branch` input, required | `release-branch` input, the project's default branch by default | `release-branch` input, `main` by default |
 | Version bump in project files | `version-bump.yml` | `release` `version-bump: maven`: bumped in a key-free job, verified as text in `Prepare: release commit and tag`, committed with the changelog | `prepare-release.yml` `version-bump: maven`: bumped in a key-free job, verified as text in the signing job, committed with the changelog |
@@ -394,7 +394,11 @@ signer image definition. Lint and build are actions the consumer's own jobs
 call, not workflows. The
 [Forgejo guide](forgejo.md) is its manual, and its
 [comparison](#delivery-layers-side-by-side) sets the layer beside the
-other two. The rest of this section is about the CLI's Forgejo adapter.
+other two. A hosted Forgejo pool that shares its kernel between tenants
+denies user namespaces, so its jobs cannot run rootless Buildah;
+[Runners and runner lending](runners.md) is how such an installation
+borrows a machine for exactly those jobs. The rest of this section is about
+the CLI's Forgejo adapter.
 
 **Runner conventions.** A Forgejo runner also sets `GITHUB_ACTIONS=true`, so
 detection probes Forgejo first, as [Detection and

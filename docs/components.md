@@ -6,10 +6,10 @@ This document is the authoritative inventory of reusable workflow components and
 their direct-call contracts. Architecture pages link here instead of maintaining
 parallel workflow lists.
 
-> **Unpublished 0.90.0:** `@v0.90.0` references below are prospective. Until the tag
-> and matching runtime images exist, use the reviewed-branch procedure in
-> [Runtime Images](runtime-images.md); do not substitute an unreviewed moving
-> ref in production.
+> **Current source versus release pins:** `v0.90.0` examples identify a historical
+> baseline, not the current source revision. Confirm matching workflows, CLI
+> assets and runtime images before adoption. For unreleased changes, follow
+> [Branch Testing](runtime-images.md#branch-testing).
 
 ---
 
@@ -403,6 +403,18 @@ These workflows are automatically called by `pullrequest-orchestrator.yml`. The
 `lint-engine` input picks the single general engine (mutually exclusive, because two
 would duplicate Code Scanning findings); Swift/iOS checks run separately in
 `lint-swift.yml` regardless of the engine.
+
+GitHub's orchestrator defaults to `nanolinter`; the provider-neutral
+`forge-ci plan pr` command defaults to `none`. Selecting `none` (or leaving
+the CLI selection empty) emits a warning during PR planning that no supported
+lint engine is enabled and general lint checks will not run. Selection uses
+the explicit input, not config-file presence or executable discovery. A missing
+executable for a selected engine remains a job failure, not a disabled engine.
+Nanolinter's `required-lints` floor and MegaLinter's blocking gate still apply
+when their engine is selected. Config files are optional customizations: without
+one, the selected engine uses its defaults, not the `none` selection. Init does
+not create either engine's config; consumers own those files, with examples
+available to copy when custom settings are wanted.
 
 #### `lint-nanolinter.yml` (default)
 Runs `nanolinter verify` against the consumer's `nanolinter.toml` verify plan,

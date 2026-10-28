@@ -86,6 +86,25 @@ runs from. **Each consumer, per project:** the merge-request gate in its
 `.gitlab-ci.yml`, its `nanolinter.toml`, its project settings and the
 protected variables (steps 3 to 6).
 
+Init neither creates nor modifies Nanolinter or MegaLinter configuration files.
+These are optional customizations: the engine selected by your lint component
+uses its defaults without a config file, with the component's required lint
+floor still applying. Keep your existing config or copy an example if you want
+custom settings.
+
+Use `forge-ci init <mirror URL> --dry-run` to preview the proposed files,
+remaining placeholders, and all existing-file conflicts before generation.
+It still fetches release templates into temporary storage, but writes no project
+files. Conflicts return nonzero. Repeat without `--dry-run` using the reported
+`--ref` and `--example` after reviewing the proposal.
+
+Automatic release selection accepts both Catalog tags such as `0.90.0` and
+prefixed tags such as `v0.90.0`, choosing the highest stable version.
+Prereleases and build-metadata tags are excluded from automatic selection.
+If both spellings exist at the highest version, the prefixed tag wins;
+use `--ref 0.90.0` to choose the unprefixed tag explicitly.
+Init resolves and reads the exact selected tag name.
+
 The organization's mirror can make `forge-ci init <mirror URL>` write a
 consumer's files with every pin filled in. The operator commits
 `.forge-ci/consumer-defaults.yml` to the mirror; init reads it at the release
@@ -166,11 +185,13 @@ images and pins, a validating regex. The inputs that are not obvious:
 | | `job-image`, `build-image`, `signer-image` | Digest-pinned images for key-free jobs, the build job, and the signing jobs. |
 | | `publication-project`, `publication-image-repository` | The separate project that owns final images, and the exact registry repository in it. |
 | | `cosign-public-key-sha256` | SHA-256 of your Cosign public key, written out. |
-| | `release-git-url`, `release-git-host-key-fingerprint` | The SSH write URL for the release commit and tag, and its independently supplied host key fingerprint. |
+| | `release-git-url`, `release-git-host-key-fingerprint` | The SSH write URL for the release commit and tag, and its independently supplied host key fingerprint, `SHA256:<base64>` alone. An empty URL is this project on the GitLab web host, port 22. |
 | | `request-allowed-signers` | OpenSSH allowed-signers text for the people who may sign a request tag. |
 | | `bot-name`, `bot-email` | The release bot identity; no default. |
 | | `checks`, `build` | Consumer commands: checks on the request commit, and the build that writes `dist/release-files.json` and `release-notes.md`. |
-| | `changelog-creator`, `changelog-config`, `commit-body-config` | `git-cliff` (default) or `git-chglog`, and the consumer's configuration files, by default `.forge-ci/gitcliff/keepachangelog.toml` and `.forge-ci/gitcliff/minimal.toml`, copies of this repository's [`templates/gitcliff/`](../templates/gitcliff/). git-cliff renders offline, without remote metadata, and reads stable `vX.Y.Z` tags only, overriding any `tag_pattern` in the configuration. |
+| | `build-runner-tags` | Runner tags for the build job alone, for example `[privileged]`. Empty, the default, leaves it untagged; every other job stays untagged. |
+| | `changelog-creator`, `changelog-config`, `commit-body-config` | `git-cliff` (default) or `git-chglog`, and the consumer's configuration files, by default `.forge-ci/gitcliff/keepachangelog.toml` and `.forge-ci/gitcliff/minimal.toml`, copies of this repository's [`templates/gitcliff/`](../templates/gitcliff/). git-cliff renders offline, without remote metadata, and reads stable `vX.Y.Z` tags only, overriding any `tag_pattern` in the configuration. A SHA-256 repository needs `git-chglog`, since git-cliff cannot read one. |
+| | `release-policy` | `stable` (default) or `stable-prerelease`, selected in the trusted external policy. GitLab has no native prerelease flag; see [release policy](workflows.md#stable-and-prerelease-policy). |
 | | `release-branch` | The branch a release lands on; empty, the default, takes the project's default branch. The request must be its head. |
 | | `transparency-log` | `none` (default) or `public`: whether Cosign signatures are also written to the public Sigstore transparency log. See [Signing](#signing). |
 | | `sign-distro-packages` | Default `true`: GPG `.sig` sidecars for `.deb`, `.rpm` and `.apk`, which makes the GPG variables required. |
@@ -180,6 +201,10 @@ images and pins, a validating regex. The inputs that are not obvious:
 | `megalinter` | `forge-ci-repository`, `megalinter-image`, `enable-gitlab-sast` | Required digest-pinned image; the rest as for `nanolinter`. |
 | `build-*` | `working-directory`, `version`, `skip-tests`, `enable-build-sbom`, `runtime-image` | Common to every build component; `build-go` and `build-cargo` add `platforms` and `artifact-name`, `build-go` also `main-package` (relative to `working-directory`), `build-maven` `build-type` and `profile`, `build-gradle-android` the module, flavour and signing inputs. |
 | `publish-*` | `project-type`, `working-directory`, `runtime-image` | `publish-maven-central` adds `profile` and `settings-path`; `publish-apple-appstore` adds `platform`, `runner-tags` and `macos-image`. |
+
+The standalone `publish-maven-central` component also accepts `release-policy`.
+It binds the selected input before authorization; a project environment variable
+cannot widen the default stable-only policy. Snapshot publishing is independent.
 
 **Variables.** Project-level variables the components read:
 
@@ -255,6 +280,9 @@ The policy selects separate digest-pinned `job-image`, `build-image` and
 permission tests must run with ordinary-user filesystem semantics. Only the
 build job selects `build-image`, which can supply a root Buildah environment.
 Pass the same image for both inputs when the build needs no separate environment.
+Buildah needs user namespaces. Where only some runners allow them, tag those
+runners and name the tags in `build-runner-tags`: the build job alone moves
+there, and the signing jobs stay on the untagged runners.
 The components clear the entrypoint of `job-image` and `build-image`, here and
 in `check`, and of the lint images in `nanolinter` and `megalinter`, so an
 image that starts a tool of its own still runs the job's shell on a Docker
@@ -682,7 +710,8 @@ and `.forge-ci/gitcliff/minimal.toml` for the release commit body. Copy the two
 files of this repository's [`templates/gitcliff/`](../templates/gitcliff/) there
 to start. Set `changelog-config` and `commit-body-config` to the consumer's
 actual paths when using another layout or `git-chglog`; the renderer CLI
-requires filenames.
+requires filenames, and refuses one that does not exist. A SHA-256 repository
+needs `git-chglog`: git-cliff cannot read one, and the render refuses it.
 
 ### Old releases' files
 
@@ -879,7 +908,7 @@ package, images, keys and bot.
    branch approves the pin, and only release administrators push the
    protected `release-request/v*` tag that starts a release from it.
 3. **If your copy changes Go code**, record the new build as
-   [Development](DEVELOPMENT.md#the-engine-layers-engine-binary) describes.
+   [Development](DEVELOPMENT.md#the-engine-binary) describes.
 4. **Publish the binary** for that commit to your project's generic packages;
    see [Publish the recorded build](#publish-the-recorded-build).
 5. **Build your signer image** and pin its digest; see
@@ -917,6 +946,28 @@ SAST conversion names an owner.
 | Findings do not appear on the Security tab | Display needs GitLab Ultimate, or the conversion was skipped; the job log says so. |
 
 `forge-ci doctor` in a job prints what the detected forge supports.
+
+For `sign.method: sigstore`, doctor checks `.gitlab-ci.yml` for a local job
+declaring `id_tokens.SIGSTORE_ID_TOKEN` with a non-empty audience (a string or
+list of strings). This declares a token GitLab creates at job runtime; never
+put the token's actual value in a template or committed configuration.
+Use the audience required by your signing service, commonly `sigstore`.
+
+A separate `spec: inputs` header followed by `---` is supported: doctor
+inspects the jobs in the following document. Input expressions (`$[[ ... ]]`)
+in that pipeline produce a warning because doctor does not evaluate them.
+
+The check reports a missing declaration as a failure for a directly readable
+local pipeline. Includes, defaults, inheritance, child pipelines, custom token
+variable names, or an unavailable default configuration file produce a warning
+to inspect the effective signing job in GitLab instead. Doctor does not fetch
+includes, evaluate the merged pipeline, inspect token values, or verify job
+execution or audience suitability. Malformed local YAML, a header without its
+pipeline, or unexpected extra documents are failures.
+
+Outside CI, doctor recognizes an unambiguous GitLab-only layout. For a repository
+with multiple forge layouts, select GitLab explicitly with
+`forge-ci --provider gitlab doctor`.
 
 ## Limits
 

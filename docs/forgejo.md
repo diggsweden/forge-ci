@@ -177,6 +177,17 @@ without a commit. Neither is a trust input, since the clone must be exactly
 
 ### Quick start
 
+Init neither creates nor modifies Nanolinter or MegaLinter configuration files.
+These are optional customizations: the engine selected by your lint job uses
+its defaults without a config file, with the job's required lint floor still
+applying. Keep your existing config or copy an example if you want custom settings.
+
+Use `forge-ci init <mirror URL> --dry-run` to preview the proposed files,
+remaining placeholders, and all existing-file conflicts before generation.
+It still fetches release templates into temporary storage, but writes no project
+files. Conflicts return nonzero. Repeat without `--dry-run` using the reported
+`--ref` and `--example` after reviewing the proposal.
+
 The organization's mirror can make `forge-ci init <mirror URL>` write a
 consumer's files with every pin filled in. The operator commits
 `.forge-ci/consumer-defaults.yml` to the mirror; init reads it at the release
@@ -195,9 +206,9 @@ the steps are these.
 1. **Copy the two examples** of your ecosystem, `pullrequest.yml` and
    `release.yml` from `examples/<ecosystem>/forgejo/` (see the
    [examples index](../examples/README.md)), at the commit you will pin, into
-   a draft directory outside `.forgejo/workflows/`. Copy the example's
-   `nanolinter.toml` to the repository root: the pull-request workflow's lint
-   job runs `nanolinter verify` against it and requires at least the
+   a draft directory outside `.forgejo/workflows/`. Optionally copy the example's
+   `nanolinter.toml` if you want custom lint policy: the pull-request workflow's lint
+   job runs `nanolinter verify` with normal configuration discovery and requires at least the
    `required-lints` floor, default `secrets,sast`.
 2. **Replace the placeholders**: `FORGE_HOST`, `OWNER`, `PIN_FORGE_CI_SHA`,
    `PIN_SIGNER_IMAGE_DIGEST` and `PIN_COSIGN_PUBLIC_KEY_SHA256`. The header of
@@ -252,19 +263,21 @@ the caller passes them by name. Never use `secrets: inherit`.
 | `sign-container-images.yml` | Signs and attests a base-image ledger in one engine call. | Cosign, `RELEASE_REGISTRY_TOKEN` |
 | `verify-base-container-images.yml` | Verifies existing base images against the trusted key, anonymously; a miss is not an error. | none |
 | `promote-base-container-images.yml` | Verifies base-image signatures, then moves the final tags. | `RELEASE_REGISTRY_TOKEN` |
+| `release-images.yml` | Builds the release images `artifacts.yml` declares, one native job per container and architecture, with the organization's image builder; scans each, publishes it under its staging tag and records it for the signer. See [Release images](#release-images). | `RELEASE_REGISTRY_TOKEN`, in the publish job only |
 
 Each workflow's `inputs:` block is its reference: every input carries a
 description. The inputs they share:
 
 | Input | Required | Meaning |
 |---|---|---|
-| `runner-label` | yes | The runner every job of the workflow runs on. |
+| `runner-label` | yes | JSON array of runner labels, e.g. `["ci-builder"]`. Every job requires all labels. |
 | `forge-ci-sha` | yes | The commit to check the layer's files out at: the same commit as the `uses:` pin. |
 | `forge-ci-repository` | yes, unless the variable is set | The repository that serves the layer, as `owner/repository` on the instance or as an HTTPS Git URL: the one in the `uses:` line. Empty takes the `FORGE_CI_REPOSITORY` variable. With neither, the `coordinates` job fails. |
 | `signer-image` | yes, in prepare and the four signer workflows | Your organization's signer image, pinned by digest; pass the same literal to preparation and signing. |
 | `skip-signer-image-check` | no, in prepare | `'false'` by default. Set explicitly to `'true'` for a private signer image whose anonymous availability cannot be checked. |
 | `cosign-public-key`, `cosign-public-key-sha256` | yes, in the four signer workflows | Your organization's Cosign public key, and its SHA-256 as `sha256sum cosign.pub` prints it. |
 | `release-branch` | no, in prepare | The branch the release lands on, `main` by default. See [The request is the head of the release branch](#the-request-is-the-head-of-the-release-branch). |
+| `release-policy` | no, in prepare and sign/publish | `stable` (default) or `stable-prerelease`; pass the same value to both workflows. See [release policy](workflows.md#stable-and-prerelease-policy). |
 | `transparency-log` | no, in the four signer workflows | `none` (the default) or `public`: whether signatures are also written to the public Sigstore transparency log. One value for every workflow of an organization; see [The transparency log](#the-transparency-log). |
 | `release-asset-retention` | no, in `sign-and-publish-release.yml` | How many of the newest releases keep every file; older ones keep their checksums and signatures. Empty, the default, deletes nothing. See [Old releases' files](#old-releases-files). |
 
@@ -286,26 +299,53 @@ alone. Each `action.yml` documents its own inputs and outputs.
 | `lint-nanolinter` | The pull-request lint gate: the repository's nanolinter plan with a mandated floor. |
 | `build-go`, `build-cargo` | The build step of the consumer's job: tests, Build SBOM and one binary per platform. |
 | `build-maven` | The build step of a Maven consumer's job: tests, the jar and the Build SBOM, as GitHub's `build-maven` workflow builds them, after checking that the POM declares the release version. |
-| `build-release-image` | One release image from build to ledger: build and push, scan every platform, record. |
 | `guard-release-tag`, `render-changelog`, `prepare-release` | The steps `prepare-release.yml` is made of, with rendering and signing in separate jobs. Call the workflow; see [The prepare job](#the-prepare-job). |
 | `upload-dist`, `assemble-release-dist` | Hand `dist/` to the signer with its digest, from one producer or several. |
-| `registry-login`, `setup-buildah`, `build-push-oci-image`, `record-release-image` | The single steps of an image build, for a release `build-release-image` does not fit. Such a job scans with `forge-ci container image-evidence` in a step of its own, the call `build-release-image` makes. |
+| `registry-login`, `setup-buildah`, `record-release-image` | Registry authentication, builder preparation and ledger recording for a custom image job. Build/push directly with `forge-ci container build-push-oci-image`; scan with its `--scan-output-template` option or `forge-ci container image-evidence`. |
+| `setup-image-builder` | Prepares whichever image builder `CI_IMAGE_BUILDER` selects: Buildah's storage, or admission of the digest-pinned kaniko job image `CI_IMAGE_BUILDER_JOB_IMAGE`, so a workflow names no builder. The step before `multiarch-image build-arch`. |
 | `prune-base-images` | Base-image maintenance on a schedule: deletes promoted base images that no supported release image's attestation names. A dry run unless told otherwise. |
 | `verify-forgejo-token` | Checks a release token before it is needed. |
+
+The `build-push-oci-image` composite action was removed. Custom jobs call the
+similarly named CLI command after `setup-forge-ci` and pass their registry auth
+file explicitly. For release images, prefer `release-images.yml`, which builds
+each architecture natively and hands its checked ledger to the signer.
 
 ### Variables
 
 Set these on the consumer repository or its organization. An operator supplies
-each value through a trusted channel; none is derived during a release job.
+each value through a trusted channel; a release job derives none of them,
+except the default push URL when `RELEASE_GIT_URL` is unset.
 
 | Variable | Value |
 |---|---|
-| `CI_RUNNER_LABEL` | The exact label of the trusted runner. |
+| `CI_RUNNER_LABEL` | JSON array of trusted runner labels, e.g. `["ci-builder"]` or `["linux","amd64"]`. All labels must match. Plain and signing jobs run here. |
+| `CI_RUNNER_LABEL_CONTAINER`, `CI_RUNNER_LABEL_CONTAINER_ARM64` | Optional, the same format: where jobs that build container images run instead of the pool, because they need user namespaces a shared pool may deny; see [Runners and runner lending](runners.md). |
+| `CI_RUNNER_LENDER`, `CI_RUNNER_LENDER_REPOSITORY` | Optional: the lender a request-runner job asks for an ephemeral runner, with the secret `CI_RUNNER_LENDER_TOKEN`; unset, nothing is borrowed. See [Runner lending](runners.md#runner-lending). |
+| `CI_IMAGE_BUILDER`, `CI_IMAGE_BUILDER_JOB_IMAGE` | The image builder type, `buildah` when unset, or `kaniko` to build on a pool that denies user namespaces, with the digest-pinned image the build jobs then run in. Set both once on the organization: the job image changes only when kaniko or its Containerfile does, not with the engine pin. See [Building on the pool with kaniko](runners.md#building-on-the-pool-with-kaniko). |
 | `CI_JOB_IMAGE` | The image the pull-request lint and build jobs run in, pinned by digest: a nanolinter image of your ecosystem's flavour, or your own image with nanolinter, its check tools and your toolchain. |
-| `RELEASE_GIT_URL` | The exact write URL, as `ssh://git@host[:port]/owner/repository.git`. |
-| `RELEASE_GIT_HOST_KEY_FINGERPRINT` | That endpoint's ed25519 host-key fingerprint. A fingerprint fetched from the host it is meant to verify verifies nothing. |
+| `RELEASE_GIT_URL` | Optional. The exact write URL, as `ssh://git@host[:port]/owner/repository.git`; unset, the release pushes to `ssh://git@<web host>/<owner>/<repository>.git`, port 22. Set it where SSH runs on another host or port. |
+| `RELEASE_GIT_HOST_KEY_FINGERPRINT` | That endpoint's ed25519 host-key fingerprint alone, `SHA256:<base64>` as `ssh-keygen -l` prints it, without host or key type. A fingerprint fetched from the host it is meant to verify verifies nothing. |
 | `COSIGN_PUBLIC_KEY` | The PEM text of your Cosign public key, if you pass it from a variable as the example does. |
 | `FORGE_CI_REPOSITORY` | `owner/repository` of the repository that serves the layer. Only read when a call does not pass `forge-ci-repository`, which the examples do. |
+
+Runner settings are JSON arrays stored as text. Migrate a single label such as
+`ci-builder` to `["ci-builder"]`; use multiple labels when both environment and
+architecture must match. These are requirements for one runner, not alternative
+runner names. The signer-image example builds each architecture on a native
+container runner, `CI_RUNNER_LABEL_CONTAINER` and
+`CI_RUNNER_LABEL_CONTAINER_ARM64`, in the same format.
+
+Direct jobs decode with `runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}`.
+Reusable-workflow callers pass the original JSON text as `runner-label`; the
+called workflow decodes it at `runs-on`. There is no implicit conversion of bare
+labels or comma-separated strings. Update variables and workflow pins together.
+Runner selection does not establish privileges, isolation or tool availability.
+
+GitHub's configurable SLSA attestor `runs-on` string input uses the same JSON-array
+encoding. Fixed GitHub hosted-runner labels and macOS-version inputs stay plain
+labels. GitLab uses its native `runner-tags` array input and `tags` YAML list;
+do not copy Actions expressions or JSON encoding into those GitLab inputs.
 
 ### Variables the layer sets
 
@@ -418,16 +458,16 @@ read-back must match the constructed index digest. The assembly job needs no
 Buildah installation or local image store. Both registry operations use the
 explicit auth file.
 
-The example selects `build-arch --stage` instead: each architecture job retains
-its layout inside the metadata artifact and makes no container registry write.
-`assemble --from-layouts` depends on the entire build matrix succeeding. Before
-uploading any image it checks every metadata binding and the manifest, config
-and compressed-layer SHA-256 values and sizes, plus the actual platform and OCI
-revision label. Assembly then preserves the existing architecture tags, final
-manifest tag and `image-ref`, `image-digest`, `image-tag` outputs. Any separately
-required scans must run against the retained layout before its build job succeeds;
-the record proves content identity, not that a scan ran. The example's existing
-generic-package binary publisher remains the bootstrap prerequisite.
+`build-arch --stage`, which `release-images.yml` uses, publishes nothing
+instead: each architecture job retains its layout inside the metadata
+artifact and makes no container registry write. `assemble --from-layouts`
+depends on the entire build matrix succeeding. Before uploading any image it
+checks every metadata binding and the manifest, config and compressed-layer
+SHA-256 values and sizes, plus the actual platform and OCI revision label.
+With `--scan-output-template` it also scans every staged architecture and
+refuses publication on a finding the container gate blocks, before the first
+upload. Assembly then preserves the existing architecture tags, final manifest
+tag and `image-ref`, `image-digest`, `image-tag` outputs.
 
 For ordinary builds the equivalent is `container build --mode oci --scan
 --output-dir <fresh-directory>`, followed by `container layout record`. Transfer
@@ -656,7 +696,7 @@ directory of each ecosystem example is the two workflows they add up to.
 | Build, Cargo | `build-cargo` | `build cargo run`: `cargo fetch`, `cargo test --locked`, the Build SBOM, one binary per platform. |
 | Build, Maven | `build-maven` | `build maven run --expect-version`: `mvn install`, a refusal unless the POM declares the release version, the app or library lifecycle with its tests, the Build SBOM, all in `target/`. |
 | Hand-off | a `run:` step | `release files declare`, which writes the checksums file and `dist/release-files.json`; then `upload-dist`. |
-| Image | `build-release-image` | `container build-push-oci-image`, `container image-evidence` for every pushed platform, `container ledger add`. |
+| Image | `release-images.yml` reusable workflow | Native per-architecture builds, scan-before-publication assembly and a release image ledger. |
 
 **Where the tools come from.** The engine's runtime images are published on
 ghcr.io by this repository's GitHub workflows, which a Forgejo instance may
@@ -712,29 +752,24 @@ level-two section, retains Markdown reference links, and refuses a missing
 or duplicate section. Consumers may append their own installation and
 verification links; no second changelog renderer or tag fetch is needed.
 
-**An image is one step.** `build-release-image` takes the per-platform build
-plan, pushes the manifest list, scans each platform of the pushed digest into
-the path template `scan-output` names (`dist/trivy-results-<role>-{arch}.json`),
-and records the image in `dist/release-images.json`. A scan that fails is run
-again, three times in all, because Trivy's database download fails
-transiently. The job logs in and sets
-buildah up first, with `registry-login` and `setup-buildah`, and passes
-`publish-container-images: 'true'` to the prepare workflow. A composite action
-on Forgejo cannot call a sibling by relative path, so the action makes the
-three engine calls itself; the single-step actions remain for a release that
-stages a candidate tag or builds on a base image. The layer has one scan:
-`container image-evidence`, with the retry above.
+**Release images use a separate workflow.** Call `release-images.yml` with
+the prepared release ref and the image declaration. It builds each architecture
+on a native runner without registry-write credentials, scans every architecture
+before publication, and records staging images in `dist/release-images.json`.
+Join that artifact with the unsigned release files before handing the combined
+`dist/` and its digest to the isolated signer. See [Release images](#release-images)
+and `examples/go-service/forgejo/` for the complete hand-off.
 
-**One job builds every platform, so only COPY-only images.**
-`build-release-image` and `build-push-oci-image` build all the platforms of
-the plan on the job's one runner. That is free of emulation only when the
-Containerfile has no `RUN` step for the target platform: for example an image
-that copies prebuilt per-architecture artifacts, with any `RUN` confined to
-`FROM --platform=$BUILDPLATFORM` stages. Nothing checks the Containerfile for
-this. An image whose target stages have `RUN` steps must be built per
-architecture, each in a job on a native runner of that architecture, with
-`container multiarch-image build-arch` and `assemble`, as the
-[signer image](#the-signer-image) is.
+The reusable workflow needs capacity for multiple jobs; a single one-job
+ephemeral runner is insufficient. Use the organization's native runner pools
+and builder settings described in [Runners](runners.md).
+
+**Direct CLI builds still use one runner.** The retained
+`forge-ci container build-push-oci-image` command builds all requested platforms
+on that runner. It is emulation-free only for COPY-only target stages, with any
+`RUN` confined to `FROM --platform=$BUILDPLATFORM` stages. Nothing checks the
+Containerfile for this. Use `release-images.yml` for native per-architecture
+builds, including images whose target stages have `RUN` steps.
 
 ## Releases and promotion
 
@@ -748,7 +783,8 @@ The consumer's `release.yml` calls the layer around its own build job:
    `release-sha`.
 2. **The consumer's build job** builds at that tag without signing keys,
    declares the release files, records images in `dist/release-images.json`,
-   and hands `dist/` on with its digest.
+   and hands `dist/` on with its digest. `release-images.yml` can build the
+   images instead; see [Release images](#release-images).
 3. **`sign-and-publish-release.yml`** runs four separately privileged jobs:
    `sign`, `promote` (final image tags), `publish` (the Forgejo release) and
    `cleanup` (candidate tags).
@@ -767,6 +803,171 @@ immutable version tag, still names the image; see
 If a release fails partway, re-run the failed jobs of that run, as
 [Quick start](#quick-start) says; [Failed Release
 Recovery](failed-release-recovery.md) covers the rest.
+
+### Release images
+
+`release-images.yml` builds a repository's release images at the prepared
+release commit. Without an `artifacts.yml` it builds one: the repository's own
+image, from the root `Containerfile`, for `linux/amd64`. Declare `containers:`
+in `.forge-ci/artifacts.yml` for more images, other platforms or tag variants.
+
+```yaml
+  release-images:
+    needs: [prepare, build]
+    uses: OWNER/forge-ci/.forgejo/workflows/release-images.yml@PIN_FORGE_CI_SHA
+    with:
+      runner-label: ${{ vars.CI_RUNNER_LABEL_CONTAINER || vars.CI_RUNNER_LABEL }}
+      runner-label-arm64: ${{ vars.CI_RUNNER_LABEL_CONTAINER_ARM64 || vars.CI_RUNNER_LABEL_ARM64 }}
+      forge-ci-sha: PIN_FORGE_CI_SHA
+      release-tag: ${{ needs.prepare.outputs.release-tag }}
+      release-sha: ${{ needs.prepare.outputs.release-sha }}
+      context-artifact: image-context
+      # Empty publishes to this forge's own registry.
+      image-repository: ghcr.io/OWNER/APP
+    secrets:
+      RELEASE_REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
+```
+
+The builds need user namespaces, so the runner labels follow the container
+runners where an installation names them, as other image-building jobs do.
+
+- **plan** reads the declaration and stops the run before any build on what
+  the workflow does not do: `build-secrets`, `extract`, a `scan-severity`
+  other than its `CRITICAL,HIGH` gate, a platform other than `linux/amd64` and
+  `linux/arm64`, two containers publishing the same tag, and an arm64 build
+  without `runner-label-arm64`.
+- **build** runs once per container and architecture, on a runner of that
+  architecture. It checks the release commit out, unpacks `context-artifact`
+  over it when one is named (binaries built in an earlier job, for example),
+  and builds to an OCI layout with `build-arch --stage`, labelled with the
+  source, revision, title, version, url, documentation, ref.name (the final
+  tag) and created (the release commit's time), then the `labels` input. It
+  writes nothing to a
+  registry and receives no secret, so the Containerfile never runs beside a
+  token. Its pulls are anonymous, whatever login the runner keeps, so the
+  bases must be public.
+- **publish** runs once per container. It installs the layer's pinned Trivy,
+  then `assemble --from-layouts --scan-output-template` verifies every staged
+  architecture against its record and its revision label, scans each, and
+  refuses publication on a fixable CRITICAL or HIGH finding or an unfixed
+  CRITICAL that the release commit's `.trivyignore.yaml` does not
+  approve. Only then does it upload
+  the index under `staging-<final tag>` and record it with `ledger add`.
+  `enable-scan: false` skips the scan.
+- **collect** merges the ledgers into one artifact, `release-images`: a
+  `release-images.json` and the Trivy results. Unpack it into the `dist/` the
+  consumer hands to `sign-and-publish-release.yml`, which signs the images,
+  generates their SBOMs and promotes the staging tags to the final ones.
+
+A release publishes to one image repository, the one the signer is bound
+to: `image-repository`, for example `ghcr.io/owner/app`, written in the
+reviewed workflow and passed to the signer's `image-repository` too, or this
+forge's own registry,
+`<host>/<owner>/<repository>`, when it is empty. Each container publishes
+`<release-tag><tag-suffix>` there, so containers are tag variants told apart
+by `tag-suffix`, and the declaration names no repository; the plan refuses an
+`image-name`:
+
+```yaml
+containers:
+  - name: app
+    container-file: Containerfile.alpine
+    platforms: linux/amd64,linux/arm64
+  - name: app-distroless
+    tag-suffix: -distroless
+    platforms: linux/amd64,linux/arm64
+```
+
+The registry credential is a pair the layer reads by name: the secret
+`RELEASE_REGISTRY_TOKEN` and the variable `RELEASE_REGISTRY_USER`, the user
+it logs in as. The `registry-user` input overrides the variable. With
+neither, this forge's registry takes the calling repository's owner; on
+another registry the plan stops before any build until one names the user
+there.
+
+The builder is the organization's, read from its variables, and the caller
+names none: `CI_IMAGE_BUILDER` is `buildah`, the default, or `kaniko`, and
+with kaniko `CI_IMAGE_BUILDER_JOB_IMAGE` is the kaniko job image pinned by
+digest. The `coordinates` job checks both before a build job starts in that
+image; [Runners](runners.md) covers when a pool needs kaniko. Kaniko runs the
+Containerfile's steps in the job container's own filesystem, so a `RUN` step
+that changes the directory the runner mounts the workspace at, such as
+`/workspace` on some runners, fails there.
+
+#### Resolved consumer image policy
+
+A consumer that already computes its image selection or content-addressed base
+IDs can pass `image-plan-json` instead of `artifacts-config`. This is the same
+`builds`/`images` JSON contract that `container release-images plan` emits, not a
+second builder interface. Each build supplies its name, native architecture and
+platform, repository-local Containerfile/context, target, public arguments and
+optional labels. Each image supplies its destination, staging/final tags,
+complete architecture set and scan choice. Optional ledger policy fields carry
+the image kind, flavor, base ref/input ID and moving tag; `required-labels` are
+checked on every staged child before publication.
+An omitted `scan` defaults to enabled, just as in the artifacts declaration;
+only an explicit `false` opts out for release images. Base plans require scanning.
+Moving tags and architecture-cache slots are part of the same destination
+collision check as final, staging and architecture tags.
+Release SBOM paths use the flavor first, then the effective role (the declared
+role or image name). Base paths use `premade-sboms/base-sbom-<flavor>.cyclonedx.json`.
+Admission and `ledger add --default-sbom` share that
+derivation and the existing ledger path validation, so an invalid derived path
+is refused before builds are scheduled rather than after images are published.
+Images cannot share an SBOM destination. Architecture lists are normalized to
+the newline-separated form consumed by the workflow.
+An optional per-build `builder-material-id` binds execution to the opaque ID
+captured on that native runner. The shared workflow compares it before any build
+and refuses drift without exposing backend-specific checks to the consumer.
+
+The engine rejects unknown fields, foreign destinations, conflicting tags,
+duplicate or incomplete architecture builds and paths outside the consumer
+checkout. It applies the existing ledger validation before scheduling anything.
+The organization still selects the builder: the consumer plan contains no
+Buildah/Kaniko settings and cannot add secrets to the build.
+
+Use a distinct `artifact-name` when one run invokes this workflow for shared
+bases, flavor bases and release images. It namespaces the intermediate artifacts
+too, so one invocation cannot collect another's ledgers. The `ledger-json` output
+returns the checked published-image facts to the consumer's policy gate.
+Base builds generate per-platform CycloneDX inventories from the staged layouts
+before uploading any image. The output artifact includes every inventory and
+`base-sbom-<flavor>.cyclonedx.json`, a copy of the first selected platform's inventory;
+the ledger pins that copy's SHA-256. Pass this artifact as `sbom-artifact` to
+`sign-container-images.yml`, which downloads it under `premade-sboms/` and checks
+the pin. This preserves the base signer's single-platform SBOM contract; the
+attestation does not claim to inventory every architecture.
+Building a base here does not sign or promote it: retain the base-image lifecycle.
+Product smoke tests
+and content-input policy also remain separate; the image build is not proof they
+passed.
+
+Scanned release images also retain every platform inventory, named
+`sbom-<flavor-or-role>-<arch>.json`. The publisher composes
+`image-sbom-<flavor-or-role>.cyclonedx.json` from those unchanged documents and
+the verified served index, then records its SHA-256 in the ledger. Its external
+BOM links name the version-specific release download URLs. The output artifact
+includes these files, the exact index snapshot and original scan reports.
+Publish every referenced platform inventory with the index BOM. Consumers do
+not need a second registry pull, scan, architecture-record projection or SBOM
+composition loop. Runtime/doctor evidence remains a separate consumer gate.
+An explicit scan opt-out retains the existing signer-generated SBOM behavior;
+base images retain the single-platform signing contract described above.
+
+A resolved base may supply a stable content `revision` and `cache-tag-prefix`,
+with matching per-build `revision`, `cache-tag` and `required-labels`. Each native
+build must also carry `builder-material-id`. The build reads the public slot
+anonymously, resolves it once to a digest, checks platform/revision/labels, and
+stages those exact bytes without running the builder on a hit. Missing or stale
+slots build normally; transport/authentication failures stop the job. Every
+cached child still passes the complete-set scan and SBOM gates. Only the
+publisher refreshes `<cache-tag-prefix>-<arch>` slots, after successful assembly.
+Labels prevent stale reuse, not malicious registry writes; keep cache writers
+restricted. Private cache reads are not supported by this secret-free build path.
+
+GHCR keeps the per-architecture `staging-<final tag>-<arch>` tags it cannot
+delete through the registry; `forge-ci container package-retention` removes
+old versions.
 
 ### Old releases' files
 
@@ -790,23 +991,23 @@ The release, its files, signatures and the engine binary stay on Forgejo; the
 images can live on another registry, such as GHCR, where storage does not
 count against the forge's package quota. The caller names the repositories:
 
-- `publication-image-repository` of `sign-and-publish-release.yml` is the
-  release images' repository, for example `ghcr.io/owner/project`; the build
-  job records its images there in `dist/release-images.json`.
+- `image-repository` is the release images' repository, for example
+  `ghcr.io/owner/project`. Pass the same value to `release-images.yml`, which
+  publishes the images there, and to `sign-and-publish-release.yml`, which
+  signs, promotes and cleans up only there.
 - `base-repository` of the base-image workflows is the bases' repository, for
   example `ghcr.io/owner/project-base`.
-- `registry-user` is the user `RELEASE_REGISTRY_TOKEN` logs in as there.
-  Empty is the calling repository's owner, which is right for Forgejo's own
-  registry.
+- `RELEASE_REGISTRY_USER`, a variable, or the `registry-user` input is the
+  user `RELEASE_REGISTRY_TOKEN` logs in as there. It is required on another
+  registry; with neither, Forgejo's own registry takes the calling
+  repository's owner.
 
-A Forgejo instance serves its registry at its own host and port, so a
-repository on any other host is external: the steps pass
-`--external-registry` (`EXTERNAL_IMAGE_REGISTRY`) to the engine, which logs
-in to that repository's registry, takes the repository as declared instead of
-requiring it under the forge owner, and deletes tags through that registry.
-The declaration is in the caller's reviewed workflow, every ledger image must
-be in the declared repository, and the registry's own token decides what can be
-written there.
+Nothing else declares the registry. A Forgejo instance serves its registry at
+its own host and port, so the engine reads from the repository's host whether
+it is Forgejo's or another one, logs in to that host, and picks how tags are
+deleted: through Forgejo's package API on its own registry, and through the
+other registry otherwise. Every ledger image must be in the one repository,
+and the registry's own token decides what can be written there.
 
 GHCR deletes nothing through the registry API, so on `ghcr.io` the cleanup
 deletes through the GitHub Packages API with the same registry token, which
@@ -837,7 +1038,7 @@ What a consumer needs beside it is a job of its own that `prepare` waits for:
 ```yaml
 jobs:
   preflight:            # yours: a token check, a full test run
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     steps:
       - uses: https://FORGE_HOST/OWNER/forge-ci/.forgejo/actions/verify-forgejo-token@<commit>
         with:
@@ -853,7 +1054,10 @@ The changelog renderer is `changelog-creator`, `git-cliff` by default or
 by default `.forge-ci/gitcliff/keepachangelog.toml` and
 `.forge-ci/gitcliff/minimal.toml`: copy the two files of this repository's
 [`templates/gitcliff/`](../templates/gitcliff/) there to start, the same
-defaults the GitLab `release` component has.
+defaults the GitLab `release` component has. Both config files must exist; a
+missing one stops the render instead of letting git-cliff fall back to its
+built-in config. A SHA-256 repository needs `git-chglog` with its own configs:
+git-cliff cannot read one, and the render refuses it by name.
 
 The workflow keeps the boundaries a hand-composed job has to get right itself:
 every secret is checked for presence before any checkout, no token enters the
@@ -1206,7 +1410,7 @@ release:
    verifies that a clone is the pinned commit; it cannot tell you the commit is
    the right one.
 3. **If your copy changes Go code**, record the new build as
-   [Development](DEVELOPMENT.md#the-engine-layers-engine-binary) describes,
+   [Development](DEVELOPMENT.md#the-engine-binary) describes,
    before you pin: a commit whose checksum is not a build of its tree is
    refused by the binary job of the next step. `just test-forgejo`, with the
    Go release `go.mod` names, rebuilds the CLI and compares it with the
@@ -1218,7 +1422,7 @@ release:
    copy and the commit of step 2, and run it. It needs the `CI_RUNNER_LABEL`
    variable (a native AMD64 runner), `CI_RUNNER_LABEL_ARM64` (a native ARM64
    runner for the arm64 image build, which never runs under emulation) and two
-   credentials: `RELEASE_REGISTRY_TOKEN` writes the engine owner's generic
+   credentials: `ENGINE_PACKAGE_TOKEN` writes the engine owner's generic
    package on this forge; `SIGNER_REGISTRY_TOKEN`, with `SIGNER_REGISTRY_USER`,
    authenticates to the signer image registry.
    To host the signer on another registry, set the workflow's literal
@@ -1283,7 +1487,7 @@ func selfCIEvents() map[string][]string {
 
 The registry is empty upstream. Registration must accompany the workflow file;
 missing files, wildcard exemptions, reusable layer paths and `workflow_call`
-events are rejected. Self-CI runs on `${{ vars.CI_RUNNER_LABEL }}` or passes that
+events are rejected. Self-CI runs on `${{ fromJSON(vars.CI_RUNNER_LABEL) }}` or passes that
 variable as `runner-label` to a reusable workflow. Its actual trigger keys must
 match its registration exactly. Other discovered workflows still receive the
 reusable-layer checks. Strict YAML checks and the checks against unlisted signer

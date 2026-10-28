@@ -5,6 +5,33 @@ reusable workflows. For other forges, see the [GitLab](gitlab.md#secrets-and-tok
 and [Forgejo](forgejo.md#secrets-and-tokens) guides.
 For the generated command surface, see [CLI Reference](cli-reference.md).
 
+## Canonical command environment names
+
+These names are consumed by the CLI inside a job. Repository variables do
+not automatically become process environment variables: a workflow maps its
+inputs, repository variables and secrets to the step environment or CLI flags.
+The generic publishing examples use `REGISTRY_USER` at both boundaries;
+release workflows map their repository variable `RELEASE_REGISTRY_USER` to it.
+
+| Purpose | Canonical name | Default when absent |
+|---|---|---|
+| Registry login user | `REGISTRY_USER` | No guessed user for external registries; release-image planning can derive the owner for the forge's own registry |
+| Release-image ledger file | `RELEASE_IMAGES_PATH` | `dist/release-images.json`; release-image operations resolve it beneath their selected dist directory |
+| Changelog file | `CHANGELOG_FILE` | `CHANGELOG.md` for rendering/commit operations; validation requires a file |
+| Whitespace-separated mise tool selection | `TOOLSET_TOOLS` | The tools declared by the project |
+
+The former names `REGISTRY_USERNAME`, `RELEASE_IMAGES_LEDGER`,
+`CHANGELOG_PATH`, `TOOLS_SUBSET` and `MISE_TOOLS` are no longer CLI sources.
+Update custom step environments with the engine pin; there are no fallback
+aliases. CLI flag names are unchanged. Explicit flags take precedence; a
+plan-backed flag resolves flag, plan field, environment, then default.
+
+The repository-level pair `RELEASE_REGISTRY_USER` / `RELEASE_REGISTRY_TOKEN`
+still maps to the CLI's `REGISTRY_USER` / `REGISTRY_TOKEN` only in the jobs
+that need it. `REGISTRY_PASSWORD` remains an alternative password input;
+it is not a second required secret. Base-image and release credentials may
+have different permissions and are not combined by this naming cleanup.
+
 ## Environment Variables Matrix
 
 | Variable/Secret | Required For | When Checked | Expected Value | Notes |
@@ -170,11 +197,15 @@ binary. Run `forge-ci validate --help` for the validation commands, or see
 **Tags for releases:**
 - Production: `v1.0.0`, `v2.3.4`
 
-The production orchestrator accepts only a signed
-`release-request/vMAJOR.MINOR.PATCH` ref and creates one immutable stable
-`vMAJOR.MINOR.PATCH` tag. SemVer prerelease/build suffixes and `-SNAPSHOT` tags
-are rejected. Branch snapshots use `release-snapshot-orchestrator.yml`; they do
-not create release tags.
+With the default `release-policy: stable`, the production flow accepts signed
+`release-request/vMAJOR.MINOR.PATCH` requests and creates immutable stable tags.
+The explicit `stable-prerelease` policy also admits immutable SemVer beta/RC
+versions through the same signing flow; it does not advance stable aliases.
+Build metadata is not a separate release identity. Mutable Maven `-SNAPSHOT`
+publication belongs to the snapshot path, not immutable production publication.
+See [release policies](workflows.md#stable-and-prerelease-policy)
+for policy, destination and promotion limits. Branch snapshots use the separate
+snapshot orchestrator and do not create production release tags.
 
 ---
 

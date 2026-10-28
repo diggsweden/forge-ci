@@ -3,10 +3,11 @@
 This index separates end-user documentation by purpose. The examples and docs
 target the 0.90.0 Go-backed workflow contract.
 
-> **Unpublished 0.90.0:** `v0.90.0` and its matching runtime images do not exist yet.
-> Treat `@v0.90.0` snippets as forward-looking; for pre-release testing, follow
-> the reviewed-branch procedure in [Runtime Images](runtime-images.md) instead
-> of substituting an unreviewed moving ref in production.
+> **Current source versus release pins:** `v0.90.0` examples identify a historical
+> baseline, not the current source revision. Confirm the selected workflow, CLI
+> assets and runtime images are available and compatible before adoption. For
+> unreleased changes, follow the reviewed-branch procedure in
+> [Runtime Images](runtime-images.md#branch-testing).
 
 ## Tutorials
 
@@ -31,6 +32,7 @@ Solve a specific task.
 - [GitHub](github.md) - The GitHub reusable workflows: adoption, inputs, secrets, runtime images, PR gates, releases and promotion, snapshots, signing, Code Scanning, forks, troubleshooting and limits.
 - [GitLab](gitlab.md) - The GitLab components, in the same section order: Catalog and checksum-bound components, the native release policy, signing, SAST reports, forks, troubleshooting, limits and live acceptance.
 - [Forgejo](forgejo.md) - The Forgejo delivery layer, in the same section order: calling it, the signer image and engine binary, the signing boundary, using it from a fork, limits; and the CLI on a Forgejo runner.
+- [Runners and runner lending](runners.md) - What each job kind needs from its runner, the runner variables, and borrowing an ephemeral runner for container builds when the pool denies user namespaces.
 - [Threat Model](threat-model.md) - What forge-ci defends against, what it deliberately doesn't, and where adopter controls layer on top.
 - [Failed Release Recovery](failed-release-recovery.md) - Safe reruns, immutable-tag rules, cleanup, and rollback.
 

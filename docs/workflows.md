@@ -233,6 +233,49 @@ Gradle matrix builds upload `<artifact-name>-build-artifacts` and
 Publish/container/release jobs consume the plan-provided names instead of
 reconstructing ecosystem defaults in workflow YAML.
 
+### Stable and prerelease policy
+
+All three forge release layers use `release-policy`:
+
+| Value | Accepted signed requests |
+| --- | --- |
+| `stable` (default) | `release-request/v1.0.0` |
+| `stable-prerelease` | Stable requests and versions such as `release-request/v1.0.0-beta.2` or `release-request/v1.0.0-rc.1` |
+
+The signed version determines classification; the policy only admits it.
+This replaces `release-type` and `derive-release --require-stable`, without
+aliases. Invalid policies, malformed
+versions and build metadata are rejected. Keep the selected policy in trusted
+workflow configuration; GitLab takes it from the external release policy, and
+Forgejo must pass the same value to prepare and sign/publish workflows.
+Use a Forge CI binary and runtime images from the same feature release as the
+workflows; older binaries fail on the new explicit policy flag.
+
+Prereleases use the same declared builds, signing backend, checksums, SBOMs
+and provenance as stable releases. They are immutable numbered releases, not
+rolling snapshots: matching published content is a retry success; conflicting
+content is refused. Draft publication remains an independent setting.
+
+On GitHub, signing and publication are separate jobs. The signer uploads a
+digest-bound checkpoint, including signatures, notes and assembly metadata.
+A failed publisher reuses that exact checkpoint and revalidates the prepared
+tag before publication; it receives no signing key or OIDC permission.
+
+Notes are cumulative from the preceding stable release, so beta tags do not
+truncate the eventual stable notes. Prerelease images use version-specific
+tags; stable aliases and the GitHub stage-promotion ladder are not advanced.
+
+GitHub and Forgejo set their native prerelease flag. GitLab has no equivalent
+flag: the release notes identify the prerelease, and version-specific download
+links must be used. Its native latest-release permalink is date-based and can
+point at a beta. Forge CI does not alter timestamps to hide this difference.
+
+Destination compatibility is checked before release preparation. Prereleases
+cannot target Google Play's production track; testing tracks remain available.
+iOS prereleases are rejected until numeric marketing-version mapping is
+supported. Mutable Maven `-SNAPSHOT` versions cannot enter immutable package
+publication; ordinary beta/RC Maven versions are supported.
+
 ### Image Promotion Ladder
 
 `publish-container.yml` uploads a run-scoped image ledger. Three calls to

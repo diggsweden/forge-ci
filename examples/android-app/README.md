@@ -17,10 +17,10 @@ Example configuration for Android applications with multiple product flavors and
 
 The rest of this page describes the GitHub configuration.
 
-> **Unpublished 0.90.0:** `@v0.90.0` references below are prospective. Until the tag
-> and matching runtime images exist, use the reviewed-branch procedure in
-> [Runtime Images](../../docs/runtime-images.md); do not substitute an
-> unreviewed moving ref in production.
+> **Current source versus release pins:** `v0.90.0` examples identify a historical
+> baseline, not the current source revision. Confirm matching workflows, CLI
+> assets and runtime images before adoption. For unreleased changes, follow
+> [Branch Testing](../../docs/runtime-images.md#branch-testing).
 
 ## Use Case
 

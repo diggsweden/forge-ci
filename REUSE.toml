@@ -70,12 +70,14 @@ path = [
   "docs/cli-black-box.md",
   "docs/cli-reference.md",
   "docs/flows.md",
+  "docs/forge-migration.md",
   "docs/failed-release-recovery.md",
   "docs/github.md",
   "docs/gitlab.md",
   "docs/open-questions.md",
   "docs/providers.md",
   "docs/project.md",
+  "docs/runners.md",
   "docs/runtime-images.md",
   "docs/scripts.md",
   "docs/testing.md",
@@ -116,6 +118,11 @@ SPDX-License-Identifier = "CC0-1.0"
 [[annotations]]
 path = "renovate.json"
 SPDX-FileCopyrightText = "2026 Digg - Agency for Digital Government"
+SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+path = "containers/runtime/images.json"
+SPDX-FileCopyrightText = "The Forge CI Authors"
 SPDX-License-Identifier = "CC0-1.0"
 
 [[annotations]]

@@ -8,10 +8,10 @@ The three forge guides, [GitHub](github.md), [GitLab](gitlab.md) and
 [Forgejo](forgejo.md), use the same section order. What each layer has beside
 the others is in [Delivery layers side by side](providers.md#delivery-layers-side-by-side).
 
-> **Unpublished 0.90.0.** `v0.90.0` and its runtime images do not exist yet.
-> Treat `@v0.90.0` snippets as forward-looking; for pre-release testing, follow
-> [Branch Testing](runtime-images.md#branch-testing) and do not substitute an
-> unreviewed moving ref in production.
+> **Current source versus release pins:** `v0.90.0` examples identify a historical
+> baseline, not the current source revision. Confirm matching workflows, CLI
+> assets and runtime images before adoption. For unreleased changes, follow
+> [Branch Testing](runtime-images.md#branch-testing).
 
 To inspect the CLI today, use the reviewed
 [source checkout](DEVELOPMENT.md#source-checkout). The adoption steps below
@@ -67,21 +67,36 @@ see the [Artifacts Reference](artifacts-reference.md).
 ## Getting started
 
 `forge-ci init https://github.com/diggsweden/forge-ci` in the repository does
-steps 1 to 3 for the example its build files imply (`--example` picks
-another): it writes the workflows, `.forge-ci/artifacts.yml` and
-`nanolinter.toml`, pinned to the newest release, and never overwrites a
-file. Review generated project-specific values before running; `doctor` checks
-local configuration, not remote secrets or runner/publishing availability. By hand:
+the CI-file setup for the example its build files imply (`--example` picks
+another): it writes the workflows and `.forge-ci/artifacts.yml`, pinned to
+the newest release, and never overwrites a file. Linter configuration is
+consumer-owned: init neither creates nor changes Nanolinter or MegaLinter
+configuration. These files are optional customizations: `lint-engine` selects
+the engine, with Nanolinter as the workflow default. Without a config file,
+the selected engine uses its defaults; absence of a config does not disable
+linting or Nanolinter's required-check floor. Example configs remain available
+to copy when you want custom settings. Review generated project-specific values
+before running; `doctor` checks local configuration, not remote secrets or
+runner/publishing availability.
+
+Add `--dry-run` to preview the same rendered proposal without writing project
+files. Preview still fetches release templates into temporary storage. It lists
+all existing-file conflicts and returns nonzero if generation would be blocked;
+remaining placeholders are reported for review, not a claim of runnable CI.
+Repeat without `--dry-run` using the previewed `--ref` and `--example` to generate.
+
+By hand:
 
 1. **Pick an example** from [`examples/`](../examples/README.md) for your
    ecosystem, and a signing backend from
    [`examples/signing/`](../examples/signing/).
 2. **Copy** its `github/pullrequest-workflow.yml` and
    `github/release-workflow.yml` (and `github/release-snapshot-workflow.yml`
-   if you want branch snapshots) into `.github/workflows/`, its
-   `nanolinter.toml` into the repository root, and its `artifacts.yml` into
-   `.forge-ci/` when you need one. The lint gate runs `nanolinter verify`
-   against `nanolinter.toml` and requires at least the `required-lints`
+   if you want branch snapshots) into `.github/workflows/`, and its
+   `artifacts.yml` into `.forge-ci/` when you need one. Optionally copy the
+   example's `nanolinter.toml` when you want custom lint policy. The lint gate
+   runs `nanolinter verify`, which discovers root `nanolinter.toml`, then
+   `development/nanolinter.toml`, then uses defaults. It requires at least the `required-lints`
    floor, default `secrets,sast`.
 3. **Pin the references.** `uses: ...@v0.90.0`, `forge-ci-binary-ref` and any
    `runtime-image*` override move together; see
@@ -109,12 +124,12 @@ local configuration, not remote secrets or runner/publishing availability. By ha
    admitted. [Local Git signature setup](DEVELOPMENT.md#local-git-signature-setup)
    says how to install and inspect signing keys locally.
 
-   If a release fails partway, re-run the failed jobs of that run. Do not
-   delete the tag, the release or a published image: once the prepare job has
-   pushed the final tag, the pipeline retries forward and converges. A release
-   is never resumed from its final tag; if the prepare job itself fails after
-   pushing `vX.Y.Z`, release the next patch version with a new request tag.
-   [Failed Release Recovery](failed-release-recovery.md) covers the rest.
+   If a release fails partway, identify the failed stage before retrying. Keep
+   final tags and published content immutable. A failed publisher reuses the
+   successful signer's checkpoint; preparation can reuse an existing final tag
+   only under the exact commit, parentage, branch-head and signature criteria in
+   [Failed Release Recovery](failed-release-recovery.md#final-git-tag-exists).
+   Retry from the original release request, not a new event on the final tag.
 
 The [examples](../examples/README.md) show the caller workflows in full; the
 snapshot caller is under [Snapshots](#snapshots). `forge-ci doctor` in a job reports what the detected forge supports.
@@ -131,6 +146,7 @@ carries a description. The orchestrator inputs most callers set:
 | `required-lints` | PR | The mandated nanolinter floor, default `secrets,sast`. |
 | `nanolinter-image`, `megalinter-image` | PR | Override the derived nanolinter flavour; the MegaLinter image, required and digest-pinned. A direct call of `lint-nanolinter.yml` defaults to the `core` tag; pin your flavour by digest as the examples show. |
 | `branch` | release, snapshot | The branch to prepare and release from, or the snapshot branch. |
+| `release-policy` | release | `stable` (default) or `stable-prerelease`; the signed tag determines classification. Replaces `release-type`. |
 | `artifacts-config` | release, snapshot | Path to `artifacts.yml`, default `.forge-ci/artifacts.yml`. |
 | `release-publisher` | release | `github-cli` creates the GitHub release; empty skips it. |
 | `changelog-creator`, `changelog.config` | release | The changelog renderer (default `git-cliff`) and its configuration. git-cliff renders offline: a configuration that uses remote metadata, such as pull-request numbers, gets none. It reads stable `vX.Y.Z` tags only, overriding any `tag_pattern` in the configuration, so pre-release tags never split the changelog. |
@@ -153,7 +169,7 @@ none. [Forks](#forks) says when to set them.
 |---|---|---|
 | `FORGE_CI_REPOSITORY` | `diggsweden/forge-ci` | bootstrap checkouts and script downloads, binary installs, release URLs, trusted signing identities, and the repository allowed to publish the rolling pre-release CLI |
 | `FORGE_CI_PRERELEASE_BRANCH` | `main` | the branch whose pushes publish runtime images and the pre-release CLI, and the branch the installer trusts for pre-release signatures |
-| `RELEASE_PLATFORMS` | `linux/amd64` | the runtime images' platforms in Self Runtime Container, as a comma-separated subset of `linux/amd64,linux/arm64`; set both to publish arm64 images too. An undeclared, duplicated or malformed entry fails before anything is built. Consumers read the same variable for their images with the same meaning, unset building what their configuration declares |
+| `RELEASE_PLATFORMS` | `linux/amd64,linux/arm64` | the runtime images' platforms in Self Runtime Container; unset selects both declared architectures, and an explicit value may narrow the selection. An undeclared, duplicated or malformed entry fails before anything is built. Consumers read the same variable for their images with the same meaning, unset building what their configuration declares |
 | `RUNTIME_IMAGE_RETENTION` | unset: nothing is deleted | how many of the newest commit images (`sha-*`) of each runtime image Self Runtime Container keeps after it publishes; older versions are deleted through the GitHub Packages API with the job token, except release and pre-release tags and every platform manifest, signature and attestation a kept image needs. `forge-ci container package-retention --dry-run` shows what a value would delete |
 | `FORGE_CI_IMAGE_NAMESPACE` | `ghcr.io/<repository owner>`, where Self Runtime Container publishes | runtime images used by Self Pull Request and Self Release; set it when the owner has capital letters or images live elsewhere |
 | `FORGE_CI_TESTSUITE_REPOSITORY` | `diggsweden/forge-ci-blackbox-tests` | the companion black-box suite checked out by the PR and release gates |
@@ -276,12 +292,25 @@ A signed `release-request/vX.Y.Z` tag starts `release-orchestrator.yml`:
    GitHub Environments named by `promote-staging-environment` and
    `promote-release-environment`. Promotion never rebuilds or re-signs.
 
-Production accepts stable `vMAJOR.MINOR.PATCH` requests only; prerelease and
-build suffixes are refused before planning. [Workflow
-Architecture](workflows.md#image-promotion-ladder) describes the ladder,
+The default `release-policy: stable` accepts stable requests only. Select
+`release-policy: stable-prerelease` for complete signed beta/RC releases;
+build metadata remains unsupported. See
+[release policy](workflows.md#stable-and-prerelease-policy).
+[Workflow Architecture](workflows.md#image-promotion-ladder) describes the ladder,
 [Publishing](publishing.md) each target. When a release fails partway, follow
 [Failed Release Recovery](failed-release-recovery.md): never delete or move a
 published tag.
+
+### Version preparation and signing
+
+GitHub release preparation runs native Maven/npm/Cargo version tooling in a
+separate key-free job. The fresh signing job receives only a version patch and
+checks it with the existing version-only verifier before committing. The
+multi-artifact path applies each planned project's patch, then uses engine-owned
+text edits for Gradle/Xcode and copies the independently rendered changelog.
+No project build tool runs beside the signing keys. The standalone
+`version-bump.yml` also checks out the immutable request commit and lease-checks
+that commit before pushing to the selected branch.
 
 ### Old releases' files
 
@@ -364,13 +393,18 @@ Release artifacts are signed with one method, `sign.method` in
 | `kms` | A KMS key reference (AWS, GCP, Azure, Vault/OpenBao, PKCS#11) | `.bundle` sidecars; the token exchange with the KMS is the caller's. See the [OpenBao example](../examples/signing/openbao-kms/). |
 | `kms` with `key: env://COSIGN_KEY` | A Cosign key pair: the private key in `RELEASE_COSIGN_PRIVATE_KEY`, its passphrase in `RELEASE_COSIGN_PASSPHRASE` | `.bundle` sidecars, verified against the public key. The GitLab and Forgejo layers sign the same way. See the [example](../examples/signing/cosign-key/). |
 
-Signing and publishing run in the release's plain-runner job with the
-forge-ci binary pinned by the orchestrator, not in the runtime image, which
-only assembles the files. GitHub-hosted runners have swap on, and
+Signing and publishing run in separate plain-runner jobs with the same
+forge-ci binary pinned by the orchestrator. The runtime image only assembles
+the files. GitHub-hosted runners have swap on, and
 `release sign` refuses to load a long-lived key while it is
-([swap policy](verification.md#swap-policy)), so that job turns swap off
+([swap policy](verification.md#swap-policy)), so the signing job turns swap off
 first. A self-hosted runner needs swap off, or passwordless `sudo` for the
 job to do it.
+
+The publisher verifies the signer's checkpoint digest and the prepared tag,
+then publishes those exact bytes without signing credentials or OIDC access.
+Retry a failed publisher job rather than regenerating signatures; see
+[failed release recovery](failed-release-recovery.md).
 
 **Cosign key signing.** `sign.key: env://COSIGN_KEY` is the one environment
 reference `artifacts.yml` accepts; another variable is refused, because Cosign

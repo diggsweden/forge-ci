@@ -6,10 +6,10 @@ Play. Per-target sections cover prerequisites, the `artifacts.yml`
 fields and secrets each one needs, and the consumer-side fetch
 commands.
 
-> **Unpublished 0.90.0:** `@v0.90.0` references below are prospective. Until the tag
-> and matching runtime images exist, use the reviewed-branch procedure in
-> [Runtime Images](runtime-images.md); do not substitute an unreviewed moving
-> ref in production.
+> **Current source versus release pins:** `v0.90.0` examples identify a historical
+> baseline, not the current source revision. Confirm matching workflows, CLI
+> assets and runtime images before adoption. For unreleased changes, follow
+> [Branch Testing](runtime-images.md#branch-testing).
 
 ## Release-file manifests
 
@@ -393,11 +393,13 @@ No additional configuration needed - Maven Central is included by default.
 
 #### Snapshot channel
 
-The production release flow publishes stable versions only. Branch snapshots
-use `release-snapshot-orchestrator.yml` and do not create release tags or GitHub
-Releases. They support content-addressed npm versions and opt-in Maven-format
-snapshots through `publish-maven-snapshots: true`. Maven snapshots use ordinary CI
-authorization; stable Central releases require an allowlisted signed request.
+The release flow defaults to stable versions; `release-policy: stable-prerelease`
+also admits immutable beta/RC releases with the same signed-request gate.
+Branch snapshots use `release-snapshot-orchestrator.yml` and do not create
+release tags or GitHub Releases. They support content-addressed npm versions
+and opt-in Maven-format snapshots through `publish-maven-snapshots: true`.
+Maven snapshots use ordinary CI authorization; immutable Central releases
+require an allowlisted signed request.
 See [snapshot publication](gradle-publishing.md#snapshots) for Maven, Gradle JVM
 and Android-library usage and the separate Central snapshot endpoint.
 
@@ -535,7 +537,7 @@ default image is `ghcr.io/OWNER/REPO_NAME:v1.0.0` without the extra name segment
 These caller job fragments assume source repository `source-org/my-app` and a
 `build-maven` job that uploads `maven-build-artifacts`. Adjust the source and
 destination names together for your project. For the custom GHCR destination,
-configure `REGISTRY_USERNAME` as a variable and `REGISTRY_TOKEN` as a secret
+configure `REGISTRY_USER` as a variable and `REGISTRY_TOKEN` as a secret
 authorized to publish under `my-custom-org`.
 
 ```yaml
@@ -556,7 +558,7 @@ jobs:
       registry: ghcr.io
       image-name: ghcr.io/my-custom-org/my-app
       enforce-namespace: my-custom-org
-      registry-username: ${{ vars.REGISTRY_USERNAME }}
+      registry-username: ${{ vars.REGISTRY_USER }}
       use-ci-token: false
       sign-image: true
       sign-method: sigstore
@@ -616,7 +618,7 @@ docker.io/dockerhub-org/my-app:v1.0.0
 
 ### Custom Registry
 
-Configure `REGISTRY_USERNAME` as a variable and `REGISTRY_TOKEN` as a secret
+Configure `REGISTRY_USER` as a variable and `REGISTRY_TOKEN` as a secret
 authorized for the destination. This example retains the source owner's
 namespace and repository name, producing `registry.example.com/source-org/my-app`.
 
@@ -636,7 +638,7 @@ jobs:
       container-file: Containerfile
       artifact-types: maven
       registry: registry.example.com
-      registry-username: ${{ vars.REGISTRY_USERNAME }}
+      registry-username: ${{ vars.REGISTRY_USER }}
       use-ci-token: false
       sign-image: true
       sign-method: sigstore

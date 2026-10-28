@@ -55,5 +55,6 @@ records the resolved engine commit for each run.
 
 See [testing](testing.md), [runtime images](runtime-images.md),
 [verification](verification.md), and [open questions](open-questions.md) for
-current requirements. This documentation does not imply that the prospective
-0.90.0 tags or image coordinates have already been published.
+current requirements. Historical `v0.90.0` examples do not identify the current
+source revision or establish availability of its matching CLI assets and images.
+Confirm the selected coordinates before adoption.

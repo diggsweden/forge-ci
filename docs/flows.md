@@ -262,31 +262,18 @@ no `..` step and no control character. The recorded `gitCommit` is
 the base images were built from; the builder identity, the invocation and the
 ref are the runner's own.
 
-The signed statement says the images were built from `--repository`, so
-`sign` writes only where that repository's owner does. The base-image
-repository, derived or named with `--expected-repository`, must be:
-
-- on the registry the command logs in to, host and port exactly. That is
-  `--registry`, or without it the host of `--server-url`: the one place the
-  engine maps a forge to its registry. A forge whose registry has its own
-  host, as GitLab's does, is named with `--registry`;
-- below the owner namespace of `--repository` (everything before its last
-  path element), compared without case.
-
-`--expected-repository` therefore chooses the repository name below the owner
-and nothing else. `forge.example/owner/any-name` is accepted for
-`--repository Owner/App`; another owner, an owner that only starts the same,
-another host or another port is refused before the ledger, a credential or the
-key is read, and no flag allows it. `promote` writes the final tags of the same
-repository and holds it to the same rule. `validate`, `cleanup` and `prune` sign
-nothing and promote nothing, and `cleanup` and `prune` also serve base images
-kept on a registry beside the runner (`--local-registry`), so they take the
-repository as named.
-
-The engine cannot prove that a host given with `--registry` belongs to the
-forge at `--server-url`. A workflow that signs for callers it does not trust
-leaves `--registry` and `CONTAINER_REGISTRY` unset, which pins the registry to
-the forge's own host.
+`sign` and `promote` work in the one base-image repository, derived or named
+with `--expected-repository`: every ledger entry and every promoted image must
+be inside it, and they log in to its registry. The repository may be under any
+owner and on any registry; the registry token decides what can be written
+there. Where it lives is read from its host: the forge's own registry when the
+host is that of `--server-url`, or of `--registry` for a forge whose registry
+has a host of its own, as GitLab's does; another registry, such as GHCR,
+otherwise. On the forge's own registry an empty `--registry-username` is the
+owner of `--repository`; another registry needs its user named. `validate`,
+`cleanup` and `prune` sign nothing and promote nothing, and `cleanup` and
+`prune` also serve base images kept on a registry beside the runner
+(`--local-registry`).
 
 The caller still provides the ledger file and the SBOM files its entries name.
 

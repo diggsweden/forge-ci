@@ -88,8 +88,9 @@ ssh-keygen -t ed25519 -N '' \
   protection to permit those operations; the private-key secret alone grants
   no forge access. It needs no host administrator privileges.
 - Set the workflow's `bot-name` and `bot-email` consistently. For the Forgejo
-  layer, also configure `release-git-url` and the independently verified
-  `release-git-host-key-fingerprint`.
+  layer, also configure the independently verified
+  `release-git-host-key-fingerprint`, and `release-git-url` only where SSH
+  runs on another host or port than the web interface.
 
 Keep the human who requests a release separate from the bot that publishes it.
 Commit authorized human public keys to the request-signature allowlist used by

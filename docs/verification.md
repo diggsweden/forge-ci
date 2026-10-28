@@ -4,11 +4,10 @@ How to verify the artifacts these workflows produce (checksums,
 signatures, SBOM attestations, and SLSA provenance), and how the
 matching guarantees are generated on the producing side.
 
-> **Published tag versus current source:** Historical `v0.90.0` is published;
-> it does not contain the current working-tree changes. Verify the intended
-> source revision and matching runtime images before adopting a release pin.
-> For current changes, use the reviewed-branch procedure in
-> [Runtime Images](runtime-images.md), not an unreviewed moving production ref.
+> **Current source versus release pins:** `v0.90.0` examples identify a historical
+> baseline, not the current source revision. Confirm matching workflows, CLI
+> assets and runtime images before adoption. For unreleased changes, follow
+> [Branch Testing](runtime-images.md#branch-testing).
 
 ## Code Quality Verification
 
@@ -267,16 +266,19 @@ policy or provider/runtime transfer identity.
 
 ## Artifact Verification Methods
 
-| Artifact Type | Verification Methods | Security Level | What It Proves |
-|--------------|---------------------|----------------|----------------|
-| **Container Images** | SLSA provenance, SBOM attestations | High/Maximum | Built by official CI, unmodified, with traceable dependencies |
-| **Maven JARs** | GPG signatures, checksums | High | Signed, unchanged since publication |
-| **NPM Packages** | npm registry integrity and package metadata | Medium | Package available from the intended registry/version |
-| **Release Assets** | GPG / Sigstore-keyless / KMS signatures (cosign), SHA256 checksums | High | Authentic release files from official builds; identity bound to workflow (sigstore) or HSM (KMS) |
-| **Git Tags** | GPG/SSH signatures | High | Release tags created by authorized developers |
-| **Git Commits** | GPG/SSH signatures | High | Commits made by verified developers |
+| Artifact Type | Verification Methods | What Verification Establishes | Required Trust / Limits |
+|---------------|----------------------|-------------------------------|-------------------------|
+| **Container Images** | Signatures, provenance and SBOM attestations | A verified signature binds the image digest or attested claims to the selected signing identity | Trust the key or constrained certificate identity and issuer; inspect provenance subject, source and builder. A signed claim alone does not establish builder isolation or dependency completeness. |
+| **Maven JARs** | GPG signatures, checksums | Signature validity for the selected key and integrity of the checked bytes | Authenticate and authorise the public key independently; a checksum alone is not publisher authentication. |
+| **NPM Packages** | npm registry integrity and package metadata | Registry-reported integrity and the selected package/version | Trust the intended registry and package identity; this is not independent signing-key verification. |
+| **Release Assets** | GPG / Sigstore-keyless / KMS signatures, SHA256 checksums | Signature validity for the selected key or constrained certificate identity, covering the checked bytes | Authenticate the key or constrain identity and issuer. KMS key use alone does not prove an approved workflow or isolated build. |
+| **Git Tags** | GPG/SSH signatures | Cryptographic validity of the signed tag object when verification succeeds | Signature presence is separate from verification; signer authorisation requires the trusted allowlist/policy. |
+| **Git Commits** | GPG/SSH signatures | Cryptographic validity of the signed commit object when verification succeeds | Trust and authorise the key; author/committer fields alone are not authenticated developer identities. |
 
-High-security verification methods use industry-standard cryptographic signatures and attestations. NPM package verification is currently registry-integrity based.
+Signature presence, cryptographic verification and signer authorisation are
+separate checks. Neither a signature nor an attestation automatically establishes
+that an official or approved build produced the artifact; that conclusion needs
+the expected identity, source and builder constraints as well as valid evidence.
 
 ## Signing Methods for Release Artifacts
 
@@ -526,11 +528,11 @@ therefore the *same signed digest* as a release build, but `:dev` is a moving
 pointer that advances on every qualifying build, so pin by digest (`@sha256:…`)
 when you need a stable reference.
 
-The production release orchestrator is stable-only: it accepts signed
-`release-request/vMAJOR.MINOR.PATCH` tags and rejects SemVer prerelease or build
-suffixes before planning or repository mutation. Use the unsigned snapshot
-workflow for branch testing. A signed prerelease channel with the full
-production attestation stack is not currently supported.
+The default `release-policy: stable` accepts signed stable requests only.
+`release-policy: stable-prerelease` also admits numbered beta/RC releases with
+the same configured signing and attestation requirements. Build metadata is
+rejected. Branch snapshots remain separate; see
+[release policy](workflows.md#stable-and-prerelease-policy).
 
 ### Container image attestation & verification
 
@@ -708,7 +710,15 @@ If either is true, the gate runs. Behaviour when the gate is on:
 | Allowlist files are all missing or empty | `EX_NOPERM` (exit 77), fails closed |
 | Tag signed but signature can't be verified against any allowed key | `EX_NOPERM` (exit 77), fails closed |
 
-When the gate is **off**, a present allowlist is still honoured. A missing allowlist, or an unverifiable signature, is **not** silent. The run emits a prominent `::warning::` in the Annotations pane and a `> [!WARNING]` callout in the prerequisites summary. Both read "this release ran with no signer allowlist; any valid signature was accepted." A release without an allowlist can't slip by unnoticed.
+Signer authorisation and signature validity have independent enforcement flags.
+With authorisation disabled, a present allowlist is still honoured. If signature
+validity is required, an unverifiable signature still fails. When both requirements
+are disabled, a missing allowlist warns that allowlist enforcement was skipped
+and signature verification was not required; it does not claim a valid signature
+was verified. An unverifiable GPG signature against a present allowlist warns and
+passes only in that permissive mode; a verified but unlisted GPG signer is refused.
+SSH verification against a present `allowed_signers` file must succeed. These
+warnings appear through the runner's annotator and prerequisites summary.
 
 ### The allowlist files
 
