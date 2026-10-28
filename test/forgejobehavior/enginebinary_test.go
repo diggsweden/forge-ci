@@ -52,14 +52,13 @@ type builtEngine struct {
 	err  error
 }
 
-//nolint:gochecknoglobals // one build per architecture shared by every test of the package; TestMain removes them.
 var engines = map[string]*builtEngine{"amd64": {}, "arm64": {}}
 
-//nolint:gochecknoglobals // captured before process isolation; only compiler subprocesses receive it.
 var engineBuildEnv []string
 
 func TestMain(m *testing.M) {
 	var err error
+
 	engineBuildEnv, err = captureEngineBuildEnv()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "forgejobehavior: prepare compiler inputs: %v\n", err)
@@ -94,18 +93,24 @@ func captureEngineBuildEnv() ([]string, error) {
 	if name == "" {
 		name = "go"
 	}
+
 	compiler, err := exec.LookPath(name)
 	if err != nil {
 		return nil, fmt.Errorf("find Go compiler: %w", err)
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	query := exec.CommandContext(ctx, compiler, "env", "-json", "GOMODCACHE", "GOCACHE") //nolint:gosec // installed compiler, metadata-only arguments.
+
+	query := exec.CommandContext(ctx, compiler, "env", "-json", "GOMODCACHE", "GOCACHE")
+
 	query.Env = append(os.Environ(), "GOTOOLCHAIN=local")
+
 	body, err := query.Output()
 	if err != nil {
 		return nil, fmt.Errorf("read Go cache locations: %w", err)
 	}
+
 	var caches struct {
 		Modules string `json:"GOMODCACHE"`
 		Build   string `json:"GOCACHE"`
@@ -113,6 +118,7 @@ func captureEngineBuildEnv() ([]string, error) {
 	if err := json.Unmarshal(body, &caches); err != nil {
 		return nil, fmt.Errorf("decode Go cache locations: %w", err)
 	}
+
 	return []string{"GO=" + compiler, "GOMODCACHE=" + caches.Modules, "GOCACHE=" + caches.Build,
 		"GOTOOLCHAIN=local", "GOPROXY=off", "GOSUMDB=off"}, nil
 }
@@ -123,7 +129,7 @@ func captureEngineBuildEnv() ([]string, error) {
 func script(ctx context.Context, root string, arguments ...string) (string, error) {
 	var stdout, stderr bytes.Buffer
 
-	command := exec.CommandContext(ctx, "bash", append([]string{filepath.Join(root, binaryScript)}, arguments...)...) //nolint:gosec // G204: this repository's own script with test-authored arguments.
+	command := exec.CommandContext(ctx, "bash", append([]string{filepath.Join(root, binaryScript)}, arguments...)...)
 	command.Dir = root
 	command.Stdout, command.Stderr = &stdout, &stderr
 
@@ -146,7 +152,7 @@ func script(ctx context.Context, root string, arguments ...string) (string, erro
 func git(t *testing.T, root string, arguments ...string) (string, error) {
 	t.Helper()
 
-	command := exec.CommandContext(t.Context(), "git", append([]string{"-C", root}, arguments...)...) //nolint:gosec // G204: git with test-authored arguments.
+	command := exec.CommandContext(t.Context(), "git", append([]string{"-C", root}, arguments...)...)
 	out, err := command.Output()
 
 	return strings.TrimSpace(string(out)), err
@@ -333,7 +339,7 @@ func TestBuildInputsCoverEveryPackageOfTheCLI(t *testing.T) {
 
 		covered := false
 
-		for _, input := range strings.Fields(inputs) {
+		for input := range strings.FieldsSeq(inputs) {
 			if relative == input || strings.HasPrefix(relative, input+string(filepath.Separator)) {
 				covered = true
 			}

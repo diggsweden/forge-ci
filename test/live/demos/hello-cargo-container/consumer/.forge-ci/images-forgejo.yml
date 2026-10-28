@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: The Forge CI Authors
+# SPDX-License-Identifier: CC0-1.0
+
+# Binary export stays in the key-free build job; this declaration builds only
+# the runtime image from the same prepared release source, one native platform.
+containers:
+  - name: hello-cargo-container
+    container-file: Containerfile
+    context: .
+    target: runtime
+    platforms: linux/amd64

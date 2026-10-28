@@ -26,7 +26,7 @@ jobs:
   # =============================================================================
   preflight:
     name: Verify Forgejo package token
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     timeout-minutes: 5
     steps:
       - name: Verify Forgejo package token
@@ -54,7 +54,7 @@ jobs:
       forge-ci-repository: itiquette/forge-ci
       forge-ci-sha: b369db7d70af68fa93a4b404841c4ce2ddbf90c0
       bot-name: Gommitlint Release Bot
-      bot-email: itiquette-release-bot@pm.me
+      bot-email: release-bot@example.invalid
       release-git-url: ${{ vars.RELEASE_GIT_URL }}
       release-git-host-key-fingerprint: ${{ vars.RELEASE_GIT_HOST_KEY_FINGERPRINT }}
     secrets:
@@ -83,7 +83,7 @@ jobs:
       # underscore output name avoids runner expression bugs; the public signer
       # input remains dist-digest.
       dist_digest: ${{ steps.handoff.outputs.digest }}
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     env:
       RELEASE_TAG: ${{ needs.prepare.outputs.release-tag }}
     steps:
@@ -204,31 +204,36 @@ jobs:
       # The minimal image: no shell and no Git, so it validates SHA-1
       # repositories only. It carries the -distroless tag; the plain release
       # tag belongs to the Alpine image below, which reads both object formats.
-      # One step builds both platforms, pushes the manifest list, scans each
-      # pushed platform from the registry digest -- a multi-arch manifest
-      # scanned once is only scanned for one architecture -- and records the
-      # image in the dist/release-images.json ledger the signer reads.
+      # This historical renderer fixture uses the retained direct CLI: build
+      # and scan both platform layouts before publishing, then record the image
+      # in the dist/release-images.json ledger the signer reads. Current consumer
+      # examples use the separate native release-images.yml workflow instead.
       # candidate/moving tags stay unset: gommitlint pushes final tags directly.
-      - name: Build, scan and record distroless container images
-        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/build-release-image@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
+      - name: Build and scan distroless container images
+        id: distroless-image
+        env:
+          REGISTRY_AUTH_FILE: ${{ steps.registry-login.outputs.auth-file }}
+          SERVER_URL: ${{ forgejo.server_url }}
+          REPOSITORY: ${{ forgejo.repository }}
+        run: |
+          set -euo pipefail
+          FORGE_CI_PROVIDER=forgejo forge-ci container build-push-oci-image \
+            --tag "${RELEASE_TAG}-distroless" --containerfile Containerfile \
+            --builds-json '[{"platform":"linux/amd64","build-args":["DIRPATH=dist/gommitlint-pie_linux_amd64_v1/"]},{"platform":"linux/arm64","build-args":["DIRPATH=dist/gommitlint-pie_linux_arm64_v8.0/"]}]' \
+            --title gommitlint --version "${RELEASE_TAG}" --ref-name "${RELEASE_TAG}-distroless" \
+            --description 'Git commit message linter and validator' --licenses 'EUPL-1.2 OR GPL-3.0-or-later' \
+            --vendor Itiquette --authors 'Forge CI Test Author <author@example.invalid>' \
+            --auth-file "${REGISTRY_AUTH_FILE:?}" --server-url "${SERVER_URL:?}" --repository "${REPOSITORY:?}" \
+            --scan-output-template 'dist/trivy-results-distroless-{arch}.json'
+      - name: Record distroless container images
+        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/record-release-image@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
         with:
           role: distroless
+          image: ${{ steps.distroless-image.outputs.image }}
+          digest: ${{ steps.distroless-image.outputs.digest }}
           tag: ${{ env.RELEASE_TAG }}-distroless
           release-tag: ${{ env.RELEASE_TAG }}
-          version: ${{ env.RELEASE_TAG }}
-          ref-name: ${{ env.RELEASE_TAG }}-distroless
-          containerfile: Containerfile
-          auth-file: ${{ steps.registry-login.outputs.auth-file }}
-          builds: >-
-            [{"platform":"linux/amd64","build-args":["DIRPATH=dist/gommitlint-pie_linux_amd64_v1/"]},
-             {"platform":"linux/arm64","build-args":["DIRPATH=dist/gommitlint-pie_linux_arm64_v8.0/"]}]
-          scan-output: dist/trivy-results-distroless-{arch}.json
           sbom: dist/image-sbom.cyclonedx.json
-          title: gommitlint
-          description: "Git commit message linter and validator"
-          licenses: "EUPL-1.2 OR GPL-3.0-or-later"
-          vendor: "Itiquette"
-          authors: "Josef Andersson <janderssonse@proton.me>"
       # Build musl PIE binaries for Alpine container (not part of GoReleaser to avoid
       # duplicate binary names for the same OS/arch). Uses the Go linker -I flag to set
       # the musl ELF interpreter so the binary runs natively on Alpine without libc6-compat.
@@ -263,24 +268,31 @@ jobs:
       # The default image, published under the plain release tag: Alpine with
       # Git, so it validates SHA-1 and SHA-256 repositories (musl-native binary,
       # no libc6-compat needed).
-      - name: Build, scan and record Alpine container images
-        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/build-release-image@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
+      - name: Build and scan Alpine container images
+        id: alpine-image
+        env:
+          REGISTRY_AUTH_FILE: ${{ steps.registry-login.outputs.auth-file }}
+          SERVER_URL: ${{ forgejo.server_url }}
+          REPOSITORY: ${{ forgejo.repository }}
+        run: |
+          set -euo pipefail
+          FORGE_CI_PROVIDER=forgejo forge-ci container build-push-oci-image \
+            --tag "${RELEASE_TAG}" --containerfile Containerfile.alpine \
+            --builds-json '[{"platform":"linux/amd64","build-args":["DIRPATH=dist/musl-amd64/"]},{"platform":"linux/arm64","build-args":["DIRPATH=dist/musl-arm64/"]}]' \
+            --title gommitlint --auth-file "${REGISTRY_AUTH_FILE:?}" \
+            --description 'Git commit message linter and validator' --licenses 'EUPL-1.2 OR GPL-3.0-or-later' \
+            --vendor Itiquette --authors 'Forge CI Test Author <author@example.invalid>' \
+            --server-url "${SERVER_URL:?}" --repository "${REPOSITORY:?}" \
+            --scan-output-template 'dist/trivy-results-alpine-{arch}.json'
+      - name: Record Alpine container images
+        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/record-release-image@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
         with:
           role: alpine
+          image: ${{ steps.alpine-image.outputs.image }}
+          digest: ${{ steps.alpine-image.outputs.digest }}
           tag: ${{ env.RELEASE_TAG }}
           release-tag: ${{ env.RELEASE_TAG }}
-          containerfile: Containerfile.alpine
-          auth-file: ${{ steps.registry-login.outputs.auth-file }}
-          builds: >-
-            [{"platform":"linux/amd64","build-args":["DIRPATH=dist/musl-amd64/"]},
-             {"platform":"linux/arm64","build-args":["DIRPATH=dist/musl-arm64/"]}]
-          scan-output: dist/trivy-results-alpine-{arch}.json
           sbom: dist/image-sbom-alpine.cyclonedx.json
-          title: gommitlint
-          description: "Git commit message linter and validator"
-          licenses: "EUPL-1.2 OR GPL-3.0-or-later"
-          vendor: "Itiquette"
-          authors: "Josef Andersson <janderssonse@proton.me>"
       # The unsigned hand-off the signer takes: dist/release-files.json, the
       # manifest that declares the public files, written from GoReleaser's own
       # metadata. The signer validates it before anything is signed and

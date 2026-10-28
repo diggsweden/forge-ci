@@ -60,7 +60,7 @@ jobs:
   build:
     name: "Build: release files"
     needs: prepare
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     container:
       image: docker.io/library/maven:3.9-eclipse-temurin-25@sha256:96f175708f766ea049ab6c794a85335d238894c75f8eb364bddd98086a5b7cfd
     timeout-minutes: 30
@@ -155,7 +155,7 @@ jobs:
     name: Summary
     if: ${{ always() && startsWith(forgejo.ref, 'refs/tags/') }}
     needs: [prepare, build, sign-and-publish]
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     timeout-minutes: 5
     steps:
       - name: Set up forge-ci

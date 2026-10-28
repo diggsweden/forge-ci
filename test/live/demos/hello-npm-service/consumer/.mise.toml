@@ -5,5 +5,5 @@
 # setup-toolchain installs these.
 [tools]
 node = "24.22.0"
-# build-release-image scans every platform before it publishes.
+# release-images.yml scans every platform before it publishes.
 "aqua:aquasecurity/trivy" = "0.76.0"

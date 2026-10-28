@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/diggsweden/forge-ci/internal/domain/validate"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
@@ -24,6 +25,64 @@ func consumerReleaseTemplates() []string {
 		"examples/go-cli/forgejo/release.yml",
 		"examples/go-service/forgejo/release.yml",
 		"examples/cargo-app/forgejo/release.yml",
+	}
+}
+
+// Exercise the same digest channel that each kit's PR gate selects. In
+// particular, a joined image/file hand-off must not leave the gate checking
+// the earlier binary-only build job.
+func TestConsumerPRIsolationInputsMatchReleaseHandoff(t *testing.T) {
+	t.Parallel()
+
+	for _, release := range consumerReleaseTemplates() {
+		var gate struct {
+			Jobs map[string]struct {
+				Steps []struct {
+					Uses string            `yaml:"uses"`
+					With map[string]string `yaml:"with"`
+				} `yaml:"steps"`
+			} `yaml:"jobs"`
+		}
+		loadYAML(t, strings.TrimSuffix(release, "release.yml")+"pullrequest.yml", &gate)
+
+		found := false
+
+		for _, job := range gate.Jobs {
+			for _, step := range job.Steps {
+				if !strings.Contains(step.Uses, "/check-l3-isolation@") {
+					continue
+				}
+
+				found = true
+				body := strings.NewReplacer("PIN_FORGE_CI_SHA", strings.Repeat("a", 40),
+					"PIN_SIGNER_IMAGE_DIGEST", strings.Repeat("b", 64),
+					"PIN_COSIGN_PUBLIC_KEY_SHA256", strings.Repeat("c", 64),
+					"FORGE_HOST", "forge.example", "OWNER", "owner").Replace(string(reporoot.ReadFile(t, release)))
+
+				digest := step.With["dist-digest-output"]
+				if digest == "" {
+					digest = "dist-digest"
+				}
+
+				build := step.With["build-job"]
+				if build == "" {
+					build = "build-and-release"
+				}
+
+				violations, err := validate.CheckIsolation([]byte(body), validate.IsolationConfig{
+					BuildJob: build, SignJob: "sign-and-publish", PrepareJob: "prepare",
+					DistDigestOutput: digest,
+					SigningSecrets:   []string{"RELEASE_COSIGN_PRIVATE_KEY", "RELEASE_COSIGN_PASSPHRASE", "RELEASE_GPG_PRIVATE_KEY", "RELEASE_GPG_PASSPHRASE", "RELEASE_GPG_FINGERPRINT"},
+				})
+				if err != nil || len(violations) != 0 {
+					t.Errorf("%s isolation: %v; violations: %v", release, err, violations)
+				}
+			}
+		}
+
+		if !found {
+			t.Errorf("%s has no PR isolation gate", release)
+		}
 	}
 }
 

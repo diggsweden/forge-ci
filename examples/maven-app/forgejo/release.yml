@@ -40,8 +40,9 @@
 # Then:
 #
 #   1. Fill in each FIXME: the bot identity and your POM's artifactId.
-#   2. Configure the variables CI_RUNNER_LABEL, RELEASE_GIT_URL,
-#      RELEASE_GIT_HOST_KEY_FINGERPRINT and COSIGN_PUBLIC_KEY, and the
+#   2. Configure the variables CI_RUNNER_LABEL,
+#      RELEASE_GIT_HOST_KEY_FINGERPRINT and COSIGN_PUBLIC_KEY (RELEASE_GIT_URL
+#      only where SSH runs on another host or port than the web), and the
 #      always-required secrets used below. Disabled package/image secrets may
 #      remain unset.
 #
@@ -68,8 +69,9 @@
 #
 # Containers: this template builds none — the image ledger is simply absent,
 # which the signer treats as empty (image sign/promote no-op). For an image,
-# add registry-login, setup-buildah and build-release-image to the build job
-# and set publish-container-images; docs/forgejo.md has the steps.
+# call release-images.yml and join its image artifact with the unsigned files
+# before signing. Set publish-container-images and provide native runner capacity;
+# examples/go-service/forgejo/ and docs/forgejo.md show the hand-off.
 name: Release
 
 on:
@@ -142,7 +144,7 @@ jobs:
   build:
     name: "Build: release files"
     needs: prepare
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -281,7 +283,7 @@ jobs:
     name: Summary
     if: ${{ always() && startsWith(forgejo.ref, 'refs/tags/') }}
     needs: [prepare, build, sign-and-publish]
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     timeout-minutes: 5
     steps:
       - name: Set up forge-ci

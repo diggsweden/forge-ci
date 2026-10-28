@@ -14,7 +14,7 @@ on:
   workflow_call:
     inputs:
       runner-label:
-        description: Exact trusted runner label selected by the consumer repository.
+        description: JSON array of trusted runner labels; all labels must match (for example '["ci-builder"]').
         type: string
         required: true
       forge-ci-repository:
@@ -61,13 +61,13 @@ on:
         default: ''
       base-repository:
         description: >-
-          Full base-image repository. Empty derives it from the calling repository and repository-suffix. On this forge's registry, with its host and port, it must be under the calling repository's owner, compared without case. On another registry, such as ghcr.io/owner/project-base, it is taken as declared, with registry-user and RELEASE_REGISTRY_TOKEN for that registry. Must match the repository used to build, verify, and sign the bases.
+          Full base-image repository. Empty derives it from the calling repository and repository-suffix. It may be on this forge's registry or on another one, such as ghcr.io/owner/project-base, which its host says; the login goes to that registry, with registry-user and RELEASE_REGISTRY_TOKEN. Must match the repository used to build, verify, and sign the bases.
         type: string
         required: false
         default: ''
       registry-user:
         description: >-
-          User the registry token logs in as. Empty is the calling repository's owner, which is right for this forge's registry; a repository on another registry, such as GHCR, names its user there.
+          User the registry token logs in as. Empty takes the RELEASE_REGISTRY_USER variable, the user of the RELEASE_REGISTRY_TOKEN secret; with neither, the calling repository's owner on this forge's registry; a repository on another registry, such as GHCR, must name its user there, and the run stops before it logs in when it does not.
         type: string
         required: false
         default: ''
@@ -102,7 +102,7 @@ env:
 jobs:
   coordinates:
     name: Validate helper trust coordinates
-    runs-on: ${{ inputs['runner-label'] }}
+    runs-on: ${{ fromJSON(inputs['runner-label']) }}
     timeout-minutes: 5
     # permissions: is a GitHub field Forgejo ignores (warning per run) --
     # kept for Scorecard Token-Permissions and GitHub portability. Real
@@ -188,7 +188,7 @@ jobs:
   promote-base-container-images:
     name: Promote base container images
     needs: coordinates
-    runs-on: ${{ inputs['runner-label'] }}
+    runs-on: ${{ fromJSON(inputs['runner-label']) }}
     container:
       image: ${{ needs.coordinates.outputs.signer_image }}
     env:
@@ -294,7 +294,7 @@ jobs:
           TRUSTED_KEY_INPUT: ${{ inputs['cosign-public-key'] }}
           TRUSTED_KEY_SHA256_INPUT: ${{ inputs['cosign-public-key-sha256'] }}
           REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
-          REGISTRY_USER: ${{ inputs['registry-user'] || forgejo.repository_owner }}
+          REGISTRY_USER: ${{ inputs['registry-user'] || vars.RELEASE_REGISTRY_USER }}
         run: |
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
@@ -315,11 +315,10 @@ jobs:
           read -r COSIGN_PUBLIC_KEY_SHA256 _ <"${trusted_key}.sha256"
           export COSIGN_PUBLIC_KEY_PATH COSIGN_PUBLIC_KEY_SHA256
           registry_token="${REGISTRY_TOKEN:?}"
-          registry_user="${REGISTRY_USER:?}"
+          registry_user="${REGISTRY_USER}"
           unset REGISTRY_TOKEN REGISTRY_USER
           # shellcheck source=.engine/bin/lib-forge-ci.sh
           source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
-          forge_ci_mark_external_registry "${BASE_IMAGE_REPOSITORY:-}" "${FORGEJO_SERVER:-}"
           printf '%s' "${registry_token}" | FORGE_CI_PROVIDER=forgejo run_forge_ci container base-images promote \
             --expected-repository "${BASE_IMAGE_REPOSITORY}" \
             --registry-username "${registry_user}" \

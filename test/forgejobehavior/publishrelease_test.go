@@ -102,7 +102,6 @@ func TestPublishRelease(t *testing.T) {
 	t.Parallel()
 
 	publish := workflowStep(t, "sign-and-publish-release.yml", "publish", "Publish release assets and signatures")
-	//nolint:gosec // G101: the name of a secret in a workflow expression, no value.
 	if want := map[string]string{
 		"PUBLISH_RELEASE_TOKEN_INPUT": "${{ secrets.RELEASE_TOKEN }}",
 		"RELEASE_DRAFT":               "${{ inputs['release-draft'] }}",

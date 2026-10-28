@@ -242,13 +242,11 @@ func TestBaseImageSigningIsOneEngineCall(t *testing.T) {
 	}
 }
 
-// The engine signs and promotes base images only on the registry it logs in
-// to. On the forge's own registry, the host for as long as the step names no
-// other, a base-repository input chooses a package name under the calling
-// repository's owner. A repository on another registry is the caller's
-// declared external one, which the layer's helper marks from its host, so
-// neither workflow passes --registry or sets CONTAINER_REGISTRY, and each
-// input description states the rules its caller meets.
+// The engine signs and promotes base images in the one base-image repository
+// and logs in to that repository's registry; whether it is the forge's own or
+// another one, the engine reads from its host. Neither workflow passes
+// --registry or sets CONTAINER_REGISTRY, which would rename the forge's own
+// registry, and each input description states the rule its caller meets.
 func TestBaseImageSigningAndPromotionNameTheirRegistry(t *testing.T) {
 	t.Parallel()
 
@@ -264,7 +262,6 @@ func TestBaseImageSigningAndPromotionNameTheirRegistry(t *testing.T) {
 		}
 
 		requireWalkReaches(t, root, `--expected-repository "${BASE_IMAGE_REPOSITORY}"`, path)
-		requireWalkReaches(t, root, `forge_ci_mark_external_registry "${BASE_IMAGE_REPOSITORY:-}" "${FORGEJO_SERVER:-}"`, path)
 
 		if anyString(root, namesRegistry.MatchString) {
 			t.Errorf("%s names a registry host; the base-image registry must stay the forge's own", path)
@@ -278,7 +275,7 @@ func TestBaseImageSigningAndPromotionNameTheirRegistry(t *testing.T) {
 		inputs := mappingValue(mappingValue(mappingValue(root, "on"), "workflow_call"), "inputs")
 
 		description := strings.Join(strings.Fields(scalarString(mappingValue(mappingValue(inputs, "base-repository"), "description"))), " ")
-		for _, rule := range []string{"On this forge's registry, with its host and port", "under the calling repository's owner", "On another registry", "taken as declared"} {
+		for _, rule := range []string{"this forge's registry or on another one", "which its host says", "the login goes to that registry"} {
 			if !strings.Contains(description, rule) {
 				t.Errorf("%s: the base-repository description does not state %q", path, rule)
 			}

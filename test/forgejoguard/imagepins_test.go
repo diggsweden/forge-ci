@@ -39,7 +39,7 @@ func TestEveryImagePinCheckIsTheCanonicalOne(t *testing.T) {
 			return walkErr
 		}
 
-		body, err := os.ReadFile(path) //nolint:gosec // a file of this repository's own layer.
+		body, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}

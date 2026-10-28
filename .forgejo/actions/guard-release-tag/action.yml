@@ -4,7 +4,7 @@
 
 name: 'Release tag guard'
 description: >-
-  Fail fast unless the final release tag is stable semver (vMAJOR.MINOR.PATCH). Forgejo matches tag triggers with globs, which can only approximate semver, so every release consumer needs a regex gate before any signing/build work runs — and it must reject pre-releases / build-metadata tags. The input may be the final tag or an immutable release-request/vMAJOR.MINOR.PATCH tag.
+  Validate the final tag against RELEASE_POLICY (stable by default). The input may be a final tag or a signed release-request tag; build metadata is rejected.
 inputs:
   tag:
     description: Final tag or release-request tag to validate. Defaults to the triggering ref name.
@@ -12,9 +12,9 @@ inputs:
     default: ${{ github.ref_name }}
   pattern:
     description: >-
-      Extended regex the tag must fully match. Default accepts only stable vMAJOR.MINOR.PATCH (no pre-release suffix, no build metadata).
+      Optional additional anchored regex restriction; it cannot widen the release policy.
     required: false
-    default: '^v[0-9]+[.][0-9]+[.][0-9]+$'
+    default: ''
 
 outputs:
   release-tag:
@@ -27,7 +27,7 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Reject non-stable release tag
+    - name: Validate release tag
       id: guard
       shell: bash
       env:
@@ -39,4 +39,4 @@ runs:
         source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         FORGE_CI_PROVIDER=forgejo run_forge_ci validate tag release-guard \
           --tag "${RELEASE_TAG:?}" \
-          --pattern "${RELEASE_TAG_PATTERN:?}"
+          --pattern "${RELEASE_TAG_PATTERN:-}"

@@ -30,9 +30,9 @@ set -euo pipefail
 case "$*" in
   'rev-parse --verify HEAD^{commit}') printf '%s\n' "${FAKE_HEAD_COMMIT:?}" ;;
   'rev-parse --verify refs/tags/'*'^{commit}') printf '%s\n' "${FAKE_TAG_COMMIT:?}" ;;
-  'for-each-ref refs/tags/release-request/v1.2.3 --format=%(taggername) <%(taggeremail)>')
-    printf 'Ada Lovelace <ada@example.test>\n' ;;
-  'for-each-ref refs/tags/release-request/v1.2.3 --format=%(taggerdate:iso8601)')
+  'for-each-ref refs/tags/release-request/v1.2.3 --format=%(taggername) <%(taggeremail)>'|'for-each-ref refs/tags/release-request/v1.2.3-beta.2 --format=%(taggername) <%(taggeremail)>')
+    printf 'Release Administrator <admin@example.test>\n' ;;
+  'for-each-ref refs/tags/release-request/v1.2.3 --format=%(taggerdate:iso8601)'|'for-each-ref refs/tags/release-request/v1.2.3-beta.2 --format=%(taggerdate:iso8601)')
     printf '1970-01-01 00:00:00 +0000\n' ;;
   *) exit 1 ;;
 esac
@@ -66,8 +66,8 @@ func TestPrepareReleaseContextCallsTheEngine(t *testing.T) {
 
 	argv := func(ref string) []string {
 		return []string{
-			"version", "derive-release", "--ref-name", ref,
-			"--require-release-request", "--require-stable", "--trailer-mode", "coauthor-only",
+			"version", "derive-release", "--release-policy", "stable", "--ref-name", ref,
+			"--require-release-request", "--trailer-mode", "coauthor-only",
 		}
 	}
 
@@ -76,7 +76,7 @@ func TestPrepareReleaseContextCallsTheEngine(t *testing.T) {
 		want              int
 	}{
 		{"forwards the ref and the policy flags", "release-request/v1.2.3", "0", 0},
-		{"keeps an option-shaped ref one value", "release-request/v1.2.3 --require-stable=false", "0", 0},
+		{"keeps an option-shaped ref one value", "release-request/v1.2.3 --release-policy stable-prerelease", "0", 0},
 		{"propagates the engine status", "release-request/v1.2.3", "5", 5},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -144,24 +144,31 @@ func TestPrepareReleaseContextBindsTheRequestToTheEventCommit(t *testing.T) {
 	}
 }
 
-// The step runs the engine built from this tree with its fixed policy flags:
-// a stable release request yields the outputs the action's later steps read,
-// and the two policy flags refuse a plain tag and a prerelease.
+// The step runs this tree's engine: stable is the default, prereleases require
+// explicit opt-in, and the authorized request remains bound to the event commit.
 func TestPrepareReleaseContextEngine(t *testing.T) {
 	t.Parallel()
 	script := actionStep(t, "prepare-release", releaseContextStep)
 	engine := forgeCIEngine(t)
 	lib := string(reporoot.ReadFile(t, ".engine/bin/lib-forge-ci.sh"))
 
-	run := func(t *testing.T, ref string) (*sandbox, result) {
+	run := func(t *testing.T, ref string, extra ...string) (*sandbox, result) {
 		t.Helper()
 
 		box, path := releaseContextSandbox(t)
 		// The real resolver runs the built engine as a non-strict override.
 		box.write(".engine/bin/lib-forge-ci.sh", lib, 0o600)
 
-		return box, box.run(script, append(releaseContextEnv(path, ref), "FORGE_CI_BIN="+engine, "FORGE_CI_RUNNER=forgejo")...)
+		env := append(releaseContextEnv(path, ref), "FORGE_CI_BIN="+engine, "FORGE_CI_RUNNER=forgejo")
+
+		return box, box.run(script, append(env, extra...)...)
 	}
+	t.Run("explicit policy admits a numbered beta", func(t *testing.T) {
+		box, got := run(t, "release-request/v1.2.3-beta.2", "RELEASE_POLICY=stable-prerelease")
+		if got.status != 0 || !strings.Contains(box.output(), "release-tag=v1.2.3-beta.2") {
+			t.Fatalf("beta policy was not carried to engine: status=%d outputs=%s stderr=%s", got.status, box.output(), got.stderr)
+		}
+	})
 
 	t.Run("derives the outputs from a stable release request", func(t *testing.T) {
 		t.Parallel()
@@ -174,7 +181,7 @@ func TestPrepareReleaseContextEngine(t *testing.T) {
 		lines := strings.Split(box.output(), "\n")
 		for _, want := range []string{
 			"release-tag=v1.2.3", "version=1.2.3", "release-request=release-request/v1.2.3",
-			"Release-Request: release-request/v1.2.3", "Co-authored-by: Ada Lovelace <ada@example.test>",
+			"Release-Request: release-request/v1.2.3", "Co-authored-by: Release Administrator <admin@example.test>",
 		} {
 			if !slices.Contains(lines, want) {
 				t.Errorf("outputs lack line %q:\n%s", want, box.output())

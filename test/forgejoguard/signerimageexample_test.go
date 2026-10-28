@@ -30,11 +30,15 @@ const (
 
 	// signerBuildArchJob builds each architecture on a native runner of that
 	// architecture: the build executes the image's steps, never under emulation.
-	signerBuildArchJob    = "build-signer-arch"
-	signerBuildArchRunner = "${{ matrix.arch == 'arm64' && vars.CI_RUNNER_LABEL_ARM64 || vars.CI_RUNNER_LABEL }}"
+	// Buildah needs user namespaces, so an installation whose pool denies them
+	// names a container runner instead, lent or its own; signerRequestRunnerJob
+	// asks for it first.
+	signerBuildArchJob     = "build-signer-arch"
+	signerBuildArchRunner  = "${{ fromJSON(vars[matrix.arch == 'arm64' && 'CI_RUNNER_LABEL_CONTAINER_ARM64' || 'CI_RUNNER_LABEL_CONTAINER'] || vars[matrix.arch == 'arm64' && 'CI_RUNNER_LABEL_ARM64' || 'CI_RUNNER_LABEL']) }}"
+	signerRequestRunnerJob = "request-runner"
 )
 
-func TestSignerImageExampleDefersRegistryWritesUntilAllBuildsSucceed(t *testing.T) {
+func TestSignerImageExampleDefersIndexPublicationUntilAllBuildsSucceed(t *testing.T) {
 	t.Parallel()
 	parsed := loadWorkflow(t, signerImageExample)
 	build := parsed.jobs["build-signer-arch"]
@@ -54,19 +58,19 @@ func TestSignerImageExampleDefersRegistryWritesUntilAllBuildsSucceed(t *testing.
 	for _, step := range build.steps() {
 		run := scalarString(mappingValue(step, "run"))
 		if strings.Contains(run, "multiarch-image build-arch") {
-			foundBuild = strings.Contains(run, "--stage")
+			foundBuild = !strings.Contains(run, "--stage") && strings.Contains(run, "--auth-file")
 		}
 	}
 
 	for _, step := range assembly.steps() {
 		run := scalarString(mappingValue(step, "run"))
 		if strings.Contains(run, "multiarch-image assemble") {
-			foundAssembly = strings.Contains(run, "--from-layouts")
+			foundAssembly = !strings.Contains(run, "--from-layouts") && strings.Contains(run, "--auth-file")
 		}
 	}
 
 	if !foundBuild || !foundAssembly {
-		t.Fatal("signer jobs must transfer staged layouts and publish only in assembly")
+		t.Fatal("signer jobs must publish registry candidates and assemble their index after all builds succeed")
 	}
 }
 
@@ -103,8 +107,8 @@ func TestSignerImageExampleBuildsFromOnePinnedEngineCheckout(t *testing.T) {
 		t.Error("a push must rebuild the image only when the workflow file, which holds the pin, changes")
 	}
 
-	if len(parsed.jobs) != 3 {
-		t.Fatalf("the example has %d jobs, want the binary, the per-architecture build and the manifest assembly", len(parsed.jobs))
+	if len(parsed.jobs) != 4 {
+		t.Fatalf("the example has %d jobs, want the binary, the per-architecture runner request and build, and the manifest assembly", len(parsed.jobs))
 	}
 
 	if got := scalarString(mappingValue(mappingValue(document, "env"), "FORGE_CI_REPOSITORY_URL")); got != "${{ forgejo.server_url }}/OWNER/forge-ci" {
@@ -115,7 +119,7 @@ func TestSignerImageExampleBuildsFromOnePinnedEngineCheckout(t *testing.T) {
 		assertSignerImageJob(t, name, target)
 	}
 
-	requireWalkReaches(t, document, "secrets.RELEASE_REGISTRY_TOKEN", signerImageExample)
+	requireWalkReaches(t, document, "secrets.ENGINE_PACKAGE_TOKEN", signerImageExample)
 	requireWalkReaches(t, document, "--containerfile "+signerContainerfile, signerImageExample)
 }
 
@@ -172,7 +176,7 @@ func TestSignerImageExamplePublishesTheEngineBinaryFirst(t *testing.T) {
 		t.Error("the build step holds a secret; the token belongs to the upload step alone")
 	}
 
-	if got := scalarString(mappingValue(mappingValue(upload, "env"), "FORGE_CI_PACKAGE_TOKEN")); got != "${{ secrets.RELEASE_REGISTRY_TOKEN }}" {
+	if got := scalarString(mappingValue(mappingValue(upload, "env"), "FORGE_CI_PACKAGE_TOKEN")); got != "${{ secrets.ENGINE_PACKAGE_TOKEN }}" {
 		t.Errorf("the upload step takes its token from %q, want the registry token", got)
 	}
 
@@ -223,7 +227,6 @@ func assertSignerImageJob(t *testing.T, name string, target job) {
 
 	localAction := regexp.MustCompile(`^\./\.forgejo/actions/([a-z0-9-]+)$`)
 	pinnedSetupGo := regexp.MustCompile(`^https://code\.forgejo\.org/actions/setup-go@[0-9a-f]{40}$`)
-	pinnedForgejoAction := regexp.MustCompile(`^https://code\.forgejo\.org/actions/checkout@[0-9a-f]{40}$`)
 
 	wantRunner := repositoryRunner
 	if name == signerBuildArchJob {
@@ -247,14 +250,18 @@ func assertSignerImageJob(t *testing.T, name string, target job) {
 		t.Errorf("job %s must first refuse a mistaken side-branch dispatch, with the ref passed through env", name)
 	}
 
+	// actions/checkout would send the job token, which the forge refuses for
+	// another repository; the engine is fetched without credentials.
 	checkout := steps[1]
-	with := mappingValue(checkout, "with")
+	fetch := scalarString(mappingValue(checkout, "run"))
 
-	if !pinnedForgejoAction.MatchString(scalarString(mappingValue(checkout, "uses"))) ||
-		scalarString(mappingValue(with, "repository")) != "OWNER/forge-ci" ||
-		scalarString(mappingValue(with, "ref")) != enginePinPlaceholder ||
-		scalarString(mappingValue(with, "persist-credentials")) != "false" {
-		t.Errorf("job %s does not check the engine out after the branch guard at the placeholder pin, without persisted credentials", name)
+	if mappingValue(checkout, "uses") != nil ||
+		scalarString(mappingValue(mappingValue(checkout, "env"), "ENGINE_REF")) != enginePinPlaceholder ||
+		!strings.Contains(fetch, `git remote add origin "${FORGE_CI_REPOSITORY_URL:?}"`) ||
+		!strings.Contains(fetch, `GIT_TERMINAL_PROMPT=0 git -c protocol.version=2 fetch`) ||
+		!strings.Contains(fetch, `origin "${ENGINE_REF:?}"`) ||
+		!strings.Contains(fetch, "git checkout --quiet --detach FETCH_HEAD") {
+		t.Errorf("job %s does not fetch the engine without credentials after the branch guard at the placeholder pin", name)
 	}
 
 	if verify := scalarString(mappingValue(steps[2], "run")); !strings.Contains(verify, `git rev-parse HEAD`) ||
@@ -290,8 +297,12 @@ func assertSignerImageJob(t *testing.T, name string, target job) {
 	}
 
 	allowedReference := "secrets.SIGNER_REGISTRY_TOKEN"
-	if name == publishBinaryJob {
-		allowedReference = "secrets.RELEASE_REGISTRY_TOKEN"
+
+	switch name {
+	case publishBinaryJob:
+		allowedReference = "secrets.ENGINE_PACKAGE_TOKEN"
+	case signerRequestRunnerJob:
+		allowedReference = "secrets.CI_RUNNER_LENDER_TOKEN"
 	}
 
 	secret := regexp.MustCompile(`secrets\.[A-Za-z0-9_]+`)

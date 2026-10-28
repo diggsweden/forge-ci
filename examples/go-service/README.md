@@ -1,9 +1,9 @@
 # Go service example
 
-A Go service shipped as a multi-arch container image. This is the
+A Go service shipped as binaries and a container image. GitHub uses the
 `container-first` Go path: the Containerfile is the build environment, and
-`sbom-go.yml` emits the Build SBOM from `go.mod` / `go.sum` alongside the
-container publish stage.
+`sbom-go.yml` emits the Build SBOM alongside publication. Forgejo builds
+versioned binaries first and assembles images from them in separate native jobs.
 
 ## Per forge
 
@@ -16,13 +16,20 @@ container publish stage.
   [GitLab guide](../../docs/gitlab.md#getting-started).
 - **Forgejo**: [`forgejo/pullrequest.yml`](forgejo/pullrequest.yml) and
   [`forgejo/release.yml`](forgejo/release.yml), the service binaries and one
-  multi-arch image from `Containerfile.example` with `build-release-image`. See
+  image from [`forgejo/Containerfile.example`](forgejo/Containerfile.example)
+  using the prebuilt binaries and `release-images.yml`. Copy
+  [`artifacts-forgejo.yml`](artifacts-forgejo.yml) to `.forge-ci/images.yml`;
+  this declaration has no extraction step. Commit `mise.lock` for the runner
+  platforms to use the locked toolchain setup. Images default to linux/amd64;
+  arm64 requires a native runner and `RELEASE_PLATFORMS=linux/amd64,linux/arm64`. See
   the [Forgejo guide](../../docs/forgejo.md#getting-started).
 
 ## Files
 
 - `artifacts.yml` declares `project-type: go` with `config.build-mode: container-first`. The GitHub release reads it.
-- `Containerfile.example` shows the required multi-stage pattern: `builder`, `export-binary`, and `runtime`. Copy it to `Containerfile`; the Forgejo release builds its final `runtime` stage.
+- `Containerfile.example` shows the container-first multi-stage pattern: `builder`, `export-binary`, and `runtime`. Copy it to `Containerfile` for the GitHub path.
+- `forgejo/Containerfile.example` copies the versioned binaries into a runtime image. Copy it to `Containerfile.forgejo` and match its binary name to `ARTIFACT_NAME` in the workflow.
+- `artifacts-forgejo.yml` declares those images without extraction. Copy it to `.forge-ci/images.yml` for the Forgejo release.
 - `github/release-workflow.yml` calls the release orchestrator; the container is published by `publish-container.yml`.
 - `github/pullrequest-workflow.yml` runs forge-ci PR checks and leaves `go test`, `go vet`, and `govulncheck` to a caller-owned test workflow.
 

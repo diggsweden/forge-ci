@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: The Forge CI Authors
+# SPDX-License-Identifier: CC0-1.0
+
+# Copy to Containerfile.forgejo; replace FIXME-service with ARTIFACT_NAME.
+# release-images overlays the image-context artifact on the release checkout.
+# The binaries already carry the prepared release's version and commit.
+FROM gcr.io/distroless/static-debian12:nonroot
+ARG TARGETARCH
+COPY dist/linux-${TARGETARCH}/FIXME-service-linux-${TARGETARCH} /usr/local/bin/my-service
+ENTRYPOINT ["/usr/local/bin/my-service"]

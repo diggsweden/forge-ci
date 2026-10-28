@@ -64,13 +64,13 @@ runs:
       if: hashFiles('go.mod') != ''
       shell: bash
       env:
-        TOOLS_SUBSET: ${{ inputs.tools }}
+        TOOLSET_TOOLS: ${{ inputs.tools }}
       run: |
         set -euo pipefail
         # shellcheck source=.engine/bin/lib-forge-ci.sh
         source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         run_forge_ci toolchain setup-go-env \
-          --tools "${TOOLS_SUBSET}" \
+          --tools "${TOOLSET_TOOLS}" \
           --path-file "${FORGEJO_PATH:?}" \
           --env-file "${FORGEJO_ENV:-${GITHUB_ENV:-}}"
 
@@ -182,7 +182,7 @@ runs:
     - name: Validate mise install mode
       shell: bash
       env:
-        TOOLS_SUBSET: ${{ inputs.tools }}
+        TOOLSET_TOOLS: ${{ inputs.tools }}
         MISE_LOCKED_INSTALL: ${{ inputs.mise-locked }}
         MISE_GITHUB_TOKEN: ${{ inputs.mise-github-token }}
       run: |
@@ -195,7 +195,7 @@ runs:
         # shellcheck source=.engine/bin/lib-forge-ci.sh
         source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         run_forge_ci toolchain validate-mise-install \
-          --tools "${TOOLS_SUBSET}" \
+          --tools "${TOOLSET_TOOLS}" \
           --locked "${MISE_LOCKED_INSTALL:?}" \
           --github-token-present="${github_token_present}"
 
@@ -208,7 +208,7 @@ runs:
         MISE_FORGEJO_TOKEN: ${{ inputs.mise-forgejo-token }}
         MISE_LOCKED_INSTALL: ${{ inputs.mise-locked }}
         MISE_INSTALL_HTTP_TIMEOUT_SECONDS: ${{ inputs.mise-http-timeout-seconds }}
-        TOOLS_SUBSET: ${{ inputs.tools }}
+        TOOLSET_TOOLS: ${{ inputs.tools }}
         GITHUB_TOKEN: ''
         GH_TOKEN: ''
         FORGEJO_TOKEN: ''
@@ -219,7 +219,7 @@ runs:
         source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         run_forge_ci toolchain install-mise-tools \
           --locked "${MISE_LOCKED_INSTALL:?}" \
-          --tools "${TOOLS_SUBSET}" \
+          --tools "${TOOLSET_TOOLS}" \
           --http-timeout-seconds "${MISE_INSTALL_HTTP_TIMEOUT_SECONDS:?}" \
           --mise-bin "$HOME/.local/bin/mise"
 

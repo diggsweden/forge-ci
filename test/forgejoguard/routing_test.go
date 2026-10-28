@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/goccy/go-yaml/ast"
 )
 
 // These rules pin consumer-facing routing: every job runs on the runner the
@@ -15,19 +17,46 @@ import (
 // will need is missing.
 
 const (
-	reusableRunner   = "${{ inputs['runner-label'] }}"
-	repositoryRunner = "${{ vars.CI_RUNNER_LABEL }}"
+	reusableRunner        = "${{ fromJSON(inputs['runner-label']) }}"
+	repositoryRunner      = "${{ fromJSON(vars.CI_RUNNER_LABEL) }}"
+	repositoryRunnerInput = "${{ vars.CI_RUNNER_LABEL }}"
+	// containerRunner is where a job that builds container images runs: the
+	// repository's second reviewed runner variable when set, because that job
+	// needs user namespaces the plain pool may deny, and the pool otherwise.
+	// runnerlending_test.go holds the converse, that only such a job uses it.
+	containerRunner = "${{ fromJSON(vars.CI_RUNNER_LABEL_CONTAINER || vars.CI_RUNNER_LABEL) }}"
+	// archRunner is where a layer workflow's per-architecture build runs: a
+	// native runner of the architecture, never CPU emulation, so an arm64
+	// build takes the caller's second label.
+	archRunner = "${{ fromJSON(matrix.build.arch == 'arm64' && inputs['runner-label-arm64'] || inputs['runner-label']) }}"
 )
 
-// routingViolation reports how a consumer job leaves the repository's runner:
-// a reusable-workflow call passes the label as input, any other job runs on it.
+// routingViolation reports how a consumer job leaves the repository's runners:
+// a reusable-workflow call passes the label as input, a container build runs on
+// the container runner, any other job runs on the plain one.
 func routingViolation(entry job) string {
+	buildsContainers := slices.ContainsFunc(entry.steps(), func(step ast.Node) bool {
+		return containerBuildingActions.MatchString(scalarString(mappingValue(step, "uses")))
+	})
+	if buildsContainers {
+		if got := entry.runsOn(); got != containerRunner {
+			return "builds container images but runs on " + got
+		}
+
+		return ""
+	}
+
 	if scalarString(mappingValue(entry.node, "uses")) != "" {
 		if mappingValue(entry.node, "runs-on") != nil {
 			return "a reusable-workflow caller declares runs-on"
 		}
 
-		if got := scalarString(mappingValue(mappingValue(entry.node, "with"), "runner-label")); got != repositoryRunner {
+		want := repositoryRunnerInput
+		if strings.Contains(scalarString(mappingValue(entry.node, "uses")), "/.forgejo/workflows/release-images.yml@") {
+			want = "${{ vars.CI_RUNNER_LABEL_CONTAINER || vars.CI_RUNNER_LABEL }}"
+		}
+
+		if got := scalarString(mappingValue(mappingValue(entry.node, "with"), "runner-label")); got != want {
 			return "runner-label is " + got
 		}
 
@@ -42,20 +71,24 @@ func routingViolation(entry job) string {
 }
 
 // Each reusable workflow requires the caller's runner label and runs every job
-// on it, so no job can land on an unreviewed runner.
+// on it, so no job can land on an unreviewed runner. A per-architecture build
+// runs on the caller's arm64 label for arm64, in a workflow that takes one.
 func TestReusableWorkflowsRunOnTheCallersRunner(t *testing.T) {
 	t.Parallel()
 
 	for _, path := range layerWorkflows(t) {
 		root := loadDocument(t, path)
+		inputs := mappingValue(mappingValue(mappingValue(root, "on"), "workflow_call"), "inputs")
 
-		input := mappingValue(mappingValue(mappingValue(mappingValue(root, "on"), "workflow_call"), "inputs"), "runner-label")
+		input := mappingValue(inputs, "runner-label")
 		if scalarString(mappingValue(input, "required")) != "true" {
 			t.Errorf("%s does not require the runner-label input", path)
 		}
 
+		takesArm64 := mappingValue(inputs, "runner-label-arm64") != nil
+
 		for name, job := range loadWorkflow(t, path).jobs {
-			if got := job.runsOn(); got != reusableRunner {
+			if got := job.runsOn(); got != reusableRunner && (got != archRunner || !takesArm64) {
 				t.Errorf("%s job %s runs on %q, want %q", path, name, got, reusableRunner)
 			}
 		}

@@ -174,8 +174,6 @@ func TestUnsignedHandOffStepThroughTheEngine(t *testing.T) {
 // passthroughEngine stands in for the resolved engine: it records the arguments
 // and the environment of every call, answers `artifact download` itself, since
 // that one reads a forge, and hands every other call to the real engine.
-//
-//nolint:gosec // G101: a fixture script, no credential.
 const passthroughEngine = `#!/usr/bin/env bash
 set -euo pipefail
 { printf 'argv:'; printf ' %q' "$@"; printf '\n'; env; } >>"${ENGINE_CALL_LOG:?}"
@@ -203,13 +201,12 @@ func forgejoRunnerEnv() []string {
 // reaches a registry. A case that logs in was admitted: the ledger sat inside
 // the base repository the step's flags name or derive, and the token arrived
 // on stdin. The registry token appears in no argument and in no child
-// environment. On the forge's registry a base-repository input chooses the
-// package name only: the engine refuses one under another owner, before the
-// ledger and the login, so a caller cannot have the release key attest a path
-// the calling repository's owner does not hold. A repository on another
-// registry is the step's declaration of an external one, taken as declared and
-// logged in to there. The command tests cover the rules; the cases here show
-// the step's flags reach them.
+// environment. A base-repository input names the repository on the forge's
+// registry or on another one, which the engine tells from its host and logs in
+// to there. An empty registry user is the calling repository's owner on the
+// forge's registry; on another registry it is refused before the login. The
+// command tests cover the rules; the cases here show the step's flags reach
+// them.
 func TestBaseImageSigningThroughTheEngine(t *testing.T) {
 	t.Parallel()
 
@@ -228,23 +225,27 @@ func TestBaseImageSigningThroughTheEngine(t *testing.T) {
 	for _, test := range []struct {
 		name, image, suffix, repository string
 		admitted                        bool
+		// noUser leaves the registry-user input empty.
+		noUser bool
 		// login is the login an admitted case shows; empty is the forge's.
 		login, refusal string
 	}{
 		{name: "derives the repository with a suffix", image: derived + "-base", suffix: "-base", admitted: true},
+		{name: "logs in as the owner when no user is named", image: derived + "-base", suffix: "-base", admitted: true, noUser: true, login: "Logged in to forgejo.invalid as Owner"},
 		{name: "takes another package name under the owner", image: explicit, suffix: "-base", repository: explicit, admitted: true},
 		{name: "refuses a ledger outside the derived repository", image: derived, suffix: "-base", refusal: "must be under"},
+		{name: "takes a repository under another owner", image: foreign, repository: foreign, admitted: true},
 		{
-			name: "refuses a repository under another owner", image: foreign, repository: foreign,
-			refusal: "must be below the source repository's owner",
-		},
-		{
-			name: "takes a repository on another registry as declared", image: offForge, repository: offForge,
+			name: "takes a repository on another registry", image: offForge, repository: offForge,
 			admitted: true, login: "Logged in to registry.invalid:5000 as owner",
 		},
 		{
-			name: "takes an external repository under another owner", image: external, repository: external,
+			name: "takes another registry's repository under another owner", image: external, repository: external,
 			admitted: true, login: "Logged in to registry.invalid:5000 as owner",
+		},
+		{
+			name: "refuses another registry without a registry user", image: offForge, repository: offForge,
+			noUser: true, refusal: "registry-user",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -254,6 +255,11 @@ func TestBaseImageSigningThroughTheEngine(t *testing.T) {
 				`","digest":"sha256:` + releaseImageDigest + `","final_tag":"` + test.image + `:` + releaseImageDigest +
 				`-core","base_input_id":"` + releaseImageDigest + `","sbom":"dist/outside.cyclonedx.json","sbom_sha256":"` +
 				releaseImageDigest + `"}]`
+
+			user := "owner"
+			if test.noUser {
+				user = ""
+			}
 
 			box := newSandbox(t, "sign-container-images")
 			box.write(".engine/bin/forge-ci", passthroughEngine, 0o700)
@@ -265,7 +271,7 @@ func TestBaseImageSigningThroughTheEngine(t *testing.T) {
 					"SIGNER_WORK_DIR="+box.root, "FORGEJO_SERVER=https://forgejo.invalid", "FORGEJO_REPO=Owner/Project",
 					"LEDGER_JSON="+ledger, "REPOSITORY_SUFFIX="+test.suffix, "BASE_IMAGE_REPOSITORY="+test.repository,
 					"SOURCE_SHA="+releaseImageDigest[:40], "CALLER_WORKFLOW=release.yml", "SBOM_ARTIFACT=base-sboms",
-					"COSIGN_KEY=fixture-key", "COSIGN_PASSWORD=fixture-password", "REGISTRY_TOKEN="+token, "REGISTRY_USER=owner")...)
+					"COSIGN_KEY=fixture-key", "COSIGN_PASSWORD=fixture-password", "REGISTRY_TOKEN="+token, "REGISTRY_USER="+user)...)
 
 			// Every case ends in a refusal; the login tells an admitted ledger
 			// from one refused at admission.

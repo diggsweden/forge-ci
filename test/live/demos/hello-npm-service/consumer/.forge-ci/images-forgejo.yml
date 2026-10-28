@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: The Forge CI Authors
+# SPDX-License-Identifier: CC0-1.0
+
+# image-context carries the unpacked package; the Containerfile copies dist/.
+containers:
+  - name: hello-npm-service
+    container-file: Containerfile
+    context: .
+    platforms: linux/amd64,linux/arm64

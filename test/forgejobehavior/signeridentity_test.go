@@ -62,6 +62,10 @@ func TestSignerExampleSeparatesEngineAndRecipeCommits(t *testing.T) {
 					}
 
 					args := box.argv()
+					if slices.Contains(args, "--stage") || slices.Contains(args, "--from-layouts") {
+						t.Fatal("signer bootstrap must keep image layers in the registry, not forge artifacts")
+					}
+
 					requireFlagValue(t, args, "--source-sha", engine)
 					requireFlagValue(t, args, "--repository", "OWNER/forge-ci")
 					requireFlagValue(t, args, "--server-url", "https://forgejo.invalid")

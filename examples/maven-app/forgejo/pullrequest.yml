@@ -55,7 +55,7 @@ env:
 jobs:
   lint:
     name: "Check: lint"
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     container:
       # A nanolinter flavour image for your ecosystem, pinned by digest: the
       # lint step runs the nanolinter it finds in the job image and installs
@@ -77,7 +77,7 @@ jobs:
 
   trust-boundary:
     name: "Check: release isolation"
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     timeout-minutes: 10
     steps:
       - name: Set up forge-ci
@@ -99,7 +99,7 @@ jobs:
 
   build:
     name: "Check: build and test"
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     container:
       image: ${{ vars.CI_JOB_IMAGE }}
     timeout-minutes: 15
@@ -126,7 +126,7 @@ jobs:
     name: Summary
     if: ${{ always() }}
     needs: [lint, trust-boundary, build]
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     timeout-minutes: 5
     steps:
       - name: Set up forge-ci

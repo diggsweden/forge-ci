@@ -30,9 +30,8 @@ func actionSteps(t *testing.T, path string) []ast.Node {
 
 // A relative `uses:` inside a composite action resolves against the calling
 // job's workspace, which holds none of this layer's files. An action therefore
-// never calls a sibling by path: it runs the engine itself, as
-// build-release-image does for its three calls. The only `uses:` an action
-// carries is a full URL.
+// never calls a sibling by path: it runs the engine itself. The only `uses:`
+// an action carries is a full URL.
 func TestCompositeActionsCallNoSiblingByPath(t *testing.T) {
 	t.Parallel()
 
@@ -62,10 +61,10 @@ func TestCompositeActionsCallNoSiblingByPath(t *testing.T) {
 // buildAndCheckActions are the actions a consumer runs in a pull-request job
 // or in its own build job, where no credential of the layer belongs.
 func buildAndCheckActions() []string {
-	return []string{"lint-nanolinter", "build-go", "build-cargo", "build-maven", "build-release-image"}
+	return []string{"lint-nanolinter", "build-go", "build-cargo", "build-maven"}
 }
 
-// The lint, build and image actions take no token, password or key: nothing
+// The lint and build actions take no token, password or key: nothing
 // in their inputs or their steps names one, and each step's variables come
 // from inputs, from an earlier step, or from the two public facts of the run.
 // The registry credential of an image build stays in the auth file the

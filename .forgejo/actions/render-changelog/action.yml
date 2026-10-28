@@ -11,7 +11,7 @@ inputs:
     description: Renderer config used for the release commit body.
     default: .forge-ci/gitcliff/minimal.toml
   changelog-creator:
-    description: Changelog renderer backend, git-chglog or git-cliff, pinned in versions.env.
+    description: Changelog renderer backend, git-chglog or git-cliff, pinned in versions.env. A SHA-256 repository needs git-chglog.
     default: git-cliff
   repository-url:
     description: Canonical HTTPS web URL used for generated changelog links.
@@ -35,9 +35,9 @@ runs:
         # shellcheck source=.engine/bin/lib-forge-ci.sh
         source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         run_forge_ci version derive-release \
+          --release-policy "${RELEASE_POLICY:-stable}" \
           --ref-name "${RELEASE_CONTEXT_REF:?}" \
           --require-release-request \
-          --require-stable \
           --trailer-mode coauthor-only
 
     # The renderer can execute commands from the consumer's configuration.

@@ -55,13 +55,13 @@ jobs:
       RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
       RELEASE_REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
 
-  # Whether a job on this runner may build an image at all, asked by the
-  # layer's own action: it installs Buildah, picks the job's container storage
-  # and ends with a probe build. When this job fails, the test's failure says
-  # that the runner is the reason and not the release.
+  # Whether a job on the container runner may build an image at all, asked by
+  # the layer's own action: it installs Buildah, picks the job's container
+  # storage and ends with a probe build. When this job fails, the test's
+  # failure says that the runner is the reason and not the release.
   storage:
     name: Check that a job can build an image
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL_CONTAINER || vars.CI_RUNNER_LABEL) }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -72,7 +72,7 @@ jobs:
   build:
     name: Build and push registry smoke image
     needs: [prepare, storage]
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL_CONTAINER || vars.CI_RUNNER_LABEL) }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -111,15 +111,23 @@ jobs:
 
       - name: Build and push registry smoke image
         id: image
-        uses: https://FORGE_HOST/OWNER/forge-ci/.forgejo/actions/build-push-oci-image@PIN_FORGE_CI_SHA
-        with:
-          tag: ${{ needs.prepare.outputs.release-tag }}
-          containerfile: Containerfile
-          builds: '[{"platform":"RENDER_PLATFORM","build-args":[]}]'
-          title: layer-registry-signer-smoke
-          description: Disposable registry and signer acceptance image
-          licenses: CC0-1.0
-          auth-file: ${{ steps.registry.outputs.auth-file }}
+        env:
+          FORGE_CI_PROVIDER: forgejo
+          IMAGE_TAG: ${{ needs.prepare.outputs.release-tag }}
+          REGISTRY_AUTH_FILE: ${{ steps.registry.outputs.auth-file }}
+          SERVER_URL: ${{ forgejo.server_url }}
+          REPOSITORY: ${{ forgejo.repository }}
+        run: |
+          set -euo pipefail
+          forge-ci container build-push-oci-image \
+            --tag "${IMAGE_TAG:?}" --image '' --containerfile Containerfile \
+            --builds-json '[{"platform":"RENDER_PLATFORM","build-args":[]}]' \
+            --title layer-registry-signer-smoke \
+            --description 'Disposable registry and signer acceptance image' \
+            --context . --vendor '' --authors '' --documentation '' \
+            --ref-name '' --version '' --revision '' --tls-verify true \
+            --licenses CC0-1.0 --auth-file "${REGISTRY_AUTH_FILE:?}" \
+            --server-url "${SERVER_URL:?}" --repository "${REPOSITORY:?}"
 
       - name: Assemble smoke release files
         env:
@@ -182,16 +190,25 @@ jobs:
 
       - name: Build and push registry smoke base image
         id: base-image
-        uses: https://FORGE_HOST/OWNER/forge-ci/.forgejo/actions/build-push-oci-image@PIN_FORGE_CI_SHA
-        with:
-          image: RENDER_BASE_REPOSITORY
-          tag: ${{ steps.base.outputs.input-id }}-smoke
-          containerfile: Containerfile
-          builds: '[{"platform":"RENDER_PLATFORM","build-args":[]}]'
-          title: layer-registry-signer-smoke-base
-          description: Disposable base-image acceptance image
-          licenses: CC0-1.0
-          auth-file: ${{ steps.registry.outputs.auth-file }}
+        env:
+          FORGE_CI_PROVIDER: forgejo
+          IMAGE_NAME: RENDER_BASE_REPOSITORY
+          IMAGE_TAG: ${{ steps.base.outputs.input-id }}-smoke
+          REGISTRY_AUTH_FILE: ${{ steps.registry.outputs.auth-file }}
+          SERVER_URL: ${{ forgejo.server_url }}
+          REPOSITORY: ${{ forgejo.repository }}
+        run: |
+          set -euo pipefail
+          forge-ci container build-push-oci-image \
+            --image "${IMAGE_NAME:?}" --tag "${IMAGE_TAG:?}" \
+            --containerfile Containerfile \
+            --builds-json '[{"platform":"RENDER_PLATFORM","build-args":[]}]' \
+            --title layer-registry-signer-smoke-base \
+            --description 'Disposable base-image acceptance image' \
+            --context . --vendor '' --authors '' --documentation '' \
+            --ref-name '' --version '' --revision '' --tls-verify true \
+            --licenses CC0-1.0 --auth-file "${REGISTRY_AUTH_FILE:?}" \
+            --server-url "${SERVER_URL:?}" --repository "${REPOSITORY:?}"
 
       # The base ledger pins the SBOM the signer attests. The signer downloads
       # the artifact into premade-sboms/, so the entry names the file there.
@@ -306,7 +323,7 @@ jobs:
   require-base:
     name: Require verified registry smoke base image
     needs: [build, verify-base]
-    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     timeout-minutes: 5
     permissions:
       contents: read

@@ -34,11 +34,12 @@ inputs:
     default: .forgejo/release-allowed-signers
   release-git-url:
     description: >-
-      Exact SSH URL used to push the signed release commit and tag, in ssh://git@host[:port]/owner/repository.git form. Required and deliberately not derived from the Forgejo web URL because HTTPS and SSH routes may differ.
-    required: true
+      Exact SSH URL used to push the signed release commit and tag, in ssh://git@host[:port]/owner/repository.git form. Empty pushes to this repository on the Forgejo web host, port 22; set it where SSH runs on another host or port.
+    required: false
+    default: ''
   release-git-host-key-fingerprint:
     description: >-
-      SSH host-key fingerprint of the release URL's host and port, as the trusted Forgejo operator reports it. Required, and deliberately not defaulted: a fingerprint fetched from the host it is meant to verify verifies nothing, so the caller pins it.
+      SSH host-key fingerprint of the release URL's host and port, SHA256:<base64> alone, as the trusted Forgejo operator reports it. Required, and deliberately not defaulted: a fingerprint fetched from the host it is meant to verify verifies nothing, so the caller pins it.
     required: true
   ssh-signing-key:
     description: SSH private key used only by the final commit/tag step.
@@ -86,9 +87,9 @@ runs:
         # shellcheck source=.engine/bin/lib-forge-ci.sh
         source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         run_forge_ci version derive-release \
+          --release-policy "${RELEASE_POLICY:-stable}" \
           --ref-name "${RELEASE_CONTEXT_REF:?}" \
           --require-release-request \
-          --require-stable \
           --trailer-mode coauthor-only
         expected_release_request_sha=${RELEASE_REQUEST_SHA_INPUT:-${RELEASE_REQUEST_EVENT_SHA:?}}
         if [[ ! "${expected_release_request_sha}" =~ ^([0123456789abcdef]{40}|[0123456789abcdef]{64})$ ]]; then
@@ -155,10 +156,11 @@ runs:
         GIT_USER_EMAIL: ${{ inputs.bot-email }}
         # Trust anchors. The engine ships no org default, since a three-forge
         # binary must not assume one forge's host or key, so this shell supplies
-        # them and the engine fails loudly if either goes missing.
+        # the host key pin and the engine fails loudly if it goes missing.
         #
-        # The exact SSH write destination and its independently supplied host
-        # key pin are separate inputs. Neither is inferred from the HTTPS URL.
+        # The SSH write destination and its independently supplied host key
+        # pin are separate inputs. An empty destination is this repository on
+        # the web host, port 22; the pin is never inferred.
         RELEASE_GIT_URL: ${{ inputs.release-git-url }}
         RELEASE_GIT_HOST_KEY_FINGERPRINT: ${{ inputs.release-git-host-key-fingerprint }}
         FORGEJO_REF_NAME: ${{ steps.derive-release-context.outputs.release-tag }}
@@ -179,13 +181,18 @@ runs:
         if [ -n "${INCLUDE_PATHS_FILE:-}" ]; then
           include=(--include-paths-file "${INCLUDE_PATHS_FILE}")
         fi
+        # Left out, the engine pushes to this repository on the web host.
+        git_url=()
+        if [ -n "${RELEASE_GIT_URL:-}" ]; then
+          git_url=(--git-url "${RELEASE_GIT_URL}")
+        fi
         # --branch matches the head check in prepare-release.yml; left out,
         # the engine reads RELEASE_BRANCH or BRANCH from the environment.
         "${SIGNING_EXECUTABLE:?}" version commit-changelog-release \
           --tag "${FORGEJO_REF_NAME}" \
           --branch "${TARGET_BRANCH:?}" \
           --repository "${FORGEJO_REPO}" \
-          --git-url "${RELEASE_GIT_URL}" \
+          "${git_url[@]}" \
           "${include[@]}"
 
     - name: Validate prepared release without signing key

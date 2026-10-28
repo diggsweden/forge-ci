@@ -15,7 +15,7 @@ import (
 func TestBootstrapRepositoryNamesMatchAdapterAddressing(t *testing.T) {
 	t.Parallel()
 
-	for _, workflow := range []string{"prepare-release.yml", "sign-and-publish-release.yml", "sign-container-images.yml", "verify-base-container-images.yml", "promote-base-container-images.yml"} {
+	for _, workflow := range []string{"prepare-release.yml", "sign-and-publish-release.yml", "sign-container-images.yml", "verify-base-container-images.yml", "promote-base-container-images.yml", "release-images.yml"} {
 		stepName := "Validate trust coordinates"
 		if workflow == "prepare-release.yml" {
 			stepName = "Validate trust coordinate"

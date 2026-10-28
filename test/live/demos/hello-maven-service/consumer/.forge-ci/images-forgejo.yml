@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: The Forge CI Authors
+# SPDX-License-Identifier: CC0-1.0
+
+# The jar is built before release-images overlays image-context on the source.
+containers:
+  - name: hello-maven-service
+    container-file: Containerfile
+    context: .
+    platforms: linux/amd64,linux/arm64

@@ -115,19 +115,19 @@ func TestForgeCIResolverSelectsTheHostArchitecture(t *testing.T) {
 		t.Run(machine, func(t *testing.T) {
 			t.Parallel()
 
-			s, digest, _ := setupForgeCISandbox(t, body)
-			if err := os.Remove(filepath.Join(s.root, filepath.FromSlash(trackedChecksum(runtime.GOARCH)))); err != nil {
+			box, digest, _ := setupForgeCISandbox(t, body)
+			if err := os.Remove(filepath.Join(box.root, filepath.FromSlash(trackedChecksum(runtime.GOARCH)))); err != nil {
 				t.Fatal(err)
 			}
 
 			if arch != "" {
-				s.write(trackedChecksum(arch), digest+"  bin/forge-ci\n", 0o600)
+				box.write(trackedChecksum(arch), digest+"  bin/forge-ci\n", 0o600)
 			}
 
-			s.write("fake-bin/uname", "#!/bin/sh\nprintf '%s\\n' '"+machine+"'\n", 0o700)
+			box.write("fake-bin/uname", "#!/bin/sh\nprintf '%s\\n' '"+machine+"'\n", 0o700)
 
-			got := s.run(`source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"`+"\nrun_forge_ci sign\n",
-				"PATH="+filepath.Join(s.root, "fake-bin")+":"+os.Getenv("PATH"))
+			got := box.run(`source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"`+"\nrun_forge_ci sign\n",
+				"PATH="+filepath.Join(box.root, "fake-bin")+":"+os.Getenv("PATH"))
 
 			switch {
 			case arch == "" && (got.status != 69 || got.stdout != "" || !strings.Contains(got.stderr, "this host is '"+machine+"'; use a native host")):

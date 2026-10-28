@@ -42,22 +42,22 @@ func TestLayoutPublicationWorkflowUsesExplicitAuthAndChecksEveryArtifact(t *test
 			var requests, wrongCredentials atomic.Int32
 
 			handler := registry.New(registry.Logger(log.New(io.Discard, "", 0)))
-			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewTLSServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 				requests.Add(1)
 
-				user, password, ok := r.BasicAuth()
+				user, password, ok := request.BasicAuth()
 				if !ok || user != "fixture-publisher" || password != "fixture-password" {
 					if ok {
 						wrongCredentials.Add(1)
 					}
 
-					w.Header().Set("WWW-Authenticate", `Basic realm="fixture"`)
-					w.WriteHeader(http.StatusUnauthorized)
+					response.Header().Set("WWW-Authenticate", `Basic realm="fixture"`)
+					response.WriteHeader(http.StatusUnauthorized)
 
 					return
 				}
 
-				handler.ServeHTTP(w, r)
+				handler.ServeHTTP(response, request)
 			}))
 			t.Cleanup(server.Close)
 			host := strings.TrimPrefix(server.URL, "https://")

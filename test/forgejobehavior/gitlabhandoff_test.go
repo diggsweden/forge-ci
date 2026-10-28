@@ -43,7 +43,7 @@ if [ "$TAMPERED" = true ]; then printf changed > "$RECEIVER/handoff/dist/payload
 umask 077
 rc_read_handoff "$RECEIVER/handoff"
 `
-			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", script, "handoff", filepath.Join(reporoot.Path(t), ".gitlab/bin/release.sh")) //nolint:gosec // Actual orchestration and built engine, on inert files only.
+			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", script, "handoff", filepath.Join(reporoot.Path(t), ".gitlab/bin/release.sh"))
 			command.Dir = receiver
 			flag := "false"
 

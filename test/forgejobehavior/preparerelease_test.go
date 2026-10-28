@@ -262,7 +262,7 @@ func TestPrepareReleaseRenderChangelog(t *testing.T) {
 
 	const (
 		key      = "ssh-signing-key-DO-NOT-LOG"
-		trailers = "Release-Request: release-request/v1.2.4\nCo-authored-by: Ada <ada@invalid.example>"
+		trailers = "Release-Request: release-request/v1.2.4\nCo-authored-by: Developer <developer@invalid.example>"
 	)
 
 	run := func(t *testing.T, url, status string) (*sandbox, result) {
@@ -493,7 +493,6 @@ func preparedReleaseFixture(t *testing.T, dir, tag string, lightweight bool) map
 	t.Helper()
 
 	git := func(args ...string) string {
-		//nolint:gosec // G204: git in the test's own fixture repository, with test-authored arguments.
 		command := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir,
 			"-c", "user.name=Fixture Bot", "-c", "user.email=bot@invalid.example", "-c", "tag.gpgSign=false"}, args...)...)
 		command.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + dir, "LANG=C", "LC_ALL=C",
@@ -687,5 +686,22 @@ func TestPrepareReleaseSigningPassesTheVersionBumpPaths(t *testing.T) {
 		if got.status != 0 || !slices.Equal(box.argv(), want) {
 			t.Fatalf("paths %q: status %d argv %q; stderr %s", paths, got.status, box.argv(), got.stderr)
 		}
+	}
+}
+
+// An empty release-git-url leaves --git-url out, so the engine pushes to this
+// repository on the Forgejo web host.
+func TestPrepareReleaseSigningLeavesAnEmptyGitURLToTheEngine(t *testing.T) {
+	t.Parallel()
+
+	box := newSandbox(t, "prepare-release")
+	signer := box.write(".engine/bin/signer", "#!/usr/bin/env bash\nprintf '%s\\0' \"$@\" >\"${FAKE_ARGV_LOG:?}\"\n", 0o700)
+	got := box.run(loadAction(t, "prepare-release").script(t, "Sign changelog commit and create release tag"),
+		"SIGNING_EXECUTABLE="+signer, "SSH_SIGNING_KEY=fixture-key", "FORGEJO_REF_NAME=v1.2.3", "FORGEJO_REPO=owner/repo",
+		"TARGET_BRANCH=main", "RELEASE_GIT_URL=")
+
+	want := []string{"version", "commit-changelog-release", "--tag", "v1.2.3", "--branch", "main", "--repository", "owner/repo"}
+	if got.status != 0 || !slices.Equal(box.argv(), want) {
+		t.Fatalf("status %d argv %q; stderr %s", got.status, box.argv(), got.stderr)
 	}
 }

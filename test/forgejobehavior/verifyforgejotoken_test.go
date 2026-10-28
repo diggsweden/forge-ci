@@ -16,14 +16,11 @@ import (
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
-//nolint:gosec // G101: a marker the test searches the output for, not a credential.
 const verifyTokenSecret = "token-value-DO-NOT-LOG"
 
 // verifyTokenFakeEngine records its argv, stdin and environment, then fails the
 // way FAKE_MODE asks. The token is split around a CR or control byte in the
 // split modes so a sanitizer that redacts before removing controls rebuilds it.
-//
-//nolint:gosec // G101: a fixture script, no credential.
 const verifyTokenFakeEngine = `#!/usr/bin/env bash
 set -euo pipefail
 printf '%s\0' "$@" >"${FAKE_ARGV_LOG:?}"

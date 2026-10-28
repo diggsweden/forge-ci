@@ -21,35 +21,45 @@ import (
 
 func TestImageExtractionStepUsesRetainedBytesWithoutABuilder(t *testing.T) {
 	t.Parallel()
-	step := jobStep(t, ".github/workflows/publish-container.yml", "build-arch", "Extract binaries from retained image filesystem")
+	extraction := jobStep(t, ".github/workflows/publish-container.yml", "build-arch", "Extract binaries from retained image filesystem")
 	box, env := engineSandbox(t, "image-file-extraction", map[string]string{"buildah": "#!/bin/sh\nexit 99\n", "docker": "#!/bin/sh\nexit 99\n"})
+
 	var buffer bytes.Buffer
+
 	archive := tar.NewWriter(&buffer)
+
 	const expected = "executable bytes from the retained image"
 	if err := archive.WriteHeader(&tar.Header{Name: "usr/bin/tool", Mode: 0o755, Size: int64(len(expected))}); err != nil {
 		t.Fatal(err)
 	}
+
 	if _, err := archive.Write([]byte(expected)); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := archive.Close(); err != nil {
 		t.Fatal(err)
 	}
+
 	image, err := mutate.AppendLayers(empty.Image, static.NewLayer(buffer.Bytes(), types.OCIUncompressedLayer))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	root, err := layout.Write(filepath.Join(box.root, "image-layout"), empty.Index)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := root.AppendImage(image); err != nil {
+
+	if err = root.AppendImage(image); err != nil {
 		t.Fatal(err)
 	}
-	result := box.run(step.Run, append(env, "RUNNER_TEMP="+box.root, "EXTRACT_BINARY_PATHS=/usr/bin/tool")...)
-	if result.status != 0 {
-		t.Fatalf("image extraction step failed: %d\n%s\n%s", result.status, result.stdout, result.stderr)
+
+	got := box.run(extraction.Run, append(env, "RUNNER_TEMP="+box.root, "EXTRACT_BINARY_PATHS=/usr/bin/tool")...)
+	if got.status != 0 {
+		t.Fatalf("image extraction step failed: %d\n%s\n%s", got.status, got.stdout, got.stderr)
 	}
+
 	body, err := os.ReadFile(filepath.Join(box.root, "extracted-binaries", "tool"))
 	if err != nil || string(body) != expected {
 		t.Fatalf("workflow extracted different bytes: %q %v", body, err)
@@ -58,7 +68,8 @@ func TestImageExtractionStepUsesRetainedBytesWithoutABuilder(t *testing.T) {
 
 func TestImageExtractionModeAdmission(t *testing.T) {
 	t.Parallel()
-	step := jobStep(t, ".github/workflows/publish-container.yml", "prep", "Validate binary extraction mode")
+
+	admission := jobStep(t, ".github/workflows/publish-container.yml", "prep", "Validate binary extraction mode")
 	for _, test := range []struct {
 		name, target, paths, push string
 		status                    int
@@ -71,9 +82,10 @@ func TestImageExtractionModeAdmission(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			box := newSandbox(t, "image-mode")
-			result := box.run(step.Run, "EXTRACT_TARGET="+test.target, "EXTRACT_PATHS="+test.paths, "PUSH_IMAGE="+test.push)
-			if result.status != test.status {
-				t.Fatalf("status=%d want=%d stderr=%s", result.status, test.status, result.stderr)
+
+			got := box.run(admission.Run, "EXTRACT_TARGET="+test.target, "EXTRACT_PATHS="+test.paths, "PUSH_IMAGE="+test.push)
+			if got.status != test.status {
+				t.Fatalf("status=%d want=%d stderr=%s", got.status, test.status, got.stderr)
 			}
 		})
 	}

@@ -32,27 +32,35 @@ const (
 	exampleSigner       = "forge.example/owner/signer@sha256:9a51d9f761cd269cadb2066710c9d2dd293f4e1020e229ff4f47ee1e6bce6234"
 	validatedRepository = "${{ needs.coordinates.outputs.helpers_repository }}"
 	versionBumpImage    = "${{ needs.coordinates.outputs.version_bump_image }}"
+	builderJobImage     = "${{ needs.coordinates.outputs.builder_job_image }}"
 	helperFallback      = `origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*'`
 	helperRemote        = `remote add origin "${FORGE_CI_REPOSITORY_URL:?}"`
+	// builderActions is where a builder workflow's container job finds the
+	// actions it may run: its own verified helper checkout.
+	builderActions = "./forge-ci-layer/.forgejo/actions/"
 )
 
 // coordinateWorkflows take the helper repository as a public coordinate,
 // separate from the exact commit input, and validate it in a secret-free
 // coordinates job. checkouts is how many helper checkouts the workflow runs.
-func coordinateWorkflows() map[string]struct {
+// A builder workflow takes no signer image: its container is the image
+// builder's job image, which the coordinates job validates from the caller's
+// variables instead.
+func coordinateWorkflows() map[string]coordinateContract {
+	return map[string]coordinateContract{
+		".forgejo/workflows/prepare-release.yml":               {"forge-ci-sha", 3, false},
+		".forgejo/workflows/sign-and-publish-release.yml":      {"forge-ci-sha", 4, false},
+		".forgejo/workflows/sign-container-images.yml":         {"forge-ci-sha", 1, false},
+		".forgejo/workflows/promote-base-container-images.yml": {"forge-ci-sha", 1, false},
+		".forgejo/workflows/verify-base-container-images.yml":  {"forge-ci-sha", 1, false},
+		".forgejo/workflows/release-images.yml":                {"forge-ci-sha", 4, true},
+	}
+}
+
+type coordinateContract struct {
 	shaInput  string
 	checkouts int
-} {
-	return map[string]struct {
-		shaInput  string
-		checkouts int
-	}{
-		".forgejo/workflows/prepare-release.yml":               {"forge-ci-sha", 3},
-		".forgejo/workflows/sign-and-publish-release.yml":      {"forge-ci-sha", 4},
-		".forgejo/workflows/sign-container-images.yml":         {"forge-ci-sha", 1},
-		".forgejo/workflows/promote-base-container-images.yml": {"forge-ci-sha", 1},
-		".forgejo/workflows/verify-base-container-images.yml":  {"forge-ci-sha", 1},
-	}
+	builder   bool
 }
 
 var (
@@ -123,7 +131,11 @@ func TestCoordinateInputsAreSeparateFromTheExactSHA(t *testing.T) {
 			t.Errorf("%s: input forge-ci-repository must be optional with an empty default", relative)
 		}
 
-		required := []string{contract.shaInput, "signer-image"}
+		required := []string{contract.shaInput}
+		if !contract.builder {
+			required = append(required, "signer-image")
+		}
+
 		if isSignerWorkflow(relative) {
 			required = append(required, "cosign-public-key", "cosign-public-key-sha256")
 		}
@@ -175,7 +187,7 @@ func TestNoUnlistedWorkflowTakesACoordinateInput(t *testing.T) {
 func TestCoordinatesArePreflightedBeforeUse(t *testing.T) {
 	t.Parallel()
 
-	for relative := range coordinateWorkflows() {
+	for relative, contract := range coordinateWorkflows() {
 		parsed := loadWorkflow(t, relative)
 
 		coordinates, ok := parsed.jobs["coordinates"]
@@ -185,7 +197,7 @@ func TestCoordinatesArePreflightedBeforeUse(t *testing.T) {
 			continue
 		}
 
-		assertCoordinatesJob(t, relative, parsed, coordinates)
+		assertCoordinatesJob(t, relative, contract, parsed, coordinates)
 
 		consumers, containers := 0, 0
 
@@ -194,7 +206,7 @@ func TestCoordinatesArePreflightedBeforeUse(t *testing.T) {
 				continue
 			}
 
-			consumer, container := assertCoordinateConsumerJob(t, relative, name, target)
+			consumer, container := assertCoordinateConsumerJob(t, relative, contract, name, target)
 			if consumer {
 				consumers++
 			}
@@ -216,7 +228,7 @@ func TestCoordinatesArePreflightedBeforeUse(t *testing.T) {
 
 // assertCoordinatesJob checks that the coordinates job validates the raw
 // inputs on the host, without secrets, and exposes them as outputs.
-func assertCoordinatesJob(t *testing.T, relative string, parsed workflow, coordinates job) {
+func assertCoordinatesJob(t *testing.T, relative string, contract coordinateContract, parsed workflow, coordinates job) {
 	t.Helper()
 
 	if mappingValue(coordinates.node, "container") != nil {
@@ -236,6 +248,15 @@ func assertCoordinatesJob(t *testing.T, relative string, parsed workflow, coordi
 		"SIGNER_IMAGE_INPUT": "${{ inputs['signer-image'] }}",
 	}
 	outputs := []string{"helpers_repository", "signer_image"}
+
+	if contract.builder {
+		wiring = map[string]string{
+			"SERVER_URL":              "${{ forgejo.server_url }}",
+			"BUILDER_INPUT":           "${{ vars.CI_IMAGE_BUILDER }}",
+			"BUILDER_JOB_IMAGE_INPUT": "${{ vars.CI_IMAGE_BUILDER_JOB_IMAGE }}",
+		}
+		outputs = []string{"helpers_repository", "builder", "builder_job_image"}
+	}
 
 	if isSignerWorkflow(relative) {
 		wiring["TRANSPARENCY_LOG_INPUT"] = "${{ inputs['transparency-log'] }}"
@@ -262,7 +283,7 @@ func assertCoordinatesJob(t *testing.T, relative string, parsed workflow, coordi
 // coordinates and, when it runs a container, runs the validated signer image
 // with no action from another pin. It reports whether the job consumes the
 // coordinates outputs and whether it runs a container.
-func assertCoordinateConsumerJob(t *testing.T, relative, name string, target job) (bool, bool) {
+func assertCoordinateConsumerJob(t *testing.T, relative string, contract coordinateContract, name string, target job) (bool, bool) {
 	t.Helper()
 
 	requireWalkReaches(t, target.node, "runs-on", relative+" job "+name)
@@ -287,11 +308,29 @@ func assertCoordinateConsumerJob(t *testing.T, relative, name string, target job
 	}
 
 	// Container jobs run only the verified helper checkout, never an action
-	// resolved from another pin.
+	// resolved from another pin. A builder job runs the layer's own actions
+	// from that checkout.
 	for _, step := range target.steps() {
-		if uses := scalarString(mappingValue(step, "uses")); uses != "" {
+		uses := scalarString(mappingValue(step, "uses"))
+		ownAction := contract.builder && strings.HasPrefix(uses, builderActions) && !strings.Contains(uses, "..")
+
+		if uses != "" && !ownAction {
 			t.Errorf("%s: container job %s uses action %s", relative, name, uses)
 		}
+	}
+
+	// A builder job runs the job image the coordinates job validated, and
+	// holds no secret: it runs the caller's Containerfile.
+	if contract.builder {
+		if image := target.containerImage(); image != builderJobImage {
+			t.Errorf("%s: job %s runs container %q, want the validated %q", relative, name, image, builderJobImage)
+		}
+
+		if anyString(target.node, secretsWord.MatchString) {
+			t.Errorf("%s: builder job %s mentions secrets", relative, name)
+		}
+
+		return consumer, false
 	}
 
 	// The one container job that is not a signer: prepare-release's version
@@ -376,7 +415,7 @@ func runPreflightWithStderr(t *testing.T, script, repository, signer string, env
 		t.Fatal(err)
 	}
 
-	command := exec.CommandContext(t.Context(), "bash", "-c", script) //nolint:gosec // G204: the validate step of this repository's own workflow.
+	command := exec.CommandContext(t.Context(), "bash", "-c", script)
 	command.Env = []string{
 		"PATH=" + os.Getenv("PATH"),
 		"HELPERS_REPOSITORY_INPUT=" + repository,
@@ -426,7 +465,7 @@ func TestCoordinatePreflightResolvesTheHelperRepository(t *testing.T) {
 		"https://[2001:db8::1]:3000/o/r.git": "https://[2001:db8::1]:3000/o/r.git",
 	}
 
-	for relative := range coordinateWorkflows() {
+	for relative, contract := range coordinateWorkflows() {
 		t.Run(filepath.Base(relative), func(t *testing.T) {
 			t.Parallel()
 
@@ -434,12 +473,23 @@ func TestCoordinatePreflightResolvesTheHelperRepository(t *testing.T) {
 
 			for repository, fetched := range accepted {
 				wantOutput := "helpers_repository=" + fetched + "\nsigner_image=" + exampleSigner + "\n"
+				if contract.builder {
+					wantOutput = "helpers_repository=" + fetched + "\nbuilder=buildah\nbuilder_job_image=\n"
+				}
+
 				if isSignerWorkflow(relative) {
 					wantOutput += "transparency_log=none\n"
 				}
 
 				if ok, output := runPreflight(t, script, repository, exampleSigner); !ok || output != wantOutput {
 					t.Errorf("repository %q: accepted=%t output %q, want %q", repository, ok, output, wantOutput)
+				}
+			}
+
+			if contract.builder {
+				want := "helpers_repository=" + exampleRepository + "\nbuilder=kaniko\nbuilder_job_image=" + exampleSigner + "\n"
+				if ok, output, _ := runPreflightWithStderr(t, script, exampleRepository, "", "BUILDER_INPUT=kaniko", "BUILDER_JOB_IMAGE_INPUT="+exampleSigner); !ok || output != want {
+					t.Errorf("kaniko: accepted=%t output %q, want %q", ok, output, want)
 				}
 			}
 		})
@@ -481,7 +531,7 @@ func TestCoordinatePreflightRejectsUnsafeCoordinates(t *testing.T) {
 		"signer@sha256:" + digest,
 	}
 
-	for relative := range coordinateWorkflows() {
+	for relative, contract := range coordinateWorkflows() {
 		t.Run(filepath.Base(relative), func(t *testing.T) {
 			t.Parallel()
 
@@ -491,6 +541,22 @@ func TestCoordinatePreflightRejectsUnsafeCoordinates(t *testing.T) {
 				if ok, output := runPreflight(t, script, repository, exampleSigner); ok || output != "" {
 					t.Errorf("repository %q: accepted=%t output %q", repository, ok, output)
 				}
+			}
+
+			// A builder workflow's image is the kaniko job image, held to the
+			// signer image's digest rule, and its builder is one of two.
+			if contract.builder {
+				if ok, output, _ := runPreflightWithStderr(t, script, exampleRepository, "", "BUILDER_INPUT=docker"); ok || output != "" {
+					t.Errorf("builder docker: accepted=%t output %q", ok, output)
+				}
+
+				for _, image := range signers {
+					if ok, output, _ := runPreflightWithStderr(t, script, exampleRepository, "", "BUILDER_INPUT=kaniko", "BUILDER_JOB_IMAGE_INPUT="+image); ok || output != "" {
+						t.Errorf("kaniko job image %q: accepted=%t output %q", image, ok, output)
+					}
+				}
+
+				return
 			}
 
 			for _, signer := range signers {
@@ -521,7 +587,9 @@ func TestLayerPinsNoSignerImage(t *testing.T) {
 				return err
 			}
 
-			if isSelfCIWorkflow(filepath.ToSlash(relative)) {
+			// The kaniko bootstrap pins kaniko's own debug image, the one image
+			// no kaniko job can build; it is not a signer image.
+			if isSelfCIWorkflow(filepath.ToSlash(relative)) || filepath.ToSlash(relative) == kanikoJobImageExample {
 				return nil
 			}
 

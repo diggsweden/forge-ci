@@ -390,7 +390,7 @@ func publishScript(t *testing.T, forge *packageForge, arch, binary string, env .
 
 	var output bytes.Buffer
 
-	command := exec.CommandContext(t.Context(), "bash", filepath.Join(reporoot.Path(t), binaryScript), "publish", arch, binary) //nolint:gosec // G204: this repository's own script.
+	command := exec.CommandContext(t.Context(), "bash", filepath.Join(reporoot.Path(t), binaryScript), "publish", arch, binary)
 	command.Stdout, command.Stderr = &output, &output
 
 	command.Env = append([]string{
@@ -478,7 +478,7 @@ func testPublishRecordedBuild(t *testing.T, arch, token string) {
 		evidence.NotProvenf(t, "the build of this tree is not the recorded one, so there is nothing the script would publish")
 	}
 
-	body, err := os.ReadFile(engine) //nolint:gosec // the engine this package built.
+	body, err := os.ReadFile(engine)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -560,7 +560,7 @@ func TestPublishGitLabUsesTheSelectedTokenAndAnonymousReadBack(t *testing.T) {
 		evidence.NotProvenf(t, "the current engine build differs from the recorded checksum")
 	}
 
-	body, err := os.ReadFile(engine) //nolint:gosec // the engine this package built.
+	body, err := os.ReadFile(engine)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -24,12 +24,18 @@
 # one pin, carried by the caller, covers the workflow, the actions, and the
 # checksum-bound forge-ci binary they verify.
 name: Prepare release (reusable)
+env:
+  RELEASE_POLICY: ${{ inputs['release-policy'] }}
 
 on:
   workflow_call:
     inputs:
+      release-policy:
+        description: "Accepted release versions: stable or stable-prerelease."
+        type: string
+        default: stable
       runner-label:
-        description: Exact trusted runner label selected by the consumer repository.
+        description: JSON array of trusted runner labels; all labels must match (for example '["ci-builder"]').
         type: string
         required: true
       forge-ci-repository:
@@ -60,11 +66,12 @@ on:
         type: string
         required: true
       release-git-url:
-        description: Exact SSH URL used to push the signed release commit and tag.
+        description: Exact SSH URL used to push the signed release commit and tag; empty is this repository on the web host, port 22.
         type: string
-        required: true
+        required: false
+        default: ''
       release-git-host-key-fingerprint:
-        description: Pinned SSH ed25519 host-key fingerprint for the Forgejo release host.
+        description: Pinned SSH ed25519 host-key fingerprint for the Forgejo release host, SHA256:<base64> alone.
         type: string
         required: true
       changelog-config:
@@ -78,7 +85,7 @@ on:
         required: false
         default: .forge-ci/gitcliff/minimal.toml
       changelog-creator:
-        description: Changelog renderer (git-chglog or git-cliff).
+        description: Changelog renderer (git-chglog or git-cliff). A SHA-256 repository needs git-chglog.
         type: string
         required: false
         default: git-cliff
@@ -135,7 +142,7 @@ on:
 jobs:
   coordinates:
     name: "Check: release settings"
-    runs-on: ${{ inputs['runner-label'] }}
+    runs-on: ${{ fromJSON(inputs['runner-label']) }}
     timeout-minutes: 5
     # permissions: is a GitHub field Forgejo ignores (warning per run) --
     # kept for Scorecard Token-Permissions and GitHub portability. Real
@@ -257,7 +264,7 @@ jobs:
   render:
     name: "Prepare: changelog"
     needs: coordinates
-    runs-on: ${{ inputs['runner-label'] }}
+    runs-on: ${{ fromJSON(inputs['runner-label']) }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -400,7 +407,7 @@ jobs:
           source ./.forge-ci-helpers/.engine/bin/lib-forge-ci.sh
           run_forge_ci platform checkout --fetch-all-refs
 
-      - name: Reject non-stable release request
+      - name: Validate release request policy
         uses: ./.forge-ci-helpers/.forgejo/actions/guard-release-tag
 
       # The prepare action pushes the release commit to the release branch
@@ -465,7 +472,7 @@ jobs:
   version-bump:
     name: "Prepare: version"
     needs: coordinates
-    runs-on: ${{ inputs['runner-label'] }}
+    runs-on: ${{ fromJSON(inputs['runner-label']) }}
     timeout-minutes: 20
     container:
       image: ${{ needs.coordinates.outputs.version_bump_image }}
@@ -539,7 +546,7 @@ jobs:
           # shellcheck source=/dev/null
           source ./.forge-ci-helpers/.engine/bin/lib-forge-ci.sh
           FORGE_CI_PROVIDER=forgejo run_forge_ci validate tag release-guard \
-            --tag "${RELEASE_REQUEST:?}" --pattern '^v[0-9]+[.][0-9]+[.][0-9]+$'
+            --tag "${RELEASE_REQUEST:?}"
 
       # The same engine verb, and so the same `mvn versions:set`, that GitHub's
       # and GitLab's release preparation run.
@@ -588,7 +595,7 @@ jobs:
     # No condition: every job above runs whether or not a bump is asked for,
     # so the default rule, all of them successful, is the whole requirement.
     needs: [coordinates, render, version-bump]
-    runs-on: ${{ inputs['runner-label'] }}
+    runs-on: ${{ fromJSON(inputs['runner-label']) }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -707,7 +714,7 @@ jobs:
             echo "ERROR: version-bump artifact must contain a regular version-bump.patch" >&2
             exit 1
           fi
-          run_forge_ci version apply-bump --project-type "${PROJECT_TYPE:?}" \
+          run_forge_ci version apply-bump --release-policy "${RELEASE_POLICY:-stable}" --project-type "${PROJECT_TYPE:?}" \
             --version "${RELEASE_TAG:?}" --working-dir "${WORKING_DIRECTORY:?}" \
             --patch "${handoff}/version-bump.patch" --sha256 "${PATCH_DIGEST:?}" \
             --paths-file "${paths_file}"

@@ -36,7 +36,7 @@ func TestSetupToolchainEngineCalls(t *testing.T) {
 		env  []string
 		argv func(s *sandbox) []string
 	}{
-		{"Choose the Go provider", []string{"FORGEJO_PATH=/runner/path-file", "FORGEJO_ENV=/runner/env-file", "TOOLS_SUBSET=go aqua:example/tool"}, func(*sandbox) []string {
+		{"Choose the Go provider", []string{"FORGEJO_PATH=/runner/path-file", "FORGEJO_ENV=/runner/env-file", "TOOLSET_TOOLS=go aqua:example/tool"}, func(*sandbox) []string {
 			return []string{"toolchain", "setup-go-env", "--tools", "go aqua:example/tool", "--path-file", "/runner/path-file", "--env-file", "/runner/env-file"}
 		}},
 		{"Install bootstrap system dependencies", nil, func(*sandbox) []string {
@@ -45,13 +45,13 @@ func TestSetupToolchainEngineCalls(t *testing.T) {
 		{"Trust consumer mise config", nil, func(s *sandbox) []string {
 			return []string{"toolchain", "trust-mise-config", "--mise-bin", filepath.Join(s.root, "home", ".local/bin/mise")}
 		}},
-		{"Validate mise install mode", []string{"MISE_LOCKED_INSTALL=true", "MISE_GITHUB_TOKEN=ghs-secret", "TOOLS_SUBSET=java maven aqua:aquasecurity/trivy"}, func(*sandbox) []string {
+		{"Validate mise install mode", []string{"MISE_LOCKED_INSTALL=true", "MISE_GITHUB_TOKEN=ghs-secret", "TOOLSET_TOOLS=java maven aqua:aquasecurity/trivy"}, func(*sandbox) []string {
 			return []string{"toolchain", "validate-mise-install", "--tools", "java maven aqua:aquasecurity/trivy", "--locked", "true", "--github-token-present=true"}
 		}},
-		{"Validate mise install mode", []string{"MISE_LOCKED_INSTALL=false", "MISE_GITHUB_TOKEN=", "TOOLS_SUBSET="}, func(*sandbox) []string {
+		{"Validate mise install mode", []string{"MISE_LOCKED_INSTALL=false", "MISE_GITHUB_TOKEN=", "TOOLSET_TOOLS="}, func(*sandbox) []string {
 			return []string{"toolchain", "validate-mise-install", "--tools", "", "--locked", "false", "--github-token-present=false"}
 		}},
-		{"Install tools (cache miss)", []string{"MISE_LOCKED_INSTALL=true", "TOOLS_SUBSET=aqua:a/b npm:c", "MISE_INSTALL_HTTP_TIMEOUT_SECONDS=240"}, func(s *sandbox) []string {
+		{"Install tools (cache miss)", []string{"MISE_LOCKED_INSTALL=true", "TOOLSET_TOOLS=aqua:a/b npm:c", "MISE_INSTALL_HTTP_TIMEOUT_SECONDS=240"}, func(s *sandbox) []string {
 			return []string{"toolchain", "install-mise-tools", "--locked", "true", "--tools", "aqua:a/b npm:c",
 				"--http-timeout-seconds", "240", "--mise-bin", filepath.Join(s.root, "home", ".local/bin/mise")}
 		}},
@@ -105,7 +105,7 @@ func TestSetupToolchainInstallRaisesTheMiseHTTPTimeout(t *testing.T) {
 	box.write("home/.local/bin/mise", "#!/usr/bin/env bash\nprintf '%s %s\\n' \"${MISE_HTTP_TIMEOUT-unset}\" \"$*\" >>\""+calls+"\"\n", 0o700)
 
 	got := box.run(install.Run, append(env,
-		"MISE_LOCKED_INSTALL=false", "TOOLS_SUBSET=", "MISE_INSTALL_HTTP_TIMEOUT_SECONDS=240", "MISE_HTTP_TIMEOUT=30s")...)
+		"MISE_LOCKED_INSTALL=false", "TOOLSET_TOOLS=", "MISE_INSTALL_HTTP_TIMEOUT_SECONDS=240", "MISE_HTTP_TIMEOUT=30s")...)
 	if got.status != 0 {
 		t.Fatalf("status %d\nstdout %s\nstderr %s", got.status, got.stdout, got.stderr)
 	}
@@ -121,7 +121,7 @@ func TestSetupToolchainInstallRaisesTheMiseHTTPTimeout(t *testing.T) {
 		}
 	}
 
-	refused := box.run(install.Run, append(env, "MISE_LOCKED_INSTALL=false", "TOOLS_SUBSET=", "MISE_INSTALL_HTTP_TIMEOUT_SECONDS=")...)
+	refused := box.run(install.Run, append(env, "MISE_LOCKED_INSTALL=false", "TOOLSET_TOOLS=", "MISE_INSTALL_HTTP_TIMEOUT_SECONDS=")...)
 	if refused.status == 0 || !strings.Contains(refused.stderr, "MISE_INSTALL_HTTP_TIMEOUT_SECONDS") {
 		t.Fatalf("an empty timeout: status %d stderr %q", refused.status, refused.stderr)
 	}
@@ -153,7 +153,7 @@ func TestSetupToolchainInstallsGoOnce(t *testing.T) {
 	}
 
 	choose := action.step(t, "go")
-	if choose.Env["TOOLS_SUBSET"] != "${{ inputs.tools }}" {
+	if choose.Env["TOOLSET_TOOLS"] != "${{ inputs.tools }}" {
 		t.Fatal("Go provider selection must receive the install step's tool subset")
 	}
 
@@ -178,7 +178,7 @@ func TestSetupToolchainInstallsGoOnce(t *testing.T) {
 			pathFile := box.write("path-file", "", 0o600)
 			envFile := box.write("env-file", "", 0o600)
 
-			got := box.run(choose.Run, append(env, "GITHUB_ACTIONS=true", "FORGEJO_PATH="+pathFile, "FORGEJO_ENV="+envFile, "GOPATH=", "TOOLS_SUBSET=")...)
+			got := box.run(choose.Run, append(env, "GITHUB_ACTIONS=true", "FORGEJO_PATH="+pathFile, "FORGEJO_ENV="+envFile, "GOPATH=", "TOOLSET_TOOLS=")...)
 			if got.status != 0 || box.output() != test.output {
 				t.Fatalf("status %d outputs %q, want %q; stderr %s", got.status, box.output(), test.output, got.stderr)
 			}
@@ -215,7 +215,7 @@ fi
 `, 0o700)
 
 	got := box.run(loadAction(t, "setup-toolchain").step(t, "Install tools (cache miss)").Run, append(env,
-		"MISE_LOCKED_INSTALL=false", "TOOLS_SUBSET=", "MISE_INSTALL_HTTP_TIMEOUT_SECONDS=120", "MISE_INSTALL_RETRY_DELAY_SECONDS=-1")...)
+		"MISE_LOCKED_INSTALL=false", "TOOLSET_TOOLS=", "MISE_INSTALL_HTTP_TIMEOUT_SECONDS=120", "MISE_INSTALL_RETRY_DELAY_SECONDS=-1")...)
 	if got.status != 0 {
 		t.Fatalf("status %d\nstdout %s\nstderr %s", got.status, got.stdout, got.stderr)
 	}
@@ -250,7 +250,7 @@ fi
 `, 0o700)
 
 	got := box.run(loadAction(t, "setup-toolchain").step(t, "Install tools (cache miss)").Run, append(env,
-		"MISE_LOCKED_INSTALL=false", "TOOLS_SUBSET=", "MISE_INSTALL_HTTP_TIMEOUT_SECONDS=120", "MISE_INSTALL_RETRY_DELAY_SECONDS=-1")...)
+		"MISE_LOCKED_INSTALL=false", "TOOLSET_TOOLS=", "MISE_INSTALL_HTTP_TIMEOUT_SECONDS=120", "MISE_INSTALL_RETRY_DELAY_SECONDS=-1")...)
 	if got.status != 0 {
 		t.Fatalf("status %d\nstdout %s\nstderr %s", got.status, got.stdout, got.stderr)
 	}

@@ -30,27 +30,28 @@ type inputContract struct {
 // input is a consumer-visible contract change and must be added here.
 func signPublishInputs() map[string]inputContract {
 	return map[string]inputContract{
-		"runner-label":                 {required: true},
-		"release-sha":                  {required: true},
-		"release-request-sha":          {required: true},
-		"release-tag":                  {required: true},
-		"dist-digest":                  {required: true},
-		"caller-workflow":              {required: true},
-		"forge-ci-sha":                 {required: true},
-		"signer-image":                 {required: true},
-		"cosign-public-key":            {required: true},
-		"cosign-public-key-sha256":     {required: true},
-		"forge-ci-repository":          {value: ""},
-		"artifact-name":                {value: "build-dist"},
-		"artifact-path":                {value: "dist/"},
-		"release-images-path":          {value: ""},
-		"base-repository":              {value: ""},
-		"publication-image-repository": {value: ""},
-		"registry-user":                {value: ""},
-		"release-draft":                {value: "false"},
-		"sign-distro-packages":         {value: "true"},
-		"release-asset-retention":      {value: ""},
-		"transparency-log":             {value: "none"},
+		"runner-label":             {required: true},
+		"release-sha":              {required: true},
+		"release-request-sha":      {required: true},
+		"release-tag":              {required: true},
+		"dist-digest":              {required: true},
+		"caller-workflow":          {required: true},
+		"forge-ci-sha":             {required: true},
+		"signer-image":             {required: true},
+		"cosign-public-key":        {required: true},
+		"cosign-public-key-sha256": {required: true},
+		"forge-ci-repository":      {value: ""},
+		"artifact-name":            {value: "build-dist"},
+		"artifact-path":            {value: "dist/"},
+		"release-images-path":      {value: ""},
+		"base-repository":          {value: ""},
+		"image-repository":         {value: ""},
+		"registry-user":            {value: ""},
+		"release-draft":            {value: "false"},
+		"release-policy":           {value: "stable"},
+		"sign-distro-packages":     {value: "true"},
+		"release-asset-retention":  {value: ""},
+		"transparency-log":         {value: "none"},
 	}
 }
 
@@ -260,14 +261,14 @@ func TestEverySignerJobPinsItsHelperCheckout(t *testing.T) {
 // holds is the intended secret, so a step cannot keep its approved env name
 // while being fed a different credential.
 func credentialWiring() map[string]string {
-	return map[string]string{ //nolint:gosec // G101: names of environment variables and secrets, no values.
+	return map[string]string{
 		"COSIGN_KEY":                  "secrets.RELEASE_COSIGN_PRIVATE_KEY",
 		"COSIGN_PASSWORD":             "secrets.RELEASE_COSIGN_PASSPHRASE",
 		"GPG_SIGNING_KEY":             "secrets.RELEASE_GPG_PRIVATE_KEY",
 		"GPG_SIGNING_PASSWORD":        "secrets.RELEASE_GPG_PASSPHRASE",
 		"GPG_SIGNING_FINGERPRINT":     "secrets.RELEASE_GPG_FINGERPRINT",
 		"REGISTRY_TOKEN":              "secrets.RELEASE_REGISTRY_TOKEN",
-		"REGISTRY_USER":               "forgejo.repository_owner",
+		"REGISTRY_USER":               "inputs['registry-user'] || vars.RELEASE_REGISTRY_USER",
 		"FORGE_CI_PACKAGE_API_TOKEN":  "secrets.RELEASE_REGISTRY_TOKEN",
 		"PUBLISH_RELEASE_TOKEN_INPUT": "secrets.RELEASE_TOKEN",
 	}
@@ -430,9 +431,7 @@ func TestImageStepsLeaveTheEngineNoFallbackCredential(t *testing.T) {
 
 	const resolver = `source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"`
 
-	//nolint:gosec // G101: variable names and shell text, no values.
 	registry := map[string]string{"REGISTRY_TOKEN": `"${registry_token}"`, "REGISTRY_PASSWORD": ""}
-	//nolint:gosec // G101: variable names and shell text, no values.
 	provider := map[string]string{
 		"FORGE_CI_PACKAGE_API_TOKEN": `"${provider_token}"`, "FORGEJO_TOKEN": "", "GITEA_TOKEN": "",
 	}

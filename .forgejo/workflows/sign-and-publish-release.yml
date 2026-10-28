@@ -41,8 +41,12 @@ name: Sign and publish release (reusable)
 on:
   workflow_call:
     inputs:
+      release-policy:
+        description: "Accepted release versions: stable or stable-prerelease."
+        type: string
+        default: stable
       runner-label:
-        description: Exact trusted runner label selected by the consumer repository.
+        description: JSON array of trusted runner labels; all labels must match (for example '["ci-builder"]').
         type: string
         required: true
       forge-ci-repository:
@@ -111,15 +115,15 @@ on:
         type: string
         required: false
         default: ''
-      publication-image-repository:
+      image-repository:
         description: >-
-          Exact repository the release images are published to on another registry, such as ghcr.io/owner/project; the ledger's image refs must be in it. Empty keeps this forge's registry and <host>/<owner>/<repository>. Signing, promotion and candidate cleanup log in to its registry as registry-user with RELEASE_REGISTRY_TOKEN; a registry that does not delete tags, such as GHCR, keeps the candidate tags and the cleanup reports them.
+          The one repository the release's images are in, the value release-images.yml's image-repository takes, for example ghcr.io/owner/project; the ledger's image refs must be in it. Empty is this forge's own registry, <host>/<owner>/<repository>. Signing, promotion and candidate cleanup log in to its registry as registry-user with RELEASE_REGISTRY_TOKEN; a registry that does not delete tags, such as GHCR, keeps the candidate tags and the cleanup reports them.
         type: string
         required: false
         default: ''
       registry-user:
         description: >-
-          User the registry token logs in as. Empty is the calling repository's owner, which is right for this forge's registry; a repository on another registry, such as GHCR, names its user there.
+          User the registry token logs in as. Empty takes the RELEASE_REGISTRY_USER variable, the user of the RELEASE_REGISTRY_TOKEN secret; with neither, the calling repository's owner on this forge's registry; a repository on another registry, such as GHCR, must name its user there, and the run stops before it logs in when it does not.
         type: string
         required: false
         default: ''
@@ -152,6 +156,7 @@ concurrency:
   group: sign-and-publish-${{ forgejo.repository }}
   cancel-in-progress: false
 env:
+  RELEASE_POLICY: ${{ inputs['release-policy'] }}
   FORGEJO_SERVER: ${{ forgejo.server_url }}
   FORGEJO_REPO: ${{ forgejo.repository }}
   SIGNED_DIST_ARTIFACT: signed-dist
@@ -160,7 +165,7 @@ jobs:
   coordinates:
     # The completion profile counts this name separately from base-image preflights.
     name: "Check: signing settings"
-    runs-on: ${{ inputs['runner-label'] }}
+    runs-on: ${{ fromJSON(inputs['runner-label']) }}
     timeout-minutes: 5
     # permissions: is a GitHub field Forgejo ignores (warning per run) --
     # kept for Scorecard Token-Permissions and GitHub portability. Real
@@ -246,7 +251,7 @@ jobs:
   sign:
     name: "Sign: files and images"
     needs: coordinates
-    runs-on: ${{ inputs['runner-label'] }}
+    runs-on: ${{ fromJSON(inputs['runner-label']) }}
     container:
       image: ${{ needs.coordinates.outputs.signer_image }}
     env:
@@ -523,8 +528,8 @@ jobs:
           COSIGN_KEY: ${{ secrets.RELEASE_COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.RELEASE_COSIGN_PASSPHRASE }}
           REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
-          REGISTRY_USER: ${{ inputs['registry-user'] || forgejo.repository_owner }}
-          LEDGER_EXPECTED_IMAGE_REPOSITORY: ${{ inputs['publication-image-repository'] }}
+          REGISTRY_USER: ${{ inputs['registry-user'] || vars.RELEASE_REGISTRY_USER }}
+          LEDGER_EXPECTED_IMAGE_REPOSITORY: ${{ inputs['image-repository'] }}
           RELEASE_IMAGES_PATH: ${{ inputs['release-images-path'] }}
         run: |
           set -euo pipefail
@@ -535,12 +540,11 @@ jobs:
           # without images and refuses an empty one before its registry login.
           # The unset leaves it no other variable to take a password from.
           registry_token="${REGISTRY_TOKEN}"
-          registry_user="${REGISTRY_USER:?}"
+          registry_user="${REGISTRY_USER}"
           unset COSIGN_KEY COSIGN_PASSWORD FORGEJO_TOKEN GPG_SIGNING_FINGERPRINT GPG_SIGNING_KEY \
             GPG_SIGNING_PASSWORD MISE_FORGEJO_TOKEN MISE_GITHUB_TOKEN REGISTRY_PASSWORD REGISTRY_TOKEN REGISTRY_USER
           # shellcheck source=.engine/bin/lib-forge-ci.sh
           source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
-          forge_ci_mark_external_registry "${LEDGER_EXPECTED_IMAGE_REPOSITORY:-}" "${FORGEJO_SERVER:-}"
           COSIGN_KEY="${cosign_key}" \
             COSIGN_PASSWORD="${cosign_password}" \
             REGISTRY_TOKEN="${registry_token}" \
@@ -620,7 +624,7 @@ jobs:
   promote:
     name: "Publish: images"
     needs: [coordinates, sign]
-    runs-on: ${{ inputs['runner-label'] }}
+    runs-on: ${{ fromJSON(inputs['runner-label']) }}
     container:
       image: ${{ needs.coordinates.outputs.signer_image }}
     env:
@@ -767,8 +771,8 @@ jobs:
       - name: Promote signed images
         env:
           REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
-          REGISTRY_USER: ${{ inputs['registry-user'] || forgejo.repository_owner }}
-          LEDGER_EXPECTED_IMAGE_REPOSITORY: ${{ inputs['publication-image-repository'] }}
+          REGISTRY_USER: ${{ inputs['registry-user'] || vars.RELEASE_REGISTRY_USER }}
+          LEDGER_EXPECTED_IMAGE_REPOSITORY: ${{ inputs['image-repository'] }}
           RELEASE_IMAGES_PATH: ${{ inputs['release-images-path'] }}
         run: |
           set -euo pipefail
@@ -777,12 +781,11 @@ jobs:
           # without images and refuses an empty one before its registry login.
           # The unset leaves it no other variable to take a password from.
           registry_token="${REGISTRY_TOKEN}"
-          registry_user="${REGISTRY_USER:?}"
+          registry_user="${REGISTRY_USER}"
           unset COSIGN_KEY COSIGN_PASSWORD FORGEJO_TOKEN GPG_SIGNING_FINGERPRINT GPG_SIGNING_KEY \
             GPG_SIGNING_PASSWORD MISE_FORGEJO_TOKEN MISE_GITHUB_TOKEN REGISTRY_PASSWORD REGISTRY_TOKEN REGISTRY_USER
           # shellcheck source=.engine/bin/lib-forge-ci.sh
           source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
-          forge_ci_mark_external_registry "${LEDGER_EXPECTED_IMAGE_REPOSITORY:-}" "${FORGEJO_SERVER:-}"
           REGISTRY_TOKEN="${registry_token}" \
             REGISTRY_USER="${registry_user}" \
             FORGE_CI_PROVIDER=forgejo \
@@ -801,7 +804,7 @@ jobs:
   cleanup:
     name: "Publish: tidy up"
     needs: [coordinates, publish]
-    runs-on: ${{ inputs['runner-label'] }}
+    runs-on: ${{ fromJSON(inputs['runner-label']) }}
     container:
       image: ${{ needs.coordinates.outputs.signer_image }}
     env:
@@ -921,8 +924,8 @@ jobs:
       - name: Cleanup release candidate tags
         env:
           REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
-          REGISTRY_USER: ${{ inputs['registry-user'] || forgejo.repository_owner }}
-          LEDGER_EXPECTED_IMAGE_REPOSITORY: ${{ inputs['publication-image-repository'] }}
+          REGISTRY_USER: ${{ inputs['registry-user'] || vars.RELEASE_REGISTRY_USER }}
+          LEDGER_EXPECTED_IMAGE_REPOSITORY: ${{ inputs['image-repository'] }}
           FORGE_CI_PACKAGE_API_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
           RELEASE_IMAGES_PATH: ${{ inputs['release-images-path'] }}
         run: |
@@ -933,14 +936,13 @@ jobs:
           # an empty provider token before it deletes a tag. The unset leaves it
           # no other variable to take either from.
           registry_token="${REGISTRY_TOKEN}"
-          registry_user="${REGISTRY_USER:?}"
+          registry_user="${REGISTRY_USER}"
           provider_token="${FORGE_CI_PACKAGE_API_TOKEN}"
           unset COSIGN_KEY COSIGN_PASSWORD FORGEJO_TOKEN GITEA_TOKEN GPG_SIGNING_FINGERPRINT GPG_SIGNING_KEY \
             GPG_SIGNING_PASSWORD MISE_FORGEJO_TOKEN MISE_GITHUB_TOKEN REGISTRY_PASSWORD REGISTRY_TOKEN \
             REGISTRY_USER FORGE_CI_PACKAGE_API_TOKEN
           # shellcheck source=.engine/bin/lib-forge-ci.sh
           source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
-          forge_ci_mark_external_registry "${LEDGER_EXPECTED_IMAGE_REPOSITORY:-}" "${FORGEJO_SERVER:-}"
           REGISTRY_TOKEN="${registry_token}" \
             REGISTRY_USER="${registry_user}" \
             FORGE_CI_PACKAGE_API_TOKEN="${provider_token}" \
@@ -960,7 +962,7 @@ jobs:
   publish:
     name: "Publish: release"
     needs: [coordinates, sign, promote]
-    runs-on: ${{ inputs['runner-label'] }}
+    runs-on: ${{ fromJSON(inputs['runner-label']) }}
     container:
       image: ${{ needs.coordinates.outputs.signer_image }}
     env:

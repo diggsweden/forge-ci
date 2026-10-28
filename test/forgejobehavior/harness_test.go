@@ -177,27 +177,6 @@ const fakeResolver = `run_forge_ci() {
 }
 `
 
-// libFunction copies one shell function out of the real bin/lib-forge-ci.sh,
-// so a sandbox that fakes the engine resolver still runs the layer's own
-// helpers rather than a test's copy of them.
-func libFunction(t *testing.T, name string) string {
-	t.Helper()
-
-	lib := string(reporoot.ReadFile(t, ".engine/bin/lib-forge-ci.sh"))
-
-	start := strings.Index(lib, "\n"+name+"() {\n")
-	if start < 0 {
-		t.Fatalf("lib-forge-ci.sh defines no %s", name)
-	}
-
-	end := strings.Index(lib[start+1:], "\n}\n")
-	if end < 0 {
-		t.Fatalf("lib-forge-ci.sh: %s has no end", name)
-	}
-
-	return lib[start+1 : start+1+end+3]
-}
-
 func newSandbox(t *testing.T, action string) *sandbox {
 	t.Helper()
 	root := t.TempDir()
@@ -212,7 +191,7 @@ func newSandbox(t *testing.T, action string) *sandbox {
 		}
 	}
 
-	box.write(".engine/bin/lib-forge-ci.sh", fakeResolver+libFunction(t, "forge_ci_mark_external_registry"), 0o600)
+	box.write(".engine/bin/lib-forge-ci.sh", fakeResolver, 0o600)
 	box.write(".engine/bin/forge-ci", fakeEngine, 0o700)
 
 	return box
@@ -267,7 +246,7 @@ func (s *sandbox) run(script string, env ...string) result {
 	ctx, cancel := context.WithTimeout(s.t.Context(), time.Minute)
 	defer cancel()
 
-	command := exec.CommandContext(ctx, "bash", "--noprofile", "--norc", path) //nolint:gosec // G204: a step script of this repository, written into the test's own sandbox.
+	command := exec.CommandContext(ctx, "bash", "--noprofile", "--norc", path)
 	command.Dir = s.root
 	command.Env = append([]string{
 		"PATH=" + os.Getenv("PATH"), "HOME=" + filepath.Join(s.root, "home"), "TMPDIR=" + s.t.TempDir(),

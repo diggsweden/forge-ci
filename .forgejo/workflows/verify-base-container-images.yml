@@ -8,7 +8,7 @@ on:
   workflow_call:
     inputs:
       runner-label:
-        description: Exact trusted runner label selected by the consumer repository.
+        description: JSON array of trusted runner labels; all labels must match (for example '["ci-builder"]').
         type: string
         required: true
       forge-ci-repository:
@@ -95,7 +95,7 @@ env:
 jobs:
   coordinates:
     name: Validate helper trust coordinates
-    runs-on: ${{ inputs['runner-label'] }}
+    runs-on: ${{ fromJSON(inputs['runner-label']) }}
     timeout-minutes: 5
     # permissions: is a GitHub field Forgejo ignores (warning per run) --
     # kept for Scorecard Token-Permissions and GitHub portability. Real
@@ -181,7 +181,7 @@ jobs:
   verify-base-container-images:
     name: Verify base container images
     needs: coordinates
-    runs-on: ${{ inputs['runner-label'] }}
+    runs-on: ${{ fromJSON(inputs['runner-label']) }}
     container:
       image: ${{ needs.coordinates.outputs.signer_image }}
     env:

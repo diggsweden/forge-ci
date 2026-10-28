@@ -276,25 +276,6 @@ verify_forge_ci() {
 	HELPERS_ENGINE_VERIFIED=${binary}
 }
 
-# forge_ci_mark_external_registry REPOSITORY SERVER_URL exports
-# EXTERNAL_IMAGE_REGISTRY=true when REPOSITORY, a full image repository, is on
-# a registry other than this Forgejo instance's own, and unsets it otherwise.
-# A Forgejo instance serves its registry at its own host and port, so the
-# repository's host says it; the engine then holds the repository to what the
-# caller declared instead of to the forge owner, and deletes tags through that
-# registry (see --external-registry). An empty REPOSITORY is the forge's own.
-forge_ci_mark_external_registry() {
-	local repository=$1 server=$2
-
-	server=${server#*://}
-	server=${server%%/*}
-
-	case "${repository}" in
-	'' | "${server}"/*) unset EXTERNAL_IMAGE_REGISTRY ;;
-	*) export EXTERNAL_IMAGE_REGISTRY=true ;;
-	esac
-}
-
 run_forge_ci() {
 	verify_forge_ci || return
 	"${HELPERS_ENGINE_VERIFIED}" "$@"

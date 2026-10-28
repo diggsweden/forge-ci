@@ -39,7 +39,7 @@ func TestForgeCICLIContract(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 		defer cancel()
 
-		command := exec.CommandContext(ctx, engine, append(strings.Fields(verbs), "--help")...) //nolint:gosec // G204: the engine built from this tree, with verbs read from this repository's own files.
+		command := exec.CommandContext(ctx, engine, append(strings.Fields(verbs), "--help")...)
 		command.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir(), "LANG=C", "LC_ALL=C"}
 
 		out, err := command.CombinedOutput()
@@ -95,8 +95,8 @@ func TestForgeCICLIContract(t *testing.T) {
 func TestConsumerTemplatesPassReleaseIsolation(t *testing.T) {
 	t.Parallel()
 	action := loadAction(t, "check-l3-isolation")
-	s := newSandbox(t, "check-l3-isolation")
-	s.write(".engine/bin/lib-forge-ci.sh", string(reporoot.ReadFile(t, ".engine/bin/lib-forge-ci.sh")), 0o600)
+	box := newSandbox(t, "check-l3-isolation")
+	box.write(".engine/bin/lib-forge-ci.sh", string(reporoot.ReadFile(t, ".engine/bin/lib-forge-ci.sh")), 0o600)
 	// A fetched action comes with its layer checkout. The gate reads its actual
 	// declarations rather than a consumer-maintained copy of the input lists.
 	for _, pattern := range []string{".forgejo/actions/*/action.yml", ".forgejo/workflows/*.yml"} {
@@ -111,7 +111,7 @@ func TestConsumerTemplatesPassReleaseIsolation(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			s.write(filepath.ToSlash(relative), string(reporoot.ReadFile(t, relative)), 0o600)
+			box.write(filepath.ToSlash(relative), string(reporoot.ReadFile(t, relative)), 0o600)
 		}
 	}
 
@@ -124,16 +124,16 @@ func TestConsumerTemplatesPassReleaseIsolation(t *testing.T) {
 		"PIN_SIGNER_IMAGE_DIGEST", strings.Repeat("a", 64), "PIN_COSIGN_PUBLIC_KEY_SHA256", strings.Repeat("b", 64))
 
 	for _, template := range consumerTemplates() {
-		s.write("consumer/.forgejo/workflows/"+filepath.Base(template), instantiate.Replace(string(reporoot.ReadFile(t, template))), 0o600)
+		box.write("consumer/.forgejo/workflows/"+filepath.Base(template), instantiate.Replace(string(reporoot.ReadFile(t, template))), 0o600)
 	}
 	// The engine resolves the sign job's pinned workflow to this sibling path.
-	s.write("delivery-0a1b/.forgejo/workflows/sign-and-publish-release.yml",
+	box.write("delivery-0a1b/.forgejo/workflows/sign-and-publish-release.yml",
 		string(reporoot.ReadFile(t, ".forgejo/workflows/sign-and-publish-release.yml")), 0o600)
 
 	// The resolver runs the built engine as a non-strict override.
 	script := action.script(t, action.Runs.Steps[0].Name)
 
-	got := s.run(script,
+	got := box.run(script,
 		"FORGE_CI_BIN="+forgeCIEngine(t), "GITHUB_ACTION_REPOSITORY=fork/delivery-0a1b",
 		"ISOLATION_WORKFLOW=consumer/.forgejo/workflows/release.yml",
 		"ISOLATION_BUILD_JOB=build", "ISOLATION_SIGN_JOB=sign-and-publish", "ISOLATION_PREPARE_JOB=prepare",
@@ -151,9 +151,9 @@ func TestConsumerTemplatesPassReleaseIsolation(t *testing.T) {
 	// names another commit is refused.
 	drifted := strings.Replace(instantiate.Replace(string(reporoot.ReadFile(t, consumerTemplates()[0]))),
 		"forge-ci-sha: "+pin, "forge-ci-sha: "+strings.Repeat("f", 40), 1)
-	s.write("consumer/.forgejo/workflows/release.yml", drifted, 0o600)
+	box.write("consumer/.forgejo/workflows/release.yml", drifted, 0o600)
 
-	refused := s.run(script,
+	refused := box.run(script,
 		"FORGE_CI_BIN="+forgeCIEngine(t), "GITHUB_ACTION_REPOSITORY=fork/delivery-0a1b",
 		"ISOLATION_WORKFLOW=consumer/.forgejo/workflows/release.yml",
 		"ISOLATION_BUILD_JOB=build", "ISOLATION_SIGN_JOB=sign-and-publish", "ISOLATION_PREPARE_JOB=prepare",
@@ -178,9 +178,9 @@ func TestConsumerTemplatesPassReleaseIsolation(t *testing.T) {
 			"passes signer-image to fork/delivery-0a1b as a value that is an expression",
 		},
 	} {
-		s.write("consumer/.forgejo/workflows/release.yml", kit.workflow, 0o600)
+		box.write("consumer/.forgejo/workflows/release.yml", kit.workflow, 0o600)
 
-		refused := s.run(script,
+		refused := box.run(script,
 			"FORGE_CI_BIN="+forgeCIEngine(t), "GITHUB_ACTION_REPOSITORY=fork/delivery-0a1b",
 			"ISOLATION_WORKFLOW=consumer/.forgejo/workflows/release.yml",
 			"ISOLATION_BUILD_JOB=build", "ISOLATION_SIGN_JOB=sign-and-publish", "ISOLATION_PREPARE_JOB=prepare",
@@ -226,18 +226,18 @@ func TestCallerCosignTrustRootThroughTheEngine(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			s := newSandbox(t, "trust-root")
-			s.write(".engine/bin/lib-forge-ci.sh", string(reporoot.ReadFile(t, ".engine/bin/lib-forge-ci.sh")), 0o600)
-			s.write("tools/cosign", "#!/usr/bin/env bash\ncat -- '"+s.write("derived.pub", key, 0o600)+"'\n", 0o700)
-			private := filepath.Join(s.root, "private")
+			box := newSandbox(t, "trust-root")
+			box.write(".engine/bin/lib-forge-ci.sh", string(reporoot.ReadFile(t, ".engine/bin/lib-forge-ci.sh")), 0o600)
+			box.write("tools/cosign", "#!/usr/bin/env bash\ncat -- '"+box.write("derived.pub", key, 0o600)+"'\n", 0o700)
+			private := filepath.Join(box.root, "private")
 
 			if err := os.Mkdir(private, 0o700); err != nil {
 				t.Fatal(err)
 			}
 
-			got := s.run(selected.Run,
-				"FORGE_CI_BIN="+forgeCIEngine(t), "PATH="+filepath.Join(s.root, "tools")+":"+os.Getenv("PATH"),
-				"HELPERS_DIR="+s.root, "SIGNER_WORKSPACE="+private,
+			got := box.run(selected.Run,
+				"FORGE_CI_BIN="+forgeCIEngine(t), "PATH="+filepath.Join(box.root, "tools")+":"+os.Getenv("PATH"),
+				"HELPERS_DIR="+box.root, "SIGNER_WORKSPACE="+private,
 				"TRUSTED_KEY_INPUT="+test.key, "TRUSTED_KEY_SHA256_INPUT="+test.digest,
 				"COSIGN_KEY=fixture-key", "COSIGN_PASSWORD=fixture-password")
 			if (got.status == 0) != test.accepted {
