@@ -51,14 +51,14 @@ func runSourcedScript(t *testing.T, script, body string, env map[string]string) 
 		t.Fatal(err)
 	}
 
-	if writeErr := os.WriteFile(filepath.Join(tools, "curl"), []byte("#!/usr/bin/env bash\nprintf 'unexpected download attempt\\n' >&2\nexit 97\n"), 0o700); writeErr != nil { //nolint:gosec // executable fixture inside t.TempDir().
+	if writeErr := os.WriteFile(filepath.Join(tools, "curl"), []byte("#!/usr/bin/env bash\nprintf 'unexpected download attempt\\n' >&2\nexit 97\n"), 0o700); writeErr != nil {
 		t.Fatal(writeErr)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, bash, "-c", "source \"$1\"; "+body, "_", script) //nolint:gosec // bounded fixture command with a closed, test-owned environment.
+	cmd := exec.CommandContext(ctx, bash, "-c", "source \"$1\"; "+body, "_", script)
 	cmd.WaitDelay = time.Second
 	vars := map[string]string{"HOME": root, "TMPDIR": root, "CI_TEMP_DIR": root, "LC_ALL": "C", "PATH": tools}
 
@@ -144,6 +144,8 @@ func TestPinnedInstallers_VerifyExactDownloadBeforeInstalling(t *testing.T) {
 		{"yq", "https://github.com/mikefarah/yq/releases/download/v4.52.5/yq_linux_amd64", "75d893a0d5940d1019cb7cdc60001d9e876623852c31cfc6267047bc31149fa9", "", "", ""},
 		{"mise", "https://github.com/jdx/mise/releases/download/v2026.9.17/mise-v2026.9.17-linux-x64", "63049bc35fb9065e8dc35ac8b25fdae53e9bd6f1885a843aedeba398e046a1ee", "", "", ""},
 		{"publiccode-parser", "https://github.com/italia/publiccode-parser-go/releases/download/v5.3.1/publiccode-parser-go_Linux_x86_64.tar.gz", "ed5b75ebe3fc3f6c29f925d8acc132e381769690cada3b40680406b9ec64fedf", "publiccode-parser", "", ""},
+		{"forgejo-runner", "https://code.forgejo.org/forgejo/runner/releases/download/v13.2.0/forgejo-runner-13.2.0-linux-amd64", "fadaec897f5e6641c363f87ecaf75f866f99c81b7097ec6b433e4c48123fcad1", "", "", ""},
+		{"forgejo-runner", "https://code.forgejo.org/forgejo/runner/releases/download/v13.2.0/forgejo-runner-13.2.0-linux-arm64", "9d3d462ee83e4e629f959faeacceb20eed2f25290bddea402e65ace46a31afd9", "", "Linux", "aarch64"},
 		{"trivy", "https://github.com/aquasecurity/trivy/releases/download/v0.76.0/trivy_0.76.0_Linux-ARM64.tar.gz", "aab21e677a7b7071fc79f1711480840754c18a1b9d9cefa7ccd06af63a0e8f4c", "trivy", "Linux", "aarch64"},
 		{"trivy", "https://github.com/aquasecurity/trivy/releases/download/v0.76.0/trivy_0.76.0_macOS-ARM64.tar.gz", "e7ec0d21fe842553f59af99aba2efbcc822369fbaed27019c575408b6d135fce", "trivy", "Darwin", "arm64"},
 		{"syft", "https://github.com/anchore/syft/releases/download/v1.51.1/syft_1.51.1_linux_arm64.tar.gz", "a7fd2b784e6664acd44719270574f6cd8c6864fc2b1700bf9099bd1cccda7d7f", "syft", "Linux", "aarch64"},
@@ -236,7 +238,7 @@ func checkPinnedInstaller(t *testing.T, tc pinnedInstallerCase, mode installerMo
 	// Substitute only the reviewed literal pin in this owned copy. The real
 	// download/checksum code must still validate the fixture bytes.
 	body = []byte(strings.Replace(string(body), tc.pin, pin, 1))
-	if writeErr := os.WriteFile(filepath.Join(scriptDir, script), body, 0o600); writeErr != nil { //nolint:gosec // fixed repository fixture copied into t.TempDir().
+	if writeErr := os.WriteFile(filepath.Join(scriptDir, script), body, 0o600); writeErr != nil {
 		t.Fatal(writeErr)
 	}
 
@@ -245,7 +247,7 @@ func checkPinnedInstaller(t *testing.T, tc pinnedInstallerCase, mode installerMo
 		t.Fatal(err)
 	}
 
-	if writeErr := os.WriteFile(filepath.Join(scriptDir, "install-common.sh"), common, 0o600); writeErr != nil { //nolint:gosec // fixed helper copied into t.TempDir().
+	if writeErr := os.WriteFile(filepath.Join(scriptDir, "install-common.sh"), common, 0o600); writeErr != nil {
 		t.Fatal(writeErr)
 	}
 
@@ -259,7 +261,7 @@ func checkPinnedInstaller(t *testing.T, tc pinnedInstallerCase, mode installerMo
 
 	if tc.tool == "cosign" || tc.tool == "syft" {
 		ambient := "#!/usr/bin/env bash\nprintf called > \"$AMBIENT_MARKER\"\nprintf 'GitVersion: v3.1.3\\n'\n"
-		if writeErr := os.WriteFile(filepath.Join(binDir, tc.tool), []byte(ambient), 0o700); writeErr != nil { //nolint:gosec // executable fixture inside t.TempDir().
+		if writeErr := os.WriteFile(filepath.Join(binDir, tc.tool), []byte(ambient), 0o700); writeErr != nil {
 			t.Fatal(writeErr)
 		}
 	}
@@ -405,7 +407,7 @@ install_gh`
 func writeGHZip(t *testing.T, path, root string) {
 	t.Helper()
 
-	file, err := os.Create(path) //nolint:gosec // test fixture under t.TempDir().
+	file, err := os.Create(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -478,7 +480,7 @@ func TestInstallForgeCIRawDownloadCallersFetchReviewedHelperSet(t *testing.T) {
 			return nil
 		}
 
-		body, err := os.ReadFile(path) //nolint:gosec // repository contract fixture.
+		body, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}
@@ -531,7 +533,7 @@ func TestInstallForgeCI_RemoteRef_GoInstallPath(t *testing.T) {
 		t.Fatalf("install_forge_ci: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 
-	args, err := os.ReadFile(logPath) //nolint:gosec // test fixture
+	args, err := os.ReadFile(logPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -540,7 +542,7 @@ func TestInstallForgeCI_RemoteRef_GoInstallPath(t *testing.T) {
 		t.Fatalf("go args = %q", got)
 	}
 
-	pathBody, err := os.ReadFile(githubPath) //nolint:gosec // test fixture
+	pathBody, err := os.ReadFile(githubPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -568,7 +570,7 @@ func TestInstallForgeCI_ReleaseAssetPath(t *testing.T) {
 	releaseRoot := t.TempDir()
 
 	releaseDir := filepath.Join(releaseRoot, "v0.90.0")
-	if err := os.MkdirAll(releaseDir, 0o755); err != nil { //nolint:gosec // test fixture
+	if err := os.MkdirAll(releaseDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -578,7 +580,7 @@ func TestInstallForgeCI_ReleaseAssetPath(t *testing.T) {
 	writeInstallerTarball(t, tarballPath, "forge-ci", binaryBody)
 
 	checksums := sha256sumFile(t, tarballPath) + "  " + tarballName + "\n"
-	if err := os.WriteFile(filepath.Join(releaseDir, "checksums.txt"), []byte(checksums), 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(filepath.Join(releaseDir, "checksums.txt"), []byte(checksums), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -586,7 +588,7 @@ func TestInstallForgeCI_ReleaseAssetPath(t *testing.T) {
 	// checksums.txt.bundle and cosign must accept it. The fixture bundle
 	// plus a fake cosign (exit 0, argv logged) keep the test hermetic
 	// while exercising the signed path's plumbing.
-	if err := os.WriteFile(filepath.Join(releaseDir, "checksums.txt.bundle"), []byte("{}"), 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(filepath.Join(releaseDir, "checksums.txt.bundle"), []byte("{}"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -620,7 +622,7 @@ func TestInstallForgeCI_ReleaseAssetPath(t *testing.T) {
 		t.Errorf("expected download log, got: %s", stdout)
 	}
 
-	cosignArgs, err := os.ReadFile(cosignLog) //nolint:gosec // test fixture
+	cosignArgs, err := os.ReadFile(cosignLog)
 	if err != nil {
 		t.Fatalf("cosign was not invoked: %v", err)
 	}
@@ -631,7 +633,7 @@ func TestInstallForgeCI_ReleaseAssetPath(t *testing.T) {
 		}
 	}
 
-	got, err := os.ReadFile(filepath.Join(installDir, "forge-ci")) //nolint:gosec // test fixture
+	got, err := os.ReadFile(filepath.Join(installDir, "forge-ci"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -640,7 +642,7 @@ func TestInstallForgeCI_ReleaseAssetPath(t *testing.T) {
 		t.Errorf("extracted binary mismatch")
 	}
 
-	pathBody, err := os.ReadFile(githubPath) //nolint:gosec // test fixture
+	pathBody, err := os.ReadFile(githubPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -804,7 +806,7 @@ func TestInstallerHarness_IsolatesPolicyAndCleansOwnedRoot(t *testing.T) {
 	root := t.TempDir()
 
 	tools := t.TempDir()
-	if err := os.WriteFile(filepath.Join(tools, "sha256sum"), []byte("#!/bin/sh\nexit 93\n"), 0o700); err != nil { //nolint:gosec // owned executable fixture; the isolated harness must not use it.
+	if err := os.WriteFile(filepath.Join(tools, "sha256sum"), []byte("#!/bin/sh\nexit 93\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 
@@ -829,7 +831,7 @@ func TestInstallForgeCI_ReleaseAssetTamperingDetected(t *testing.T) {
 	releaseRoot := t.TempDir()
 
 	releaseDir := filepath.Join(releaseRoot, "v0.90.0")
-	if err := os.MkdirAll(releaseDir, 0o755); err != nil { //nolint:gosec // test fixture
+	if err := os.MkdirAll(releaseDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -838,13 +840,13 @@ func TestInstallForgeCI_ReleaseAssetTamperingDetected(t *testing.T) {
 	writeInstallerTarball(t, tarballPath, "forge-ci", []byte("genuine\n"))
 	// Checksums file claims a hash for unrelated content; verification must fail.
 	bogusChecksum := strings.Repeat("0", 64) + "  " + tarballName + "\n"
-	if err := os.WriteFile(filepath.Join(releaseDir, "checksums.txt"), []byte(bogusChecksum), 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(filepath.Join(releaseDir, "checksums.txt"), []byte(bogusChecksum), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	// A bundle + fake cosign get the run past the fail-closed signature
 	// gate, so the test reaches the SHA-256 check it is actually about.
-	if err := os.WriteFile(filepath.Join(releaseDir, "checksums.txt.bundle"), []byte("{}"), 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(filepath.Join(releaseDir, "checksums.txt.bundle"), []byte("{}"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -885,7 +887,7 @@ func TestInstallForgeCI_UnsignedReleaseRefused(t *testing.T) {
 	releaseRoot := t.TempDir()
 
 	releaseDir := filepath.Join(releaseRoot, "v0.90.0")
-	if err := os.MkdirAll(releaseDir, 0o755); err != nil { //nolint:gosec // test fixture
+	if err := os.MkdirAll(releaseDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -894,7 +896,7 @@ func TestInstallForgeCI_UnsignedReleaseRefused(t *testing.T) {
 	writeInstallerTarball(t, tarballPath, "forge-ci", []byte("genuine\n"))
 
 	checksums := sha256sumFile(t, tarballPath) + "  " + tarballName + "\n"
-	if err := os.WriteFile(filepath.Join(releaseDir, "checksums.txt"), []byte(checksums), 0o644); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(filepath.Join(releaseDir, "checksums.txt"), []byte(checksums), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// Deliberately NO checksums.txt.bundle.
@@ -950,14 +952,14 @@ func osArchTarballName(t *testing.T) string {
 func writeInstallerTarball(t *testing.T, path, entryName string, body []byte) {
 	t.Helper()
 
-	f, err := os.Create(path) //nolint:gosec // test fixture; path is under t.TempDir().
+	file, err := os.Create(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer func() { _ = f.Close() }()
+	defer func() { _ = file.Close() }()
 
-	gz := gzip.NewWriter(f)
+	gz := gzip.NewWriter(file)
 
 	defer func() { _ = gz.Close() }()
 
@@ -978,7 +980,7 @@ func writeInstallerTarball(t *testing.T, path, entryName string, body []byte) {
 func sha256sumFile(t *testing.T, path string) string {
 	t.Helper()
 
-	body, err := os.ReadFile(path) //nolint:gosec // test fixture
+	body, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1024,7 +1026,7 @@ if [[ -n "${FAKE_CURL_FAIL_AFTER_PARTIAL:-}" ]]; then
 fi
 cp "$src" "$dest"
 `
-	if err := os.WriteFile(filepath.Join(dir, "curl"), []byte(body), 0o755); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(filepath.Join(dir, "curl"), []byte(body), 0o755); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1043,7 +1045,7 @@ func TestInstallForgeCI_LocalRef(t *testing.T) {
 		t.Fatalf("install_forge_ci local: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 
-	args, err := os.ReadFile(logPath) //nolint:gosec // test fixture
+	args, err := os.ReadFile(logPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1069,7 +1071,7 @@ if [[ -n "${EXPECTED_COSIGN_IDENTITY:-}" ]]; then
 fi
 [[ "${COSIGN_VERIFY_FAIL:-0}" != 1 ]]
 `
-	if err := os.WriteFile(filepath.Join(dir, "cosign"), []byte(body), 0o755); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(filepath.Join(dir, "cosign"), []byte(body), 0o755); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1089,7 +1091,7 @@ chmod +x "$GOBIN/forge-ci"
 `
 
 	path := filepath.Join(dir, "go")
-	if err := os.WriteFile(path, []byte(body), 0o755); err != nil { //nolint:gosec // test fixture
+	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1144,6 +1146,10 @@ func TestInstallerResolvers_EveryPlatformAndAliasHasAPinnedAsset(t *testing.T) {
 			"cosign-linux-amd64": linuxAMD64, "cosign-linux-arm64": linuxARM64,
 			"cosign-darwin-amd64": darwinAMD64, "cosign-darwin-arm64": darwinARM64,
 		}},
+		// A runner is lent to a Linux job; there is no macOS build to lend.
+		{script: "install-forgejo-runner.sh", resolve: "resolve_forgejo_runner_asset", pin: "resolve_forgejo_runner_sha256", refusal: "ERROR: unsupported forgejo-runner platform: ", assets: map[string][]platform{
+			"forgejo-runner-13.2.0-linux-amd64": linuxAMD64, "forgejo-runner-13.2.0-linux-arm64": linuxARM64,
+		}, unsupported: append(darwinAMD64, darwinARM64...)},
 	} {
 		t.Run(tool.script, func(t *testing.T) {
 			t.Parallel()
@@ -1193,7 +1199,7 @@ func TestCIPrependPath_CarriesTheDirectoryIntoLaterSteps(t *testing.T) {
 		t.Errorf("this step's PATH starts with %q, want /opt/tool-bin", stdout)
 	}
 
-	body, err := os.ReadFile(pathFile) //nolint:gosec // test reads its own temp file.
+	body, err := os.ReadFile(pathFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1217,7 +1223,7 @@ func TestCIPrependPath_PrefersForgejoPath(t *testing.T) {
 		t.Fatalf("ci_prepend_path: %v\n%s", err, stderr)
 	}
 
-	if body, readErr := os.ReadFile(forgejoPath); readErr != nil || string(body) != "/opt/tool-bin\n" { //nolint:gosec // test reads its own temp file.
+	if body, readErr := os.ReadFile(forgejoPath); readErr != nil || string(body) != "/opt/tool-bin\n" {
 		t.Errorf("FORGEJO_PATH = %q (%v), want the directory", body, readErr)
 	}
 
@@ -1245,7 +1251,7 @@ func TestBootstrapForgeCICosign_StaysOutOfLaterSteps(t *testing.T) {
 		t.Errorf("GITHUB_PATH after the bootstrap = %q, want it restored to %q", stdout, pathFile)
 	}
 
-	if body, readErr := os.ReadFile(pathFile); readErr == nil && len(body) > 0 { //nolint:gosec // test reads its own temp file.
+	if body, readErr := os.ReadFile(pathFile); readErr == nil && len(body) > 0 {
 		t.Errorf("the bootstrap cosign reached GITHUB_PATH: %q", body)
 	}
 }

@@ -197,7 +197,7 @@ var placeholderPattern = regexp.MustCompile(`__[A-Z][A-Z0-9_]*__`)
 func renderShellTemplate(body []byte) []byte {
 	lines := strings.Split(string(body), "\n")
 
-	for i, line := range lines {
+	for index, line := range lines {
 		indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
 		rest := line[len(indent):]
 
@@ -210,7 +210,7 @@ func renderShellTemplate(body []byte) []byte {
 			rest = rest[loc[1]:]
 		}
 
-		lines[i] = indent + placeholderPattern.ReplaceAllString(rest, "rci_placeholder")
+		lines[index] = indent + placeholderPattern.ReplaceAllString(rest, "rci_placeholder")
 	}
 
 	return []byte(strings.Join(lines, "\n"))

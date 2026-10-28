@@ -161,7 +161,7 @@ func newLiveRun(t *testing.T, extraEnv ...string) liveRun {
 func writeExecutable(t *testing.T, path, body string) {
 	t.Helper()
 
-	if err := os.WriteFile(path, []byte(body), 0o700); err != nil { //nolint:gosec // Fake tools must be executable; the directory is private.
+	if err := os.WriteFile(path, []byte(body), 0o700); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -178,7 +178,7 @@ func (run liveRun) exec(t *testing.T, args ...string) (string, string, int) {
 	ctx, cancel := context.WithTimeout(t.Context(), liveCommandBound)
 	defer cancel()
 
-	command := exec.CommandContext(ctx, "bash", append([]string{script}, args...)...) //nolint:gosec // fixed local script with test-authored arguments.
+	command := exec.CommandContext(ctx, "bash", append([]string{script}, args...)...)
 	command.Env = run.env
 
 	var out, errOut strings.Builder
@@ -345,14 +345,14 @@ func requireGoCalls(t *testing.T, calls []string, wantTest string) {
 		t.Fatalf("test compilation/discovery calls: %v", calls[6:8])
 	}
 
-	for i, target := range []string{
+	for index, target := range []string{
 		"forge-ci-host ./cmd/forge-ci",
 		"forge-ci-runner ./cmd/forge-ci",
 		"credential-proxy ./internal/livetest/credentialproxy",
 		"probe-json ./internal/livetest/probejson",
 	} {
-		if call := calls[2+i]; !strings.HasPrefix(call, "build -trimpath -buildvcs=false -o ") || !strings.HasSuffix(call, "/"+target) {
-			t.Fatalf("build call %d: %q", i, call)
+		if call := calls[2+index]; !strings.HasPrefix(call, "build -trimpath -buildvcs=false -o ") || !strings.HasSuffix(call, "/"+target) {
+			t.Fatalf("build call %d: %q", index, call)
 		}
 	}
 }
@@ -413,15 +413,19 @@ func requireRedactedLog(t *testing.T, run liveRun, stdout string, header ...stri
 
 func TestRunLiveTests_RedactsColoredFieldsInSwedishLocale(t *testing.T) {
 	t.Parallel()
+
 	locales, err := exec.CommandContext(t.Context(), "locale", "-a").Output()
 	if err != nil || !strings.Contains(strings.ToLower(string(locales)), "sv_se.utf8") {
 		t.Skip("Swedish UTF-8 locale is not installed")
 	}
+
 	run := newLiveRun(t, "LC_ALL=sv_SE.UTF-8", "FAKE_GO_TEST_OUTPUT="+fakeSuiteOutput)
+
 	stdout, stderr, status := run.exec(t, "full")
 	if status != 0 {
 		t.Fatalf("status %d\nstdout:\n%s\nstderr:\n%s", status, stdout, stderr)
 	}
+
 	requireRedactedLog(t, run, stdout)
 }
 

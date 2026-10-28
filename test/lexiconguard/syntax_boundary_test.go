@@ -20,6 +20,8 @@ func TestDigestRegexpGuardSyntax(t *testing.T) {
 
 	for _, pattern := range []string{bareSHA256HexPattern, prefixedSHA256DigestPattern} {
 		t.Run(pattern, func(t *testing.T) {
+			t.Parallel()
+
 			quoted := strconv.Quote(pattern)
 			for _, tc := range []struct {
 				name   string
@@ -43,6 +45,8 @@ func TestDigestRegexpGuardSyntax(t *testing.T) {
 				{"different-pattern", `import "regexp"; var _ = regexp.MustCompile("^[0-9]+$")`, false},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
+					t.Parallel()
+
 					root := t.TempDir()
 					require.NoError(t, os.WriteFile(filepath.Join(root, "candidate.go"), []byte("package fixture\n"+tc.source), 0o600))
 
@@ -105,6 +109,8 @@ func TestRetryWaitGuardSyntax(t *testing.T) {
 		{"else-branch-of-an-unrelated-guard", `import "time"`, `for n := range 4 { if n > 2 { return } else { time.Sleep(delay) } }`, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			fset := token.NewFileSet()
 			source := "package fixture\n" + tc.imports + "\nfunc f() {\n" + tc.body + "\n}"
 			file, err := parser.ParseFile(fset, "fixture.go", source, 0)

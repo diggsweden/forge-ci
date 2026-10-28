@@ -23,7 +23,7 @@ func TestGuardWorkingDirectoryBoundary_CompiledTestsRunFromRoot(t *testing.T) {
 	// the module cache when neither GOMODCACHE nor GOPATH was explicitly set.
 	moduleCache := guardModuleCache(t, os.Environ())
 	require.DirExists(t, moduleCache)
-	cmd := exec.CommandContext(t.Context(), binary, "-test.run=^Test(ExecAdaptersClassifyStartFailures|OnlyCompositionRootMintsOperatorCredentials|LayersDoNotNameRunContextVars|ForgeAwareCommandsHaveALiveScenario)$") //nolint:gosec // self-owned test executable and fixed guard selection.
+	cmd := exec.CommandContext(t.Context(), binary, "-test.run=^Test(ExecAdaptersClassifyStartFailures|OnlyCompositionRootMintsOperatorCredentials|LayersDoNotNameRunContextVars|ForgeAwareCommandsHaveALiveScenario)$")
 	root := t.TempDir()
 	goRoot := guardGoRoot(t)
 	cmd.Dir = reporoot.Path(t)
@@ -67,7 +67,7 @@ func guardModuleCache(t *testing.T, env []string) string {
 	t.Helper()
 
 	goRoot := guardGoRoot(t)
-	cmd := exec.CommandContext(t.Context(), filepath.Join(goRoot, "bin", "go"), "env", "GOMODCACHE") //nolint:gosec // matching installed Go executable; fixed metadata-only command, not a product tool.
+	cmd := exec.CommandContext(t.Context(), filepath.Join(goRoot, "bin", "go"), "env", "GOMODCACHE")
 	cmd.Dir = reporoot.Path(t)
 	cmd.Env = env
 	cmd.Env = append(cmd.Env, "GOROOT="+goRoot, "GOPROXY=off", "GOSUMDB=off", "GOTOOLCHAIN=local")
@@ -94,6 +94,8 @@ func TestGuardWorkingDirectoryBoundary_EffectiveModuleCache(t *testing.T) {
 		{"explicit module cache", []string{"GOMODCACHE=" + filepath.Join(root, "modules")}, filepath.Join(root, "modules")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			// No ambient GOMODCACHE, GOPATH, or persisted go env settings enter
 			// these cases. go env derives paths without creating/downloading them.
 			env := append([]string{"HOME=" + root, "TMPDIR=" + root, "GOENV=off"}, tc.env...)

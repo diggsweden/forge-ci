@@ -195,7 +195,7 @@ check)
 			printf '✓ linux/%s checksum matches: %s\n' "$arch" "$built"
 		else
 			printf '✗ linux/%s checksum is stale: recorded %s, built %s\n' "$arch" "$recorded" "$built"
-			printf '  Run `just refresh-engine-binary` and commit the updated files.\n'
+			printf '  Run just refresh-engine-binary and commit the updated files.\n'
 			failed=1
 		fi
 	done

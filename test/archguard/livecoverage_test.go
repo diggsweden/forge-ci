@@ -42,7 +42,7 @@ func TestEveryCommandGroupHasALiveDisposition(t *testing.T) {
 		"plan":      {gap: "DEFERRED: pipeline planning reaches provider-backed domain types; no plan CLI conformance invocation"},
 		"platform":  {scenario: "TestCheckout_ProducesAWorkingTreeAtTheRequestedRef"},
 		"publish":   {gap: "OUTSIDE SCANNER: forgepackages_test.go drives in-runner shell probes, not CLI/CLIIn; do not credit shell text or infer coverage of other publish verbs"},
-		"release":   {scenario: "TestRelease_PublishReconcile_ConvergesOnTheGivenAssets"},
+		"release":   {scenario: "TestRelease_PublishReconcile_RefusesPublishedChanges"},
 		"report":    {gap: "MISSING: report/status imports provider, but adapter capability checks and helper labels are not a report CLI scenario"},
 		"sbom":      {gap: "DEFERRED: cosign -> domain/container -> provider is package-level awareness; no sbom CLI conformance invocation"},
 		"security":  {scenario: "TestDegradation_SARIFUpload_NoticesAndSucceeds"},

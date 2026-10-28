@@ -196,7 +196,7 @@ func (c *execCheck) block(fn *execFunction, stmts []ast.Stmt, paths []execPath, 
 	for _, stmt := range stmts {
 		var next []execPath
 
-		for _, p := range paths {
+		for _, provider := range paths {
 			c.steps++
 			if c.steps > 20000 || depth > 8 || len(paths) > 256 {
 				c.exhausted = true
@@ -204,13 +204,13 @@ func (c *execCheck) block(fn *execFunction, stmts []ast.Stmt, paths []execPath, 
 				return paths
 			}
 
-			if p.done {
-				next = append(next, p)
+			if provider.done {
+				next = append(next, provider)
 
 				continue
 			}
 
-			next = append(next, c.statement(fn, stmt, p, depth)...)
+			next = append(next, c.statement(fn, stmt, provider, depth)...)
 		}
 
 		paths = next
@@ -219,10 +219,10 @@ func (c *execCheck) block(fn *execFunction, stmts []ast.Stmt, paths []execPath, 
 	return paths
 }
 
-func (c *execCheck) statement(fn *execFunction, stmt ast.Stmt, p execPath, depth int) []execPath {
+func (c *execCheck) statement(fn *execFunction, stmt ast.Stmt, flow execPath, depth int) []execPath {
 	switch stmt := stmt.(type) {
 	case *ast.AssignStmt:
-		c.assign(fn, stmt.Lhs, stmt.Rhs, &p, depth)
+		c.assign(fn, stmt.Lhs, stmt.Rhs, &flow, depth)
 	case *ast.DeclStmt:
 		if decl, ok := stmt.Decl.(*ast.GenDecl); ok {
 			for _, spec := range decl.Specs {
@@ -232,30 +232,30 @@ func (c *execCheck) statement(fn *execFunction, stmt ast.Stmt, p execPath, depth
 						lhs[i] = id
 					}
 
-					c.assign(fn, lhs, spec.Values, &p, depth)
+					c.assign(fn, lhs, spec.Values, &flow, depth)
 				}
 			}
 		}
 	case *ast.ExprStmt:
-		c.value(fn, stmt.X, &p, depth)
+		c.value(fn, stmt.X, &flow, depth)
 	case *ast.ReturnStmt:
 		for _, result := range stmt.Results {
-			p.result = c.value(fn, result, &p, depth)
+			flow.result = c.value(fn, result, &flow, depth)
 		}
 
-		p.done = true
+		flow.done = true
 	case *ast.BlockStmt:
-		return c.block(fn, stmt.List, []execPath{p}, depth)
+		return c.block(fn, stmt.List, []execPath{flow}, depth)
 	case *ast.IfStmt:
-		return c.branches(fn, stmt, p, depth)
+		return c.branches(fn, stmt, flow, depth)
 	default:
-		c.uncertain(fn, stmt, &p, depth)
+		c.uncertain(fn, stmt, &flow, depth)
 	}
 
-	return []execPath{p}
+	return []execPath{flow}
 }
 
-func (c *execCheck) uncertain(fn *execFunction, stmt ast.Stmt, p *execPath, depth int) {
+func (c *execCheck) uncertain(fn *execFunction, stmt ast.Stmt, flow *execPath, depth int) {
 	// Bind only the initializer, without inferring iteration or case semantics.
 	var init ast.Stmt
 
@@ -270,7 +270,7 @@ func (c *execCheck) uncertain(fn *execFunction, stmt ast.Stmt, p *execPath, dept
 	}
 
 	if init != nil {
-		*p = c.statement(fn, init, *p, depth)[0]
+		*flow = c.statement(fn, init, *flow, depth)[0]
 	}
 	// Inspect unsupported control for discovery, but never use it as proof.
 	ast.Inspect(stmt, func(node ast.Node) bool {
@@ -292,18 +292,18 @@ func (c *execCheck) uncertain(fn *execFunction, stmt ast.Stmt, p *execPath, dept
 		}
 
 		if body != nil {
-			arm := *p
+			arm := *flow
 
-			arm.vars = maps.Clone(p.vars)
+			arm.vars = maps.Clone(flow.vars)
 			for _, outcome := range c.block(fn, body, []execPath{arm}, depth+1) {
-				p.active = p.active || outcome.active
+				flow.active = flow.active || outcome.active
 			}
 
 			return false
 		}
 
 		if call, ok := node.(*ast.CallExpr); ok {
-			c.value(fn, call, p, depth)
+			c.value(fn, call, flow, depth)
 
 			return false
 		}
@@ -323,92 +323,132 @@ func (c *execCheck) uncertain(fn *execFunction, stmt ast.Stmt, p *execPath, dept
 
 		for _, lhs := range assignment.Lhs {
 			id, ok := lhs.(*ast.Ident)
-			if !ok || p.vars[id.Obj] == (execValue{}) {
+			if !ok || flow.vars[id.Obj] == (execValue{}) {
 				continue
 			}
 
-			p.unsupported = true
-			if p.vars[id.Obj].kind != "command" {
-				p.vars[id.Obj] = execValue{}
+			flow.unsupported = true
+			if flow.vars[id.Obj].kind != "command" {
+				flow.vars[id.Obj] = execValue{}
 			}
 		}
 
 		return true
 	})
 
-	p.unsupported = p.unsupported || p.active
-	if p.unsupported {
-		p.reason = "unsupported control flow"
+	flow.unsupported = flow.unsupported || flow.active
+	if flow.unsupported {
+		flow.reason = "unsupported control flow"
 	}
 }
 
-func (c *execCheck) assign(fn *execFunction, lhs, rhs []ast.Expr, p *execPath, depth int) {
+func (c *execCheck) assign(fn *execFunction, lhs, rhs []ast.Expr, flow *execPath, depth int) {
 	values := make([]execValue, len(rhs))
 	for i, expr := range rhs {
-		values[i] = c.value(fn, expr, p, depth)
+		values[i] = c.value(fn, expr, flow, depth)
 	}
 
-	for i, expr := range lhs {
+	for index, expr := range lhs {
 		id, ok := expr.(*ast.Ident)
 		if !ok || id.Obj == nil {
 			continue
 		}
 
-		v := execValue{}
+		value := execValue{}
 		if len(values) == len(lhs) {
-			v = values[i]
-		} else if i == len(lhs)-1 && len(values) == 1 {
-			v = values[0] // Run/output/helper errors are the final result.
+			value = values[index]
+		} else if index == len(lhs)-1 && len(values) == 1 {
+			value = values[0] // Run/output/helper errors are the final result.
 		}
 
-		p.vars[id.Obj] = v
+		flow.vars[id.Obj] = value
 	}
 }
 
-func (c *execCheck) branches(fn *execFunction, stmt *ast.IfStmt, p execPath, depth int) []execPath {
-	if stmt.Init != nil {
-		p = c.statement(fn, stmt.Init, p, depth)[0]
+func (c *execCheck) branches(fn *execFunction, stmt *ast.IfStmt, flow execPath, depth int) []execPath {
+	// The replayed result is never an ExitError, so this arm is not taken.
+	if c.exitAsType(fn, stmt, &flow, depth) {
+		if stmt.Else != nil {
+			return c.statement(fn, stmt.Else, flow, depth)
+		}
+
+		return []execPath{flow}
 	}
 
-	truth := c.condition(fn, stmt.Cond, &p, depth)
+	if stmt.Init != nil {
+		flow = c.statement(fn, stmt.Init, flow, depth)[0]
+	}
+
+	truth := c.condition(fn, stmt.Cond, &flow, depth)
 
 	var branches []execPath
 
 	if truth != "false" {
-		arm := p
-		arm.vars = maps.Clone(p.vars)
+		arm := flow
+		arm.vars = maps.Clone(flow.vars)
 		branches = append(branches, c.block(fn, stmt.Body.List, []execPath{arm}, depth)...)
 	}
 
 	if truth != "true" {
 		if stmt.Else != nil {
-			branches = append(branches, c.statement(fn, stmt.Else, p, depth)...)
+			branches = append(branches, c.statement(fn, stmt.Else, flow, depth)...)
 		} else {
-			branches = append(branches, p)
+			branches = append(branches, flow)
 		}
 	}
 
 	return branches
 }
 
+// exitAsType matches `target, ok := errors.AsType[*exec.ExitError](raw); ok`,
+// the generic form of the errors.As exit test in condition.
+func (c *execCheck) exitAsType(fn *execFunction, stmt *ast.IfStmt, flow *execPath, depth int) bool {
+	assign, ok := stmt.Init.(*ast.AssignStmt)
+	if !ok || assign.Tok != token.DEFINE || len(assign.Lhs) != 2 || len(assign.Rhs) != 1 {
+		return false
+	}
+
+	okName, isIdent := assign.Lhs[1].(*ast.Ident)
+	cond, isCond := ast.Unparen(stmt.Cond).(*ast.Ident)
+
+	if !isIdent || !isCond || okName.Obj == nil || cond.Obj != okName.Obj {
+		return false
+	}
+
+	call, ok := assign.Rhs[0].(*ast.CallExpr)
+	if !ok || len(call.Args) != 1 {
+		return false
+	}
+
+	generic, ok := call.Fun.(*ast.IndexExpr)
+	if !ok || c.value(fn, generic.X, flow, depth).kind != "errors.AsType" {
+		return false
+	}
+
+	target, ok := generic.Index.(*ast.StarExpr)
+
+	return ok && execImported(fn.file, target.X) == "os/exec.ExitError" &&
+		c.value(fn, call.Args[0], flow, depth).kind == "raw"
+}
+
 // nonCallValue resolves an expression that is not a call: a process method
 // on a command, or an operand that may hold a helper.
-func (c *execCheck) nonCallValue(fn *execFunction, expr ast.Expr, p *execPath, depth int) execValue {
+func (c *execCheck) nonCallValue(fn *execFunction, expr ast.Expr, flow *execPath, depth int) execValue {
 	if sel, ok := expr.(*ast.SelectorExpr); ok &&
 		slices.Contains([]string{"Run", "Output", "CombinedOutput", "Start", "Wait"}, sel.Sel.Name) &&
-		c.value(fn, sel.X, p, depth).kind == "command" {
+		c.value(fn, sel.X, flow, depth).kind == "command" {
 		return execValue{kind: "process." + sel.Sel.Name}
 	}
 
-	c.operands(fn, expr, p, depth)
+	c.operands(fn, expr, flow, depth)
 
 	return c.helper(fn, expr)
 }
 
-func (c *execCheck) value(fn *execFunction, expr ast.Expr, p *execPath, depth int) execValue {
+func (c *execCheck) value(fn *execFunction, expr ast.Expr, flow *execPath, depth int) execValue {
 	expr = ast.Unparen(expr)
 	if id, ok := expr.(*ast.Ident); ok && id.Obj != nil {
-		if v, found := p.vars[id.Obj]; found {
+		if v, found := flow.vars[id.Obj]; found {
 			return v
 		}
 	}
@@ -419,19 +459,19 @@ func (c *execCheck) value(fn *execFunction, expr ast.Expr, p *execPath, depth in
 
 	call, ok := expr.(*ast.CallExpr)
 	if !ok {
-		return c.nonCallValue(fn, expr, p, depth)
+		return c.nonCallValue(fn, expr, flow, depth)
 	}
 
-	callee := c.value(fn, call.Fun, p, depth)
+	callee := c.value(fn, call.Fun, flow, depth)
 
 	args := make([]execValue, len(call.Args))
 	for i, arg := range call.Args {
-		args[i] = c.value(fn, arg, p, depth)
+		args[i] = c.value(fn, arg, flow, depth)
 	}
 
 	if strings.HasPrefix(callee.kind, "ambiguous ") {
-		p.unsupported = true
-		p.reason = "ambiguous helper declaration"
+		flow.unsupported = true
+		flow.reason = "ambiguous helper declaration"
 
 		return execValue{kind: strings.TrimPrefix(callee.kind, "ambiguous ")}
 	}
@@ -443,7 +483,7 @@ func (c *execCheck) value(fn *execFunction, expr ast.Expr, p *execPath, depth in
 	if method, ok := strings.CutPrefix(callee.kind, "process."); ok {
 		c.sites[call.Pos()] = method
 		if call.Pos() == c.target {
-			p.active = true
+			flow.active = true
 
 			return execValue{kind: "raw"}
 		}
@@ -458,8 +498,8 @@ func (c *execCheck) value(fn *execFunction, expr ast.Expr, p *execPath, depth in
 		return execValue{kind: "wrapped"}
 	}
 
-	if callee.kind == "fmt.Errorf" && p.active {
-		p.reason = "unsupported error format"
+	if callee.kind == "fmt.Errorf" && flow.active {
+		flow.reason = "unsupported error format"
 	}
 
 	if callee.helper != nil && (execCommandBuilder(callee.helper) || slices.ContainsFunc(args, func(v execValue) bool {
@@ -467,7 +507,7 @@ func (c *execCheck) value(fn *execFunction, expr ast.Expr, p *execPath, depth in
 	})) {
 		result := c.helperResult(callee.helper, args, depth+1)
 		if execCommandBuilder(callee.helper) && result.kind != "command" {
-			p.unsupported = true
+			flow.unsupported = true
 
 			return execValue{kind: "command"} // Do not lose the caller's process site.
 		}
@@ -480,7 +520,7 @@ func (c *execCheck) value(fn *execFunction, expr ast.Expr, p *execPath, depth in
 
 // Unknown expression semantics must not hide calls in operands or receivers.
 // Discover them, but do not infer short-circuit truth or error preservation.
-func (c *execCheck) operands(fn *execFunction, expr ast.Expr, p *execPath, depth int) {
+func (c *execCheck) operands(fn *execFunction, expr ast.Expr, flow *execPath, depth int) {
 	ast.Inspect(expr, func(node ast.Node) bool {
 		if _, ok := node.(*ast.FuncLit); ok {
 			return false
@@ -495,12 +535,12 @@ func (c *execCheck) operands(fn *execFunction, expr ast.Expr, p *execPath, depth
 			return true
 		}
 
-		active := p.active
+		active := flow.active
 
-		v := c.value(fn, operand, p, depth)
-		if (!active && p.active) || v.kind == "raw" || v.kind == "wrapped" {
-			p.unsupported = true
-			p.reason = "unsupported expression"
+		v := c.value(fn, operand, flow, depth)
+		if (!active && flow.active) || v.kind == "raw" || v.kind == "wrapped" {
+			flow.unsupported = true
+			flow.reason = "unsupported expression"
 		}
 
 		return false
@@ -508,7 +548,7 @@ func (c *execCheck) operands(fn *execFunction, expr ast.Expr, p *execPath, depth
 }
 
 func (c *execCheck) helperResult(fn *execFunction, args []execValue, depth int) execValue {
-	p := execPath{vars: map[*execBinding]execValue{}, active: slices.ContainsFunc(args, func(v execValue) bool {
+	flow := execPath{vars: map[*execBinding]execValue{}, active: slices.ContainsFunc(args, func(v execValue) bool {
 		return v.kind == "raw" || v.kind == "wrapped"
 	})}
 	index := 0
@@ -516,14 +556,14 @@ func (c *execCheck) helperResult(fn *execFunction, args []execValue, depth int) 
 	for _, field := range fn.decl.Type.Params.List {
 		for _, id := range field.Names {
 			if index < len(args) {
-				p.vars[id.Obj] = args[index]
+				flow.vars[id.Obj] = args[index]
 			}
 
 			index++
 		}
 	}
 
-	paths := c.block(fn, fn.body.List, []execPath{p}, depth)
+	paths := c.block(fn, fn.body.List, []execPath{flow}, depth)
 
 	result := paths[0].result
 	for _, p := range paths {
@@ -535,10 +575,10 @@ func (c *execCheck) helperResult(fn *execFunction, args []execValue, depth int) 
 	return result
 }
 
-func (c *execCheck) condition(fn *execFunction, expr ast.Expr, p *execPath, depth int) string {
+func (c *execCheck) condition(fn *execFunction, expr ast.Expr, flow *execPath, depth int) string {
 	expr = ast.Unparen(expr)
 	if unary, ok := expr.(*ast.UnaryExpr); ok && unary.Op == token.NOT {
-		switch c.condition(fn, unary.X, p, depth) {
+		switch c.condition(fn, unary.X, flow, depth) {
 		case "true":
 			return "false"
 		case "false":
@@ -554,20 +594,20 @@ func (c *execCheck) condition(fn *execFunction, expr ast.Expr, p *execPath, dept
 			left, right = right, left
 		}
 
-		v := c.value(fn, left, p, depth)
+		v := c.value(fn, left, flow, depth)
 		if id, ok := right.(*ast.Ident); ok && id.Name == "nil" && id.Obj == nil && (v.kind == "raw" || v.kind == "wrapped") {
 			return strconv.FormatBool(binary.Op == token.NEQ)
 		}
 	}
 
-	if call, ok := expr.(*ast.CallExpr); ok && c.value(fn, call.Fun, p, depth).kind == "errors.As" && len(call.Args) == 2 &&
-		c.value(fn, call.Args[0], p, depth).kind == "raw" {
+	if call, ok := expr.(*ast.CallExpr); ok && c.value(fn, call.Fun, flow, depth).kind == "errors.As" && len(call.Args) == 2 &&
+		c.value(fn, call.Args[0], flow, depth).kind == "raw" {
 		if execExitTarget(fn.file, call.Args[1]) {
 			return "false"
 		}
 	}
 
-	c.value(fn, expr, p, depth)
+	c.value(fn, expr, flow, depth)
 
 	return ""
 }

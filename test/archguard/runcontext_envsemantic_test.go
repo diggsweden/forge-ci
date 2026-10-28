@@ -15,6 +15,7 @@ import (
 
 type envSemanticImporter struct {
 	types.Importer
+
 	keys *types.Package
 }
 
@@ -88,6 +89,8 @@ var Getenv = func(string) string { return "" }
 		{name: "limit container", source: `import "os"; var readers = []func(string)string{os.Getenv}; var _ = readers[0]("GITHUB_SHA")`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			files := make([]*ast.File, 0, 2)
 
 			for i, source := range []string{tc.source, tc.sibling} {
@@ -114,6 +117,8 @@ var Getenv = func(string) string { return "" }
 	}
 
 	t.Run("diagnostic location", func(t *testing.T) {
+		t.Parallel()
+
 		file, err := parser.ParseFile(fset, "location.go", "package fixture\nimport env \"os\"\nfunc f() {\n const key = \"GITHUB_\" + \"SHA\"\n _ = env.Getenv(key)\n}\n", 0)
 		require.NoError(t, err)
 		reads, err := runContextEnvReads(fset, "fixture/location", []*ast.File{file}, imp)
@@ -124,6 +129,8 @@ var Getenv = func(string) string { return "" }
 		require.Equal(t, "GITHUB_SHA", reads[0].name)
 	})
 	t.Run("type errors are not a clean scan", func(t *testing.T) {
+		t.Parallel()
+
 		file, err := parser.ParseFile(fset, "invalid.go", `package fixture; import "os"; var _ = os.Getenv(missing)`, 0)
 		require.NoError(t, err)
 		_, err = runContextEnvReads(fset, "fixture/invalid", []*ast.File{file}, imp)
@@ -143,6 +150,8 @@ func TestRunContextEnvGuardLayers(t *testing.T) {
 		{"adapters/github", false}, {"testutil/fixture", false}, {"livetest", false},
 	} {
 		t.Run(tc.path, func(t *testing.T) {
+			t.Parallel()
+
 			require.Equal(t, tc.want, slices.Contains(guardedLayers(), layerOf(tc.path)))
 		})
 	}

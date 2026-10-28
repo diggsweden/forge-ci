@@ -36,21 +36,21 @@ func TestGuardPackagesAreDocumented(t *testing.T) {
 
 	var found []string
 
-	for _, e := range entries {
-		if !e.IsDir() || !strings.HasSuffix(e.Name(), "guard") {
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.HasSuffix(entry.Name(), "guard") {
 			continue
 		}
 
-		found = append(found, e.Name())
+		found = append(found, entry.Name())
 
 		// The table cites each package as `test/<name>` in a row.
-		if !slices.Contains(rows, e.Name()) {
+		if !slices.Contains(rows, entry.Name()) {
 			t.Errorf(
 				"test/%s is a repo-wide guard package with no row in docs/testing.md.\n"+
 					"    Add one saying what it guards and what it reads. That table is the\n"+
 					"    single list of guard packages -- the package doc comments point at it\n"+
 					"    rather than enumerating each other, so this is the only place to edit.",
-				e.Name(),
+				entry.Name(),
 			)
 		}
 	}

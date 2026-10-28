@@ -40,6 +40,8 @@ import (
 		{"git fallback classification", `func run() (bool, error) { cmd := safeexec.Command(ctx, bin); err := cmd.Run(); if err == nil { return true, nil }; var exitErr *exec.ExitError; if errors.As(err, &exitErr) { if exitErr.ExitCode() == 1 { return false, nil }; return false, fmt.Errorf("exit: %w", sentinel) }; return false, safeexec.WrapError(err, bin, "") }`, 1},
 		{"non exit fallback gap", `func run() error { cmd := safeexec.Command(ctx, bin); err := @cmd.Run(); if err == nil { return nil }; var exitErr *exec.ExitError; if errors.As(err, &exitErr) { return safeexec.WrapError(err, bin, "") }; return err }`, 1},
 		{"negated exit branch", `func run() error { cmd := safeexec.Command(ctx, bin); err := cmd.Run(); if nil == err { return nil }; var exitErr *exec.ExitError; if !errors.As(err, &exitErr) { return safeexec.WrapError(err, bin, "") }; return nil }`, 1},
+		{"generic exit code adapter", `func run() (int, error) { cmd := safeexec.Command(ctx, bin); err := cmd.Run(); if err == nil { return 0, nil }; if exitErr, ok := errors.AsType[*exec.ExitError](err); ok { return exitErr.ExitCode(), nil }; return -1, safeexec.WrapError(err, bin, "") }`, 1},
+		{"generic non exit fallback gap", `func run() error { cmd := safeexec.Command(ctx, bin); err := @cmd.Run(); if err == nil { return nil }; if _, ok := errors.AsType[*exec.ExitError](err); ok { return safeexec.WrapError(err, bin, "") }; return err }`, 1},
 		{"wrapped result branches", `func run() error { cmd := safeexec.Command(ctx, bin); out, err := cmd.CombinedOutput(); if err != nil { wrapped := safeexec.WrapError(err, bin, ""); if len(out) == 0 { return wrapped }; return fmt.Errorf("%w\n%s", wrapped, out) }; return nil }`, 1},
 		{"function gap", `func covered() error { cmd := safeexec.Command(ctx, bin); return safeexec.WrapError(cmd.Run(), bin, "") }
 func run() error { cmd := safeexec.Command(ctx, bin); return @cmd.Run() }`, 2},
@@ -69,6 +71,8 @@ func run() error { cmd := safeexec.Command(ctx, bin); return @cmd.Run() }`, 2},
 		{"unrelated error sink", `func run() error { cmd := safeexec.Command(ctx, bin); err := @cmd.Run(); return discard(safeexec.WrapError(err, bin, "")) }`, 1},
 		{"wrong errors As", `func run() error { cmd := safeexec.Command(ctx, bin); err := @cmd.Run(); errors := fake; var exitErr *exec.ExitError; if errors.As(err, &exitErr) { return nil }; return safeexec.WrapError(err, bin, "") }`, 1},
 		{"wrong As target", `func run() error { cmd := safeexec.Command(ctx, bin); err := @cmd.Run(); var exitErr *Other; if errors.As(err, &exitErr) { return nil }; return safeexec.WrapError(err, bin, "") }`, 1},
+		{"wrong AsType target", `func run() error { cmd := safeexec.Command(ctx, bin); err := @cmd.Run(); if _, ok := errors.AsType[*Other](err); ok { return nil }; return safeexec.WrapError(err, bin, "") }`, 1},
+		{"wrong AsType condition", `func run() error { cmd := safeexec.Command(ctx, bin); err := @cmd.Run(); other := true; if _, ok := errors.AsType[*exec.ExitError](err); other { _ = ok; return nil }; return safeexec.WrapError(err, bin, "") }`, 1},
 		{"helper parameter", `func finish(err error) error { if err == nil { return nil }; return safeexec.WrapError(err, bin, "") }
 func run() error { cmd := safeexec.Command(ctx, bin); err := cmd.Run(); return finish(err) }`, 1},
 		{"helper branch gap", `func finish(err error) error { if flag { return safeexec.WrapError(err, bin, "") }; return err }
@@ -101,6 +105,8 @@ func run() error { cmd := safeexec.Command(ctx, bin); return finish(@cmd.Run()) 
 		{"process in switch discovered", `func run() error { switch mode { case "run": cmd := safeexec.Command(ctx, bin); return @cmd.Run() }; return nil }`, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			source := imports + tc.body + "\n"
 
 			var want []string
@@ -188,6 +194,8 @@ func broken() error { cmd := safeexec.Command(ctx, bin); return cmd.Run() }
 		}, 2, []string{"good/nested/bad.go:3:65: broken: Run"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			tree := fstest.MapFS{}
 			for name, source := range tc.files {
 				tree[name] = &fstest.MapFile{Data: []byte(source)}
@@ -406,6 +414,8 @@ func command() *exec.Cmd { return nil }`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			source := prefix + tc.body + "\n"
 
 			mark := strings.IndexByte(source, '@')

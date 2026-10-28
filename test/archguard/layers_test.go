@@ -14,7 +14,7 @@ const internalPrefix = "github.com/diggsweden/forge-ci/internal/"
 
 // layerOf classifies an internal package path (given relative to internal/)
 // into its hexagonal layer (ADR 0004). The import direction between layers is
-// enforced by the depguard layer-* rules in .golangci.yml; the guards here use
+// enforced by the depguard layer-* rules in development/golangci-lint/golangci.yml; the guards here use
 // the classification for their own placement rules. Test infrastructure has an
 // explicit separate layer. listval in particular is imported by domain itself,
 // which is exactly why it cannot live inside one of the layered trees.

@@ -45,7 +45,7 @@ func TestDomainPlatformBranchingIsConfinedToPresentation(t *testing.T) {
 			return nil
 		}
 
-		body, readErr := os.ReadFile(path) //nolint:gosec // test reads repo-local source files.
+		body, readErr := os.ReadFile(path)
 		if readErr != nil {
 			return readErr
 		}

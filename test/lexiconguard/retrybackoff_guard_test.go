@@ -53,6 +53,8 @@ func TestRetryBackoffIsSingleSourced(t *testing.T) {
 		{"poison", root, []string{"poison.go:3"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			var findings []string
 
 			visited, err := walkGoSources(tc.root, func(path, rel string) error {

@@ -4,7 +4,7 @@
 // Package archguard enforces where code may live: which layer may read the
 // environment, which may mint a credential, which may branch on the platform.
 // The import direction between layers (ADR 0004) is enforced by the depguard
-// layer-* rules in .golangci.yml, which `just lint` runs.
+// layer-* rules in development/golangci-lint/golangci.yml, which `just lint` runs.
 //
 // One of the repo-wide guard packages; docs/testing.md says which is which and
 // where a new guard belongs.

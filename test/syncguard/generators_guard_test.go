@@ -105,7 +105,7 @@ func justRecipes(justfile string) map[string]string {
 	found := map[string]string{}
 	lines := strings.Split(justfile, "\n")
 
-	for i, line := range lines {
+	for index, line := range lines {
 		match := justRecipeHeader.FindStringSubmatch(line)
 		if match == nil {
 			continue
@@ -113,7 +113,7 @@ func justRecipes(justfile string) map[string]string {
 
 		var body strings.Builder
 
-		for _, next := range lines[i+1:] {
+		for _, next := range lines[index+1:] {
 			if next != "" && !strings.HasPrefix(next, " ") && !strings.HasPrefix(next, "\t") {
 				break
 			}

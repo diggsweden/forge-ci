@@ -20,6 +20,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/runcontext"
@@ -90,6 +91,8 @@ func TestLayersDoNotNameRunContextVars(t *testing.T) {
 
 	for _, goos := range slices.Compact([]string{"linux", runtime.GOOS}) {
 		t.Run(goos, func(t *testing.T) {
+			t.Parallel()
+
 			checkRunContextVars(t, goos)
 		})
 	}
@@ -170,7 +173,7 @@ func envGuardPackagesForOS(t *testing.T, goos string, patterns ...string) ([]env
 
 	args := append([]string{"list", "-mod=readonly", "-buildvcs=false", "-deps", "-export", "-compiled", "-json"}, patterns...)
 	goRoot := guardGoRoot(t)
-	cmd := exec.CommandContext(t.Context(), filepath.Join(goRoot, "bin", "go"), args...) //nolint:gosec // matching installed Go executable; callers supply fixed source/metadata package patterns.
+	cmd := exec.CommandContext(t.Context(), filepath.Join(goRoot, "bin", "go"), args...)
 	cmd.Dir = reporoot.Path(t)
 
 	cmd.Env = append(os.Environ(), "GOPROXY=off", "GOSUMDB=off", "GOTOOLCHAIN=local", "GOOS="+goos, "GOARCH="+runtime.GOARCH, "CGO_ENABLED=0")
@@ -209,7 +212,21 @@ func envGuardPackagesForOS(t *testing.T, goos string, patterns ...string) ([]env
 		return os.Open(archive)
 	})
 
-	return packages, imp, fset
+	return packages, &lockedImporter{importer: imp}, fset
+}
+
+// lockedImporter serialises a gc importer, whose package cache is not safe
+// for the parallel subtests that share it.
+type lockedImporter struct {
+	mu       sync.Mutex
+	importer types.Importer
+}
+
+func (l *lockedImporter) Import(path string) (*types.Package, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	return l.importer.Import(path)
 }
 
 type runContextEnvRead struct {
@@ -257,7 +274,7 @@ func runContextFix(layer string) string {
 // unmodelled flow exists". Closing that gap needs interprocedural analysis that
 // can tell an injected lookup from a smuggled one. docs/testing.md says the
 // same thing for readers who never open this file.
-func runContextEnvReads(fset *token.FileSet, path string, files []*ast.File, imp types.Importer) ([]runContextEnvRead, error) { //nolint:gocognit,gocyclo // bounded write accounting and object-based call recognition form one scanner, not a general flow engine.
+func runContextEnvReads(fset *token.FileSet, path string, files []*ast.File, imp types.Importer) ([]runContextEnvRead, error) {
 	info := &types.Info{
 		Types: make(map[ast.Expr]types.TypeAndValue),
 		Defs:  make(map[*ast.Ident]types.Object),
@@ -287,13 +304,13 @@ func runContextEnvReads(fset *token.FileSet, path string, files []*ast.File, imp
 		ast.Inspect(file, func(node ast.Node) bool {
 			switch node := node.(type) {
 			case *ast.ValueSpec:
-				for i, name := range node.Names {
+				for index, name := range node.Names {
 					if len(node.Values) > 0 {
 						obj := info.ObjectOf(name)
 
 						writes[obj]++
 						if len(node.Names) == len(node.Values) {
-							values[obj] = node.Values[i]
+							values[obj] = node.Values[index]
 						}
 					}
 				}

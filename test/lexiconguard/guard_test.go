@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -150,7 +151,7 @@ func (s singleSource) offenders(t *testing.T) []string {
 			return nil
 		}
 
-		content, err := os.ReadFile(path) //nolint:gosec // test walks repo-local files.
+		content, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}
@@ -227,7 +228,7 @@ func (s singleSource) staleOwners(root string) []string {
 	var stale []string
 
 	for _, owner := range s.owners {
-		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(owner))) //nolint:gosec // repo-relative owner under an owned root.
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(owner)))
 		if err != nil || !s.holdsPattern(string(content)) {
 			stale = append(stale, owner)
 		}
@@ -303,10 +304,8 @@ func importedFunction(file *ast.File, expr ast.Expr, pkg string, names ...string
 			continue
 		}
 
-		for _, want := range names {
-			if name == want {
-				return true
-			}
+		if slices.Contains(names, name) {
+			return true
 		}
 	}
 
