@@ -428,7 +428,9 @@ func TestCompanionCheckoutPinRejectsInvalidCheckouts(t *testing.T) {
 // the strict recipe, the release itself depends on that job, and the recipe
 // really does set the profile. A rename that left `just test-integration` in
 // the release gate, or a justfile edit that dropped the variable, would leave
-// a gate that looks strict and skips.
+// a gate that looks strict and skips. During the explicit Self Release
+// bootstrap pause below, checksum and image validation remain mandatory;
+// enabling the strict jobs through their shared switch restores both gates.
 func TestReleaseGateRunsTheStrictIntegrationTier(t *testing.T) {
 	t.Parallel()
 
@@ -456,6 +458,22 @@ func TestReleaseGateRunsTheStrictIntegrationTier(t *testing.T) {
 	}
 
 	for _, gate := range gates {
+		const enabled = "${{ vars.SELF_RELEASE_INTEGRATION_GATES == 'true' }}"
+		if release.Jobs[gate].If == enabled {
+			require.Equal(t, "evidence", gate, "only the documented bootstrap gate may be paused")
+			require.Equal(t, enabled, release.Jobs["blackbox"].If)
+			require.Equal(t, []string{"resolve-branch", "checksums", "blackbox", "evidence"}, jobNeeds(release.Jobs["wait-for-images"]))
+			require.Equal(t, []string{"resolve-branch", "checksums", "blackbox", "evidence", "wait-for-images"}, jobNeeds(release.Jobs["release"]))
+			require.Equal(t, "${{ !cancelled() && needs.resolve-branch.result == 'success' && needs.checksums.result == 'success' && (vars.SELF_RELEASE_INTEGRATION_GATES != 'true' || (needs.blackbox.result == 'success' && needs.evidence.result == 'success')) }}", release.Jobs["wait-for-images"].If)
+			require.Equal(t, "${{ !cancelled() && needs.resolve-branch.result == 'success' && needs.checksums.result == 'success' && needs.wait-for-images.result == 'success' && (vars.SELF_RELEASE_INTEGRATION_GATES != 'true' || (needs.blackbox.result == 'success' && needs.evidence.result == 'success')) }}", release.Jobs["release"].If)
+
+			for _, name := range []string{"resolve-branch", "checksums"} {
+				require.Empty(t, release.Jobs[name].If, "%s must retain normal success gating", name)
+			}
+
+			continue
+		}
+
 		if !slices.Contains(jobNeeds(release.Jobs["release"]), gate) {
 			t.Errorf("self-release.yml jobs.release does not need %q, so the strict tier cannot block the release", gate)
 		}

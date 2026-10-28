@@ -162,6 +162,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Temporarily pause Self Release's strict integration and companion black-box
+  jobs while Nanolinter publication is pending. Branch resolution, engine
+  checksum verification and runtime-image availability remain required. Set
+  `SELF_RELEASE_INTEGRATION_GATES=true` in repository variables to restore both
+  jobs and their mandatory release checks after bootstrap.
 - **Breaking:** command environment inputs use `REGISTRY_USER`,
   `RELEASE_IMAGES_PATH`, `CHANGELOG_FILE` and `TOOLSET_TOOLS` consistently.
   Removed the `REGISTRY_USERNAME`, `RELEASE_IMAGES_LEDGER`, `CHANGELOG_PATH`,
