@@ -135,7 +135,7 @@ func TestPublicationCompleteNativeSetAndScanBarrier(t *testing.T) {
 	for _, defect := range []string{"missing sibling", "wrong source", "wrong platform", "failed scan", "failed SBOM", "missing scanner", "missing SBOM tool", "symlink metadata", "nonregular metadata", "unknown metadata field"} {
 		t.Run(defect, func(t *testing.T) {
 			plan, in, writes := publicationFixture(t)
-			scan := &scanner{t: t, severity: "HIGH", fail: defect == "failed scan"}
+			scan := &scanner{t: t, severity: "CRITICAL,HIGH", fail: defect == "failed scan"}
 
 			syft := &inventoryTool{t: t, malformed: defect == "failed SBOM"}
 			if defect == "failed SBOM" || defect == "missing SBOM tool" {
@@ -242,13 +242,25 @@ func replaceStagedIdentity(t *testing.T, plan snapshotimage.Plan, in appsnapshot
 	require.NoError(t, appsnapshot.WriteJSON(filepath.Join(directory, "layout", "forge-ci-image.json"), appcontainer.ImageLayoutRecord{ImageRef: tag, Platform: "linux/" + arch, SourceSHA: plan.SourceSHA, Digest: digest.String()}))
 }
 
-func TestSnapshotSBOMIndependentOfScanAndReceiptBindsServedIndex(t *testing.T) {
+// Every published snapshot image is scanned, with its SBOM when asked for; a
+// frozen plan that would publish an image unscanned is refused before upload.
+func TestSnapshotScansEveryImageAndReceiptBindsServedIndex(t *testing.T) {
 	plan, in, writes := publicationFixture(t)
-	plan.Images[0].Scan = false
 	plan.Images[0].SBOM = true
+	scan := &scanner{t: t, severity: "CRITICAL,HIGH"}
 	syft := &inventoryTool{t: t}
-	r, err := appsnapshot.Publish(t.Context(), ociregistry.WithAuthFile(in.AuthFile), nil, syft, fakeoutputsink.New(t), nil, io.Discard, output.Annotator{}, plan, in)
+
+	unscanned := plan
+	unscanned.Images = []snapshotimage.Image{plan.Images[0]}
+	unscanned.Images[0].Scan = false
+	_, err := appsnapshot.Publish(t.Context(), ociregistry.WithAuthFile(in.AuthFile), scan, syft, fakeoutputsink.New(t), nil, io.Discard, output.Annotator{}, unscanned, in)
+	require.ErrorContains(t, err, "without its scan")
+	require.Zero(t, writes.Load())
+	require.Zero(t, scan.calls)
+
+	r, err := appsnapshot.Publish(t.Context(), ociregistry.WithAuthFile(in.AuthFile), scan, syft, fakeoutputsink.New(t), nil, io.Discard, output.Annotator{}, plan, in)
 	require.NoError(t, err)
+	require.Equal(t, 2, scan.calls, "every platform is scanned")
 	require.Equal(t, 2, syft.calls)
 	require.Positive(t, writes.Load())
 

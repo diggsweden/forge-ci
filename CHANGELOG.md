@@ -326,6 +326,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING:** Every published image is scanned, and the administrator
+  policy (`enforce-vulnerabilities`) alone decides whether findings block.
+  A container's `enable-scan: false` no longer skips the scan of release
+  images (Forgejo `release-images.yml`, including `scan: false` in an
+  `image-plan-json` entry) or snapshot images (GitHub, Forgejo and GitLab):
+  the plans ignore it with a warning, as the build and publish route does,
+  the providers always install Trivy, and a frozen snapshot plan with
+  `scan: false` is refused. `container multiarch-image assemble
+  --from-layouts` and `container build-push-oci-image` now require
+  `--scan-output-template`, so a direct final-tag publication is scanned
+  too; pass it, with Trivy on the runner. Images that relied on the opt-out
+  publish only when their findings pass the gate or are approved in
+  `.trivyignore.yaml`.
+- **BREAKING:** The container vulnerability gate blocks only on CRITICAL by
+  default. `scan-severity` (`container build --scan-severity`,
+  `security scan container --fail-on-severity`, the `publish-container.yml`
+  input) is now the blocking threshold alone, default `CRITICAL`; a
+  comma-list blocks at its least severe entry. The scan still reports HIGH
+  findings, listed as "reported, not blocking" and kept in the scan report,
+  SARIF and GitLab report, and reports further down when the threshold is
+  lower. An unfixed CRITICAL still blocks unless `.trivyignore.yaml`
+  approves it. Set `scan-severity: "CRITICAL,HIGH"` to keep blocking on
+  fixable HIGH findings. Release images gate at the same default, and
+  `release-images.yml` now refuses a declared `scan-severity` other than
+  `CRITICAL`. Snapshot images read `scan-severity` with the same parser, so
+  lowercase and spaced lists are accepted there too, and record the
+  normalised threshold. The `enable-scan` schema description now says that
+  `false` cannot disable the scan of an exported/published layout.
 - Forgejo `release-images.yml` and `snapshot-images.yml` hand image layouts
   from build to publish through a run-scoped, content-addressed blob store:
   each layout blob of 1 MiB or more is uploaded once per run as

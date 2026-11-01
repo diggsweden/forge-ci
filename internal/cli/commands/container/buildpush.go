@@ -45,8 +45,9 @@ RUN steps for the target platform (for example COPY-only images over
 prebuilt per-architecture artifacts, or RUN only in FROM --platform=$BUILDPLATFORM
 stages). An image whose target stages have RUN steps would run them under CPU
 emulation for every non-native platform; build it with container
-multiarch-image, one native job per architecture, instead. With
---scan-output-template, every exported platform must pass Trivy before publication.
+multiarch-image, one native job per architecture, instead. Publication always
+scans: --scan-output-template is required, every exported platform is scanned
+before publication, and the administrator policy decides whether findings block.
 Emits image, verified digest and platforms outputs; platforms is the comma-separated
 list that was built, in plan order. Release consumers normally use release-images.yml.
 Every flag may also be fed from the $FORGE_CI_PLAN plan file under the "container build-push-oci-image"
@@ -67,7 +68,7 @@ scope (flag > plan > env > default).`,
 			&cli.StringFlag{Name: flagVersion, Sources: planfile.Vars(planScopeBuildPush, flagVersion, "OCI_LABEL_VERSION"), Usage: "org.opencontainers.image.version; defaults to --tag"},
 			&cli.StringFlag{Name: flagRevision, Sources: planfile.Vars(planScopeBuildPush, flagRevision, "OCI_LABEL_REVISION"), Usage: "org.opencontainers.image.revision; defaults to git rev-parse HEAD"},
 			regflags.AuthFile(regflags.AuthFileOpts{Usage: "registry auth file for builds, export and OCI publication", PlanScope: planScopeBuildPush}),
-			&cli.StringFlag{Name: "scan-output-template", Sources: planfile.Vars(planScopeBuildPush, "scan-output-template", "SCAN_OUTPUT_TEMPLATE"), Usage: "scan every exported platform before publication; Trivy JSON path must contain {arch} or {platform}"},
+			&cli.StringFlag{Name: "scan-output-template", Sources: planfile.Vars(planScopeBuildPush, "scan-output-template", "SCAN_OUTPUT_TEMPLATE"), Usage: "required: scan every exported platform before publication; Trivy JSON path must contain {arch} or {platform}"},
 			regflags.TLSVerify(regflags.TLSVerifyOpts{Env: "BUILD_PUSH_TLS_VERIFY", PlanScope: planScopeBuildPush}),
 			&cli.StringFlag{Name: flagServerURL, Sources: planfile.Chain(planScopeBuildPush, flagServerURL, cienv.ServerURL()), Usage: "forge server URL used to derive defaults and source labels"},
 			&cli.StringFlag{Name: flagRepository, Sources: planfile.Chain(planScopeBuildPush, flagRepository, cienv.Repository()), Usage: "owner/repo used to derive defaults and source labels"},
@@ -76,7 +77,14 @@ scope (flag > plan > env > default).`,
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			template := cmd.String("scan-output-template")
-			if template != "" && !strings.Contains(template, "{arch}") && !strings.Contains(template, "{platform}") {
+			// A publish route like any other: the exported platforms are
+			// always scanned, and the administrator policy decides whether
+			// findings block.
+			if template == "" {
+				return fmt.Errorf("build-push-oci-image publishes, and publication is always scanned: pass --scan-output-template; the administrator policy decides whether findings block: %w", errs.ErrUsage)
+			}
+
+			if !strings.Contains(template, "{arch}") && !strings.Contains(template, "{platform}") {
 				return fmt.Errorf("scan-output-template must contain {arch} or {platform}: %w", errs.ErrUsage)
 			}
 
@@ -84,16 +92,12 @@ scope (flag > plan > env > default).`,
 				auth := regflags.Resolve(cmd)
 				registry := ociregistry.WithAuthFileAndTLS(auth.AuthFile, auth.TLSVerify != tlsVerifyDisabled)
 
-				var checkLayout func(context.Context, string, []string) error
-
-				if template := cmd.String("scan-output-template"); template != "" {
-					scanner := trivy.New(secretenv.Names()...)
-					annot := deps.Annotator(cmd)
-					checkLayout = func(scanContext context.Context, layout string, platforms []string) error {
-						return appcontainer.ImageEvidence(scanContext, nil, registry, scanner, nil, os.Stderr, os.Stderr,
-							appcontainer.ImageEvidenceInput{ScanLayout: layout, Platforms: platforms, TrivyOutputTemplate: template,
-								Gate: publicationGate(scanner, annot)})
-					}
+				scanner := trivy.New(secretenv.Names()...)
+				annot := deps.Annotator(cmd)
+				checkLayout := func(scanContext context.Context, layout string, platforms []string) error {
+					return appcontainer.ImageEvidence(scanContext, nil, registry, scanner, nil, os.Stderr, os.Stderr,
+						appcontainer.ImageEvidenceInput{ScanLayout: layout, Platforms: platforms, TrivyOutputTemplate: template,
+							Gate: publicationGate(scanner, annot)})
 				}
 
 				_, err := appcontainer.BuildPushOCIImage(ctx, buildah.New(), registry, git.New(), checkLayout, dep.OutputSink, os.Stderr, appcontainer.BuildPushOCIImageInput{
@@ -126,9 +130,9 @@ scope (flag > plan > env > default).`,
 }
 
 // publicationGate is the container scan GitHub's image builds pass before
-// publication, applied to one platform's layout: a fixed finding at CRITICAL
-// or HIGH, or an unfixed CRITICAL, blocks unless .trivyignore.yaml approves
-// it. Its reports go to a scratch directory; the evidence JSON is the record.
+// publication, applied to one platform's layout at the default threshold: a
+// CRITICAL finding, fixed or not, blocks unless .trivyignore.yaml approves
+// it, and HIGH findings are reported. Its reports go to a scratch directory; the evidence JSON is the record.
 func publicationGate(scanner appsecurity.TrivyOps, annot output.Annotator) func(context.Context, string, string) error {
 	return func(ctx context.Context, layout, platform string) error {
 		reports, err := os.MkdirTemp("", "forge-ci-image-gate-")

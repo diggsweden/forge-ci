@@ -16,6 +16,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/git"
 	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
 	"github.com/diggsweden/forge-ci/internal/domain/projecttype"
+	"github.com/diggsweden/forge-ci/internal/domain/security"
 	"github.com/diggsweden/forge-ci/internal/domain/version"
 	"github.com/diggsweden/forge-ci/internal/pathsafe"
 )
@@ -40,6 +41,7 @@ var (
 	errNonNativePlatform      = errors.New("snapshot requires native linux/amd64 or linux/arm64")
 	errDuplicatePlatform      = errors.New("duplicate snapshot platform")
 	errUnsupportedSeverity    = errors.New("unsupported snapshot scan severity")
+	errUnscannedImage         = errors.New("snapshot plan publishes an image without its scan")
 	errInvalidBuild           = errors.New("invalid or duplicate snapshot build")
 	errInvalidDependency      = errors.New("invalid snapshot artifact dependency")
 	errReservedDestination    = errors.New("reserved snapshot artifact destination")
@@ -66,6 +68,9 @@ type Plan struct {
 	Tag             string                     `json:"tag"`
 	Builds          []Build                    `json:"builds"`
 	Images          []Image                    `json:"images"`
+	// IgnoredScanOptOuts names the containers whose legacy enable-scan:
+	// false the plan overrode; the caller reports them.
+	IgnoredScanOptOuts []string `json:"-"`
 }
 
 // Dependency is a built artifact a native build needs at a given destination.
@@ -89,7 +94,9 @@ type Build struct {
 	RequiredArtifacts []Dependency      `json:"required_artifacts"`
 }
 
-// Image is one published snapshot image and its evidence policy.
+// Image is one published snapshot image and its evidence policy. Scan is
+// always true: every published image is scanned, and the administrator policy
+// alone decides whether findings block. The field stays in the frozen plan.
 type Image struct {
 	Name            string   `json:"name"`
 	ImageRepository string   `json:"image_repository"`
@@ -135,6 +142,10 @@ func New(cfg pipeline.ConfigPlan, in Input) (Plan, error) {
 			return plan, err
 		}
 
+		if !ctr.EnableScan {
+			plan.IgnoredScanOptOuts = append(plan.IgnoredScanOptOuts, ctr.Name)
+		}
+
 		plan.Images = append(plan.Images, image)
 		plan.Builds = append(plan.Builds, builds...)
 	}
@@ -175,12 +186,14 @@ func planContainer(cfg pipeline.ConfigPlan, in Input, baseVersion string, ctr pi
 
 	platforms := strings.FieldsFunc(ctr.Platforms, func(r rune) bool { return r == ',' || r == ' ' || r == '\n' || r == '\t' })
 
-	severity := ctr.ScanSeverity
-	if severity == "" {
-		severity = "CRITICAL,HIGH"
+	// The plan records the normalised blocking threshold, the one the scan
+	// applies.
+	gate, err := security.ParseContainerSeverityGate(ctr.ScanSeverity)
+	if err != nil {
+		return Image{}, nil, fmt.Errorf("container %s: %w: %w", ctr.Name, errUnsupportedSeverity, err)
 	}
 
-	image := Image{Name: ctr.Name, ImageRepository: repo, Tag: tag, TagSuffix: ctr.TagSuffix, Platforms: platforms, Scan: ctr.EnableScan, Severity: severity, SBOM: ctr.EnableAnalyzedContainerSBOM, Signing: "NONE"}
+	image := Image{Name: ctr.Name, ImageRepository: repo, Tag: tag, TagSuffix: ctr.TagSuffix, Platforms: platforms, Scan: true, Severity: gate.Threshold(), SBOM: ctr.EnableAnalyzedContainerSBOM, Signing: "NONE"}
 
 	deps, err := dependencies(cfg, ctr)
 	if err != nil {
@@ -416,10 +429,13 @@ func (p Plan) validateImages(short string) (map[string]Image, error) {
 			pending[key] = image
 		}
 
-		for sev := range strings.SplitSeq(image.Severity, ",") {
-			if !slices.Contains([]string{"UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL"}, sev) {
-				return nil, fmt.Errorf("%w %q", errUnsupportedSeverity, sev)
-			}
+		// A plan always records its threshold; an empty one was not planned.
+		if _, err := security.ParseContainerSeverityGate(image.Severity); image.Severity == "" || err != nil {
+			return nil, fmt.Errorf("%w %q", errUnsupportedSeverity, image.Severity)
+		}
+
+		if !image.Scan {
+			return nil, errUnscannedImage
 		}
 
 		if err := container.ValidateManifestTags(image.ImageRepository, []string{image.ImageRepository + ":" + image.Tag, image.ImageRepository + ":" + image.Tag + "-amd64", image.ImageRepository + ":" + image.Tag + "-arm64"}); err != nil {

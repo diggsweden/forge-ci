@@ -160,7 +160,7 @@ func TestCompiledAdminPolicyCannotBeOverriddenByConsumers(t *testing.T) {
 			previousPath := os.Getenv("PATH")
 			t.Setenv("PATH", dir+string(os.PathListSeparator)+previousPath)
 			trivy := filepath.Join(dir, "trivy")
-			write(trivy, "#!/bin/sh\nwhile [ \"$#\" -gt 0 ]; do\nif [ \"$1\" = --output ]; then output=$2; shift 2; else shift; fi\ndone\nprintf '%s\\n' '{\"ArtifactName\":\"fixture\",\"Results\":[{\"Target\":\"fixture\",\"Vulnerabilities\":[{\"VulnerabilityID\":\"CVE-FIXTURE\",\"PkgName\":\"fixture\",\"InstalledVersion\":\"1\",\"FixedVersion\":\"2\",\"Severity\":\"HIGH\"}]}]}' > \"$output\"\n", 0o700)
+			write(trivy, "#!/bin/sh\nwhile [ \"$#\" -gt 0 ]; do\nif [ \"$1\" = --output ]; then output=$2; shift 2; else shift; fi\ndone\nprintf '%s\\n' '{\"ArtifactName\":\"fixture\",\"Results\":[{\"Target\":\"fixture\",\"Vulnerabilities\":[{\"VulnerabilityID\":\"CVE-FIXTURE\",\"PkgName\":\"fixture\",\"InstalledVersion\":\"1\",\"FixedVersion\":\"2\",\"Severity\":\"CRITICAL\"}]}]}' > \"$output\"\n", 0o700)
 			scan := run(!variant.vulnerabilities, "security", "scan", "container", "--image-ref", "registry.example/app:fixture")
 			if !strings.Contains(scan, "CVE-FIXTURE") {
 				t.Fatal("scan findings disappeared")

@@ -380,13 +380,12 @@ jobs:
         run: forge-ci validate event-context
       - name: Install configured evidence tools
         env:
-          SCAN: ${{ matrix.image.scan }}
           SBOM: ${{ matrix.image.sbom }}
         run: |
-          if [[ "$SCAN" == true ]]; then
-            source "${RUNNER_TEMP}/snapshot-inputs/bootstrap/install-trivy.sh"
-            install_trivy
-          fi
+          # Every published image is scanned; the administrator policy in
+          # the engine decides whether findings block.
+          source "${RUNNER_TEMP}/snapshot-inputs/bootstrap/install-trivy.sh"
+          install_trivy
           if [[ "$SBOM" == true ]]; then
             source "${RUNNER_TEMP}/snapshot-inputs/bootstrap/install-syft.sh"
             install_syft

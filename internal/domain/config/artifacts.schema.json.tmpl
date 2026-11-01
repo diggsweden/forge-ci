@@ -139,11 +139,11 @@
         },
         "enable-scan": {
           "type": "boolean",
-          "description": "Run Trivy vulnerability scan AND gate the publish on its findings. Default: true. Set false to skip both the scan and the CVE gate (not recommended for production)."
+          "description": "Legacy scan input. Default: true. false cannot disable the Trivy scan of an exported/published OCI layout or administrator enforcement; the administrator policy decides whether findings block."
         },
         "scan-severity": {
           "type": "string",
-          "description": "Per-container override of the trivy --severity filter and fail-on threshold. Default 'CRITICAL,HIGH'. Narrow (e.g. 'CRITICAL') to relax the gate without disabling the scan; use enable-scan: false to skip the gate entirely."
+          "description": "Per-container blocking threshold of the vulnerability scan: a finding at this level or above with a fixed package blocks the publish; an unfixed CRITICAL blocks unless .trivyignore.yaml approves it. A level or a comma-list whose least severe entry counts ('CRITICAL,HIGH' blocks at HIGH). Default 'CRITICAL'. HIGH findings are always reported, blocking or not."
         },
         "build-args": {
           "type": "object",

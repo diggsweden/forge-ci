@@ -169,8 +169,8 @@ func ClassifyTrivyFindings(body []byte) (TrivyFindings, error) {
 	return findings, nil
 }
 
-// severityRank orders Trivy's severities, the most severe first.
-var severityRank = map[string]int{"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "UNKNOWN": 4}
+// severityOrder lists Trivy's severities, the most severe first.
+var severityOrder = []string{"CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"}
 
 func compareFindings(left, right TrivyFinding) int {
 	return cmp.Or(
@@ -182,10 +182,11 @@ func compareFindings(left, right TrivyFinding) int {
 	)
 }
 
+// rankOf is a severity's place in severityOrder; an unknown one sorts last.
 func rankOf(severity string) int {
-	if rank, ok := severityRank[severity]; ok {
+	if rank := slices.Index(severityOrder, severity); rank >= 0 {
 		return rank
 	}
 
-	return len(severityRank)
+	return len(severityOrder)
 }

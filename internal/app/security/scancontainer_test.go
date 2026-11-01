@@ -165,7 +165,7 @@ func TestScanContainer_IdentifiesEmbeddedGoRuntime(t *testing.T) {
 	trivy := &recordingTrivy{writeJSON: []byte(`{"Results":[{
 		"Target":"usr/bin/pebble","Type":"gobinary","Vulnerabilities":[{
 			"VulnerabilityID":"CVE-2026-78667","PkgName":"stdlib",
-			"InstalledVersion":"v1.27.1","FixedVersion":"1.27.2","Severity":"HIGH"
+			"InstalledVersion":"v1.27.1","FixedVersion":"1.27.2","Severity":"CRITICAL"
 		}]}]}`)}
 
 	err := appsecurity.ScanContainer(t.Context(), trivy, &log, io.Discard, output.Annotator{}, appsecurity.ScanContainerInput{
@@ -271,8 +271,9 @@ func TestScanContainer_PropagatesScanFailure(t *testing.T) {
 }
 
 // TestScanContainer_ImageScanArgsCarryThresholdAndExitZero pins the
-// trivy invocation shape: severity filter applied, --exit-code 0 so the
-// gate decision stays in-process, and the image ref carried verbatim.
+// trivy invocation shape: a CRITICAL threshold still reports HIGH,
+// --exit-code 0 so the gate decision stays in-process, and the image ref
+// carried verbatim.
 func TestScanContainer_ImageScanArgsCarryThresholdAndExitZero(t *testing.T) {
 	dir := t.TempDir()
 	jsonPath := filepath.Join(dir, "trivy.json")
@@ -298,13 +299,13 @@ func TestScanContainer_ImageScanArgsCarryThresholdAndExitZero(t *testing.T) {
 	}
 
 	// The whole invocation, not a membership check per flag: a set test
-	// cannot tell "--severity CRITICAL" from "--severity" followed by some
-	// other value with CRITICAL sitting elsewhere in the line.
+	// cannot tell "--severity CRITICAL,HIGH" from "--severity" followed by
+	// some other value with CRITICAL,HIGH sitting elsewhere in the line.
 	want := []string{
 		"image",
 		"--format", "json",
 		"--output", privateOutput,
-		"--severity", "CRITICAL",
+		"--severity", "CRITICAL,HIGH",
 		"--pkg-types", "os,library",
 		"--exit-code", "0",
 		"ghcr.io/example/img@sha256:deadbeef",
@@ -347,12 +348,73 @@ func TestScanContainer_UnfixedFindingsBlockOnlyWhenCritical(t *testing.T) {
 				t.Fatalf("err = %v, want blocked=%v\n%s", err, tc.wantBlocked, out.String())
 			}
 
-			if !strings.Contains(out.String(), "CVE-H") || !strings.Contains(out.String(), "Not blocking") {
+			if !strings.Contains(out.String(), "CVE-H") || !strings.Contains(out.String(), "Reported, not blocking") {
 				t.Errorf("unfixed HIGH not reported:\n%s", out.String())
 			}
 
 			if tc.wantBlocked && !strings.Contains(out.String(), "approve it in .trivyignore.yaml") {
 				t.Errorf("blocking unfixed critical gives no way forward:\n%s", out.String())
+			}
+		})
+	}
+}
+
+// fixableTrivyJSON has one finding per severity with a fixed package.
+const fixableTrivyJSON = `{"ArtifactName":"img","Results":[{"Target":"debian","Vulnerabilities":[
+{"VulnerabilityID":"CVE-C","PkgName":"libc6","InstalledVersion":"2.41","FixedVersion":"2.42","Severity":"CRITICAL"},
+{"VulnerabilityID":"CVE-H","PkgName":"git","InstalledVersion":"2.47","FixedVersion":"2.48","Severity":"HIGH"}]}]}`
+
+// The threshold decides which fixable findings block; the default blocks only
+// on CRITICAL and still reports HIGH, and a comma-list blocks at its least
+// severe entry, so an existing "CRITICAL,HIGH" keeps blocking on HIGH.
+func TestScanContainer_ThresholdDecidesWhichFixableFindingsBlock(t *testing.T) {
+	highOnly := strings.Replace(fixableTrivyJSON, `"CRITICAL"`, `"HIGH"`, 1)
+
+	for name, tc := range map[string]struct {
+		severity     string
+		body         string
+		wantBlocking []string
+		wantReported []string
+	}{
+		"default blocks a fixable critical":   {body: fixableTrivyJSON, wantBlocking: []string{"CVE-C"}, wantReported: []string{"CVE-H"}},
+		"default reports a fixable high":      {body: highOnly, wantReported: []string{"CVE-C", "CVE-H"}},
+		"CRITICAL,HIGH blocks a fixable high": {severity: "CRITICAL,HIGH", body: highOnly, wantBlocking: []string{"CVE-C", "CVE-H"}},
+		"HIGH blocks a fixable high":          {severity: "high", body: fixableTrivyJSON, wantBlocking: []string{"CVE-C", "CVE-H"}},
+		"default blocks an unfixed critical":  {body: unfixedTrivyJSON, wantBlocking: []string{"CVE-C"}, wantReported: []string{"CVE-H"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			var out bytes.Buffer
+
+			trivy := &recordingTrivy{writeJSON: []byte(tc.body)}
+
+			err := appsecurity.ScanContainer(t.Context(), trivy, &out, io.Discard, output.Annotator{}, appsecurity.ScanContainerInput{
+				ImageRef:         "img",
+				JSONFile:         filepath.Join(dir, "trivy.json"),
+				SARIFFile:        filepath.Join(dir, "trivy.sarif"),
+				GitLabReportFile: filepath.Join(dir, "gl.json"),
+				Severity:         tc.severity,
+			})
+			if blocked := errors.Is(err, errs.ErrValidation); blocked != (len(tc.wantBlocking) != 0) {
+				t.Fatalf("err = %v, want blocking %v\n%s", err, tc.wantBlocking, out.String())
+			}
+
+			if got := reportFlag(trivy.runs[0], "--severity"); got != "CRITICAL,HIGH" {
+				t.Errorf("--severity %q, want CRITICAL,HIGH: HIGH is reported at every threshold down to HIGH", got)
+			}
+
+			blocking, reported, _ := strings.Cut(out.String(), "Reported, not blocking")
+			for _, id := range tc.wantBlocking {
+				if !strings.Contains(blocking, id) {
+					t.Errorf("%s not listed as blocking:\n%s", id, out.String())
+				}
+			}
+
+			for _, id := range tc.wantReported {
+				if !strings.Contains(reported, id) {
+					t.Errorf("%s not listed as reported, not blocking:\n%s", id, out.String())
+				}
 			}
 		})
 	}

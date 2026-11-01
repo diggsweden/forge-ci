@@ -37,7 +37,7 @@ Two assumptions sit under every row. Within one job, state persists between step
 | Path traversal via `working-directory` | `validateWorkingDirectory` at config-parse time |
 | Path traversal via artifact `name` / `binary-name` | `validateArtifactFileNames` at config-parse time |
 | Env-var refs in artifacts.yml string fields | Rejected by `validateWorkingDirectory` (no silent literal-string fallback) |
-| Silent CVE-laden container release | `publish-container.yml` Trivy scan + severity gate (fail on CRITICAL/HIGH by default) |
+| Silent CVE-laden container release | `publish-container.yml` Trivy scan + severity gate (fail on CRITICAL by default; HIGH reported) |
 | Silent SBOM-missing release | All SBOM steps mandatory; explicit `enable-build-sbom: false` opt-out |
 | Non-reproducible JVM / Cargo releases | `validate jvm-reproducibility` (strict by default; administrator `enforce-reproducible-builds`) + `validate cargo` hard-fail at prerequisites stage |
 | Stale-runner drift | `runs-on: ubuntu-26.04` pinned (not `ubuntu-latest`) |

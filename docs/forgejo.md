@@ -342,7 +342,7 @@ alone. Each `action.yml` documents its own inputs and outputs.
 | `build-maven` | The build step of a Maven consumer's job: tests, the jar and the Build SBOM, as GitHub's `build-maven` workflow builds them, after checking that the POM declares the release version. |
 | `guard-release-tag`, `render-changelog`, `prepare-release` | The steps `prepare-release.yml` is made of, with rendering and signing in separate jobs. Call the workflow; see [The prepare job](#the-prepare-job). |
 | `upload-dist`, `assemble-release-dist` | Hand `dist/` to the signer with its digest, from one producer or several. |
-| `registry-login`, `setup-buildah`, `record-release-image` | Registry authentication, builder preparation and ledger recording for a custom image job. Build/push directly with `forge-ci container build-push-oci-image`; scan with its `--scan-output-template` option or `forge-ci container image-evidence`. |
+| `registry-login`, `setup-buildah`, `record-release-image` | Registry authentication, builder preparation and ledger recording for a custom image job. Build/push directly with `forge-ci container build-push-oci-image`, which requires `--scan-output-template` and so needs Trivy on the runner; `forge-ci container image-evidence` scans an image already published. |
 | `setup-image-builder` | Prepares whichever image builder `CI_IMAGE_BUILDER` selects: Buildah's storage, or admission of the digest-pinned kaniko job image `CI_IMAGE_BUILDER_JOB_IMAGE`, so a workflow names no builder. The step before `multiarch-image build-arch`. |
 | `prune-base-images` | Base-image maintenance on a schedule: deletes promoted base images that no supported release image's attestation names. A dry run unless told otherwise. |
 | `verify-forgejo-token` | Checks a release token before it is needed. |
@@ -355,7 +355,8 @@ the user there, or the login stops before it sends a token.
 
 The `build-push-oci-image` composite action was removed. Custom jobs call the
 similarly named CLI command after `setup-forge-ci` and pass their registry auth
-file explicitly. For release images, prefer `release-images.yml`, which builds
+file and `--scan-output-template` explicitly: publication always scans, and the
+administrator policy decides whether findings block. For release images, prefer `release-images.yml`, which builds
 each architecture natively and hands its checked ledger to the signer.
 
 ### Variables
@@ -916,7 +917,7 @@ runners where an installation names them, as other image-building jobs do.
 
 - **plan** reads the declaration and stops the run before any build on what
   the workflow does not do: `build-secrets`, `extract`, a `scan-severity`
-  other than its `CRITICAL,HIGH` gate, a platform other than `linux/amd64` and
+  other than its default `CRITICAL` gate, a platform other than `linux/amd64` and
   `linux/arm64`, two containers publishing the same tag, and an arm64 build
   without `runner-label-arm64`.
 - **build** runs once per container and architecture, on a runner of that
@@ -933,13 +934,13 @@ runners where an installation names them, as other image-building jobs do.
 - **publish** runs once per container. It installs the layer's pinned Trivy,
   then `assemble --from-layouts --scan-output-template` verifies every staged
   architecture against its record and its revision label, scans each, and
-  under the default administrator policy refuses publication on a fixable
-  CRITICAL or HIGH finding or an unfixed CRITICAL that the release commit's
-  `.trivyignore.yaml` does not approve. Only after the gate permits continuation
+  under the default administrator policy refuses publication on a CRITICAL
+  finding, fixable or unfixed, that the release commit's `.trivyignore.yaml`
+  does not approve; HIGH findings are reported without blocking. Only after the gate permits continuation
   does it upload
   the index under `staging-<final tag>` and record it with `ledger add`.
   Consumer `enable-scan: false` cannot skip scanning an exported/published OCI
-  layout. An administrator-built report-only distribution still scans and
+  layout; the plan job ignores it with a warning. An administrator-built report-only distribution still scans and
   reports findings; scanner/operational, credential, signature and source/digest
   identity errors stay blocking. See [Administrator check enforcement](admin-policy.md).
 - **collect** merges the ledgers into one artifact, `release-images`: a
@@ -1007,11 +1008,12 @@ IDs can pass `image-plan-json` instead of `artifacts-config`. This is the same
 second builder interface. Each build supplies its name, native architecture and
 platform, repository-local Containerfile/context, target, public arguments and
 optional labels. Each image supplies its destination, staging/final tags,
-complete architecture set and scan choice. Optional ledger policy fields carry
+complete architecture set and, optionally, the legacy `scan` field. Optional ledger policy fields carry
 the image kind, flavor, base ref/input ID and moving tag; `required-labels` are
 checked on every staged child before publication.
-An omitted `scan` defaults to enabled, just as in the artifacts declaration;
-only an explicit `false` opts out for release images. Base plans require scanning.
+Every published release image is scanned, as with the artifacts declaration:
+an explicit `scan: false` is ignored with a warning, and the administrator
+policy alone decides whether findings block.
 Moving tags and architecture-cache slots are part of the same destination
 collision check as final, staging and architecture tags.
 Release SBOM paths use the flavor first, then the effective role (the declared

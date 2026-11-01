@@ -5,6 +5,7 @@ package pipeline_test
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -61,10 +62,16 @@ func TestPlanReleaseImages_PublishesTagVariantsOfOneRepository(t *testing.T) {
 
 	want := []pipeline.ReleaseImage{
 		{Name: "app", ImageRepository: "ghcr.io/acme/app", CandidateTag: "staging-v1.2.3", FinalTagName: "v1.2.3", Archs: "arm64", Scan: true},
-		{Name: "app-distroless", ImageRepository: "ghcr.io/acme/app", CandidateTag: "staging-v1.2.3-distroless", FinalTagName: "v1.2.3-distroless", Archs: "arm64"},
+		// enable-scan: false is a legacy opt-out: published images are
+		// always scanned, and the plan names what it overrode.
+		{Name: "app-distroless", ImageRepository: "ghcr.io/acme/app", CandidateTag: "staging-v1.2.3-distroless", FinalTagName: "v1.2.3-distroless", Archs: "arm64", Scan: true},
 	}
 	if len(plan.Images) != len(want) || plan.Images[0] != want[0] || plan.Images[1] != want[1] {
 		t.Fatalf("images = %+v, want %+v", plan.Images, want)
+	}
+
+	if !slices.Equal(plan.IgnoredScanOptOuts, []string{"app-distroless"}) {
+		t.Errorf("ignored scan opt-outs = %q, want the app-distroless opt-out reported", plan.IgnoredScanOptOuts)
 	}
 
 	if len(plan.Builds) != 2 {
@@ -108,6 +115,19 @@ func TestPlanReleaseImages_PublishesToTheOneFullRepository(t *testing.T) {
 	}
 }
 
+// Release images gate at the default threshold, CRITICAL, however an adopter
+// spells it; a stricter or looser threshold is refused above.
+func TestPlanReleaseImages_AcceptsTheDefaultScanThreshold(t *testing.T) {
+	t.Parallel()
+
+	for _, severity := range []string{"CRITICAL", "critical", " CRITICAL "} {
+		containers := plannedContainers(t, "  - name: app\n    scan-severity: \""+severity+"\"\n")
+		if _, err := pipeline.PlanReleaseImages(containers, releaseImagesInput()); err != nil {
+			t.Errorf("scan-severity %q: err = %v, want the default threshold accepted", severity, err)
+		}
+	}
+}
+
 func TestPlanReleaseImages_RefusesWhatItDoesNotCarryOut(t *testing.T) {
 	t.Parallel()
 
@@ -122,7 +142,7 @@ func TestPlanReleaseImages_RefusesWhatItDoesNotCarryOut(t *testing.T) {
 		"image-name":       {containers: "  - name: app\n    image-name: acme/other\n", want: "tag-suffix"},
 		"build secrets":    {containers: "  - name: app\n    build-secrets: [PRIVATE_REGISTRY_CREDENTIAL]\n", want: "build-secrets"},
 		"extraction":       {containers: "  - name: app\n    extract: {binary: {paths: [/app]}}\n", want: "extract"},
-		"scan threshold":   {containers: "  - name: app\n    scan-severity: CRITICAL\n", want: "gate at CRITICAL,HIGH"},
+		"scan threshold":   {containers: "  - name: app\n    scan-severity: CRITICAL,HIGH\n", want: "gate at CRITICAL;"},
 		"foreign platform": {containers: "  - name: app\n    platforms: linux/s390x\n", want: "linux/amd64 and linux/arm64"},
 		"undeclared":       {containers: "  - name: app\n", platforms: "linux/arm64", want: "not declared"},
 		"build metadata":   {containers: "  - name: app\n", tag: "v1.2.3+build", want: "release tag"},

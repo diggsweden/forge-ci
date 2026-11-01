@@ -50,6 +50,8 @@ var (
 type PlanInput struct {
 	File, Branch, SourceSHA, ImageRepository string
 	Publish                                  bool
+	// Annotator reports the legacy scan opt-outs the plan ignores.
+	Annotator output.Annotator
 }
 
 // DefaultConfigFile is optional for projects without declared containers.
@@ -101,7 +103,19 @@ func Plan(ctx context.Context, ops appversion.GenerateSnapshotOps, in PlanInput)
 		}
 	}
 
-	return snapshotimage.New(typed, snapshotimage.Input{SourceSHA: in.SourceSHA, SourceBranch: in.Branch, Tag: strings.TrimSpace(tag.String()), ImageRepository: in.ImageRepository, SourceDateEpoch: epoch, Publish: in.Publish})
+	plan, err := snapshotimage.New(typed, snapshotimage.Input{SourceSHA: in.SourceSHA, SourceBranch: in.Branch, Tag: strings.TrimSpace(tag.String()), ImageRepository: in.ImageRepository, SourceDateEpoch: epoch, Publish: in.Publish})
+	if err != nil {
+		return plan, err
+	}
+
+	// The same legacy input the build and release routes ignore: published
+	// layouts are always scanned, and the administrator policy decides what
+	// blocks.
+	for _, name := range plan.IgnoredScanOptOuts {
+		in.Annotator.Warningf("container %q: enable-scan: false ignored; snapshot images are always scanned and the administrator policy decides whether findings block", name)
+	}
+
+	return plan, nil
 }
 
 // loadConfig reads, validates and derives the artifact configuration. Only the
@@ -343,7 +357,8 @@ func Publish(ctx context.Context, registry appcontainer.StagedSignerRegistry, sc
 		return snapshotimage.Receipt{}, err
 	}
 
-	if im.Scan && scanner == nil {
+	// Every published snapshot image is scanned; a frozen plan cannot opt out.
+	if scanner == nil {
 		return snapshotimage.Receipt{}, errScanRequiresTrivy
 	}
 
@@ -352,19 +367,13 @@ func Publish(ctx context.Context, registry appcontainer.StagedSignerRegistry, sc
 	}
 
 	evidence := &appcontainer.StagedLayoutEvidence{CheckLayout: func(ctx context.Context, layout, platform string) error {
-		if !im.Scan && !im.SBOM {
-			return nil
-		}
-
 		dir := filepath.Join(in.EvidenceDir, im.Name, strings.ReplaceAll(platform, "/", "-"))
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return err
 		}
 
-		if im.Scan {
-			if err := appsecurity.ScanContainer(ctx, scanner, out, out, annot, appsecurity.ScanContainerInput{ImageRef: im.ImageRepository + ":" + im.Tag, OCILayout: layout, Severity: im.Severity, JSONFile: filepath.Join(dir, "trivy.json"), SARIFFile: filepath.Join(dir, "trivy.sarif"), GitLabReportFile: filepath.Join(dir, "gitlab.json")}); err != nil {
-				return err
-			}
+		if err := appsecurity.ScanContainer(ctx, scanner, out, out, annot, appsecurity.ScanContainerInput{ImageRef: im.ImageRepository + ":" + im.Tag, OCILayout: layout, Severity: im.Severity, JSONFile: filepath.Join(dir, "trivy.json"), SARIFFile: filepath.Join(dir, "trivy.sarif"), GitLabReportFile: filepath.Join(dir, "gitlab.json")}); err != nil {
+			return err
 		}
 
 		if im.SBOM {

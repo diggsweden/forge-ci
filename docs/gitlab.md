@@ -860,7 +860,7 @@ provide native transport, not context-validation business rules. Do not recreate
 the producer inventory after transport. Npm inputs require one valid packaged
 tarball at `<context>/.forge-ci/snapshot-inputs/<name>`. See the
 [shared contract](workflows.md#snapshot-container-contract-all-three-forges) for
-branch-hashed, final `-snapshot` tags, independent scan/SBOM policy and unsupported
+branch-hashed, final `-snapshot` tags, an always-on scan, independent SBOM policy and unsupported
 build secrets, extraction and explicit snapshot OCI signing/provenance requests.
 Snapshots do not advance release aliases or promotions.
 

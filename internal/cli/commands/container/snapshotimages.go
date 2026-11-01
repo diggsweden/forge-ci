@@ -162,7 +162,7 @@ func snapshotImagesPlanCmd() *cli.Command {
 			return err
 		}
 
-		p, err := appsnapshot.Plan(ctx, gitadapter.New(), appsnapshot.PlanInput{File: cmd.String("file"), Branch: cmd.String("branch"), SourceSHA: cmd.String("source-sha"), ImageRepository: cmd.String(flagImageRepository), Publish: cmd.Bool(flagPublish)})
+		p, err := appsnapshot.Plan(ctx, gitadapter.New(), appsnapshot.PlanInput{File: cmd.String("file"), Branch: cmd.String("branch"), SourceSHA: cmd.String("source-sha"), ImageRepository: cmd.String(flagImageRepository), Publish: cmd.Bool(flagPublish), Annotator: deps.Annotator(cmd)})
 		if err != nil {
 			return err
 		}

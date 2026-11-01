@@ -603,7 +603,6 @@ jobs:
       # install script; the gate's verdict does not depend on the caller's
       # tool versions.
       - name: Install Trivy
-        if: ${{ matrix.image.scan }}
         run: |
           set -euo pipefail
           export CI_TEMP_DIR="${RUNNER_TEMP:?}"
@@ -612,7 +611,6 @@ jobs:
           install_trivy
 
       - name: Install Syft for platform inventories
-        if: ${{ matrix.image.scan }}
         run: |
           set -euo pipefail
           export CI_TEMP_DIR="${RUNNER_TEMP:?}"
@@ -631,7 +629,6 @@ jobs:
           IMAGE_ARCHS: ${{ matrix.image.archs }}
           IMAGE_REPOSITORY: ${{ matrix.image['image-repository'] }}
           CANDIDATE_TAG: ${{ matrix.image['candidate-tag'] }}
-          IMAGE_SCAN: ${{ matrix.image.scan }}
           IMAGE_KIND: ${{ matrix.image['image-kind'] }}
           IMAGE_ROLE: ${{ matrix.image.role }}
           IMAGE_FLAVOR: ${{ matrix.image.flavor }}
@@ -659,13 +656,12 @@ jobs:
             --auth-file "${auth_file}"
           ledger_dir="${GITHUB_WORKSPACE:?}/image-artifacts/${IMAGE_ARTIFACT_NAMESPACE:?}-ledger-${IMAGE_NAME:?}"
           mkdir -p "${ledger_dir}"
-          scan=()
-          if [ "${IMAGE_SCAN}" = true ]; then
-            scan=(--scan-output-template "${ledger_dir}/trivy-results-${IMAGE_NAME}-{arch}.json")
-          fi
+          # Every published image is scanned; the administrator policy in
+          # the engine decides whether findings block.
+          scan=(--scan-output-template "${ledger_dir}/trivy-results-${IMAGE_NAME}-{arch}.json")
           if [ "${IMAGE_KIND:-}" = base ]; then
             scan+=(--sbom-output-template "${ledger_dir}/inventory-${IMAGE_NAME}-{arch}.cyclonedx.json")
-          elif [ "${IMAGE_SCAN}" = true ]; then
+          else
             evidence_id=${IMAGE_FLAVOR:-${IMAGE_ROLE:-${IMAGE_NAME}}}
             scan+=(--sbom-output-template "${ledger_dir}/sbom-${evidence_id}-{arch}.json"
               --index-sbom-output "${ledger_dir}/image-sbom-${evidence_id}.cyclonedx.json"
@@ -701,7 +697,6 @@ jobs:
           IMAGE_REPOSITORY: ${{ matrix.image['image-repository'] }}
           IMAGE_DIGEST: ${{ steps.assemble.outputs.image-digest }}
           IMAGE_SBOM_SHA256: ${{ steps.assemble.outputs.image-sbom-sha256 }}
-          IMAGE_SCAN: ${{ matrix.image.scan }}
           FINAL_TAG_NAME: ${{ matrix.image['final-tag-name'] }}
           IMAGE_KIND: ${{ matrix.image['image-kind'] }}
           IMAGE_ROLE: ${{ matrix.image.role }}
@@ -727,7 +722,7 @@ jobs:
             cp -- "${ledger_dir}/inventory-${IMAGE_NAME}-${first_arch}.cyclonedx.json" "${sbom}"
             sbom_sha256=$(sha256sum -- "${sbom}")
             policy+=(--sbom-sha256 "${sbom_sha256%% *}")
-          elif [ "${IMAGE_SCAN}" = true ]; then
+          else
             policy+=(--sbom-sha256 "${IMAGE_SBOM_SHA256:?scanned release image requires its index SBOM pin}")
           fi
           if [ -n "${IMAGE_KIND:-}" ]; then policy+=(--image-kind "${IMAGE_KIND}"); fi

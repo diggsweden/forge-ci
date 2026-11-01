@@ -374,8 +374,8 @@ dist-tag `snapshot`) to `npm-registry` (GitHub Packages by default), with SBOMs
 when `sboms` asks for them.
 Declared containers also publish by default from the same frozen source SHA;
 `publish-containers: false` explicitly opts out. Containers use branch-hashed tags
-ending in lower-case `-snapshot`; package naming is unchanged. Image scan and SBOM
-policy are independent of the package `sboms` input. Snapshot images are unsigned
+ending in lower-case `-snapshot`; package naming is unchanged. Snapshot images are
+always scanned, and their SBOM policy is independent of the package `sboms` input. Snapshot images are unsigned
 and never advance release aliases or promotions. See the
 [snapshot container contract](workflows.md#snapshot-container-contract-all-three-forges)
 and [manual branch-selection example](../examples/container-snapshot/).

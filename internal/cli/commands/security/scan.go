@@ -38,7 +38,7 @@ func scanContainerCmd() *cli.Command {
 		Name:  "container",
 		Usage: "run `trivy image`, derive SARIF/GitLab reports, and fail on fixable or unapproved critical findings",
 		Description: `EXAMPLES:
-   # Scan a digest-pinned image, failing on HIGH+ findings
+   # Scan a digest-pinned image, also blocking on fixable HIGH findings
    forge-ci security scan container \
      --image-ref ghcr.io/owner/app@sha256:… --fail-on-severity HIGH
 
@@ -50,7 +50,7 @@ func scanContainerCmd() *cli.Command {
 			&cli.StringFlag{Name: "json-file", Value: security.DefaultTrivyContainerJSONFile, Sources: cli.EnvVars("CONTAINER_JSON_FILE"), Usage: "destination path for the raw trivy JSON findings"},
 			&cli.StringFlag{Name: flagSARIFFile, Value: security.DefaultTrivyContainerSARIFFile, Sources: cli.EnvVars("CONTAINER_SARIF_FILE"), Usage: "destination path for the trivy SARIF findings"},
 			&cli.StringFlag{Name: "gitlab-report-file", Value: security.DefaultTrivyGitLabContainerFile, Sources: cli.EnvVars("CONTAINER_GITLAB_REPORT_FILE"), Usage: "destination path for the GitLab container-scanning report"},
-			&cli.StringFlag{Name: "fail-on-severity", Value: "CRITICAL,HIGH", Sources: cli.EnvVars("CONTAINER_FAIL_ON_SEVERITY"), Usage: "trivy --severity filter and gate threshold: a finding at this level or above fails the scan when a fixed package exists, an unfixed CRITICAL fails it unless approved, other unfixed findings are reported (comma-list, e.g. 'CRITICAL,HIGH'; narrow to 'CRITICAL' to relax)"},
+			&cli.StringFlag{Name: "fail-on-severity", Value: security.DefaultContainerBlockSeverity, Sources: cli.EnvVars("CONTAINER_FAIL_ON_SEVERITY"), Usage: "blocking threshold: a finding at this level or above fails the scan when a fixed package exists, an unfixed CRITICAL fails it unless approved, everything else is reported; HIGH is always reported (a level or comma-list whose lowest entry counts, e.g. 'CRITICAL,HIGH' blocks at HIGH)"},
 			&cli.StringFlag{Name: "ignore-file", Sources: cli.EnvVars("CONTAINER_IGNORE_FILE"), Usage: "Trivy ignore file approving findings, with reasons and expiry (default: .trivyignore.yaml when present)"},
 			&cli.StringFlag{Name: "trivy-version", Sources: cli.EnvVars("TRIVY_VERSION"), Usage: "trivy version string embedded in the SARIF / GitLab report"},
 		},

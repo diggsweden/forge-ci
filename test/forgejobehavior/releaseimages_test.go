@@ -241,9 +241,13 @@ esac
 	}
 }
 
-func TestReleaseImages_ScanOptOutPreservesTheExistingSignerSBOMPath(t *testing.T) {
+// A published release image is always scanned: the publish step does not
+// read the plan's scan flag, so even a stale scan=false matrix value still
+// scans, retains the index BOM and pins it in the ledger. Whether findings
+// block is the engine's administrator policy.
+func TestReleaseImages_AlwaysScansWhatItPublishes(t *testing.T) {
 	t.Parallel()
-	box := newSandbox(t, "release-evidence-opt-out")
+	box := newSandbox(t, "release-evidence-always-scanned")
 	box.write(".engine/bin/forge-ci", directoryRecordingEngine, 0o700)
 
 	env := []string{
@@ -252,17 +256,27 @@ func TestReleaseImages_ScanOptOutPreservesTheExistingSignerSBOMPath(t *testing.T
 		"IMAGE_REPOSITORY=registry.invalid/owner/app", "CANDIDATE_TAG=staging-v1.2.3", "FINAL_TAG_NAME=v1.2.3",
 		"RELEASE_SHA=" + strings.Repeat("a", 40), "RELEASE_TAG=v1.2.3", "FORGEJO_SERVER=https://forgejo.invalid", "FORGEJO_REPO=owner/app",
 		"REGISTRY_TOKEN=fixture-token", "REGISTRY_USER=owner", "IMAGE_DIGEST=sha256:" + strings.Repeat("b", 64),
+		"IMAGE_SBOM_SHA256=" + strings.Repeat("c", 64),
 	}
-	for _, step := range []string{"Scan and publish ${{ matrix.image.name }}", "Record ${{ matrix.image.name }} in the ledger"} {
+	for step, required := range map[string][]string{
+		"Scan and publish ${{ matrix.image.name }}":     {"--scan-output-template", "--sbom-output-template", "--index-sbom-output"},
+		"Record ${{ matrix.image.name }} in the ledger": {"--sbom-sha256"},
+	} {
 		got := box.run(workflowStep(t, "release-images.yml", "publish", step).Run, env...)
 		if got.status != 0 {
 			t.Fatalf("%s: %s", step, got.stderr)
 		}
 
-		for _, forbidden := range []string{"--scan-output-template", "--sbom-output-template", "--index-sbom-output", "--sbom-sha256"} {
-			if slices.Contains(box.argv(), forbidden) {
-				t.Fatalf("scan opt-out unexpectedly requires %s", forbidden)
+		for _, flag := range required {
+			if !slices.Contains(box.argv(), flag) {
+				t.Fatalf("%s: a scan=false matrix value dropped %s: %q", step, flag, box.argv())
 			}
+		}
+	}
+
+	for _, name := range []string{"Install Trivy", "Install Syft for platform inventories"} {
+		if step := workflowStep(t, "release-images.yml", "publish", name); step.If != "" {
+			t.Errorf("%s runs only if %s; the scanner must always be installed", name, step.If)
 		}
 	}
 }

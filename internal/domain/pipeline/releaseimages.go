@@ -12,12 +12,9 @@ import (
 
 	domaincontainer "github.com/diggsweden/forge-ci/internal/domain/container"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/security"
 	"github.com/diggsweden/forge-ci/internal/domain/version"
 )
-
-// releaseImagesScanSeverity is the one gate threshold the release-images
-// workflow applies: the publication gate of every forge-ci image build.
-const releaseImagesScanSeverity = "CRITICAL,HIGH"
 
 // ReleaseImagesInput is what the release-images plan needs beyond the
 // declaration: where images go and which release and platforms this run builds.
@@ -54,6 +51,10 @@ type ReleaseImageBuild struct {
 
 // ReleaseImage is one container's publication: its index under the staging
 // candidate tag, the final tag the signer promotes it to, and its scan.
+//
+// Scan is always true in a plan: every published release image is scanned,
+// and the administrator policy alone decides whether findings block. The
+// field stays on the wire for the plans and outputs that carry it.
 type ReleaseImage struct {
 	Name            string `json:"name"`
 	ImageRepository string `json:"image-repository"`
@@ -78,6 +79,19 @@ type ReleaseImage struct {
 type ReleaseImagesPlan struct {
 	Builds []ReleaseImageBuild `json:"builds"`
 	Images []ReleaseImage      `json:"images"`
+	// IgnoredScanOptOuts names the images that asked not to be scanned, a
+	// legacy consumer opt-out the plan overrides; the caller reports them.
+	IgnoredScanOptOuts []string `json:"-"`
+}
+
+// requireScans scans every image, recording the opt-outs it overrides.
+func (plan *ReleaseImagesPlan) requireScans() {
+	for index := range plan.Images {
+		if !plan.Images[index].Scan {
+			plan.IgnoredScanOptOuts = append(plan.IgnoredScanOptOuts, plan.Images[index].Name)
+			plan.Images[index].Scan = true
+		}
+	}
 }
 
 // PlanReleaseImages turns the declared containers into the release-images
@@ -125,6 +139,8 @@ func PlanReleaseImages(containers []PlannedContainer, in ReleaseImagesInput) (Re
 		plan.Images = append(plan.Images, image)
 		plan.Builds = append(plan.Builds, builds...)
 	}
+
+	plan.requireScans()
 
 	return plan, nil
 }
@@ -210,8 +226,10 @@ func supportedByReleaseImages(container PlannedContainer) error {
 		return fmt.Errorf("container %q declares build-secrets, which release images do not pass to the build: %w", container.Name, errs.ErrInvalidConfig)
 	case container.ExtractBinaryTarget != "" || len(container.ExtractBinaryPaths) > 0:
 		return fmt.Errorf("container %q declares extract, which release images do not carry out: %w", container.Name, errs.ErrInvalidConfig)
-	case container.ScanSeverity != "" && container.ScanSeverity != releaseImagesScanSeverity:
-		return fmt.Errorf("container %q scan-severity %q: release images gate at %s; use enable-scan: false to skip the gate: %w", container.Name, container.ScanSeverity, releaseImagesScanSeverity, errs.ErrInvalidConfig)
+	// The release-images workflow applies one threshold, the publication
+	// gate of every forge-ci image build: the default.
+	case !releaseImagesScanThreshold(container.ScanSeverity):
+		return fmt.Errorf("container %q scan-severity %q: release images gate at %s; the administrator policy decides whether findings block: %w", container.Name, container.ScanSeverity, security.DefaultContainerBlockSeverity, errs.ErrInvalidConfig)
 	// The build job places the checkout beside the layer's own files, so a
 	// path out of the repository would build from those.
 	case !filepath.IsLocal(container.ContainerFile) || !filepath.IsLocal(container.Context):
@@ -231,4 +249,12 @@ func splitPlatforms(declared string) []string {
 	}
 
 	return platforms
+}
+
+// releaseImagesScanThreshold reports whether a declared scan-severity is the
+// default threshold the release-images workflow gates at.
+func releaseImagesScanThreshold(declared string) bool {
+	gate, err := security.ParseContainerSeverityGate(declared)
+
+	return err == nil && gate.Threshold() == security.DefaultContainerBlockSeverity
 }

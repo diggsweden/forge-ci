@@ -294,10 +294,10 @@ jobs:
       # 'analyzed-container'. Replaces the v2.x user-facing `enable-sbom` flag.
       enable-analyzed-container-sbom: ${{ matrix.container.enable_analyzed_container_sbom }}
       enable-scan: ${{ matrix.container.enable_scan }}
-      # Per-container severity override; empty → publish-container's
-      # default ("CRITICAL,HIGH") applies. Narrow to relax (e.g.
-      # "CRITICAL"); set enable-scan: false to skip the gate entirely.
-      scan-severity: ${{ matrix.container.scan_severity || 'CRITICAL,HIGH' }}
+      # Per-container blocking threshold; empty → the default ("CRITICAL")
+      # applies and HIGH is reported without blocking. "CRITICAL,HIGH"
+      # also blocks on HIGH.
+      scan-severity: ${{ matrix.container.scan_severity || 'CRITICAL' }}
       registry: ghcr.io
       artifact-types: ${{ join(matrix.container.artifact_types, ',') }}
       artifact-types-json: ${{ toJson(matrix.container.artifact_types) }}

@@ -101,6 +101,23 @@ jobs:
       - name: Set up Buildah
         uses: https://FORGE_HOST/OWNER/forge-ci/.forgejo/actions/setup-buildah@PIN_FORGE_CI_SHA
 
+      # Publication always scans: Trivy pinned by version and checksum in the
+      # engine's own install script, at the engine pin.
+      - name: Install Trivy
+        env:
+          HELPERS_URL: RENDER_ACCEPTANCE_SERVER_URL/RENDER_FORGE_CI_REPOSITORY
+        run: |
+          set -euo pipefail
+          helpers="${RUNNER_TEMP:?}/forge-ci-helpers"
+          git init --quiet "${helpers}"
+          git -C "${helpers}" remote add origin "${HELPERS_URL}"
+          GIT_TERMINAL_PROMPT=0 git -C "${helpers}" fetch --quiet --depth=1 --no-tags origin PIN_FORGE_CI_SHA
+          git -C "${helpers}" checkout --quiet --detach FETCH_HEAD
+          export CI_TEMP_DIR="${RUNNER_TEMP}"
+          # shellcheck source=/dev/null
+          source "${helpers}/scripts/bootstrap/install-trivy.sh"
+          install_trivy
+
       - name: Login to registry
         id: registry
         uses: https://FORGE_HOST/OWNER/forge-ci/.forgejo/actions/registry-login@PIN_FORGE_CI_SHA
@@ -127,7 +144,8 @@ jobs:
             --context . --vendor '' --authors '' --documentation '' \
             --ref-name '' --version '' --revision '' --tls-verify true \
             --licenses CC0-1.0 --auth-file "${REGISTRY_AUTH_FILE:?}" \
-            --server-url "${SERVER_URL:?}" --repository "${REPOSITORY:?}"
+            --server-url "${SERVER_URL:?}" --repository "${REPOSITORY:?}" \
+            --scan-output-template "${RUNNER_TEMP:?}/trivy-smoke-{arch}.json"
 
       - name: Assemble smoke release files
         env:
@@ -208,7 +226,8 @@ jobs:
             --context . --vendor '' --authors '' --documentation '' \
             --ref-name '' --version '' --revision '' --tls-verify true \
             --licenses CC0-1.0 --auth-file "${REGISTRY_AUTH_FILE:?}" \
-            --server-url "${SERVER_URL:?}" --repository "${REPOSITORY:?}"
+            --server-url "${SERVER_URL:?}" --repository "${REPOSITORY:?}" \
+            --scan-output-template "${RUNNER_TEMP:?}/trivy-smoke-base-{arch}.json"
 
       # The base ledger pins the SBOM the signer attests. The signer downloads
       # the artifact into premade-sboms/, so the entry names the file there.

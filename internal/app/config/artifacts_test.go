@@ -154,6 +154,26 @@ func TestEmitReleaseImagesPlan_ContainersWithoutArtifacts(t *testing.T) {
 	}
 }
 
+// enable-scan: false cannot keep a release image from its scan: the plan
+// scans it and says the legacy opt-out was ignored, as the build route does.
+func TestEmitReleaseImagesPlan_IgnoresTheScanOptOutWithAWarning(t *testing.T) {
+	t.Parallel()
+	path := writeYAML(t, "containers:\n  - name: app\n    enable-scan: false\n")
+	sink := fakeoutputsink.New(t)
+
+	var annotations bytes.Buffer
+
+	plan, err := appconfig.EmitReleaseImagesPlan(context.Background(), sink, output.NewAnnotator(&annotations, output.FormatGitHub), appconfig.EmitReleaseImagesPlanInput{
+		Config: appconfig.EmitConfigPlanInput{Path: path},
+		Images: pipeline.ReleaseImagesInput{ImageRepository: "ghcr.io/acme/app", Repository: "acme/app", ReleaseTag: "v1.2.3"},
+	})
+	require.NoError(t, err)
+	require.True(t, plan.Images[0].Scan, "a published release image skipped its scan")
+	require.Contains(t, sink.Single("images"), `"scan":true`)
+	require.Contains(t, annotations.String(), "enable-scan: false ignored")
+	require.Contains(t, annotations.String(), "administrator policy")
+}
+
 func TestEmitReleaseImagesPlan_ResolvedPolicyUsesTheSameOutputContract(t *testing.T) {
 	t.Parallel()
 

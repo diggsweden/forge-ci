@@ -122,7 +122,7 @@ jobs:
 
 	sourceFiles := snapshotCanaryFiles(false)
 	if !withArtifacts {
-		sourceFiles[config] = filePayload{Body: "containers:\n  - name: canary\n    container-file: Containerfile\n    context: .\n    platforms: linux/amd64\n    enable-scan: false\n    enable-slsa: false\n", Mode: 0644}
+		sourceFiles[config] = filePayload{Body: "containers:\n  - name: canary\n    container-file: Containerfile\n    context: .\n    platforms: linux/amd64\n    enable-slsa: false\n", Mode: 0644}
 	}
 
 	sourceFiles[".forgejo/workflows/snapshot-native.yml"] = filePayload{Body: caller, Mode: 0644}

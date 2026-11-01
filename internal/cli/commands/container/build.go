@@ -23,6 +23,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/cli/regflags"
 	domaincontainer "github.com/diggsweden/forge-ci/internal/domain/container"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/security"
 )
 
 // planScopeBuild is the plan-file scope of `container build`: the
@@ -60,7 +61,7 @@ EXAMPLES:
 
    # Build, scan the exported layout, then push it by digest
    forge-ci container build --mode push-by-digest --image-ref ghcr.io/org/app \
-     --platform linux/amd64 --scan --scan-severity CRITICAL,HIGH`,
+     --platform linux/amd64 --scan --scan-severity HIGH`,
 		Flags:  append(append(buildImageFlags(), scanFlags()...), imageBuilderFlags()...),
 		Action: runBuild,
 	}
@@ -95,7 +96,7 @@ func runBuild(ctx context.Context, cmd *cli.Command) error {
 func scanFlags() []cli.Flag {
 	return []cli.Flag{
 		&cli.BoolFlag{Name: flagScan, Sources: planfile.Vars(planScopeBuild, "scan", "ENABLE_SCAN"), Usage: "scan the exported layout before pushing or retaining it; fail on fixable findings at/above --scan-severity and on unfixed CRITICAL findings .trivyignore.yaml does not approve (push-by-digest and oci modes)"},
-		&cli.StringFlag{Name: "scan-severity", Value: "CRITICAL,HIGH", Sources: planfile.Vars(planScopeBuild, "scan-severity", "SCAN_SEVERITY"), Usage: "trivy severity filter and gate threshold"},
+		&cli.StringFlag{Name: "scan-severity", Value: security.DefaultContainerBlockSeverity, Sources: planfile.Vars(planScopeBuild, "scan-severity", "SCAN_SEVERITY"), Usage: "blocking threshold for fixable findings (a level or comma-list whose lowest entry counts); the scan always reports down to HIGH"},
 		&cli.StringFlag{Name: "trivy-version", Sources: planfile.Vars(planScopeBuild, "trivy-version", "TRIVY_VERSION"), Usage: "version embedded in the GitLab container-scanning report"},
 	}
 }

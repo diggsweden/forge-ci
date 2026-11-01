@@ -21,8 +21,9 @@ import (
 )
 
 // UnmarshalJSON preserves the declarative planner's scan-by-default policy for
-// resolved input too. Explicit false remains an intentional opt-out. Keep
-// strict field admission even though the outer decoder delegates this object.
+// resolved input too; an explicit false is a legacy opt-out the plan then
+// overrides (see ReleaseImagesPlan.requireScans). Keep strict field admission
+// even though the outer decoder delegates this object.
 func (image *ReleaseImage) UnmarshalJSON(body []byte) error {
 	type wireImage ReleaseImage
 
@@ -62,6 +63,8 @@ func ReadImageBuildPlan(body, expectedRepository, releaseTag string) (ReleaseIma
 			plan.Images[idx].MovingTagName = ""
 		}
 	}
+
+	plan.requireScans()
 
 	if err := validateImageBuildPlan(plan, expectedRepository, releaseTag); err != nil {
 		return ReleaseImagesPlan{}, err
@@ -183,10 +186,6 @@ func validateImageCachePolicy(image ReleaseImage) error {
 
 	if image.CacheTagPrefix != "" && (!base || image.Revision == "" || image.RequiredLabels == "") {
 		return fmt.Errorf("architecture cache requires a base content revision and required labels: %w", errs.ErrInvalidConfig)
-	}
-
-	if base && !image.Scan {
-		return fmt.Errorf("base image plans require scans and premade SBOMs: %w", errs.ErrInvalidConfig)
 	}
 
 	return nil

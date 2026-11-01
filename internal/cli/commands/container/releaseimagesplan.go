@@ -55,7 +55,7 @@ When RELEASE_PLATFORMS is set, the resolved plan must already match it; the
 engine refuses a different frozen selection rather than silently rewriting it.
 
 Declared features the release-images workflow does not carry out (build
-secrets, binary extraction, another scan threshold than its CRITICAL,HIGH gate,
+secrets, binary extraction, another scan threshold than its default CRITICAL gate,
 platforms other than linux/amd64 and linux/arm64) are refused here, before any
 runner starts. RELEASE_PLATFORMS narrows every container's platforms.
 

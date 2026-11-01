@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 
 	appenforcement "github.com/diggsweden/forge-ci/internal/app/enforcement"
 	"github.com/diggsweden/forge-ci/internal/clicolor"
@@ -46,13 +45,15 @@ type ScanContainerInput struct {
 	GitLabReportFile string
 	// TrivyVersion is embedded into the GitLab report metadata.
 	TrivyVersion string
-	// Severity is the trivy --severity filter and the gate's threshold.
-	// Default: "CRITICAL,HIGH". A finding at this severity or above blocks
-	// when a fixed package exists for it, and an unfixed CRITICAL blocks
-	// unless the ignore file approves it; other unfixed findings are
-	// reported without blocking. To skip the gate entirely, set the
-	// admin-owned enforcement policy; scan execution and report generation
-	// remain mandatory for exported/published layouts.
+	// Severity is the gate's blocking threshold: one level, or a comma-list
+	// whose least severe entry is the threshold. Default: "CRITICAL". A
+	// finding at this severity or above blocks when a fixed package exists
+	// for it, and an unfixed CRITICAL blocks unless the ignore file approves
+	// it; every other finding is reported without blocking. The scan always
+	// reports down to HIGH, or down to the threshold when it is lower. To
+	// skip the gate entirely, set the admin-owned enforcement policy; scan
+	// execution and report generation remain mandatory for exported/published
+	// layouts.
 	Severity string
 	// IgnoreFile is the Trivy ignore file that approves findings, with the
 	// reason and expiry Trivy's YAML format records. Empty takes the
@@ -93,7 +94,7 @@ func resolveIgnoreFile(named string) (string, error) {
 
 // ScanContainer orchestrates a container scan in four steps:
 //  1. `trivy image --format json` → private report (trivy does the scan)
-//  2. Parse JSON, count findings at/above Severity → fail when non-zero
+//  2. Parse JSON, count blocking findings (see gateFindings) → fail when non-zero
 //  3. in-process TrivyToSARIF       → SARIFFile (skipped with no findings)
 //  4. in-process TrivyToGitLabContainer → GitLabReportFile
 //
@@ -126,20 +127,13 @@ func ScanContainer(
 	jsonPath := cmp.Or(in.JSONFile, security.DefaultTrivyContainerJSONFile)
 	sarifPath := cmp.Or(in.SARIFFile, security.DefaultTrivyContainerSARIFFile)
 	gitlabPath := cmp.Or(in.GitLabReportFile, security.DefaultTrivyGitLabContainerFile)
-	severity := cmp.Or(in.Severity, "CRITICAL,HIGH")
 
-	parts := strings.Split(severity, ",")
-	for index, part := range parts {
-		part = strings.ToUpper(strings.TrimSpace(part))
-		switch part {
-		case "UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL":
-			parts[index] = part
-		default:
-			return fmt.Errorf("unsupported container scan severity %q: %w", part, errs.ErrUsage)
-		}
+	gate, err := security.ParseContainerSeverityGate(in.Severity)
+	if err != nil {
+		return err
 	}
 
-	severity = strings.Join(parts, ",")
+	threshold, severity := gate.Threshold(), gate.ReportSeverities()
 
 	ignoreFile, err := resolveIgnoreFile(in.IgnoreFile)
 	if err != nil {
@@ -157,7 +151,8 @@ func ScanContainer(
 
 	_, _ = fmt.Fprintf(out, "🔍 Container vulnerability scan\n")
 	_, _ = fmt.Fprintf(out, "   Image: %s\n", in.ImageRef)
-	_, _ = fmt.Fprintf(out, "   Severity filter: %s\n", severity)
+	_, _ = fmt.Fprintf(out, "   Reported severities: %s\n", severity)
+	_, _ = fmt.Fprintf(out, "   Blocking: %s or above with a fixed package, and unfixed CRITICAL\n", threshold)
 	_, _ = fmt.Fprintf(out, "   Approved findings: %s\n\n", cmp.Or(ignoreFile, "none (no .trivyignore.yaml)"))
 
 	if scanErr := runTrivyContainerScan(ctx, trivy, out, stderr, rawReport, severity, ignoreFile, in.ImageRef, in.OCILayout); scanErr != nil {
@@ -174,7 +169,7 @@ func ScanContainer(
 	}
 	// Only a parsed report with no findings is clean; empty bytes are not a scan.
 	if len(findings.Fixable)+len(findings.Unfixed) == 0 {
-		_, _ = fmt.Fprintf(out, "%s No vulnerabilities found at severity %s or above\n", clicolor.Check(out), severity)
+		_, _ = fmt.Fprintf(out, "%s No vulnerabilities found at severity %s\n", clicolor.Check(out), severity)
 
 		return appenforcement.Findings(out, enforcement.Vulnerabilities, 0)
 	}
@@ -189,22 +184,22 @@ func ScanContainer(
 		ImageRef:     in.ImageRef,
 	}, filepath.Join(workDir, "gitlab.json"), sarifPath, gitlabPath)
 
-	blocking, reported := gateFindings(findings)
-	printFindings(out, blocking, reported, ignoreFile)
+	blocking, reported := gateFindings(gate, findings)
+	printFindings(out, blocking, reported, threshold, ignoreFile)
 
 	if len(reported) != 0 {
-		annot.Warningf("%d container %s at severity %s or above %s no fixed package yet; reported, not blocking",
-			len(reported), plural(len(reported), "vulnerability", "vulnerabilities"), severity, plural(len(reported), "has", "have"))
+		annot.Warningf("%d container %s below the %s threshold or without a fixed package; reported, not blocking",
+			len(reported), plural(len(reported), "vulnerability", "vulnerabilities"), threshold)
 	}
 
 	if len(blocking) == 0 {
-		_, _ = fmt.Fprintf(out, "%s No blocking vulnerabilities at severity %s or above\n", clicolor.Check(out), severity)
+		_, _ = fmt.Fprintf(out, "%s No blocking vulnerabilities (threshold %s)\n", clicolor.Check(out), threshold)
 
 		return appenforcement.Findings(out, enforcement.Vulnerabilities, 0)
 	}
 
-	msg := fmt.Sprintf("Found %d blocking container %s at severity %s or above", len(blocking),
-		plural(len(blocking), "vulnerability", "vulnerabilities"), severity)
+	msg := fmt.Sprintf("Found %d blocking container %s (threshold %s)", len(blocking),
+		plural(len(blocking), "vulnerability", "vulnerabilities"), threshold)
 	_, _ = fmt.Fprintf(out, "Scan report: %s\n", jsonPath)
 	_, _ = fmt.Fprintln(out, "Next: update the affected dependency or pinned base image, rebuild, and rerun the scan before publishing or promoting.")
 	_, _ = fmt.Fprintf(out, "If a fix cannot be deployed, request a reviewed CVE-specific exception in %s with a reason and expiry; the admin policy decides whether these findings block.\n", cmp.Or(ignoreFile, defaultIgnoreFile))
@@ -221,14 +216,20 @@ func ScanContainer(
 }
 
 // gateFindings splits the findings the gate blocks on from those it only
-// reports: a finding with a fixed package blocks, and so does an unfixed
-// CRITICAL, which the ignore file can approve; other unfixed findings are
-// reported. Nothing the consumer can act on passes silently, and nothing it
-// cannot act on stops a release unless it is critical.
-func gateFindings(findings security.TrivyFindings) ([]security.TrivyFinding, []security.TrivyFinding) {
-	blocking := slices.Clone(findings.Fixable)
+// reports: a finding with a fixed package blocks at or above the gate's
+// threshold, and an unfixed CRITICAL blocks whatever the threshold, until the
+// ignore file approves it. Every other finding is reported. Nothing the
+// consumer cannot act on stops a release unless it is critical.
+func gateFindings(gate security.ContainerSeverityGate, findings security.TrivyFindings) ([]security.TrivyFinding, []security.TrivyFinding) {
+	var blocking, reported []security.TrivyFinding
 
-	var reported []security.TrivyFinding
+	for _, finding := range findings.Fixable {
+		if gate.Blocks(finding.Severity) {
+			blocking = append(blocking, finding)
+		} else {
+			reported = append(reported, finding)
+		}
+	}
 
 	for _, finding := range findings.Unfixed {
 		if finding.Severity == "CRITICAL" {
@@ -246,8 +247,8 @@ func gateFindings(findings security.TrivyFindings) ([]security.TrivyFinding, []s
 const maxReportedLines = 20
 
 // printFindings lists what blocks the release and why, then what is only
-// reported, one finding per line.
-func printFindings(out io.Writer, blocking, reported []security.TrivyFinding, ignoreFile string) {
+// reported and why not, one finding per line.
+func printFindings(out io.Writer, blocking, reported []security.TrivyFinding, threshold, ignoreFile string) {
 	approve := cmp.Or(ignoreFile, defaultIgnoreFile)
 
 	if len(blocking) != 0 {
@@ -273,7 +274,7 @@ func printFindings(out io.Writer, blocking, reported []security.TrivyFinding, ig
 	}
 
 	if len(reported) != 0 {
-		_, _ = fmt.Fprintf(out, "Not blocking, no fixed package yet: %d\n", len(reported))
+		_, _ = fmt.Fprintf(out, "Reported, not blocking: %d\n", len(reported))
 
 		for index, finding := range reported {
 			if index == maxReportedLines {
@@ -282,7 +283,12 @@ func printFindings(out io.Writer, blocking, reported []security.TrivyFinding, ig
 				break
 			}
 
-			_, _ = fmt.Fprintf(out, "   %-8s  %-20s  %s %s\n", finding.Severity, finding.ID, finding.Package, finding.Installed)
+			reason := "no fixed package yet"
+			if finding.Fixed != "" {
+				reason = "fixed in " + finding.Fixed + "; below the " + threshold + " threshold"
+			}
+
+			_, _ = fmt.Fprintf(out, "   %-8s  %-20s  %s %s  (%s)\n", finding.Severity, finding.ID, finding.Package, finding.Installed, reason)
 		}
 
 		_, _ = fmt.Fprintln(out)

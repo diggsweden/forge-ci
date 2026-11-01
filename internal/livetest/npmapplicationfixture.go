@@ -299,7 +299,7 @@ func npmFixtureFiles(recipeDirectory, workflow string, oracle []byte, developmen
 		name = forgejoDevelopmentWorkflow
 	}
 
-	files := map[string]string{name: workflow, ".forge-ci/npm-oracle.sh": string(oracle), ".forge-ci/npm-application.yml": "artifacts:\n  - name: application\n    project-type: npm\n    working-directory: .\ncontainers:\n  - name: application\n    container-file: Containerfile\n    context: .\n    platforms: linux/amd64\n    enable-scan: false\n    enable-slsa: false\n"}
+	files := map[string]string{name: workflow, ".forge-ci/npm-oracle.sh": string(oracle), ".forge-ci/npm-application.yml": "artifacts:\n  - name: application\n    project-type: npm\n    working-directory: .\ncontainers:\n  - name: application\n    container-file: Containerfile\n    context: .\n    platforms: linux/amd64\n    enable-slsa: false\n"}
 
 	if !development {
 		if err := readNPMChangelogInputs(recipeDirectory, files); err != nil {

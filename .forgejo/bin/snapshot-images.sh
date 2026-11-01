@@ -122,14 +122,13 @@ snapshot_build() {
 }
 
 snapshot_evidence_tools() {
-	local name=$1 scan sbom
-	scan=$(snapshot_engine container snapshot-images read-plan --plan snapshot-plan.json --name "${name}" --field scan) || return
+	local name=$1 sbom
 	sbom=$(snapshot_engine container snapshot-images read-plan --plan snapshot-plan.json --name "${name}" --field sbom) || return
-	if [ "${scan}" = true ]; then
-		# shellcheck source=scripts/bootstrap/install-trivy.sh
-		source "${SNAPSHOT_HELPERS:?}/scripts/bootstrap/install-trivy.sh"
-		install_trivy
-	fi
+	# Every published image is scanned; the administrator policy in the engine
+	# decides whether findings block.
+	# shellcheck source=scripts/bootstrap/install-trivy.sh
+	source "${SNAPSHOT_HELPERS:?}/scripts/bootstrap/install-trivy.sh"
+	install_trivy
 	if [ "${sbom}" = true ]; then
 		# shellcheck source=scripts/bootstrap/install-syft.sh
 		source "${SNAPSHOT_HELPERS:?}/scripts/bootstrap/install-syft.sh"

@@ -77,6 +77,65 @@ func TestPublishedLayoutScanCannotLosePrerequisiteOrReports(t *testing.T) {
 	}
 }
 
+// Snapshot images publish too: their providers install the scanner for every
+// image, whatever the plan's legacy scan field says, and the engine scans.
+func TestSnapshotPublicationAlwaysInstallsTheScanner(t *testing.T) {
+	t.Parallel()
+
+	root := reporoot.Path(t)
+
+	github, err := os.ReadFile(filepath.Join(root, ".github/workflows/snapshot-images.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var workflow struct {
+		Jobs map[string]struct {
+			Steps []struct {
+				Name string            `yaml:"name"`
+				If   string            `yaml:"if"`
+				Env  map[string]string `yaml:"env"`
+				Run  string            `yaml:"run"`
+			} `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal(github, &workflow); err != nil {
+		t.Fatal(err)
+	}
+
+	checked := false
+
+	for _, job := range workflow.Jobs {
+		for _, step := range job.Steps {
+			if step.Name != "Install configured evidence tools" {
+				continue
+			}
+
+			checked = true
+
+			if step.If != "" || step.Env["SCAN"] != "" || !strings.Contains(step.Run, "install_trivy") || strings.Contains(step.Run, "SCAN") {
+				t.Fatalf("the snapshot scanner install is conditional: if=%q env=%v run=%s", step.If, step.Env, step.Run)
+			}
+		}
+	}
+
+	if !checked {
+		t.Fatal("no GitHub snapshot evidence-tools step was checked")
+	}
+
+	forgejo, err := os.ReadFile(filepath.Join(root, ".forgejo/bin/snapshot-images.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, tools, found := strings.Cut(string(forgejo), "snapshot_evidence_tools() {")
+	tools, _, _ = strings.Cut(tools, "\n}\n")
+
+	if !found || strings.Contains(tools, "--field scan") || !strings.Contains(tools, "\tinstall_trivy\n") {
+		t.Fatalf("the Forgejo/GitLab snapshot scanner install is conditional:\n%s", tools)
+	}
+}
+
 func TestRuntimePublicationInstallsScannerBeforeItsMandatoryGate(t *testing.T) {
 	t.Parallel()
 

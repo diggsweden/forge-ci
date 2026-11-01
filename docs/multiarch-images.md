@@ -119,7 +119,9 @@ Index verification does not execute either architecture's code.
 ## Compose the index SBOM
 
 For staged builds, `container multiarch-image assemble --from-layouts` can
-perform this composition directly. Alongside `--scan-output-template` and
+perform this composition directly. `--from-layouts` always scans: it requires
+`--scan-output-template`, and the administrator policy decides whether findings
+block. Alongside `--scan-output-template` and
 `--sbom-output-template`, pass `--manifest-output`, `--index-sbom-output` and
 `--sbom-url-prefix`. The prefix is the public HTTPS directory where the caller
 will publish the unchanged platform inventories. The operation scans the staged
@@ -127,7 +129,7 @@ bytes before any upload and uses their recorded child digests and the checked
 served index to compose the index BOM without re-pulling images. It emits
 `image-sbom-sha256` for the ledger pin. Evidence destinations must be distinct
 and must not overwrite authentication or staged image inputs. The shared
-`release-images.yml` uses this path for scanned release images.
+`release-images.yml` uses this path for every release image.
 
 For evidence produced separately, the existing offline command below remains
 available.

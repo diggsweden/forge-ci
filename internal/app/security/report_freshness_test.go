@@ -220,7 +220,7 @@ func TestScanFreshness_SupportedSeverityIsNormalised(t *testing.T) {
 	root := t.TempDir()
 
 	scanner := &scanRecorder{run: func(_ context.Context, args []string) (int, error) {
-		require.Equal(t, "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL", reportFlag(args, "--severity"))
+		require.Equal(t, "CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN", reportFlag(args, "--severity"))
 
 		return 0, os.WriteFile(scanOutput(args), []byte(`{"ArtifactName":"clean-native-report"}`), 0600)
 	}}

@@ -909,7 +909,7 @@ EXAMPLES:
 
    # Build, scan the exported layout, then push it by digest
    forge-ci container build --mode push-by-digest --image-ref ghcr.io/org/app \
-     --platform linux/amd64 --scan --scan-severity CRITICAL,HIGH
+     --platform linux/amd64 --scan --scan-severity HIGH
 ```
 
 | Flag | Description | Type | Default | Env vars |
@@ -930,7 +930,7 @@ EXAMPLES:
 | `--output-dir` | destination for local export, or a fresh directory for oci mode | string | `""` | `$OUTPUT_DIR` |
 | `--digest-key` | OutputSink key for the pushed digest (push-by-digest mode) | string | `"digest"` | `$DIGEST_KEY` |
 | `--scan` | scan the exported layout before pushing or retaining it; fail on fixable findings at/above --scan-severity and on unfixed CRITICAL findings .trivyignore.yaml does not approve (push-by-digest and oci modes) | bool | `false` | `$ENABLE_SCAN` |
-| `--scan-severity` | trivy severity filter and gate threshold | string | `"CRITICAL,HIGH"` | `$SCAN_SEVERITY` |
+| `--scan-severity` | blocking threshold for fixable findings (a level or comma-list whose lowest entry counts); the scan always reports down to HIGH | string | `"CRITICAL"` | `$SCAN_SEVERITY` |
 | `--trivy-version` | version embedded in the GitLab container-scanning report | string | `""` | `$TRIVY_VERSION` |
 | `--image-builder` | image builder type: buildah (default; rootless, needs user namespaces) or kaniko (for a pool that denies them; runs as root in the job image CI_IMAGE_BUILDER_JOB_IMAGE names, builds to a layout only, no load/local modes, no build secrets). Set CI_IMAGE_BUILDER on the repository to select it. | string | `"buildah"` | `$CI_IMAGE_BUILDER` |
 | `--kaniko-executor` | path of the kaniko executor (default /kaniko/executor) | string | `""` | `$KANIKO_EXECUTOR` |
@@ -947,8 +947,9 @@ RUN steps for the target platform (for example COPY-only images over
 prebuilt per-architecture artifacts, or RUN only in FROM --platform=$BUILDPLATFORM
 stages). An image whose target stages have RUN steps would run them under CPU
 emulation for every non-native platform; build it with container
-multiarch-image, one native job per architecture, instead. With
---scan-output-template, every exported platform must pass Trivy before publication.
+multiarch-image, one native job per architecture, instead. Publication always
+scans: --scan-output-template is required, every exported platform is scanned
+before publication, and the administrator policy decides whether findings block.
 Emits image, verified digest and platforms outputs; platforms is the comma-separated
 list that was built, in plan order. Release consumers normally use release-images.yml.
 Every flag may also be fed from the $FORGE_CI_PLAN plan file under the "container build-push-oci-image"
@@ -972,7 +973,7 @@ scope (flag > plan > env > default).
 | `--version` | org.opencontainers.image.version; defaults to --tag | string | `""` | `$OCI_LABEL_VERSION` |
 | `--revision` | org.opencontainers.image.revision; defaults to git rev-parse HEAD | string | `""` | `$OCI_LABEL_REVISION` |
 | `--auth-file` | registry auth file for builds, export and OCI publication | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
-| `--scan-output-template` | scan every exported platform before publication; Trivy JSON path must contain {arch} or {platform} | string | `""` | `$SCAN_OUTPUT_TEMPLATE` |
+| `--scan-output-template` | required: scan every exported platform before publication; Trivy JSON path must contain {arch} or {platform} | string | `""` | `$SCAN_OUTPUT_TEMPLATE` |
 | `--tls-verify` | verify registry TLS certificates: true or false | string | `"true"` | `$BUILD_PUSH_TLS_VERIFY` |
 | `--server-url` | forge server URL used to derive defaults and source labels | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo used to derive defaults and source labels | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
@@ -1573,12 +1574,12 @@ outputs.
 | `--tag-prefix` | prefix prepended to the source-SHA image and manifest tags (e.g. signer-) | string | `""` | `$IMAGE_TAG_PREFIX` |
 | `--tag` | explicit index tag name instead of tag-prefix + source-sha; architecture tags append -<arch>; mutually exclusive with tag-prefix | string | `""` | n/a |
 | `--name` | basename for the per-arch/manifest metadata files and dirs shared across the two phases | string | `"image"` | `$IMAGE_METADATA_NAME` |
-| `--from-layouts` | verify all staged architecture layouts before any upload, then publish and assemble; requires a successful whole-matrix dependency | bool | `false` | n/a |
+| `--from-layouts` | verify and scan all staged architecture layouts before any upload, then publish and assemble; requires --scan-output-template and a successful whole-matrix dependency | bool | `false` | n/a |
 | `--archs` | newline-separated architectures to include | string | `"amd64\narm64"` | `$IMAGE_ARCHS` |
 | `--require-label` | required child config label as key=value (repeatable); checked before any upload | string | `""` | n/a |
 | `--manifest-output` | optional file for exact verified index bytes, suitable for sbom index --index-file; '-' is not supported | string | `""` | n/a |
 | `--metadata-dir` | directory for <name>.json (default <name>-dist) | string | `""` | `$IMAGE_METADATA_DIR` |
-| `--scan-output-template` | with --from-layouts: scan every staged architecture before any upload and refuse publication on a finding the container gate blocks; Trivy JSON path must contain {arch} or {platform} | string | `""` | n/a |
+| `--scan-output-template` | required with --from-layouts: scan every staged architecture before any upload; a finding the container gate blocks refuses publication under an enforcing administrator policy; Trivy JSON path must contain {arch} or {platform} | string | `""` | n/a |
 | `--sbom-output-template` | with --from-layouts and --scan-output-template: generate per-architecture CycloneDX SBOMs from the staged bytes before upload; path must contain {arch} or {platform} | string | `""` | n/a |
 | `--index-sbom-output` | with staged inventories and --manifest-output: write an index SBOM binding every selected platform; emits image-sbom-sha256 | string | `""` | n/a |
 | `--sbom-url-prefix` | public HTTPS directory where the unchanged platform inventories will be published; required with --index-sbom-output | string | `""` | n/a |
@@ -1862,7 +1863,7 @@ When RELEASE_PLATFORMS is set, the resolved plan must already match it; the
 engine refuses a different frozen selection rather than silently rewriting it.
 
 Declared features the release-images workflow does not carry out (build
-secrets, binary extraction, another scan threshold than its CRITICAL,HIGH gate,
+secrets, binary extraction, another scan threshold than its default CRITICAL gate,
 platforms other than linux/amd64 and linux/arm64) are refused here, before any
 runner starts. RELEASE_PLATFORMS narrows every container's platforms.
 
@@ -4308,7 +4309,7 @@ run `trivy image`, derive SARIF/GitLab reports, and fail on fixable or unapprove
 
 ```
 EXAMPLES:
-   # Scan a digest-pinned image, failing on HIGH+ findings
+   # Scan a digest-pinned image, also blocking on fixable HIGH findings
    forge-ci security scan container \
      --image-ref ghcr.io/owner/app@sha256:… --fail-on-severity HIGH
 
@@ -4323,7 +4324,7 @@ EXAMPLES:
 | `--json-file` | destination path for the raw trivy JSON findings | string | `"trivy-results.json"` | `$CONTAINER_JSON_FILE` |
 | `--sarif-file` | destination path for the trivy SARIF findings | string | `"trivy-results.sarif"` | `$CONTAINER_SARIF_FILE` |
 | `--gitlab-report-file` | destination path for the GitLab container-scanning report | string | `"gl-container-scanning-report.json"` | `$CONTAINER_GITLAB_REPORT_FILE` |
-| `--fail-on-severity` | trivy --severity filter and gate threshold: a finding at this level or above fails the scan when a fixed package exists, an unfixed CRITICAL fails it unless approved, other unfixed findings are reported (comma-list, e.g. 'CRITICAL,HIGH'; narrow to 'CRITICAL' to relax) | string | `"CRITICAL,HIGH"` | `$CONTAINER_FAIL_ON_SEVERITY` |
+| `--fail-on-severity` | blocking threshold: a finding at this level or above fails the scan when a fixed package exists, an unfixed CRITICAL fails it unless approved, everything else is reported; HIGH is always reported (a level or comma-list whose lowest entry counts, e.g. 'CRITICAL,HIGH' blocks at HIGH) | string | `"CRITICAL"` | `$CONTAINER_FAIL_ON_SEVERITY` |
 | `--ignore-file` | Trivy ignore file approving findings, with reasons and expiry (default: .trivyignore.yaml when present) | string | `""` | `$CONTAINER_IGNORE_FILE` |
 | `--trivy-version` | trivy version string embedded in the SARIF / GitLab report | string | `""` | `$TRIVY_VERSION` |
 

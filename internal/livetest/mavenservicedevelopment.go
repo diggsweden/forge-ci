@@ -117,7 +117,7 @@ func mavenServiceDevelopmentFixture(ctx context.Context, source Consumer, config
 	}
 	// A container-only declaration deliberately creates no unused Maven producer.
 	// Maven's original checked app lifecycle runs once in the separate check job.
-	declaration := "containers:\n  - name: service\n    container-file: Containerfile\n    context: .\n    platforms: linux/amd64\n    enable-scan: false\n    enable-slsa: false\n"
+	declaration := "containers:\n  - name: service\n    container-file: Containerfile\n    context: .\n    platforms: linux/amd64\n    enable-slsa: false\n"
 	for path, text := range map[string]string{
 		forgejoDevelopmentWorkflow:          workflow,
 		".forge-ci/service-development.yml": declaration,

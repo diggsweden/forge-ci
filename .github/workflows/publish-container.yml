@@ -164,9 +164,9 @@ on:
         default: true
         type: boolean
       scan-severity:
-        description: "Trivy severity filter, default CRITICAL,HIGH. Admin policy controls enforcement; enable-scan=false cannot skip scan execution."
+        description: "Blocking threshold for fixable findings, default CRITICAL (a comma-list blocks at its lowest entry, e.g. CRITICAL,HIGH). HIGH is always reported. Admin policy controls enforcement; enable-scan=false cannot skip scan execution."
         required: false
-        default: "CRITICAL,HIGH"
+        default: "CRITICAL"
         type: string
       registry:
         description: "Container registry"

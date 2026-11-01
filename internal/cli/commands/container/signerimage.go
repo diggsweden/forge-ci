@@ -152,12 +152,12 @@ that every source image is digest-pinned under the expected repository, assemble
 the multi-arch manifest, and emits image-ref, image-digest, and image-tag
 outputs.`,
 		Flags: append(append(signerImageCommonFlags(), multiarchImageParamFlags()...),
-			&cli.BoolFlag{Name: "from-layouts", Usage: "verify all staged architecture layouts before any upload, then publish and assemble; requires a successful whole-matrix dependency"},
+			&cli.BoolFlag{Name: "from-layouts", Usage: "verify and scan all staged architecture layouts before any upload, then publish and assemble; requires --scan-output-template and a successful whole-matrix dependency"},
 			multiarchImageArchsFlag(),
 			&cli.StringSliceFlag{Name: flagRequireLabel, Usage: "required child config label as key=value (repeatable); checked before any upload"},
 			&cli.StringFlag{Name: flagManifestOutput, Usage: "optional file for exact verified index bytes, suitable for sbom index --index-file; '-' is not supported"},
 			&cli.StringFlag{Name: flagMetadataDir, Sources: cli.EnvVars("IMAGE_METADATA_DIR"), Usage: "directory for <name>.json (default <name>-dist)"},
-			&cli.StringFlag{Name: "scan-output-template", Usage: "with --from-layouts: scan every staged architecture before any upload and refuse publication on a finding the container gate blocks; Trivy JSON path must contain {arch} or {platform}"},
+			&cli.StringFlag{Name: "scan-output-template", Usage: "required with --from-layouts: scan every staged architecture before any upload; a finding the container gate blocks refuses publication under an enforcing administrator policy; Trivy JSON path must contain {arch} or {platform}"},
 			&cli.StringFlag{Name: "sbom-output-template", Usage: "with --from-layouts and --scan-output-template: generate per-architecture CycloneDX SBOMs from the staged bytes before upload; path must contain {arch} or {platform}"},
 			&cli.StringFlag{Name: "index-sbom-output", Usage: "with staged inventories and --manifest-output: write an index SBOM binding every selected platform; emits image-sbom-sha256"},
 			&cli.StringFlag{Name: "sbom-url-prefix", Usage: "public HTTPS directory where the unchanged platform inventories will be published; required with --index-sbom-output"},
@@ -209,8 +209,8 @@ outputs.`,
 				if cmd.Bool("from-layouts") {
 					_, err := appcontainer.PublishAndAssembleSignerImage(ctx, registry, dep.OutputSink, dep.SummarySink, os.Stderr, input)
 					if err == nil && cmd.String("index-sbom-output") == "" {
-						// Keep the reusable workflow output defined for base images
-						// and scan-disabled callers as well as release index BOMs.
+						// Keep the reusable workflow output defined for base images,
+						// which carry no index BOM, as well as release index BOMs.
 						return dep.OutputSink.Set(ctx, "image-sbom-sha256", "")
 					}
 
@@ -242,6 +242,13 @@ func validateSignerAssemblyFlags(cmd *cli.Command) error {
 
 	if scanTemplate != "" && !cmd.Bool("from-layouts") {
 		return fmt.Errorf("--scan-output-template scans staged layouts and needs --from-layouts: %w", errs.ErrUsage)
+	}
+
+	// Publishing staged layouts is a publish route like any other: the
+	// layouts are always scanned, and the administrator policy decides
+	// whether findings block.
+	if cmd.Bool("from-layouts") && scanTemplate == "" {
+		return fmt.Errorf("--from-layouts publishes staged layouts, which are always scanned: pass --scan-output-template; the administrator policy decides whether findings block: %w", errs.ErrUsage)
 	}
 
 	return nil

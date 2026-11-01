@@ -79,7 +79,6 @@ func TestReadImageBuildPlan_RefusesIncompleteOrInconsistentPublication(t *testin
 		"malformed provenance":           func(p *pipeline.ReleaseImagesPlan) { p.Images[0].ProvenanceJSON = "{" },
 		"unsafe derived SBOM flavor":     func(p *pipeline.ReleaseImagesPlan) { p.Images[0].Flavor = "../../../escape" },
 		"invalid builder material":       func(p *pipeline.ReleaseImagesPlan) { p.Builds[0].BuilderMaterialID = "not-a-digest" },
-		"base scan bypass":               func(p *pipeline.ReleaseImagesPlan) { p.Images[0].Scan = false },
 		"unbound cache":                  func(p *pipeline.ReleaseImagesPlan) { p.Images[0].CacheTagPrefix = "cache-arch-core" },
 		"foreign cache":                  func(p *pipeline.ReleaseImagesPlan) { p.Builds[0].CacheTag = "registry.invalid/other:cache" },
 	} {
@@ -129,7 +128,7 @@ func TestReadImageBuildPlan_RejectsUnknownFieldsAndTrailingDocuments(t *testing.
 	}
 }
 
-func TestReadImageBuildPlan_ScansByDefaultAndPreservesExplicitOptOut(t *testing.T) {
+func TestReadImageBuildPlan_ScansByDefaultAndOverridesExplicitOptOut(t *testing.T) {
 	t.Parallel()
 
 	ordinary, err := pipeline.PlanReleaseImages(plannedContainers(t, "  - name: app\n"), releaseImagesInput())
@@ -158,7 +157,17 @@ func TestReadImageBuildPlan_ScansByDefaultAndPreservesExplicitOptOut(t *testing.
 	require.NoError(t, err)
 	plan, err = pipeline.ReadImageBuildPlan(string(body), "ghcr.io/acme/app", "v1.2.3")
 	require.NoError(t, err)
-	require.False(t, plan.Images[0].Scan)
+	require.True(t, plan.Images[0].Scan, "an explicit scan opt-out must not skip the publication gate")
+	require.Equal(t, []string{plan.Images[0].Name}, plan.IgnoredScanOptOuts)
+
+	// A base image's opt-out is overridden the same way.
+	base := resolvedBasePlan()
+	base.Images[0].Scan = false
+	body, err = json.Marshal(base)
+	require.NoError(t, err)
+	plan, err = pipeline.ReadImageBuildPlan(string(body), "ghcr.io/acme/app-base", "v1.2.3")
+	require.NoError(t, err)
+	require.True(t, plan.Images[0].Scan)
 }
 
 func TestReadImageBuildPlan_NormalizesArchitectureTransport(t *testing.T) {

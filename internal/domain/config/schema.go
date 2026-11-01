@@ -198,11 +198,13 @@ type Container struct {
 	// distinguish "unset" (nil) from "explicitly false" — both default to
 	// true (per the publish-container.yml input defaults), but an explicit
 	// `false` must reach the workflow as a per-container override.
+	// EnableScan is a legacy input: false cannot disable the scan of an
+	// exported/published layout or administrator enforcement.
 	EnableSLSA *bool `yaml:"enable-slsa,omitempty"`
 	EnableScan *bool `yaml:"enable-scan,omitempty"`
-	// ScanSeverity narrows the trivy --severity filter (and the gate
-	// threshold) for this container. Empty → use the workflow default
-	// (CRITICAL,HIGH). Set per-container to relax / tighten the gate.
+	// ScanSeverity is this container's scan blocking threshold: a level, or
+	// a comma-list whose least severe entry counts. Empty → the default
+	// (CRITICAL). The scan reports down to HIGH whatever the threshold.
 	ScanSeverity string            `yaml:"scan-severity,omitempty"`
 	BuildArgs    map[string]string `yaml:"build-args,omitempty"`
 	// BuildSecrets lists the GHA secret names that should be forwarded

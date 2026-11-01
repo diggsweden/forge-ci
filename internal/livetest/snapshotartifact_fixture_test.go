@@ -36,7 +36,6 @@ containers:
     container-file: Containerfile
     context: .
     platforms: linux/amd64
-    enable-scan: false
     enable-slsa: false
 `
 const snapshotArtifactContainerfile = "FROM scratch\nCOPY --chmod=0755 dist/linux-amd64/canary-linux-amd64 /canary\nENTRYPOINT [\"/canary\"]\n"
@@ -88,7 +87,7 @@ func checkSnapshotArtifactEvidence(planBytes, resultBytes, inventoryBytes []byte
 	branchHash := fmt.Sprintf("%x", sha256.Sum256([]byte(snapshotArtifactBranch)))
 	suffix := "-feature-artifact-source-" + branchHash[:16] + "-" + source[:7] + "-snapshot"
 
-	if !plan.Enabled || plan.SourceSHA != source || plan.SourceBranch != snapshotArtifactBranch || !strings.HasSuffix(plan.Tag, suffix) || len(plan.Artifacts) != 1 || len(plan.Builds) != 1 || len(plan.Images) != 1 || plan.Builds[0].Arch != "amd64" || len(plan.Builds[0].RequiredArtifacts) != 1 || plan.Images[0].Scan || plan.Images[0].SBOM || len(receipts) != 1 {
+	if !plan.Enabled || plan.SourceSHA != source || plan.SourceBranch != snapshotArtifactBranch || !strings.HasSuffix(plan.Tag, suffix) || len(plan.Artifacts) != 1 || len(plan.Builds) != 1 || len(plan.Images) != 1 || plan.Builds[0].Arch != "amd64" || len(plan.Builds[0].RequiredArtifacts) != 1 || !plan.Images[0].Scan || plan.Images[0].SBOM || len(receipts) != 1 {
 		return fail()
 	}
 
@@ -180,7 +179,9 @@ func TestSnapshotArtifactFixtureSeparatesSelectedSource(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(cfg.Artifacts) != 1 || len(cfg.Containers) != 1 || cfg.Containers[0].EnableScan == nil || *cfg.Containers[0].EnableScan || cfg.Containers[0].EnableAnalyzedContainerSBOM {
-		t.Fatal("fixture must declare exactly one Go producer with scan/SBOM explicitly disabled")
+	// Published images are always scanned, so the fixture declares no scan
+	// opt-out; only the image SBOM is off.
+	if len(cfg.Artifacts) != 1 || len(cfg.Containers) != 1 || cfg.Containers[0].EnableScan != nil || cfg.Containers[0].EnableAnalyzedContainerSBOM {
+		t.Fatal("fixture must declare exactly one Go producer, no scan opt-out and the image SBOM disabled")
 	}
 }

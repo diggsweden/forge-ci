@@ -45,6 +45,48 @@ func TestMatrixPolicyAndNameResolution(t *testing.T) {
 	}
 }
 
+// A published snapshot image is always scanned: the plan overrides a legacy
+// enable-scan: false and names it, and a frozen plan without the scan is
+// refused.
+func TestEveryPlannedImageIsScanned(t *testing.T) {
+	tag, err := version.ComposeSnapshotContainerTag("1.2.3", "manual-branch", "aaaaaaa")
+	require.NoError(t, err)
+
+	plan, err := snapshotimage.New(pipeline.ConfigPlan{Containers: pipeline.ContainerSets{All: []pipeline.PlannedContainer{{Name: "app", ContainerFile: "Containerfile", Context: ".", Platforms: "linux/amd64", EnableScan: false}}}}, snapshotimage.Input{SourceSHA: strings.Repeat("a", 40), SourceBranch: "manual-branch", Tag: tag, ImageRepository: "registry.example/team/app", Publish: true})
+	require.NoError(t, err)
+	require.True(t, plan.Images[0].Scan)
+	require.Equal(t, []string{"app"}, plan.IgnoredScanOptOuts)
+
+	plan.Images[0].Scan = false
+	require.ErrorContains(t, plan.Validate(), "without its scan")
+}
+
+// The snapshot plan reads scan-severity with the scan's own parser and records
+// the normalised blocking threshold; a frozen plan without one is refused.
+func TestScanSeverityIsTheNormalisedThreshold(t *testing.T) {
+	tag, err := version.ComposeSnapshotContainerTag("1.2.3", "manual-branch", "aaaaaaa")
+	require.NoError(t, err)
+
+	plan := func(severity string) (snapshotimage.Plan, error) {
+		return snapshotimage.New(pipeline.ConfigPlan{Containers: pipeline.ContainerSets{All: []pipeline.PlannedContainer{{Name: "app", ContainerFile: "Containerfile", Context: ".", Platforms: "linux/amd64", EnableScan: true, ScanSeverity: severity}}}}, snapshotimage.Input{SourceSHA: strings.Repeat("a", 40), SourceBranch: "manual-branch", Tag: tag, ImageRepository: "registry.example/team/app", Publish: true})
+	}
+
+	for severity, want := range map[string]string{"": "CRITICAL", "critical": "CRITICAL", "CRITICAL, high": "HIGH", "medium": "MEDIUM"} {
+		p, err := plan(severity)
+		require.NoError(t, err, severity)
+		require.Equal(t, want, p.Images[0].Severity, severity)
+	}
+
+	_, err = plan("CRITICAL,SEVERE")
+	require.ErrorContains(t, err, "unsupported snapshot scan severity")
+
+	p, err := plan("")
+	require.NoError(t, err)
+
+	p.Images[0].Severity = ""
+	require.Error(t, p.Validate())
+}
+
 func TestFrozenImageTagsRejectCoordinatedBuildAndImageMutation(t *testing.T) {
 	for _, branch := range []string{"manual-branch", strings.Repeat("long-branch-", 40)} {
 		for _, suffix := range []string{"", "-slim"} {

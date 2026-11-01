@@ -147,9 +147,9 @@ func TestBuildAndScan_NoScanWhenNoDigest(t *testing.T) {
 	}
 }
 
-// The severity a caller configures is both the trivy `--severity` filter and
-// the fail-on threshold, so it decides which findings are reported AND which
-// ones fail the build. `containers[].scan-severity` in an adopter's
+// The severity a caller configures is the blocking threshold, and the trivy
+// `--severity` filter is derived from it: every level down to HIGH, or down to
+// the threshold when it is lower. `containers[].scan-severity` in an adopter's
 // artifacts.yml reaches trivy through here.
 //
 // What the tests above check is that a scan ran and was anchored to
@@ -164,9 +164,10 @@ func TestBuildAndScan_ForwardsTheExactRequestedSeverity(t *testing.T) {
 		want      string
 		why       string
 	}{
-		{"the default gate", "CRITICAL,HIGH", "CRITICAL,HIGH", "what an adopter gets without configuring anything"},
-		{"a narrowed gate", "CRITICAL", "CRITICAL", "relaxing the gate is a deliberate per-container choice"},
-		{"a widened gate", "CRITICAL,HIGH,MEDIUM,LOW", "CRITICAL,HIGH,MEDIUM,LOW", "every level survives, in order"},
+		{"the default gate", "CRITICAL", "CRITICAL,HIGH", "blocking on CRITICAL only must not hide HIGH findings"},
+		{"the former default gate", "CRITICAL,HIGH", "CRITICAL,HIGH", "an existing configuration keeps blocking at HIGH"},
+		{"a widened gate", "CRITICAL,HIGH,MEDIUM,LOW", "CRITICAL,HIGH,MEDIUM,LOW", "every level down to the threshold is reported"},
+		{"a single lower threshold", "MEDIUM", "CRITICAL,HIGH,MEDIUM", "a threshold blocks at that level and above, so reports them all"},
 		{"unset falls back to the documented default", "", "CRITICAL,HIGH", "an empty value must not become an empty filter, which trivy reads as no filter"},
 		{"lowercase is normalised, not rejected", "critical,high", "CRITICAL,HIGH", "trivy matches these case-sensitively"},
 		{"surrounding spaces are trimmed", "CRITICAL , HIGH", "CRITICAL,HIGH", "a comma-list written by a human"},

@@ -35,6 +35,32 @@ func TestMultiarchCommandRejectsConflictingTagAndMalformedLabelsBeforeIO(t *test
 	require.ErrorIs(t, err, errs.ErrUsage)
 }
 
+// Publishing staged layouts always scans them; the caller cannot leave the
+// scan out, and the administrator policy decides whether findings block.
+func TestMultiarchAssembleFromLayoutsRequiresTheScan(t *testing.T) {
+	auth := filepath.Join(t.TempDir(), "auth.json")
+	require.NoError(t, os.WriteFile(auth, []byte(`{"auths":{}}`), 0o600))
+
+	err := containercmd.New().Run(t.Context(), []string{"container", "multiarch-image", "assemble", "--from-layouts",
+		"--auth-file", auth, "--source-sha", strings.Repeat("a", 40), "--server-url", "https://forge.invalid",
+		"--repository", "acme/widget", "--image-repository", "registry.invalid/acme/widget", "--tag", "staging-v1.2.3",
+		"--name", "widget", "--archs", "amd64"})
+	require.ErrorIs(t, err, errs.ErrUsage)
+	require.Contains(t, err.Error(), "--scan-output-template")
+	require.Contains(t, err.Error(), "administrator policy")
+}
+
+// build-push-oci-image publishes a final tag, so it scans like every other
+// publish route; leaving the scan out is a usage error, refused before a build.
+func TestBuildPushOCIImageRequiresTheScan(t *testing.T) {
+	err := containercmd.New().Run(t.Context(), []string{"container", "build-push-oci-image",
+		"--tag", "v1.2.3", "--containerfile", "Containerfile", "--builds-json", `[{"platform":"linux/amd64"}]`,
+		"--image", "registry.invalid/acme/widget", "--server-url", "https://forge.invalid", "--repository", "acme/widget"})
+	require.ErrorIs(t, err, errs.ErrUsage)
+	require.Contains(t, err.Error(), "--scan-output-template")
+	require.Contains(t, err.Error(), "administrator policy")
+}
+
 func TestMultiarchCommandsRejectStdoutSnapshotsBeforeReadingMetadata(t *testing.T) {
 	auth := filepath.Join(t.TempDir(), "auth.json")
 	require.NoError(t, os.WriteFile(auth, []byte(`{"auths":{}}`), 0o600))

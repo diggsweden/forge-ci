@@ -24,7 +24,8 @@ type BuildAndScanInput struct {
 	// EnableScan is retained for callers; false cannot disable admin-required
 	// scan execution for exported/published layouts.
 	EnableScan bool
-	// ScanSeverity is the trivy --severity filter AND fail-on threshold.
+	// ScanSeverity is the scan's blocking threshold; see
+	// appsecurity.ScanContainerInput.Severity.
 	ScanSeverity string
 	// TrivyVersion is embedded in the GitLab container-scanning report.
 	TrivyVersion string
