@@ -547,15 +547,15 @@ func TestResolveImageRegistry_DerivesTheForeignRegistryFromTheHost(t *testing.T)
 func TestRegistryLoginUser_DefaultsToTheOwnerOnTheForgeOnly(t *testing.T) {
 	t.Parallel()
 
-	got, err := registryLoginUser("", "owner/app", imageRegistry{Host: "forge.example"})
+	got, err := registryLoginUser("", "owner/app", imageRegistry{Host: "forge.example"}, releaseUserSettings)
 	require.NoError(t, err)
 	require.Equal(t, "owner", got)
 
-	got, err = registryLoginUser("someone", "owner/app", imageRegistry{Host: "ghcr.io", Foreign: true})
+	got, err = registryLoginUser("someone", "owner/app", imageRegistry{Host: "ghcr.io", Foreign: true}, releaseUserSettings)
 	require.NoError(t, err)
 	require.Equal(t, "someone", got)
 
-	_, err = registryLoginUser("", "owner/app", imageRegistry{Host: "ghcr.io", Foreign: true})
+	_, err = registryLoginUser("", "owner/app", imageRegistry{Host: "ghcr.io", Foreign: true}, releaseUserSettings)
 	require.ErrorIs(t, err, errs.ErrUsage)
 	require.ErrorContains(t, err, "registry-user")
 	require.ErrorContains(t, err, "ghcr.io")
@@ -576,4 +576,39 @@ func TestRegistryForLogin_ReducesARepositoryToItsHost(t *testing.T) {
 		require.NoError(t, err, registry)
 		require.Equal(t, want, got, registry)
 	}
+}
+
+// A login without a user takes the rule every image verb shares: the
+// repository owner on the forge's own registry only. A consumer's own
+// registry-login step then needs no user variable, and a foreign registry
+// is never sent the forge owner's name.
+func TestLoginUser_DefaultsToTheOwnerOnTheForgesOwnRegistryOnly(t *testing.T) {
+	t.Parallel()
+
+	got, err := loginUser("", "owner/app", "forge.example:8443", "https://forge.example:8443")
+	require.NoError(t, err)
+	require.Equal(t, "owner", got)
+
+	got, err = loginUser("someone", "owner/app", "ghcr.io", "https://forge.example:8443")
+	require.NoError(t, err)
+	require.Equal(t, "someone", got, "a named user wins on any registry")
+
+	got, err = loginUser("", "owner/app", "Forge.Example:8443", "https://forge.example:8443")
+	require.NoError(t, err, "hosts compare without case")
+	require.Equal(t, "owner", got)
+
+	for _, refused := range []struct{ registry, serverURL string }{
+		{"ghcr.io", "https://forge.example:8443"},       // another registry
+		{"forge.example", "https://forge.example:8443"}, // another port is another registry
+		{"forge.example:8443", ""},                      // nothing says which registry is the forge's
+	} {
+		_, err := loginUser("", "owner/app", refused.registry, refused.serverURL)
+		require.ErrorIs(t, err, errs.ErrUsage, refused.registry)
+		require.ErrorContains(t, err, "container login", refused.registry)
+		require.ErrorContains(t, err, "registry-login's input username", "the refusal names the login's own setting")
+		require.NotContains(t, err.Error(), "RELEASE_REGISTRY_USER", "a login reads no release variable")
+	}
+
+	_, err = loginUser("", "", "forge.example:8443", "https://forge.example:8443")
+	require.ErrorIs(t, err, errs.ErrUsage, "no repository, no owner to log in as")
 }

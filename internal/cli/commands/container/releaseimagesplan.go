@@ -137,7 +137,7 @@ func releasePlanRegistryUser(cmd *cli.Command, imageRepository string) (string, 
 	// Without a forge to compare with, the owner is no safer a guess.
 	registry.Foreign = registry.Foreign || serverHost == ""
 
-	username, err := registryLoginUser(strings.TrimSpace(cmd.String(regflags.FlagUsername)), cmd.String(flagRepository), registry)
+	username, err := registryLoginUser(strings.TrimSpace(cmd.String(regflags.FlagUsername)), cmd.String(flagRepository), registry, releaseUserSettings)
 	if err != nil {
 		return "", fmt.Errorf("release images: %w", err)
 	}

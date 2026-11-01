@@ -199,7 +199,7 @@ func baseImagesRegistryCreds(cmd *cli.Command, requireRegistry bool, repository 
 
 	auth := regflags.Resolve(cmd)
 
-	username, err := registryLoginUser(auth.Username, repository, registry)
+	username, err := registryLoginUser(auth.Username, repository, registry, releaseUserSettings)
 	if err != nil {
 		return "", "", fmt.Errorf("base images: %w", err)
 	}

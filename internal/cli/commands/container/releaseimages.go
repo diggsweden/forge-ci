@@ -505,7 +505,7 @@ func (c releaseImagesCommon) singleStdin(cmd *cli.Command) error {
 // loginUser is resolved when a verb logs in, not before: a release without
 // images reads no credential at all.
 func (c releaseImagesCommon) loginUser() (string, error) {
-	username, err := registryLoginUser(c.RegistryUsername, c.Repository, imageRegistry{Host: c.Registry, Foreign: c.Foreign})
+	username, err := registryLoginUser(c.RegistryUsername, c.Repository, imageRegistry{Host: c.Registry, Foreign: c.Foreign}, releaseUserSettings)
 	if err != nil {
 		return "", fmt.Errorf("release images: %w", err)
 	}

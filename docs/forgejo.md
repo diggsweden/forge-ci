@@ -345,6 +345,12 @@ alone. Each `action.yml` documents its own inputs and outputs.
 | `prune-base-images` | Base-image maintenance on a schedule: deletes promoted base images that no supported release image's attestation names. A dry run unless told otherwise. |
 | `verify-forgejo-token` | Checks a release token before it is needed. |
 
+`registry-login` and `release-images.yml` name the registry user by one rule:
+the user given (`username`, `registry-user` or the `RELEASE_REGISTRY_USER`
+variable), else the repository's owner on this forge's own registry, whom its
+tokens log in as. Another registry, such as GHCR, has users of its own: name
+the user there, or the login stops before it sends a token.
+
 The `build-push-oci-image` composite action was removed. Custom jobs call the
 similarly named CLI command after `setup-forge-ci` and pass their registry auth
 file explicitly. For release images, prefer `release-images.yml`, which builds

@@ -1361,8 +1361,9 @@ EXAMPLES:
 |------|-------------|------|---------|----------|
 | `--registry` | registry host (e.g. ghcr.io, forgejo.example.com), or an image repository on it | string | `"ghcr.io"` | `$CONTAINER_REGISTRY` |
 | `--server-url` | forge/server URL used to derive the registry host when --registry is empty or omitted | string | `""` | n/a |
-| `--registry-username` | registry username; the password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER` |
+| `--registry-username` | registry username; empty is the --repository owner on the forge's own registry (--server-url's host) and refused on another one. The password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER` |
 | `--registry-password-file` | file containing the registry password/token ("-" reads stdin); defaults to $REGISTRY_TOKEN then $REGISTRY_PASSWORD. The password never appears in argv. | string | `""` | n/a |
+| `--repository` | owner/repo whose owner logs in to the forge's own registry when --registry-username is empty | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
 | `--auth-file` | override the auth config path (default: $REGISTRY_AUTH_FILE, else $DOCKER_CONFIG/config.json, else ~/.docker/config.json) | string | `""` | n/a |
 | `--create-auth-file` | when --auth-file is empty, create a fresh job-local auth file under $RUNNER_TEMP | bool | `false` | `$REGISTRY_CREATE_AUTH_FILE` |
 | `--export-env` | append REGISTRY_AUTH_FILE=<auth-file> to --env-file; requires an explicit or created auth file | bool | `false` | `$REGISTRY_EXPORT_AUTH_FILE_ENV` |

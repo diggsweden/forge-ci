@@ -32,6 +32,7 @@ func TestRegistryLogin(t *testing.T) {
 		"REGISTRY_LOGIN_REGISTRY=registry.invalid", "REGISTRY_LOGIN_TOOL=buildah",
 		"REGISTRY_LOGIN_AUTHFILE="+authFile, "REGISTRY_LOGIN_CREATE_AUTHFILE=true",
 		"REGISTRY_LOGIN_EXPORT_ENV=true", "REGISTRY_LOGIN_SERVER=https://forgejo.invalid",
+		"REGISTRY_LOGIN_REPOSITORY=fixture-owner/fixture-repo",
 		"FORGEJO_ENV="+envFile,
 	)
 
@@ -42,6 +43,7 @@ func TestRegistryLogin(t *testing.T) {
 
 	wantArgv := []string{
 		"container", "login", "--registry", "registry.invalid", "--server-url", "https://forgejo.invalid",
+		"--repository", "fixture-owner/fixture-repo",
 		"--registry-username", "fixture-user", "--registry-password-file", "-", "--auth-file", authFile,
 		"--create-auth-file=true", "--export-env=true", "--env-file", envFile,
 	}
@@ -103,6 +105,7 @@ func TestRegistryLoginDefaultsToAnIsolatedAuthFile(t *testing.T) {
 			got := box.run(script, append(env, "GITHUB_ACTIONS=true",
 				"REGISTRY_LOGIN_USERNAME=fixture-user", "REGISTRY_LOGIN_TOKEN=fixture-token",
 				"REGISTRY_LOGIN_REGISTRY=registry.invalid", "REGISTRY_LOGIN_SERVER=https://forgejo.invalid",
+				"REGISTRY_LOGIN_REPOSITORY=fixture-owner/fixture-repo",
 				"REGISTRY_LOGIN_TOOL="+fmt.Sprint(action.Inputs["tool"].Default),
 				"REGISTRY_LOGIN_AUTHFILE="+explicit,
 				"REGISTRY_LOGIN_CREATE_AUTHFILE="+fmt.Sprint(action.Inputs["create-auth-file"].Default),

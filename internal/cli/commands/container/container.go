@@ -39,6 +39,7 @@ import (
 
 	gitadapter "github.com/diggsweden/forge-ci/internal/adapters/git"
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
+	"github.com/diggsweden/forge-ci/internal/cli/cienv"
 	"github.com/diggsweden/forge-ci/internal/cli/cmdmeta"
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
 	"github.com/diggsweden/forge-ci/internal/cli/planfile"
@@ -91,8 +92,9 @@ EXAMPLES:
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: flagRegistry, Value: domaincontainer.DefaultRegistry, Sources: cli.EnvVars("CONTAINER_REGISTRY"), Usage: "registry host (e.g. ghcr.io, forgejo.example.com), or an image repository on it"},
 			&cli.StringFlag{Name: flagServerURL, Usage: "forge/server URL used to derive the registry host when --registry is empty or omitted"},
-			regflags.Username(),
+			regflags.UsernameFor("registry username; empty is the --repository owner on the forge's own registry (--server-url's host) and refused on another one. The password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD"),
 			regflags.PasswordFile(),
+			&cli.StringFlag{Name: flagRepository, Sources: cienv.Repository(), Usage: "owner/repo whose owner logs in to the forge's own registry when --registry-username is empty"},
 			&cli.StringFlag{Name: flagAuthFile, Usage: "override the auth config path (default: $REGISTRY_AUTH_FILE, else $DOCKER_CONFIG/config.json, else ~/.docker/config.json)"},
 			&cli.BoolFlag{Name: "create-auth-file", Sources: cli.EnvVars("REGISTRY_CREATE_AUTH_FILE"), Usage: "when --auth-file is empty, create a fresh job-local auth file under $RUNNER_TEMP"},
 			&cli.BoolFlag{Name: "export-env", Sources: cli.EnvVars("REGISTRY_EXPORT_AUTH_FILE_ENV"), Usage: "append REGISTRY_AUTH_FILE=<auth-file> to --env-file; requires an explicit or created auth file"},
@@ -119,6 +121,10 @@ EXAMPLES:
 
 				username, password, err = registryLoginCredentials(registry, username, password)
 				if err != nil {
+					return err
+				}
+
+				if username, err = loginUser(username, cmd.String(flagRepository), registry, cmd.String(flagServerURL)); err != nil {
 					return err
 				}
 
@@ -195,6 +201,26 @@ func registryForLogin(registry, serverURL string, registrySet bool) (string, err
 	}
 
 	return domaincontainer.DefaultRegistry, nil
+}
+
+// loginUser is the user of a login: the one given, else the rule every image
+// verb shares (registryLoginUser): the repository owner on the forge's own
+// registry, whom its tokens log in as, and refused anywhere else. Without a
+// server URL nothing says which registry is the forge's, so none is.
+func loginUser(username, repository, registry, serverURL string) (string, error) {
+	serverHost, err := appcontainer.OptionalRegistryHost(appcontainer.NormalizedServerURL(serverURL))
+	if err != nil {
+		return "", err
+	}
+
+	foreign := serverHost == "" || !strings.EqualFold(registry, serverHost)
+
+	user, err := registryLoginUser(username, repository, imageRegistry{Host: registry, Foreign: foreign}, loginUserSettings)
+	if err != nil {
+		return "", fmt.Errorf("container login: %w", err)
+	}
+
+	return user, nil
 }
 
 func registryHostFromServerURL(raw string) (string, error) {

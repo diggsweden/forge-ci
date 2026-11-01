@@ -224,6 +224,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `registry-login` (Forgejo) and `forge-ci container login` take the registry
+  user by the rule `release-images.yml` already used: the user given, else
+  the repository's owner on the forge's own registry; another registry must
+  name its user. `username` is optional. A custom image job that left its user
+  variable unset stopped with `REGISTRY_LOGIN_USERNAME: parameter null or not
+  set` although `release-images.yml` in the same run logged in.
 - **BREAKING:** Shared build gates refuse legacy `skip-tests: true` and
   `SKIP_TESTS=true`; exported/published OCI layouts are vulnerability-scanned
   even with consumer `enable-scan: false`. Keep scanner prerequisites available.

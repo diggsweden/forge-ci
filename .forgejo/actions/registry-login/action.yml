@@ -7,8 +7,10 @@ description: >-
   Log in to an OCI registry by writing a containers auth file through forge-ci. Centralises the secure invocation so consumers don't re-hand-roll it: the token is passed over stdin (never on the command line / process list), and empty inputs fail fast. By default the credentials go to a fresh file of the job's own, whose path is the `auth-file` output; pass it to the steps that pull or push. The registry host defaults to the host of the server URL.
 inputs:
   username:
-    description: Registry username (e.g. the repository owner).
-    required: true
+    description: >-
+      User the token logs in as. Empty is the repository's owner on this forge's own registry, whom its tokens log in as; another registry, such as GHCR, must name its user, and the login stops there without one.
+    required: false
+    default: ''
   token:
     description: >-
       Registry token/password. Passed to the client over stdin and never placed on the command line. Source it from a secret at the call site.
@@ -60,6 +62,9 @@ runs:
         REGISTRY_LOGIN_CREATE_AUTHFILE: ${{ inputs.create-auth-file }}
         REGISTRY_LOGIN_EXPORT_ENV: ${{ inputs.export-env }}
         REGISTRY_LOGIN_SERVER: ${{ github.server_url }}
+        # The runner's own repository: a job's env may hold a REPOSITORY of
+        # its own (an image reference, say), which must not name the user.
+        REGISTRY_LOGIN_REPOSITORY: ${{ github.repository }}
       run: |
         set -euo pipefail
         case "${REGISTRY_LOGIN_TOOL}" in
@@ -81,7 +86,8 @@ runs:
         printf '%s' "${registry_login_token}" | FORGE_CI_PROVIDER=forgejo run_forge_ci container login \
           --registry "${REGISTRY_LOGIN_REGISTRY}" \
           --server-url "${REGISTRY_LOGIN_SERVER}" \
-          --registry-username "${REGISTRY_LOGIN_USERNAME:?}" \
+          --repository "${REGISTRY_LOGIN_REPOSITORY}" \
+          --registry-username "${REGISTRY_LOGIN_USERNAME}" \
           --registry-password-file - \
           --auth-file "${REGISTRY_LOGIN_AUTHFILE}" \
           --create-auth-file="${REGISTRY_LOGIN_CREATE_AUTHFILE}" \

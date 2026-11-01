@@ -61,7 +61,10 @@ func resolveImageRegistry(forgeRegistry, serverHost, repository string) (imageRe
 // or on the forge's own registry the source repository's owner, whom the
 // forge's tokens log in as. Another registry has users of its own, so there
 // the user must be named; guessing the forge owner fails late and obscurely.
-func registryLoginUser(username, sourceRepository string, registry imageRegistry) (string, error) {
+//
+// nameIt names the caller's own settings for the user, so a refusal points
+// at a setting the caller has.
+func registryLoginUser(username, sourceRepository string, registry imageRegistry, nameIt string) (string, error) {
 	if username != "" {
 		return username, nil
 	}
@@ -71,6 +74,13 @@ func registryLoginUser(username, sourceRepository string, registry imageRegistry
 		return owner, nil
 	}
 
-	return "", fmt.Errorf("%s is not this forge's registry, so name the user the registry token logs in as there: "+
-		"the RELEASE_REGISTRY_USER variable or the workflow input registry-user (--%s, $%s): %w", registry.Host, regflags.FlagUsername, regflags.EnvUser, errs.ErrUsage)
+	return "", fmt.Errorf("%s is not this forge's registry, so name the user the registry token logs in as there: %s: %w",
+		registry.Host, nameIt, errs.ErrUsage)
 }
+
+// releaseUserSettings and loginUserSettings name, for a refusal, where the
+// release and base-image verbs and a plain login take the registry user.
+var (
+	releaseUserSettings = fmt.Sprintf("the RELEASE_REGISTRY_USER variable or the workflow input registry-user (--%s, $%s)", regflags.FlagUsername, regflags.EnvUser)
+	loginUserSettings   = fmt.Sprintf("registry-login's input username (--%s, $%s)", regflags.FlagUsername, regflags.EnvUser)
+)
