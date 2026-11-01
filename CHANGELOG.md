@@ -158,6 +158,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `build-go`. The engine refuses it, because an administrator may require
   tests, so a merge request copied from the example failed before building.
   A guard keeps every example from skipping tests.
+- A run artifact downloaded on Forgejo, or restored from the blob store, now
+  gets the job's ordinary file mode instead of a private 0600. An image
+  built from a downloaded context copied those files unreadable to its
+  non-root user: Nanolinter's release images could not read their own
+  linter defaults.
 - A re-run of a failed job that uploads to the `--blob-store` no longer takes
   its own blob artifact from the failed attempt as stored on sight; Forgejo
   lists an artifact from its first file on, so that copy may be partial. The

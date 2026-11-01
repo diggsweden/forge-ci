@@ -401,7 +401,7 @@ func restoreFrom(ctx context.Context, store provider.RunArtifactDownloader, name
 	}
 	defer func() { _ = src.Close() }()
 
-	if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil { //nolint:gosec // a restored tree is as readable as the forge download's.
 		return fmt.Errorf("create %q: %w", filepath.Dir(dest), err)
 	}
 
@@ -411,7 +411,9 @@ func restoreFrom(ctx context.Context, store provider.RunArtifactDownloader, name
 // writeVerified copies src to dest while hashing it and keeps dest only when
 // size and digest match the reference.
 func writeVerified(src io.Reader, dest, name string, ref domainartifact.BlobRef) error {
-	dst, err := os.OpenFile(dest, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600) //nolint:gosec // dest passed SafeJoin.
+	// A restored file gets the mode any file the job writes gets, as the
+	// forge's own download gives it; see the Forgejo adapter.
+	dst, err := os.OpenFile(dest, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644) //nolint:gosec // dest passed SafeJoin.
 	if err != nil {
 		return fmt.Errorf("create %q: %w", dest, err)
 	}

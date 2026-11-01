@@ -98,7 +98,8 @@ func (m *memoryStore) DownloadRunArtifact(_ context.Context, in provider.RunArti
 			return provider.RunArtifactInfo{}, err
 		}
 
-		if err := os.WriteFile(dest, body, 0o600); err != nil {
+		// The forge adapters create downloads with the job's ordinary mode.
+		if err := os.WriteFile(dest, body, 0o644); err != nil {
 			return provider.RunArtifactInfo{}, err
 		}
 
@@ -314,6 +315,34 @@ func TestBlobStore_RoundTripRestoresTheExactDirectory(t *testing.T) {
 	leftovers, err := os.ReadDir(filepath.Join(root, "out"))
 	if err != nil || len(leftovers) != 1 {
 		t.Errorf("staging directories left beside the destination: %v (%v)", leftovers, err)
+	}
+
+	// A restored file gets the mode any file the job writes gets, so an
+	// image built from it stays readable to a non-root user.
+	reference := filepath.Join(root, "reference")
+	if err := os.WriteFile(reference, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	wantMode, err := os.Stat(reference)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = filepath.WalkDir(dest, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil || entry.IsDir() {
+			return walkErr
+		}
+
+		info, statErr := entry.Info()
+		if statErr == nil && info.Mode().Perm() != wantMode.Mode().Perm() {
+			t.Errorf("%s mode = %v, want %v", path, info.Mode().Perm(), wantMode.Mode().Perm())
+		}
+
+		return statErr
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

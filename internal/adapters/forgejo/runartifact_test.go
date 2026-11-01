@@ -156,6 +156,30 @@ func TestDownloadRunArtifact_HappyPath(t *testing.T) {
 	if err != nil || string(got) != "bravo" {
 		t.Errorf("nested file = %q, err=%v", got, err)
 	}
+
+	// The protocol carries no modes: a downloaded file gets the mode any file
+	// the job writes gets, not a private one an image's non-root user cannot
+	// read after COPY.
+	reference := filepath.Join(t.TempDir(), "reference")
+	if err := os.WriteFile(reference, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	want, err := os.Stat(reference)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, name := range []string{"a.txt", filepath.Join("sub", "b.txt")} {
+		info, err := os.Stat(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if info.Mode().Perm() != want.Mode().Perm() {
+			t.Errorf("%s mode = %v, want %v like any file the job writes", name, info.Mode().Perm(), want.Mode().Perm())
+		}
+	}
 }
 
 func TestDownloadRunArtifact_RejectsOversizedRuntimeJSON(t *testing.T) {

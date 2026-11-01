@@ -406,6 +406,13 @@ func (p *Provider) downloadContainer(
 	return info, nil
 }
 
+// downloadedFileMode is the mode a downloaded file is created with, before
+// the job's umask. The runtime protocol carries no file modes, so a download
+// gets the mode any file the job writes gets, as download-artifact gives it.
+// A private 0600 broke every image built from a downloaded context: the
+// image's non-root user could not read the files COPY took from it.
+const downloadedFileMode = 0o644
+
 // writeEntry materializes one container entry at dest, size-capped, and
 // returns the bytes written. An empty contentLocation is only valid for a
 // declared zero-length file; otherwise the entry is malformed.
@@ -418,7 +425,7 @@ func (p *Provider) writeEntry(ctx context.Context, contentLocation, token string
 				return 0, fmt.Errorf("replace empty %q: %w", dest, err)
 			}
 
-			file, err := root.OpenFile(dest, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+			file, err := root.OpenFile(dest, os.O_CREATE|os.O_EXCL|os.O_WRONLY, downloadedFileMode)
 			if err != nil {
 				return 0, fmt.Errorf("write empty %q: %w", dest, err)
 			}
@@ -467,7 +474,7 @@ func (p *Provider) downloadFile(ctx context.Context, contentLocation, token stri
 		return 0, fmt.Errorf("replace %q: %w", dest, removeErr)
 	}
 
-	out, err := root.OpenFile(dest, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	out, err := root.OpenFile(dest, os.O_CREATE|os.O_EXCL|os.O_WRONLY, downloadedFileMode)
 	if err != nil {
 		return 0, fmt.Errorf("create %q: %w", dest, err)
 	}
