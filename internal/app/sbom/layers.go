@@ -466,7 +466,8 @@ func scanArtifacts(
 	if len(artifacts) == 0 {
 		_, _ = fmt.Fprintf(deps.w, "   ⚠️  %s\n", scan.missingWarn)
 
-		return fmt.Errorf("%s: %w", scan.missingWarn, errs.ErrMissingInput)
+		return fmt.Errorf("%s; build the project first, or pass --layers=build to assemble only the harvested build layer: %w",
+			scan.missingWarn, errs.ErrMissingInput)
 	}
 
 	for _, a := range artifacts {

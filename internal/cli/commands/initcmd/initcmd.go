@@ -57,7 +57,7 @@ EXAMPLES:
    forge-ci init https://github.com/diggsweden/forge-ci
 
    # Forgejo or GitLab, from your organization's mirror:
-   forge-ci init https://github.com/diggsweden/forge-ci
+   forge-ci init https://codeberg.org/examplescope/forge-ci
 
    # Preview without writing project files:
    forge-ci init https://github.com/diggsweden/forge-ci --example go-service --ref v0.90.0 --dry-run
@@ -71,7 +71,9 @@ EXAMPLES:
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			if cmd.NArg() < 1 || cmd.NArg() > 2 {
-				return fmt.Errorf("init takes <forge-ci URL> [directory]: %w", errs.ErrUsage)
+				return fmt.Errorf("init takes <forge-ci URL> [directory]; the URL names the Forge CI repository "+
+					"to copy the examples from, for example https://github.com/diggsweden/forge-ci "+
+					"(see forge-ci init --help): %w", errs.ErrUsage)
 			}
 
 			dir := "."
@@ -180,8 +182,21 @@ func report(out io.Writer, example string, result appinit.Result) {
 		return
 	}
 
-	_, _ = fmt.Fprintf(out, "\nNext: in the template repository https://%s/%s at commit %s (release %s), read docs/%s.md, Getting started, for the secrets and variables. Then run forge-ci doctor in your project.\n",
-		result.Source.Host, result.Source.Repository, result.Source.Commit, result.Source.Tag, result.Forge)
+	_, _ = fmt.Fprintf(out, "\nNext: read the Getting started section of %s for the secrets and variables, then run forge-ci doctor in your project.\n",
+		forgeGuideLocation(result.Source, string(result.Forge)))
+}
+
+// forgeGuideLocation says where the per-forge guide for the pinned release
+// is. On github.com that is one URL; other forges lay out file URLs
+// differently, so there the repository, the tag and the path are named
+// instead. The tag pins the commit, so the commit hash is not repeated.
+func forgeGuideLocation(src domain.Source, forge string) string {
+	path := "docs/" + forge + ".md"
+	if src.Host == "github.com" {
+		return fmt.Sprintf("https://%s/%s/blob/%s/%s", src.Host, src.Repository, src.Tag, path)
+	}
+
+	return fmt.Sprintf("%s in https://%s/%s at tag %s", path, src.Host, src.Repository, src.Tag)
 }
 
 func reportFiles(out io.Writer, result appinit.Result) {

@@ -175,7 +175,7 @@ func loadDoctorConfig(root, artifactsPath string, allowAutoDerive bool) (*config
 					Name:        "configuration auto-derives",
 					Severity:    SeverityFail,
 					Message:     deriveErr.Error(),
-					Remediation: "add one recognised root manifest or create .forge-ci/artifacts.yml explicitly",
+					Remediation: "add a recognised manifest at the repository root, or run `forge-ci init <forge-ci URL> --dry-run` to preview an artifacts.yml",
 				}}, false
 			}
 
@@ -184,7 +184,7 @@ func loadDoctorConfig(root, artifactsPath string, allowAutoDerive bool) (*config
 					Name:        "auto-derived configuration validates",
 					Severity:    SeverityFail,
 					Message:     err.Error(),
-					Remediation: "create .forge-ci/artifacts.yml explicitly; see docs/artifacts-reference.md",
+					Remediation: "create .forge-ci/artifacts.yml explicitly; see https://github.com/diggsweden/forge-ci/blob/main/docs/artifacts-reference.md",
 				}}, true
 			}
 
@@ -227,7 +227,7 @@ func signMethodRecommendation(cfg *config.Config, keylessAvailable bool) (Check,
 		Severity: SeverityOK,
 		Message: "sign.method=gpg, but this forge supports keyless (sigstore) signing — " +
 			"keyless needs no key on the runner. Consider sign.method: sigstore " +
-			"(see docs/verification.md#choosing-a-method); keep gpg if you later publish to a PGP-native registry.",
+			"(see https://github.com/diggsweden/forge-ci/blob/main/docs/verification.md#choosing-a-method); keep gpg if you later publish to a PGP-native registry.",
 	}, true
 }
 
@@ -250,7 +250,7 @@ func checkGitSigningSSHAllowlist(root string, cfg *config.Config) (Check, bool) 
 				"SSH-signed release tags/commits need a trusted-key entry in it",
 			Remediation: "commit .forge-ci/allowed_signers with the release signing public key " +
 				"and a principal identifying its signer; " +
-				"see docs/verification.md#release-authorisation",
+				"see https://github.com/diggsweden/forge-ci/blob/main/docs/verification.md#release-authorisation",
 		}, true
 	}
 
@@ -261,7 +261,7 @@ func checkGitSigningSSHAllowlist(root string, cfg *config.Config) (Check, bool) 
 			Message:  fmt.Sprintf(".forge-ci/allowed_signers failed entry/key checks: %v", err),
 			Remediation: "fix the entries above — each line must be " +
 				"'principal [options] key-type base64-key'; " +
-				"see docs/verification.md#release-authorisation",
+				"see https://github.com/diggsweden/forge-ci/blob/main/docs/verification.md#release-authorisation",
 		}, true
 	}
 
@@ -423,8 +423,8 @@ func checkArtifactsExists(path string) Check {
 			Name:     checkArtifactsYMLPresent,
 			Severity: SeverityFail,
 			Message:  path + " not found",
-			Remediation: "create .forge-ci/artifacts.yml; see examples/ for ecosystem templates " +
-				"(go-cli, maven-app, openbao-kms, sigstore-keyless)",
+			Remediation: "preview the files for this repository with `forge-ci init <forge-ci URL> --dry-run`, " +
+				"or write .forge-ci/artifacts.yml by hand",
 		}
 	}
 
@@ -470,7 +470,7 @@ func parseArtifacts(path string) (*config.Config, Check, bool) {
 			Name:        "artifacts.yml validates",
 			Severity:    SeverityFail,
 			Message:     err.Error(),
-			Remediation: "see docs/artifacts-reference.md for the per-field schema",
+			Remediation: "see https://github.com/diggsweden/forge-ci/blob/main/docs/artifacts-reference.md for the per-field schema",
 		}, true
 	}
 
@@ -487,7 +487,7 @@ func checkSignBlock(sign config.SignConfig) Check {
 			Name:        "sign block valid",
 			Severity:    SeverityFail,
 			Message:     err.Error(),
-			Remediation: "see docs/verification.md#signing-methods-for-release-artifacts for the per-method invariants",
+			Remediation: "see https://github.com/diggsweden/forge-ci/blob/main/docs/verification.md#signing-methods-for-release-artifacts for the per-method invariants",
 		}
 	}
 
@@ -531,7 +531,7 @@ func checkAllowedSignersIfRequired(root string, artifacts []config.Artifact) Che
 			Severity: SeverityFail,
 			Message:  "release authorization is required but neither .forge-ci/allowed_signers nor allowed_gpg_keys.asc exists",
 			Remediation: "commit .forge-ci/allowed_signers (SSH OpenSSH format) and/or " +
-				".forge-ci/allowed_gpg_keys.asc (armored GPG public keys of authorised signers); see docs/verification.md#release-authorisation",
+				".forge-ci/allowed_gpg_keys.asc (armored GPG public keys of authorised signers); see https://github.com/diggsweden/forge-ci/blob/main/docs/verification.md#release-authorisation",
 		}
 	}
 
@@ -557,7 +557,7 @@ func checkAllowedSignersIfRequired(root string, artifacts []config.Artifact) Che
 				len(formatErrs), strings.Join(formatErrs, "; ")),
 			Remediation: "fix the entries above — SSH: 'principal [options] key-type base64-key'; " +
 				"GPG: complete armor blocks containing public keys; " +
-				"see docs/verification.md#release-authorisation",
+				"see https://github.com/diggsweden/forge-ci/blob/main/docs/verification.md#release-authorisation",
 		}
 	}
 

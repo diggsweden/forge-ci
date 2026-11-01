@@ -244,7 +244,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not source-tree paths, as are the ones in the example `artifacts.yml`
   files `init` copies and in the schema's editor descriptions; `init` ends
   with the per-forge guide at the pinned release instead of a path and a
-  commit hash.
+  commit hash. `sbom assemble` says what to do when it finds no built
+  artifact.
 - Temporarily pause Self Release's strict integration and companion black-box
   jobs while Nanolinter publication is pending. Branch resolution, engine
   checksum verification and runtime-image availability remain required. Set

@@ -54,7 +54,7 @@ func AutoDeriveConfig(fsys fs.FS, root string) (*config.Config, error) {
 			"no .forge-ci/artifacts.yml and no recognised manifest at repo root\n"+
 				"  Looked for: %s\n"+
 				"  Either write .forge-ci/artifacts.yml, or place a single ecosystem manifest at root.\n"+
-				"  Docs: docs/artifacts-reference.md: %w",
+				"  Docs: https://github.com/diggsweden/forge-ci/blob/main/docs/artifacts-reference.md: %w",
 			manifestProbeNames(), errs.ErrMissingInput,
 		)
 	case 1:
@@ -68,7 +68,7 @@ func AutoDeriveConfig(fsys fs.FS, root string) (*config.Config, error) {
 		return nil, fmt.Errorf(
 			"no .forge-ci/artifacts.yml and multiple manifests at root: %s\n"+
 				"  Cannot auto-derive — a polyglot repo needs an explicit artifacts.yml.\n"+
-				"  Docs: docs/artifacts-reference.md: %w",
+				"  Docs: https://github.com/diggsweden/forge-ci/blob/main/docs/artifacts-reference.md: %w",
 			strings.Join(names, ", "), errs.ErrInvalidConfig,
 		)
 	}

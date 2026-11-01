@@ -10,6 +10,7 @@ package doctor
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/urfave/cli/v3"
@@ -95,14 +96,7 @@ Exit codes:
 					return err
 				}
 			} else {
-				appdoctor.FormatEnvironment(os.Stdout, env)
-				_, _ = fmt.Fprintln(os.Stdout)
-				appdoctor.FormatText(os.Stdout, checks)
-
-				_, _ = fmt.Fprintln(os.Stdout, "\nScope: local configuration checks only; remote secrets, runner availability and publishing permissions were not checked.")
-				if env.ForgeAPI == string(provider.ForgeGitLab) {
-					_, _ = fmt.Fprintln(os.Stdout, "GitLab include pins are not checked by the workflow-pin scan.")
-				}
+				writeTextReport(os.Stdout, env, checks, failures)
 			}
 
 			if failures > 0 {
@@ -115,6 +109,45 @@ Exit codes:
 			return nil
 		},
 	}
+}
+
+// writeTextReport prints the human report: the environment block, the
+// checks, the scope caveat, and one line that says what to do now, so the
+// report never ends on a caveat.
+func writeTextReport(out io.Writer, env appdoctor.Environment, checks []appdoctor.Check, failures int) {
+	appdoctor.FormatEnvironment(out, env)
+	_, _ = fmt.Fprintln(out)
+	appdoctor.FormatText(out, checks)
+
+	_, _ = fmt.Fprintln(out, "\nScope: local configuration checks only; remote secrets, runner availability and publishing permissions were not checked.")
+	if env.ForgeAPI == string(provider.ForgeGitLab) {
+		_, _ = fmt.Fprintln(out, "GitLab include pins are not checked by the workflow-pin scan.")
+	}
+
+	// The pull-request advice is for a person at a terminal. Two release
+	// workflows run doctor inside a job, where that line would tell the job
+	// to open a pull request, so only the failure case keeps its Next: there.
+	switch {
+	case failures > 0:
+		_, _ = fmt.Fprintln(out, "Next: fix the FAIL lines above, then run forge-ci doctor again.")
+	case env.Runner != string(provider.RunnerLocal):
+	case hasWarnings(checks):
+		_, _ = fmt.Fprintln(out, "Next: review the WARN lines above, then commit the Forge CI files and open a pull request; the reusable workflows check the rest in CI.")
+	default:
+		_, _ = fmt.Fprintln(out, "Next: commit the Forge CI files and open a pull request; the reusable workflows check the rest in CI.")
+	}
+}
+
+// hasWarnings reports whether any check is advisory. Warnings never change
+// the exit code, so the report says they are there instead.
+func hasWarnings(checks []appdoctor.Check) bool {
+	for _, c := range checks {
+		if c.Severity == appdoctor.SeverityWarn {
+			return true
+		}
+	}
+
+	return false
 }
 
 // resolveEnvironment gathers the active forge/runner/capabilities for

@@ -130,8 +130,8 @@ func TestInitCommandWithoutDryRunCreatesFiles(t *testing.T) {
 	}
 
 	for _, expected := range []string{
-		"in the template repository https://github.com/fixture/forge-ci at commit " + strings.Repeat("a", 40),
-		"(release v1.2.3), read docs/github.md", "Then run forge-ci doctor in your project",
+		"Getting started section of https://github.com/fixture/forge-ci/blob/v1.2.3/docs/github.md",
+		"then run forge-ci doctor in your project",
 	} {
 		if !strings.Contains(output.String(), expected) {
 			t.Errorf("missing documentation handoff %q: %s", expected, output.String())

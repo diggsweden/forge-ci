@@ -115,8 +115,10 @@ func TestRun_MissingArtifactsYML_Fails(t *testing.T) {
 		t.Fatalf("missing artifacts.yml must produce a FAIL check; got %+v", check)
 	}
 
-	if !strings.Contains(check.Remediation, "examples/") {
-		t.Errorf("remediation must reference examples/; got %q", check.Remediation)
+	// The fix names a command the binary's user can run, not a directory of
+	// the source tree they may not have.
+	if !strings.Contains(check.Remediation, "forge-ci init") {
+		t.Errorf("remediation must point at forge-ci init; got %q", check.Remediation)
 	}
 }
 
