@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -179,5 +180,26 @@ func TestGoReleaseBuild_MissingGoModFails(t *testing.T) {
 	// nothing: no download, no test run, no compile.
 	if len(goTool.calls) != 0 || len(sbomTool.calls) != 0 {
 		t.Errorf("ran tools before resolving metadata: go=%v sbom=%d", goRunArgs(goTool.calls), len(sbomTool.calls))
+	}
+}
+
+type missingCycloneDXGoModTool struct{}
+
+func (missingCycloneDXGoModTool) Run(context.Context, appbuild.GoRunInput) error {
+	return fmt.Errorf("cyclonedx-gomod not found in $PATH: %w", errs.ErrDependencyUnavailable)
+}
+
+// A Forgejo release failed with only "cyclonedx-gomod not found in $PATH".
+func TestGoReleaseBuild_AMissingSBOMGeneratorSaysHowToBringIt(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+
+	err := appbuild.GoReleaseBuild(context.Background(), &recordingSummarySink{}, &fakeGoTool{}, missingCycloneDXGoModTool{}, &out, &out, appbuild.GoReleaseBuildInput{
+		Dir: newGoModDir(t), EnableBuildSBOM: true, Version: "1.2.3", Platforms: "linux/amd64",
+	})
+	if !errors.Is(err, errs.ErrDependencyUnavailable) || !strings.Contains(err.Error(), "install cyclonedx-gomod") ||
+		!strings.Contains(err.Error(), "--build-sbom=false") {
+		t.Fatalf("err = %v, want the unavailable class and how to bring the generator", err)
 	}
 }

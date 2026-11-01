@@ -5,12 +5,14 @@ package build
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
 	appenforcement "github.com/diggsweden/forge-ci/internal/app/enforcement"
 	appsummary "github.com/diggsweden/forge-ci/internal/app/summary"
 	"github.com/diggsweden/forge-ci/internal/domain/ci"
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
 // GoReleaseBuildInput drives GoReleaseBuild — the full Go release build. It
@@ -71,6 +73,12 @@ func GoReleaseBuild(ctx context.Context, summarySink ci.SummarySink, goTool GoTo
 			ArtifactName: in.ArtifactName,
 			BinaryName:   meta.BinaryName,
 		}); err != nil {
+			if errors.Is(err, errs.ErrDependencyUnavailable) {
+				// The generator is missing: say how a job brings it.
+				return fmt.Errorf("generate build SBOM: %w (install cyclonedx-gomod, as forge-ci's runtime image "+
+					"and Forgejo build-go action do, or turn the Build SBOM off with --build-sbom=false)", err)
+			}
+
 			return fmt.Errorf("generate build SBOM: %w", err)
 		}
 	}

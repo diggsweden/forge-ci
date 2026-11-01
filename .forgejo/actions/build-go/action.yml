@@ -4,7 +4,7 @@
 
 name: 'Build Go'
 description: >-
-  The build step of a consumer's own job for a Go module: one `forge-ci build go run`, which downloads the modules, runs `go test ./...`, writes the CycloneDX Build SBOM and cross-compiles one binary per platform. Binaries land in <working-directory>/dist/<os>-<arch>/<binary>-<os>-<arch>, and the SBOM in <working-directory>/.forge-ci/go-build-sbom/<name>/bom.json. The job brings the toolchain: Go, and cyclonedx-gomod unless enable-build-sbom is 'false' (see setup-toolchain). The step holds no secret.
+  The build step of a consumer's own job for a Go module: one `forge-ci build go run`, which downloads the modules, runs `go test ./...`, writes the CycloneDX Build SBOM and cross-compiles one binary per platform. Binaries land in <working-directory>/dist/<os>-<arch>/<binary>-<os>-<arch>, and the SBOM in <working-directory>/.forge-ci/go-build-sbom/<name>/bom.json. The job brings the toolchain: Go (see setup-toolchain). The step installs its pinned cyclonedx-gomod for the Build SBOM unless enable-build-sbom is 'false' or the job already has one on PATH. The step holds no secret.
 inputs:
   version:
     description: >-
@@ -47,7 +47,7 @@ inputs:
     required: false
     default: 'false'
   enable-build-sbom:
-    description: "'false' skips the Build SBOM, and with it the need for cyclonedx-gomod."
+    description: "'false' skips the Build SBOM, and with it the cyclonedx-gomod install."
     required: false
     default: 'true'
   source-date-epoch:
@@ -59,6 +59,19 @@ inputs:
 runs:
   using: composite
   steps:
+    # The Build SBOM generator is forge-ci's, pinned by version and checksum
+    # in its install script, as the runtime image carries it on GitHub and
+    # GitLab. One the job already has on PATH is used as it is.
+    - name: Install cyclonedx-gomod
+      if: ${{ inputs.enable-build-sbom != 'false' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        export CI_TEMP_DIR="${RUNNER_TEMP:?}"
+        # shellcheck source=scripts/bootstrap/install-cyclonedx-gomod.sh
+        source "${GITHUB_ACTION_PATH}/../../../scripts/bootstrap/install-cyclonedx-gomod.sh"
+        install_cyclonedx_gomod
+
     - name: Build Go module
       shell: bash
       env:

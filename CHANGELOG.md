@@ -178,6 +178,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exclude files, relaxing `failIfNoSpecifiedTests`) in `MAVEN_CLI_OPTS`.
   Each let a build skip, ignore or narrow its tests and still be logged as
   an enforced, clean test run.
+- Forgejo's `build-go` and `build-cargo` actions install the Build SBOM
+  generator themselves, pinned by version and checksum at the version of
+  forge-ci's runtime image: `cyclonedx-gomod` v1.10.0 and `cargo-cyclonedx`
+  0.5.9 (a `.tar.xz`; the runner needs `xz`). They had required it from the
+  consumer's mise config, which the examples did not say how to supply, so a
+  copied Go release failed with "cyclonedx-gomod not found in $PATH". One
+  already on `PATH` is still used. A missing `cyclonedx-gomod` now says how
+  to bring it or turn the Build SBOM off.
 - `artifact upload` and `artifact download` no longer cut a large file off
   after 30 seconds. File bodies on Forgejo and GitHub are bounded by progress:
   a transfer fails only once no bytes move for the HTTP timeout

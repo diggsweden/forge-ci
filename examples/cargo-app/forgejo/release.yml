@@ -146,9 +146,9 @@ jobs:
           forge-ci platform checkout
 
       # The tools of your mise config, and the Rust toolchain your
-      # rust-toolchain.toml pins. The build below needs cargo-cyclonedx among
-      # the tools for the Build SBOM, and the Rust target and linker of every
-      # platform it builds.
+      # rust-toolchain.toml pins. The build below needs the Rust target and
+      # linker of every platform it builds; it brings its own cargo-cyclonedx
+      # for the Build SBOM.
       - name: Set up toolchain
         uses: https://FORGE_HOST/OWNER/forge-ci/.forgejo/actions/setup-toolchain@PIN_FORGE_CI_SHA
         with:

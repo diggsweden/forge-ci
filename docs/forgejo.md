@@ -776,12 +776,16 @@ not reach, so no action assumes one. Each runs in whatever the job provides:
   build jobs run in the image the `CI_JOB_IMAGE` variable names, which carries
   nanolinter with its check tools and the toolchain. `lint-nanolinter` stops
   with a message when the job has no `nanolinter`; it does not download one.
-- The release build job installs its toolchain with `setup-toolchain`: Go, and
-  the tools of the consumer's mise config, among them `cyclonedx-gomod` or
-  `cargo-cyclonedx` for the Build SBOM. `enable-build-sbom: 'false'` drops that
-  requirement. A Maven build needs the JDK and Maven from the mise config
-  (or a job image); `build-maven` pins the `cyclonedx-maven-plugin` itself,
-  in its `versions.env`, at the version GitHub and GitLab use.
+- The release build job installs its toolchain with `setup-toolchain`: Go,
+  and the tools of the consumer's mise config. The Build SBOM generator is
+  forge-ci's, as on GitHub and GitLab, where the runtime image carries it:
+  `build-go` installs its pinned `cyclonedx-gomod` and `build-cargo` its
+  pinned `cargo-cyclonedx` (a `.tar.xz`, so the runner needs `xz`), each
+  checksum-verified, unless the job already has one on `PATH` or
+  `enable-build-sbom: 'false'` skips the SBOM. A Maven build needs the JDK
+  and Maven from the mise config (or a job image); `build-maven` pins the
+  `cyclonedx-maven-plugin` itself, in its `versions.env`, at the version
+  GitHub and GitLab use.
   A job downloads Go once. When the mise config declares `go`, mise installs
   it, the release and checksum `mise.lock` records under `mise-locked: 'true'`,
   and the job runs with `GOTOOLCHAIN=local`, so `go.mod` asking for a newer Go

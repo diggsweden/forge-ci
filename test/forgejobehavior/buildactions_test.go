@@ -13,19 +13,22 @@ import (
 	"testing"
 )
 
-// buildAction is what the two build actions share: one step, a prefix on its
-// variables, and the verb it calls.
+// buildAction is what the two build actions share: the pinned Build SBOM
+// generator install, one engine step, a prefix on its variables, and the
+// verb it calls.
 type buildAction struct {
 	name, prefix, ecosystem string
 	// optional are the inputs beyond the six both actions take, in the order
 	// the step passes their flags.
 	optional []string
+	// sbomTool is the generator the first step installs.
+	sbomTool string
 }
 
 func buildActions() []buildAction {
 	return []buildAction{
-		{name: "build-go", prefix: "BUILD_GO_", ecosystem: "go", optional: []string{"main-package", "build-tags", "ldflags"}},
-		{name: "build-cargo", prefix: "BUILD_CARGO_", ecosystem: "cargo"},
+		{name: "build-go", prefix: "BUILD_GO_", ecosystem: "go", optional: []string{"main-package", "build-tags", "ldflags"}, sbomTool: "cyclonedx-gomod"},
+		{name: "build-cargo", prefix: "BUILD_CARGO_", ecosystem: "cargo", sbomTool: "cargo-cyclonedx"},
 	}
 }
 
@@ -46,7 +49,17 @@ func TestBuildActionsForwardEveryInput(t *testing.T) {
 		t.Run(build.name, func(t *testing.T) {
 			t.Parallel()
 			action := loadAction(t, build.name)
-			action.requireSteps(t, 1)
+			action.requireSteps(t, 2)
+
+			// The generator is forge-ci's and pinned, and only an SBOM build needs it.
+			install := action.Runs.Steps[0]
+			installer := "../../../scripts/bootstrap/install-" + build.sbomTool + ".sh"
+
+			if install.If != "${{ inputs.enable-build-sbom != 'false' }}" ||
+				!strings.Contains(install.Run, "source \"${GITHUB_ACTION_PATH}/"+installer+"\"") ||
+				!strings.Contains(install.Run, "install_"+strings.ReplaceAll(build.sbomTool, "-", "_")) {
+				t.Errorf("%s: first step does not install the pinned %s for an SBOM build: if %q run %q", build.name, build.sbomTool, install.If, install.Run)
+			}
 
 			inputs := append([]string{"version", "commit", "working-directory", "platforms", "artifact-name", "binary-name"}, build.optional...)
 			inputs = append(inputs, "skip-tests", "build-sbom")
@@ -66,7 +79,7 @@ func TestBuildActionsForwardEveryInput(t *testing.T) {
 				env = append(env, build.variable("source-date-epoch")+"=")
 			}
 
-			action.requireStepEnv(t, 0, bound)
+			action.requireStepEnv(t, 1, bound)
 
 			for _, required := range []string{"version", "commit"} {
 				if !action.Inputs[required].Required || action.Inputs[required].Default != nil {
@@ -74,7 +87,7 @@ func TestBuildActionsForwardEveryInput(t *testing.T) {
 				}
 			}
 
-			script := action.Runs.Steps[0].Run
+			script := action.Runs.Steps[1].Run
 
 			passed := make([]string, 0, 2*len(build.optional))
 			for _, input := range build.optional {

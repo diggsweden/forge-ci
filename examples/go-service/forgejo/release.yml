@@ -155,8 +155,8 @@ jobs:
           set -euo pipefail
           forge-ci platform checkout
       # Go and the tools of your mise config; Go from go.mod when the mise
-      # config declares none. The build below needs cyclonedx-gomod among the
-      # tools for the Build SBOM, and trivy for the image scans.
+      # config declares none. The build below brings its own cyclonedx-gomod
+      # for the Build SBOM, and the image job its own Trivy for the scans.
       - name: Set up toolchain
         uses: https://FORGE_HOST/OWNER/forge-ci/.forgejo/actions/setup-toolchain@PIN_FORGE_CI_SHA
         with:

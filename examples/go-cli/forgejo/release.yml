@@ -143,8 +143,8 @@ jobs:
           forge-ci platform checkout
 
       # Go and the tools of your mise config; Go from go.mod when the mise
-      # config declares none. The build below needs cyclonedx-gomod among the
-      # tools for the Build SBOM.
+      # config declares none. The build below brings its own cyclonedx-gomod
+      # for the Build SBOM.
       - name: Set up toolchain
         uses: https://FORGE_HOST/OWNER/forge-ci/.forgejo/actions/setup-toolchain@PIN_FORGE_CI_SHA
         with:
