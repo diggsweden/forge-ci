@@ -184,6 +184,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `bot-email` with `RELEASE_SSH_SIGNING_KEY`. An SSH key carries no identity,
   and `bot-email` is the principal `.forge-ci/allowed_signers` must name, so a
   copied release could not make its signed release commit.
+- The Gradle Artifact SBOM layer scans the JARs a release job downloaded under
+  `release-artifacts/`, as Maven's does, before `build/libs/`. A GitHub Gradle
+  release failed in "Publish: release files" with "no Gradle artifacts found
+  in build/libs" although the build had uploaded its JAR.
 - GitHub `build-npm` and `build-cargo` run the build from the workspace root.
   They also ran it inside `working-directory` and passed the same directory to
   the binary, so a project below the repository root (a monorepo package) was
