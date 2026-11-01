@@ -34,6 +34,9 @@ examples: their source is their own, and every CI file is the example's,
 filled in by `internal/livetest/exampledemos_internal_test.go`, which fails when
 one drifts. After changing an example, rewrite them with
 `go test ./internal/livetest -run TestExampleDemosAreTheirExamples -args -update-demos`.
+Their GitLab gate builds with `build-go`, so its job image is the candidate's
+own runtime image: `just runtime-image-archive go <directory>` builds it, and
+`just demo gitlab <name> job-archive=<archive>` takes it.
 A demo for another ecosystem or feature is one more directory in the same shape;
 `internal/livetest/demos_internal_test.go` renders every consumer here for
 each forge it declares and parses its artifact configuration, so malformed

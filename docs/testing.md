@@ -1536,6 +1536,19 @@ digests, preserving the consumer's commands and other files.
 Deployment outside the trial requires the published image digest, as in
 [Source-check component](gitlab.md#source-check-component).
 
+Build components run `forge-ci` from their runtime image, bound to
+`$CI_JOB_IMAGE` in a trial, so the job image decides which engine a GitLab
+build runs. To trial a candidate, build the image from the candidate's tree:
+
+```text
+just runtime-image-archive go /absolute/images   # prints /absolute/images/forge-ci-runtime-go.tar
+```
+
+It carries the engine the tree records, checked against
+`.engine/bin/forge-ci-linux-<arch>.sha256` as published images are, for this
+machine's architecture. A published runtime image carries the engine of its own
+release; pairing it with a newer candidate trials an older engine.
+
 Prepare the trusted job image separately and export it as a Docker image
 archive (`podman save --format=docker-archive`). The trial publishes it into
 its own disposable GitLab project using the existing confined registry

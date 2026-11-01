@@ -998,6 +998,56 @@ demo forge name *settings:
     GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go test -tags=live -count=1 -buildvcs=false -timeout=5h -v \
         -run="$scenario" ./internal/livetest/githubconsumer/
 
+# Build one runtime image of this tree for this machine's architecture and
+# save it as <directory>/forge-ci-runtime-<target>.tar, the archive a GitLab
+# trial takes as job-archive= or build-archive=. Its engine is the build this
+# tree records, checked against .engine/bin/forge-ci-linux-<arch>.sha256 as
+# the published images are, so GitLab's build components run the candidate's
+# engine, as Forgejo's do, and not whatever a published image carries.
+# Prints the archive's path.
+[arg('target', help='Runtime target of containers/runtime/images.json, e.g. go')]
+[arg('directory', help='Absolute directory to write the archive to')]
+[doc('Build a candidate runtime image archive; network')]
+[group('live')]
+runtime-image-archive target directory:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$1 directory=$2
+    case "$(uname -m)" in
+    x86_64) arch=amd64 ;;
+    aarch64 | arm64) arch=arm64 ;;
+    *) printf 'no runtime image for %s\n' "$(uname -m)" >&2 && exit 2 ;;
+    esac
+    if ! jq -e --arg target "$target" --arg arch "$arch" \
+        'any(.[]; .target == $target and (.archs | index($arch)))' containers/runtime/images.json >/dev/null; then
+        printf 'no %s runtime target %q in containers/runtime/images.json\n' "$arch" "$target" >&2
+        exit 2
+    fi
+    if [[ "$directory" != /* ]]; then
+        printf 'the archive directory must be an absolute path, got %q\n' "$directory" >&2
+        exit 2
+    fi
+    # The image's whole build context, and nothing of the tree beyond it.
+    context=$(mktemp -d "${TMPDIR:-/tmp}/forge-ci-runtime-image.XXXXXXXX")
+    trap 'rm -rf -- "$context"' EXIT
+    mkdir -p -- "$context/scripts" "$context/cli-prebuilt"
+    bash scripts/ci/engine-binary.sh build "$arch" "$context/cli-prebuilt/forge-ci"
+    read -r recorded _ <".engine/bin/forge-ci-linux-$arch.sha256"
+    built=$(sha256sum -- "$context/cli-prebuilt/forge-ci")
+    if [[ "${built%% *}" != "$recorded" ]]; then
+        printf 'the engine built here is not the one this tree records; run just refresh-engine-binary and commit it\n' >&2
+        exit 1
+    fi
+    cp -R -- scripts/bootstrap "$context/scripts/bootstrap"
+    cp -R -- templates "$context/templates"
+    image="localhost/forge-ci-runtime-$target:candidate"
+    podman build --file containers/runtime/Containerfile --target "$target" --tag "$image" "$context" >&2
+    mkdir -p -- "$directory"
+    archive="$directory/forge-ci-runtime-$target.tar"
+    rm -f -- "$archive"
+    podman save --quiet --format docker-archive --output "$archive" "$image"
+    printf '%s\n' "$archive"
+
 # Build a demo's job image from test/live/demos/<name>/job.Containerfile and
 # save it as <directory>/<name>-job.tar, the archive `just demo gitlab` takes
 # as job-archive=. A demo whose GitLab release build needs more than its job
