@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"os/exec"
@@ -59,6 +60,9 @@ type GitHubTrial struct {
 	// history makes PushConsumer push the consumer's own history under the
 	// rendered commit: WithHistory.
 	history bool
+	// files are trial-made files PushConsumer commits beside the rendered
+	// workflows, by repository path: WithFile.
+	files map[string]string
 }
 
 // OpenGitHubTrial loads Forge Lab's hosted context and authorizes exactly the
@@ -193,6 +197,22 @@ func (trial *GitHubTrial) WithHistory() *GitHubTrial {
 	return &shown
 }
 
+// WithFile makes PushConsumer commit content at path in the consumer, in
+// place of any file the fixture has there: material the trial itself makes,
+// such as the allowed-signers line of a key it generated.
+func (trial *GitHubTrial) WithFile(path, content string) *GitHubTrial {
+	shown := *trial
+	shown.files = maps.Clone(trial.files)
+
+	if shown.files == nil {
+		shown.files = map[string]string{}
+	}
+
+	shown.files[path] = content
+
+	return &shown
+}
+
 // NewDemoRepository creates the public repository <prefix>demo-<name> for a demo and
 // registers nothing to delete it. The client refuses a name that exists, so an
 // earlier demo is never adopted or replaced; Forge Lab's session cleanup
@@ -304,6 +324,12 @@ func (trial *GitHubTrial) stageConsumer(root, fixtures string, engine GitHubEngi
 	for _, input := range sortedKeys(overrides) {
 		if !applied[input] {
 			trial.tb.Fatalf("livetest: no fixture passes %s", input)
+		}
+	}
+
+	for _, path := range sortedKeys(trial.files) {
+		if err = staged.stageFile(trial.tb.Context(), "100644", path, trial.files[path]); err != nil {
+			trial.tb.Fatalf("livetest: %v", err)
 		}
 	}
 
@@ -518,7 +544,7 @@ func (trial *GitHubTrial) ReportRun(repo string, run *github.WorkflowRun) {
 		trial.tb.Logf("  %-9s %s", status, job.GetName())
 
 		switch job.GetConclusion() {
-		case "success", "skipped", "neutral":
+		case runSuccess, runSkipped, "neutral":
 			continue
 		}
 
@@ -813,8 +839,10 @@ func (trial *GitHubTrial) PushReleaseRequest(repo string, tree GitHubConsumerTre
 
 // CheckRelease checks what the engine promises of a GitHub release beyond a
 // green run: main advanced by one signed commit, the final tag exists, the
-// release offers assets, and each Cosign bundle verifies against trust.
-func (trial *GitHubTrial) CheckRelease(repo string, tree GitHubConsumerTree, final string, trust CosignTrust) map[string]int64 {
+// release offers assets, and its signatures verify: each Cosign bundle
+// against trust and each GPG signature (.asc, the default sign method)
+// against the trial's GPG key. At least one signature must verify.
+func (trial *GitHubTrial) CheckRelease(repo string, tree GitHubConsumerTree, final string, trust CosignTrust, key TrialGPGKey) map[string]int64 {
 	trial.tb.Helper()
 
 	ctx := trial.tb.Context()
@@ -839,12 +867,15 @@ func (trial *GitHubTrial) CheckRelease(repo string, tree GitHubConsumerTree, fin
 		trial.tb.Fatalf("livetest: the release %s offers no assets", final)
 	}
 
-	verified := trial.verifyBundles(repo, assets, trust)
-	if verified == 0 {
-		trial.tb.Errorf("the release %s offers no Cosign bundle beside its subject", final)
+	bundles := trial.verifyBundles(repo, assets, trust)
+	signatures := trial.verifyGPGSignatures(repo, assets, key)
+
+	if bundles+signatures == 0 {
+		trial.tb.Errorf("the release %s offers no Cosign bundle and no GPG signature beside its subject", final)
 	}
 
-	trial.tb.Logf("release %s: %d assets, %d Cosign bundles verified against %s", final, len(assets), verified, trust)
+	trial.tb.Logf("release %s: %d assets, %d Cosign bundles verified against %s, %d GPG signatures verified against %s",
+		final, len(assets), bundles, trust, signatures, key.Fingerprint)
 
 	return assets
 }
@@ -966,6 +997,54 @@ func (trial *GitHubTrial) verifyBundles(repo string, assets map[string]int64, tr
 	}
 
 	return verified
+}
+
+// verifyGPGSignatures verifies each <subject>.asc beside its subject and
+// requires the signature to be the trial key's own: gpg --verify alone also
+// accepts any other key in the keyring.
+func (trial *GitHubTrial) verifyGPGSignatures(repo string, assets map[string]int64, key TrialGPGKey) int {
+	trial.tb.Helper()
+
+	dir := trial.tempDir("release-gpg")
+	verified := 0
+
+	for name, id := range assets {
+		subject, isSignature := strings.CutSuffix(name, ".asc")
+		subjectID, hasSubject := assets[subject]
+
+		if !isSignature || !hasSubject {
+			continue
+		}
+
+		trial.download(repo, id, filepath.Join(dir, name))
+		trial.download(repo, subjectID, filepath.Join(dir, subject))
+		status := trial.run(dir, nil, "gpg", "--homedir", key.Home, "--batch", "--status-fd", "1",
+			"--verify", filepath.Join(dir, name), filepath.Join(dir, subject))
+
+		if !signedBy(status, key.Fingerprint) {
+			trial.tb.Errorf("the GPG signature %s is not the trial key %s's", name, key.Fingerprint)
+
+			continue
+		}
+
+		verified++
+	}
+
+	return verified
+}
+
+// signedBy reports whether gpg's machine-readable status names a valid
+// signature by the primary key with this fingerprint.
+func signedBy(status, fingerprint string) bool {
+	for line := range strings.SplitSeq(status, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 3 && fields[0] == "[GNUPG:]" && fields[1] == "VALIDSIG" &&
+			(strings.EqualFold(fields[2], fingerprint) || strings.EqualFold(fields[len(fields)-1], fingerprint)) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (trial *GitHubTrial) ensurePrerelease(repo string) {

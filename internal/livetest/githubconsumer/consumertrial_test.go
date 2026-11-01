@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -148,6 +149,16 @@ func runTrial(t *testing.T, trial *livetest.GitHubTrial, engine livetest.GitHubE
 		overrides["cosign-public-key-sha256"] = key.SHA256
 	}
 
+	// A release that signs Git with SSH gets a key made for this run, and the
+	// allowed-signers line that names it for the workflow's bot-email.
+	var sshSigningKey string
+
+	if principal, signs := sshSigned(t, root, fixtures); signs && settings.Event == livetest.TrialRelease {
+		private, public := livetest.SSHKey(t, t.TempDir())
+		sshSigningKey = private
+		trial = trial.WithFile(".forge-ci/allowed_signers", principal+" "+public+"\n")
+	}
+
 	tree := trial.PushConsumer(repo, root, fixtures, engine, overrides)
 	trial.SetVariable(repo, "FORGE_CI_REPOSITORY", engine.Owner+"/"+engine.Repository)
 	trial.SetVariable(repo, "RELEASE_PLATFORMS", settings.Platforms)
@@ -183,6 +194,10 @@ func runTrial(t *testing.T, trial *livetest.GitHubTrial, engine livetest.GitHubE
 		"RELEASE_TOKEN":           trial.Token(),
 	}
 
+	if sshSigningKey != "" {
+		secrets["RELEASE_SSH_SIGNING_KEY"] = sshSigningKey
+	}
+
 	if cosignKey != nil {
 		secrets["RELEASE_COSIGN_PRIVATE_KEY"] = cosignKey.Private
 		secrets["RELEASE_COSIGN_PASSPHRASE"] = cosignKey.Passphrase
@@ -209,7 +224,7 @@ func runTrial(t *testing.T, trial *livetest.GitHubTrial, engine livetest.GitHubE
 	trial.PushReleaseRequest(repo, tree, key, request, settings.Version)
 	judge(t, trial, repo, settings.Workflow, "push", tree.Main)
 
-	assets := trial.CheckRelease(repo, tree, final, trust)
+	assets := trial.CheckRelease(repo, tree, final, trust, key)
 	if visibility.Private {
 		trial.CheckPrivateReleaseAssets(repo, assets)
 	}
@@ -273,6 +288,33 @@ func keySigned(t *testing.T, root, fixtures string) bool {
 	}
 
 	return strings.Contains(string(release), "cosign-public-key-sha256:")
+}
+
+// botEmail is the bot-email a release workflow passes the orchestrator.
+var botEmail = regexp.MustCompile(`(?m)^\s*bot-email:\s*["']?([^"'\s#]+)`)
+
+// sshSigned reports whether the fixture's release workflow signs Git with SSH
+// (it hands the orchestrator RELEASE_SSH_SIGNING_KEY) and the principal that
+// key signs as. Such a workflow must name the principal: SSH keys carry no
+// identity, and the release tag is checked against allowed_signers by it.
+func sshSigned(t *testing.T, root, fixtures string) (string, bool) {
+	t.Helper()
+
+	release, err := os.ReadFile(filepath.Join(root, fixtures, "workflows", "release.yml"))
+	if err != nil {
+		t.Fatalf("read the fixture's release workflow: %v", err)
+	}
+
+	if !strings.Contains(string(release), "secrets.RELEASE_SSH_SIGNING_KEY") {
+		return "", false
+	}
+
+	match := botEmail.FindStringSubmatch(string(release))
+	if match == nil {
+		t.Fatal("the fixture's release workflow signs Git with SSH but passes no bot-email, the principal its key signs as")
+	}
+
+	return match[1], true
 }
 
 // judge waits for the run, prints its jobs, and fails the trial unless it

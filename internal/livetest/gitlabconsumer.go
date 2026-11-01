@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -187,23 +188,8 @@ func renderGitLabConsumer(body []byte, layer Layer, images GitLabGateImages) (st
 			"Add workflow: rules: - if: '$CI_PIPELINE_SOURCE == \"merge_request_event\"': %w", errs.ErrValidation)
 	}
 
-	seen := map[string]bool{}
-
-	for _, entry := range entries {
-		name, bindErr := bindGitLabGateComponent(entry, layer, images)
-		if bindErr != nil {
-			return "", bindErr
-		}
-
-		if seen[name] {
-			return "", fmt.Errorf("the gate includes the %s component twice: %w", name, errs.ErrValidation)
-		}
-
-		seen[name] = true
-	}
-
-	if !seen["check"] {
-		return "", fmt.Errorf("the MR trial requires one pinned check component: %w", errs.ErrValidation)
+	if err := bindGitLabGateComponents(entries, layer, images); err != nil {
+		return "", err
 	}
 
 	for name, tags := range images.JobTags {
@@ -235,6 +221,51 @@ func renderGitLabConsumer(body []byte, layer Layer, images GitLabGateImages) (st
 	return encoded.String(), err
 }
 
+// bindGitLabGateComponents binds every included component. check and
+// nanolinter appear once; a build component may run as several jobs, and must
+// come from the project the check component names, having no
+// forge-ci-repository input of its own.
+func bindGitLabGateComponents(entries []*yaml.Node, layer Layer, images GitLabGateImages) error {
+	seen := map[string]bool{}
+
+	var checkProject string
+
+	builds := map[string]string{} // build component entry → engine project
+
+	for _, entry := range entries {
+		name, project, bindErr := bindGitLabGateComponent(entry, layer, images)
+		if bindErr != nil {
+			return bindErr
+		}
+
+		// A build component may run as several jobs; check and nanolinter once.
+		if seen[name] && !gitlabGateImageInputs[name].build {
+			return fmt.Errorf("the gate includes the %s component twice: %w", name, errs.ErrValidation)
+		}
+
+		seen[name] = true
+
+		switch {
+		case name == gitlabCheckComponent:
+			checkProject = project
+		case gitlabGateImageInputs[name].build:
+			builds[fmt.Sprintf("%s (include %d)", name, len(builds)+1)] = project
+		}
+	}
+
+	if !seen[gitlabCheckComponent] {
+		return fmt.Errorf("the MR trial requires one pinned check component: %w", errs.ErrValidation)
+	}
+
+	for _, build := range sortedKeys(builds) {
+		if builds[build] != checkProject {
+			return fmt.Errorf("the %s component comes from %s, not the check component's %s: %w", build, builds[build], checkProject, errs.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
 // GitLabGateImages are the images a trial gives the consumer's gate: Job for
 // the check component, Lint for the nanolinter component. They differ because
 // the job image also runs the release's own jobs, which need tools a lint
@@ -247,57 +278,92 @@ type GitLabGateImages struct {
 
 // gitlabGateImage is, for each component a gate may include, the input that
 // takes its image, the placeholder the consumer writes there, and the image
-// the trial binds.
+// the trial binds. A build component runs forge-ci from its runtime image, so
+// it takes the job image, which carries the engine under test.
 type gitlabGateImage struct {
 	input, placeholder string
 	image              func(GitLabGateImages) string
+	// build components have no forge-ci-repository input and may be pinned
+	// by release version; check is checksum-bound and pinned by commit.
+	build bool
 }
 
+// The check component, the placeholder of the job image, and the input that
+// takes a build component's image.
+const (
+	gitlabCheckComponent = "check"
+	gitlabJobPlaceholder = "$CI_JOB_IMAGE"
+	gitlabRuntimeInput   = "runtime-image"
+)
+
+func gitlabJobImage(images GitLabGateImages) string { return images.Job }
+
 var gitlabGateImageInputs = map[string]gitlabGateImage{
-	"check":      {input: "job-image", placeholder: "$CI_JOB_IMAGE", image: func(images GitLabGateImages) string { return images.Job }},
-	"nanolinter": {input: "nanolinter-image", placeholder: "$CI_LINT_IMAGE", image: func(images GitLabGateImages) string { return images.Lint }},
+	gitlabCheckComponent:   {input: "job-image", placeholder: gitlabJobPlaceholder, image: gitlabJobImage},
+	"nanolinter":           {input: "nanolinter-image", placeholder: "$CI_LINT_IMAGE", image: func(images GitLabGateImages) string { return images.Lint }},
+	"build-go":             {input: gitlabRuntimeInput, placeholder: gitlabJobPlaceholder, image: gitlabJobImage, build: true},
+	"build-maven":          {input: gitlabRuntimeInput, placeholder: gitlabJobPlaceholder, image: gitlabJobImage, build: true},
+	"build-npm":            {input: gitlabRuntimeInput, placeholder: gitlabJobPlaceholder, image: gitlabJobImage, build: true},
+	"build-gradle":         {input: gitlabRuntimeInput, placeholder: gitlabJobPlaceholder, image: gitlabJobImage, build: true},
+	"build-gradle-android": {input: gitlabRuntimeInput, placeholder: gitlabJobPlaceholder, image: gitlabJobImage, build: true},
+	"build-cargo":          {input: gitlabRuntimeInput, placeholder: gitlabJobPlaceholder, image: gitlabJobImage, build: true},
 }
+
+// releaseVersionPin is a component pinned by catalog release, X.Y.Z.
+var releaseVersionPin = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 
 // bindGitLabGateComponent points one included component at the layer under
 // test and its image input at the trial's image, and returns the component's
-// name. The consumer must pin the component by full SHA, name the engine
-// project the component comes from, and leave the image to the trial with the
-// component's placeholder: $CI_JOB_IMAGE for check, $CI_LINT_IMAGE for
-// nanolinter.
-func bindGitLabGateComponent(entry *yaml.Node, layer Layer, images GitLabGateImages) (string, error) {
+// name and the engine project it names. The consumer leaves the image to the
+// trial with the component's placeholder: $CI_JOB_IMAGE for check and the
+// build components, $CI_LINT_IMAGE for nanolinter. check is pinned by full
+// SHA; nanolinter and the build components by full SHA or release version.
+// check and nanolinter name the engine project in forge-ci-repository.
+func bindGitLabGateComponent(entry *yaml.Node, layer Layer, images GitLabGateImages) (string, string, error) {
 	component := gitlabMappingValue(entry, "component")
 	inputs := gitlabMappingValue(entry, "inputs")
 
 	project, name, pin, known := gitlabGateComponent(component)
 	if !known {
-		return "", fmt.Errorf("the gate may include only pinned check and nanolinter components: %w", errs.ErrValidation)
+		return "", "", fmt.Errorf("the gate may include only pinned check, nanolinter and build components: %w", errs.ErrValidation)
 	}
 
 	use := gitlabGateImageInputs[name]
-	forgeCIRepository := gitlabMappingValue(inputs, "forge-ci-repository")
 
 	jobImage := gitlabMappingValue(inputs, use.input)
-	for _, field := range []*yaml.Node{forgeCIRepository, jobImage} {
+	fields := []*yaml.Node{jobImage}
+
+	var forgeCIRepository *yaml.Node
+	if !use.build {
+		forgeCIRepository = gitlabMappingValue(inputs, "forge-ci-repository")
+		fields = append(fields, forgeCIRepository)
+	}
+
+	for _, field := range fields {
 		if field == nil || field.Kind != yaml.ScalarNode {
-			return "", fmt.Errorf("%s component coordinates must be scalars: %w", name, errs.ErrValidation)
+			return "", "", fmt.Errorf("%s component coordinates must be scalars: %w", name, errs.ErrValidation)
 		}
 	}
 
-	if !fixtureObjectID(pin) || project != forgeCIRepository.Value || jobImage.Value != use.placeholder {
-		return "", fmt.Errorf("pin the %s component by full SHA, match forge-ci-repository and use %s: %s: %w",
+	pinned := fixtureObjectID(pin) || (name != gitlabCheckComponent && releaseVersionPin.MatchString(pin))
+	if !pinned || (forgeCIRepository != nil && project != forgeCIRepository.Value) || jobImage.Value != use.placeholder {
+		return "", "", fmt.Errorf("pin the %s component (check by full SHA), match forge-ci-repository and use %s: %s: %w",
 			name, use.input, use.placeholder, errs.ErrValidation)
 	}
 
 	image := use.image(images)
 	if image == "" {
-		return "", fmt.Errorf("the gate includes the %s component; give the trial its image (lint-archive=): %w", name, errs.ErrValidation)
+		return "", "", fmt.Errorf("the gate includes the %s component; give the trial its image (lint-archive=): %w", name, errs.ErrValidation)
 	}
 
 	component.Value = strings.TrimPrefix(layer.ServerURL, "https://") + "/" + layer.Repository + "/" + name + "@" + layer.Commit
-	forgeCIRepository.Value = layer.Repository
 	jobImage.Value = image
 
-	return name, nil
+	if forgeCIRepository != nil {
+		forgeCIRepository.Value = layer.Repository
+	}
+
+	return name, project, nil
 }
 
 // gitlabGateComponent splits an include's component reference,

@@ -139,6 +139,50 @@ func TestGitHubConsumerPreservesTrackedIgnoredSource(t *testing.T) {
 	}
 }
 
+// A file the trial makes replaces the fixture's at that path in the pushed
+// commit, and the source checkout is left alone.
+func TestGitHubConsumerCommitsTrialFiles(t *testing.T) {
+	t.Parallel()
+	trial := &GitHubTrial{tb: t}
+	root := t.TempDir()
+	trial.git(root, "init", "--quiet", "--initial-branch=main", ".")
+
+	for name, body := range map[string]string{
+		".forge-ci/allowed_signers":                  "fixture\n",
+		"test/live/github/workflows/pullrequest.yml": fixturePullRequest,
+	} {
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	trial.git(root, "add", "--all")
+	trial.commit(root, consumerBaseMessage, "")
+
+	signers := trial.WithFile(".forge-ci/allowed_signers", "bot@example.com ssh-ed25519 AAAA\n")
+	if trial.files != nil {
+		t.Fatal("WithFile changed the trial it was called on")
+	}
+
+	dir, _ := signers.WithFile("extra/notes.txt", "made by the trial\n").stageConsumer(root, "test/live/github", trialEngine, nil)
+	if got := trial.git(dir, "show", "HEAD:.forge-ci/allowed_signers"); got != "bot@example.com ssh-ed25519 AAAA\n" {
+		t.Fatalf("allowed_signers = %q", got)
+	}
+
+	if got := trial.git(dir, "show", "HEAD:extra/notes.txt"); got != "made by the trial\n" {
+		t.Fatalf("notes = %q", got)
+	}
+
+	if got := trial.git(root, "show", "HEAD:.forge-ci/allowed_signers"); got != "fixture\n" {
+		t.Fatalf("source changed: %q", got)
+	}
+}
+
 // The release-request tag is pushed only once GitHub lists every workflow just
 // pushed as active: an event before that starts no run.
 func TestGitHubListsAllRequiresEveryPushedWorkflowActive(t *testing.T) {
@@ -175,6 +219,31 @@ func TestGitHubListsAllRequiresEveryPushedWorkflowActive(t *testing.T) {
 	} {
 		if got := githubListsAll(&github.Workflows{Workflows: test.listed}, entries); got != test.want {
 			t.Errorf("%s: githubListsAll() = %v, want %v", name, got, test.want)
+		}
+	}
+}
+
+func TestGPGSignatureMustBeTheTrialKeys(t *testing.T) {
+	t.Parallel()
+
+	trialKey := strings.Repeat("A1", 20)
+	otherKey := strings.Repeat("B2", 20)
+
+	tests := []struct {
+		name   string
+		status string
+		want   bool
+	}{
+		{"the trial key", "[GNUPG:] GOODSIG A1A1A1A1A1A1A1A1 Trial\n[GNUPG:] VALIDSIG " + trialKey + " 2026-10-31 1793450000 0 4 0 22 10 00 " + trialKey + "\n", true},
+		{"a subkey of the trial key", "[GNUPG:] VALIDSIG " + otherKey + " 2026-10-31 1793450000 0 4 0 22 10 00 " + strings.ToLower(trialKey) + "\n", true},
+		{"another key", "[GNUPG:] VALIDSIG " + otherKey + " 2026-10-31 1793450000 0 4 0 22 10 00 " + otherKey + "\n", false},
+		{"a bad signature", "[GNUPG:] BADSIG A1A1A1A1A1A1A1A1 Trial\n", false},
+		{"the fingerprint outside a status line", "gpg: VALIDSIG " + trialKey + "\n", false},
+	}
+
+	for _, test := range tests {
+		if got := signedBy(test.status, trialKey); got != test.want {
+			t.Errorf("%s: signedBy = %v, want %v", test.name, got, test.want)
 		}
 	}
 }
