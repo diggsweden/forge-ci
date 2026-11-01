@@ -124,6 +124,13 @@ jobs:
 artefact's `working-directory`. `validate cargo` enforces this: a
 release will fail at the prerequisites stage if the pin is missing.
 `sbom-cargo.yml` auto-detects the file directly.
+The GitLab example's check job runs `cargo fmt` and `cargo clippy`, so its
+pin must also list `components = ["rustfmt", "clippy"]`; the `minimal`
+profile installs neither. Every build also cross-compiles each platform it
+selects, so the pin lists those targets too, for example `targets =
+["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]` for GitLab's
+default Linux amd64 and arm64; a missing one fails with "can't find crate
+for `std`".
 
 ## Private cargo registry credentials (build-time)
 

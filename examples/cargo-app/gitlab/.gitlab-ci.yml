@@ -49,7 +49,8 @@ include:
 
   # The workspace's own checks at the pipeline commit, in an image that
   # carries Bash, Git, curl, sha256sum and the toolchain rust-toolchain.toml
-  # pins.
+  # pins. cargo fmt and cargo clippy need that pin to list
+  # components = ["rustfmt", "clippy"]: the minimal profile has neither.
   # check is checksum-bound: include it by the engine commit, never a version;
   # see Checksum-bound engine bootstrap in
   # https://gitlab.example.com/team/ci/forge-ci/-/blob/PIN_FORGE_CI_SHA/docs/gitlab.md.
@@ -64,14 +65,18 @@ include:
 
   # `forge-ci build cargo run` once per service: cargo test, the Build SBOM
   # (bom.json) and one binary per platform under dist/, kept as job
-  # artifacts. Each include names its own job.
+  # artifacts. Each include names its own job. Every platform is
+  # cross-compiled, so the toolchain pin lists each one's target, for
+  # example targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"].
   - component: gitlab.example.com/team/ci/forge-ci/build-cargo@0.90.0
     inputs:
       job-name: build-hsm-worker
       working-directory: hsm-worker
       artifact-name: hsm-worker
+      platforms: "linux/amd64,linux/arm64"
   - component: gitlab.example.com/team/ci/forge-ci/build-cargo@0.90.0
     inputs:
       job-name: build-wallet-bff
       working-directory: wallet-bff
       artifact-name: wallet-bff
+      platforms: "linux/amd64,linux/arm64"

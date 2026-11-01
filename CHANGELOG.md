@@ -158,6 +158,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   member. Cargo metadata lists every member wherever it runs, and the
   build took the first one, so a second member's build asked cargo for a
   binary it could not see from that directory.
+- The GitLab cargo-app example and its README say the toolchain pin must
+  list `components = ["rustfmt", "clippy"]`. Its check job runs both, and a
+  pin with the `minimal` profile installs neither, so the job failed with
+  "'cargo-fmt' is not installed". They also say the pin must list the target
+  of every platform the builds select (Linux amd64 and arm64 by default on
+  GitLab); a missing one fails with "can't find crate for `std`".
 - The GitLab go-cli example no longer passes `skip-tests: true` to
   `build-go`. The engine refuses it, because an administrator may require
   tests, so a merge request copied from the example failed before building.
@@ -200,6 +206,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   copied Go release failed with "cyclonedx-gomod not found in $PATH". One
   already on `PATH` is still used. A missing `cyclonedx-gomod` now says how
   to bring it or turn the Build SBOM off.
+- The monorepo example's Nanolinter plan lists only checks that run at the
+  repository root. It had also blocked on `java-checkstyle`, `node-eslint` and
+  `node-format`, which find no `pom.xml` or `package.json` at a monorepo's
+  root and only reported "skip", so the projects looked linted when they were
+  not.
 - `artifact upload` and `artifact download` no longer cut a large file off
   after 30 seconds. File bodies on Forgejo and GitHub are bounded by progress:
   a transfer fails only once no bytes move for the HTTP timeout

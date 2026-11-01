@@ -66,4 +66,5 @@ include:
   - component: gitlab.example.com/team/ci/forge-ci/build-go@0.90.0
     inputs:
       artifact-name: my-service
+      main-package: ./cmd/my-service # FIXME: the service's main Go package.
       platforms: "linux/amd64,linux/arm64"

@@ -4,6 +4,12 @@
 
 # nanolinter verify plan: the forge-ci lint gate runs `nanolinter verify` against
 # it, with `secrets,sast` as the floor. `nanolinter explain --all` lists more checks.
+#
+# The gate runs at the repository root, and Nanolinter detects projects there:
+# these checks cover the whole tree. Checks that read a project manifest
+# (java-checkstyle needs a pom.xml, node-eslint and node-format a
+# package.json) find none at the root of a monorepo and would only report
+# "skip", so they are not listed; lint each project with its own tooling.
 
 [detect]
 auto = true
@@ -17,9 +23,6 @@ checks = [
   "markdown",
   "shell",
   "xml",
-  "java-checkstyle",
-  "node-eslint",
-  "node-format",
 ]
 
 [policy]
@@ -31,7 +34,4 @@ block = [
   "markdown",
   "shell",
   "xml",
-  "java-checkstyle",
-  "node-eslint",
-  "node-format",
 ]

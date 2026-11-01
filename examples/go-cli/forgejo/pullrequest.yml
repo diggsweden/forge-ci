@@ -109,6 +109,8 @@ jobs:
         with:
           version: 0.0.0-pr
           commit: ${{ forgejo.sha }}
+          # FIXME: your command's main package; the release builds the same.
+          main-package: ./cmd/my-cli
           enable-build-sbom: 'false'
 
   # ===========================================================================

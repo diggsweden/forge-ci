@@ -167,6 +167,8 @@ jobs:
           version: ${{ needs.prepare.outputs.release-tag }}
           commit: ${{ needs.prepare.outputs.release-sha }}
           artifact-name: ${{ env.ARTIFACT_NAME }}
+          # FIXME: your command's main package ("." at the module root).
+          main-package: ./cmd/my-cli
           platforms: linux/amd64,linux/arm64
 
       # The hand-off the signer takes: the public files, exactly one checksums

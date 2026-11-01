@@ -111,6 +111,8 @@ jobs:
         with:
           version: 0.0.0-pr
           commit: ${{ forgejo.sha }}
+          # FIXME: the service's main Go package; the release builds the same.
+          main-package: ./cmd/my-service
           enable-build-sbom: 'false'
 
   # ===========================================================================

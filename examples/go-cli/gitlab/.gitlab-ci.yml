@@ -64,5 +64,5 @@ include:
   - component: gitlab.example.com/team/ci/forge-ci/build-go@0.90.0
     inputs:
       artifact-name: my-cli
-      main-package: "." # Use ./cmd/my-cli for a command below the module root.
+      main-package: ./cmd/my-cli # FIXME: your command's main package ("." at the module root).
       platforms: "linux/amd64,linux/arm64,darwin/amd64,darwin/arm64"

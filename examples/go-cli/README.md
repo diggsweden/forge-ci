@@ -60,9 +60,10 @@ When calling the builders directly, their defaults differ:
 | `skip-tests` | `false` | `false` | `'false'` |
 | `enable-build-sbom` | `true` | `true` | `'true'` |
 
-Select `platforms` explicitly when moving a build between forges. Use
-`main-package: ./cmd/my-cli` for a command below the module root; it is relative
-to `working-directory`. Forgejo action booleans are string inputs.
+Select `platforms` explicitly when moving a build between forges. The examples
+build `main-package: ./cmd/my-cli` on every forge, in pull requests and
+releases alike; use `.` for a command at the module root. It is relative to
+`working-directory`. Forgejo action booleans are string inputs.
 
 GitHub release creation downloads the build artifact contents under
 `release-artifacts/<goos>-<goarch>/`. Filenames include the platform suffix so

@@ -28,7 +28,7 @@ versioned binaries first and assembles images from them in separate native jobs.
 
 - `artifacts.yml` declares `project-type: go` with `config.build-mode: container-first`. The GitHub release reads it.
 - `Containerfile.example` shows the container-first multi-stage pattern: `builder`, `export-binary`, and `runtime`. Copy it to `Containerfile` for the GitHub path.
-- `forgejo/Containerfile.example` copies the versioned binaries into a runtime image. Copy it to `Containerfile.forgejo` and match its binary name to `ARTIFACT_NAME` in the workflow.
+- `forgejo/Containerfile.example` copies the versioned binaries into a runtime image. Copy it to `Containerfile.forgejo` and match its binary name to `ARTIFACT_NAME` in the workflow. Its build context must include `dist/linux-*/`: if your `.containerignore` excludes `dist/`, add `!dist/linux-*/` after that line.
 - `artifacts-forgejo.yml` declares those images without extraction. Copy it to `.forge-ci/images.yml` for the Forgejo release.
 - `github/release-workflow.yml` calls the release orchestrator; the container is published by `publish-container.yml`.
 - `github/pullrequest-workflow.yml` runs forge-ci PR checks and, in its own `test` job, `go vet` and `go test`; `govulncheck` and any other policy are yours to add there.

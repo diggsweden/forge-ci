@@ -46,8 +46,9 @@ stages:
 
 include:
   # The lint gate: the project's nanolinter.toml plan, with the secrets,sast
-  # floor. The core flavour carries only the ecosystem-neutral checks; pick
-  # the java or javascript-typescript flavour for the stack you lint most.
+  # floor. The gate runs at the repository root, where a monorepo has no
+  # project manifest, so the plan lists only tree-wide checks and the core
+  # flavour carries them all; see nanolinter.toml.
   - component: gitlab.example.com/team/ci/forge-ci/nanolinter@0.90.0
     inputs:
       forge-ci-repository: team/ci/forge-ci

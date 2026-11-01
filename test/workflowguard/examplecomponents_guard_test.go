@@ -136,4 +136,14 @@ func checkExampleInclude(t *testing.T, where string, spec componentSpec, inputs 
 			t.Errorf("%s leaves out the required input %s", where, name)
 		}
 	}
+
+	// The platforms a build selects decide what else the project needs, a
+	// cross-compilation target in the Cargo toolchain pin for one, and the
+	// default differs between components and forges. An adopter reads them
+	// from the include, not from the component's spec.
+	if _, declared := spec.Spec.Inputs["platforms"]; declared {
+		if _, passed := inputs["platforms"]; !passed {
+			t.Errorf("%s leaves platforms to the component's default; name them", where)
+		}
+	}
 }
