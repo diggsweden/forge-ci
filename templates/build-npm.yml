@@ -45,7 +45,7 @@ spec:
       description: Generate the CycloneDX Build SBOM with cyclonedx-npm.
     sbom-tool-version:
       # renovate: datasource=npm depName=@cyclonedx/cyclonedx-npm
-      default: "6.0.0"
+      default: "6.0.1"
       description: Pinned @cyclonedx/cyclonedx-npm version run via npx.
     node-version:
       default: "24"

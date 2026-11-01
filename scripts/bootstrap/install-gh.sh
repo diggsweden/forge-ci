@@ -12,11 +12,11 @@
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/install-common.sh"
 
 # renovate: datasource=github-releases depName=cli/cli
-readonly GH_VERSION="v2.93.0"
-readonly GH_SHA256_LINUX_AMD64="02d1290eba130e0b896f3709ffff22e1c75a51475ddb70476a85abc6b5807af0"
-readonly GH_SHA256_LINUX_ARM64="c55feb33684abba57e9909737340d5b39282257c0363e1edde6785ac4a413be7"
-readonly GH_SHA256_DARWIN_AMD64="009425b9d175c482037fe25181817fd6b1ea3ae1f51cfae0e18f29f33d3152ac"
-readonly GH_SHA256_DARWIN_ARM64="a86be4e0a86c26456cf71177d6572d6f1165cf1679e532b72f7f15918ee51fd2"
+readonly GH_VERSION="v2.103.2"
+readonly GH_SHA256_LINUX_AMD64="62ccf747115ddc61237efffdde66a3c8f70ba249433dc64f70801089b59c59c8"
+readonly GH_SHA256_LINUX_ARM64="4c3e99a50bd8b181a3fe9d69b25dd978bac768148d88f01507c6b4d1ef61a443"
+readonly GH_SHA256_DARWIN_AMD64="2dc7f1fc4761f96732995f6e4f4c6b4d705f2635da4126620c8b30eaa67b9c98"
+readonly GH_SHA256_DARWIN_ARM64="5416000f5d17580a187339e0c4068a01ca5c87f7d4fe6ca64933696f967bc418"
 
 resolve_gh_dist() {
 	local os arch dist=""
@@ -48,10 +48,10 @@ resolve_gh_dist() {
 
 resolve_gh_sha256() {
 	case "$1" in
-	gh_2.93.0_linux_amd64.tar.gz) printf '%s' "$GH_SHA256_LINUX_AMD64" ;;
-	gh_2.93.0_linux_arm64.tar.gz) printf '%s' "$GH_SHA256_LINUX_ARM64" ;;
-	gh_2.93.0_macOS_amd64.zip) printf '%s' "$GH_SHA256_DARWIN_AMD64" ;;
-	gh_2.93.0_macOS_arm64.zip) printf '%s' "$GH_SHA256_DARWIN_ARM64" ;;
+	gh_2.103.2_linux_amd64.tar.gz) printf '%s' "$GH_SHA256_LINUX_AMD64" ;;
+	gh_2.103.2_linux_arm64.tar.gz) printf '%s' "$GH_SHA256_LINUX_ARM64" ;;
+	gh_2.103.2_macOS_amd64.zip) printf '%s' "$GH_SHA256_DARWIN_AMD64" ;;
+	gh_2.103.2_macOS_arm64.zip) printf '%s' "$GH_SHA256_DARWIN_ARM64" ;;
 	*)
 		printf 'ERROR: no pinned SHA-256 for gh asset %s\n' "$1" >&2
 		return 1

@@ -33,7 +33,7 @@ the table below summarizes the shipped families.
 | `forge-ci-runtime` (full) | `runtime-base` | `syft`, `trivy` |
 | `forge-ci-runtime-rust-stable` | `runtime-base` | Pinned Rust stable release + `cargo-cyclonedx` |
 | `forge-ci-runtime-go-1.27` | `runtime-base` | Go 1.27.3, `cyclonedx-gomod`, GCC, libc development headers and gettext |
-| `forge-ci-runtime-java-25` | `runtime-base` | Eclipse Temurin JDK 25 LTS + Maven 3.9.x + Gradle 8.x |
+| `forge-ci-runtime-java-25` | `runtime-base` | Eclipse Temurin JDK 25 LTS + Maven 3.10.x + Gradle 8.x |
 | `forge-ci-runtime-android-35` | `runtime-java-25` | Android cmdline-tools + platform-tools + build-tools 35 + android-35, no NDK |
 | `forge-ci-runtime-node-24` | `runtime-base` | Node 24 LTS + npm + corepack |
 
@@ -250,11 +250,11 @@ release lines, not a request to install the latest version on each rebuild.
 | Rust | Pinned stable release | Use a compatible `runtime-image:` override |
 | Go | 1.27.x | Use a compatible `runtime-image:` override |
 | JDK | Eclipse Temurin 25 LTS | Use a compatible `runtime-image:` override |
-| Maven | Pinned 3.9.x | The shipped adapter runs system `mvn`, not an automatically discovered `mvnw`; override the image to change it |
+| Maven | Pinned 3.x release, currently 3.10.x | The shipped adapter runs system `mvn`, not an automatically discovered `mvnw`; override the image to change it |
 | Gradle | Pinned 8.x installed | The shipped adapter runs the project's `./gradlew` wrapper |
 | Node | Node 24 LTS with bundled npm and Corepack by default | GitHub `build-npm` selects an explicit `node-version` before `npm`/`npx`; stable/snapshot stages forward `config.node-version`. Empty retains the runtime image's Node. `engines` or `packageManager` metadata alone does not select a different toolchain |
 | Android cmdline-tools | Pinned archive version | Extend/override the image for additional SDK requirements |
-| Android build-tools | 35.0.0 | Extend/override the image for additional SDK requirements |
+| Android build-tools | 35.0.1 | Extend/override the image for additional SDK requirements |
 | Android SDK platform | android-35 | Extend/override the image for additional SDK requirements |
 
 A reusable workflow's runtime is selected inside its jobs. Tool setup performed

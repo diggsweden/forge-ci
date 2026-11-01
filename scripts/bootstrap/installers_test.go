@@ -135,43 +135,43 @@ func TestPinnedInstallers_VerifyExactDownloadBeforeInstalling(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []pinnedInstallerCase{
-		{"trivy", "https://github.com/aquasecurity/trivy/releases/download/v0.76.0/trivy_0.76.0_Linux-64bit.tar.gz", "e24b1c51293c1b15e4ba8d45bbc7891ba053f90278ec2698f3562c993e145fe7", "trivy", "", ""},
-		{"syft", "https://github.com/anchore/syft/releases/download/v1.51.1/syft_1.51.1_linux_amd64.tar.gz", "8fcb33017a0dc1058298c923c436d19dfa68ae93968e0b423248542e3afb9fc3", "syft", "", ""},
+		{"trivy", "https://github.com/aquasecurity/trivy/releases/download/v0.76.1/trivy_0.76.1_Linux-64bit.tar.gz", "c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0", "trivy", "", ""},
+		{"syft", "https://github.com/anchore/syft/releases/download/v1.55.0/syft_1.55.0_linux_amd64.tar.gz", "bb65249542db5fedeeb4d3f9b018b75e7264dbfbbb10486f044581a92f90490d", "syft", "", ""},
 		{"cargo-cyclonedx", "https://github.com/CycloneDX/cyclonedx-rust-cargo/releases/download/cargo-cyclonedx-0.5.9/cargo-cyclonedx-x86_64-unknown-linux-gnu.tar.xz", "fb8dbee9f182173e062a64a387b21a0badc6fab8b2abf9294973f012972bf6d8", "cargo-cyclonedx-x86_64-unknown-linux-gnu/cargo-cyclonedx", "", ""},
 		{"cargo-cyclonedx", "https://github.com/CycloneDX/cyclonedx-rust-cargo/releases/download/cargo-cyclonedx-0.5.9/cargo-cyclonedx-aarch64-unknown-linux-gnu.tar.xz", "7bf131ca5389b07a4f10c182bcf8a5ad339d64408b6f0d8f6834a0bd6120a06a", "cargo-cyclonedx-aarch64-unknown-linux-gnu/cargo-cyclonedx", "Linux", "aarch64"},
 		{"cargo-cyclonedx", "https://github.com/CycloneDX/cyclonedx-rust-cargo/releases/download/cargo-cyclonedx-0.5.9/cargo-cyclonedx-x86_64-apple-darwin.tar.xz", "59d2a583fa632f8759456c1b531340331255b277386d23c598a3dbbc916fde63", "cargo-cyclonedx-x86_64-apple-darwin/cargo-cyclonedx", "Darwin", "x86_64"},
 		{"cargo-cyclonedx", "https://github.com/CycloneDX/cyclonedx-rust-cargo/releases/download/cargo-cyclonedx-0.5.9/cargo-cyclonedx-aarch64-apple-darwin.tar.xz", "4c53dfa21e70b65bf7f8d2592aadde3bcb02c1a40b6ec63b877e5ca65a29e180", "cargo-cyclonedx-aarch64-apple-darwin/cargo-cyclonedx", "Darwin", "arm64"},
-		{"cyclonedx-gomod", "https://github.com/CycloneDX/cyclonedx-gomod/releases/download/v1.10.0/cyclonedx-gomod_1.10.0_linux_amd64.tar.gz", "5cce8ae99a5181be6a610ea5ed9ca9d596937cc04dc1a8f6f6b5e462d8c9900e", "cyclonedx-gomod", "", ""},
-		{"cyclonedx-gomod", "https://github.com/CycloneDX/cyclonedx-gomod/releases/download/v1.10.0/cyclonedx-gomod_1.10.0_linux_arm64.tar.gz", "b2bebbe569c39b6bd62b7a142269a8870795020ef608483c942e4b7f51f4de6b", "cyclonedx-gomod", "Linux", "aarch64"},
-		{"cyclonedx-gomod", "https://github.com/CycloneDX/cyclonedx-gomod/releases/download/v1.10.0/cyclonedx-gomod_1.10.0_darwin_amd64.tar.gz", "f4ec9f8bef518001c6d12b151cb965511d3e67fab22bed3a682f7cf4fd2f1728", "cyclonedx-gomod", "Darwin", "x86_64"},
-		{"cyclonedx-gomod", "https://github.com/CycloneDX/cyclonedx-gomod/releases/download/v1.10.0/cyclonedx-gomod_1.10.0_darwin_arm64.tar.gz", "2a8e887efb07ed4e36d7ead879a15e055b1e50d60e5d45e407f9f2a27db4dc46", "cyclonedx-gomod", "Darwin", "arm64"},
-		{"cosign", "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-linux-amd64", "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71", "", "", ""},
-		{"gh", "https://github.com/cli/cli/releases/download/v2.93.0/gh_2.93.0_linux_amd64.tar.gz", "02d1290eba130e0b896f3709ffff22e1c75a51475ddb70476a85abc6b5807af0", "gh_2.93.0_linux_amd64/bin/gh", "", ""},
-		{"glab", "https://gitlab.com/gitlab-org/cli/-/releases/v1.74.0/downloads/glab_1.74.0_linux_amd64.tar.gz", "75008e8d57825547d944a3193a66a018188b433a4ecb1cf36500ffbafe4689ff", "root/bin/glab", "", ""},
-		{"git-cliff", "https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-x86_64-unknown-linux-gnu.tar.gz", "9a1263f24e59a2f508c7b3d3283c9dea94a8bf697f96dbc18cc783cac6284546", "root/git-cliff", "", ""},
-		{"yq", "https://github.com/mikefarah/yq/releases/download/v4.52.5/yq_linux_amd64", "75d893a0d5940d1019cb7cdc60001d9e876623852c31cfc6267047bc31149fa9", "", "", ""},
-		{"mise", "https://github.com/jdx/mise/releases/download/v2026.9.17/mise-v2026.9.17-linux-x64", "63049bc35fb9065e8dc35ac8b25fdae53e9bd6f1885a843aedeba398e046a1ee", "", "", ""},
-		{"publiccode-parser", "https://github.com/italia/publiccode-parser-go/releases/download/v5.3.1/publiccode-parser-go_Linux_x86_64.tar.gz", "ed5b75ebe3fc3f6c29f925d8acc132e381769690cada3b40680406b9ec64fedf", "publiccode-parser", "", ""},
+		{"cyclonedx-gomod", "https://github.com/CycloneDX/cyclonedx-gomod/releases/download/v1.12.0/cyclonedx-gomod_1.12.0_linux_amd64.tar.gz", "004b9f5cc595b797fb5423e2ae4c97bcf0f18c712ed2faee1640b09e5efd6d15", "cyclonedx-gomod", "", ""},
+		{"cyclonedx-gomod", "https://github.com/CycloneDX/cyclonedx-gomod/releases/download/v1.12.0/cyclonedx-gomod_1.12.0_linux_arm64.tar.gz", "b6dd6424755e61c0f7fcd36074fbb78798a33c52f1bd35dd177ba62eccadf404", "cyclonedx-gomod", "Linux", "aarch64"},
+		{"cyclonedx-gomod", "https://github.com/CycloneDX/cyclonedx-gomod/releases/download/v1.12.0/cyclonedx-gomod_1.12.0_darwin_amd64.tar.gz", "94ab2d999341e4bc8d26767bffda2823ac4507c2f17c01af6d3738f5341b9e85", "cyclonedx-gomod", "Darwin", "x86_64"},
+		{"cyclonedx-gomod", "https://github.com/CycloneDX/cyclonedx-gomod/releases/download/v1.12.0/cyclonedx-gomod_1.12.0_darwin_arm64.tar.gz", "43dcd58b7a7ef9d84a2d21df9c6eeeb907d5b4ee2b1fe6c1330e5bc9b478281e", "cyclonedx-gomod", "Darwin", "arm64"},
+		{"cosign", "https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-linux-amd64", "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa", "", "", ""},
+		{"gh", "https://github.com/cli/cli/releases/download/v2.103.2/gh_2.103.2_linux_amd64.tar.gz", "62ccf747115ddc61237efffdde66a3c8f70ba249433dc64f70801089b59c59c8", "gh_2.103.2_linux_amd64/bin/gh", "", ""},
+		{"glab", "https://gitlab.com/gitlab-org/cli/-/releases/v1.124.0/downloads/glab_1.124.0_linux_amd64.tar.gz", "63df684842b0697e418649dd64374d37ac1da0fbcdcb422d6a5557222f8bb40f", "root/bin/glab", "", ""},
+		{"git-cliff", "https://github.com/orhun/git-cliff/releases/download/v2.14.2/git-cliff-2.14.2-x86_64-unknown-linux-gnu.tar.gz", "24f397c733add5390fdceee3a2088588ab0d5f944ce00d34cb7029b888cf2db4", "root/git-cliff", "", ""},
+		{"yq", "https://github.com/mikefarah/yq/releases/download/v4.54.1/yq_linux_amd64", "8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f", "", "", ""},
+		{"mise", "https://github.com/jdx/mise/releases/download/v2026.10.19/mise-v2026.10.19-linux-x64", "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d", "", "", ""},
+		{"publiccode-parser", "https://github.com/italia/publiccode-parser-go/releases/download/v5.4.3/publiccode-parser-go_Linux_x86_64.tar.gz", "211847305611417ac0b76af5169086232ea6c75ff6ae686227b6972a41599dd7", "publiccode-parser", "", ""},
 		{"forgejo-runner", "https://code.forgejo.org/forgejo/runner/releases/download/v13.2.0/forgejo-runner-13.2.0-linux-amd64", "fadaec897f5e6641c363f87ecaf75f866f99c81b7097ec6b433e4c48123fcad1", "", "", ""},
 		{"forgejo-runner", "https://code.forgejo.org/forgejo/runner/releases/download/v13.2.0/forgejo-runner-13.2.0-linux-arm64", "9d3d462ee83e4e629f959faeacceb20eed2f25290bddea402e65ace46a31afd9", "", "Linux", "aarch64"},
-		{"trivy", "https://github.com/aquasecurity/trivy/releases/download/v0.76.0/trivy_0.76.0_Linux-ARM64.tar.gz", "aab21e677a7b7071fc79f1711480840754c18a1b9d9cefa7ccd06af63a0e8f4c", "trivy", "Linux", "aarch64"},
-		{"trivy", "https://github.com/aquasecurity/trivy/releases/download/v0.76.0/trivy_0.76.0_macOS-ARM64.tar.gz", "e7ec0d21fe842553f59af99aba2efbcc822369fbaed27019c575408b6d135fce", "trivy", "Darwin", "arm64"},
-		{"syft", "https://github.com/anchore/syft/releases/download/v1.51.1/syft_1.51.1_linux_arm64.tar.gz", "a7fd2b784e6664acd44719270574f6cd8c6864fc2b1700bf9099bd1cccda7d7f", "syft", "Linux", "aarch64"},
-		{"syft", "https://github.com/anchore/syft/releases/download/v1.51.1/syft_1.51.1_darwin_amd64.tar.gz", "0e186ce1d4351ec276126851ca3ff258ed070e93e73574ed64858d4fc2339867", "syft", "Darwin", "x86_64"},
-		{"syft", "https://github.com/anchore/syft/releases/download/v1.51.1/syft_1.51.1_darwin_arm64.tar.gz", "ac063af3b9874769deb7ea1e6d76841e68f9e3bb50cd654226fc977de65532c1", "syft", "Darwin", "arm64"},
-		{"cosign", "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-linux-arm64", "c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a", "", "Linux", "aarch64"},
-		{"cosign", "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-darwin-arm64", "5cf948c2f4dfe59687bdd0b8523709067383e03982cc543475c8a7dc70e92a76", "", "Darwin", "arm64"},
-		{"gh", "https://github.com/cli/cli/releases/download/v2.93.0/gh_2.93.0_linux_arm64.tar.gz", "c55feb33684abba57e9909737340d5b39282257c0363e1edde6785ac4a413be7", "gh_2.93.0_linux_arm64/bin/gh", "Linux", "arm64"},
-		{"glab", "https://gitlab.com/gitlab-org/cli/-/releases/v1.74.0/downloads/glab_1.74.0_linux_arm64.tar.gz", "65f987456b884a9b230895010d24431507e4c9b48bbada4de5400d2d11b0ccee", "root/bin/glab", "Linux", "aarch64"},
-		{"glab", "https://gitlab.com/gitlab-org/cli/-/releases/v1.74.0/downloads/glab_1.74.0_darwin_arm64.tar.gz", "cc67a9f79079ed9578cd93ca385e3df13975e2ccb03f047c0c6bf51f708af395", "root/bin/glab", "Darwin", "arm64"},
-		{"git-cliff", "https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-aarch64-unknown-linux-gnu.tar.gz", "9619b7f0c584229f8a2331c1905afe88bd938bdc9102926c2073836a42f02455", "root/git-cliff", "Linux", "aarch64"},
-		{"git-cliff", "https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-x86_64-apple-darwin.tar.gz", "6e60ae390d375cecb9d8008c49f0e724a8dfe40390b532ef5501e421d2cc8acb", "root/git-cliff", "Darwin", "amd64"},
-		{"yq", "https://github.com/mikefarah/yq/releases/download/v4.52.5/yq_linux_arm", "dea10a4f66646160b592bb8ddaed9fc8c5f13d235474e66c47178cbf2f816a73", "", "Linux", "armv7l"},
-		{"yq", "https://github.com/mikefarah/yq/releases/download/v4.52.5/yq_darwin_arm64", "45a12e64d4bd8a31c72ee1b889e81f1b1110e801baad3d6f030c111db0068de0", "", "Darwin", "arm64"},
-		{"mise", "https://github.com/jdx/mise/releases/download/v2026.9.17/mise-v2026.9.17-linux-arm64", "ab125726a93a2967e30290ade713a960b9fe8eed0ae0e2fc0976e327b08af70d", "", "Linux", "aarch64"},
-		{"mise", "https://github.com/jdx/mise/releases/download/v2026.9.17/mise-v2026.9.17-macos-x64", "5377f3173a8ba333612cfbaa3906b4a8cb167dfcca5bf2e76dc280243255abc3", "", "Darwin", "x86_64"},
-		{"publiccode-parser", "https://github.com/italia/publiccode-parser-go/releases/download/v5.3.1/publiccode-parser-go_Linux_arm64.tar.gz", "556b0fe4d8a6e9d2f638baa174212930ae463da6f5911543a55f29018bea78ae", "publiccode-parser", "Linux", "aarch64"},
-		{"publiccode-parser", "https://github.com/italia/publiccode-parser-go/releases/download/v5.3.1/publiccode-parser-go_Darwin_arm64.tar.gz", "ca7a332ddda144e7f7f5569fe207799298db5fc1fd9129cff312a9ffe658543f", "publiccode-parser", "Darwin", "arm64"},
+		{"trivy", "https://github.com/aquasecurity/trivy/releases/download/v0.76.1/trivy_0.76.1_Linux-ARM64.tar.gz", "e174dff2a6dba5e3ae41f8d0537a6324405bd08132497340304c6b20e0f16a1f", "trivy", "Linux", "aarch64"},
+		{"trivy", "https://github.com/aquasecurity/trivy/releases/download/v0.76.1/trivy_0.76.1_macOS-ARM64.tar.gz", "11a9b6cd2752011b54f01ea4bd0dbfa9f0c41dc6538d5a3f9d23955f471bf4e5", "trivy", "Darwin", "arm64"},
+		{"syft", "https://github.com/anchore/syft/releases/download/v1.55.0/syft_1.55.0_linux_arm64.tar.gz", "929bd163db2d7cd2255d3bcb8967208079813d7b46b0c952f7b794d8e2c7d304", "syft", "Linux", "aarch64"},
+		{"syft", "https://github.com/anchore/syft/releases/download/v1.55.0/syft_1.55.0_darwin_amd64.tar.gz", "e2e5831cbabaec9a36fe65c34755c1113982c842a685edce3ce0b54a0ded8003", "syft", "Darwin", "x86_64"},
+		{"syft", "https://github.com/anchore/syft/releases/download/v1.55.0/syft_1.55.0_darwin_arm64.tar.gz", "1217c258bd5eb91ef3189cf22a82e02f9cac07e4ce934350f428e93aff674625", "syft", "Darwin", "arm64"},
+		{"cosign", "https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-linux-arm64", "ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2", "", "Linux", "aarch64"},
+		{"cosign", "https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-darwin-arm64", "9f9b8cd557cf2e5b3df3373a00baa005a86b02391e3e06dd0ce37b3a1533d3a4", "", "Darwin", "arm64"},
+		{"gh", "https://github.com/cli/cli/releases/download/v2.103.2/gh_2.103.2_linux_arm64.tar.gz", "4c3e99a50bd8b181a3fe9d69b25dd978bac768148d88f01507c6b4d1ef61a443", "gh_2.103.2_linux_arm64/bin/gh", "Linux", "arm64"},
+		{"glab", "https://gitlab.com/gitlab-org/cli/-/releases/v1.124.0/downloads/glab_1.124.0_linux_arm64.tar.gz", "0716395a0efeb991fc844b33fe55310645afcbd9b9746e50c725e9d1cd1b8d16", "root/bin/glab", "Linux", "aarch64"},
+		{"glab", "https://gitlab.com/gitlab-org/cli/-/releases/v1.124.0/downloads/glab_1.124.0_darwin_arm64.tar.gz", "04aad4d989d98cb030318e09359f02e0ba2637ede682ec0dee1f5974dedd44c1", "root/bin/glab", "Darwin", "arm64"},
+		{"git-cliff", "https://github.com/orhun/git-cliff/releases/download/v2.14.2/git-cliff-2.14.2-aarch64-unknown-linux-gnu.tar.gz", "69e208f6e4baef3a0f9b759d5f44223aa9336b86c691072a3d0c98d35a816e69", "root/git-cliff", "Linux", "aarch64"},
+		{"git-cliff", "https://github.com/orhun/git-cliff/releases/download/v2.14.2/git-cliff-2.14.2-x86_64-apple-darwin.tar.gz", "4e647d2deb152aca1e987f225cf42b080b991dd98f3bce4027ef95446d982ac3", "root/git-cliff", "Darwin", "amd64"},
+		{"yq", "https://github.com/mikefarah/yq/releases/download/v4.54.1/yq_linux_arm", "a5d45c07b75fab772193c4a79f4df9f5c8ed33836fa0f36dcc947f9495439b00", "", "Linux", "armv7l"},
+		{"yq", "https://github.com/mikefarah/yq/releases/download/v4.54.1/yq_darwin_arm64", "fee511a181bd8b3e6b7da98842b41973bfac8cd3bcd341ed29a584620b5b2844", "", "Darwin", "arm64"},
+		{"mise", "https://github.com/jdx/mise/releases/download/v2026.10.19/mise-v2026.10.19-linux-arm64", "4a4ca53b28e5433c527f4f73fac1f98f992a17cf32ca136a58e2e375f790f627", "", "Linux", "aarch64"},
+		{"mise", "https://github.com/jdx/mise/releases/download/v2026.10.19/mise-v2026.10.19-macos-x64", "8d5e1591811143f15334f690373cefb58c13bd6cbd0292008748fd777f6c99d8", "", "Darwin", "x86_64"},
+		{"publiccode-parser", "https://github.com/italia/publiccode-parser-go/releases/download/v5.4.3/publiccode-parser-go_Linux_arm64.tar.gz", "33363da55ddf38457f6f9081cc8f3b833e833eb3a401d6c9c3feb8e5f2dc3fd7", "publiccode-parser", "Linux", "aarch64"},
+		{"publiccode-parser", "https://github.com/italia/publiccode-parser-go/releases/download/v5.4.3/publiccode-parser-go_Darwin_arm64.tar.gz", "61b3754455bfa5c04fe766d549e8b1d01fe804f7d914c93ee19e3ea28e6a46ae", "publiccode-parser", "Darwin", "arm64"},
 	} {
 		if tc.os == "" {
 			tc.os, tc.arch = "Linux", "x86_64"
@@ -222,7 +222,7 @@ func checkPinnedInstaller(t *testing.T, tc pinnedInstallerCase, mode installerMo
 	t.Helper()
 	root, scriptDir, binDir := t.TempDir(), t.TempDir(), t.TempDir()
 	fixture := filepath.Join(root, "download")
-	binary := []byte("#!/usr/bin/env bash\nprintf 'GitVersion: v3.1.3\\n{\"version\":\"fixture\"}\\n'\n")
+	binary := []byte("#!/usr/bin/env bash\nprintf 'GitVersion: v3.1.4\\n{\"version\":\"fixture\"}\\n'\n")
 	writeFixture := func(body []byte) {
 		if tc.entry != "" {
 			writeInstallerTarball(t, fixture, tc.entry, body)
@@ -268,7 +268,7 @@ func checkPinnedInstaller(t *testing.T, tc pinnedInstallerCase, mode installerMo
 	ambientMarker := filepath.Join(root, "ambient-called")
 
 	if tc.tool == "cosign" || tc.tool == "syft" {
-		ambient := "#!/usr/bin/env bash\nprintf called > \"$AMBIENT_MARKER\"\nprintf 'GitVersion: v3.1.3\\n'\n"
+		ambient := "#!/usr/bin/env bash\nprintf called > \"$AMBIENT_MARKER\"\nprintf 'GitVersion: v3.1.4\\n'\n"
 		if writeErr := os.WriteFile(filepath.Join(binDir, tc.tool), []byte(ambient), 0o700); writeErr != nil {
 			t.Fatal(writeErr)
 		}
@@ -323,35 +323,35 @@ func TestRuntimeInstallerHashesMatchExactAssets(t *testing.T) {
 		body   string
 		want   string
 	}{
-		{name: "cosign linux amd64", script: "install-cosign.sh", body: `resolve_cosign_sha256 cosign-linux-amd64`, want: "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71"},
-		{name: "cosign linux arm64", script: "install-cosign.sh", body: `resolve_cosign_sha256 cosign-linux-arm64`, want: "c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a"},
-		{name: "cosign darwin amd64", script: "install-cosign.sh", body: `resolve_cosign_sha256 cosign-darwin-amd64`, want: "2347488e5d5b25336644024dfeca5601b190e91197a71a917bda44744aff106c"},
-		{name: "cosign darwin arm64", script: "install-cosign.sh", body: `resolve_cosign_sha256 cosign-darwin-arm64`, want: "5cf948c2f4dfe59687bdd0b8523709067383e03982cc543475c8a7dc70e92a76"},
-		{name: "gh amd64", script: "install-gh.sh", body: `resolve_gh_sha256 gh_2.93.0_linux_amd64.tar.gz`, want: "02d1290eba130e0b896f3709ffff22e1c75a51475ddb70476a85abc6b5807af0"},
-		{name: "gh arm64", script: "install-gh.sh", body: `resolve_gh_sha256 gh_2.93.0_linux_arm64.tar.gz`, want: "c55feb33684abba57e9909737340d5b39282257c0363e1edde6785ac4a413be7"},
-		{name: "gh darwin amd64", script: "install-gh.sh", body: `resolve_gh_sha256 gh_2.93.0_macOS_amd64.zip`, want: "009425b9d175c482037fe25181817fd6b1ea3ae1f51cfae0e18f29f33d3152ac"},
-		{name: "gh darwin arm64", script: "install-gh.sh", body: `resolve_gh_sha256 gh_2.93.0_macOS_arm64.zip`, want: "a86be4e0a86c26456cf71177d6572d6f1165cf1679e532b72f7f15918ee51fd2"},
-		{name: "glab amd64", script: "install-glab.sh", body: `resolve_glab_sha256 glab_1.74.0_linux_amd64.tar.gz`, want: "75008e8d57825547d944a3193a66a018188b433a4ecb1cf36500ffbafe4689ff"},
-		{name: "glab arm64", script: "install-glab.sh", body: `resolve_glab_sha256 glab_1.74.0_linux_arm64.tar.gz`, want: "65f987456b884a9b230895010d24431507e4c9b48bbada4de5400d2d11b0ccee"},
-		{name: "glab darwin amd64", script: "install-glab.sh", body: `resolve_glab_sha256 glab_1.74.0_darwin_amd64.tar.gz`, want: "3262db492073ac23318f43de4b59b93463b01ba9d06232d61ff1f02e10082337"},
-		{name: "glab darwin arm64", script: "install-glab.sh", body: `resolve_glab_sha256 glab_1.74.0_darwin_arm64.tar.gz`, want: "cc67a9f79079ed9578cd93ca385e3df13975e2ccb03f047c0c6bf51f708af395"},
-		{name: "git-cliff amd64", script: "install-git-cliff.sh", body: `resolve_git_cliff_sha256 git-cliff-2.13.1-x86_64-unknown-linux-gnu.tar.gz`, want: "9a1263f24e59a2f508c7b3d3283c9dea94a8bf697f96dbc18cc783cac6284546"},
-		{name: "git-cliff arm64", script: "install-git-cliff.sh", body: `resolve_git_cliff_sha256 git-cliff-2.13.1-aarch64-unknown-linux-gnu.tar.gz`, want: "9619b7f0c584229f8a2331c1905afe88bd938bdc9102926c2073836a42f02455"},
-		{name: "git-cliff darwin amd64", script: "install-git-cliff.sh", body: `resolve_git_cliff_sha256 git-cliff-2.13.1-x86_64-apple-darwin.tar.gz`, want: "6e60ae390d375cecb9d8008c49f0e724a8dfe40390b532ef5501e421d2cc8acb"},
-		{name: "git-cliff darwin arm64", script: "install-git-cliff.sh", body: `resolve_git_cliff_sha256 git-cliff-2.13.1-aarch64-apple-darwin.tar.gz`, want: "21547ae4a0421164070ab75c2522864ea5565858a011fabc5f583061b20f1226"},
-		{name: "yq amd64", script: "install-yq.sh", body: `resolve_yq_sha256 yq_linux_amd64`, want: "75d893a0d5940d1019cb7cdc60001d9e876623852c31cfc6267047bc31149fa9"},
-		{name: "yq arm64", script: "install-yq.sh", body: `resolve_yq_sha256 yq_linux_arm64`, want: "90fa510c50ee8ca75544dbfffed10c88ed59b36834df35916520cddc623d9aaa"},
-		{name: "yq arm", script: "install-yq.sh", body: `resolve_yq_sha256 yq_linux_arm`, want: "dea10a4f66646160b592bb8ddaed9fc8c5f13d235474e66c47178cbf2f816a73"},
-		{name: "yq darwin amd64", script: "install-yq.sh", body: `resolve_yq_sha256 yq_darwin_amd64`, want: "6e399d1eb466860c3202d231727197fdce055888c5c7bec6964156983dd1559d"},
-		{name: "yq darwin arm64", script: "install-yq.sh", body: `resolve_yq_sha256 yq_darwin_arm64`, want: "45a12e64d4bd8a31c72ee1b889e81f1b1110e801baad3d6f030c111db0068de0"},
-		{name: "mise amd64", script: "install-mise.sh", body: `resolve_mise_sha256 mise-v2026.9.17-linux-x64`, want: "63049bc35fb9065e8dc35ac8b25fdae53e9bd6f1885a843aedeba398e046a1ee"},
-		{name: "mise arm64", script: "install-mise.sh", body: `resolve_mise_sha256 mise-v2026.9.17-linux-arm64`, want: "ab125726a93a2967e30290ade713a960b9fe8eed0ae0e2fc0976e327b08af70d"},
-		{name: "mise darwin amd64", script: "install-mise.sh", body: `resolve_mise_sha256 mise-v2026.9.17-macos-x64`, want: "5377f3173a8ba333612cfbaa3906b4a8cb167dfcca5bf2e76dc280243255abc3"},
-		{name: "mise darwin arm64", script: "install-mise.sh", body: `resolve_mise_sha256 mise-v2026.9.17-macos-arm64`, want: "b2dab031288ddd760878bfaefb1f403d2c5d99ca5c478a81c9e7baf07b5f7b84"},
-		{name: "publiccode amd64", script: "install-publiccode-parser.sh", body: `resolve_publiccode_parser_sha256 publiccode-parser-go_Linux_x86_64.tar.gz`, want: "ed5b75ebe3fc3f6c29f925d8acc132e381769690cada3b40680406b9ec64fedf"},
-		{name: "publiccode arm64", script: "install-publiccode-parser.sh", body: `resolve_publiccode_parser_sha256 publiccode-parser-go_Linux_arm64.tar.gz`, want: "556b0fe4d8a6e9d2f638baa174212930ae463da6f5911543a55f29018bea78ae"},
-		{name: "publiccode darwin amd64", script: "install-publiccode-parser.sh", body: `resolve_publiccode_parser_sha256 publiccode-parser-go_Darwin_x86_64.tar.gz`, want: "b283c916c5fface7434a530f39eadc452ea65bb9c3bc12e1446a06714905a453"},
-		{name: "publiccode darwin arm64", script: "install-publiccode-parser.sh", body: `resolve_publiccode_parser_sha256 publiccode-parser-go_Darwin_arm64.tar.gz`, want: "ca7a332ddda144e7f7f5569fe207799298db5fc1fd9129cff312a9ffe658543f"},
+		{name: "cosign linux amd64", script: "install-cosign.sh", body: `resolve_cosign_sha256 cosign-linux-amd64`, want: "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa"},
+		{name: "cosign linux arm64", script: "install-cosign.sh", body: `resolve_cosign_sha256 cosign-linux-arm64`, want: "ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2"},
+		{name: "cosign darwin amd64", script: "install-cosign.sh", body: `resolve_cosign_sha256 cosign-darwin-amd64`, want: "9d1e4abe2b6be279ed0d2ff706fde1ccd738747c834e3e6d44039c238867334f"},
+		{name: "cosign darwin arm64", script: "install-cosign.sh", body: `resolve_cosign_sha256 cosign-darwin-arm64`, want: "9f9b8cd557cf2e5b3df3373a00baa005a86b02391e3e06dd0ce37b3a1533d3a4"},
+		{name: "gh amd64", script: "install-gh.sh", body: `resolve_gh_sha256 gh_2.103.2_linux_amd64.tar.gz`, want: "62ccf747115ddc61237efffdde66a3c8f70ba249433dc64f70801089b59c59c8"},
+		{name: "gh arm64", script: "install-gh.sh", body: `resolve_gh_sha256 gh_2.103.2_linux_arm64.tar.gz`, want: "4c3e99a50bd8b181a3fe9d69b25dd978bac768148d88f01507c6b4d1ef61a443"},
+		{name: "gh darwin amd64", script: "install-gh.sh", body: `resolve_gh_sha256 gh_2.103.2_macOS_amd64.zip`, want: "2dc7f1fc4761f96732995f6e4f4c6b4d705f2635da4126620c8b30eaa67b9c98"},
+		{name: "gh darwin arm64", script: "install-gh.sh", body: `resolve_gh_sha256 gh_2.103.2_macOS_arm64.zip`, want: "5416000f5d17580a187339e0c4068a01ca5c87f7d4fe6ca64933696f967bc418"},
+		{name: "glab amd64", script: "install-glab.sh", body: `resolve_glab_sha256 glab_1.124.0_linux_amd64.tar.gz`, want: "63df684842b0697e418649dd64374d37ac1da0fbcdcb422d6a5557222f8bb40f"},
+		{name: "glab arm64", script: "install-glab.sh", body: `resolve_glab_sha256 glab_1.124.0_linux_arm64.tar.gz`, want: "0716395a0efeb991fc844b33fe55310645afcbd9b9746e50c725e9d1cd1b8d16"},
+		{name: "glab darwin amd64", script: "install-glab.sh", body: `resolve_glab_sha256 glab_1.124.0_darwin_amd64.tar.gz`, want: "6adb7155566bedd6272d8f286e6c75b080d0050a349de4bed79661226d10d954"},
+		{name: "glab darwin arm64", script: "install-glab.sh", body: `resolve_glab_sha256 glab_1.124.0_darwin_arm64.tar.gz`, want: "04aad4d989d98cb030318e09359f02e0ba2637ede682ec0dee1f5974dedd44c1"},
+		{name: "git-cliff amd64", script: "install-git-cliff.sh", body: `resolve_git_cliff_sha256 git-cliff-2.14.2-x86_64-unknown-linux-gnu.tar.gz`, want: "24f397c733add5390fdceee3a2088588ab0d5f944ce00d34cb7029b888cf2db4"},
+		{name: "git-cliff arm64", script: "install-git-cliff.sh", body: `resolve_git_cliff_sha256 git-cliff-2.14.2-aarch64-unknown-linux-gnu.tar.gz`, want: "69e208f6e4baef3a0f9b759d5f44223aa9336b86c691072a3d0c98d35a816e69"},
+		{name: "git-cliff darwin amd64", script: "install-git-cliff.sh", body: `resolve_git_cliff_sha256 git-cliff-2.14.2-x86_64-apple-darwin.tar.gz`, want: "4e647d2deb152aca1e987f225cf42b080b991dd98f3bce4027ef95446d982ac3"},
+		{name: "git-cliff darwin arm64", script: "install-git-cliff.sh", body: `resolve_git_cliff_sha256 git-cliff-2.14.2-aarch64-apple-darwin.tar.gz`, want: "a0be97e237d440d34c5e508ec21d070b2c85cbb8be48a46a56f9a4e8bd247f05"},
+		{name: "yq amd64", script: "install-yq.sh", body: `resolve_yq_sha256 yq_linux_amd64`, want: "8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f"},
+		{name: "yq arm64", script: "install-yq.sh", body: `resolve_yq_sha256 yq_linux_arm64`, want: "189088da0c6429ec5178dfaab1a114805f6cab0b61b165ab236efedf1d57a71b"},
+		{name: "yq arm", script: "install-yq.sh", body: `resolve_yq_sha256 yq_linux_arm`, want: "a5d45c07b75fab772193c4a79f4df9f5c8ed33836fa0f36dcc947f9495439b00"},
+		{name: "yq darwin amd64", script: "install-yq.sh", body: `resolve_yq_sha256 yq_darwin_amd64`, want: "3a812fce205a4d67014fb71b7fa297092210e580df3d8f52dddc2cf3a599c22b"},
+		{name: "yq darwin arm64", script: "install-yq.sh", body: `resolve_yq_sha256 yq_darwin_arm64`, want: "fee511a181bd8b3e6b7da98842b41973bfac8cd3bcd341ed29a584620b5b2844"},
+		{name: "mise amd64", script: "install-mise.sh", body: `resolve_mise_sha256 mise-v2026.10.19-linux-x64`, want: "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d"},
+		{name: "mise arm64", script: "install-mise.sh", body: `resolve_mise_sha256 mise-v2026.10.19-linux-arm64`, want: "4a4ca53b28e5433c527f4f73fac1f98f992a17cf32ca136a58e2e375f790f627"},
+		{name: "mise darwin amd64", script: "install-mise.sh", body: `resolve_mise_sha256 mise-v2026.10.19-macos-x64`, want: "8d5e1591811143f15334f690373cefb58c13bd6cbd0292008748fd777f6c99d8"},
+		{name: "mise darwin arm64", script: "install-mise.sh", body: `resolve_mise_sha256 mise-v2026.10.19-macos-arm64`, want: "7dc61dfa71abbcda1c40d18440bc556b5d58b80e6042bc4f95fd106fa1bb3c66"},
+		{name: "publiccode amd64", script: "install-publiccode-parser.sh", body: `resolve_publiccode_parser_sha256 publiccode-parser-go_Linux_x86_64.tar.gz`, want: "211847305611417ac0b76af5169086232ea6c75ff6ae686227b6972a41599dd7"},
+		{name: "publiccode arm64", script: "install-publiccode-parser.sh", body: `resolve_publiccode_parser_sha256 publiccode-parser-go_Linux_arm64.tar.gz`, want: "33363da55ddf38457f6f9081cc8f3b833e833eb3a401d6c9c3feb8e5f2dc3fd7"},
+		{name: "publiccode darwin amd64", script: "install-publiccode-parser.sh", body: `resolve_publiccode_parser_sha256 publiccode-parser-go_Darwin_x86_64.tar.gz`, want: "38d6bb4be977a1b0ea723e1c4decece852d3c143d15ba98620956e8617354d1f"},
+		{name: "publiccode darwin arm64", script: "install-publiccode-parser.sh", body: `resolve_publiccode_parser_sha256 publiccode-parser-go_Darwin_arm64.tar.gz`, want: "61b3754455bfa5c04fe766d549e8b1d01fe804f7d914c93ee19e3ea28e6a46ae"},
 	}
 
 	for _, testCase := range tests {
@@ -371,7 +371,7 @@ func TestRuntimeInstallersFailBeforeNetworkWhenExactAssetHasNoPin(t *testing.T) 
   builtin command "$@"
 }
 curl() { printf called >"$CURL_MARKER"; }
-resolve_gh_dist() { printf 'gh_2.93.0_macOS_ppc64.zip'; }
+resolve_gh_dist() { printf 'gh_2.103.2_macOS_ppc64.zip'; }
 install_gh`
 
 	_, stderr, err := runSourcedScript(t, "install-gh.sh", body, map[string]string{
@@ -390,7 +390,7 @@ func TestInstallGH_DarwinUsesZipExtraction(t *testing.T) {
 	evidence.RequireTool(t, "unzip")
 
 	fixture := filepath.Join(t.TempDir(), "gh.zip")
-	writeGHZip(t, fixture, "gh_2.93.0_macOS_arm64")
+	writeGHZip(t, fixture, "gh_2.103.2_macOS_arm64")
 	installDir := t.TempDir()
 	body := `command() {
   if [[ "$1" == -v && "$2" == gh && ! -x "$INSTALL_DIR/gh" ]]; then return 1; fi
@@ -1290,16 +1290,16 @@ func TestInstallerResolvers_EveryPlatformAndAliasHasAPinnedAsset(t *testing.T) {
 		unsupported                   []platform
 	}{
 		{script: "install-gh.sh", resolve: "resolve_gh_dist", pin: "resolve_gh_sha256", refusal: "ERROR: Unsupported gh platform: ", assets: map[string][]platform{
-			"gh_2.93.0_linux_amd64.tar.gz": linuxAMD64, "gh_2.93.0_linux_arm64.tar.gz": linuxARM64,
-			"gh_2.93.0_macOS_amd64.zip": darwinAMD64, "gh_2.93.0_macOS_arm64.zip": darwinARM64,
+			"gh_2.103.2_linux_amd64.tar.gz": linuxAMD64, "gh_2.103.2_linux_arm64.tar.gz": linuxARM64,
+			"gh_2.103.2_macOS_amd64.zip": darwinAMD64, "gh_2.103.2_macOS_arm64.zip": darwinARM64,
 		}},
 		{script: "install-glab.sh", resolve: "resolve_glab_dist", pin: "resolve_glab_sha256", refusal: "ERROR: Unsupported glab platform: ", assets: map[string][]platform{
-			"glab_1.74.0_linux_amd64.tar.gz": linuxAMD64, "glab_1.74.0_linux_arm64.tar.gz": linuxARM64,
-			"glab_1.74.0_darwin_amd64.tar.gz": darwinAMD64, "glab_1.74.0_darwin_arm64.tar.gz": darwinARM64,
+			"glab_1.124.0_linux_amd64.tar.gz": linuxAMD64, "glab_1.124.0_linux_arm64.tar.gz": linuxARM64,
+			"glab_1.124.0_darwin_amd64.tar.gz": darwinAMD64, "glab_1.124.0_darwin_arm64.tar.gz": darwinARM64,
 		}},
 		{script: "install-git-cliff.sh", resolve: "resolve_git_cliff_dist", pin: "resolve_git_cliff_sha256", refusal: "ERROR: Unsupported git-cliff platform: ", assets: map[string][]platform{
-			"git-cliff-2.13.1-x86_64-unknown-linux-gnu.tar.gz": linuxAMD64, "git-cliff-2.13.1-aarch64-unknown-linux-gnu.tar.gz": linuxARM64,
-			"git-cliff-2.13.1-x86_64-apple-darwin.tar.gz": darwinAMD64, "git-cliff-2.13.1-aarch64-apple-darwin.tar.gz": darwinARM64,
+			"git-cliff-2.14.2-x86_64-unknown-linux-gnu.tar.gz": linuxAMD64, "git-cliff-2.14.2-aarch64-unknown-linux-gnu.tar.gz": linuxARM64,
+			"git-cliff-2.14.2-x86_64-apple-darwin.tar.gz": darwinAMD64, "git-cliff-2.14.2-aarch64-apple-darwin.tar.gz": darwinARM64,
 		}},
 		{script: "install-yq.sh", resolve: "resolve_yq_dist", pin: "resolve_yq_sha256", refusal: "ERROR: Unsupported yq platform: ", assets: map[string][]platform{
 			"yq_linux_amd64": linuxAMD64, "yq_linux_arm64": linuxARM64,
@@ -1307,8 +1307,8 @@ func TestInstallerResolvers_EveryPlatformAndAliasHasAPinnedAsset(t *testing.T) {
 			"yq_darwin_amd64": darwinAMD64, "yq_darwin_arm64": darwinARM64,
 		}, unsupported: []platform{{"Darwin", "armv7l"}}},
 		{script: "install-mise.sh", resolve: "resolve_mise_dist", pin: "resolve_mise_sha256", refusal: "ERROR: Unsupported mise platform: ", assets: map[string][]platform{
-			"mise-v2026.9.17-linux-x64": linuxAMD64, "mise-v2026.9.17-linux-arm64": linuxARM64,
-			"mise-v2026.9.17-macos-x64": darwinAMD64, "mise-v2026.9.17-macos-arm64": darwinARM64,
+			"mise-v2026.10.19-linux-x64": linuxAMD64, "mise-v2026.10.19-linux-arm64": linuxARM64,
+			"mise-v2026.10.19-macos-x64": darwinAMD64, "mise-v2026.10.19-macos-arm64": darwinARM64,
 		}},
 		{script: "install-publiccode-parser.sh", resolve: "resolve_publiccode_parser_dist", pin: "resolve_publiccode_parser_sha256", refusal: "ERROR: Unsupported publiccode-parser platform: ", assets: map[string][]platform{
 			"publiccode-parser-go_Linux_x86_64.tar.gz": linuxAMD64, "publiccode-parser-go_Linux_arm64.tar.gz": linuxARM64,

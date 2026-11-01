@@ -35,7 +35,7 @@
 # FROM line can only reference ARGs declared globally — a stage-scoped ARG is
 # invisible to a later FROM. See the pinning rationale at the base stage below.
 # renovate: datasource=docker depName=debian versioning=docker
-ARG DEBIAN_VERSION=13-slim@sha256:3a39a0592364683e6bab97937b72cad5a8fa6dcbbee90edb3bb48c7f8e94f258
+ARG DEBIAN_VERSION=13-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
 
 # =============================================================================
 # Base stage
@@ -140,7 +140,7 @@ ENV CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:$PATH
 
 # renovate: datasource=github-releases depName=rust-lang/rust extractVersion=^(?<version>.*)$
-ARG RUST_VERSION=1.90.0
+ARG RUST_VERSION=1.99.1
 # renovate: datasource=crate depName=cargo-cyclonedx
 ARG CARGO_CYCLONEDX_VERSION=0.5.9
 
@@ -179,7 +179,7 @@ FROM base AS go
 # renovate: datasource=golang-version depName=go
 ARG GO_VERSION=1.27.3
 # renovate: datasource=github-releases depName=CycloneDX/cyclonedx-gomod
-ARG CYCLONEDX_GOMOD_VERSION=v1.10.0
+ARG CYCLONEDX_GOMOD_VERSION=v1.12.0
 
 ENV GOROOT=/usr/local/go \
     GOPATH=/go \
@@ -228,7 +228,7 @@ RUN arch="$(dpkg --print-architecture)" \
 FROM base AS node
 
 # renovate: datasource=node-version depName=node
-ARG NODE_VERSION=24.17.0
+ARG NODE_VERSION=24.22.1
 
 # hadolint ignore=DL3008,SC2155
 RUN arch="$(dpkg --print-architecture)" \
@@ -255,11 +255,11 @@ RUN arch="$(dpkg --print-architecture)" \
 FROM base AS java
 
 # renovate: datasource=adoptium-java depName=temurin
-ARG JDK_VERSION=25.0.3+9
+ARG JDK_VERSION=25.0.5+8
 # renovate: datasource=maven depName=org.apache.maven:apache-maven extractVersion=^(?<version>.*)$
-ARG MAVEN_VERSION=3.9.11
+ARG MAVEN_VERSION=3.10.0
 # renovate: datasource=gradle-version depName=gradle
-ARG GRADLE_VERSION=8.14
+ARG GRADLE_VERSION=8.14.6
 
 ENV JAVA_HOME=/usr/local/jdk \
     MAVEN_HOME=/usr/local/maven \
@@ -268,7 +268,8 @@ ENV JAVA_HOME=/usr/local/jdk \
 
 # Maven comes from Maven Central, the same file the Apache archive serves
 # (and the source Renovate already reads): archive.apache.org throttles CI
-# runners, and its timeouts failed a runtime image build.
+# runners, and its timeouts failed a runtime image build. The build fails
+# unless `mvn -version` reports exactly MAVEN_VERSION.
 # hadolint ignore=DL3008,DL4006
 RUN arch="$(dpkg --print-architecture)" \
   && case "$arch" in \
@@ -297,7 +298,12 @@ RUN arch="$(dpkg --print-architecture)" \
   && mv "/usr/local/gradle-${GRADLE_VERSION}" "$GRADLE_HOME" \
   && rm -f /tmp/gradle.zip \
   && java -version \
-  && mvn -version \
+  && mvn_banner="$(mvn --batch-mode -version)" \
+  && printf '%s\n' "$mvn_banner" \
+  && case "$mvn_banner" in \
+       "Apache Maven ${MAVEN_VERSION} "*) ;; \
+       *) printf 'mvn does not report Maven %s\n' "$MAVEN_VERSION" >&2; exit 1 ;; \
+     esac \
   && gradle --version
 
 # =============================================================================
@@ -308,12 +314,12 @@ RUN arch="$(dpkg --print-architecture)" \
 
 FROM java AS android
 
-# renovate: datasource=github-tags depName=android/cmdline-tools-version
-ARG ANDROID_CMDLINE_VERSION=11076708
-# renovate: datasource=custom.android-platform
+# renovate: datasource=custom.android-cmdline-tools depName=android-cmdline-tools
+ARG ANDROID_CMDLINE_VERSION=16111833
+# The platform is the image's line (android-35 in images.json), not an update.
 ARG ANDROID_PLATFORM=android-35
-# renovate: datasource=custom.android-build-tools
-ARG ANDROID_BUILD_TOOLS_VERSION=35.0.0
+# renovate: datasource=custom.android-build-tools depName=android-build-tools
+ARG ANDROID_BUILD_TOOLS_VERSION=35.0.1
 
 ENV ANDROID_HOME=/opt/android-sdk \
     ANDROID_SDK_ROOT=/opt/android-sdk \

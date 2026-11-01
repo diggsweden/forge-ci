@@ -12,11 +12,11 @@
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/install-common.sh"
 
 # renovate: datasource=github-releases depName=orhun/git-cliff
-readonly GIT_CLIFF_VERSION="v2.13.1"
-readonly GIT_CLIFF_SHA256_LINUX_AMD64="9a1263f24e59a2f508c7b3d3283c9dea94a8bf697f96dbc18cc783cac6284546"
-readonly GIT_CLIFF_SHA256_LINUX_ARM64="9619b7f0c584229f8a2331c1905afe88bd938bdc9102926c2073836a42f02455"
-readonly GIT_CLIFF_SHA256_DARWIN_AMD64="6e60ae390d375cecb9d8008c49f0e724a8dfe40390b532ef5501e421d2cc8acb"
-readonly GIT_CLIFF_SHA256_DARWIN_ARM64="21547ae4a0421164070ab75c2522864ea5565858a011fabc5f583061b20f1226"
+readonly GIT_CLIFF_VERSION="v2.14.2"
+readonly GIT_CLIFF_SHA256_LINUX_AMD64="24f397c733add5390fdceee3a2088588ab0d5f944ce00d34cb7029b888cf2db4"
+readonly GIT_CLIFF_SHA256_LINUX_ARM64="69e208f6e4baef3a0f9b759d5f44223aa9336b86c691072a3d0c98d35a816e69"
+readonly GIT_CLIFF_SHA256_DARWIN_AMD64="4e647d2deb152aca1e987f225cf42b080b991dd98f3bce4027ef95446d982ac3"
+readonly GIT_CLIFF_SHA256_DARWIN_ARM64="a0be97e237d440d34c5e508ec21d070b2c85cbb8be48a46a56f9a4e8bd247f05"
 
 resolve_git_cliff_dist() {
 	local os arch dist=""
@@ -48,10 +48,10 @@ resolve_git_cliff_dist() {
 
 resolve_git_cliff_sha256() {
 	case "$1" in
-	git-cliff-2.13.1-x86_64-unknown-linux-gnu.tar.gz) printf '%s' "$GIT_CLIFF_SHA256_LINUX_AMD64" ;;
-	git-cliff-2.13.1-aarch64-unknown-linux-gnu.tar.gz) printf '%s' "$GIT_CLIFF_SHA256_LINUX_ARM64" ;;
-	git-cliff-2.13.1-x86_64-apple-darwin.tar.gz) printf '%s' "$GIT_CLIFF_SHA256_DARWIN_AMD64" ;;
-	git-cliff-2.13.1-aarch64-apple-darwin.tar.gz) printf '%s' "$GIT_CLIFF_SHA256_DARWIN_ARM64" ;;
+	git-cliff-2.14.2-x86_64-unknown-linux-gnu.tar.gz) printf '%s' "$GIT_CLIFF_SHA256_LINUX_AMD64" ;;
+	git-cliff-2.14.2-aarch64-unknown-linux-gnu.tar.gz) printf '%s' "$GIT_CLIFF_SHA256_LINUX_ARM64" ;;
+	git-cliff-2.14.2-x86_64-apple-darwin.tar.gz) printf '%s' "$GIT_CLIFF_SHA256_DARWIN_AMD64" ;;
+	git-cliff-2.14.2-aarch64-apple-darwin.tar.gz) printf '%s' "$GIT_CLIFF_SHA256_DARWIN_ARM64" ;;
 	*)
 		printf 'ERROR: no pinned SHA-256 for git-cliff asset %s\n' "$1" >&2
 		return 1

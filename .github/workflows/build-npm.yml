@@ -144,7 +144,7 @@ jobs:
           DEPENDENCY_REGISTRY: ${{ inputs['dependency-registry'] }}
           DEPENDENCY_TOKEN: ${{ inputs['private-dependencies'] && github.token || '' }}
           # renovate: datasource=npm depName=@cyclonedx/cyclonedx-npm
-          CYCLONEDX_VERSION: "6.0.0"
+          CYCLONEDX_VERSION: "6.0.1"
         run: forge-ci build npm run
       - name: Upload NPM artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

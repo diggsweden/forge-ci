@@ -6,4 +6,4 @@
 [tools]
 node = "24.22.0"
 # release-images.yml scans every platform before it publishes.
-"aqua:aquasecurity/trivy" = "0.76.0"
+"aqua:aquasecurity/trivy" = "0.76.1"

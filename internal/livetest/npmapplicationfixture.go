@@ -116,7 +116,7 @@ const npmApplicationBuildSteps = `      - name: Build original npm application
         env:
           RELEASE_TAG: ${{ needs.prepare.outputs.release-tag }}
           NODE_VERSION: '24.17.0'
-          CYCLONEDX_VERSION: '6.0.0'
+          CYCLONEDX_VERSION: '6.0.1'
         run: forge-ci build npm run --expect-version "${RELEASE_TAG#v}"
       - name: Retain and install the package
         env:

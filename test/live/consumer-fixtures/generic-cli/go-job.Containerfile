@@ -13,7 +13,7 @@ COPY --chmod=0644 go-job.mise.toml /opt/forge-ci-job/config.toml
 COPY nanolinter /usr/local/bin/nanolinter
 COPY --chmod=0644 nano-acceptance.json /usr/local/share/forge-ci-job/nano-acceptance.json
 ENV GOROOT=/usr/local/go GOTOOLCHAIN=local JAVA_HOME=/usr/local/jdk \
-    PATH=/opt/mise/installs/aqua-casey-just/1.58.0:/usr/local/jdk/bin:/opt/mise/installs/node/24.17.0/bin:/usr/local/go/bin:/usr/lib/podman:/opt/mise/shims:/usr/local/bin:${PATH} \
+    PATH=/opt/mise/installs/aqua-casey-just/1.58.0:/usr/local/jdk/bin:/opt/mise/installs/node/24.22.1/bin:/usr/local/go/bin:/usr/lib/podman:/opt/mise/shims:/usr/local/bin:${PATH} \
     MISE_CONFIG_DIR=/opt/forge-ci-job \
     MISE_OVERRIDE_CONFIG_FILENAMES=/opt/forge-ci-job/config.toml
 RUN test "$(go env GOVERSION)" = go1.27.3 \
@@ -43,10 +43,10 @@ RUN test -r /opt/forge-ci-job/config.toml \
     && gpg --version && command -v ssh-keygen
 RUN test "$(command -v just)" = /opt/mise/installs/aqua-casey-just/1.58.0/just \
     && env -i HOME=/tmp PATH=/usr/bin:/bin /opt/mise/installs/aqua-casey-just/1.58.0/just --version \
-    && test "$(node --version)" = v24.17.0 \
-    && test "$(command -v node)" = /opt/mise/installs/node/24.17.0/bin/node \
-    && test "$(command -v npm)" = /opt/mise/installs/node/24.17.0/bin/npm \
-    && env -i HOME=/tmp PATH=/opt/mise/installs/node/24.17.0/bin:/usr/bin:/bin npm --version \
+    && test "$(node --version)" = v24.22.1 \
+    && test "$(command -v node)" = /opt/mise/installs/node/24.22.1/bin/node \
+    && test "$(command -v npm)" = /opt/mise/installs/node/24.22.1/bin/npm \
+    && env -i HOME=/tmp PATH=/opt/mise/installs/node/24.22.1/bin:/usr/bin:/bin npm --version \
     && java -version \
     && keytool -list -cacerts -storepass changeit >/dev/null \
     && buildah --version \

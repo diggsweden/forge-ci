@@ -18,11 +18,11 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/install-common.sh"
 # renovate: datasource=github-releases depName=sigstore/cosign
 # cosign 3.x is required: the v3 bundle format is the only output
 # layout we support. Adapters pass --bundle / --new-bundle-format.
-readonly COSIGN_VERSION="v3.1.3"
-readonly COSIGN_SHA256_LINUX_AMD64="4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71"
-readonly COSIGN_SHA256_LINUX_ARM64="c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a"
-readonly COSIGN_SHA256_DARWIN_AMD64="2347488e5d5b25336644024dfeca5601b190e91197a71a917bda44744aff106c"
-readonly COSIGN_SHA256_DARWIN_ARM64="5cf948c2f4dfe59687bdd0b8523709067383e03982cc543475c8a7dc70e92a76"
+readonly COSIGN_VERSION="v3.1.4"
+readonly COSIGN_SHA256_LINUX_AMD64="424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa"
+readonly COSIGN_SHA256_LINUX_ARM64="ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2"
+readonly COSIGN_SHA256_DARWIN_AMD64="9d1e4abe2b6be279ed0d2ff706fde1ccd738747c834e3e6d44039c238867334f"
+readonly COSIGN_SHA256_DARWIN_ARM64="9f9b8cd557cf2e5b3df3373a00baa005a86b02391e3e06dd0ce37b3a1533d3a4"
 
 resolve_cosign_asset() {
 	local os arch asset=""

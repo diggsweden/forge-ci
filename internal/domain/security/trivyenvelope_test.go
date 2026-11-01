@@ -39,7 +39,10 @@ import (
 // updating this fails TestTrivyEnvelope_IsPinnedToTheVerifiedVersion.
 // Verified with actual 0.76.0 scans of the Java service and its runtime bases.
 // PkgPath identifies nested JARs when Results.Target is only "Java".
-const verifiedTrivyVersion = "0.76.0"
+// 0.76.1 only rebuilt 0.76.0 with Go 1.27.3 and newer dependencies; its scans
+// of the runtime images carry every consumed key, and the native-envelope
+// integration test passes against it.
+const verifiedTrivyVersion = "0.76.1"
 
 // consumedTrivyFields is every key the transforms read, by JSON path. Adding a
 // field to a struct in trivy.go without adding it here fails, so the inventory

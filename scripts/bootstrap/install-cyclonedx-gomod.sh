@@ -18,13 +18,13 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/install-common.sh"
 
 # Keep in step with CYCLONEDX_GOMOD_VERSION in containers/runtime/Containerfile.
 # renovate: datasource=github-releases depName=CycloneDX/cyclonedx-gomod
-readonly CYCLONEDX_GOMOD_VERSION="v1.10.0"
+readonly CYCLONEDX_GOMOD_VERSION="v1.12.0"
 # Archive hashes are independently pinned here rather than downloaded beside
-# the archive. Source: the upstream v1.10.0 release checksums asset.
-readonly CYCLONEDX_GOMOD_SHA256_LINUX_AMD64="5cce8ae99a5181be6a610ea5ed9ca9d596937cc04dc1a8f6f6b5e462d8c9900e"
-readonly CYCLONEDX_GOMOD_SHA256_LINUX_ARM64="b2bebbe569c39b6bd62b7a142269a8870795020ef608483c942e4b7f51f4de6b"
-readonly CYCLONEDX_GOMOD_SHA256_DARWIN_AMD64="f4ec9f8bef518001c6d12b151cb965511d3e67fab22bed3a682f7cf4fd2f1728"
-readonly CYCLONEDX_GOMOD_SHA256_DARWIN_ARM64="2a8e887efb07ed4e36d7ead879a15e055b1e50d60e5d45e407f9f2a27db4dc46"
+# the archive. Source: the upstream v1.12.0 release checksums asset.
+readonly CYCLONEDX_GOMOD_SHA256_LINUX_AMD64="004b9f5cc595b797fb5423e2ae4c97bcf0f18c712ed2faee1640b09e5efd6d15"
+readonly CYCLONEDX_GOMOD_SHA256_LINUX_ARM64="b6dd6424755e61c0f7fcd36074fbb78798a33c52f1bd35dd177ba62eccadf404"
+readonly CYCLONEDX_GOMOD_SHA256_DARWIN_AMD64="94ab2d999341e4bc8d26767bffda2823ac4507c2f17c01af6d3738f5341b9e85"
+readonly CYCLONEDX_GOMOD_SHA256_DARWIN_ARM64="43dcd58b7a7ef9d84a2d21df9c6eeeb907d5b4ee2b1fe6c1330e5bc9b478281e"
 
 install_cyclonedx_gomod() {
 	if command -v cyclonedx-gomod &>/dev/null; then

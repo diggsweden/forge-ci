@@ -259,8 +259,8 @@ jobs:
           BUILD_MODULE: ${{ inputs['build-module'] }}
           SKIP_TESTS: ${{ inputs['skip-tests'] }}
           ENABLE_BUILD_SBOM: ${{ inputs['enable-build-sbom'] }}
-          # renovate: datasource=maven depName=org.cyclonedx:cyclonedx-gradle-plugin
-          CYCLONEDX_GRADLE_VERSION: "3.2.1"
+          # renovate: datasource=maven depName=org.cyclonedx:cyclonedx-gradle-plugin registryUrl=https://plugins.gradle.org/m2/
+          CYCLONEDX_GRADLE_VERSION: "3.5.1"
         run: forge-ci build gradle-android run
       - name: Export Android library publications
         if: ${{ inputs.library && inputs['publication-artifact-name'] != '' }}

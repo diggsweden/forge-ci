@@ -29,7 +29,7 @@
 # Renovate's docker manager updates both digests.
 FROM ghcr.io/osscontainertools/kaniko:v1.28.6@sha256:2fa20b0a4b40c7db72b479d57e55c2cf79f2178533b2d3bcbd129d6bd3c087ed AS kaniko
 
-FROM docker.io/library/debian:13.7-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a
+FROM docker.io/library/debian:13.7-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
 
 # Kaniko runs the Containerfile's steps as this container's user and needs
 # root for them (apt-get, adduser, chown); it refuses to start otherwise. The

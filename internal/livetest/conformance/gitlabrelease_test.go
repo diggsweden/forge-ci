@@ -1007,7 +1007,7 @@ func requireGitLabReleaseChild(t *testing.T, ctx context.Context, client *gitlab
 	return child
 }
 
-const gitlabMinimalBuild = `GOBIN="${RC_WORK}/tools" GOTOOLCHAIN=local go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.10.0
+const gitlabMinimalBuild = `GOBIN="${RC_WORK}/tools" GOTOOLCHAIN=local go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.12.0
 export PATH="${RC_WORK}/tools:${PATH}"
 forge-ci build go run --working-dir . --main-package ./cmd/layer-release-canary \
   --binary-name layer-release-canary --artifact-name layer-release-canary \

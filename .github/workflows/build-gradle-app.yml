@@ -155,8 +155,8 @@ jobs:
           PRIVATE_DEPENDENCIES: ${{ inputs['private-dependencies'] }}
           DEPENDENCY_USERNAME: ${{ github.actor }}
           DEPENDENCY_TOKEN: ${{ inputs['private-dependencies'] && github.token || '' }}
-          # renovate: datasource=maven depName=org.cyclonedx:cyclonedx-gradle-plugin
-          CYCLONEDX_GRADLE_VERSION: "3.2.1"
+          # renovate: datasource=maven depName=org.cyclonedx:cyclonedx-gradle-plugin registryUrl=https://plugins.gradle.org/m2/
+          CYCLONEDX_GRADLE_VERSION: "3.5.1"
         run: forge-ci build gradle run
       - name: Export Maven publications without release credentials
         if: ${{ inputs['publication-artifact-name'] != '' }}

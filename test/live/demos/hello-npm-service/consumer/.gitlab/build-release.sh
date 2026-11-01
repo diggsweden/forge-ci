@@ -14,7 +14,7 @@ umask 077
 : "${RELEASE_TAG:?}" "${RELEASE_VERSION:?}" "${RELEASE_SHA:?}"
 test "$(git rev-parse HEAD)" = "${RELEASE_SHA}"
 
-NODE_VERSION=24 CYCLONEDX_VERSION=6.0.0 forge-ci build npm run --expect-version "${RELEASE_VERSION}"
+NODE_VERSION=24 CYCLONEDX_VERSION=6.0.1 forge-ci build npm run --expect-version "${RELEASE_VERSION}"
 
 package="hello-npm-service-${RELEASE_VERSION}.tgz"
 test -f "${package}"

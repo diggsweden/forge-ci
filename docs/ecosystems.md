@@ -240,12 +240,21 @@ opt-in.
 | Status | Production |
 | Tracked since | 0.90.0 baseline |
 
-Maven 3.9 is the floor, matching the JDK runtime image
-(`forge-ci-runtime-java-25` ships Maven 3.9.x). Older Maven is not tested
+Maven 3.9 is the floor; the JDK runtime image
+(`forge-ci-runtime-java-25`) ships Maven 3.10.x. Older Maven is not tested
 and not supported. The floor is not cosmetic: 3.9 is where the deploy plugin
 moved to the Maven Resolver native transport, so behaviour a pipeline depends
 on. Transport selection, and therefore how TLS and proxy settings are
 honoured, differs from 3.8 and earlier.
+
+A build in the runtime image gets Maven 3.10's stricter defaults: POM problems
+3.9 only warned about (duplicate dependencies or plugins, malformed versions or
+repository ids) fail the build, the classpath is ordered breadth-first, and
+`settings.xml` credentials are bound to repository origins. The settings file
+forge-ci writes for a forge registry deploy names no origin, which Maven 3.10
+accepts with a warning. The
+[Maven 3.10.0 release notes](https://maven.apache.org/docs/3.10.0/release-notes.html)
+list the opt-out for each change.
 
 #### Capabilities
 

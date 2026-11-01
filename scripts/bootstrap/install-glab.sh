@@ -12,11 +12,11 @@
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/install-common.sh"
 
 # renovate: datasource=gitlab-releases depName=gitlab-org/cli
-readonly GLAB_VERSION="v1.74.0"
-readonly GLAB_SHA256_LINUX_AMD64="75008e8d57825547d944a3193a66a018188b433a4ecb1cf36500ffbafe4689ff"
-readonly GLAB_SHA256_LINUX_ARM64="65f987456b884a9b230895010d24431507e4c9b48bbada4de5400d2d11b0ccee"
-readonly GLAB_SHA256_DARWIN_AMD64="3262db492073ac23318f43de4b59b93463b01ba9d06232d61ff1f02e10082337"
-readonly GLAB_SHA256_DARWIN_ARM64="cc67a9f79079ed9578cd93ca385e3df13975e2ccb03f047c0c6bf51f708af395"
+readonly GLAB_VERSION="v1.124.0"
+readonly GLAB_SHA256_LINUX_AMD64="63df684842b0697e418649dd64374d37ac1da0fbcdcb422d6a5557222f8bb40f"
+readonly GLAB_SHA256_LINUX_ARM64="0716395a0efeb991fc844b33fe55310645afcbd9b9746e50c725e9d1cd1b8d16"
+readonly GLAB_SHA256_DARWIN_AMD64="6adb7155566bedd6272d8f286e6c75b080d0050a349de4bed79661226d10d954"
+readonly GLAB_SHA256_DARWIN_ARM64="04aad4d989d98cb030318e09359f02e0ba2637ede682ec0dee1f5974dedd44c1"
 
 resolve_glab_dist() {
 	local os arch dist=""
@@ -48,10 +48,10 @@ resolve_glab_dist() {
 
 resolve_glab_sha256() {
 	case "$1" in
-	glab_1.74.0_linux_amd64.tar.gz) printf '%s' "$GLAB_SHA256_LINUX_AMD64" ;;
-	glab_1.74.0_linux_arm64.tar.gz) printf '%s' "$GLAB_SHA256_LINUX_ARM64" ;;
-	glab_1.74.0_darwin_amd64.tar.gz) printf '%s' "$GLAB_SHA256_DARWIN_AMD64" ;;
-	glab_1.74.0_darwin_arm64.tar.gz) printf '%s' "$GLAB_SHA256_DARWIN_ARM64" ;;
+	glab_1.124.0_linux_amd64.tar.gz) printf '%s' "$GLAB_SHA256_LINUX_AMD64" ;;
+	glab_1.124.0_linux_arm64.tar.gz) printf '%s' "$GLAB_SHA256_LINUX_ARM64" ;;
+	glab_1.124.0_darwin_amd64.tar.gz) printf '%s' "$GLAB_SHA256_DARWIN_AMD64" ;;
+	glab_1.124.0_darwin_arm64.tar.gz) printf '%s' "$GLAB_SHA256_DARWIN_ARM64" ;;
 	*)
 		printf 'ERROR: no pinned SHA-256 for glab asset %s\n' "$1" >&2
 		return 1

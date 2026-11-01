@@ -12,13 +12,13 @@
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/install-common.sh"
 
 # renovate: datasource=github-releases depName=anchore/syft
-readonly SYFT_VERSION="v1.51.1"
+readonly SYFT_VERSION="v1.55.0"
 # Archive hashes are independently pinned here rather than downloaded beside
-# the archive. Source: the upstream v1.51.1 release checksums asset.
-readonly SYFT_SHA256_LINUX_AMD64="8fcb33017a0dc1058298c923c436d19dfa68ae93968e0b423248542e3afb9fc3"
-readonly SYFT_SHA256_LINUX_ARM64="a7fd2b784e6664acd44719270574f6cd8c6864fc2b1700bf9099bd1cccda7d7f"
-readonly SYFT_SHA256_DARWIN_AMD64="0e186ce1d4351ec276126851ca3ff258ed070e93e73574ed64858d4fc2339867"
-readonly SYFT_SHA256_DARWIN_ARM64="ac063af3b9874769deb7ea1e6d76841e68f9e3bb50cd654226fc977de65532c1"
+# the archive. Source: the upstream v1.55.0 release checksums asset.
+readonly SYFT_SHA256_LINUX_AMD64="bb65249542db5fedeeb4d3f9b018b75e7264dbfbbb10486f044581a92f90490d"
+readonly SYFT_SHA256_LINUX_ARM64="929bd163db2d7cd2255d3bcb8967208079813d7b46b0c952f7b794d8e2c7d304"
+readonly SYFT_SHA256_DARWIN_AMD64="e2e5831cbabaec9a36fe65c34755c1113982c842a685edce3ce0b54a0ded8003"
+readonly SYFT_SHA256_DARWIN_ARM64="1217c258bd5eb91ef3189cf22a82e02f9cac07e4ce934350f428e93aff674625"
 
 install_syft() {
 	local install_dir os arch asset sha256 archive version

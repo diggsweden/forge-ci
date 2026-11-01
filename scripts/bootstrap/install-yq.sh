@@ -12,12 +12,12 @@
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/install-common.sh"
 
 # renovate: datasource=github-releases depName=mikefarah/yq
-readonly YQ_VERSION="v4.52.5"
-readonly YQ_SHA256_LINUX_AMD64="75d893a0d5940d1019cb7cdc60001d9e876623852c31cfc6267047bc31149fa9"
-readonly YQ_SHA256_LINUX_ARM64="90fa510c50ee8ca75544dbfffed10c88ed59b36834df35916520cddc623d9aaa"
-readonly YQ_SHA256_LINUX_ARM="dea10a4f66646160b592bb8ddaed9fc8c5f13d235474e66c47178cbf2f816a73"
-readonly YQ_SHA256_DARWIN_AMD64="6e399d1eb466860c3202d231727197fdce055888c5c7bec6964156983dd1559d"
-readonly YQ_SHA256_DARWIN_ARM64="45a12e64d4bd8a31c72ee1b889e81f1b1110e801baad3d6f030c111db0068de0"
+readonly YQ_VERSION="v4.54.1"
+readonly YQ_SHA256_LINUX_AMD64="8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f"
+readonly YQ_SHA256_LINUX_ARM64="189088da0c6429ec5178dfaab1a114805f6cab0b61b165ab236efedf1d57a71b"
+readonly YQ_SHA256_LINUX_ARM="a5d45c07b75fab772193c4a79f4df9f5c8ed33836fa0f36dcc947f9495439b00"
+readonly YQ_SHA256_DARWIN_AMD64="3a812fce205a4d67014fb71b7fa297092210e580df3d8f52dddc2cf3a599c22b"
+readonly YQ_SHA256_DARWIN_ARM64="fee511a181bd8b3e6b7da98842b41973bfac8cd3bcd341ed29a584620b5b2844"
 
 resolve_yq_dist() {
 	local os arch dist=""

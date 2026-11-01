@@ -81,8 +81,8 @@ spec:
       default: true
       description: Generate the cyclonedx-gradle-plugin Build SBOM.
     sbom-tool-version:
-      # renovate: datasource=maven depName=org.cyclonedx:cyclonedx-gradle-plugin
-      default: "3.2.1"
+      # renovate: datasource=maven depName=org.cyclonedx:cyclonedx-gradle-plugin registryUrl=https://plugins.gradle.org/m2/
+      default: "3.5.1"
       description: Pinned cyclonedx-gradle-plugin version.
     runtime-image:
       default: "ghcr.io/diggsweden/forge-ci-runtime-android-35:v0.90.0"

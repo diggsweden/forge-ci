@@ -29,7 +29,7 @@ jobs:
       - name: Original npm lifecycle
         env:
           NODE_VERSION: '24.17.0'
-          CYCLONEDX_VERSION: '6.0.0'
+          CYCLONEDX_VERSION: '6.0.1'
         run: forge-ci build npm run
       - name: Retain checked package before installed oracle
         env:
