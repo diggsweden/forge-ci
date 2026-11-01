@@ -152,6 +152,11 @@ jobs:
       - name: Set up toolchain
         uses: https://FORGE_HOST/OWNER/forge-ci/.forgejo/actions/setup-toolchain@PIN_FORGE_CI_SHA
         with:
+          # A read-only GitHub token: mise downloads your mise config's tools
+          # from GitHub releases, which rate-limit anonymous downloads.
+          # (mise-locked: 'true' instead needs a platform URL in mise.lock for
+          # every tool, which tools from a forgejo: backend do not get.)
+          mise-github-token: ${{ secrets.DEPENDENCY_GITHUB_TOKEN }}
           cache-key-suffix: release-build
           install-dev-tools: false
           # Release isolation: no cache in token-bearing release jobs.

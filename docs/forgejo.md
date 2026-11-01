@@ -444,6 +444,27 @@ both forges configures one set of names.
 A pull-request job receives no secret and no rate-limit token. It installs
 nothing and uses the tools the runner already has.
 
+### The dependency token of your own jobs
+
+Your build jobs install your mise config's tools with `setup-toolchain`, and
+tools from GitHub releases go through the GitHub API, which rate-limits
+anonymous downloads. Pass a read-only GitHub token as `mise-github-token`,
+named `DEPENDENCY_GITHUB_TOKEN` as in the examples:
+
+| Secret | Role | Used for |
+|---|---|---|
+| `DEPENDENCY_GITHUB_TOKEN` | A GitHub token with no scopes and no repository access (a fine-grained token on public repositories, read-only) | Downloading your tools from GitHub releases within the authenticated rate limit. |
+
+Set it once as an organization secret: every repository's build jobs then
+pass the same name, and no write or delete scope ever reaches a job. The
+layer's own workflows read no `DEPENDENCY_*` secret. Without the token,
+`mise-locked: 'true'` installs from a committed `mise.lock`, which must
+record a download URL for every tool on every runner platform. mise records
+none for tools from a `forgejo:` backend, so a config that uses one cannot
+install locked: pass the GitHub token instead, and for those tools
+`mise-forgejo-token` (read-only) where their Forgejo rate-limits anonymous
+downloads.
+
 ## Images and the engine binary
 
 The Forgejo layer has no runtime images. The engine's runtime images are

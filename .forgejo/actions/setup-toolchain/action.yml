@@ -17,7 +17,7 @@ inputs:
     default: 'false'
   mise-github-token:
     description: >-
-      Token used by mise when installing tools from GitHub releases (avoids anonymous rate limits). Required for repositories with .mise.toml or mise.toml unless mise-locked is true. Read-only is sufficient. Sourced from the caller's repo/org secrets — secret masking is preserved across the composite-action input boundary in modern Forgejo Actions.
+      Token used by mise when installing tools from GitHub releases (avoids anonymous rate limits). Required for repositories with .mise.toml or mise.toml unless mise-locked is true. Read-only is sufficient: pass the DEPENDENCY_GITHUB_TOKEN secret, as the examples do, and set it once for the organization. Sourced from the caller's repo/org secrets — secret masking is preserved across the composite-action input boundary in modern Forgejo Actions.
     required: false
     default: ''
   mise-forgejo-token:

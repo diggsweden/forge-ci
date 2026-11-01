@@ -112,7 +112,9 @@ func validateMiseInstallMode(root string, locked, hasConfig, githubTokenPresent 
 	}
 
 	if hasConfig && !githubTokenPresent {
-		return fmt.Errorf("setup-toolchain requires either mise-locked=true with mise.lock or mise-github-token: %w", errs.ErrValidation)
+		return fmt.Errorf("setup-toolchain installs a mise config's tools with a read-only GitHub token or from a lock: "+
+			"pass mise-github-token (by convention the DEPENDENCY_GITHUB_TOKEN secret; one organization secret, with no scopes, serves every repository), "+
+			"or mise-locked=true with a committed mise.lock that records a download URL for every tool: %w", errs.ErrValidation)
 	}
 
 	return nil

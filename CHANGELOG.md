@@ -174,6 +174,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   entries). The lint image's user does not own the runner's checkout, so
   every merge request without hand-set `safe.directory` variables failed
   with "cannot fetch the merge request's target branch".
+- The Forgejo examples' release builds pass `setup-toolchain` a read-only
+  `DEPENDENCY_GITHUB_TOKEN` as `mise-github-token`. maven-app, cargo-app and
+  go-cli passed neither a token nor `mise-locked`, so a copied release refused
+  the repository's mise config or built without the JDK or Rust toolchain;
+  go-service's `mise-locked` needs a lock URL for every tool, which tools from
+  a `forgejo:` backend never get.
+- The go-cli and Sigstore-keyless GitHub examples pass `bot-name` and
+  `bot-email` with `RELEASE_SSH_SIGNING_KEY`. An SSH key carries no identity,
+  and `bot-email` is the principal `.forge-ci/allowed_signers` must name, so a
+  copied release could not make its signed release commit.
 - Bootstrap source installs build a detached Git checkout instead of resolving
   a commit through a cached moving Go module tag. Host jobs bind the binary to
   their bootstrap checkout, support full SHA-1/SHA-256 IDs and relative install
@@ -230,6 +240,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- One name for the read-only token of a consumer's own tool installs:
+  `DEPENDENCY_GITHUB_TOKEN`, passed to `setup-toolchain` as
+  `mise-github-token`. docs/forgejo.md documents it ("The dependency token
+  of your own jobs"), setup-toolchain's refusal names it and the lock
+  alternative's limits, and a guard holds every example to the name.
 - `registry-login` (Forgejo) and `forge-ci container login` take the registry
   user by the rule `release-images.yml` already used: the user given, else
   the repository's owner on the forge's own registry; another registry must
