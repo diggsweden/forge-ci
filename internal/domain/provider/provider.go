@@ -48,6 +48,20 @@ func (p ForgeAPI) IsValid() bool {
 	return slices.Contains(AllForges(), p)
 }
 
+// TroubleshootingGuide is the Troubleshooting table of the forge's guide, or
+// "" when no guide exists (a local run). The name is taken from the enum,
+// never from an environment string, because callers render it as markdown.
+func (p ForgeAPI) TroubleshootingGuide() string {
+	switch p {
+	case ForgeGitHub, ForgeGitLab, ForgeForgejo:
+		return "https://github.com/diggsweden/forge-ci/blob/main/docs/" + string(p) + ".md#troubleshooting"
+	case ForgeLocal:
+		return ""
+	default:
+		return ""
+	}
+}
+
 // RunnerKind identifies the *workflow-runner conventions* the binary
 // emits for — output format, $*_OUTPUT key/value writes, annotation
 // vocabulary, and step-summary file. It is the second axis alongside

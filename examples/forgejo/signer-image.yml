@@ -44,7 +44,8 @@
 # CI_RUNNER_LABEL_CONTAINER_ARM64 name the runners the builds move to, and
 # CI_RUNNER_LENDER with CI_RUNNER_LENDER_REPOSITORY and the secret
 # CI_RUNNER_LENDER_TOKEN name the lender the request-runner jobs ask for them.
-# docs/runners.md describes both.
+# docs/runners.md of forge-ci (https://forge.example/owner/forge-ci)
+# describes both.
 # ENGINE_PACKAGE_TOKEN writes the engine owner's generic package on this
 # forge; SIGNER_REGISTRY_TOKEN authenticates only to the signer image registry.
 # The engine package and signer image must be readable without credentials.

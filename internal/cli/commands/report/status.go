@@ -198,6 +198,7 @@ func statusPrerequisitesCmd() *cli.Command {
 					RequireAllowlistedSigner: cmd.Bool("require-allowlisted-signer"),
 					JobStatus:                domainsummary.NormalizeResult(cmd.String("job-status")),
 					PublishTo:                cmd.String("publish-to"),
+					Forge:                    d.Platform,
 					HasReleaseGPGPrivateKey:  cmd.Bool("has-release-gpg-private-key"),
 					HasReleaseGPGPassphrase:  cmd.Bool("has-release-gpg-passphrase"),
 					HasReleaseToken:          cmd.Bool("has-release-token"),

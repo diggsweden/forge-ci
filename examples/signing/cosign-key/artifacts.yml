@@ -16,7 +16,7 @@
 # With transparency disabled, signing contacts no public Sigstore endpoint;
 # verify with the public key and --insecure-ignore-tlog.
 #
-# See docs/github.md#signing.
+# See https://github.com/diggsweden/forge-ci/blob/main/docs/github.md#signing.
 artifacts:
   - name: my-cli
     project-type: go

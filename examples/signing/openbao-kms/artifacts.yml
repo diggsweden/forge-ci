@@ -22,7 +22,8 @@
 # runner still needs private network access to OpenBao and the normal package,
 # registry, and forge endpoints used by the release.
 #
-# See docs/verification.md#signing-methods-for-release-artifacts.
+# See
+# https://github.com/diggsweden/forge-ci/blob/main/docs/verification.md#signing-methods-for-release-artifacts.
 artifacts:
   - name: my-lib
     project-type: maven

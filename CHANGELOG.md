@@ -245,7 +245,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   files `init` copies and in the schema's editor descriptions; `init` ends
   with the per-forge guide at the pinned release instead of a path and a
   commit hash. `sbom assemble` says what to do when it finds no built
-  artifact.
+  artifact. A failed release-prerequisites summary links the forge guide's
+  Troubleshooting table. The Forgejo and GitLab starters link the docs served
+  with the pinned forge-ci commit on the consumer's own forge.
 - Temporarily pause Self Release's strict integration and companion black-box
   jobs while Nanolinter publication is pending. Branch resolution, engine
   checksum verification and runtime-image availability remain required. Set

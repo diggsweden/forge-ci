@@ -5,6 +5,7 @@ package provider_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -129,5 +130,19 @@ func TestClassifyRef_PullRequestThenRefTypeThenPrefix(t *testing.T) {
 		{"", "", "", provider.RefTypeOther},
 	} {
 		require.Equal(t, testCase.want, provider.ClassifyRef(testCase.event, testCase.refType, testCase.ref), "%+v", testCase)
+	}
+}
+
+func TestTroubleshootingGuideLinksEachForgesGuide(t *testing.T) {
+	t.Parallel()
+
+	for _, forge := range []provider.ForgeAPI{provider.ForgeGitHub, provider.ForgeGitLab, provider.ForgeForgejo} {
+		if got := forge.TroubleshootingGuide(); !strings.HasSuffix(got, "/docs/"+string(forge)+".md#troubleshooting") {
+			t.Errorf("%s guide = %q", forge, got)
+		}
+	}
+
+	if got := provider.ForgeLocal.TroubleshootingGuide(); got != "" {
+		t.Errorf("local guide = %q, want none", got)
 	}
 }

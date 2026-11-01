@@ -18,7 +18,8 @@
 # principal in .forge-ci/allowed_signers. forge-ci does not currently
 # support keyless Git-object signing.
 #
-# See docs/verification.md#signing-methods-for-release-artifacts.
+# See
+# https://github.com/diggsweden/forge-ci/blob/main/docs/verification.md#signing-methods-for-release-artifacts.
 artifacts:
   - name: my-cli
     project-type: go

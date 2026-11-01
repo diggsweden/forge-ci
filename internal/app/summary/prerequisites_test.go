@@ -334,6 +334,66 @@ func TestPrerequisites_FailedJobStatus(t *testing.T) {
 	}
 }
 
+// A failed job on a forge with a guide points at that guide's Troubleshooting
+// table; a local run has no guide and keeps the plain sentence.
+func TestPrerequisites_FailedJobStatusNamesTheGuide(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		forge provider.ForgeAPI
+		want  string
+		avoid string
+	}{
+		{
+			name:  "github",
+			forge: provider.ForgeGitHub,
+			want:  "https://github.com/diggsweden/forge-ci/blob/main/docs/github.md#troubleshooting",
+			avoid: "Review the failed checks",
+		},
+		{
+			name:  "forgejo",
+			forge: provider.ForgeForgejo,
+			want:  "https://github.com/diggsweden/forge-ci/blob/main/docs/forgejo.md#troubleshooting",
+			avoid: "Review the failed checks",
+		},
+		{
+			name:  "local",
+			forge: provider.ForgeLocal,
+			want:  "Review the failed checks before attempting release.",
+			avoid: "#troubleshooting",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			sink := &fakeSummarySink{}
+
+			err := appsummary.Prerequisites(context.Background(), sink, &fakeGitInfo{}, appsummary.PrerequisitesSummaryInput{
+				TagName:   "v1.0.0",
+				RefType:   provider.RefTypeTag,
+				JobStatus: domainsummary.ResultFailure,
+				Forge:     tc.forge,
+				Now:       fixedNow(),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			body := sink.buf.String()
+			if !strings.Contains(body, tc.want) {
+				t.Errorf("expected %q in: %s", tc.want, body)
+			}
+
+			if strings.Contains(body, tc.avoid) {
+				t.Errorf("did not expect %q in: %s", tc.avoid, body)
+			}
+		})
+	}
+}
+
 func TestPrerequisites_MissingReleaseTokenShown(t *testing.T) {
 	t.Parallel()
 

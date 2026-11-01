@@ -48,6 +48,9 @@ type PrerequisitesSummaryInput struct {
 	RequireAllowlistedSigner bool
 	JobStatus                domainsummary.Result
 	PublishTo                string // "maven-central,npmjs,forge-packages" CSV
+	// Forge selects the guide a failed job points at; local or unknown
+	// forges get no link.
+	Forge provider.ForgeAPI
 
 	// Boolean secret presence flags
 	HasReleaseGPGPrivateKey bool
@@ -321,7 +324,12 @@ func writeJobStatus(builder *strings.Builder, in PrerequisitesSummaryInput) {
 		_, _ = fmt.Fprintf(builder, "Release preflight completed.\n")
 	} else {
 		_, _ = fmt.Fprintf(builder, "### ✗ Prerequisites validation failed\n")
-		_, _ = fmt.Fprintf(builder, "Review the failed checks before attempting release.\n")
+
+		if guide := in.Forge.TroubleshootingGuide(); guide != "" {
+			_, _ = fmt.Fprintf(builder, "Each symptom and its fix is in the guide's Troubleshooting table:\n%s\n", guide)
+		} else {
+			_, _ = fmt.Fprintf(builder, "Review the failed checks before attempting release.\n")
+		}
 	}
 }
 

@@ -3,7 +3,9 @@
 # SPDX-License-Identifier: CC0-1.0
 #
 # Example: a monorepo's merge-request gate and plan-driven build fan-out on
-# GitLab CI/CD, from the components under templates/ (docs/gitlab.md). Copy
+# GitLab CI/CD, from the components under templates/
+# (https://gitlab.example.com/team/ci/forge-ci/-/blob/PIN_FORGE_CI_SHA/docs/gitlab.md).
+# Copy
 # to the project's .gitlab-ci.yml and replace the placeholders, all literal
 # so that `git grep` finds them:
 #
@@ -24,11 +26,13 @@
 # planned build is silently left out.
 #
 # Releases run from a separate, pinned policy project that includes the
-# `release` component; see docs/gitlab.md#native-release-policy-under-acceptance.
+# `release` component; see
+# https://gitlab.example.com/team/ci/forge-ci/-/blob/PIN_FORGE_CI_SHA/docs/gitlab.md#native-release-policy-under-acceptance.
 #
 # Once the release policy is the project's CI configuration path, GitLab runs
 # it instead of this file, so the policy includes this gate for merge
-# requests; see docs/gitlab.md#the-merge-request-gate-under-a-policy.
+# requests; see
+# https://gitlab.example.com/team/ci/forge-ci/-/blob/PIN_FORGE_CI_SHA/docs/gitlab.md#the-merge-request-gate-under-a-policy.
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -52,7 +56,8 @@ include:
   # The consumer's own checks at the pipeline commit, in an image that carries
   # Bash, Git, curl, sha256sum, a JDK with Maven, and Node.
   # check is checksum-bound: include it by the engine commit, never a version;
-  # see Checksum-bound engine bootstrap in docs/gitlab.md.
+  # see Checksum-bound engine bootstrap in
+  # https://gitlab.example.com/team/ci/forge-ci/-/blob/PIN_FORGE_CI_SHA/docs/gitlab.md.
   - component: gitlab.example.com/team/ci/forge-ci/check@PIN_FORGE_CI_SHA
     inputs:
       forge-ci-repository: team/ci/forge-ci

@@ -33,17 +33,17 @@ import (
 // "--debug-allow-swap" and "swap" are pinned by the integration test.
 //
 //nolint:gosec // G101 false positive: the substring "key material" is operator-facing warning text, not a credential literal.
-const debugSwapWarning = "swap policy bypassed via --debug-allow-swap — decrypted key material may be paged to disk. DO NOT USE FOR PRODUCTION RELEASES; see docs/verification.md#swap-policy."
+const debugSwapWarning = "swap policy bypassed via --debug-allow-swap — decrypted key material may be paged to disk. DO NOT USE FOR PRODUCTION RELEASES; see https://github.com/diggsweden/forge-ci/blob/main/docs/verification.md#swap-policy."
 
 // undeterminedSwapNotice is emitted when swap state cannot be read, so the
 // skip is in the log rather than inferred from its absence. Deliberately a
 // Notice, not a Warning: on a restricted container or a non-Linux runner the
 // indeterminacy is structural and there is nothing for the operator to fix.
-const undeterminedSwapNotice = "swap state could not be determined (/proc/swaps unreadable) — the swap policy did not run; signing proceeded with only the process hardening (RLIMIT_CORE, PR_SET_DUMPABLE), which does not keep memory out of swap. See docs/verification.md#swap-policy."
+const undeterminedSwapNotice = "swap state could not be determined (/proc/swaps unreadable) — the swap policy did not run; signing proceeded with only the process hardening (RLIMIT_CORE, PR_SET_DUMPABLE), which does not keep memory out of swap. See https://github.com/diggsweden/forge-ci/blob/main/docs/verification.md#swap-policy."
 
 // A Notice like the undetermined case: the black-box suite sets the override on
 // purpose, but the pass is not the kernel's answer and the log has to say so.
-const overriddenSwapNotice = "swap state was read from $FORGE_CI_PROC_SWAPS, not /proc/swaps — no active swap area was reported there, so the swap policy passed on an injected answer. See docs/verification.md#swap-policy."
+const overriddenSwapNotice = "swap state was read from $FORGE_CI_PROC_SWAPS, not /proc/swaps — no active swap area was reported there, so the swap policy passed on an injected answer. See https://github.com/diggsweden/forge-ci/blob/main/docs/verification.md#swap-policy."
 
 // debugAllowSwapFlag is the operator's opt-out from the swap-refusal
 // policy. Flag-only, so the override must reappear in argv each
@@ -51,7 +51,7 @@ const overriddenSwapNotice = "swap state was read from $FORGE_CI_PROC_SWAPS, not
 func debugAllowSwapFlag() cli.Flag {
 	return &cli.BoolFlag{
 		Name:  "debug-allow-swap",
-		Usage: "DEBUG ONLY — bypass the swap-refusal policy when /proc/swaps reports an active swap area; emits a loud Warning annotation. NOT FOR PRODUCTION RELEASES; the supported fix is to disable swap on the runner. See docs/verification.md#swap-policy.",
+		Usage: "DEBUG ONLY — bypass the swap-refusal policy when /proc/swaps reports an active swap area; emits a loud Warning annotation. NOT FOR PRODUCTION RELEASES; the supported fix is to disable swap on the runner. See https://github.com/diggsweden/forge-ci/blob/main/docs/verification.md#swap-policy.",
 	}
 }
 

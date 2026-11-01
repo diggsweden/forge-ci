@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: CC0-1.0
 # Example: Gradle JVM project build. For publication, add build-type: library
 # and publish-to: [forge-packages, maven-central], and configure maven-publish
-# as described in docs/gradle-publishing.md. Every publication must use the
-# prepared release version; Gradle never receives release-signing keys.
+# as described in https://github.com/diggsweden/forge-ci/blob/main/docs/gradle-publishing.md.
+# Every publication must use the prepared release version; Gradle never
+# receives release-signing keys.
 #
 # For Android applications, see examples/android-app/ — that path uses
 # `project-type: gradle-android` and routes to build-gradle-android.yml,

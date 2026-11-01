@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/diggsweden/forge-ci/.forge-ci/artifacts.schema.json",
   "title": "forge-ci artifacts.yml",
-  "description": "Declarative release plan for a repository. See docs/artifacts-reference.md.",
+  "description": "Declarative release plan for a repository. See https://github.com/diggsweden/forge-ci/blob/main/docs/artifacts-reference.md.",
   "type": "object",
   "additionalProperties": false,
   "anyOf": [
@@ -26,7 +26,7 @@
     "git-signing": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Backend for signing the release commit and tag (git objects), independent of the artifact `sign` backend. See docs/verification.md#choosing-a-method.",
+      "description": "Backend for signing the release commit and tag (git objects), independent of the artifact `sign` backend. See https://github.com/diggsweden/forge-ci/blob/main/docs/verification.md#choosing-a-method.",
       "properties": {
         "method": {
           "type": "string",
@@ -38,7 +38,7 @@
     "sign": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Signing backend for `release sign` and `release sbom-zip --sign`. See docs/verification.md#signing-methods-for-release-artefacts.",
+      "description": "Signing backend for `release sign` and `release sbom-zip --sign`. See https://github.com/diggsweden/forge-ci/blob/main/docs/verification.md#signing-methods-for-release-artifacts.",
       "properties": {
         "method": {
           "type": "string",
@@ -101,7 +101,7 @@
         },
         "config": {
           "type": "object",
-          "description": "Per-ecosystem options. Schema varies by project-type — see docs/artifacts-reference.md for the field list of each ecosystem."
+          "description": "Per-ecosystem options. Schema varies by project-type — see https://github.com/diggsweden/forge-ci/blob/main/docs/artifacts-reference.md for the field list of each ecosystem."
         }
       }
     },
@@ -155,7 +155,7 @@
             "type": "string",
             "pattern": "^[A-Z_][A-Z0-9_]*$"
           },
-          "description": "Names of BuildKit secrets to forward into the Containerfile build as `--mount=type=secret,id=<lowercased-name>` mounts. Values come from the FORGE_CI_BUILD_SECRETS_JSON envelope packed by the caller workflow; the publish-container materialize step writes them to mode-0600 tmpfiles for the duration of the build. Unlike build-args, these values are NEVER recorded in SLSA provenance attestations — use this for any secret consumed at build time (private package tokens, build-time API keys). See docs/artifacts-reference.md for the full caller recipe."
+          "description": "Names of BuildKit secrets to forward into the Containerfile build as `--mount=type=secret,id=<lowercased-name>` mounts. Values come from the FORGE_CI_BUILD_SECRETS_JSON envelope packed by the caller workflow; the publish-container materialize step writes them to mode-0600 tmpfiles for the duration of the build. Unlike build-args, these values are NEVER recorded in SLSA provenance attestations — use this for any secret consumed at build time (private package tokens, build-time API keys). See https://github.com/diggsweden/forge-ci/blob/main/docs/artifacts-reference.md for the full caller recipe."
         },
         "extract": {
           "type": "object",

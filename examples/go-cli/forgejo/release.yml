@@ -56,7 +56,8 @@
 # which the signer treats as empty (image sign/promote no-op). For an image,
 # call release-images.yml and join its image artifact with the unsigned files
 # before signing, as examples/go-service/forgejo/ does. Set
-# publish-container-images and provide native runner capacity (docs/runners.md).
+# publish-container-images and provide native runner capacity
+# (https://FORGE_HOST/OWNER/forge-ci/src/commit/PIN_FORGE_CI_SHA/docs/runners.md).
 name: Release
 
 on:
@@ -237,7 +238,8 @@ jobs:
       cosign-public-key-sha256: PIN_COSIGN_PUBLIC_KEY_SHA256
       # Signatures are verified against your key alone and nothing is written
       # to the public Sigstore transparency log. `transparency-log: public`
-      # here writes every signature to it, permanently; see docs/forgejo.md.
+      # here writes every signature to it, permanently; see
+      # https://FORGE_HOST/OWNER/forge-ci/src/commit/PIN_FORGE_CI_SHA/docs/forgejo.md.
     secrets:
       # The same complete hand-off; the signer uses the GPG and registry
       # secrets only for distro packages and images.

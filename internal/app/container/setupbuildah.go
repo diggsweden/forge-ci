@@ -379,7 +379,7 @@ func withUserNamespaceHint(err error) error {
 		return err
 	}
 
-	return fmt.Errorf("%w\nthis runner denies user namespaces, which rootless Buildah needs; no storage driver can help. Run container-building jobs on a runner that permits them: CI_RUNNER_LABEL_CONTAINER selects it, and `forge-ci platform request-runner` can lend one; or build without them with CI_IMAGE_BUILDER=kaniko (docs/runners.md)", err)
+	return fmt.Errorf("%w\nthis runner denies user namespaces, which rootless Buildah needs; no storage driver can help. Run container-building jobs on a runner that permits them: CI_RUNNER_LABEL_CONTAINER selects it, and `forge-ci platform request-runner` can lend one; or build without them with CI_IMAGE_BUILDER=kaniko (https://github.com/diggsweden/forge-ci/blob/main/docs/runners.md)", err)
 }
 
 func writeBuildahStorage(ctx context.Context, tool BuildahSetupTool, out io.Writer, paths buildahSetupPaths, driver string, probe bool) error {

@@ -3554,7 +3554,7 @@ EXAMPLE:
 | `--sign` | additionally sign the resulting zip using the method selected by --method | bool | `false` | `$SIGN_ARTIFACTS` |
 | `--sbom-dir` | directory holding the SBOM layers to bundle | string | `""` | `$SBOM_DIR` |
 | `--assembly` | release assembly manifest whose SBOM inputs should be bundled | string | `""` | `$RELEASE_ASSEMBLY` |
-| `--debug-allow-swap` | DEBUG ONLY — bypass the swap-refusal policy when /proc/swaps reports an active swap area; emits a loud Warning annotation. NOT FOR PRODUCTION RELEASES; the supported fix is to disable swap on the runner. See docs/verification.md#swap-policy. | bool | `false` | n/a |
+| `--debug-allow-swap` | DEBUG ONLY — bypass the swap-refusal policy when /proc/swaps reports an active swap area; emits a loud Warning annotation. NOT FOR PRODUCTION RELEASES; the supported fix is to disable swap on the runner. See https://github.com/diggsweden/forge-ci/blob/main/docs/verification.md#swap-policy. | bool | `false` | n/a |
 | `--method` | signing backend: gpg (default; key from --private-key-file or $GPG_PRIVATE_KEY), sigstore (keyless cosign + OIDC), or kms (cosign + --key) | string | `"gpg"` | `$SIGN_METHOD` |
 | `--key` | cosign --key reference for --method=kms: KMS URI (awskms:///alias/X, hashivault://transit/keys/X, gcpkms://..., azurekms://...), PKCS#11 URI, or local key-file path. Forbidden for --method=gpg/sigstore. | string | `""` | `$SIGN_KEY` |
 | `--oidc-issuer` | OIDC issuer URL for --method=sigstore (default: auto-detected — GitHub Actions / GitLab CI / $CI_SERVER_URL). Forbidden for --method=gpg/kms. | string | `""` | `$SIGN_OIDC_ISSUER` |
@@ -3598,7 +3598,7 @@ EXAMPLES:
 | `--manifest` | release file manifest used by --manifest-section and --checksums-from-manifest; a manifest named here must exist | string | `"dist/release-files.json"` | `$RELEASE_FILES_MANIFEST` |
 | `--dist-dir` | dist directory used with --manifest | string | `"dist"` | n/a |
 | `--manifest-section` | release file manifest section to sign exactly (repeatable): assets, checksums, sboms, evidence, provenance | string | `""` | n/a |
-| `--debug-allow-swap` | DEBUG ONLY — bypass the swap-refusal policy when /proc/swaps reports an active swap area; emits a loud Warning annotation. NOT FOR PRODUCTION RELEASES; the supported fix is to disable swap on the runner. See docs/verification.md#swap-policy. | bool | `false` | n/a |
+| `--debug-allow-swap` | DEBUG ONLY — bypass the swap-refusal policy when /proc/swaps reports an active swap area; emits a loud Warning annotation. NOT FOR PRODUCTION RELEASES; the supported fix is to disable swap on the runner. See https://github.com/diggsweden/forge-ci/blob/main/docs/verification.md#swap-policy. | bool | `false` | n/a |
 | `--method` | signing backend: gpg (default; key from --private-key-file or $GPG_PRIVATE_KEY), sigstore (keyless cosign + OIDC), or kms (cosign + --key) | string | `"gpg"` | `$SIGN_METHOD` |
 | `--key` | cosign --key reference for --method=kms: KMS URI (awskms:///alias/X, hashivault://transit/keys/X, gcpkms://..., azurekms://...), PKCS#11 URI, or local key-file path. Forbidden for --method=gpg/sigstore. | string | `""` | `$SIGN_KEY` |
 | `--oidc-issuer` | OIDC issuer URL for --method=sigstore (default: auto-detected — GitHub Actions / GitLab CI / $CI_SERVER_URL). Forbidden for --method=gpg/kms. | string | `""` | `$SIGN_OIDC_ISSUER` |

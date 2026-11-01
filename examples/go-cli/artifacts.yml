@@ -22,9 +22,10 @@ artifacts:
 # GitLab): Sigstore-keyless. No signing key on the runner, no secret to manage,
 # and `forge-ci validate artifact-signature` derives the verification
 # identity from the forge in CI (no flags). Switch to `gpg` for PGP-native
-# ecosystems (Maven Central, apt/rpm) or `kms` for an HSM/Vault trust anchor —
-# see docs/verification.md → "Choosing a method". Omitting this block entirely
-# defaults to gpg, preserving the pre-cosign contract for existing repos.
+# ecosystems (Maven Central, apt/rpm) or `kms` for an HSM/Vault trust anchor;
+# see https://github.com/diggsweden/forge-ci/blob/main/docs/verification.md#choosing-a-method.
+# Omitting this block entirely defaults to gpg, preserving the pre-cosign
+# contract for existing repos.
 sign:
   method: sigstore
 
