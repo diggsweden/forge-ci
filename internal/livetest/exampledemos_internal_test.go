@@ -23,6 +23,8 @@ var updateDemos = flag.Bool("update-demos", false, "rewrite the example demos' C
 var exampleDemos = map[string]string{
 	"hello-go-cli":     "go-cli",
 	"hello-go-service": "go-service",
+	"hello-gradle":     "gradle-app",
+	"hello-monorepo":   "monorepo",
 }
 
 // exampleDemoPin stands where a consumer pins Forge CI; the live tier puts
@@ -43,10 +45,13 @@ var exampleDemoValues = strings.NewReplacer(
 	"FIXME-app", "my-cli",
 	"FIXME-service", "my-service",
 	`"ghcr.io/itiquette/nanolinter:go@sha256:PIN_DIGEST"`, "$CI_LINT_IMAGE",
+	`"ghcr.io/itiquette/nanolinter:kotlin@sha256:PIN_DIGEST"`, "$CI_LINT_IMAGE",
+	`"ghcr.io/itiquette/nanolinter:core@sha256:PIN_DIGEST"`, "$CI_LINT_IMAGE",
 	"registry.example.com/team/check-tools@sha256:PIN_IMAGE_DIGEST", gitlabJobPlaceholder,
 	"gitlab.example.com/team/ci/forge-ci", "$CI_SERVER_FQDN/itiquette/forge-ci",
 	"team/ci/forge-ci", "itiquette/forge-ci",
 	"/build-go@0.90.0\n    inputs:\n", "/build-go@0.90.0\n    inputs:\n      "+gitlabRuntimeInput+": "+gitlabJobPlaceholder+"\n",
+	"/build-gradle@0.90.0\n    inputs:\n", "/build-gradle@0.90.0\n    inputs:\n      "+gitlabRuntimeInput+": "+gitlabJobPlaceholder+"\n",
 )
 
 // exampleDemoFiles maps a demo's CI files to the release files they are
@@ -58,10 +63,14 @@ func exampleDemoFiles(example string) map[string]string {
 		".forge-ci/artifacts.yml":                path.Join(dir, "artifacts.yml"),
 		".forge-ci/gitcliff/keepachangelog.toml": "templates/gitcliff/keepachangelog.toml",
 		".forge-ci/gitcliff/minimal.toml":        "templates/gitcliff/minimal.toml",
-		".forgejo/workflows/pullrequest.yml":     path.Join(dir, "forgejo/pullrequest.yml"),
-		".forgejo/workflows/release.yml":         path.Join(dir, "forgejo/release.yml"),
 		GitLabGateFile:                           path.Join(dir, "gitlab/.gitlab-ci.yml"),
 		"nanolinter.toml":                        path.Join(dir, "nanolinter.toml"),
+	}
+
+	// Only the Go examples have Forgejo workflows.
+	if example == "go-cli" || example == "go-service" {
+		files[".forgejo/workflows/pullrequest.yml"] = path.Join(dir, "forgejo/pullrequest.yml")
+		files[".forgejo/workflows/release.yml"] = path.Join(dir, "forgejo/release.yml")
 	}
 
 	if example == "go-service" {

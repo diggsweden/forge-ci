@@ -24,6 +24,9 @@ path = [
   "test/live/demos/hello-android/consumer/gradlew",
   "test/live/demos/hello-android/consumer/gradlew.bat",
   "test/live/demos/hello-android/consumer/gradle/wrapper/gradle-wrapper.jar",
+  "test/live/demos/hello-gradle/consumer/gradlew",
+  "test/live/demos/hello-gradle/consumer/gradlew.bat",
+  "test/live/demos/hello-gradle/consumer/gradle/wrapper/gradle-wrapper.jar",
 ]
 precedence = "override"
 SPDX-FileCopyrightText = "2015 the original authors; Gradle, Inc."

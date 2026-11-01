@@ -29,14 +29,17 @@ workflows in `test/live/github/workflows`. `hello-maven` is a Maven jar;
 its binary extracted from the image. `hello-npm-package` adds an installable,
 scoped npm package without a container. `hello-cargo-workspace` adds two
 workspace binaries, each with its own runtime image and binary export target.
-`hello-go-cli` and `hello-go-service` show the `go-cli` and `go-service`
-examples: their source is their own, and every CI file is the example's,
+`hello-go-cli`, `hello-go-service`, `hello-gradle` and `hello-monorepo` show
+the `go-cli`, `go-service`, `gradle-app` and `monorepo` examples: their source
+is their own, and every CI file is the example's,
 filled in by `internal/livetest/exampledemos_internal_test.go`, which fails when
 one drifts. After changing an example, rewrite them with
 `go test ./internal/livetest -run TestExampleDemosAreTheirExamples -args -update-demos`.
-Their GitLab gate builds with `build-go`, so its job image is the candidate's
-own runtime image: `just runtime-image-archive go <directory>` builds it, and
-`just demo gitlab <name> job-archive=<archive>` takes it.
+A GitLab gate that builds with a component runs the engine of its job image,
+so the Go and Gradle demos take the candidate's own runtime image:
+`just runtime-image-archive go <directory>` (or `java`) builds it, and
+`just demo gitlab <name> job-archive=<archive>` takes it. `hello-monorepo`
+builds only on a release tag; its gate runs in its own `job.Containerfile`.
 A demo for another ecosystem or feature is one more directory in the same shape;
 `internal/livetest/demos_internal_test.go` renders every consumer here for
 each forge it declares and parses its artifact configuration, so malformed
@@ -56,6 +59,8 @@ inputs fail `just test-unit`. Rendering is not a live-flow pass.
 | hello-ios | GitHub PR/build | macOS ARM64 simulator tests, XcodeGen app, unsigned archive |
 | hello-go-cli | Forgejo, GitLab MR gate | The go-cli example as shipped; `cmd/my-cli` layout |
 | hello-go-service | Forgejo, GitLab MR gate | The go-service example as shipped; binaries and runtime image |
+| hello-gradle | GitLab MR gate | The gradle-app example as shipped; reproducible Java library jars |
+| hello-monorepo | GitLab MR gate | The monorepo example as shipped; Maven and npm services checked together |
 
 Record live results separately by commit, provider, visibility and flow. Local
 package, binary and Android build tests do not establish registry permissions,
