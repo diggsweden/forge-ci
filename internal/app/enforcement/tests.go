@@ -4,12 +4,10 @@
 package enforcement
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
-	"sync"
 
 	"github.com/diggsweden/forge-ci/internal/domain/enforcement"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
@@ -37,9 +35,9 @@ func testRun(ctx context.Context, policy enforcement.Policy, out, stderr io.Writ
 		return false, err
 	}
 
-	capture := &testCapture{}
+	output := enforcement.NewTestOutput(protocol)
 
-	err := run(io.MultiWriter(out, capture), io.MultiWriter(stderr, capture))
+	err := run(io.MultiWriter(out, output.Stdout()), io.MultiWriter(stderr, output.Stderr()))
 	if ctx.Err() != nil {
 		return false, errors.Join(err, ctx.Err())
 	}
@@ -55,8 +53,8 @@ func testRun(ctx context.Context, policy enforcement.Policy, out, stderr io.Writ
 		return false, err
 	}
 
-	if capture.overflow {
-		notWaivable(out, policy, "the test output exceeded the capture limit, so no summary could be trusted")
+	if output.Overlong() {
+		notWaivable(out, policy, fmt.Sprintf("a test output line exceeded %d MiB, so no summary could be trusted", enforcement.MaxTestLineBytes>>20))
 
 		return false, err
 	}
@@ -68,7 +66,7 @@ func testRun(ctx context.Context, policy enforcement.Policy, out, stderr io.Writ
 		return false, err
 	}
 
-	count := enforcement.FailedTests(protocol, capture.body.String())
+	count := output.FailedTests()
 	if count == 0 {
 		notWaivable(out, policy, "no complete assertion-failure summary: test errors, setup and compile failures are never waived")
 
@@ -92,28 +90,6 @@ func RequireTests(skip bool) error {
 	_, err := enforcement.Current()
 
 	return err
-}
-
-type testCapture struct {
-	mu       sync.Mutex
-	body     bytes.Buffer
-	overflow bool
-}
-
-func (capture *testCapture) Write(body []byte) (int, error) {
-	capture.mu.Lock()
-	defer capture.mu.Unlock()
-
-	const limit = 8 << 20
-	if capture.body.Len()+len(body) > limit {
-		capture.overflow = true
-
-		return len(body), nil
-	}
-
-	_, _ = capture.body.Write(body)
-
-	return len(body), nil
 }
 
 // notWaivable says why report-only did not continue past a failed test run,

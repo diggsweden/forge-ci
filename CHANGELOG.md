@@ -154,6 +154,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A report-only engine can waive the assertion failures of a large test suite.
+  The summary was parsed from at most 8 MiB of captured output, so a larger
+  suite was never waivable, and Go's stderr could land inside a `go test -json`
+  event and fail the parse. Output is now classified line by line while the
+  tests run, stdout and stderr each split on their own; only a line over 1 MiB
+  is refused. See `docs/admin-policy.md`.
 - `forge-ci init` on Forgejo and GitLab writes the release's changelog
   configuration to `.forge-ci/gitcliff/`, which their releases read and stop
   without, keeping either file the repository already has, and puts only

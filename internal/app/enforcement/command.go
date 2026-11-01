@@ -4,6 +4,7 @@
 package enforcement
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -41,7 +42,7 @@ func nanolinter(ctx context.Context, policy enforcement.Policy, runner LintRunne
 		return err
 	}
 
-	capture := &testCapture{}
+	capture := &boundedCapture{}
 
 	status, err := runner.Run(ctx, io.MultiWriter(out, capture), stderr, args)
 	if ctx.Err() != nil {
@@ -76,6 +77,26 @@ func nanolinter(ctx context.Context, policy enforcement.Policy, runner LintRunne
 	}
 
 	return errors.Join(FindingsFor(out, policy, enforcement.Lint, report.LintFindings), FindingsFor(out, policy, enforcement.Vulnerabilities, report.VulnerabilityFindings))
+}
+
+// boundedCapture keeps one structured report, refusing to grow past 8 MiB.
+// It receives only the linter's stdout, so it has a single writer.
+type boundedCapture struct {
+	body     bytes.Buffer
+	overflow bool
+}
+
+func (capture *boundedCapture) Write(body []byte) (int, error) {
+	const limit = 8 << 20
+	if capture.body.Len()+len(body) > limit {
+		capture.overflow = true
+
+		return len(body), nil
+	}
+
+	_, _ = capture.body.Write(body)
+
+	return len(body), nil
 }
 
 func retireSARIF(path string) error {

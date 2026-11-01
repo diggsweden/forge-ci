@@ -108,9 +108,13 @@ and toolchain-pin requirements are not part of this setting.
 The Go, Maven, npm, Cargo and Gradle/Android build paths apply the application
 test policy after running tests. A non-enforcing engine only continues after an
 ordinary native test-failure status with a recognized fresh summary. Unknown,
-missing, malformed or oversized output stays blocking. Maven reports containing
-test setup errors are not assertion-only waivers; for example a missing
-Testcontainers socket remains an error. Compilation and packaging invocations
+missing or malformed output stays blocking. The summary is recognized while the
+tests run, so the size of a suite's output does not matter; a single output
+line longer than 1 MiB stays blocking. Go's summary is read from the
+`go test -json` events on stdout, and its stderr may only report module
+downloads; the other tools' summaries are read from stdout and stderr. Maven
+reports containing test setup errors are not assertion-only waivers; for
+example a missing Testcontainers socket remains an error. Compilation and packaging invocations
 are never waived. Where packaging needs a follow-up after failed tests, that
 follow-up does not repeat the already reported tests.
 
@@ -122,7 +126,7 @@ Admin policy sha256:<digest>: application-tests result=not-waivable enforcement=
 ```
 
 The other reasons name an exit status that is not the tool's assertion-failure
-status, output over the capture limit, or a command that failed without a test
+status, an output line over 1 MiB, or a command that failed without a test
 exit status. A build blocked under report-only with no such line did not reach
 the test gate.
 

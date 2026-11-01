@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 
@@ -163,5 +164,64 @@ func TestReportOnlyGradleRequiresAssertionOnlyTerminal(t *testing.T) {
 				t.Fatalf("runtime failure was waived or lost: %v\n%s", err, &out)
 			}
 		})
+	}
+}
+
+func TestReportOnlyGoTestsStream(t *testing.T) {
+	const assertion = "{\"Action\":\"fail\",\"Package\":\"app\",\"Test\":\"TestValue\"}\n{\"Action\":\"fail\",\"Package\":\"app\"}\n"
+
+	passing := "{\"Action\":\"output\",\"Package\":\"app\",\"Test\":\"TestOther\",\"Output\":\"    other_test.go:9: " + strings.Repeat("x", 200) + "\\n\"}\n" +
+		"{\"Action\":\"pass\",\"Package\":\"app\",\"Test\":\"TestOther\"}\n"
+
+	for _, test := range []struct {
+		name      string
+		stdout    string
+		stderr    string
+		continued bool
+		reason    string
+	}{
+		// More output than any whole-output buffer would hold.
+		{"large suite", strings.Repeat(passing, (9<<20)/len(passing)) + assertion, "", true, ""},
+		// stderr arrives while stdout is mid-line, from another goroutine.
+		{"concurrent stderr", strings.Repeat(passing, 200) + assertion, strings.Repeat("go: downloading example.com/module v1.0.0\n", 200), true, ""},
+		{"overlong line", "{\"Action\":\"output\",\"Package\":\"app\",\"Output\":\"" + strings.Repeat("x", enforcement.MaxTestLineBytes) + "\"}\n" + assertion, "", false, "a test output line exceeded 1 MiB"},
+		{"panic", passing + "{\"Action\":\"output\",\"Package\":\"app\",\"Test\":\"TestValue\",\"Output\":\"panic: boom\\n\"}\n" + assertion, "", false, "no complete assertion-failure summary"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var out bytes.Buffer
+
+			continued, err := testRun(t.Context(), enforcement.Policy{}, &out, io.Discard, enforcement.GoJSON, func(stdout, stderr io.Writer) error {
+				done := make(chan struct{})
+
+				go func() {
+					defer close(done)
+
+					write(stderr, test.stderr)
+				}()
+
+				write(stdout, test.stdout)
+				<-done
+
+				return testExitError(1)
+			})
+			if continued != test.continued || (err == nil) != test.continued {
+				t.Fatalf("continued=%t err=%v\n%s", continued, err, &out)
+			}
+
+			if test.continued && !strings.Contains(out.String(), "result=findings count=1 enforcement=false") {
+				t.Fatalf("assertion finding lost: %s", &out)
+			}
+
+			if !test.continued && !strings.Contains(out.String(), "result=not-waivable enforcement=false reason=\""+test.reason) {
+				t.Fatalf("reason lost: %s", &out)
+			}
+		})
+	}
+}
+
+// write sends body in small pieces, as a pipe would.
+func write(writer io.Writer, body string) {
+	for chunk := range slices.Chunk([]byte(body), 4096-7) {
+		_, _ = writer.Write(chunk)
 	}
 }
