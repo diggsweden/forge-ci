@@ -637,6 +637,21 @@ func classifyStatus(code int) error {
 	return errs.ErrDependencyUnavailable
 }
 
+// uploadRefusalHint says what an artifact upload refusal means where the
+// status alone does not. Forgejo answers 413 before reading the body when the
+// repository owner's storage quota ([quota] in app.ini), which packages and
+// Actions artifacts share, would be exceeded; a proxy limiting request bodies
+// answers the same. Neither is a fault of the file.
+func uploadRefusalHint(code int) string {
+	if code != http.StatusRequestEntityTooLarge {
+		return ""
+	}
+
+	return " (the forge refused it as too large: on Forgejo, the repository owner's storage quota, " +
+		"shared by packages and Actions artifacts, is spent, or a proxy limits request size; " +
+		"free the owner's storage or ask the forge admin for a larger quota)"
+}
+
 func is2xx(code int) bool { return code >= http.StatusOK && code < http.StatusMultipleChoices }
 
 // uploadFile is one resolved upload entry: where it is on disk, the
@@ -777,7 +792,7 @@ func (p *Provider) createContainer(ctx context.Context, creds runtimeUploadCreds
 	defer func() { _ = resp.Body.Close() }()
 
 	if !is2xx(resp.StatusCode) {
-		return "", fmt.Errorf("create artifact container: HTTP %d: %w", resp.StatusCode, classifyStatus(resp.StatusCode))
+		return "", fmt.Errorf("create artifact container: HTTP %d%s: %w", resp.StatusCode, uploadRefusalHint(resp.StatusCode), classifyStatus(resp.StatusCode))
 	}
 
 	var created struct {
@@ -840,7 +855,7 @@ func (p *Provider) putFile(ctx context.Context, creds runtimeUploadCreds, contai
 	defer func() { _ = resp.Body.Close() }()
 
 	if !is2xx(resp.StatusCode) {
-		return fmt.Errorf("upload %q: HTTP %d: %w", item.itemPath, resp.StatusCode, classifyStatus(resp.StatusCode))
+		return fmt.Errorf("upload %q: HTTP %d%s: %w", item.itemPath, resp.StatusCode, uploadRefusalHint(resp.StatusCode), classifyStatus(resp.StatusCode))
 	}
 
 	return nil
@@ -860,7 +875,7 @@ func (p *Provider) finalizeArtifact(ctx context.Context, creds runtimeUploadCred
 	defer func() { _ = resp.Body.Close() }()
 
 	if !is2xx(resp.StatusCode) {
-		return fmt.Errorf("finalize artifact %q: HTTP %d: %w", name, resp.StatusCode, classifyStatus(resp.StatusCode))
+		return fmt.Errorf("finalize artifact %q: HTTP %d%s: %w", name, resp.StatusCode, uploadRefusalHint(resp.StatusCode), classifyStatus(resp.StatusCode))
 	}
 
 	return nil

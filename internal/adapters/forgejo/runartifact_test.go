@@ -1147,3 +1147,30 @@ func TestDownloadRunArtifact_Pattern(t *testing.T) {
 		}
 	})
 }
+
+// Forgejo answers 413 when the owner's storage quota is spent; a nanolinter
+// release read only "HTTP 413: validation failed" and nothing to act on.
+func TestUploadRunArtifact_A413SaysWhatTheForgeRefused(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "blob"), "layer")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodPost && request.URL.Path == "/_apis/pipelines/workflows/7/artifacts":
+			writeJSON(response, jsonObj{"fileContainerResourceUrl": "http://" + request.Host + "/upload"})
+		case request.Method == http.MethodPut && request.URL.Path == "/upload":
+			response.WriteHeader(http.StatusRequestEntityTooLarge)
+		default:
+			response.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	_, err := uploadProvider(srv).UploadRunArtifact(context.Background(), provider.RunArtifactUpload{Name: "layout", Dir: dir})
+	if !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "HTTP 413 (the forge refused it as too large") ||
+		!strings.Contains(err.Error(), "storage quota") {
+		t.Fatalf("err = %v, want a validation refusal naming the owner's storage quota", err)
+	}
+}

@@ -180,6 +180,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the same way, so a large file is no longer cut off by a fixed wall-clock
   limit. Other API requests keep the whole-request timeout, now applied by the
   client's transport.
+- `artifact upload` on Forgejo says what an HTTP 413 means: the forge refused
+  the upload as too large, which on Forgejo is the repository owner's storage
+  quota, shared by packages and Actions artifacts, or a proxy's request limit.
+  It read only "HTTP 413: validation failed", which pointed at the file.
 - The GitLab `nanolinter` and `megalinter` components trust the checkout
   themselves, by one block a guard keeps identical in both
   (`safe.directory` through `GIT_CONFIG_*`, beside the project's own
