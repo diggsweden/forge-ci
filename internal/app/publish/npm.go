@@ -22,6 +22,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/ci"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/output"
+	domainpublish "github.com/diggsweden/forge-ci/internal/domain/publish"
 	"github.com/diggsweden/forge-ci/internal/pathsafe"
 )
 
@@ -311,22 +312,25 @@ func NPMValidateTarball(_ context.Context, out, stderr io.Writer, annot output.A
 
 	_, _ = fmt.Fprintln(out, "Extracted contents:")
 
-	listed := listFiles(out, filepath.Join(extracted, "dist"))
+	entrypoint, err := npmTarballEntrypoint(staging.Root())
+	if err != nil {
+		return err
+	}
+
+	listed := listFiles(out, filepath.Join(extracted, filepath.Dir(entrypoint)))
 	if !listed {
 		listFiles(out, filepath.Join(extracted, "build"))
 	}
 
-	cliJS := filepath.Join(extracted, "dist", "cli.js")
-
 	_, _ = fmt.Fprintln(out, "")
-	_, _ = fmt.Fprintln(out, "Verifying dist/cli.js exists:")
+	_, _ = fmt.Fprintf(out, "Verifying %s exists:\n", entrypoint)
 
-	if info, err := os.Lstat(cliJS); err == nil && info.Mode().IsRegular() {
-		_, _ = fmt.Fprintf(out, "%s dist/cli.js found\n", clicolor.Check(out))
+	if info, err := staging.Root().Lstat(entrypoint); err == nil && info.Mode().IsRegular() {
+		_, _ = fmt.Fprintf(out, "%s %s found\n", clicolor.Check(out), entrypoint)
 	} else {
-		_, _ = fmt.Fprintf(out, "%s dist/cli.js NOT found\n", clicolor.Cross(out))
+		_, _ = fmt.Fprintf(out, "%s %s NOT found\n", clicolor.Cross(out), entrypoint)
 
-		return fmt.Errorf("dist/cli.js not found in extracted tarball: %w", errs.ErrValidation)
+		return fmt.Errorf("%s not found in extracted tarball: %w", entrypoint, errs.ErrValidation)
 	}
 
 	if err := staging.InstallWithRelativeSymlinks(); err != nil {
@@ -338,6 +342,21 @@ func NPMValidateTarball(_ context.Context, out, stderr io.Writer, annot output.A
 	}
 
 	return nil
+}
+
+// CLI packages retain the historical dist/cli.js requirement. Libraries may
+// instead declare a literal exports or main path; inspecting it executes no code.
+func npmTarballEntrypoint(root *os.Root) (string, error) {
+	body, err := root.ReadFile("package.json")
+	if os.IsNotExist(err) {
+		return domainpublish.NPMPackedEntrypoint(nil)
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("read packed package metadata: %w", err)
+	}
+
+	return domainpublish.NPMPackedEntrypoint(body)
 }
 
 func npmPackageName(dir string) (string, error) {

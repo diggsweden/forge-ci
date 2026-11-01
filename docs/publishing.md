@@ -162,6 +162,18 @@ Publishing requires an explicit version-specific `config.npm-tag`, normally
 `release-{version}`. There is no movable default channel. See the
 [npm publication policy](ecosystems.md#npm-artifact-first).
 
+`forge-ci publish npm validate-tarball` reads packed metadata without executing
+package code. CLI packages declaring `bin` retain the historical `dist/cli.js`
+requirement. Libraries may declare a literal `exports` string naming an
+unescaped canonical `./` file target, or a relative `main` path to a regular
+file when `exports` is absent/null. Exports targets cannot contain backslashes,
+percent-encoded paths, query/fragment syntax, empty/dot/parent segments or
+`node_modules` segments. Conditional/subpath objects, arrays, other non-string
+exports values, bare targets and noncanonical paths are refused rather than
+guessed or replaced by `main`. The selected entry must exist as a regular file;
+this bounded validation does not prove every export works. Keep a fresh
+installed-package oracle for actual package behavior.
+
 ```bash
 # Configure npm to use GitHub Packages
 npm config set @your-github-org:registry https://npm.pkg.github.com
