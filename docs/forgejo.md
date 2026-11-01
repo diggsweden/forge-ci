@@ -563,10 +563,13 @@ buildah build --file containers/signer/Containerfile \
 ```
 
 The build context is the repository root, cut down to the one file the image
-copies by `containers/signer/Containerfile.containerignore`. Buildah and
-Podman read that file because it is named after the Containerfile; a builder
-that does not sends the whole checkout, Git history and a downloaded binary
-included, which costs time and changes nothing in the image.
+copies by `containers/signer/Containerfile.containerignore`. forge-ci's
+Buildah builds name a Containerfile's own `<Containerfile>.containerignore`
+(or `.dockerignore`) with `--ignorefile`, ahead of the context's own ignore
+file, on every Buildah version; Buildah 1.39 would otherwise read only the
+context's. A builder that reads neither sends the whole checkout, Git history
+and a downloaded binary included, which costs time and changes nothing in the
+image.
 
 The image holds `jq`, `cosign`, `syft`, `skopeo`, `gpg` and Git on Debian, and
 its build runs `verify-signer-toolchain.sh` in strict mode, which refuses

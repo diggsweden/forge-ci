@@ -43,11 +43,9 @@ func (a *Adapter) BuildSignerImage(ctx context.Context, req container.SignerImag
 		args = append(args, "--target", req.Target)
 	}
 
-	args = append(args,
-		"--tag", req.LocalImage,
-		"--file", req.Containerfile,
-		req.Context,
-	)
+	args = append(args, "--tag", req.LocalImage, "--file", req.Containerfile)
+	args = append(args, ignoreFileArgs(req.Containerfile)...)
+	args = append(args, req.Context)
 
 	return a.run(ctx, out, args...)
 }

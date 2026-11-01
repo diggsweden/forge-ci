@@ -207,6 +207,7 @@ func (a *Adapter) buildArgs(req container.BuildRequest, modeArgs ...string) []st
 
 	if req.Containerfile != "" {
 		args = append(args, "-f", req.Containerfile)
+		args = append(args, ignoreFileArgs(req.Containerfile)...)
 	}
 
 	if req.Platform != "" {

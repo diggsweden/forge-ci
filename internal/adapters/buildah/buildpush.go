@@ -26,6 +26,8 @@ func (a *Adapter) BuildManifest(ctx context.Context, req container.BuildPushMani
 	}
 
 	args = append(args, "-f", req.Containerfile)
+	args = append(args, ignoreFileArgs(req.Containerfile)...)
+
 	for _, buildArg := range req.BuildArgs {
 		args = append(args, "--build-arg", buildArg)
 	}

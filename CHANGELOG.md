@@ -163,6 +163,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   built from a downloaded context copied those files unreadable to its
   non-root user: Nanolinter's release images could not read their own
   linter defaults.
+- Buildah image builds name a Containerfile's own ignore file
+  (`<Containerfile>.containerignore`, else `.dockerignore`) with
+  `--ignorefile`. Buildah 1.40 and later already prefer it over the context's,
+  but Buildah 1.39 (Debian 13, the Forgejo runner's) reads only the context's,
+  so a release image whose own allowlist admitted its prebuilt binary failed
+  at `COPY` there while building locally.
 - A re-run of a failed job that uploads to the `--blob-store` no longer takes
   its own blob artifact from the failed attempt as stored on sight; Forgejo
   lists an artifact from its first file on, so that copy may be partial. The
