@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **BREAKING:** Replace `release-type` and `derive-release --require-stable`
+  with `release-policy: stable|stable-prerelease`, without compatibility aliases.
+  Keep workflow, binary and runtime-image versions aligned; select prerelease
+  admission in trusted configuration.
 - Remove ignored GitHub-style permission declarations from Forgejo workflows,
   examples and live consumers. Automatic-token rights, explicit credentials and
   OIDC behavior are unchanged; the Forgejo guide states their actual boundaries.
@@ -23,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Signed numbered prereleases use the existing release pipeline with
+  `release-policy: stable-prerelease`, including release evidence and retry
+  behavior. Prereleases do not move stable image aliases or promotion stages;
+  GitLab identifies them in release notes because it has no native prerelease flag.
 - Package retention accepts repeatable `--keep-digest` roots, preserving old
   consumer pins and their platform/signature closure. A missing pin refuses the
   pass. A weekly/manual opt-in example previews a caller's reviewed runtime-image
