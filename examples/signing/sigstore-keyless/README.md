@@ -8,7 +8,8 @@ Release commits and tags are signed independently. This example sets
 `git-signing.method: ssh`, so it still needs `RELEASE_SSH_SIGNING_KEY` and a
 matching principal and public key in `.forge-ci/allowed_signers`. Start from
 the included `.forge-ci/allowed_signers.example`, replace its demonstration
-key with the public half of `RELEASE_SSH_SIGNING_KEY`, and commit it as
+key with the public half of `RELEASE_SSH_SIGNING_KEY` and its principal with
+the `bot-email` you set in `github/release-workflow.yml`, and commit it as
 `.forge-ci/allowed_signers`. The SSH key protects Git objects; it is not used
 for artifact signatures. forge-ci does not currently offer keyless
 Git-object signing.
@@ -28,7 +29,7 @@ example, which ships this setup.
   OIDC token, and `RELEASE_SSH_SIGNING_KEY` as its one signing secret.
 - `.forge-ci/allowed_signers.example` shows the OpenSSH allowed-signers
   format required to verify release commits and tags. Its bundled key is only a
-  demonstration key and must be replaced.
+  demonstration key and its principal a FIXME placeholder; replace both.
 
 ## What gets produced
 
