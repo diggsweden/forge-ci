@@ -32,4 +32,17 @@ jobs:
       # Default lint engine: nanolinter (runs `nanolinter verify` from your nanolinter.toml)
       lint-engine: nanolinter
 
-  # Project-specific test jobs remain caller-owned.
+  # Your tests. The orchestrator above never runs them; require this job and
+  # pr-checks as status checks.
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - run: ./gradlew test

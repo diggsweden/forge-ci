@@ -46,8 +46,8 @@ output layout and `artifact-first` alternative, use the
 - `Containerfile.example`: reference multi-stage Containerfile with the
   three named stages (`builder`, `export-binary`, `runtime`). Copy to
   `<service>/Containerfile` and adjust per-service.
-- `github/pullrequest-workflow.yml`: runs forge-ci nanolinter checks.
-  Add a caller-owned `test.yml` for workspace-specific Rust checks.
+- `github/pullrequest-workflow.yml`: runs forge-ci nanolinter checks and, in
+  its own `test` job, `cargo test --workspace`; add feature combinations there.
 - `github/release-workflow.yml`: standard signed `release-request/vX.Y.Z`-driven
   release; the orchestrator creates the final `vX.Y.Z` tag after preparation,
   then dispatches `sbom-cargo` per artefact and `publish-container` per container.

@@ -2,6 +2,13 @@
 #
 # SPDX-License-Identifier: CC0-1.0
 name: Release Workflow
+
+# Runs when you push a signed release-request/vX.Y.Z tag; the release creates
+# the final vX.Y.Z tag, never you. Before the first run, set the secrets your
+# artifacts.yml signing method needs (the block below names them) and follow
+# https://github.com/diggsweden/forge-ci/blob/main/docs/github.md#getting-started
+# changelog-creator and release-publisher name the tools; an empty value skips
+# that step.
 on:
   push:
     tags:

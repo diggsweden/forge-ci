@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `application-tests result=not-waivable` decision line with the reason (test
   errors are never waived, an unrecognised exit status, output over the capture
   limit). See `docs/admin-policy.md`.
+- The GitHub pull-request starters `init` copies carry a `test` job that runs
+  the project's tests with pinned actions and no secrets, as the Forgejo and
+  GitLab starters already do.
+- The release starters explain their trigger, secrets and choices in a header.
 - A tutorial, `docs/tutorial-first-pull-request.md`, from a bare Go repository
   on GitHub to a checked pull request with `forge-ci init` and `forge-ci doctor`;
   the docs index lists it under Tutorials and files the signing-secrets guide

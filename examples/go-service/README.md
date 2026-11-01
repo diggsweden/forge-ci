@@ -31,7 +31,7 @@ versioned binaries first and assembles images from them in separate native jobs.
 - `forgejo/Containerfile.example` copies the versioned binaries into a runtime image. Copy it to `Containerfile.forgejo` and match its binary name to `ARTIFACT_NAME` in the workflow.
 - `artifacts-forgejo.yml` declares those images without extraction. Copy it to `.forge-ci/images.yml` for the Forgejo release.
 - `github/release-workflow.yml` calls the release orchestrator; the container is published by `publish-container.yml`.
-- `github/pullrequest-workflow.yml` runs forge-ci PR checks and leaves `go test`, `go vet`, and `govulncheck` to a caller-owned test workflow.
+- `github/pullrequest-workflow.yml` runs forge-ci PR checks and, in its own `test` job, `go vet` and `go test`; `govulncheck` and any other policy are yours to add there.
 
 ## Containerfile Pattern
 

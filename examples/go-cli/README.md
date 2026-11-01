@@ -21,7 +21,7 @@ publish stage.
 
 | Forge | Included in this starter | What the project adds |
 |---|---|---|
-| GitHub | Lint and security checks | A test job for `go test`, `go vet`, and the project's vulnerability policy; require it alongside the lint gate |
+| GitHub | Lint and security checks, then `go vet` and `go test` in the starter's own `test` job | The project's vulnerability policy, for example `govulncheck`; require both jobs as status checks |
 | GitLab | Lint, `go vet`, `go test`, then a cross-platform build and Build SBOM | Any additional project-specific checks; tests run once in the `test` stage |
 | Forgejo | Lint, release-isolation validation, `go test`, and a build without a Build SBOM | Any additional project-specific checks |
 
@@ -32,7 +32,7 @@ starter pipeline proves only the checks listed above.
 
 - `artifacts.yml` declares `project-type: go` with `config.build-mode: artifact-first`. The GitHub release reads it; the GitLab and Forgejo files select platforms in their build step.
 - `github/release-workflow.yml` calls the release orchestrator and attaches `release-artifacts/*/my-cli-*` to the GitHub Release.
-- `github/pullrequest-workflow.yml` runs forge-ci PR checks and leaves `go test`, `go vet`, and `govulncheck` to a caller-owned test workflow.
+- `github/pullrequest-workflow.yml` runs forge-ci PR checks and, in its own `test` job, `go vet` and `go test`; `govulncheck` and any other policy are yours to add there.
 
 ## Output Layout
 
