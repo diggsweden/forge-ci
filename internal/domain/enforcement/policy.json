@@ -1,5 +1,6 @@
 {
   "enforce-lint": true,
   "enforce-vulnerabilities": true,
-  "enforce-application-tests": true
+  "enforce-application-tests": true,
+  "enforce-reproducible-builds": true
 }

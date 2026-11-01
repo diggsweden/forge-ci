@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Administrator policy setting `enforce-reproducible-builds` (strict
+  reproducible builds, default `true`). With `false`, missing Maven
+  `project.build.outputTimestamp` or Gradle reproducible-archive settings are
+  reported with their fix and policy decision without stopping the release.
+  Unreadable or malformed build files still block. See `docs/admin-policy.md`.
 - A report-only engine that still stops a failed test run now says why: an
   `application-tests result=not-waivable` decision line with the reason (test
   errors are never waived, an unrecognised exit status, output over the capture
