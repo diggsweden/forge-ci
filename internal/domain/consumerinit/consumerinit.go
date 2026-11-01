@@ -92,10 +92,14 @@ func Examples() []string {
 	return names
 }
 
-// FileCopy is one example file and the path it takes in the consumer.
+// FileCopy is one release file and the path it takes in the consumer.
 type FileCopy struct {
-	From string // path inside the examples
+	From string // slash path inside the release
 	To   string // slash path relative to the consumer's root
+	// KeepExisting marks a file the consumer may already have, from an
+	// earlier copy or another forge's init: an existing one is kept, not
+	// a conflict.
+	KeepExisting bool
 }
 
 // Replacement is one placeholder and its value, applied in order.

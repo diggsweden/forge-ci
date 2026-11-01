@@ -275,8 +275,10 @@ the steps are these.
 5. **Set the [variables](#variables) and [secrets](#secrets-and-tokens)**, among them
    `CI_JOB_IMAGE`, the image the pull-request jobs run in.
 6. **Add the two files** as `.forgejo/workflows/pullrequest.yml` and
-   `.forgejo/workflows/release.yml` through your protected pull-request path.
-   Do not activate an incomplete template.
+   `.forgejo/workflows/release.yml` through your protected pull-request path,
+   with the changelog configuration the release reads: `keepachangelog.toml`
+   and `minimal.toml` of [`templates/gitcliff/`](../templates/gitcliff/) as
+   `.forge-ci/gitcliff/`. Do not activate an incomplete template.
 7. **Release** by pushing an immutable `release-request/vX.Y.Z` tag. The flow
    derives the final `vX.Y.Z` tag and creates it once. Never create, move or
    force-push the final tag yourself.
@@ -1157,8 +1159,9 @@ jobs:
 The changelog renderer is `changelog-creator`, `git-cliff` by default or
 `git-chglog`, reading the consumer's `changelog-config` and `commit-body-config`,
 by default `.forge-ci/gitcliff/keepachangelog.toml` and
-`.forge-ci/gitcliff/minimal.toml`: copy the two files of this repository's
-[`templates/gitcliff/`](../templates/gitcliff/) there to start, the same
+`.forge-ci/gitcliff/minimal.toml`: `forge-ci init` writes them from this
+repository's [`templates/gitcliff/`](../templates/gitcliff/), or copy the two
+files there by hand to start, the same
 defaults the GitLab `release` component has. Both config files must exist; a
 missing one stops the render instead of letting git-cliff fall back to its
 built-in config. A SHA-256 repository needs `git-chglog` with its own configs:

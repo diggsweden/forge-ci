@@ -41,7 +41,10 @@ The examples and the values its operator records in ` + domain.DefaultsFile + `
 are read from that repository at that tag, so the files match the release
 they pin. github.com is GitHub; any other host is the forge that file
 names. Existing files are never overwritten. The report lists what is
-still left to fill in. Linter configuration is not generated.
+still left to fill in. On Forgejo and GitLab it also writes the release's
+changelog configuration to .forge-ci/gitcliff/, which their releases read,
+keeping any such file the repository already has.
+Linter configuration is not generated.
 
 With --dry-run, render the same proposal and report existing-file conflicts
 without writing project files. Templates are still fetched into temporary
@@ -225,6 +228,14 @@ func reportFiles(out io.Writer, result appinit.Result) {
 
 	if len(files) == len(result.Conflicts) {
 		_, _ = fmt.Fprintln(out, "  (none)")
+	}
+
+	if len(result.Kept) > 0 {
+		_, _ = fmt.Fprintln(out, "\nKept existing:")
+
+		for _, file := range result.Kept {
+			_, _ = fmt.Fprintf(out, "  %s\n", file)
+		}
 	}
 }
 

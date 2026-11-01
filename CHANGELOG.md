@@ -154,6 +154,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `forge-ci init` on Forgejo and GitLab writes the release's changelog
+  configuration to `.forge-ci/gitcliff/`, which their releases read and stop
+  without, keeping either file the repository already has, and puts only
+  workflow files in `.forgejo/workflows/`; the
+  go-service example's `Containerfile.example` no longer lands there.
+- The examples build the same Go main package in pull requests and releases
+  on every forge, and the GitLab cargo-app builds name their `platforms`,
+  so the toolchain pin they need is visible where they are included.
 - A Cargo build whose working-directory is a workspace member builds that
   member. Cargo metadata lists every member wherever it runs, and the
   build took the first one, so a second member's build asked cargo for a

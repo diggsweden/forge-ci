@@ -191,7 +191,7 @@ images and pins, a validating regex. The inputs that are not obvious:
 | | `checks`, `build` | Consumer commands: checks on the request commit, and the build that writes `dist/release-files.json` and `release-notes.md`. |
 | | `build-runner-tags` | Runner tags for the build job alone, for example `[privileged]`. Empty, the default, leaves it untagged. |
 | | `checks-runner-tags` | Runner tags for consumer checks after restricted signed-request authorization. Empty, the default, leaves checks untagged. Authorization and signing stay untagged. |
-| | `changelog-creator`, `changelog-config`, `commit-body-config` | `git-cliff` (default) or `git-chglog`, and the consumer's configuration files, by default `.forge-ci/gitcliff/keepachangelog.toml` and `.forge-ci/gitcliff/minimal.toml`, copies of this repository's [`templates/gitcliff/`](../templates/gitcliff/). git-cliff renders offline, without remote metadata, and reads stable `vX.Y.Z` tags only, overriding any `tag_pattern` in the configuration. A SHA-256 repository needs `git-chglog`, since git-cliff cannot read one. |
+| | `changelog-creator`, `changelog-config`, `commit-body-config` | `git-cliff` (default) or `git-chglog`, and the consumer's configuration files, by default `.forge-ci/gitcliff/keepachangelog.toml` and `.forge-ci/gitcliff/minimal.toml`, copies of this repository's [`templates/gitcliff/`](../templates/gitcliff/) that `forge-ci init` writes. git-cliff renders offline, without remote metadata, and reads stable `vX.Y.Z` tags only, overriding any `tag_pattern` in the configuration. A SHA-256 repository needs `git-chglog`, since git-cliff cannot read one. |
 | | `release-policy` | `stable` (default) or `stable-prerelease`, selected in the trusted external policy. GitLab has no native prerelease flag; see [release policy](workflows.md#stable-and-prerelease-policy). |
 | | `release-branch` | The branch a release lands on; empty, the default, takes the project's default branch. The request must be its head. |
 | | `transparency-log` | `none` (default) or `public`: whether Cosign signatures are also written to the public Sigstore transparency log. See [Signing](#signing). |
@@ -716,9 +716,10 @@ use content digests rooted at `.` so different runner paths remain compatible.
 The component owns input defaults and forwards explicit values to the child.
 Its default renderer is `git-cliff`, and its default configuration paths match
 the Forgejo layer: `.forge-ci/gitcliff/keepachangelog.toml` for `CHANGELOG.md`
-and `.forge-ci/gitcliff/minimal.toml` for the release commit body. Copy the two
-files of this repository's [`templates/gitcliff/`](../templates/gitcliff/) there
-to start. Set `changelog-config` and `commit-body-config` to the consumer's
+and `.forge-ci/gitcliff/minimal.toml` for the release commit body. `forge-ci
+init` writes them from this repository's
+[`templates/gitcliff/`](../templates/gitcliff/); by hand, copy the two files
+there to start. Set `changelog-config` and `commit-body-config` to the consumer's
 actual paths when using another layout or `git-chglog`; the renderer CLI
 requires filenames, and refuses one that does not exist. A SHA-256 repository
 needs `git-chglog`: git-cliff cannot read one, and the render refuses it.

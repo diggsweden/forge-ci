@@ -21,13 +21,14 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
 )
 
-// fakeRemote serves this repository's own examples as the pinned release,
-// and the defaults file the case gives.
+// fakeRemote serves this repository's own examples and changelog
+// configurations as the pinned release, and the defaults file the case gives.
 type fakeRemote struct {
-	tags     []string
-	defaults string // empty: the mirror has no defaults file
-	commit   string // empty: use the default SHA-1 fixture
-	fetchErr error
+	tags        []string
+	defaults    string // empty: the mirror has no defaults file
+	commit      string // empty: use the default SHA-1 fixture
+	noChangelog bool   // an older release without templates/gitcliff
+	fetchErr    error
 }
 
 func (f fakeRemote) VersionTags(context.Context, string) ([]string, error) { return f.tags, nil }
@@ -49,8 +50,15 @@ func (f fakeRemote) Export(_ context.Context, _, _, dest string, _ []string) ([]
 		return nil, err
 	}
 
+	var missing []string
+	if f.noChangelog {
+		missing = append(missing, domain.ChangelogDir)
+	} else if err := os.CopyFS(filepath.Join(dest, filepath.FromSlash(domain.ChangelogDir)), os.DirFS(repoChangelog)); err != nil {
+		return nil, err
+	}
+
 	if f.defaults == "" {
-		return []string{domain.DefaultsFile}, nil
+		return append(missing, domain.DefaultsFile), nil
 	}
 
 	file := filepath.Join(dest, filepath.FromSlash(domain.DefaultsFile))
@@ -58,12 +66,15 @@ func (f fakeRemote) Export(_ context.Context, _, _, dest string, _ []string) ([]
 		return nil, err
 	}
 
-	return nil, os.WriteFile(file, []byte(f.defaults), 0o600)
+	return missing, os.WriteFile(file, []byte(f.defaults), 0o600)
 }
 
-// repoExamples is this repository's examples directory; go test runs in
-// the package directory.
-const repoExamples = "../../../examples"
+// repoExamples and repoChangelog are this repository's examples and
+// changelog configurations; go test runs in the package directory.
+const (
+	repoExamples  = "../../../examples"
+	repoChangelog = "../../../templates/gitcliff"
+)
 
 const fullDefaults = `forge: %s
 signer-image: registry.example/fixture/signer@sha256:` + "1111111111111111111111111111111111111111111111111111111111111111" + `
@@ -194,6 +205,125 @@ func TestRunFromRenamedForgejoForkPreservesFullPins(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Forgejo and GitLab releases read the consumer's changelog configuration
+// and stop without it, so init writes the release's; GitHub's release brings
+// its own. Only workflows go to .forgejo/workflows: the go-service Forgejo
+// directory also holds a Containerfile.example the README places elsewhere.
+func TestRunWritesWhatTheForgesReleaseReads(t *testing.T) {
+	t.Parallel()
+
+	changelog := []string{".forge-ci/gitcliff/keepachangelog.toml", ".forge-ci/gitcliff/minimal.toml"}
+	cases := map[provider.ForgeAPI]struct {
+		mirror string
+		want   []string
+	}{
+		provider.ForgeGitHub: {"https://github.com/fixture/forge-ci", []string{
+			".forge-ci/artifacts.yml", ".github/workflows/pullrequest-workflow.yml", ".github/workflows/release-workflow.yml",
+		}},
+		provider.ForgeForgejo: {"https://forge.example/fixture/forge-ci", append([]string{
+			".forgejo/workflows/pullrequest.yml", ".forgejo/workflows/release.yml",
+		}, changelog...)},
+		provider.ForgeGitLab: {"https://gitlab.example/fixture/forge-ci", append([]string{".gitlab-ci.yml"}, changelog...)},
+	}
+
+	for forge, tc := range cases {
+		t.Run(string(forge), func(t *testing.T) {
+			t.Parallel()
+
+			remote := fakeRemote{tags: []string{"v1.2.3"}}
+			if forge != provider.ForgeGitHub {
+				remote.defaults = "forge: " + string(forge) + "\n"
+			}
+
+			dir := t.TempDir()
+
+			result, err := appinit.Run(t.Context(), appinit.Input{Remote: remote, URL: tc.mirror, Dir: dir, Example: "go-service"})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if got := slices.Sorted(slices.Values(result.Written)); !slices.Equal(got, slices.Sorted(slices.Values(tc.want))) {
+				t.Fatalf("wrote %v, want %v", got, tc.want)
+			}
+
+			for _, file := range changelog {
+				if !slices.Contains(tc.want, file) {
+					continue
+				}
+
+				got, readErr := os.ReadFile(filepath.Join(dir, filepath.FromSlash(file)))
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+
+				want, readErr := os.ReadFile(filepath.Join(repoChangelog, path.Base(file)))
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+
+				if string(got) != string(want) {
+					t.Errorf("%s differs from the release's templates/gitcliff", file)
+				}
+			}
+		})
+	}
+}
+
+// The changelog configuration may already be there: copied by hand, as the
+// guides said before init wrote it, or by init for the repository's other
+// forge. Init keeps it and writes the rest instead of refusing.
+func TestRunKeepsExistingChangelogConfiguration(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	mine := filepath.Join(dir, ".forge-ci", "gitcliff", "minimal.toml")
+
+	if err := os.MkdirAll(filepath.Dir(mine), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(mine, []byte("# mine\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	remote := fakeRemote{tags: []string{"v1.2.3"}, defaults: "forge: gitlab\n"}
+
+	result, err := appinit.Run(t.Context(), appinit.Input{Remote: remote, URL: "https://gitlab.example/fixture/forge-ci", Dir: dir, Example: "go-cli"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want := []string{".gitlab-ci.yml", ".forge-ci/gitcliff/keepachangelog.toml"}; !slices.Equal(result.Written, want) {
+		t.Fatalf("wrote %v, want %v", result.Written, want)
+	}
+
+	if !slices.Equal(result.Kept, []string{".forge-ci/gitcliff/minimal.toml"}) || len(result.Conflicts) != 0 {
+		t.Fatalf("kept %v, conflicts %v", result.Kept, result.Conflicts)
+	}
+
+	if body, readErr := os.ReadFile(mine); readErr != nil || string(body) != "# mine\n" {
+		t.Fatalf("init changed the consumer's own configuration: %q, %v", body, readErr)
+	}
+}
+
+// A release from before init wrote changelog configuration still
+// initializes, with the files it has.
+func TestRunFromAReleaseWithoutChangelogConfiguration(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	remote := fakeRemote{tags: []string{"v1.2.3"}, defaults: "forge: gitlab\n", noChangelog: true}
+
+	result, err := appinit.Run(t.Context(), appinit.Input{Remote: remote, URL: "https://gitlab.example/fixture/forge-ci", Dir: dir, Example: "go-cli"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !slices.Equal(result.Written, []string{".gitlab-ci.yml"}) {
+		t.Fatalf("wrote %v, want only .gitlab-ci.yml", result.Written)
 	}
 }
 

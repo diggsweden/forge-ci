@@ -23,9 +23,6 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
 )
 
-// examplesDir is where a Forge CI release keeps its consumer examples.
-const examplesDir = "examples"
-
 // Remote reads a Forge CI mirror without credentials.
 type Remote interface {
 	VersionTags(ctx context.Context, repoURL string) ([]string, error)
@@ -54,6 +51,7 @@ type Result struct {
 	Defaults  bool // the mirror has a defaults file at the pinned tag
 	Written   []string
 	Proposed  []string
+	Kept      []string // existing files init keeps rather than refuses, such as the changelog configuration
 	Conflicts []string
 	Remaining map[string][]domain.Placeholder
 }
@@ -89,14 +87,13 @@ func Run(ctx context.Context, in Input) (Result, error) {
 		return Result{}, err
 	}
 
-	examples := os.DirFS(filepath.Join(snapshot, examplesDir))
 	result := Result{DryRun: in.DryRun, Forge: forge, Source: src, Defaults: found, Remaining: map[string][]domain.Placeholder{}}
 
-	return initializeFiles(examples, in, defaults, result)
+	return initializeFiles(os.DirFS(snapshot), in, defaults, result)
 }
 
-func initializeFiles(examples fs.FS, in Input, defaults domain.Defaults, result Result) (Result, error) {
-	plan, err := planFiles(examples, result.Forge, in.Example)
+func initializeFiles(release fs.FS, in Input, defaults domain.Defaults, result Result) (Result, error) {
+	plan, err := planFiles(release, result.Forge, in.Example)
 	if err != nil {
 		return Result{}, err
 	}
@@ -108,7 +105,12 @@ func initializeFiles(examples fs.FS, in Input, defaults domain.Defaults, result 
 
 	result.Directory = directory
 
-	files, err := render(examples, plan, domain.Replacements(result.Forge, in.Example, result.Source, defaults), &result)
+	plan, result.Kept, err = keepExisting(directory, plan)
+	if err != nil {
+		return Result{}, err
+	}
+
+	files, err := render(release, plan, domain.Replacements(result.Forge, in.Example, result.Source, defaults), &result)
 	if err != nil {
 		return Result{}, err
 	}
@@ -129,6 +131,32 @@ func initializeFiles(examples fs.FS, in Input, defaults domain.Defaults, result 
 	err = write(files, directory, &result)
 
 	return result, err
+}
+
+// keepExisting takes the copies the consumer may already have, and has,
+// out of the plan.
+func keepExisting(dir string, plan []domain.FileCopy) ([]domain.FileCopy, []string, error) {
+	var kept []string
+
+	remaining := plan[:0:0]
+	for _, c := range plan {
+		if c.KeepExisting {
+			_, err := os.Lstat(filepath.Join(dir, filepath.FromSlash(c.To)))
+			if err == nil {
+				kept = append(kept, c.To)
+
+				continue
+			}
+
+			if !errors.Is(err, fs.ErrNotExist) {
+				return nil, nil, err
+			}
+		}
+
+		remaining = append(remaining, c)
+	}
+
+	return remaining, kept, nil
 }
 
 func existingDestinations(dir string, proposed []string) ([]string, error) {
@@ -182,16 +210,16 @@ func pin(ctx context.Context, remote Remote, repoURL, ref string) (string, strin
 	return tag, commit, err
 }
 
-// readRelease exports the release's examples and defaults file into
-// snapshot and parses the defaults, when there are any.
+// readRelease exports the release's examples, changelog configurations and
+// defaults file into snapshot and parses the defaults, when there are any.
 func readRelease(ctx context.Context, remote Remote, repoURL, tag, snapshot string) (domain.Defaults, bool, error) {
-	missing, err := remote.Export(ctx, repoURL, tag, snapshot, []string{examplesDir, domain.DefaultsFile})
+	missing, err := remote.Export(ctx, repoURL, tag, snapshot, []string{domain.ExamplesDir, domain.ChangelogDir, domain.DefaultsFile})
 	if err != nil {
 		return domain.Defaults{}, false, err
 	}
 
-	if slices.Contains(missing, examplesDir) {
-		return domain.Defaults{}, false, fmt.Errorf("%s at %s has no %s/: it is not a Forge CI repository: %w", repoURL, tag, examplesDir, errs.ErrUsage)
+	if slices.Contains(missing, domain.ExamplesDir) {
+		return domain.Defaults{}, false, fmt.Errorf("%s at %s has no %s/: it is not a Forge CI repository: %w", repoURL, tag, domain.ExamplesDir, errs.ErrUsage)
 	}
 
 	if slices.Contains(missing, domain.DefaultsFile) {
@@ -209,8 +237,8 @@ func readRelease(ctx context.Context, remote Remote, repoURL, tag, snapshot stri
 }
 
 // planFiles lists the available initialization files of the selected example.
-func planFiles(examples fs.FS, forge provider.ForgeAPI, example string) ([]domain.FileCopy, error) {
-	entries, err := fs.ReadDir(examples, path.Join(example, domain.ForgeDir(forge)))
+func planFiles(release fs.FS, forge provider.ForgeAPI, example string) ([]domain.FileCopy, error) {
+	entries, err := fs.ReadDir(release, path.Join(domain.ExamplesDir, example, domain.ForgeDir(forge)))
 	if err != nil {
 		return nil, fmt.Errorf("this release has no %s files for example %s; choose another with --example: %w", forge, example, errs.ErrUsage)
 	}
@@ -227,14 +255,14 @@ func planFiles(examples fs.FS, forge provider.ForgeAPI, example string) ([]domai
 	var plan []domain.FileCopy
 
 	for _, c := range domain.Plan(forge, example, names) {
-		if _, statErr := fs.Stat(examples, c.From); statErr == nil {
+		if _, statErr := fs.Stat(release, c.From); statErr == nil {
 			plan = append(plan, c)
 		} else if !errors.Is(statErr, fs.ErrNotExist) {
 			return nil, statErr
 		}
 	}
 
-	if len(plan) == 0 {
+	if !slices.ContainsFunc(plan, func(c domain.FileCopy) bool { return strings.HasPrefix(c.From, domain.ExamplesDir+"/") }) {
 		return nil, fmt.Errorf("this release has no initialization files for %s example %s: %w", forge, example, errs.ErrUsage)
 	}
 
@@ -247,10 +275,10 @@ type renderedFile struct {
 }
 
 // render is shared by previews and writes, including placeholder reporting.
-func render(examples fs.FS, plan []domain.FileCopy, replacements []domain.Replacement, result *Result) ([]renderedFile, error) {
+func render(release fs.FS, plan []domain.FileCopy, replacements []domain.Replacement, result *Result) ([]renderedFile, error) {
 	files := make([]renderedFile, 0, len(plan))
 	for _, file := range plan {
-		body, err := fs.ReadFile(examples, file.From)
+		body, err := fs.ReadFile(release, file.From)
 		if err != nil {
 			return nil, err
 		}

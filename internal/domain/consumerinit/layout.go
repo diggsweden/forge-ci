@@ -37,28 +37,58 @@ func ResolveForge(host string, defaults Defaults) (provider.ForgeAPI, error) {
 	}
 }
 
-// Plan lists the files a forge takes from an example. Entries are the
-// file names the example holds in its forge directory.
+// Release paths init reads from a Forge CI release, besides DefaultsFile.
+const (
+	ExamplesDir  = "examples"
+	ChangelogDir = "templates/gitcliff"
+)
+
+// changelogConfigs are the git-cliff configurations the Forgejo and GitLab
+// releases read from the consumer by default, .forge-ci/gitcliff/<name>.
+var changelogConfigs = []string{"keepachangelog.toml", "minimal.toml"}
+
+// Plan lists the files a forge takes from a release. Entries are the file
+// names the example holds in its forge directory; From is a path in the
+// release. GitHub's release brings its own changelog configuration; the
+// Forgejo and GitLab ones read the consumer's, so init writes the release's.
 func Plan(forge provider.ForgeAPI, example string, forgeEntries []string) []FileCopy {
 	// Linter configuration belongs to the consumer, not CI initialization.
 	var plan []FileCopy
 
+	dir := path.Join(ExamplesDir, example)
+
 	switch forge {
 	case provider.ForgeGitHub:
-		plan = append(plan, FileCopy{From: path.Join(example, "artifacts.yml"), To: ".forge-ci/artifacts.yml"})
+		plan = append(plan, FileCopy{From: path.Join(dir, "artifacts.yml"), To: ".forge-ci/artifacts.yml"})
 		for _, name := range forgeEntries {
-			plan = append(plan, FileCopy{From: path.Join(example, "github", name), To: path.Join(".github/workflows", name)})
+			plan = append(plan, FileCopy{From: path.Join(dir, "github", name), To: path.Join(".github/workflows", name)})
 		}
 	case provider.ForgeGitLab:
-		plan = append(plan, FileCopy{From: path.Join(example, "gitlab", ".gitlab-ci.yml"), To: ".gitlab-ci.yml"})
+		plan = append(plan, FileCopy{From: path.Join(dir, "gitlab", ".gitlab-ci.yml"), To: ".gitlab-ci.yml"})
+		plan = append(plan, changelogCopies()...)
 	case provider.ForgeForgejo:
+		// The directory also holds files the README asks to copy elsewhere,
+		// such as a Containerfile.example; only workflows are workflows.
 		for _, name := range forgeEntries {
-			plan = append(plan, FileCopy{From: path.Join(example, "forgejo", name), To: path.Join(".forgejo/workflows", name)})
+			if path.Ext(name) == ".yml" {
+				plan = append(plan, FileCopy{From: path.Join(dir, "forgejo", name), To: path.Join(".forgejo/workflows", name)})
+			}
 		}
+
+		plan = append(plan, changelogCopies()...)
 	case provider.ForgeLocal:
 	}
 
 	return plan
+}
+
+func changelogCopies() []FileCopy {
+	copies := make([]FileCopy, 0, len(changelogConfigs))
+	for _, name := range changelogConfigs {
+		copies = append(copies, FileCopy{From: path.Join(ChangelogDir, name), To: path.Join(".forge-ci/gitcliff", name), KeepExisting: true})
+	}
+
+	return copies
 }
 
 // ForgeDir is the directory of an example that holds a forge's files.
