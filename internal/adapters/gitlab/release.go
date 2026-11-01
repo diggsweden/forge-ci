@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/diggsweden/forge-ci/internal/adapters/httpretry"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
 	domainrelease "github.com/diggsweden/forge-ci/internal/domain/release"
@@ -521,6 +522,10 @@ func postMultipartFile(ctx context.Context, client *http.Client, endpoint string
 	reader, writer := io.Pipe()
 	multipartWriter := multipart.NewWriter(writer)
 
+	// The file is bounded by progress, not wall time.
+	ctx, transfer := httpretry.StartTransfer(ctx, httpretry.ClientTimeout())
+	defer transfer.Stop()
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, reader)
 	if err != nil {
 		_ = reader.Close()
@@ -545,12 +550,14 @@ func postMultipartFile(ctx context.Context, client *http.Client, endpoint string
 
 	resp, err := doRequest(client, req)
 	if err != nil {
-		return nil, err
+		return nil, transfer.Err(err)
 	}
 
 	defer func() { _ = resp.Body.Close() }()
 
-	return readMultipartResponse(resp)
+	body, err := readMultipartResponse(resp)
+
+	return body, transfer.Err(err)
 }
 
 // streamMultipartFile writes one form file into the multipart pipe, closing

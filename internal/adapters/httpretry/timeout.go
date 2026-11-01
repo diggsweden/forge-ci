@@ -11,9 +11,12 @@ import (
 )
 
 // DefaultClientTimeout is the per-request HTTP timeout API clients apply
-// when FORGE_CI_HTTP_TIMEOUT is unset. It caps total wall time for one
-// request including retries; the transport's MaxCumulativeDelay caps
-// in-process backoff sleep separately.
+// when FORGE_CI_HTTP_TIMEOUT is unset. A client from NewClient caps total
+// wall time for one ordinary request with it, retries and response body
+// included; the transport's MaxCumulativeDelay caps in-process backoff sleep
+// separately. A request whose body is a file runs under a Transfer instead,
+// which uses the same value as its idle window: it ends only once that long
+// passes with no byte moved.
 const DefaultClientTimeout = 30 * time.Second
 
 // timeoutEnv overrides DefaultClientTimeout with a Go duration string.

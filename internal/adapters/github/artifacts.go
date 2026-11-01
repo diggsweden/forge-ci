@@ -298,6 +298,11 @@ func findArtifactID(ctx context.Context, client *gogithub.Client, owner, repo st
 // The body is streamed to a temp file so the ZIP reader (which needs
 // io.ReaderAt) doesn't materialise the whole archive in memory.
 func downloadAndExtractZip(ctx context.Context, client *http.Client, url, dir string, maxBytes int64, maxFiles int) (int64, int, error) {
+	// The zip is bounded by progress, not wall time: a large artifact must not
+	// be cut off by the API client's whole-request Timeout.
+	ctx, transfer := httpretry.StartTransfer(ctx, httpretry.ClientTimeout())
+	defer transfer.Stop()
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return 0, 0, fmt.Errorf("build download request: %w", err)
@@ -305,7 +310,7 @@ func downloadAndExtractZip(ctx context.Context, client *http.Client, url, dir st
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return 0, 0, fmt.Errorf("download artifact: %w", httpretry.SafeError(err))
+		return 0, 0, fmt.Errorf("download artifact: %w", httpretry.SafeError(transfer.Err(err)))
 	}
 
 	defer func() { _ = resp.Body.Close() }()
@@ -333,6 +338,8 @@ func downloadAndExtractZip(ctx context.Context, client *http.Client, url, dir st
 	defer func() { _ = os.Remove(tmpPath) }()
 
 	size, err := domainartifact.CopyAtMost(tmp, resp.Body, domainartifact.MaxArchiveBytes)
+	err = transfer.Err(err)
+
 	if cerr := tmp.Close(); err == nil {
 		err = cerr
 	}

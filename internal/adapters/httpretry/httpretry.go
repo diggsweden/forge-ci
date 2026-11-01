@@ -10,10 +10,7 @@
 // The transport is safe for use as a drop-in replacement for
 // http.DefaultTransport. Use it via:
 //
-//	client := &http.Client{
-//	    Timeout:   30 * time.Second,
-//	    Transport: httpretry.NewTransport(httpretry.Config{}),
-//	}
+//	client := httpretry.NewClient(30*time.Second, httpretry.NewTransport(httpretry.Config{}))
 package httpretry
 
 import (
@@ -129,9 +126,15 @@ func NewTransport(cfg Config) *Transport {
 
 // WithInternalServerErrorRetries derives a transport for services whose reads
 // can transiently return HTTP 500. An existing retry transport is copied, not
-// nested, preserving its clock and retry budgets without multiplying attempts.
-// Other transports become the inner transport of the standard bounded policy.
-func WithInternalServerErrorRetries(inner http.RoundTripper) *Transport {
+// nested, preserving its clock and retry budgets without multiplying attempts;
+// one inside a BoundedTransport is derived in place, so the bound still caps
+// the whole retry loop. Other transports become the inner transport of the
+// standard bounded policy.
+func WithInternalServerErrorRetries(inner http.RoundTripper) http.RoundTripper {
+	if bounded, ok := inner.(*BoundedTransport); ok {
+		return NewBoundedTransport(bounded.timeout, WithInternalServerErrorRetries(bounded.next))
+	}
+
 	cfg := Config{Inner: inner}
 	if existing, ok := inner.(*Transport); ok {
 		cfg = existing.cfg

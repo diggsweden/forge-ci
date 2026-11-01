@@ -15,6 +15,7 @@ import (
 
 	"code.gitea.io/sdk/gitea"
 
+	"github.com/diggsweden/forge-ci/internal/adapters/httpretry"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
 	"github.com/diggsweden/forge-ci/internal/pathsafe"
@@ -74,7 +75,7 @@ func (p *Provider) CreateRelease(ctx context.Context, repo string, spec provider
 		return fmt.Errorf("created release response did not include a valid id: %w", errs.ErrMalformedInput)
 	}
 
-	return attachAndPublish(client, owner, name, rel.ID, spec)
+	return attachAndPublish(ctx, client, owner, name, rel.ID, spec)
 }
 
 // publishedImmutableRelease reports whether an immutable release is already
@@ -98,9 +99,9 @@ func (p *Provider) publishedImmutableRelease(ctx context.Context, client *gitea.
 
 // attachAndPublish uploads the assets to a created release and, for an
 // immutable release, publishes the staged draft once they all exist.
-func attachAndPublish(client *gitea.Client, owner, name string, releaseID int64, spec provider.ReleaseSpec) error {
+func attachAndPublish(ctx context.Context, client *gitea.Client, owner, name string, releaseID int64, spec provider.ReleaseSpec) error {
 	for _, asset := range spec.Assets {
-		if err := uploadAttachment(client, owner, name, releaseID, asset); err != nil {
+		if err := uploadAttachment(ctx, client, owner, name, releaseID, asset); err != nil {
 			return err
 		}
 	}
@@ -159,7 +160,7 @@ func (p *Provider) PublishRelease(ctx context.Context, repo string, spec provide
 	existing, resp, err := client.GetReleaseByTag(owner, name, spec.Tag)
 	if err != nil {
 		if responseStatus(resp) == http.StatusNotFound {
-			return createReleaseWithAssets(client, owner, name, spec)
+			return createReleaseWithAssets(ctx, client, owner, name, spec)
 		}
 
 		return fmt.Errorf("forgejo get release %q: %w", spec.Tag, classifyErr(resp, err))
@@ -185,7 +186,7 @@ func (p *Provider) PublishRelease(ctx context.Context, repo string, spec provide
 	// were never published; reconciling first and then failing to update leaves
 	// the correct artifacts under the previous description, which is stale but
 	// not untrue. A failure here therefore preserves the prior metadata.
-	if err = reconcileReleaseAttachments(client, owner, name, existing.ID, attachments, spec.Assets); err != nil {
+	if err = reconcileReleaseAttachments(ctx, client, owner, name, existing.ID, attachments, spec.Assets); err != nil {
 		return err
 	}
 
@@ -239,7 +240,7 @@ func classifyReleaseFileError(err error) error {
 	return err
 }
 
-func createReleaseWithAssets(client *gitea.Client, owner, name string, spec provider.ReleaseSpec) error {
+func createReleaseWithAssets(ctx context.Context, client *gitea.Client, owner, name string, spec provider.ReleaseSpec) error {
 	opt, err := strictReleaseOption(spec)
 	if err != nil {
 		return err
@@ -255,7 +256,7 @@ func createReleaseWithAssets(client *gitea.Client, owner, name string, spec prov
 	}
 
 	for _, asset := range spec.Assets {
-		if err := uploadAttachment(client, owner, name, rel.ID, asset); err != nil {
+		if err := uploadAttachment(ctx, client, owner, name, rel.ID, asset); err != nil {
 			return err
 		}
 	}
@@ -379,17 +380,17 @@ func (p *Provider) UploadReleaseAsset(ctx context.Context, tag, file string) err
 		return err
 	}
 
-	return replaceReleaseAttachment(client, owner, name, rel.ID, existing, file)
+	return replaceReleaseAttachment(ctx, client, owner, name, rel.ID, existing, file)
 }
 
-func replaceReleaseAttachment(client *gitea.Client, owner, name string, releaseID int64, existing []*gitea.Attachment, file string) error {
+func replaceReleaseAttachment(ctx context.Context, client *gitea.Client, owner, name string, releaseID int64, existing []*gitea.Attachment, file string) error {
 	for _, attachment := range existing {
 		if attachment == nil || attachment.ID <= 0 {
 			return fmt.Errorf("release asset did not include a valid id: %w", errs.ErrMalformedInput)
 		}
 	}
 
-	if err := uploadAttachment(client, owner, name, releaseID, file); err != nil {
+	if err := uploadAttachment(ctx, client, owner, name, releaseID, file); err != nil {
 		return err
 	}
 
@@ -404,8 +405,11 @@ func replaceReleaseAttachment(client *gitea.Client, owner, name string, releaseI
 	return nil
 }
 
-// uploadAttachment streams one file to a release as an attachment.
-func uploadAttachment(client *gitea.Client, owner, repo string, releaseID int64, file string) error {
+// uploadAttachment streams one file to a release as an attachment, bounded
+// by progress rather than by the API client's cap. The SDK takes its context
+// from the client, so the client carries the transfer's context for this one
+// call; ctx is the one the client was built with.
+func uploadAttachment(ctx context.Context, client *gitea.Client, owner, repo string, releaseID int64, file string) error {
 	//nolint:gosec // G304: asset path is an operator-supplied release artifact, not attacker-controlled.
 	f, err := os.Open(file)
 	if err != nil {
@@ -414,9 +418,16 @@ func uploadAttachment(client *gitea.Client, owner, repo string, releaseID int64,
 
 	defer func() { _ = f.Close() }()
 
+	transferCtx, transfer := httpretry.StartTransfer(ctx, httpretry.ClientTimeout())
+	client.SetContext(transferCtx)
+
 	attachment, resp, err := client.CreateReleaseAttachment(owner, repo, releaseID, f, filepath.Base(file))
+
+	client.SetContext(ctx)
+	transfer.Stop()
+
 	if err != nil {
-		return fmt.Errorf("forgejo upload asset %q: %w", filepath.Base(file), classifyErr(resp, err))
+		return fmt.Errorf("forgejo upload asset %q: %w", filepath.Base(file), classifyErr(resp, transfer.Err(err)))
 	}
 
 	if attachment == nil || attachment.ID <= 0 {
@@ -456,7 +467,7 @@ func listReleaseAttachments(client *gitea.Client, owner, repo string, releaseID 
 	return all, nil
 }
 
-func reconcileReleaseAttachments(client *gitea.Client, owner, repo string, releaseID int64, existing []*gitea.Attachment, desired []string) error {
+func reconcileReleaseAttachments(ctx context.Context, client *gitea.Client, owner, repo string, releaseID int64, existing []*gitea.Attachment, desired []string) error {
 	// Stale-only reconciliation must validate the whole response too, before
 	// dereferencing an attachment or deleting any previously listed asset.
 	for _, attachment := range existing {
@@ -471,7 +482,7 @@ func reconcileReleaseAttachments(client *gitea.Client, owner, repo string, relea
 	}
 
 	for _, asset := range desired {
-		if err := replaceReleaseAttachment(client, owner, repo, releaseID, existing, asset); err != nil {
+		if err := replaceReleaseAttachment(ctx, client, owner, repo, releaseID, existing, asset); err != nil {
 			return err
 		}
 	}

@@ -168,6 +168,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exclude files, relaxing `failIfNoSpecifiedTests`) in `MAVEN_CLI_OPTS`.
   Each let a build skip, ignore or narrow its tests and still be logged as
   an enforced, clean test run.
+- `artifact upload` and `artifact download` no longer cut a large file off
+  after 30 seconds. File bodies on Forgejo and GitHub are bounded by progress:
+  a transfer fails only once no bytes move for the HTTP timeout
+  (`FORGE_CI_HTTP_TIMEOUT`, default 30s), and the error says it stalled. They
+  were bound by the API client's whole-request timeout, so any body larger
+  than the link moved in that time failed, as a large OCI layout blob did.
+- Release asset uploads on GitHub, Forgejo and GitLab, the read-back of
+  published assets for an immutable release, the self-runtime asset snapshot,
+  Maven registry uploads and the Central bundle upload are bounded by progress
+  the same way, so a large file is no longer cut off by a fixed wall-clock
+  limit. Other API requests keep the whole-request timeout, now applied by the
+  client's transport.
 - The GitLab `nanolinter` and `megalinter` components trust the checkout
   themselves, by one block a guard keeps identical in both
   (`safe.directory` through `GIT_CONFIG_*`, beside the project's own

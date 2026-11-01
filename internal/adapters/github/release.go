@@ -17,6 +17,7 @@ import (
 
 	gogithub "github.com/google/go-github/v76/github"
 
+	"github.com/diggsweden/forge-ci/internal/adapters/httpretry"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
 	"github.com/diggsweden/forge-ci/internal/domain/repository"
@@ -468,7 +469,7 @@ func uploadVerifiedReleaseAsset(
 	digest string,
 	beforeCleanup func() error,
 ) (*gogithub.ReleaseAsset, error) {
-	asset, _, err := client.Repositories.UploadReleaseAsset(ctx, owner, repo, releaseID, &gogithub.UploadOptions{Name: name}, file)
+	asset, err := uploadReleaseAssetBody(ctx, client, owner, repo, releaseID, name, file)
 	if err != nil {
 		return nil, fmt.Errorf("upload asset %q: %w", name, classifyGitHubError(err))
 	}
@@ -490,6 +491,17 @@ func uploadVerifiedReleaseAsset(
 	}
 
 	return asset, nil
+}
+
+// uploadReleaseAssetBody sends the asset bounded by progress, not wall time,
+// so a large asset is not cut off by the API client's cap.
+func uploadReleaseAssetBody(ctx context.Context, client *gogithub.Client, owner, repo string, releaseID int64, name string, file *os.File) (*gogithub.ReleaseAsset, error) {
+	ctx, transfer := httpretry.StartTransfer(ctx, httpretry.ClientTimeout())
+	defer transfer.Stop()
+
+	asset, _, err := client.Repositories.UploadReleaseAsset(ctx, owner, repo, releaseID, &gogithub.UploadOptions{Name: name}, file)
+
+	return asset, transfer.Err(err)
 }
 
 func temporaryReleaseAssetName(name, purpose string) (string, error) {

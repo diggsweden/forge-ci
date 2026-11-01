@@ -467,6 +467,11 @@ func (p *Provider) uploadZipBlob(ctx context.Context, signedURL string, archive 
 
 	defer func() { _ = file.Close() }()
 
+	// The zip is bounded by progress, not wall time: a large artifact must not
+	// be cut off by the API client's whole-request Timeout.
+	ctx, transfer := httpretry.StartTransfer(ctx, httpretry.ClientTimeout())
+	defer transfer.Stop()
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, signedURL, file)
 	if err != nil {
 		return fmt.Errorf("build blob upload request: %w", err)
@@ -479,7 +484,7 @@ func (p *Provider) uploadZipBlob(ctx context.Context, signedURL string, archive 
 
 	resp, err := p.httpClient().Do(req)
 	if err != nil {
-		return fmt.Errorf("upload artifact blob: %w", httpretry.SafeError(err))
+		return fmt.Errorf("upload artifact blob: %w", httpretry.SafeError(transfer.Err(err)))
 	}
 
 	defer func() { _ = resp.Body.Close() }()

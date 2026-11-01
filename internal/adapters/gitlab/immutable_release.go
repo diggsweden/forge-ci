@@ -145,6 +145,10 @@ func (p *Provider) matchPublishedAsset(ctx context.Context, apiBase string, head
 		return err
 	}
 
+	// The published asset is bounded by progress, not wall time.
+	ctx, transfer := httpretry.StartTransfer(ctx, httpretry.ClientTimeout())
+	defer transfer.Stop()
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, source, nil)
 	if err != nil {
 		return err
@@ -161,7 +165,7 @@ func (p *Provider) matchPublishedAsset(ctx context.Context, apiBase string, head
 
 	resp, err := httpretry.SameAuthority(client, "GitLab").Do(req)
 	if err != nil {
-		return err
+		return transfer.Err(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -173,7 +177,7 @@ func (p *Provider) matchPublishedAsset(ctx context.Context, apiBase string, head
 
 	read, err := io.Copy(digest, io.LimitReader(resp.Body, size+1))
 	if err != nil {
-		return err
+		return transfer.Err(err)
 	}
 
 	if read != size || !bytes.Equal(digest.Sum(nil), local) {

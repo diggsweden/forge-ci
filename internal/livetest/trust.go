@@ -211,14 +211,14 @@ func targetHTTPClient(target Target, timeout time.Duration) (*http.Client, error
 }
 
 // disposableHTTPClient retries safe reads through base, with the host check
-// outermost: labcontract.DisposableTransport sees every request, each
-// redirect hop included, and refuses one off the lab, over plain http or with
-// userinfo before a retry or a dial.
+// ahead of the retries: labcontract.DisposableTransport sees every request,
+// each redirect hop included, and refuses one off the lab, over plain http or
+// with userinfo before a retry or a dial. The client is bounded as the
+// adapters' own are: timeout caps an ordinary request, and a file transfer
+// made under httpretry.StartTransfer is bounded by progress instead.
 func disposableHTTPClient(base *http.Transport, timeout time.Duration) *http.Client {
-	return &http.Client{
-		Timeout:   timeout,
-		Transport: labcontract.DisposableTransport(httpretry.NewTransport(httpretry.Config{Inner: base})),
-	}
+	return httpretry.NewClient(timeout,
+		labcontract.DisposableTransport(httpretry.NewTransport(httpretry.Config{Inner: base})))
 }
 
 // HTTPClient returns a client that trusts the run's frozen lab CA and reaches

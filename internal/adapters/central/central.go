@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/diggsweden/forge-ci/internal/adapters/httpretry"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
@@ -31,6 +32,10 @@ type Client struct {
 	Username, Password, BaseURL string
 	HTTP                        *http.Client
 }
+
+// requestTimeout caps a status request and is the idle window of a bundle
+// upload, which is bounded by progress, not wall time.
+const requestTimeout = 2 * time.Minute
 
 var deploymentID = regexp.MustCompile(`^[A-Za-z0-9-]{1,128}$`)
 
@@ -110,12 +115,20 @@ func (c Client) Upload(ctx context.Context, filename string, automatic bool) (st
 		mode = "AUTOMATIC"
 	}
 
-	body, err := c.request(ctx, "upload", url.Values{"publishingType": {mode}}, reader, form.FormDataContentType())
+	// The bundle is bounded by progress, not wall time.
+	transferCtx, transfer := httpretry.StartTransfer(ctx, requestTimeout)
+	defer transfer.Stop()
+
+	body, err := c.request(transferCtx, "upload", url.Values{"publishingType": {mode}}, reader, form.FormDataContentType())
 	_ = reader.Close()
 	streamErr := <-done
 
 	if err != nil {
-		return "", err
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+
+		return "", transfer.Err(err)
 	}
 
 	if streamErr != nil {
@@ -177,7 +190,7 @@ func (c Client) request(ctx context.Context, endpoint string, query url.Values, 
 		req.Header.Set("Content-Type", contentType)
 	}
 
-	client := http.Client{Timeout: 2 * time.Minute}
+	client := *httpretry.NewClient(requestTimeout, nil)
 	if c.HTTP != nil {
 		client = *c.HTTP
 	}

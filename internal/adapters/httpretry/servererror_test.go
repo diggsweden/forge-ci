@@ -47,7 +47,7 @@ func TestInternalServerErrorRetryPolicy(t *testing.T) {
 			clock := newFakeClock()
 			base := httpretry.NewTransport(httpretry.Config{Inner: inner, Clock: clock, MaxAttempts: 3, MaxDelay: time.Second, MaxCumulativeDelay: 2 * time.Second})
 
-			transport := base
+			var transport http.RoundTripper = base
 			if tc.optIn {
 				transport = httpretry.WithInternalServerErrorRetries(base)
 			}

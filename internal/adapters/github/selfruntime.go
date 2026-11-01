@@ -21,6 +21,7 @@ import (
 
 	gogithub "github.com/google/go-github/v76/github"
 
+	"github.com/diggsweden/forge-ci/internal/adapters/httpretry"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	domaingit "github.com/diggsweden/forge-ci/internal/domain/git"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
@@ -182,9 +183,13 @@ func (p *Provider) downloadSelfRuntimeAssetSnapshot(
 	asset *gogithub.ReleaseAsset,
 	path string,
 ) error {
+	// The asset is bounded by progress, not wall time, like a release upload.
+	ctx, transfer := httpretry.StartTransfer(ctx, httpretry.ClientTimeout())
+	defer transfer.Stop()
+
 	body, _, err := client.Repositories.DownloadReleaseAsset(ctx, owner, repo, asset.GetID(), p.httpClient())
 	if err != nil {
-		return fmt.Errorf("download self-runtime asset %q for snapshot: %w", asset.GetName(), classifyGitHubError(err))
+		return fmt.Errorf("download self-runtime asset %q for snapshot: %w", asset.GetName(), classifyGitHubError(transfer.Err(err)))
 	}
 	defer func() { _ = body.Close() }()
 
@@ -198,7 +203,7 @@ func (p *Provider) downloadSelfRuntimeAssetSnapshot(
 	closeErr := file.Close()
 
 	if copyErr != nil {
-		return fmt.Errorf("snapshot self-runtime asset %q: %w", asset.GetName(), copyErr)
+		return fmt.Errorf("snapshot self-runtime asset %q: %w", asset.GetName(), transfer.Err(copyErr))
 	}
 
 	if closeErr != nil {

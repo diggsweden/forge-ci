@@ -67,17 +67,17 @@ func New() *Provider {
 	return &Provider{Env: os.Getenv}
 }
 
-// defaultHTTPClient returns a client backed by the retry transport. The
-// timeout caps total per-request wall time including retries (default
-// 30s, overridable via FORGE_CI_HTTP_TIMEOUT for slow links); the
-// transport's MaxCumulativeDelay caps in-process sleep separately.
+// defaultHTTPClient returns a client backed by the retry transport and
+// bounded by httpretry.NewClient. An ordinary request is capped at
+// FORGE_CI_HTTP_TIMEOUT (default 30s) of total wall time, retries and
+// response body included; the transport's MaxCumulativeDelay caps in-process
+// sleep separately. A request made under httpretry.StartTransfer, such as a
+// release asset or run artifact body, is bounded by progress instead: it ends
+// once that long passes with no byte moved.
 // Identical to the github/gitlab adapters so all three providers bound
 // their requests the same way.
 func defaultHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout:   httpretry.ClientTimeout(),
-		Transport: httpretry.NewTransport(httpretry.Config{}),
-	}
+	return httpretry.NewClient(httpretry.ClientTimeout(), httpretry.NewTransport(httpretry.Config{}))
 }
 
 // Name reports the platform identifier.

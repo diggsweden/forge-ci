@@ -419,8 +419,12 @@ func (p *Provider) writeEntry(ctx context.Context, contentLocation, token string
 }
 
 // downloadFile GETs contentLocation with the runtime Bearer token and
-// streams it to dest, bounded by MaxFileBytes.
+// streams it to dest, bounded by MaxFileBytes. The body is bounded by
+// progress, not wall time, so a large entry is not cut off mid-stream.
 func (p *Provider) downloadFile(ctx context.Context, contentLocation, token string, root *os.Root, dest string, maxBytes int64) (int64, error) {
+	ctx, transfer := httpretry.StartTransfer(ctx, httpretry.ClientTimeout())
+	defer transfer.Stop()
+
 	req, err := newRuntimeRequest(ctx, contentLocation, token, "application/octet-stream;api-version="+runArtifactAPIVersion)
 	if err != nil {
 		return 0, err
@@ -428,7 +432,7 @@ func (p *Provider) downloadFile(ctx context.Context, contentLocation, token stri
 
 	resp, err := p.doRuntimeRequest(req, token)
 	if err != nil {
-		return 0, fmt.Errorf("download artifact entry: %w", err)
+		return 0, fmt.Errorf("download artifact entry: %w", transfer.Err(err))
 	}
 
 	defer func() { _ = resp.Body.Close() }()
@@ -459,7 +463,7 @@ func (p *Provider) downloadFile(ctx context.Context, contentLocation, token stri
 
 	switch {
 	case copyErr != nil:
-		return 0, fmt.Errorf("write %q: %w", dest, copyErr)
+		return 0, fmt.Errorf("write %q: %w", dest, transfer.Err(copyErr))
 	case closeErr != nil:
 		return 0, fmt.Errorf("close %q: %w", dest, closeErr)
 	}
@@ -574,12 +578,15 @@ func isLoopbackHost(host string) bool {
 	return strings.EqualFold(host, "localhost") || (ip != nil && ip.IsLoopback())
 }
 
+// doRuntimeRequest sends req to the runtime service. A request made under
+// httpretry.StartTransfer is bounded by progress, not by the client's cap.
 func (p *Provider) doRuntimeRequest(req *http.Request, token string) (*http.Response, error) {
 	client := *p.httpClient()
 	// Forgejo's artifact service can transiently return 500 on reads even
 	// after acknowledging an upload. Reuse bounded safe-read retries; never
 	// replay upload or finalization mutations automatically.
 	client.Transport = httpretry.WithInternalServerErrorRetries(client.Transport)
+
 	if token == "" {
 		client.Jar = nil
 	}
@@ -821,9 +828,13 @@ func (p *Provider) putFile(ctx context.Context, creds runtimeUploadCreds, contai
 
 	putURL := appendItemPath(containerURL, item.itemPath)
 
+	// The file is bounded by progress, not wall time, like a download.
+	ctx, transfer := httpretry.StartTransfer(ctx, httpretry.ClientTimeout())
+	defer transfer.Stop()
+
 	resp, err := p.runtimeSend(ctx, http.MethodPut, putURL, creds.token, "application/octet-stream", file, item.entry.Size, headers)
 	if err != nil {
-		return fmt.Errorf("upload %q: %w", item.itemPath, err)
+		return fmt.Errorf("upload %q: %w", item.itemPath, transfer.Err(err))
 	}
 
 	defer func() { _ = resp.Body.Close() }()
@@ -856,7 +867,8 @@ func (p *Provider) finalizeArtifact(ctx context.Context, creds runtimeUploadCred
 }
 
 // runtimeSend issues a request to the runtime service carrying the Bearer
-// token in a per-request header — never argv, never disk.
+// token in a per-request header — never argv, never disk. A request made under
+// httpretry.StartTransfer is bounded by progress, not by the client's cap.
 func (p *Provider) runtimeSend(ctx context.Context, method, rawURL, token, contentType string, body io.Reader, contentLength int64, headers map[string]string) (*http.Response, error) {
 	// ContentLength 0 with a non-nil body means "unknown" to net/http,
 	// which then sends Transfer-Encoding: chunked — Forgejo's upload-chunk

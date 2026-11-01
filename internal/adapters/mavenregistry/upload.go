@@ -7,6 +7,7 @@ package mavenregistry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -17,12 +18,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/diggsweden/forge-ci/internal/adapters/httpretry"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
 )
 
 // Client accepts an injected transport for controlled registry integration tests.
 type Client struct{ HTTP *http.Client }
+
+// requestTimeout bounds the wait for the registry: the idle window of an
+// upload, since an artifact is bounded by progress, not wall time.
+const requestTimeout = 2 * time.Minute
 
 // Upload sends one already-validated artifact exactly once. Redirects are
 // refused, so registry credentials cannot follow an unrelated authority.
@@ -32,7 +38,10 @@ func (c Client) Upload(ctx context.Context, registry provider.ForgeMavenRegistry
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, address, body)
+	transferCtx, transfer := httpretry.StartTransfer(ctx, requestTimeout)
+	defer transfer.Stop()
+
+	req, err := http.NewRequestWithContext(transferCtx, http.MethodPut, address, body)
 	if err != nil {
 		return err
 	}
@@ -44,7 +53,7 @@ func (c Client) Upload(ctx context.Context, registry provider.ForgeMavenRegistry
 		return authErr
 	}
 
-	client := http.Client{Timeout: 2 * time.Minute}
+	client := *httpretry.NewClient(requestTimeout, nil)
 	if c.HTTP != nil {
 		client = *c.HTTP
 	}
@@ -55,6 +64,10 @@ func (c Client) Upload(ctx context.Context, registry provider.ForgeMavenRegistry
 	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
+		}
+
+		if stalled := transfer.Err(err); errors.Is(stalled, httpretry.ErrStalled) {
+			return fmt.Errorf("maven artifact upload: %w", stalled)
 		}
 
 		return fmt.Errorf("maven artifact upload failed: %w", errs.ErrDependencyUnavailable)
