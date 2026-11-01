@@ -168,6 +168,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exclude files, relaxing `failIfNoSpecifiedTests`) in `MAVEN_CLI_OPTS`.
   Each let a build skip, ignore or narrow its tests and still be logged as
   an enforced, clean test run.
+- The GitLab `nanolinter` and `megalinter` components trust the checkout
+  themselves, by one block a guard keeps identical in both
+  (`safe.directory` through `GIT_CONFIG_*`, beside the project's own
+  entries). The lint image's user does not own the runner's checkout, so
+  every merge request without hand-set `safe.directory` variables failed
+  with "cannot fetch the merge request's target branch".
 - Bootstrap source installs build a detached Git checkout instead of resolving
   a commit through a cached moving Go module tag. Host jobs bind the binary to
   their bootstrap checkout, support full SHA-1/SHA-256 IDs and relative install

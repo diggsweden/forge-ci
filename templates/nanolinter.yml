@@ -82,6 +82,22 @@ spec:
       export HOME=/home/nanolinter
 
       # --- Merge-request base -----------------------------------------------
+      # Trust the checkout, then fetch the merge request's target.
+      # --- Checkout trust ---------------------------------------------------
+      # The runner's user owns the checkout, and a lint image may run as
+      # another user, so git refuses the checkout as dubious ownership.
+      # Trust this one directory for every git call of the job, the linter's
+      # own included, through the environment: no config file is written,
+      # and the consumer's own GIT_CONFIG_* entries stay in force.
+      git_config_count="${GIT_CONFIG_COUNT:-0}"
+      case "$git_config_count" in
+        ''|*[!0-9]*) echo "GIT_CONFIG_COUNT is not a number: ${git_config_count}" >&2; exit 1 ;;
+      esac
+      export "GIT_CONFIG_KEY_${git_config_count}=safe.directory"
+      export "GIT_CONFIG_VALUE_${git_config_count}=${CI_PROJECT_DIR:?}"
+      export GIT_CONFIG_COUNT=$((git_config_count + 1))
+
+      # --- Target fetch -----------------------------------------------------
       # Diff-based checks (secret scanning, commit checks, changed-file
       # linting) compare the merge request with its target branch, and GitLab
       # fetches only the merge request's head: fetch the target as

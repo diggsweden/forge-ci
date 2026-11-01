@@ -106,8 +106,9 @@ func TestComponentsDoNotSetHomeAsAJobVariable(t *testing.T) {
 	}
 }
 
-// Both lint components fetch the merge request's target the same way; a fix
-// in one copy alone would leave the other comparing with nothing.
+// Both lint components trust the checkout and fetch the merge request's
+// target the same way; a fix in one copy alone would leave the other
+// refusing the checkout or comparing with nothing.
 func TestLintComponentsFetchTheMergeRequestTargetTheSameWay(t *testing.T) {
 	t.Parallel()
 
@@ -128,5 +129,11 @@ func TestLintComponentsFetchTheMergeRequestTargetTheSameWay(t *testing.T) {
 
 	if blocks["nanolinter"] != blocks["megalinter"] {
 		t.Error("templates/nanolinter.yml and templates/megalinter.yml fetch the merge request's target differently")
+	}
+
+	// A lint image may run as another user than the checkout's owner: both
+	// trust the checkout before any git call, or git refuses it.
+	if !strings.Contains(blocks["nanolinter"], `"GIT_CONFIG_VALUE_${git_config_count}=${CI_PROJECT_DIR:?}"`) {
+		t.Error("the lint components' merge-request base block no longer trusts the checkout (safe.directory)")
 	}
 }

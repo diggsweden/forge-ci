@@ -68,6 +68,37 @@ func TestNanolinterFetchesTheMergeRequestTarget(t *testing.T) {
 	}
 }
 
+// The lint image's user does not own the runner's checkout, so git refuses
+// it as dubious ownership. The component trusts the checkout through
+// GIT_CONFIG_* for every git call, nanolinter's included, and keeps the
+// consumer's own entries.
+func TestNanolinterTrustsTheCheckoutItDoesNotOwn(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	workspace := filepath.Join(dir, "builds")
+	gitIn(t, dir, "init", "--quiet", "--initial-branch=main", workspace)
+
+	stub := "#!/bin/sh\nset -e\n" +
+		"test \"$(git config --get-all safe.directory)\" = \"$(printf '%s\\n%s' /consumer/own \"$CI_PROJECT_DIR\")\"\n" +
+		"test \"$(git config --get core.consumer)\" = kept\n"
+	if err := os.WriteFile(filepath.Join(dir, "nanolinter"), []byte(stub), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	output, err := runNanolinterScript(t, dir, workspace, "GIT_CONFIG_COUNT=2",
+		"GIT_CONFIG_KEY_0=safe.directory", "GIT_CONFIG_VALUE_0=/consumer/own",
+		"GIT_CONFIG_KEY_1=core.consumer", "GIT_CONFIG_VALUE_1=kept")
+	if err != nil {
+		t.Fatalf("nanolinter did not see the checkout trusted beside the consumer's entries: %v\n%s", err, output)
+	}
+
+	output, err = runNanolinterScript(t, dir, workspace, "GIT_CONFIG_COUNT=two")
+	if err == nil || !strings.Contains(output, "GIT_CONFIG_COUNT is not a number") {
+		t.Fatalf("a malformed GIT_CONFIG_COUNT: %v\n%s", err, output)
+	}
+}
+
 func TestNanolinterUsesUTF8AndPreservesScannerFailure(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -178,7 +209,7 @@ func runNanolinterScript(t *testing.T, dir, workspace string, env ...string) (st
 
 	command.Env = append([]string{
 		"PATH=" + dir + ":/usr/bin:/bin", "TMPDIR=" + dir, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null",
-		"CI_SERVER_URL=file://" + dir, "CI_PROJECT_PATH=group/app", "CI_JOB_TOKEN=job-token",
+		"CI_SERVER_URL=file://" + dir, "CI_PROJECT_PATH=group/app", "CI_PROJECT_DIR=" + workspace, "CI_JOB_TOKEN=job-token",
 		"REQUIRED_LINTS=secrets,sast", "ENABLE_GITLAB_SAST=false",
 		"RC_FORGE_CI_REPOSITORY=engine",
 		"SARIF_FILE=" + filepath.Join(dir, "out.sarif"), "GL_SAST_FILE=" + filepath.Join(dir, "gl.json"),
