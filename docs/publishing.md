@@ -11,6 +11,21 @@ commands.
 > assets and runtime images before adoption. For unreleased changes, follow
 > [Branch Testing](runtime-images.md#branch-testing).
 
+## Check enforcement before publication
+
+The [administrator's immutable engine policy](admin-policy.md) controls whether
+recognized lint, vulnerability and application-test findings block progression.
+All three settings default to enforcing. Legacy `skip-tests: true` (including
+`SKIP_TESTS=true`) is refused, and exported/published OCI layouts are scanned
+even when a consumer sets `enable-scan: false`. SBOM selection is separate from
+this vulnerability scan.
+
+To report recognized findings without blocking, use a reviewed administrator-built
+report-only distribution with matching protected workflow, binary and image
+pins. Checks still run and findings remain visible. Tool startup, invalid reports,
+compilation, packaging, credentials, signatures and source/digest identity
+failures remain blocking; a report-only publication is not a scan-clean receipt.
+
 ## Release-file manifests
 
 The build producer supplies `dist/release-files.json` before handing its

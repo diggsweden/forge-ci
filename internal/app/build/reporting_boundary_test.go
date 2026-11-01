@@ -96,7 +96,7 @@ func TestProjectDirectoryBoundary_GradleAndAndroid(t *testing.T) {
 				}
 			}
 
-			err = appbuild.AndroidReleaseBuild(t.Context(), sink, summary, ops, output.Annotator{}, &out, &stderr, appbuild.AndroidReleaseBuildInput{Dir: "nested project/.", SkipTests: true, EnableBuildSBOM: true, RepoName: "mobile", GradleTasksOverride: "assembleWidget bundleWidget", SBOMToolVersion: "2.1.0", SecretsPropertiesBase64: base64.StdEncoding.EncodeToString([]byte("fixture=owned\n"))})
+			err = appbuild.AndroidReleaseBuild(t.Context(), sink, summary, ops, output.Annotator{}, &out, &stderr, appbuild.AndroidReleaseBuildInput{Dir: "nested project/.", SkipTests: false, EnableBuildSBOM: true, RepoName: "mobile", GradleTasksOverride: "assembleWidget bundleWidget", SBOMToolVersion: "2.1.0", SecretsPropertiesBase64: base64.StdEncoding.EncodeToString([]byte("fixture=owned\n"))})
 			if sink.Single("version") != "9.8.7" || sink.Single("version-code") != "41" {
 				t.Fatalf("Android metadata=%v", sink.AllScalar())
 			}
@@ -105,7 +105,7 @@ func TestProjectDirectoryBoundary_GradleAndAndroid(t *testing.T) {
 				t.Fatal("injected properties survived Android return")
 			}
 		} else {
-			err = appbuild.GradleReleaseBuild(t.Context(), summary, ops, &out, &stderr, appbuild.GradleReleaseBuildInput{Dir: "nested project/.", SkipTests: true, EnableBuildSBOM: true, Tasks: "assembleWidget bundleWidget", SBOMToolVersion: "2.1.0"})
+			err = appbuild.GradleReleaseBuild(t.Context(), summary, ops, &out, &stderr, appbuild.GradleReleaseBuildInput{Dir: "nested project/.", SkipTests: false, EnableBuildSBOM: true, Tasks: "assembleWidget bundleWidget", SBOMToolVersion: "2.1.0"})
 			if !strings.Contains(summary.buf.String(), "2.3.4") {
 				t.Fatalf("summary=%s", &summary.buf)
 			}
@@ -119,7 +119,12 @@ func TestProjectDirectoryBoundary_GradleAndAndroid(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if len(ops.calls) != 2 || !slices.Equal(ops.calls[0].Args, []string{"assembleWidget", "bundleWidget", "-x", "test"}) || !strings.Contains(ops.initBody, "2.1.0") {
+		testTask := "test"
+		if android {
+			testTask = "app:test"
+		}
+
+		if len(ops.calls) != 3 || !slices.Equal(ops.calls[0].Args, []string{testTask}) || !slices.Equal(ops.calls[1].Args, []string{"assembleWidget", "bundleWidget", "-x", testTask}) || !strings.Contains(ops.initBody, "2.1.0") {
 			t.Fatalf("calls=%v init=%s", ops.calls, ops.initBody)
 		}
 
@@ -133,7 +138,11 @@ func TestProjectDirectoryBoundary_GradleAndAndroid(t *testing.T) {
 			t.Fatalf("project identity: dir=%s summary=%s output=%s stderr=%s", dir, &summary.buf, &out, &stderr)
 		}
 
-		if _, err := os.Stat(ops.calls[1].Args[1]); !errors.Is(err, os.ErrNotExist) {
+		if !slices.Equal(ops.calls[2].Args, []string{"--init-script", ops.calls[2].Args[1], "cyclonedxBom"}) {
+			t.Fatalf("unexpected SBOM invocation: %v", ops.calls[2].Args)
+		}
+
+		if _, err := os.Stat(ops.calls[2].Args[1]); !errors.Is(err, os.ErrNotExist) {
 			t.Fatal("SBOM init script survived")
 		}
 	}

@@ -48,7 +48,7 @@ func gradleAndroidRunCmd(ops appbuild.AndroidGradleOps) *cli.Command {
    including on failure; cleanup errors are returned. Replaced properties are
    preserved. Emits artifact names + version for downstream upload/publish jobs.
 
-   Both ./gradlew invocations and metadata use --working-dir. Inherited JDK/SDK
+   Test, packaging and optional SBOM invocations and metadata use --working-dir. Inherited JDK/SDK
    runtime settings remain available; this command is not a build sandbox.
 
 EXAMPLE:
@@ -68,7 +68,7 @@ EXAMPLE:
 			&cli.StringFlag{Name: "build-types", Value: "debug,release", Sources: cli.EnvVars("BUILD_TYPES"), Usage: "comma-separated Android build types to assemble"},
 			&cli.BoolFlag{Name: "include-aab", Value: true, Sources: cli.EnvVars("INCLUDE_AAB"), Usage: "also emit bundleRelease (produces an AAB)"},
 			&cli.StringFlag{Name: flagBuildModule, Value: defaultBuildModule, Sources: cli.EnvVars("BUILD_MODULE"), Usage: "gradle module name (e.g. \"app\")"},
-			&cli.BoolFlag{Name: flagSkipTests, Sources: cli.EnvVars("SKIP_TESTS"), Usage: "omit unit tests from derived variant tasks; explicit task overrides control their own test selection"},
+			&cli.BoolFlag{Name: flagSkipTests, Sources: cli.EnvVars("SKIP_TESTS"), Usage: usageSkipTestTask},
 			&cli.BoolFlag{Name: flagBuildSBOM, Value: true, Sources: cli.EnvVars("ENABLE_BUILD_SBOM"), Usage: "generate the cyclonedx-gradle-plugin Build SBOM (default true)"},
 			&cli.StringFlag{Name: flagSBOMToolVersion, Sources: cli.EnvVars("CYCLONEDX_GRADLE_VERSION"), Usage: "pinned cyclonedx-gradle-plugin version (required when --build-sbom)"},
 			&cli.StringFlag{Name: flagTempDir, Sources: cienv.TempDir(), Usage: "existing scratch parent for a private signing directory, outside the project dir"},

@@ -46,6 +46,7 @@ then the environment variables listed per flag, then the flag default.
 - [`lint`](#forge-ci-lint) — code-style lint wrappers (swift-format, swiftlint)
 - [`plan`](#forge-ci-plan) — typed release, snapshot-release, and pull-request plan composition
 - [`platform`](#forge-ci-platform) — CI-runtime git + workspace operations (check out a repo, resolve a ref, inspect the workspace)
+- [`policy`](#forge-ci-policy) — immutable administrator check policy
 - [`publish`](#forge-ci-publish) — publish-side validators, output helpers, and registry uploads
 - [`release`](#forge-ci-release) — release-flow helpers (GPG lifecycle, signing, checksums, notes, create, attachments, …)
 - [`report`](#forge-ci-report) — write step-summary blocks (build, publish, status, lifecycle)
@@ -150,7 +151,7 @@ run the full Cargo release build (metadata, fetch, test, SBOM, compile, status)
 
 ```
 Runs the whole Cargo build sequence in one step: resolve metadata, fetch
-   deps, test (unless --skip-tests), generate the Build SBOM with cargo-cyclonedx
+   deps, run tests under the admin enforcement policy, generate the Build SBOM with cargo-cyclonedx
    (unless --no-build-sbom), and cross-compile per platform into dist/. The
    forge job wraps this with checkout + artifact upload only.
 
@@ -167,7 +168,7 @@ EXAMPLE:
 | `--ref-name` | git ref name used to derive the version when --version is empty | string | `""` | `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
 | `--commit` | prepared release commit exposed as FORGE_CI_COMMIT during compilation | string | `""` | `$CI_COMMIT`, `$CI_COMMIT_SHA`, `$COMMIT_SHA`, `$FORGEJO_SHA`, `$GITHUB_SHA` |
 | `--platforms` | comma/space/newline-separated GOOS/GOARCH targets to cross-compile (each must have a Rust target triple mapping) | string | `"linux/amd64"` | `$PLATFORMS` |
-| `--skip-tests` | skip 'cargo test' during the release build | bool | `false` | `$SKIP_TESTS` |
+| `--skip-tests` | legacy opt-out; true is refused: admin policy controls enforcement, tests still run | bool | `false` | `$SKIP_TESTS` |
 | `--build-sbom` | generate the cargo-cyclonedx Build SBOM (default true) | bool | `true` | `$ENABLE_BUILD_SBOM` |
 
 ### `forge-ci build go`
@@ -210,7 +211,7 @@ run the full Go release build (metadata, deps, test, SBOM, compile, summary)
 
 ```
 Runs the whole Go build sequence in one step: resolve metadata, download
-   dependencies, test (unless --skip-tests), generate the Build SBOM (unless
+   dependencies, run tests under the admin enforcement policy, generate the Build SBOM (unless
    --no-build-sbom), cross-compile per platform into dist/, and write the build
    summary. Binaries and the SBOM land at fixed paths the forge job uploads.
 
@@ -230,7 +231,7 @@ EXAMPLE:
 | `--build-tags` | comma-separated build tags passed via -tags (test + compile) | string | `""` | `$BUILD_TAGS` |
 | `--ldflags` | extra -ldflags appended after the version-injection block | string | `""` | `$LD_FLAGS` |
 | `--main-package` | main package import path relative to --working-dir | string | `"."` | `$MAIN_PACKAGE` |
-| `--skip-tests` | skip 'go test ./...' during the release build | bool | `false` | `$SKIP_TESTS` |
+| `--skip-tests` | legacy opt-out; true is refused: admin policy controls enforcement, tests still run | bool | `false` | `$SKIP_TESTS` |
 | `--build-sbom` | generate the CycloneDX Build SBOM (default true) | bool | `true` | `$ENABLE_BUILD_SBOM` |
 
 ### `forge-ci build gradle`
@@ -260,14 +261,14 @@ run the full Gradle release build (gradlew chmod, metadata, tasks, SBOM, summary
 
 ```
 Runs the whole Gradle build sequence in one step: make ./gradlew
-   executable, resolve metadata, run the gradle tasks (-x test unless
-   --skip-tests), generate the Build SBOM with the pinned cyclonedx-gradle-plugin
-   (unless --no-build-sbom), and write the summaries.
+   executable, resolve metadata, invoke mandatory test tasks under administrator
+   policy, then run the requested packaging tasks without repeating those tests.
+   Generate the Build SBOM with the pinned cyclonedx-gradle-plugin when enabled
+   and write the summaries. Consumer --skip-tests=true is refused.
 
-   ./gradlew executes in the current directory, not --working-dir: run this from
-   the project root, or cd in first (the forge job does, then wraps it with
-   checkout + artifact upload). --working-dir only locates gradle.properties for
-   metadata.
+   Test, packaging and SBOM invocations execute in --working-dir, which also
+   selects gradle.properties. A successful invocation can include Gradle cached,
+   up-to-date or NO-SOURCE outcomes; the summary reports test tasks invoked.
 
 EXAMPLE:
    cd app && forge-ci build gradle run --tasks assemble --sbom-tool-version 3.2.1
@@ -279,9 +280,9 @@ EXAMPLE:
 | `--private-dependencies` | explicitly allow dependency resolution to use the read-only dependency credential | bool | `false` | `$PRIVATE_DEPENDENCIES` |
 | `--dependency-token-file` | read-only package token file; defaults to $DEPENDENCY_TOKEN | string | `""` | n/a |
 | `--dependency-username` | username for the project's dependency repository settings | string | `""` | `$DEPENDENCY_USERNAME` |
-| `--working-dir` | directory of gradle.properties to read for metadata; ./gradlew itself runs in the current directory (cd in first) | string | `"."` | `$WORKING_DIRECTORY` |
+| `--working-dir` | project directory for metadata, mandatory tests, packaging and SBOM | string | `"."` | `$WORKING_DIRECTORY` |
 | `--tasks` | whitespace-separated gradle tasks to run (required) | string | `""` | `$GRADLE_TASKS` |
-| `--skip-tests` | append -x test to skip the test task | bool | `false` | `$SKIP_TESTS` |
+| `--skip-tests` | legacy opt-out; true is refused: admin policy controls enforcement, tests still run | bool | `false` | `$SKIP_TESTS` |
 | `--build-sbom` | generate the cyclonedx-gradle-plugin Build SBOM (default true) | bool | `true` | `$ENABLE_BUILD_SBOM` |
 | `--sbom-tool-version` | pinned cyclonedx-gradle-plugin version (required when --build-sbom) | string | `""` | `$CYCLONEDX_GRADLE_VERSION` |
 | `--java-version` | JDK major version, reported in the build summary | string | `""` | `$JAVA_VERSION` |
@@ -321,7 +322,7 @@ Runs the whole Android build sequence in one step: compose artifact names,
    including on failure; cleanup errors are returned. Replaced properties are
    preserved. Emits artifact names + version for downstream upload/publish jobs.
 
-   Both ./gradlew invocations and metadata use --working-dir. Inherited JDK/SDK
+   Test, packaging and optional SBOM invocations and metadata use --working-dir. Inherited JDK/SDK
    runtime settings remain available; this command is not a build sandbox.
 
 EXAMPLE:
@@ -344,7 +345,7 @@ EXAMPLE:
 | `--build-types` | comma-separated Android build types to assemble | string | `"debug,release"` | `$BUILD_TYPES` |
 | `--include-aab` | also emit bundleRelease (produces an AAB) | bool | `true` | `$INCLUDE_AAB` |
 | `--build-module` | gradle module name (e.g. "app") | string | `"app"` | `$BUILD_MODULE` |
-| `--skip-tests` | omit unit tests from derived variant tasks; explicit task overrides control their own test selection | bool | `false` | `$SKIP_TESTS` |
+| `--skip-tests` | legacy opt-out; true is refused: admin policy controls enforcement, tests still run | bool | `false` | `$SKIP_TESTS` |
 | `--build-sbom` | generate the cyclonedx-gradle-plugin Build SBOM (default true) | bool | `true` | `$ENABLE_BUILD_SBOM` |
 | `--sbom-tool-version` | pinned cyclonedx-gradle-plugin version (required when --build-sbom) | string | `""` | `$CYCLONEDX_GRADLE_VERSION` |
 | `--temp-dir` | existing scratch parent for a private signing directory, outside the project dir | string | `""` | `$CI_TEMP_DIR`, `$RUNNER_TEMP` |
@@ -415,7 +416,7 @@ EXAMPLE:
 | `--build-type` | lifecycle: "app" (clean package) or "lib" (compile/test/package with optional --profile; POM owns attached artifacts) | string | `""` | `$BUILD_TYPE` |
 | `--cli-opts` | extra args forwarded to mvn (whitespace-separated, e.g. "-B -ntp") | string | `""` | `$MAVEN_CLI_OPTS` |
 | `--profile` | Maven profile to activate for dependency resolution, metadata and the build lifecycle | string | `""` | `$MAVEN_PROFILE` |
-| `--skip-tests` | skip the Maven test phase | bool | `false` | `$SKIP_TESTS` |
+| `--skip-tests` | legacy opt-out; true is refused: admin policy controls enforcement, tests still run | bool | `false` | `$SKIP_TESTS` |
 | `--build-sbom` | generate the cyclonedx-maven-plugin Build SBOM (default true) | bool | `true` | `$ENABLE_BUILD_SBOM` |
 | `--sbom-tool-version` | pinned org.cyclonedx:cyclonedx-maven-plugin version (required when --build-sbom) | string | `""` | `$CYCLONEDX_MAVEN_VERSION` |
 | `--java-version` | JDK major version, reported in the build summary | string | `""` | `$JAVA_VERSION` |
@@ -458,7 +459,7 @@ run the full npm release build (metadata, ci, test, build, SBOM, pack, summary)
 
 ```
 Runs the whole npm build sequence in one step: resolve metadata, npm ci,
-   test (when configured, unless --skip-tests; failures block), run the build script, generate the Build
+   test (when configured, under admin enforcement policy), run the build script, generate the Build
    SBOM with the pinned cyclonedx-npm (unless --no-build-sbom), and npm pack. The
    tarball is left at its default <name>-<version>.tgz path for the forge job to
    upload.
@@ -478,7 +479,7 @@ EXAMPLE:
 | `--scope` | expected scope (e.g. @examplescope); errors when package.json disagrees | string | `""` | `$SCOPE`, `$PACKAGE_SCOPE` |
 | `--expect-version` | expected committed package version (with or without v); mismatch stops before npm ci | string | `""` | `$EXPECT_VERSION` |
 | `--script` | npm build script name to run (skipped when absent) | string | `"build"` | n/a |
-| `--skip-tests` | skip the configured npm test script; otherwise test failures stop the build | bool | `false` | `$SKIP_TESTS` |
+| `--skip-tests` | legacy opt-out; true is refused: admin policy controls enforcement, tests still run | bool | `false` | `$SKIP_TESTS` |
 | `--build-sbom` | generate the CycloneDX Build SBOM (default true) | bool | `true` | `$ENABLE_BUILD_SBOM` |
 | `--sbom-tool-version` | pinned @cyclonedx/cyclonedx-npm version run via npx (required when --build-sbom) | string | `""` | `$CYCLONEDX_VERSION` |
 | `--node-version` | executed Node version, reported in the build summary | string | `""` | `$NODE_VERSION` |
@@ -2364,14 +2365,14 @@ run `swiftlint lint` with optional --config and write the step-summary block
 
 ```
 EXAMPLE:
-   forge-ci lint swift swiftlint --config .swiftlint.yml --fail-on-warning
+   forge-ci lint swift swiftlint --config .swiftlint.yml
 ```
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
 | `--working-dir` | directory the linter is rooted at | string | `"."` | `$WORKING_DIRECTORY` |
 | `--config` | path to a .swiftlint.yml config file (passed via --config) | string | `""` | `$SWIFTLINT_CONFIG_PATH` |
-| `--fail-on-warning` | warnings cause a non-zero exit | bool | `false` | `$FAIL_ON_WARNING` |
+| `--fail-on-warning` | legacy compatibility input; administrator lint policy determines findings enforcement | bool | `false` | `$FAIL_ON_WARNING` |
 
 ## `forge-ci plan`
 
@@ -2649,6 +2650,34 @@ EXAMPLE:
 | `--destination` | workspace-relative path to write the key to (required) | string | `""` | n/a |
 | `--workspace` | workspace root the destination is confined to (default: the working directory) | string | `""` | `$CI_WORKSPACE`, `$FORGEJO_WORKSPACE`, `$GITHUB_WORKSPACE` |
 | `--output-key` | key written to the platform output sink | string | `"sha256"` | `$OUTPUT_KEY` |
+
+## `forge-ci policy`
+
+immutable administrator check policy
+
+### `forge-ci policy nanolinter`
+
+run full Nanolinter SARIF and independently gate lint and vulnerability findings
+
+**Usage:** `forge-ci policy nanolinter -- <nanolinter verify --report sarif --out - command>`
+
+| Flag | Description | Type | Default | Env vars |
+|------|-------------|------|---------|----------|
+| `--sarif-file` | write the invocation's security-only SARIF for provider upload | string | `""` | n/a |
+
+### `forge-ci policy show`
+
+print the admin settings and policy SHA-256 embedded in this engine
+
+### `forge-ci policy tests`
+
+run application tests and apply admin enforcement to recognized assertion failures
+
+**Usage:** `forge-ci policy tests -- <native test command>`
+
+| Flag | Description | Type | Default | Env vars |
+|------|-------------|------|---------|----------|
+| `--protocol` | native report protocol: go-json, maven, cargo, node, gradle, xctest (required) | string | `""` | n/a |
 
 ## `forge-ci publish`
 

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	appenforcement "github.com/diggsweden/forge-ci/internal/app/enforcement"
 	appsummary "github.com/diggsweden/forge-ci/internal/app/summary"
 	"github.com/diggsweden/forge-ci/internal/domain/build"
 	"github.com/diggsweden/forge-ci/internal/domain/ci"
@@ -74,6 +75,10 @@ type AndroidReleaseBuildInput struct {
 // resolved artifact names + version are emitted on the sink as the job outputs
 // downstream upload/publish jobs consume.
 func AndroidReleaseBuild(ctx context.Context, sink ci.OutputSink, summarySink ci.SummarySink, ops AndroidGradleOps, annot output.Annotator, out, stderr io.Writer, in AndroidReleaseBuildInput) (err error) {
+	if err := appenforcement.RequireTests(in.SkipTests); err != nil {
+		return err
+	}
+
 	dir, err := filepath.Abs(defaultDir(in.Dir))
 	if err != nil {
 		return err
@@ -142,7 +147,7 @@ func AndroidReleaseBuild(ctx context.Context, sink ci.OutputSink, summarySink ci
 		defer func() { err = errors.Join(err, cleanup()) }()
 	}
 
-	if err = AndroidGradleBuild(ctx, bound, out, stderr, AndroidGradleBuildInput{Tasks: pre.tasks, SkipTests: in.SkipTests}); err != nil {
+	if err = AndroidGradleBuild(ctx, bound, out, stderr, AndroidGradleBuildInput{Tasks: pre.tasks, TestTask: pre.testTask, SkipTests: in.SkipTests}); err != nil {
 		return fmt.Errorf("gradle build: %w", err)
 	}
 
@@ -163,7 +168,7 @@ func publishAndroidVersion(ctx context.Context, sink ci.OutputSink, annot output
 // before it opens the project, publishes an output or stages a secret.
 type androidReleasePreflight struct {
 	keystore, properties []byte
-	tasks                string
+	tasks, testTask      string
 }
 
 func preflightAndroidRelease(in AndroidReleaseBuildInput) (androidReleasePreflight, error) {
@@ -195,6 +200,11 @@ func preflightAndroidRelease(in AndroidReleaseBuildInput) (androidReleasePreflig
 	}
 
 	pre.tasks, err = androidReleaseTasks(in)
+	if err != nil {
+		return pre, err
+	}
+
+	pre.testTask, err = build.AndroidUnitTestTask(in.BuildModule)
 	if err != nil {
 		return pre, err
 	}

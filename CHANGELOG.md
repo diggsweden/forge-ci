@@ -137,6 +137,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The GitLab go-cli example no longer passes `skip-tests: true` to
+  `build-go`. The engine refuses it, because an administrator may require
+  tests, so a merge request copied from the example failed before building.
+  A guard keeps every example from skipping tests.
 - Bootstrap source installs build a detached Git checkout instead of resolving
   a commit through a cached moving Go module tag. Host jobs bind the binary to
   their bootstrap checkout, support full SHA-1/SHA-256 IDs and relative install
@@ -193,6 +197,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING:** Shared build gates refuse legacy `skip-tests: true` and
+  `SKIP_TESTS=true`; exported/published OCI layouts are vulnerability-scanned
+  even with consumer `enable-scan: false`. Keep scanner prerequisites available.
+  Migrate finding exceptions to a reviewed administrator-built engine policy
+  and matching protected workflow, binary and image pins. The embedded
+  `enforce-lint`, `enforce-vulnerabilities` and `enforce-application-tests`
+  settings default to `true`. Report-only distributions still execute checks
+  and retain findings; operational, compilation/packaging, credential, signature
+  and source/digest identity errors remain blocking. SwiftLint's legacy
+  `--fail-on-warning` flag is compatibility-only, not enforcement authority.
+  Gradle invokes tests separately before packaging, preserving Android's
+  module-bound test aggregate even with task overrides; cache and `NO-SOURCE`
+  outcomes do not prove physical test execution. See `docs/admin-policy.md`.
 - The snapshot flow's jobs are named by stage like the release flow's,
   `Prepare`, `Build: <name> (Maven)`, `Publish: npm package`, `Summary`;
   a branch rule that required one of the old names must be updated.

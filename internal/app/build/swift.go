@@ -13,9 +13,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	appenforcement "github.com/diggsweden/forge-ci/internal/app/enforcement"
 	"github.com/diggsweden/forge-ci/internal/clicolor"
 	"github.com/diggsweden/forge-ci/internal/domain/build"
 	"github.com/diggsweden/forge-ci/internal/domain/ci"
+	"github.com/diggsweden/forge-ci/internal/domain/enforcement"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/output"
 )
@@ -71,6 +73,10 @@ func SwiftFormatLint(
 	annot output.Annotator,
 	in SwiftFormatLintInput,
 ) error {
+	if _, err := enforcement.Current(); err != nil {
+		return err
+	}
+
 	pattern := in.FilePattern
 	if pattern == "" {
 		pattern = "*.swift"
@@ -97,6 +103,14 @@ func SwiftFormatLint(
 		return fmt.Errorf("swift-format lint: %w", err)
 	}
 
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	if exitCode != 0 && exitCode != 1 {
+		return fmt.Errorf("swift-format did not complete (exit %d): %w", exitCode, errs.ErrDependencyUnavailable)
+	}
+
 	_, _ = fmt.Fprint(out, output)
 
 	if !strings.HasSuffix(output, "\n") {
@@ -110,7 +124,7 @@ func SwiftFormatLint(
 			return err
 		}
 
-		return fmt.Errorf("swift-format reported issues: %w", errs.ErrValidation)
+		return appenforcement.Findings(out, enforcement.Lint, 1)
 	}
 
 	_, _ = fmt.Fprintf(out, "%s swift-format passed\n", clicolor.Check(out))
@@ -140,6 +154,10 @@ func SwiftLintLint(
 	annot output.Annotator,
 	in SwiftLintLintInput,
 ) error {
+	if _, err := enforcement.Current(); err != nil {
+		return err
+	}
+
 	configPath := in.ConfigPath
 	if configPath != "" {
 		resolved := configPath
@@ -163,6 +181,14 @@ func SwiftLintLint(
 		return fmt.Errorf("swiftlint lint: %w", err)
 	}
 
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	if exitCode != 0 && exitCode != 2 {
+		return fmt.Errorf("swiftlint did not complete (exit %d): %w", exitCode, errs.ErrDependencyUnavailable)
+	}
+
 	_, _ = fmt.Fprint(out, output)
 
 	if !strings.HasSuffix(output, "\n") {
@@ -175,19 +201,19 @@ func SwiftLintLint(
 		return summary.Append(ctx, build.RenderSwiftLintBlock(build.SwiftLintPassed, ""))
 	}
 
-	if in.FailOnWarning {
-		annot.Errorf("SwiftLint found issues")
-
-		if err := summary.Append(ctx, build.RenderSwiftLintBlock(build.SwiftLintFailed, output)); err != nil {
-			return err
-		}
-
-		return fmt.Errorf("swiftlint reported issues: %w", errs.ErrValidation)
+	if err := summary.Append(ctx, build.RenderSwiftLintBlock(build.SwiftLintFailed, output)); err != nil {
+		return err
 	}
 
-	annot.Warningf("SwiftLint found issues but fail-on-warning is false")
+	if err := appenforcement.Findings(out, enforcement.Lint, 1); err != nil {
+		annot.Errorf("SwiftLint found issues")
 
-	return summary.Append(ctx, build.RenderSwiftLintBlock(build.SwiftLintWarned, output))
+		return err
+	}
+
+	annot.Warningf("SwiftLint findings reported under non-enforcing admin policy")
+
+	return nil
 }
 
 func splitNonEmptyLines(value string) []string {

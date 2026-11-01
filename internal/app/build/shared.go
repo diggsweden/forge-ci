@@ -22,6 +22,10 @@ const (
 	// CLI invocation.
 	subCmdBuild = "build"
 
+	// testCommand is the literal test subcommand or task name that the
+	// cargo, go and Gradle wrappers pass to their underlying CLI.
+	testCommand = "test"
+
 	// Workflow output key emitted by toolchain build use cases.
 	outKeyVersion = "version"
 )

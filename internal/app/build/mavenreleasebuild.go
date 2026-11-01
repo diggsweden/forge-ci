@@ -10,9 +10,11 @@ import (
 	"io"
 	"strings"
 
+	appenforcement "github.com/diggsweden/forge-ci/internal/app/enforcement"
 	appsummary "github.com/diggsweden/forge-ci/internal/app/summary"
 	"github.com/diggsweden/forge-ci/internal/domain/build"
 	"github.com/diggsweden/forge-ci/internal/domain/ci"
+	"github.com/diggsweden/forge-ci/internal/domain/enforcement"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
@@ -117,12 +119,8 @@ type mavenDeps struct {
 // working-directory), matching MavenOps. When enabled, the Build SBOM is a
 // mandatory release deliverable and generation failure fails the build.
 func MavenReleaseBuild(ctx context.Context, summarySink ci.SummarySink, ops MavenOps, out, stderr io.Writer, in MavenReleaseBuildInput) error {
-	if in.BuildType != mavenBuildTypeApp && in.BuildType != mavenBuildTypeLib {
-		return fmt.Errorf("build-type must be %q or %q, got %q: %w", mavenBuildTypeApp, mavenBuildTypeLib, in.BuildType, errs.ErrUsage)
-	}
-
-	if in.EnableBuildSBOM && strings.TrimSpace(in.SBOMToolVersion) == "" {
-		return fmt.Errorf("SBOM tool version is required: %w", errs.ErrUsage)
+	if err := validateMavenReleaseBuildInput(in); err != nil {
+		return err
 	}
 
 	pom, err := loadMavenPOM(MavenMetadataInput{Dir: in.Dir})
@@ -172,6 +170,29 @@ func MavenReleaseBuild(ctx context.Context, summarySink ci.SummarySink, ops Mave
 		IsSnapshot:  build.IsSnapshot(meta.version),
 	}); err != nil {
 		return fmt.Errorf("write build summary: %w", err)
+	}
+
+	return nil
+}
+
+// validateMavenReleaseBuildInput refuses a release build request before any
+// Maven invocation: tests must run, the build type must be known, the CLI
+// options must keep the test gate, and an enabled SBOM needs a tool version.
+func validateMavenReleaseBuildInput(in MavenReleaseBuildInput) error {
+	if err := appenforcement.RequireTests(in.SkipTests); err != nil {
+		return err
+	}
+
+	if in.BuildType != mavenBuildTypeApp && in.BuildType != mavenBuildTypeLib {
+		return fmt.Errorf("build-type must be %q or %q, got %q: %w", mavenBuildTypeApp, mavenBuildTypeLib, in.BuildType, errs.ErrUsage)
+	}
+
+	if err := enforcement.MavenTestArguments(in.CLIOpts); err != nil {
+		return err
+	}
+
+	if in.EnableBuildSBOM && strings.TrimSpace(in.SBOMToolVersion) == "" {
+		return fmt.Errorf("SBOM tool version is required: %w", errs.ErrUsage)
 	}
 
 	return nil

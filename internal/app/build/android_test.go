@@ -11,7 +11,6 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -215,21 +214,20 @@ func TestAndroidVersionInfo_NormalizesCRLFForRealSink(t *testing.T) {
 	}
 }
 
-func TestAndroidGradleBuild_WithSkipTests(t *testing.T) {
+func TestAndroidGradleBuild_RefusesConsumerTestOptOut(t *testing.T) {
 	ops := &fakeGradle{}
 	if err := appbuild.AndroidGradleBuild(context.Background(), ops, io.Discard, io.Discard, appbuild.AndroidGradleBuildInput{
 		Tasks: "assembleRelease app:bundleRelease", SkipTests: true,
-	}); err != nil {
-		t.Fatal(err)
+	}); !errors.Is(err, errs.ErrUsage) {
+		t.Fatalf("test opt-out was not refused: %v", err)
 	}
 
-	want := []string{"assembleRelease", "app:bundleRelease", "-x", "test"}
-	if !slices.Equal(ops.args, want) {
-		t.Errorf("args = %v, want %v", ops.args, want)
+	if len(ops.args) != 0 {
+		t.Fatalf("ran gradle before refusal: %v", ops.args)
 	}
 }
 
-func TestAndroidGradleBuild_WithoutSkipTestsRunsTasksDirectly(t *testing.T) {
+func TestAndroidGradleBuild_RunsTestsBeforePackaging(t *testing.T) {
 	ops := &fakeGradle{}
 	if err := appbuild.AndroidGradleBuild(context.Background(), ops, io.Discard, io.Discard, appbuild.AndroidGradleBuildInput{
 		Tasks: "assembleDebug",
@@ -237,9 +235,7 @@ func TestAndroidGradleBuild_WithoutSkipTestsRunsTasksDirectly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !slices.Equal(ops.args, []string{"assembleDebug"}) {
-		t.Errorf("args = %v, want %v", ops.args, []string{"assembleDebug"})
-	}
+	assertGradleCalls(t, ops.calls, []string{"test"}, []string{"assembleDebug", "-x", "test"})
 }
 
 func TestAndroidGradleBuild_RequiresTasks(t *testing.T) {
