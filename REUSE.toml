@@ -50,6 +50,7 @@ path = [
   "docs/consumer-validation-lessons.md",
   "docs/workflow-design-policy.md",
   "docs/workflows.md",
+  "internal/livetest/consumerpr.md",
   "examples/README.md",
   "examples/container-snapshot/README.md",
   "examples/container-snapshot/hello.txt",

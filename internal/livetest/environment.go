@@ -76,67 +76,79 @@ func Requires(tb TB, forge provider.ForgeAPI, needs ...Need) bool {
 	}
 
 	for _, need := range needs {
-		switch need {
-		case NeedsInRunner:
-			if !RunsInRunner(forge) {
-				tb.Logf("SKIP %s: the in-runner tier does not drive this forge yet", forge)
+		if !meetsNeed(tb, forge, contract, need) {
+			return false
+		}
+	}
 
-				return false
-			}
+	return true
+}
 
-			endpoint, endpointErr := contract.Endpoint(labcontract.Kind(forge))
-			if endpointErr != nil {
-				tb.Fatalf("livetest: %v", endpointErr)
+// meetsNeed reports whether forge satisfies one need, logging why when it
+// does not.
+func meetsNeed(tb TB, forge provider.ForgeAPI, contract *labcontract.Contract, need Need) bool {
+	tb.Helper()
 
-				return false
-			}
-
-			if !endpoint.HasCapability(labcontract.CapabilityWorkflowRuns) {
-				tb.Logf("SKIP %s: the contract deployed no runner for endpoint %q (capability workflow-runs)", forge, endpoint.Name)
-
-				return false
-			}
-		case NeedsFulcio:
-			endpoint, err := contract.Endpoint(labcontract.Kind(forge))
-			if err != nil {
-				tb.Fatalf("livetest: %v", err)
-
-				return false
-			}
-
-			fulcioURL, issuer, ok := contract.FulcioFor(endpoint.Name)
-			if !ok {
-				tb.Logf("SKIP %s: contract fulcio has no issuer mapping for endpoint %q", forge, endpoint.Name)
-
-				return false
-			}
-
-			target := Target{Forge: forge, Host: endpoint.Host(), FulcioURL: fulcioURL, OIDCIssuer: issuer}
-			if trustErr := validateTargetAuthorities(target); trustErr != nil {
-				tb.Fatalf("livetest: Fulcio trust boundary refused %s: %v", forge, trustErr)
-
-				return false
-			}
-		case NeedsPackages:
-			endpoint, endpointErr := contract.Endpoint(labcontract.Kind(forge))
-			if endpointErr != nil {
-				tb.Fatalf("livetest: %v", endpointErr)
-
-				return false
-			}
-
-			if !endpoint.HasCapability(labcontract.CapabilityPackages) {
-				tb.Logf("SKIP %s: endpoint %q has no packages capability", forge, endpoint.Name)
-
-				return false
-			}
-		default:
-			// An unwired Need is a programming error, not a skip: silently
-			// treating it as satisfied is how a gate stops gating.
-			tb.Fatalf("livetest: unhandled %s; wire it into Requires", need)
+	switch need {
+	case NeedsInRunner:
+		if !RunsInRunner(forge) {
+			tb.Logf("SKIP %s: the in-runner tier does not drive this forge yet", forge)
 
 			return false
 		}
+
+		endpoint, endpointErr := contract.Endpoint(labcontract.Kind(forge))
+		if endpointErr != nil {
+			tb.Fatalf("livetest: %v", endpointErr)
+
+			return false
+		}
+
+		if !endpoint.HasCapability(labcontract.CapabilityWorkflowRuns) {
+			tb.Logf("SKIP %s: the contract deployed no runner for endpoint %q (capability workflow-runs)", forge, endpoint.Name)
+
+			return false
+		}
+	case NeedsFulcio:
+		endpoint, err := contract.Endpoint(labcontract.Kind(forge))
+		if err != nil {
+			tb.Fatalf("livetest: %v", err)
+
+			return false
+		}
+
+		fulcioURL, issuer, ok := contract.FulcioFor(endpoint.Name)
+		if !ok {
+			tb.Logf("SKIP %s: contract fulcio has no issuer mapping for endpoint %q", forge, endpoint.Name)
+
+			return false
+		}
+
+		target := Target{Forge: forge, Host: endpoint.Host(), FulcioURL: fulcioURL, OIDCIssuer: issuer}
+		if trustErr := validateTargetAuthorities(target); trustErr != nil {
+			tb.Fatalf("livetest: Fulcio trust boundary refused %s: %v", forge, trustErr)
+
+			return false
+		}
+	case NeedsPackages:
+		endpoint, endpointErr := contract.Endpoint(labcontract.Kind(forge))
+		if endpointErr != nil {
+			tb.Fatalf("livetest: %v", endpointErr)
+
+			return false
+		}
+
+		if !endpoint.HasCapability(labcontract.CapabilityPackages) {
+			tb.Logf("SKIP %s: endpoint %q has no packages capability", forge, endpoint.Name)
+
+			return false
+		}
+	default:
+		// An unwired Need is a programming error, not a skip: silently
+		// treating it as satisfied is how a gate stops gating.
+		tb.Fatalf("livetest: unhandled %s; wire it into Requires", need)
+
+		return false
 	}
 
 	return true

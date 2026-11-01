@@ -7,10 +7,11 @@ package livetest
 
 import (
 	"encoding/json"
-	"github.com/diggsweden/forge-ci/internal/domain/provider"
 	"net/http"
 	"os"
 	"testing"
+
+	"github.com/diggsweden/forge-ci/internal/domain/provider"
 )
 
 func TestForgejoSnapshotFinalizeAcknowledged(t *testing.T) {

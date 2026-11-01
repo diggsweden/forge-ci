@@ -16,6 +16,7 @@ import (
 const (
 	gitAdd           = "add"
 	gitCommitCommand = "commit"
+	objectFormatSHA1 = "sha1"
 )
 
 // ObjectFormatFixture has one annotated tag followed by one additional commit.
@@ -48,7 +49,7 @@ func SeedObjectFormatFixture(tb TB, target Target, repo, format, directory strin
 }
 
 func seedObjectFormatFixture(ctx context.Context, git layerGit, directory, format string) (ObjectFormatFixture, error) {
-	if format != "sha1" && format != "sha256" {
+	if format != objectFormatSHA1 && format != "sha256" {
 		return ObjectFormatFixture{}, fmt.Errorf("unsupported fixture object format %q: %w", format, errs.ErrValidation)
 	}
 

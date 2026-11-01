@@ -32,6 +32,7 @@ func TestLiveLauncherWaitsForCleanupAndReleasesLock(t *testing.T) {
 
 			gnu := testenv.GNUPath(t, "bash", "sed", "sha256sum", "install", "find")
 			command := liveLauncherCommand(t, ctx, root, script, mode, gnu)
+
 			command.Env = []string{"PATH=" + filepath.Join(root, "tools") + ":" + testenv.ToolPath(t, "flock", "jq") + ":" + gnu + ":/usr/bin:/bin", "HOME=" + root,
 				"XDG_STATE_HOME=" + filepath.Join(root, "state"), "TMPDIR=" + root,
 				"FORGE_CI_LIVE_SIGNAL_FIXTURE=" + root, "FORGE_CI_LIVE_FIXTURE_BINARY=" + os.Args[0], "FORGE_CI_LIVE_PACKAGE_DIR=" + packageDir,

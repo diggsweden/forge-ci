@@ -207,7 +207,7 @@ func SignGitLabRequest(tb TB, target Target, repo, commit, tag, keyPath string) 
 	ctx, cancel := context.WithTimeout(Context(tb), timeoutLayerPush)
 	defer cancel()
 
-	format := "sha1"
+	format := objectFormatSHA1
 	if len(commit) == 64 {
 		format = "sha256"
 	}

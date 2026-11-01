@@ -243,7 +243,7 @@ func ParseGitHubTrialSettings(event string, words []string) (GitHubTrialSettings
 
 func (settings *GitHubTrialSettings) parseWord(word string) error {
 	key, value, found := strings.Cut(word, "=")
-	if key == "image" && settings.Image != "" {
+	if key == settingImage && settings.Image != "" {
 		return fmt.Errorf("image must be supplied once as image=<name[,name...]>; repeated settings would omit earlier verification targets: %w", errs.ErrValidation)
 	}
 
@@ -284,7 +284,7 @@ func (settings *GitHubTrialSettings) set(key, value string) bool {
 		settings.Version = "v" + version
 
 		return release && valid
-	case key == "image":
+	case key == settingImage:
 		settings.Image = value
 
 		return release && validTrialImageNames(value)

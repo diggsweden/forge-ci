@@ -22,7 +22,7 @@ func (trial *GitHubTrial) DispatchDevelopment(repo, workflow string) int64 {
 	trial.tb.Helper()
 
 	details, _, err := trial.api.Actions.CreateWorkflowDispatchEventByFileName(trial.tb.Context(), trial.org, repo, workflow,
-		githubapi.CreateWorkflowDispatchEventRequest{Ref: "main", ReturnRunDetails: new(true)})
+		githubapi.CreateWorkflowDispatchEventRequest{Ref: defaultBranch, ReturnRunDetails: new(true)})
 	if err != nil {
 		trial.tb.Fatalf("dispatch development workflow %s: %v", workflow, err)
 	}
