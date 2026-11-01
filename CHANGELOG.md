@@ -158,6 +158,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `build-go`. The engine refuses it, because an administrator may require
   tests, so a merge request copied from the example failed before building.
   A guard keeps every example from skipping tests.
+- A re-run of a failed job that uploads to the `--blob-store` no longer takes
+  its own blob artifact from the failed attempt as stored on sight; Forgejo
+  lists an artifact from its first file on, so that copy may be partial. The
+  job uploads it again, and keeps the earlier copy only once it downloads and
+  verifies, so a partial blob fails the job instead of the later publish.
 - A Go test that panics, hits a runtime fatal error or times out is no longer
   counted as an assertion failure a report-only policy may waive. The crash
   ends the package's test binary, so the tests after it never ran.
@@ -264,6 +269,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Forgejo `release-images.yml` and `snapshot-images.yml` hand image layouts
+  from build to publish through a run-scoped, content-addressed blob store:
+  each layout blob of 1 MiB or more is uploaded once per run as
+  `<artifact-name>-blob-<sha256>-<uploader>`, and skipped when the run
+  already stores it. Images sharing one base no longer each upload its
+  layers, which spent the owner's storage quota until Forgejo refused an
+  upload with HTTP 413. Publish restores every blob after checking its
+  SHA-256 and size; a missing or mismatching blob stops it and names the
+  digest. Build jobs still hold no registry credential. New flag
+  `artifact upload|download --blob-store <prefix>`; the engine binary and
+  the workflows must be updated together.
 - One name for the read-only token of a consumer's own tool installs:
   `DEPENDENCY_GITHUB_TOKEN`, passed to `setup-toolchain` as
   `mise-github-token`. docs/forgejo.md documents it ("The dependency token

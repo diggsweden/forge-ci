@@ -236,6 +236,7 @@ var (
 	_ provider.TagDeleter              = (*Provider)(nil)
 	_ provider.RunArtifactDownloader   = (*Provider)(nil)
 	_ provider.RunArtifactUploader     = (*Provider)(nil)
+	_ provider.RunArtifactLister       = (*Provider)(nil)
 	_ provider.SigningIdentityResolver = (*Provider)(nil)
 	_ provider.RegistryAuthResolver    = (*Provider)(nil)
 )

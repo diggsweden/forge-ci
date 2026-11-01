@@ -229,6 +229,7 @@ func TestRequireRoles_ConformanceMatrix(t *testing.T) {
 		{"release asset upload", func(d *deps.Deps) error { return errOf(d.RequireReleaseAssetUploader()) }, gh | gl | fj},
 		{"run-artifact upload", func(d *deps.Deps) error { return errOf(d.RequireRunArtifactUploader()) }, gh | fj},
 		{"run-artifact download", func(d *deps.Deps) error { return errOf(d.RequireRunArtifactDownloader()) }, gh | fj},
+		{"run-artifact listing", func(d *deps.Deps) error { return errOf(d.RequireRunArtifactLister()) }, gh | fj},
 		{"forge-packages Maven deploy", func(d *deps.Deps) error { return errOf(d.RequireForgeMavenRegistryResolver()) }, gh | gl | fj},
 		{"forge-packages npm publish", func(d *deps.Deps) error { return errOf(d.RequireForgeNPMRegistryResolver()) }, gh | gl | fj},
 		{"SARIF upload to Code Scanning", func(d *deps.Deps) error { return errOf(d.RequireSARIFUploader()) }, gh},

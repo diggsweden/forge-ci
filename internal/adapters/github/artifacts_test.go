@@ -621,3 +621,29 @@ func TestProvider_DownloadRunArtifact_RefusesWholeOperationAndCleansTheSpool(t *
 		})
 	}
 }
+
+// TestProvider_ListRunArtifacts_NamesTheCurrentRunsArtifacts covers the
+// lister the blob store checks for an already stored digest with.
+func TestProvider_ListRunArtifacts_NamesTheCurrentRunsArtifacts(t *testing.T) {
+	t.Parallel()
+
+	srv := servePatternArtifacts(t)
+	githubProvider := &github.Provider{
+		Env:             envFunc(map[string]string{"GITHUB_REPOSITORY": "owner/repo", "GITHUB_RUN_ID": "9876"}),
+		APIBaseOverride: srv.URL(), HTTPClient: srv.Client(),
+	}
+
+	names, err := githubProvider.ListRunArtifacts(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.Join(names, ",") != "sbom-a,sbom-b,other" {
+		t.Errorf("names = %v", names)
+	}
+
+	withoutRun := &github.Provider{Env: envFunc(map[string]string{"GITHUB_REPOSITORY": "owner/repo"})}
+	if _, err := withoutRun.ListRunArtifacts(context.Background()); !errors.Is(err, errs.ErrUsage) {
+		t.Errorf("without GITHUB_RUN_ID: %v, want ErrUsage", err)
+	}
+}

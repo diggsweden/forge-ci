@@ -138,6 +138,12 @@ func RegistryAuthForDetected() (provider.RegistryAuthResolver, bool) {
 	return r, ok
 }
 
+// RequireRunArtifactLister returns the RunArtifactLister role when the
+// active forge can name the current run's artifacts (GitHub, Forgejo).
+func (d *Deps) RequireRunArtifactLister() (provider.RunArtifactLister, error) {
+	return requireRole[provider.RunArtifactLister](d, "run-artifact listing")
+}
+
 // RequireRunArtifactDownloader returns the RunArtifactDownloader role
 // when the active provider implements it.
 func (d *Deps) RequireRunArtifactDownloader() (provider.RunArtifactDownloader, error) {

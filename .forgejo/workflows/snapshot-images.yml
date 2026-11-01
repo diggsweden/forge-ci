@@ -388,8 +388,10 @@ jobs:
         run: |
           set -euo pipefail
           source "${SNAPSHOT_HELPERS}/.engine/bin/lib-forge-ci.sh"
+          # Each layout blob is stored once per run under its digest.
           run_forge_ci artifact upload --name "${SNAPSHOT_NAMESPACE}-layout-${IMAGE_NAME}-${IMAGE_ARCH}" \
-            --dir "snapshot-source/snapshot-layouts/${IMAGE_NAME}-arch-${IMAGE_ARCH}" --include-hidden --if-no-files error --retention-days 1
+            --dir "snapshot-source/snapshot-layouts/${IMAGE_NAME}-arch-${IMAGE_ARCH}" --blob-store "${SNAPSHOT_NAMESPACE}-blob" \
+            --include-hidden --if-no-files error --retention-days 1
   publish:
     needs: [coordinates, plan, build]
     if: ${{ needs.plan.outputs.enabled == 'true' && needs.build.result == 'success' }}
@@ -432,7 +434,7 @@ jobs:
           archs=$(run_forge_ci container snapshot-images read-plan --plan snapshot-plan.json --name "${IMAGE_NAME}" --field archs)
           while IFS= read -r arch; do
             run_forge_ci artifact download --name "${SNAPSHOT_NAMESPACE}-layout-${IMAGE_NAME}-${arch}" \
-              --dir "snapshot-layouts/${IMAGE_NAME}-arch-${arch}"
+              --dir "snapshot-layouts/${IMAGE_NAME}-arch-${arch}" --blob-store "${SNAPSHOT_NAMESPACE}-blob"
           done <<< "${archs}"
           # The scanner reads only the selected commit's ignore policy.
           if [ -f snapshot-source/.trivyignore.yaml ]; then cp snapshot-source/.trivyignore.yaml .; fi

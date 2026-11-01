@@ -492,9 +492,13 @@ jobs:
           set -euo pipefail
           # shellcheck source=.engine/bin/lib-forge-ci.sh
           source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          # Images built from one base share most of their layers. Each blob
+          # is stored once per run, under its digest, in the namespace's
+          # blob store; the layout artifact carries the rest and a manifest.
           run_forge_ci artifact upload \
             --name "${IMAGE_ARTIFACT_NAMESPACE:?}-layout-${IMAGE_NAME:?}-${IMAGE_ARCH:?}" \
             --dir "${GITHUB_WORKSPACE:?}/staged/${IMAGE_NAME}-arch-${IMAGE_ARCH}/" \
+            --blob-store "${IMAGE_ARTIFACT_NAMESPACE}-blob" \
             --retention-days 1 \
             --if-no-files error \
             --include-hidden
@@ -586,10 +590,13 @@ jobs:
           source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
           publish_dir="${GITHUB_WORKSPACE:?}/source"
           echo "PUBLISH_DIR=${publish_dir}" >>"${FORGEJO_ENV}"
+          # Every blob the layout left in the blob store is restored and
+          # checked against its digest before the layout is used.
           while IFS= read -r arch; do
             run_forge_ci artifact download \
               --name "${IMAGE_ARTIFACT_NAMESPACE:?}-layout-${IMAGE_NAME:?}-${arch}" \
-              --dir "${publish_dir}/${IMAGE_NAME}-arch-${arch}"
+              --dir "${publish_dir}/${IMAGE_NAME}-arch-${arch}" \
+              --blob-store "${IMAGE_ARTIFACT_NAMESPACE}-blob"
           done <<<"${IMAGE_ARCHS:?}"
 
       # The scanner is the layer's, pinned by version and checksum in its

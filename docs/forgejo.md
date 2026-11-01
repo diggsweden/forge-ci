@@ -543,7 +543,11 @@ independently expected repository, full source SHA and complete platform set.
 OCI staging disables registry-cache export even with scanning off; reads remain.
 
 This handoff uses the existing artifact limits: 5 GiB per file, 10 GiB and 10,000
-files per artifact/download set; instance quotas may be smaller. Allow disk for
+files per artifact/download set; instance quotas may be smaller. On Forgejo,
+`release-images.yml` and `snapshot-images.yml` move each layout blob through
+the run's blob store (`artifact upload|download --blob-store`), so a layer
+shared by several images is stored once per run; see
+[Release images](#release-images). Allow disk for
 all compressed layouts plus download/extraction staging. GitHub uploads use no
 extra ZIP compression and layout retention is one day. Oversized or incomplete
 handoffs fail before registry publication. Registry failure after admission can
@@ -911,7 +915,8 @@ runners where an installation names them, as other image-building jobs do.
   writes nothing to a
   registry and receives no secret, so the Containerfile never runs beside a
   token. Its pulls are anonymous, whatever login the runner keeps, so the
-  bases must be public.
+  bases must be public. It hands the layout to publish as run artifacts
+  through the namespace's blob store, below.
 - **publish** runs once per container. It installs the layer's pinned Trivy,
   then `assemble --from-layouts --scan-output-template` verifies every staged
   architecture against its record and its revision label, scans each, and
@@ -928,6 +933,23 @@ runners where an installation names them, as other image-building jobs do.
   `release-images.json` and the Trivy results. Unpack it into the `dist/` the
   consumer hands to `sign-and-publish-release.yml`, which signs the images,
   generates their SBOMs and promotes the staging tags to the final ones.
+
+The layouts travel between the jobs as artifacts of the run, which Forgejo
+counts against the repository owner's storage quota, shared with packages,
+until they expire after a day. Images built from one base share most of
+their layers, so each layer is stored once per run: `artifact upload
+--blob-store <artifact-name>-blob` stores every layout blob of 1 MiB or more
+as its own artifact, `<artifact-name>-blob-<sha256>-<uploader>`, and skips
+one the run already stores. The layout artifact,
+`<artifact-name>-layout-<container>-<arch>`, keeps the small files and a
+manifest of the blobs. Publish's `artifact download --blob-store` restores
+each blob and checks its SHA-256 and size before writing it; a missing blob,
+or one stored only with other bytes, stops the job and names the digest.
+`assemble --from-layouts` then sees the layout the build wrote. Builds that
+run at the same moment may both store a shared blob; that costs bytes, not
+correctness. For one base layer set of B bytes shared by N images, a run
+uploads B once instead of N times. An upload Forgejo refuses with HTTP 413
+means the owner's quota is spent.
 
 A release publishes to one image repository, the one the signer is bound
 to: `image-repository`, for example `ghcr.io/owner/app`, written in the

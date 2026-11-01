@@ -125,6 +125,28 @@ func (p *Provider) DownloadRunArtifact(ctx context.Context, in provider.RunArtif
 	return p.downloadContainer(ctx, creds, containerURL, in.Name, in.Dir, 0, 0)
 }
 
+// ListRunArtifacts names the current run's artifacts through the same
+// run-scoped runtime listing the downloads resolve names with. Forgejo lists
+// an artifact from its first uploaded file on, before it is finalized.
+func (p *Provider) ListRunArtifacts(ctx context.Context) ([]string, error) {
+	creds, err := p.resolveRuntimeCreds()
+	if err != nil {
+		return nil, err
+	}
+
+	matches, err := p.resolveMatchingContainers(ctx, creds, "*")
+	if err != nil {
+		return nil, err
+	}
+
+	names := make([]string, 0, len(matches))
+	for _, match := range matches {
+		names = append(names, match.name)
+	}
+
+	return names, nil
+}
+
 // downloadMatchingContainers implements pattern/merge-multiple for Forgejo:
 // list the run's artifacts, keep those whose name matches the glob, and
 // download each — flattened into Dir (MergeMultiple) or into Dir/<name>/.

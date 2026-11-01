@@ -97,6 +97,11 @@ EXAMPLES (as a workflow step):
 
    # Download from a different run/repository (both default to the current ones)
    forge-ci artifact download --name dist --run-id 123 --repository examplescope/myapp
+
+   # Download an OCI layout and restore its blobs from the run's blob store,
+   # each verified against its digest
+   forge-ci artifact download --name images-layout-app-amd64 --dir ./app-arch-amd64 \
+     --blob-store images-blob
 ```
 
 | Flag | Description | Type | Default | Env vars |
@@ -107,6 +112,7 @@ EXAMPLES (as a workflow step):
 | `--dir` | destination directory | string | `"."` | `$ARTIFACT_DIR` |
 | `--run-id` | run the artifact belongs to (default: current run) | string | `""` | `$CI_RUN_ID`, `$FORGEJO_RUN_ID`, `$GITHUB_RUN_ID` |
 | `--repository` | owner/repo the run belongs to (default: current repo) | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
+| `--blob-store` | with --name, current run only: restore the blobs the artifact was uploaded without from this blob store, each verified against its sha256 digest | string | `""` | `$ARTIFACT_BLOB_STORE` |
 
 ### `forge-ci artifact upload`
 
@@ -125,6 +131,10 @@ EXAMPLES (as a workflow step):
 
    # Upload explicit files with a fixed retention
    forge-ci artifact upload --name logs --file build.log --file test.log --retention-days 7
+
+   # Upload an OCI layout, storing each large blob once per run under its digest
+   forge-ci artifact upload --name images-layout-app-amd64 --dir ./staged/app-arch-amd64 \
+     --blob-store images-blob --include-hidden
 ```
 
 | Flag | Description | Type | Default | Env vars |
@@ -136,6 +146,7 @@ EXAMPLES (as a workflow step):
 | `--retention-days` | retention in days (0 = forge default) | int | `0` | `$ARTIFACT_RETENTION_DAYS` |
 | `--if-no-files` | when nothing matches: error \| warn \| ignore | string | `"error"` | `$ARTIFACT_IF_NO_FILES` |
 | `--include-hidden` | include dotfiles/hidden files (off by default, matching upload-artifact) | bool | `false` | `$ARTIFACT_INCLUDE_HIDDEN` |
+| `--blob-store` | with --dir: upload each OCI layout blob (blobs/sha256/<digest>, 1 MiB or more) as its own artifact <prefix>-<digest>-<owner>, skipped when the run already stores that digest; download with the same prefix | string | `""` | `$ARTIFACT_BLOB_STORE` |
 
 ## `forge-ci build`
 

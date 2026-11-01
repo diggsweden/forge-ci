@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -1172,5 +1173,27 @@ func TestUploadRunArtifact_A413SaysWhatTheForgeRefused(t *testing.T) {
 	if !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "HTTP 413 (the forge refused it as too large") ||
 		!strings.Contains(err.Error(), "storage quota") {
 		t.Fatalf("err = %v, want a validation refusal naming the owner's storage quota", err)
+	}
+}
+
+// TestListRunArtifacts_NamesEveryArtifactOfTheRun covers the lister the blob
+// store checks for an already stored digest with.
+func TestListRunArtifacts_NamesEveryArtifactOfTheRun(t *testing.T) {
+	t.Parallel()
+
+	fixture := map[string]map[string]string{
+		"images-layout-a-amd64": {"index.json": "{}"},
+		"images-blob-x-y":       {"x": "blob"},
+	}
+
+	names, err := runtimeProvider(multiArtifactServer(t, fixture)).ListRunArtifacts(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	slices.Sort(names)
+
+	if !slices.Equal(names, []string{"images-blob-x-y", "images-layout-a-amd64"}) {
+		t.Errorf("names = %v", names)
 	}
 }

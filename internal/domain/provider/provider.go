@@ -645,6 +645,16 @@ type RunArtifactDownloader interface {
 	DownloadRunArtifact(ctx context.Context, in RunArtifactDownload) (RunArtifactInfo, error)
 }
 
+// RunArtifactLister names the artifacts the current run holds. A name is
+// listed from the moment the forge records the artifact, which may be before
+// its upload is finalized; a caller that skips work because a name exists
+// relies on the uploader's job succeeding, and must verify the content it
+// later downloads. The run-artifact blob store uses it to upload a blob only
+// when no artifact of the run stores it yet.
+type RunArtifactLister interface {
+	ListRunArtifacts(ctx context.Context) ([]string, error)
+}
+
 // IfNoFilesPolicy selects what UploadRunArtifact does when the input
 // matches no files — mirroring actions/upload-artifact's if-no-files-found.
 type IfNoFilesPolicy string

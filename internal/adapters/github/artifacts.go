@@ -54,6 +54,42 @@ func (p *Provider) DownloadRunArtifact(ctx context.Context, in provider.RunArtif
 	return p.downloadRunArtifact(ctx, runID, in.Repository, in.Name, in.Dir)
 }
 
+// ListRunArtifacts names the current run's artifacts through the REST
+// artifacts API, across every page.
+func (p *Provider) ListRunArtifacts(ctx context.Context) ([]string, error) {
+	runIDStr := p.envFunc()("GITHUB_RUN_ID")
+	if runIDStr == "" {
+		return nil, fmt.Errorf("GITHUB_RUN_ID is required: %w", errs.ErrUsage)
+	}
+
+	runID, err := strconv.ParseInt(strings.TrimSpace(runIDStr), 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("parse run-id %q: %w", runIDStr, err)
+	}
+
+	owner, repo, err := resolveOwnerRepo(p, "")
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := p.releaseClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("github client: %w", err)
+	}
+
+	artifacts, err := listRunArtifacts(ctx, client, owner, repo, runID)
+	if err != nil {
+		return nil, err
+	}
+
+	names := make([]string, 0, len(artifacts))
+	for _, art := range artifacts {
+		names = append(names, art.GetName())
+	}
+
+	return names, nil
+}
+
 // downloadMatchingArtifacts implements the pattern/merge-multiple download:
 // list the run's artifacts, keep those whose name matches the glob, and
 // download each — flattened into Dir (MergeMultiple) or into Dir/<name>/.
