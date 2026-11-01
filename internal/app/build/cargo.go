@@ -376,14 +376,19 @@ func readCargoMetadata(ctx context.Context, tool CargoTool, dir string) (cargoMe
 		return cargoMetadata{}, fmt.Errorf("cargo metadata returned no packages: %w", errs.ErrInvalidConfig)
 	}
 
-	// Pick the root package. cargo sorts `packages` by package id, so the
-	// [package] at workspace_root is not necessarily first (cargo 1.98 lists
-	// a member "alpha" before the root "zeta"); it is the one whose manifest
-	// is <workspace_root>/Cargo.toml. A virtual workspace has no such
-	// package and keeps the first member — the cargo-cyclonedx / `cargo run`
-	// heuristic. Single-crate projects have exactly one entry.
+	// Pick the package the build is for. Inside a workspace, cargo metadata
+	// lists every member wherever it runs, sorted by package id, so the
+	// package whose manifest is <dir>/Cargo.toml comes first: a member's
+	// working-directory builds that member, which is all cargo build --bin
+	// can see from there. Otherwise the root package, the one whose manifest
+	// is <workspace_root>/Cargo.toml (cargo 1.98 lists a member "alpha"
+	// before the root "zeta"). A virtual workspace's root has no package and
+	// keeps the first member: the cargo-cyclonedx / `cargo run` heuristic.
+	// Single-crate projects have exactly one entry.
 	root := doc.Packages[0]
-	if rootPkg, ok := workspaceRootPackage(doc.Packages, doc.WorkspaceRoot); ok {
+	if member, ok := packageWithManifestIn(doc.Packages, absoluteDir(dir)); ok {
+		root = member
+	} else if rootPkg, ok := packageWithManifestIn(doc.Packages, doc.WorkspaceRoot); ok {
 		root = rootPkg
 	}
 
@@ -415,14 +420,25 @@ func readCargoMetadata(ctx context.Context, tool CargoTool, dir string) (cargoMe
 	}, nil
 }
 
-// workspaceRootPackage returns the package whose manifest is the workspace
-// root's Cargo.toml, if any.
-func workspaceRootPackage(packages []cargoPackage, workspaceRoot string) (cargoPackage, bool) {
-	if strings.TrimSpace(workspaceRoot) == "" {
+// absoluteDir is dir as cargo sees it when it runs there: manifest paths in
+// cargo metadata are absolute. It is "" when dir cannot be resolved.
+func absoluteDir(dir string) string {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return ""
+	}
+
+	return abs
+}
+
+// packageWithManifestIn returns the package whose manifest is dir's
+// Cargo.toml, if any.
+func packageWithManifestIn(packages []cargoPackage, dir string) (cargoPackage, bool) {
+	if strings.TrimSpace(dir) == "" {
 		return cargoPackage{}, false
 	}
 
-	want := filepath.Join(filepath.Clean(workspaceRoot), "Cargo.toml")
+	want := filepath.Join(filepath.Clean(dir), "Cargo.toml")
 
 	for _, candidate := range packages {
 		if candidate.ManifestPath != "" && filepath.Clean(candidate.ManifestPath) == want {

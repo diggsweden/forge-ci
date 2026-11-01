@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -360,5 +361,55 @@ func TestCargoMetadata_PicksTheWorkspaceRootPackage(t *testing.T) {
 
 	if version != "0.1.0" {
 		t.Errorf("version = %q, want the root package's 0.1.0", version)
+	}
+}
+
+// Inside a workspace cargo metadata lists every member wherever it runs. A
+// build whose working-directory is a member builds that member: the live
+// GitLab cargo-app trial built keytool/ and picked the first member,
+// hello-worker, which cargo build --bin cannot see from keytool/.
+func TestCargoMetadata_PicksTheMemberAtTheWorkingDirectory(t *testing.T) {
+	t.Parallel()
+	fsys := testfs.NewReal(t)
+
+	root := filepath.Clean(fsys.Root)
+	member := filepath.Join(root, "keytool")
+	metadata := `{
+  "packages": [
+    {"name": "hello-keytool", "version": "0.3.0", "manifest_path": ` + strconv.Quote(filepath.Join(member, "Cargo.toml")) + `, "targets": [{"name": "hello-keytool", "kind": ["bin"]}]},
+    {"name": "hello-worker", "version": "0.1.0", "manifest_path": ` + strconv.Quote(filepath.Join(root, "worker", "Cargo.toml")) + `, "targets": [{"name": "hello-worker", "kind": ["bin"]}]}
+  ],
+  "workspace_members": ["hello-keytool 0.3.0", "hello-worker 0.1.0"],
+  "workspace_root": ` + strconv.Quote(root) + `,
+  "resolve": null
+}`
+
+	for dir, want := range map[string]string{member: "hello-keytool", root: "hello-keytool"} {
+		tool := &fakeCargoTool{metadata: metadata}
+
+		binaryName, version, packageName, err := appbuild.ResolveCargoMetadataForTest(context.Background(), tool, appbuild.CargoMetadataInput{Dir: dir})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if packageName != want || binaryName != want {
+			t.Errorf("dir %s: package = %q, binary = %q, want %q", dir, packageName, binaryName, want)
+		}
+
+		if dir == member && version != "0.3.0" {
+			t.Errorf("dir %s: version = %q, want the member's 0.3.0", dir, version)
+		}
+	}
+
+	// A sorted-later member is chosen by its directory, not by position.
+	tool := &fakeCargoTool{metadata: metadata}
+
+	_, _, packageName, err := appbuild.ResolveCargoMetadataForTest(context.Background(), tool, appbuild.CargoMetadataInput{Dir: filepath.Join(root, "worker")})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if packageName != "hello-worker" {
+		t.Errorf("worker/: package = %q, want hello-worker", packageName)
 	}
 }

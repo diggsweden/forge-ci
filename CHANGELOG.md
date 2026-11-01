@@ -154,6 +154,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A Cargo build whose working-directory is a workspace member builds that
+  member. Cargo metadata lists every member wherever it runs, and the
+  build took the first one, so a second member's build asked cargo for a
+  binary it could not see from that directory.
 - The GitLab go-cli example no longer passes `skip-tests: true` to
   `build-go`. The engine refuses it, because an administrator may require
   tests, so a merge request copied from the example failed before building.
