@@ -710,6 +710,7 @@ func TestAndroidReleaseBuild_OptionalControls(t *testing.T) {
 				return nil
 			}}
 			sink, summary := fakeoutputsink.New(t), &recordingSummarySink{}
+
 			err := appbuild.AndroidReleaseBuild(t.Context(), sink, summary, ops, output.Annotator{}, io.Discard, io.Discard, in)
 			require.NoError(t, err)
 			require.Len(t, ops.calls, 1)
