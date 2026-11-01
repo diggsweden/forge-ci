@@ -4,6 +4,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -34,6 +35,13 @@ import (
 func ClassifyError(err error) error {
 	if err == nil {
 		return nil
+	}
+
+	// Already typed by this project (the root's own unknown-subcommand error,
+	// a bare group's refusal): nothing to classify, and wrapping again would
+	// print ": usage error" twice.
+	if errors.Is(err, errs.ErrUsage) {
+		return err
 	}
 
 	msg := rewriteHelpTopicMessage(err.Error())
@@ -74,20 +82,27 @@ func rewriteHelpTopicMessage(msg string) string {
 // this to skip its own `Error: …` line so the user does not see the
 // same message twice.
 //
-// Two sources print before main.go:
+// Three sources print before main.go:
 //   - urfave/cli auto-prints "Incorrect Usage:" for stdlib flag.Parse
 //     failures (unknown flag).
 //   - This project's onUsageError hook prints "Error: …" + a `--help`
 //     pointer for every flag-parse failure (including required-flag-
 //     missing).
+//   - The root action writes the start card for a bare `forge-ci` and
+//     returns ErrNoCommand; an "Error:" line under the card would only
+//     repeat what the card already says.
 //
-// Both classes match isUsageMessage, so one check covers them. We do
-// NOT treat the "No help topic for" rewrite as already-printed; that
+// The first two classes match isUsageMessage, so one check covers them. We
+// do NOT treat the "No help topic for" rewrite as already-printed; that
 // one only reaches us via the error return and gets the standard
 // main.go "Error: …" line.
 func IsAlreadyPrintedByCLI(err error) bool {
 	if err == nil {
 		return false
+	}
+
+	if errors.Is(err, ErrNoCommand) {
+		return true
 	}
 
 	msg := err.Error()

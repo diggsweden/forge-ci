@@ -21,22 +21,27 @@ import (
 // that resolves before any forge transport. The artifact "results" upload
 // backend itself is untestable off-runner (see ART-* in the doc).
 
-// CLI-01: no args prints help to stdout, exits 0, leaves stderr clean.
-func TestBinary_NoArgs_PrintsHelpOnStdout(t *testing.T) {
+// CLI-01: no args is a usage error: a short start card on stderr, exit 2,
+// nothing on stdout, and no "Error:" line under the card.
+func TestBinary_NoArgs_PrintsStartCardOnStderr(t *testing.T) {
 	_ = testenv.New(t)
 	bin := buildBinary(t)
 
 	stdout, stderr, code := runBinary(t, bin)
-	if code != 0 {
-		t.Fatalf("exit = %d, want 0; stderr=%q", code, stderr)
+	if code != 2 {
+		t.Fatalf("exit = %d, want 2; stderr=%q", code, stderr)
 	}
 
-	if !strings.Contains(stdout, "artifact") || !strings.Contains(stdout, "COMMANDS") {
-		t.Errorf("help should list command groups on stdout; got %q", stdout)
+	if !strings.Contains(stderr, "START HERE") || !strings.Contains(stderr, "forge-ci init") {
+		t.Errorf("the card should say where to start; got %q", stderr)
 	}
 
-	if strings.TrimSpace(stderr) != "" {
-		t.Errorf("stderr should be empty for help; got %q", stderr)
+	if strings.Contains(stderr, "Error:") {
+		t.Errorf("the card is the whole message; got an Error line too: %q", stderr)
+	}
+
+	if stdout != "" {
+		t.Errorf("a refusal must not write to stdout; got %q", stdout)
 	}
 }
 

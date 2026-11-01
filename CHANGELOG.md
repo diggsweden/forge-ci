@@ -232,6 +232,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The snapshot flow's jobs are named by stage like the release flow's,
   `Prepare`, `Build: <name> (Maven)`, `Publish: npm package`, `Summary`;
   a branch rule that required one of the old names must be updated.
+- **BREAKING:** `forge-ci` with no command is a usage error (exit 2), like a
+  bare command group: it prints a short start card on stderr naming `init`
+  and `doctor` instead of the full reference at exit 0. `--help` and `help`
+  are unchanged. The root help groups commands into repository setup and
+  workflow steps, `forge-ci version` leads with the `--version` hint, `init`
+  explains what its URL argument is, and `doctor` run at a terminal ends with
+  a `Next:` line and points a missing `artifacts.yml` at `forge-ci init
+  --dry-run` instead of the source tree's `examples/`. Pointers the binary
+  prints to the artifacts reference and the verification guide are URLs,
+  not source-tree paths, as are the ones in the example `artifacts.yml`
+  files `init` copies and in the schema's editor descriptions; `init` ends
+  with the per-forge guide at the pinned release instead of a path and a
+  commit hash.
 - Temporarily pause Self Release's strict integration and companion black-box
   jobs while Nanolinter publication is pending. Branch resolution, engine
   checksum verification and runtime-image availability remain required. Set

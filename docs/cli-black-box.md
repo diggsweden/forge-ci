@@ -82,7 +82,7 @@ conventional meaning. Source of truth: `internal/domain/errs`
 |---|---|---|
 | `0` | OK | success, including `--help` / `--version` and passing gates |
 | `1` | Validation | a rule/gate failed (e.g. bad tag, doctor FAIL, lint gate) |
-| `2` | Usage | CLI misuse: bad flags, wrong args, unknown command, context-cancel |
+| `2` | Usage | CLI misuse: bad flags, wrong args, unknown command, a bare `forge-ci` or command group, context-cancel |
 | `65` | DataErr | malformed input (bad JSON/YAML payload, unparsable value) |
 | `66` | NoInput | a required input file/ref/artifact is missing |
 | `69` | Unavailable | external dependency missing/unreachable, rate-limited, timed out |
@@ -174,7 +174,7 @@ are exact.
 
 | ID | Scenario | Expected observable result |
 |---|---|---|
-| CLI-01 | `forge-ci` with no args. | Exit `0`; concise help/command list on **stdout**; stderr empty; no stack trace; no side effects. |
+| CLI-01 | `forge-ci` with no args. | Exit `2` (usage); a short start card on **stderr** naming `init` and `doctor` and pointing at `--help`; stdout empty; no `Error:` line under the card; no stack trace; no side effects. |
 | CLI-02 | `--help`, `help`, and a representative `<group> --help`. | Exit `0`; help on **stdout**; each group page names only its own commands and flags; pipeable. |
 | CLI-03 | `--version`. | Exit `0`; stdout has version, commit, build date; works with no repo, config, token, or network. |
 | CLI-04 | Unknown command, e.g. `forge-ci relese`. | Exit `2`; stderr is the one line `Error: unknown subcommand 'relese'. Did you mean "release"?: usage error` (the closest command is suggested); stdout empty; never auto-runs the guess. |

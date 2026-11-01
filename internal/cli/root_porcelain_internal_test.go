@@ -8,13 +8,24 @@ import (
 	"testing"
 )
 
-// TestPorcelainCommandsResolve guards the curated COMMON COMMANDS block in the
-// root help against drift: every path advertised to humans must still resolve
-// to a real command in the tree. A rename that misses this list fails here.
+// TestPorcelainCommandsResolve guards the curated direct-use list (the start
+// card and the root help's "run directly" block) against drift: every path
+// advertised to humans must still resolve to a real command in the tree, and
+// the first two must stay init then doctor, which the card's START HERE block
+// spells out by hand. A rename that misses this list fails here.
 func TestPorcelainCommandsResolve(t *testing.T) {
 	t.Parallel()
 
 	root := New(BuildInfo{})
+
+	if porcelainCommands[0].path != "init" || porcelainCommands[1].path != "doctor" {
+		t.Fatalf("the card's START HERE block assumes init then doctor lead the list; got %q, %q",
+			porcelainCommands[0].path, porcelainCommands[1].path)
+	}
+
+	if startHereCount != 2 {
+		t.Fatalf("startHereCount = %d, want 2 (init, doctor)", startHereCount)
+	}
 
 	for _, pc := range porcelainCommands {
 		cur := root

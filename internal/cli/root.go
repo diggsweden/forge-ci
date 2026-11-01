@@ -18,6 +18,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/diggsweden/forge-ci/internal/cli/cmdmeta"
 	cmdartifact "github.com/diggsweden/forge-ci/internal/cli/commands/artifact"
 	cmdbuild "github.com/diggsweden/forge-ci/internal/cli/commands/build"
 	cmdconfig "github.com/diggsweden/forge-ci/internal/cli/commands/config"
@@ -184,11 +185,10 @@ func applyArgGuards(cmd *cli.Command) {
 // A typo in the subcommand already fails (`validate tagg` → unknown subcommand,
 // exit 2). This closes the omission case, which is the quieter of the two.
 //
-// The root itself is deliberately exempt — hence the walk starts at root's
-// children: `forge-ci` with no arguments is the discovery path, and the
-// failure mode guarded here is a command that lost its *last* segment, not one
-// that lost every segment. A group with an Action of its own is left alone —
-// that Action is an intentional default.
+// The walk starts at root's children because the root has its own Action
+// (rootAction): a bare `forge-ci` is refused there, with a start card instead
+// of a subcommand list, and the same usage exit code. A group with an Action
+// of its own is left alone — that Action is an intentional default.
 func applyParentGuards(root *cli.Command) {
 	for _, child := range root.Commands {
 		applyParentGuard(child)
@@ -208,32 +208,35 @@ func applyParentGuard(cmd *cli.Command) {
 
 	cmd.Action = func(_ context.Context, group *cli.Command) error {
 		// `forge-ci version` is the one bare group a person types meaning
-		// something else: the tool's own version, which is a flag.
+		// something else: the tool's own version, which is a flag. That
+		// reading comes first, before the list of what the group holds.
 		hint := ""
 		if group.Name == "version" {
-			hint = "; the installed forge-ci version is printed by forge-ci --version"
+			hint = "the installed forge-ci version is printed by forge-ci --version; "
 		}
 
-		return fmt.Errorf("%q requires a subcommand (one of: %s)%s: %w",
-			group.Name, strings.Join(subcommandNames(group), ", "), hint, errs.ErrUsage)
+		return fmt.Errorf("%s%q requires a subcommand (one of: %s): %w",
+			hint, group.Name, strings.Join(subcommandNames(group), ", "), errs.ErrUsage)
 	}
 }
 
 // subcommandNames lists a group's invocable subcommand names for the
 // missing-subcommand usage error.
 //
-// It used to skip a child named "help", on the theory that urfave/cli injects
-// its built-in help entry into Commands and listing it would offer the
-// operator a non-operation. That entry does not exist here: urfave/cli v3
-// serves help through a flag and a root-level handler, and walking the whole
-// built tree finds zero children named "help" at any depth. The branch was
-// unreachable, so it is gone rather than left looking like a live safeguard —
-// and the guard test that asserted "help" was absent from the message was
-// asserting something that could not occur.
+// The built-in "help" child is skipped. It is not in the tree cli.New builds,
+// which is why an earlier version of this function dropped the skip as
+// unreachable; urfave/cli appends it to every group when Run sets the command
+// graph up, so by the time this Action runs the child is there and would be
+// offered as something to type. TestBareGroupsRefuseThroughRootRun checks the
+// message through Run, where it is reachable.
 func subcommandNames(group *cli.Command) []string {
 	names := make([]string, 0, len(group.Commands))
 
 	for _, child := range group.Commands {
+		if child.Name == "help" {
+			continue
+		}
+
 		names = append(names, child.Name)
 	}
 
@@ -360,6 +363,14 @@ func newRoot(info BuildInfo, versionString string) *cli.Command {
 				Sources: cli.EnvVars("FORGE_CI_RUNNER"),
 			},
 		},
+		// Action handles the two things that reach the root itself: no command
+		// at all, and a first argument that is not a command. See rootAction.
+		// It gets the bare version (info.Version), not cmd.Version, which is
+		// the composed "v0.90.0 (commit …, built …)" string: docsRef must see
+		// the tag alone, or a release build prints a broken Docs URL.
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			return rootAction(ctx, cmd, info.Version)
+		},
 		Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
 			if err := configureLogger(cmd); err != nil {
 				return ctx, err
@@ -394,45 +405,129 @@ func newRoot(info BuildInfo, versionString string) *cli.Command {
 
 			return ctx, nil
 		},
-		Commands: []*cli.Command{
-			cmdartifact.New(),
-			cmdbuild.New(),
-			cmdlint.New(),
-			cmdplatform.New(),
-			cmdconfig.New(),
-			cmdpolicy.New(),
-			cmdcontainer.New(),
-			cmddoctor.New(),
-			cmdinit.New(),
-			cmdplan.New(),
-			cmdpublish.New(),
-			cmdrelease.New(),
-			cmdsbom.New(),
-			cmdsecurity.New(),
-			cmdtoolchain.New(),
-			cmdreport.New(),
-			cmdvalidate.New(),
-			cmdversion.New(),
-		},
+		// The root help groups the tree by audience. A person setting up or
+		// troubleshooting a repository works in the first category; the second
+		// is the surface the reusable workflows call, listed in full so the
+		// reference stays complete. The category names sort alphabetically in
+		// urfave/cli's help, so "Repository" is named to land first.
+		Commands: slices.Concat(
+			cmdmeta.WithCategory(categoryRepository,
+				cmdconfig.New(),
+				cmddoctor.New(),
+				cmdinit.New(),
+			),
+			cmdmeta.WithCategory(categoryWorkflow,
+				cmdartifact.New(),
+				cmdbuild.New(),
+				cmdlint.New(),
+				cmdplatform.New(),
+				cmdpolicy.New(),
+				cmdcontainer.New(),
+				cmdplan.New(),
+				cmdpublish.New(),
+				cmdrelease.New(),
+				cmdsbom.New(),
+				cmdsecurity.New(),
+				cmdtoolchain.New(),
+				cmdreport.New(),
+				cmdvalidate.New(),
+				cmdversion.New(),
+			),
+		),
 	}
+}
+
+// Root help categories. The names are part of the help text, and their
+// alphabetical order is their display order.
+const (
+	categoryRepository = "Repository setup and troubleshooting"
+	categoryWorkflow   = "Workflow steps"
+)
+
+// ErrNoCommand is what a bare `forge-ci` returns: the start card has already
+// been written to stderr, so main prints no further line. It wraps
+// errs.ErrUsage, so the exit code is the same as for a bare command group.
+var ErrNoCommand = fmt.Errorf("forge-ci needs a command: %w", errs.ErrUsage)
+
+// rootAction runs when no subcommand matched. Two cases reach it.
+//
+// No arguments at all: the bare binary. Siblings in this tool family treat
+// that as a usage error with a short start card on stderr, not as a request
+// for the reference, and so does forge-ci: the card names the two commands a
+// person runs first and leaves the full surface to --help. The exit code is
+// usage (2), the same as a bare command group, so a workflow step that lost
+// every path segment fails just like one that lost its last.
+//
+// A first argument that is no command: a typo. urfave/cli's default root
+// action reported that as "No help topic for 'X'" plus a suggestion; this
+// reproduces the user-facing form that ClassifyError made of it, so the
+// stderr line is unchanged.
+func rootAction(_ context.Context, cmd *cli.Command, version string) error {
+	if cmd.Args().Len() > 0 {
+		name := cmd.Args().First()
+		msg := fmt.Sprintf("unknown subcommand '%s'", name)
+
+		if suggestion := cli.SuggestCommand(cmd.Commands, name); suggestion != "" {
+			msg += fmt.Sprintf(". Did you mean %q?", suggestion)
+		}
+
+		return fmt.Errorf("%s: %w", msg, errs.ErrUsage)
+	}
+
+	_, _ = fmt.Fprint(cmd.Root().ErrWriter, rootCard(version))
+
+	return ErrNoCommand
 }
 
 // porcelainCommands lists the commands intended to be run directly, as opposed
 // to the commands the shared CI/CD workflows invoke internally (the full set
-// is in docs/cli-reference.md). The list is shown at the top of
-// `forge-ci --help`; TestPorcelainCommandsResolve asserts every path still
+// is in docs/cli-reference.md). The first two are the start of an adoption and
+// head the bare-invocation card; the rest follow on the card and in
+// `forge-ci --help`. TestPorcelainCommandsResolve asserts every path still
 // resolves to a real command, so the list cannot silently drift from the tree.
 var porcelainCommands = []struct {
 	path string // space-separated command path, e.g. "config validate"
 	what string
 }{
-	{"config validate", "validate .forge-ci/artifacts.yml against the schema"},
-	{"container login", "store container registry credentials (podman, buildah, cosign)"},
-	{"doctor", "check that a repository is configured correctly for forge-ci"},
 	{"init", "write a repository's first Forge CI files from an example"},
+	{"doctor", "check that a repository is configured correctly for forge-ci"},
+	{"config validate", "validate .forge-ci/artifacts.yml against the schema"},
+	{"container login", "store container registry credentials"},
 	{"platform checkout", "check out a repository without persisting credentials"},
 	{"sbom assemble", "assemble the project's SBOM layer set after a build"},
-	{"version bump", "update the recorded project version (pom.xml, package.json, …)"},
+	{"version bump", "update the recorded project version"},
+}
+
+// startHereCount is how many leading porcelainCommands form the START HERE
+// block of the card: init, then doctor.
+const startHereCount = 2
+
+// rootCard renders what a bare `forge-ci` prints: what the tool is, the two
+// commands to run first, the other commands meant for a terminal, and where
+// the rest lives. It is deliberately short (the house budget for brief help is
+// about fifteen lines) and goes to stderr, since a bare invocation is a usage
+// error, not a request for the reference.
+func rootCard(version string) string {
+	var card strings.Builder
+
+	card.WriteString("forge-ci - forge-neutral CI/CD commands for pull-request and release pipelines\n\n")
+	card.WriteString("START HERE\n")
+	// The two commands to type are written in full so they can be pasted; the
+	// rest are names to recognise, listed bare as the sibling tools do. Every
+	// row fits an 80-column terminal, so the card is as tall as it looks.
+	fmt.Fprintf(&card, "  %-40s %s\n", "forge-ci init <forge-ci URL> --dry-run", "preview the first Forge CI files")
+	fmt.Fprintf(&card, "  %-40s %s\n", "forge-ci doctor", "check the Forge CI configuration")
+	card.WriteString("\nALSO RUN DIRECTLY\n")
+
+	for _, c := range porcelainCommands[startHereCount:] {
+		fmt.Fprintf(&card, "  %-19s %s\n", c.path, c.what)
+	}
+
+	card.WriteString("\nThe other commands are run by the reusable workflows; see forge-ci --help.\n\n")
+	fmt.Fprintf(&card, "Docs:    https://github.com/diggsweden/forge-ci/tree/%s/docs\n", docsRef(version))
+	card.WriteString("Issues:  https://github.com/diggsweden/forge-ci/issues\n")
+
+	return card.String()
 }
 
 // rootDescription renders the root --help body: a short statement of what the
@@ -446,24 +541,20 @@ func rootDescription(version string) string {
 		fmt.Fprintf(&common, "   forge-ci %-18s %s\n", c.path, c.what)
 	}
 
-	return fmt.Sprintf(`forge-ci is a command-line tool that runs the steps of a CI/CD pull-request
-or release pipeline: building and testing projects, generating SBOMs, building
-and signing container images, scanning for vulnerabilities, and publishing
-releases. It behaves the same on GitHub, GitLab, and Forgejo.
+	return fmt.Sprintf(`forge-ci runs the steps of a CI/CD pull-request or release pipeline: building
+and testing projects, generating SBOMs, building and signing container images,
+scanning for vulnerabilities, and publishing releases. It behaves the same on
+GitHub, GitLab, and Forgejo.
 
-Most commands are invoked by the reusable workflows during a pipeline run. The
-commands below are meant to be run directly, for example to set up or
-troubleshoot a repository.
+Most commands are run by the reusable workflows inside a CI job, where they
+auto-detect the forge and read the repository, run, and credentials from the
+job environment; --provider and --runner override the detection. The commands
+below are the ones to run directly, to set up or troubleshoot a repository:
 
-Most commands auto-detect the forge and read the repository, run, and
-credentials from the CI environment, so they are meant to run inside a job;
---provider and --runner override the detection.
-
-Run "forge-ci <command> --help" for a command's options. The full command
-reference is in docs/cli-reference.md.
-
-COMMANDS TO RUN DIRECTLY:
 %s
+Run "forge-ci <command> --help" for a command's options. The full command
+reference is cli-reference.md under Docs below.
+
 Docs:    https://github.com/diggsweden/forge-ci/tree/%s/docs
 Issues:  https://github.com/diggsweden/forge-ci/issues`, common.String(), docsRef(version))
 }

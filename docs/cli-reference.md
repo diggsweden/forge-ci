@@ -27,13 +27,13 @@ then the environment variables listed per flag, then the flag default.
 
 ## Commands to run directly
 
-- [`config validate`](#forge-ci-config-validate) — validate .forge-ci/artifacts.yml against the schema
-- [`container login`](#forge-ci-container-login) — store container registry credentials (podman, buildah, cosign)
-- [`doctor`](#forge-ci-doctor) — check that a repository is configured correctly for forge-ci
 - [`init`](#forge-ci-init) — write a repository's first Forge CI files from an example
+- [`doctor`](#forge-ci-doctor) — check that a repository is configured correctly for forge-ci
+- [`config validate`](#forge-ci-config-validate) — validate .forge-ci/artifacts.yml against the schema
+- [`container login`](#forge-ci-container-login) — store container registry credentials
 - [`platform checkout`](#forge-ci-platform-checkout) — check out a repository without persisting credentials
 - [`sbom assemble`](#forge-ci-sbom-assemble) — assemble the project's SBOM layer set after a build
-- [`version bump`](#forge-ci-version-bump) — update the recorded project version (pom.xml, package.json, …)
+- [`version bump`](#forge-ci-version-bump) — update the recorded project version
 
 ## Command groups (run by the workflows)
 

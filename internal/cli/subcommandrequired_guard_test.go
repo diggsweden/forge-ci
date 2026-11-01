@@ -153,16 +153,74 @@ func TestBareGroupErrorNamesEveryChild(t *testing.T) {
 	}
 }
 
-// TestRootStillRunsBare pins the deliberate exemption: `forge-ci` with no
-// arguments is the discovery path and must keep printing help at exit 0. The
-// failure mode the parent guard exists for is a command that lost its *last*
-// segment, not one that lost every segment.
-func TestRootStillRunsBare(t *testing.T) {
+// TestRootBareInvocationIsAUsageErrorWithACard: `forge-ci` alone is no longer
+// the one exemption that printed the reference and exited 0. Like its
+// siblings, it writes a short start card to stderr and refuses with a usage
+// error, so a step that lost every path segment fails like one that lost its
+// last. --help and `help` remain the explicit, exit-0 requests for the
+// reference (cmd/forge-ci smoke tests).
+func TestRootBareInvocationIsAUsageErrorWithACard(t *testing.T) {
 	t.Parallel()
 
 	root := cli.New(cli.BuildInfo{Version: "dev"})
 
-	require.Nil(t, root.Action, "root must stay actionless so urfave/cli renders help at exit 0")
+	var stdout, stderr bytes.Buffer
+
+	root.Writer = &stdout
+	root.ErrWriter = &stderr
+
+	err := root.Run(context.Background(), []string{"forge-ci"})
+	require.ErrorIs(t, err, cli.ErrNoCommand)
+	require.ErrorIs(t, err, errs.ErrUsage)
+	require.Empty(t, stdout.String(), "the card is a refusal and belongs on stderr")
+
+	card := stderr.String()
+	require.Contains(t, card, "START HERE")
+	require.Contains(t, card, "forge-ci init")
+	require.Contains(t, card, "forge-ci doctor")
+	require.Contains(t, card, "--help")
+
+	// The house budget for brief help is about fifteen lines; the card is the
+	// brief help, so it stays near that, not the sixty-line reference.
+	require.LessOrEqual(t, strings.Count(card, "\n"), 18, "card grew past the brief-help budget:\n%s", card)
+}
+
+// TestRootCardDocsLinkUsesTheBareTag: the card's Docs link must come from the
+// bare version, not cmd.Version, which is the composed "v0.90.0 (commit …,
+// built …)" string. Dev builds hide the difference (both fall back to main),
+// so this runs a release-shaped BuildInfo.
+func TestRootCardDocsLinkUsesTheBareTag(t *testing.T) {
+	t.Parallel()
+
+	root := cli.New(cli.BuildInfo{Version: "v0.90.0", Commit: "abc1234", Date: "2026-10-31"})
+
+	var stdout, stderr bytes.Buffer
+
+	root.Writer = &stdout
+	root.ErrWriter = &stderr
+
+	require.ErrorIs(t, root.Run(context.Background(), []string{"forge-ci"}), cli.ErrNoCommand)
+	require.Contains(t, stderr.String(), "/tree/v0.90.0/docs")
+	require.NotContains(t, stderr.String(), "(commit")
+}
+
+// TestRootUnknownSubcommandKeepsItsSuggestion: giving the root an Action takes
+// over urfave/cli's unknown-command path, so the "did you mean" line is now
+// this project's to keep. The wording is the one main.go has always printed.
+func TestRootUnknownSubcommandKeepsItsSuggestion(t *testing.T) {
+	t.Parallel()
+
+	root := cli.New(cli.BuildInfo{Version: "dev"})
+
+	var sink bytes.Buffer
+
+	root.Writer = &sink
+	root.ErrWriter = &sink
+
+	err := root.Run(context.Background(), []string{"forge-ci", "relese"})
+	require.ErrorIs(t, err, errs.ErrUsage)
+	require.Equal(t, `unknown subcommand 'relese'. Did you mean "release"?: usage error`, err.Error())
+	require.Empty(t, sink.String(), "an unknown subcommand is reported by main.go, not printed here")
 }
 
 // TestBareGroupsRefuseThroughRootRun drives the refusal through the parser
@@ -204,6 +262,12 @@ func TestBareGroupsRefuseThroughRootRun(t *testing.T) {
 			// typed, in the error itself.
 			if !strings.Contains(err.Error(), group) {
 				t.Errorf("error does not name the group: %v", err)
+			}
+
+			// urfave/cli appends a "help" child to every group at Run time;
+			// it is not an operation and must not be offered as one.
+			if strings.Contains(err.Error(), " help,") || strings.Contains(err.Error(), " help)") {
+				t.Errorf("bare %q offers the built-in help child: %v", group, err)
 			}
 
 			// Nothing is printed as if the command had succeeded.

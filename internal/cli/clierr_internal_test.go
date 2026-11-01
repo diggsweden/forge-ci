@@ -162,6 +162,11 @@ func TestIsAlreadyPrintedByCLI_MatchesOnlyWhatTheFrameworkPrints(t *testing.T) {
 			in:   errors.New("unknown subcommand 'relese'"),
 		},
 		{name: "an ordinary failure is not printed", in: errs.ErrDependencyUnavailable},
+		{
+			name: "the bare-invocation refusal is printed as the start card",
+			in:   ErrNoCommand,
+			want: true,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

@@ -122,7 +122,9 @@ func TestRoot_AcceptsValidLogLevels(t *testing.T) {
 			cmd.Writer = io.Discard
 			cmd.ErrWriter = io.Discard
 
-			require.NoError(t, cmd.Run(context.Background(), append([]string{"forge-ci"}, tc.args...)))
+			// Flags alone reach the root's bare-invocation refusal, after the
+			// Before hook has configured the logger; the refusal is expected.
+			require.ErrorIs(t, cmd.Run(context.Background(), append([]string{"forge-ci"}, tc.args...)), cli.ErrNoCommand)
 
 			ctx := context.Background()
 			require.Truef(t, slog.Default().Enabled(ctx, tc.enabled), "level %v is not enabled", tc.enabled)
@@ -162,10 +164,12 @@ func TestRoot_ProviderFlagBridgesToEnv(t *testing.T) {
 	t.Setenv("FORGE_CI_PROVIDER", "")
 
 	cmd := cli.New(cli.BuildInfo{Version: "x", Commit: "y", Date: "z"})
-	// No subcommand + valid flag: Before runs the bridge, then root
-	// prints help and returns nil — leaving the bridged env observable.
+	cmd.Writer = io.Discard
+	cmd.ErrWriter = io.Discard
+	// No subcommand + valid flag: Before runs the bridge, then the root
+	// refuses the bare invocation — leaving the bridged env observable.
 	err := cmd.Run(context.Background(), []string{"forge-ci", "--provider=forgejo"})
-	require.NoError(t, err)
+	require.ErrorIs(t, err, cli.ErrNoCommand)
 	require.Equal(t, "forgejo", os.Getenv("FORGE_CI_PROVIDER"))
 }
 
