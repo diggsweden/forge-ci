@@ -4,6 +4,8 @@
 package version
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"path"
 	"regexp"
@@ -43,7 +45,7 @@ func BumpPatchFiles(pt projecttype.Type) ([]string, bool) {
 // BumpPatchResult is what a verified bump patch changes.
 type BumpPatchResult struct {
 	Paths      []string // repository-relative project files, sorted
-	OldVersion string   // the one version every changed line moved away from
+	OldVersion string   // the one version every substitution moved away from
 }
 
 // BumpPatchSection retains a file's exact diff text for the existing verifier.
@@ -108,8 +110,9 @@ var (
 // every change is the substitution of one old version by newVersion, in the
 // named project files and nowhere else. The patch comes from a job that ran
 // project-controlled build tools, so anything else it carries is refused: other
-// files, file creation, deletion, renames, mode or binary changes, unpaired
-// lines, and lines that differ in more than the version.
+// files, file creation, deletion, renames, mode or binary changes, and changes
+// beyond the version. npm may additionally reformat complete JSON properties;
+// compaction must prove their values are unchanged apart from that version.
 func VerifyBumpPatch(patch []byte, files []string, newVersion string) (BumpPatchResult, error) {
 	if err := checkBumpPatchText(patch, newVersion); err != nil {
 		return BumpPatchResult{}, fmt.Errorf("version-bump patch refused: %w", err)
@@ -243,13 +246,13 @@ func (p *bumpPatchParser) hunk(file string) error {
 	p.at++
 
 	for oldCount > 0 || newCount > 0 {
-		lines, err := p.hunkStep(file)
+		oldLines, newLines, err := p.hunkStep(file)
 		if err != nil {
 			return err
 		}
 
-		oldCount -= lines
-		newCount -= lines
+		oldCount -= oldLines
+		newCount -= newLines
 	}
 
 	if oldCount != 0 || newCount != 0 {
@@ -259,12 +262,11 @@ func (p *bumpPatchParser) hunk(file string) error {
 	return nil
 }
 
-// hunkStep reads one context line or one change run and returns how many lines
-// it covers on each side; a bump changes lines in place, so both sides match.
-func (p *bumpPatchParser) hunkStep(file string) (int, error) {
+// hunkStep returns each side's line count; npm JSON formatting may change them.
+func (p *bumpPatchParser) hunkStep(file string) (int, int, error) {
 	switch current := p.line(p.at); {
 	case p.at >= len(p.lines):
-		return 0, fmt.Errorf("%s: a hunk ends before its line counts: %w", file, errs.ErrValidation)
+		return 0, 0, fmt.Errorf("%s: a hunk ends before its line counts: %w", file, errs.ErrValidation)
 	case strings.HasPrefix(current, " "):
 		p.at++
 
@@ -272,22 +274,58 @@ func (p *bumpPatchParser) hunkStep(file string) (int, error) {
 			p.at++
 		}
 
-		return 1, nil
+		return 1, 1, nil
 	case strings.HasPrefix(current, "-"):
 		return p.change(file)
 	default:
-		return 0, fmt.Errorf("%s: line %d is %q, which a bump does not produce: %w", file, p.at+1, current, errs.ErrValidation)
+		return 0, 0, fmt.Errorf("%s: line %d is %q, which a bump does not produce: %w", file, p.at+1, current, errs.ErrValidation)
 	}
 }
 
-// change reads a run of removed lines and the equal run of added lines that
-// replaces them, pairing them in order, and returns the run's length.
-func (p *bumpPatchParser) change(file string) (int, error) {
+// npmReformattedChange reports whether the removed and added lines of an npm
+// file are the same JSON, up to npm's reformatting, apart from a version
+// substitution, recording that substitution when there is one.
+func (p *bumpPatchParser) npmReformattedChange(file string, removed, added int) (bool, error) {
+	before, beforeComma, beforeOK := compactBumpJSON(p.lines[p.at : p.at+removed])
+
+	after, afterComma, afterOK := compactBumpJSON(p.lines[p.at+removed : p.at+removed+added])
+	if !beforeOK || !afterOK || beforeComma != afterComma {
+		return false, nil
+	}
+
+	if before == after {
+		return true, nil
+	}
+
+	// Anything but a version substitution is left to the line-by-line check.
+	if old, err := bumpPatchSubstitution(before, after, p.newVersion); err == nil {
+		return true, p.versionPair(file, old)
+	}
+
+	return false, nil
+}
+
+// change pairs version substitutions, permitting npm's JSON-only reformatting.
+func (p *bumpPatchParser) change(file string) (int, int, error) {
 	removed := p.run(p.at, "-")
 	added := p.run(p.at+removed, "+")
 
+	npmFiles, _ := BumpPatchFiles(projecttype.NPM)
+	if slices.Contains(npmFiles, path.Base(file)) {
+		accepted, err := p.npmReformattedChange(file, removed, added)
+		if err != nil {
+			return 0, 0, err
+		}
+
+		if accepted {
+			p.at += removed + added
+
+			return removed, added, nil
+		}
+	}
+
 	if added != removed {
-		return 0, fmt.Errorf("%s: %d removed lines meet %d added lines; a bump changes each line in place: %w",
+		return 0, 0, fmt.Errorf("%s: %d removed lines meet %d added lines; a bump changes each line in place: %w",
 			file, removed, added, errs.ErrValidation)
 	}
 
@@ -299,20 +337,52 @@ func (p *bumpPatchParser) change(file string) (int, error) {
 
 		old, err := bumpPatchSubstitution(before, after, p.newVersion)
 		if err != nil {
-			return 0, fmt.Errorf("%s: %w", file, err)
+			return 0, 0, fmt.Errorf("%s: %w", file, err)
 		}
 
-		if p.result.OldVersion != "" && old != p.result.OldVersion {
-			return 0, fmt.Errorf("%s: lines move from both %q and %q: %w", file, p.result.OldVersion, old, errs.ErrValidation)
+		if err := p.versionPair(file, old); err != nil {
+			return 0, 0, err
 		}
-
-		p.result.OldVersion = old
-		p.pairs++
 	}
 
 	p.at += removed + added
 
-	return removed, nil
+	return removed, added, nil
+}
+
+func (p *bumpPatchParser) versionPair(file, old string) error {
+	if p.result.OldVersion != "" && old != p.result.OldVersion {
+		return fmt.Errorf("%s: lines move from both %q and %q: %w", file, p.result.OldVersion, old, errs.ErrValidation)
+	}
+
+	p.result.OldVersion = old
+	p.pairs++
+
+	return nil
+}
+
+// A changed run may contain complete object properties rather than a document.
+// Wrapping those properties preserves JSON string contents; trailing separators
+// must agree so removing one cannot hide a structural edit.
+func compactBumpJSON(lines []string) (string, bool, bool) {
+	parts := make([]string, len(lines))
+	for i, line := range lines {
+		parts[i] = line[1:]
+	}
+
+	body := strings.TrimSpace(strings.Join(parts, "\n"))
+	comma := strings.HasSuffix(body, ",")
+
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, []byte("{"+strings.TrimSuffix(body, ",")+"}")); err != nil {
+		return "", false, false
+	}
+	// Normalize only the standard HTML escapes used by encoding/json. Unlike
+	// decoding into a map, this preserves key order, duplicate keys and numbers.
+	var escaped bytes.Buffer
+	json.HTMLEscape(&escaped, compact.Bytes())
+
+	return escaped.String(), comma, true
 }
 
 // outputTimestampChange reports whether a line pair moves the reproducible

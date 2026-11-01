@@ -61,6 +61,87 @@ func TestVerifyBumpPatch_AcceptsVersionSubstitutions(t *testing.T) {
 	require.Equal(t, "0.1.9-SNAPSHOT", got.OldVersion)
 }
 
+const npmReformattedBump = `diff --git a/package-lock.json b/package-lock.json
+index 1111111..2222222 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,9 +1,11 @@
+ {
+-  "version": "1.2.2",
++  "version": "1.2.3",
+   "packages": {
+     "": {
+-      "version": "1.2.2",
+-      "engines": { "node": "26.x" }
++      "version": "1.2.3",
++      "engines": {
++        "node": "26.x"
++      }
+     }
+   }
+ }
+`
+
+func TestVerifyBumpPatch_NPMFormattingPreservesJSONValues(t *testing.T) {
+	t.Parallel()
+
+	files, ok := version.BumpPatchFiles(projecttype.NPM)
+	require.True(t, ok)
+
+	got, err := version.VerifyBumpPatch([]byte(npmReformattedBump), files, "1.2.3")
+	require.NoError(t, err)
+	require.Equal(t, "1.2.2", got.OldVersion)
+	require.Equal(t, []string{"package-lock.json"}, got.Paths)
+
+	for name, changed := range map[string]string{
+		"changed engine":      strings.Replace(npmReformattedBump, `+        "node": "26.x"`, `+        "node": "99.x"`, 1),
+		"string whitespace":   strings.Replace(npmReformattedBump, `+        "node": "26.x"`, `+        "node": "26. x"`, 1),
+		"injected field":      strings.Replace(npmReformattedBump, `+        "node": "26.x"`, `+        "node": "26.x", "extra": true`, 1),
+		"invalid JSON":        strings.Replace(npmReformattedBump, `+        "node": "26.x"`, `+        "node": "26.x",`, 1),
+		"invalid hunk counts": strings.Replace(npmReformattedBump, "+1,11", "+1,12", 1),
+		"no version changed":  strings.ReplaceAll(npmReformattedBump, `"1.2.3"`, `"1.2.2"`),
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := version.VerifyBumpPatch([]byte(changed), files, "1.2.3")
+			require.ErrorIs(t, err, errs.ErrValidation)
+		})
+	}
+}
+
+func TestVerifyBumpPatch_NPMHTMLEscapesDoNotHideStringOrKeyChanges(t *testing.T) {
+	t.Parallel()
+
+	const patch = `diff --git a/package.json b/package.json
+index 1111111..2222222 100644
+--- a/package.json
++++ b/package.json
+@@ -1,5 +1,5 @@
+ {
+-  "engines": { "node": "\u003e=18" },
++  "engines": { "node": ">=18" },
+   "name": "fixture",
+-  "version": "1.2.2"
++  "version": "1.2.3"
+ }
+`
+
+	files, _ := version.BumpPatchFiles(projecttype.NPM)
+	got, err := version.VerifyBumpPatch([]byte(patch), files, "1.2.3")
+	require.NoError(t, err)
+	require.Equal(t, "1.2.2", got.OldVersion)
+
+	for _, changed := range []string{
+		`+  "engines": { "node": "\\u003e=18" },`,
+		`+  "engines": { "node": "bad", "node": ">=18" },`,
+		`+  "engines": { "node": ">= 18" },`,
+	} {
+		_, err := version.VerifyBumpPatch([]byte(strings.Replace(patch, `+  "engines": { "node": ">=18" },`, changed, 1)), files, "1.2.3")
+		require.ErrorIs(t, err, errs.ErrValidation)
+	}
+}
+
 func TestVerifyBumpPatch_RefusesWhatABumpDoesNotDo(t *testing.T) {
 	t.Parallel()
 
