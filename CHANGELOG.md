@@ -193,6 +193,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The snapshot flow's jobs are named by stage like the release flow's,
+  `Prepare`, `Build: <name> (Maven)`, `Publish: npm package`, `Summary`;
+  a branch rule that required one of the old names must be updated.
 - Temporarily pause Self Release's strict integration and companion black-box
   jobs while Nanolinter publication is pending. Branch resolution, engine
   checksum verification and runtime-image availability remain required. Set

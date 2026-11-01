@@ -241,7 +241,7 @@ jobs:
   # consumed by every later stage.
   setup-snapshot:
     needs: [resolve-bootstrap]
-    name: Setup
+    name: Prepare
     runs-on: ubuntu-26.04
     container:
       image: ${{ inputs['runtime-image'] || needs.resolve-bootstrap.outputs['runtime-image'] }}
@@ -359,7 +359,7 @@ jobs:
       sboms: ${{ inputs.sboms }}
 
   execute-snapshot-images:
-    name: Snapshot images
+    name: "Publish: snapshot images"
     needs: [resolve-bootstrap, setup-snapshot, execute-snapshot-build-stage]
     if: ${{ !failure() && !cancelled() }}
     permissions:
@@ -385,7 +385,7 @@ jobs:
 
   # ===== Stage 3: Summary =====
   snapshot-release-summary:
-    name: Snapshot Summary
+    name: Summary
     needs:
       - execute-snapshot-images
       - resolve-bootstrap

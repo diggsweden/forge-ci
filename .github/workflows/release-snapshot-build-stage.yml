@@ -105,7 +105,7 @@ jobs:
       forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
   maven:
     needs: [resolve-bootstrap]
-    name: Build Maven Snapshot - ${{ matrix.artifact.name }}
+    name: "Build: ${{ matrix.artifact.name }} (Maven)"
     if: ${{ fromJson(inputs['snapshot-build-stage-plan-json']).targets.maven.runs }}
     strategy:
       matrix:
@@ -128,7 +128,7 @@ jobs:
       runtime-image: ${{ inputs['runtime-image-java'] || needs.resolve-bootstrap.outputs['runtime-image-java'] }}
   npm:
     needs: [resolve-bootstrap]
-    name: Build NPM Snapshot - ${{ matrix.artifact.name }}
+    name: "Build: ${{ matrix.artifact.name }} (npm)"
     if: ${{ fromJson(inputs['snapshot-build-stage-plan-json']).targets.npm.runs }}
     strategy:
       matrix:
@@ -150,7 +150,7 @@ jobs:
       node-version: ${{ matrix.artifact.npm.node_version || '' }}
   gradle:
     needs: [resolve-bootstrap]
-    name: Build Gradle Snapshot - ${{ matrix.artifact.name }}
+    name: "Build: ${{ matrix.artifact.name }} (Gradle)"
     if: ${{ fromJson(inputs['snapshot-build-stage-plan-json']).targets.gradle.runs }}
     strategy:
       matrix:
@@ -173,7 +173,7 @@ jobs:
       runtime-image: ${{ inputs['runtime-image-java'] || needs.resolve-bootstrap.outputs['runtime-image-java'] }}
   go:
     needs: [resolve-bootstrap]
-    name: Build Go Snapshot - ${{ matrix.artifact.name }}
+    name: "Build: ${{ matrix.artifact.name }} (Go)"
     if: ${{ fromJson(inputs['snapshot-build-stage-plan-json']).targets.go.runs }}
     strategy:
       matrix:
@@ -198,7 +198,7 @@ jobs:
       runtime-image: ${{ inputs['runtime-image-go'] || needs.resolve-bootstrap.outputs['runtime-image-go'] }}
   gradle-android:
     needs: [resolve-bootstrap]
-    name: Build Gradle Android Snapshot - ${{ matrix.artifact.name }}
+    name: "Build: ${{ matrix.artifact.name }} (Android)"
     if: ${{ fromJson(inputs['snapshot-build-stage-plan-json']).targets.gradle_android.runs }}
     strategy:
       matrix:
@@ -229,7 +229,7 @@ jobs:
       runtime-image: ${{ inputs['runtime-image-android'] || needs.resolve-bootstrap.outputs['runtime-image-android'] }}
   xcode-ios:
     needs: [resolve-bootstrap]
-    name: Build Xcode Snapshot - ${{ matrix.artifact.name }}
+    name: "Build: ${{ matrix.artifact.name }} (Xcode)"
     if: ${{ fromJson(inputs['snapshot-build-stage-plan-json']).targets.xcode_ios.runs }}
     strategy:
       matrix:
@@ -263,7 +263,7 @@ jobs:
       forge-ci-binary-ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
   cargo:
     needs: [resolve-bootstrap]
-    name: Build Cargo Snapshot - ${{ matrix.artifact.name }}
+    name: "Build: ${{ matrix.artifact.name }} (Cargo)"
     if: ${{ fromJson(inputs['snapshot-build-stage-plan-json']).targets.cargo.runs }}
     strategy:
       matrix:
@@ -289,7 +289,7 @@ jobs:
   # alongside the container build — mirrors the prod release-build-stage
   # split.
   summarize-snapshot-build-stage:
-    name: Summarize Snapshot Build Stage
+    name: Summary
     needs: [resolve-bootstrap, maven, npm, gradle, go, cargo, gradle-android, xcode-ios]
     if: always() && needs.resolve-bootstrap.result == 'success'
     runs-on: ubuntu-26.04
