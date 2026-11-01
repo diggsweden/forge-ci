@@ -80,8 +80,31 @@ func TestTestArgumentOptOutSpellingsAreRefused(t *testing.T) {
 		}
 	}
 
-	if err := MavenTestArguments([]string{"--batch-mode", "-DskipTests=false", "-Drevision=1.2.3"}); err != nil {
-		t.Fatal(err)
+	// Fail-never exits 0 whatever the tests did; skip.exec skips them; the
+	// selection properties narrow them to nothing; reruns pass a failed test.
+	// Maven takes an option name after one dash or two and a -D value after
+	// "="; abbreviations are refused in case a later parser accepts them.
+	for _, args := range [][]string{
+		{"-fn"}, {"--fn"}, {"-fail-never"}, {"--fail-never"}, {"--fail-nev"}, {"-B", "--fail-n"},
+		{"-define", "skipTests"}, {"-define=skipTests=yes"}, {"--D=skipTests=yes"}, {"-D=skipTests"}, {"--DskipTests"},
+		{"-Dmaven.test.skip.exec=true"}, {"--def", "skipTests"}, {"--defi=maven.test.skip=true"},
+		{"-Dsurefire.rerunFailingTestsCount=2"}, {"-Dfailsafe.rerunFailingTestsCount=1"},
+		{"-Dtest=None", "-Dsurefire.failIfNoSpecifiedTests=false"}, {"-Dtest=OneTest"}, {"-Dit.test=None"},
+		{"-Dgroups=fast"}, {"-DexcludedGroups=slow"}, {"-DfailIfNoTests=false"}, {"-Dsurefire.excludesFile=skip.txt"},
+	} {
+		if err := MavenTestArguments(args); !errors.Is(err, errs.ErrUsage) {
+			t.Errorf("accepted %v: %v", args, err)
+		}
+	}
+
+	for _, args := range [][]string{
+		{"--batch-mode", "-DskipTests=false", "-Drevision=1.2.3"},
+		{"-fae", "--fail-at-end", "--fail-fast", "--debug", "-Dtestcontainers.reuse=true", "-Dtest.timeout=60"},
+		{"-Dsurefire.failIfNoSpecifiedTests=true", "-DfailIfNoTests=true", "-Dsurefire.rerunFailingTestsCount=0"},
+	} {
+		if err := MavenTestArguments(args); err != nil {
+			t.Errorf("refused %v: %v", args, err)
+		}
 	}
 
 	for _, args := range [][]string{{"build", "-x", "test"}, {"build", "--exclude-task=test"}, {"build", "-xtest"}} {

@@ -237,6 +237,13 @@ func failedGoTests(body string) int {
 			return 0
 		}
 
+		// A panic, a runtime fatal error or the test timeout kills the test
+		// binary: the running test is reported failed and every test after it
+		// in the package never ran. That is a test error, not an assertion.
+		if crashed(event.Output) {
+			return 0
+		}
+
 		if event.Action == failedStatus {
 			if event.Test != "" {
 				failed[event.Package] = true
@@ -258,6 +265,14 @@ func failedGoTests(body string) int {
 	}
 
 	return count
+}
+
+// crashed reports whether a line of test output is the Go runtime's report
+// of a panic or fatal error, which starts at the beginning of a line; t.Log
+// and t.Error output is indented.
+func crashed(output string) bool {
+	return strings.HasPrefix(output, "panic: ") || strings.HasPrefix(output, "fatal error: ") ||
+		strings.Contains(output, "[setup failed]")
 }
 
 func number(raw string) int {

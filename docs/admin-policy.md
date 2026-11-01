@@ -40,8 +40,11 @@ whether enforcement is enabled.
 There is no consumer `--enforce-*` flag, environment override, policy-file path,
 artifact override or mutation command. A file named `policy.json` in a consumer
 checkout has no effect. The legacy `skip-tests=true` input is refused, including
-`SKIP_TESTS=true`; report-only tests must still run. Maven test-skipping/ignore
-options and Gradle task exclusions are refused at the engine's build gates.
+`SKIP_TESTS=true`; report-only tests must still run. Maven options that skip,
+ignore or narrow tests (`skipTests`, `maven.test.skip[.exec]`,
+`maven.test.failure.ignore`, fail-never, rerunning failed tests, and test
+selection such as `-Dtest` or `-Dgroups`, in any spelling Maven accepts) and Gradle task exclusions are refused at the engine's build
+gates. A project's own POM and `.mvn/maven.config` stay its responsibility.
 `enable-scan=false` cannot disable the scan of an exported/published layout.
 Forgejo lint/build actions checksum-verify their pinned engine even when a
 consumer supplies `FORGE_CI_BIN`. GitLab's Nanolinter component bootstraps and
@@ -94,6 +97,18 @@ test setup errors are not assertion-only waivers; for example a missing
 Testcontainers socket remains an error. Compilation and packaging invocations
 are never waived. Where packaging needs a follow-up after failed tests, that
 follow-up does not repeat the already reported tests.
+
+When a non-enforcing engine stops anyway, the log says why, beside the test
+tool's own error:
+
+```text
+Admin policy sha256:<digest>: application-tests result=not-waivable enforcement=false reason="no complete assertion-failure summary: test errors, setup and compile failures are never waived"
+```
+
+The other reasons name an exit status that is not the tool's assertion-failure
+status, output over the capture limit, or a command that failed without a test
+exit status. A build blocked under report-only with no such line did not reach
+the test gate.
 
 Gradle invokes tests separately before packaging; Android retains its selected
 module's test aggregate even when packaging tasks are overridden. A successful

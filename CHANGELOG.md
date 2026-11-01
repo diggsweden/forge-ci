@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A report-only engine that still stops a failed test run now says why: an
+  `application-tests result=not-waivable` decision line with the reason (test
+  errors are never waived, an unrecognised exit status, output over the capture
+  limit). See `docs/admin-policy.md`.
 - Signed numbered prereleases use the existing release pipeline with
   `release-policy: stable-prerelease`, including release evidence and retry
   behavior. Prereleases do not move stable image aliases or promotion stages;
@@ -141,6 +145,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `build-go`. The engine refuses it, because an administrator may require
   tests, so a merge request copied from the example failed before building.
   A guard keeps every example from skipping tests.
+- A Go test that panics, hits a runtime fatal error or times out is no longer
+  counted as an assertion failure a report-only policy may waive. The crash
+  ends the package's test binary, so the tests after it never ran.
+- The Maven build gates also refuse fail-never (`-fn` or `-fail-never`,
+  after one dash or two), every spelling of a `-D`/`-define` property,
+  `-Dmaven.test.skip.exec`, rerunning failed tests, and the test-selection
+  properties (`test`, `it.test`, `groups`, `excludedGroups`, the include and
+  exclude files, relaxing `failIfNoSpecifiedTests`) in `MAVEN_CLI_OPTS`.
+  Each let a build skip, ignore or narrow its tests and still be logged as
+  an enforced, clean test run.
 - Bootstrap source installs build a detached Git checkout instead of resolving
   a commit through a cached moving Go module tag. Host jobs bind the binary to
   their bootstrap checkout, support full SHA-1/SHA-256 IDs and relative install

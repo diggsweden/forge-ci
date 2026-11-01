@@ -121,6 +121,10 @@ func TestNativeTestFailureClassification(t *testing.T) {
 		{"go TestMain error", GoJSON, `{"Action":"fail","Package":"app"}`, 0},
 		{"go mixed build", GoJSON, "{\"Action\":\"fail\",\"Package\":\"app\",\"Test\":\"TestValue\"}\n{\"Action\":\"fail\",\"Package\":\"other\"}", 0},
 		{"go malformed", GoJSON, "not JSON", 0},
+		{"go panic", GoJSON, "{\"Action\":\"output\",\"Package\":\"app\",\"Test\":\"TestValue\",\"Output\":\"panic: assignment to entry in nil map [recovered]\\n\"}\n{\"Action\":\"fail\",\"Package\":\"app\",\"Test\":\"TestValue\"}\n{\"Action\":\"fail\",\"Package\":\"app\"}", 0},
+		{"go timeout", GoJSON, "{\"Action\":\"output\",\"Package\":\"app\",\"Test\":\"TestValue\",\"Output\":\"panic: test timed out after 10m0s\\n\"}\n{\"Action\":\"fail\",\"Package\":\"app\",\"Test\":\"TestValue\"}\n{\"Action\":\"fail\",\"Package\":\"app\"}", 0},
+		{"go fatal error", GoJSON, "{\"Action\":\"output\",\"Package\":\"app\",\"Output\":\"fatal error: concurrent map writes\\n\"}\n{\"Action\":\"fail\",\"Package\":\"app\",\"Test\":\"TestValue\"}\n{\"Action\":\"fail\",\"Package\":\"app\"}", 0},
+		{"go logged panic text", GoJSON, "{\"Action\":\"output\",\"Package\":\"app\",\"Test\":\"TestValue\",\"Output\":\"    value_test.go:9: panic: expected\\n\"}\n{\"Action\":\"fail\",\"Package\":\"app\",\"Test\":\"TestValue\"}\n{\"Action\":\"fail\",\"Package\":\"app\"}", 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if got := FailedTests(test.protocol, test.body); got != test.count {
