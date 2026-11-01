@@ -135,6 +135,7 @@ func TestGitLabRelease_BuildImageCapability(t *testing.T) {
 	}
 
 	target := livetest.Accept(t, provider.ForgeGitLab)
+	label := privilegedRunner(t, target)
 	repo := livetest.NewScratchRepo(t, target, "build-image-probe")
 	image := livetest.PushJobImage(t, target, repo, archive)
 
@@ -146,6 +147,7 @@ func TestGitLabRelease_BuildImageCapability(t *testing.T) {
 	body, err := yaml.Marshal(map[string]any{"probe": map[string]any{
 		// As release-jobs.yml declares a build image: its own entrypoint is not the job's shell.
 		"image":     map[string]any{"name": image, "entrypoint": []string{""}},
+		"tags":      []string{label},
 		"variables": map[string]string{"GIT_STRATEGY": "empty"},
 		"script":    []string{"set -euo pipefail", prelude, gitlabBuildImageProbe},
 	}})
@@ -295,6 +297,8 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 
 	var consumer *livetest.Consumer
 
+	checksRunnerTags := []string{}
+
 	if consumerRoot != "" {
 		opened := livetest.OpenConsumer(t, target, consumerRoot)
 		if livetest.DemoName() != "" {
@@ -302,6 +306,14 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 		}
 
 		consumer = &opened
+		if opened.GitLabChecksNeedBuildah(t) {
+			label := livetest.PrivilegedRunnerLabel(t, target)
+			if label == "" {
+				t.Fatal("the admitted Go CLI integration fixture requires runner.privileged_label for Buildah checks")
+			}
+
+			checksRunnerTags = append(checksRunnerTags, label)
+		}
 	}
 
 	layer := livetest.PushLayer(t, target, gitlabReleaseRepo(t, target, "release-engine"))
@@ -328,6 +340,9 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 	defer cancel()
 
 	keys := newReleaseKeys(t)
+	livetest.RetainGitLabJobLogsAfter(t, target, repo, map[string]string{
+		"ssh": keys.sshPrivate, "cosign": keys.cosignPrivate, "passphrase": keys.passphrase,
+	})
 	requestKeyDir := t.TempDir()
 	_, requestPublic := livetest.SSHKey(t, requestKeyDir)
 
@@ -387,6 +402,7 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 			"version-bump":         settings.VersionBump,
 			"base-images":          bases,
 			"checks":               checks,
+			"checks-runner-tags":   checksRunnerTags,
 			"build":                build,
 			"build-runner-tags":    buildRunnerTags,
 		}),
@@ -405,7 +421,7 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 		policyIncludes = append(policyIncludes, map[string]any{
 			"component": strings.TrimPrefix(target.BaseURL(), "https://") + "/" + layer.Repository + "/check@" + layer.Commit,
 			"inputs": map[string]any{"forge-ci-repository": layer.Repository, "job-image": jobImage,
-				"job-name": "candidate-check", "commands": []string{"test -f warm-request.txt"}},
+				"job-name": "candidate-check", "commands": []string{"test -f next-release-request.txt"}},
 		})
 		policyConfig["candidate-check"] = map[string]any{
 			"rules": []any{map[string]string{"if": `$CI_PIPELINE_SOURCE == "merge_request_event"`}},
@@ -478,8 +494,8 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 		logGitLabReleaseInventory(t, ctx, client, project, child)
 	}
 
-	if len(buildRunnerTags) != 0 {
-		requireGitLabBuildRunnerRouting(t, ctx, client, project, child, buildRunnerTags)
+	if len(buildRunnerTags) != 0 || len(checksRunnerTags) != 0 {
+		requireGitLabReleaseRunnerRouting(t, ctx, client, project, child, buildRunnerTags, checksRunnerTags)
 	}
 
 	requireReleaseGit(t, target, repo, keys, request, requestTag, finalTag)
@@ -728,7 +744,7 @@ func configureGitLabReleaseVariables(t *testing.T, target livetest.Target, clien
 	}
 }
 
-func requireGitLabBuildRunnerRouting(t *testing.T, ctx context.Context, client *gitlabapi.Client, project string, child int64, tags []string) {
+func requireGitLabReleaseRunnerRouting(t *testing.T, ctx context.Context, client *gitlabapi.Client, project string, child int64, buildTags, checksTags []string) {
 	t.Helper()
 
 	jobs, response, err := client.Jobs.ListPipelineJobs(project, child, &gitlabapi.ListJobsOptions{PerPage: 100}, gitlabapi.WithContext(ctx))
@@ -740,31 +756,36 @@ func requireGitLabBuildRunnerRouting(t *testing.T, ctx context.Context, client *
 		t.Fatal("release runner routing requires a complete job listing")
 	}
 
-	var buildRunner int64
+	expected := map[string][]string{"Build: release files": buildTags, "Check: consumer checks": checksTags}
+	seen := map[string]bool{}
+	capableRunners := map[int64]bool{}
 
 	for _, job := range jobs {
 		if job.Runner.ID != 0 {
 			t.Logf("release routing: job %q tags=%v runner=%d (%s)", job.Name, job.TagList, job.Runner.ID, job.Runner.Description)
 		}
 
-		if job.Name == "Build: release files" {
-			if !slices.Equal(job.TagList, tags) || job.Runner.ID == 0 {
-				t.Fatalf("build job did not run with the requested tags %v", tags)
+		if tags, routed := expected[job.Name]; routed {
+			if !slices.Equal(job.TagList, tags) || job.Runner.ID == 0 || job.Status != "success" {
+				t.Fatalf("job %q did not succeed with the requested tags %v", job.Name, tags)
 			}
 
-			buildRunner = job.Runner.ID
+			seen[job.Name] = true
+			if len(tags) != 0 {
+				capableRunners[job.Runner.ID] = true
+			}
 		} else if len(job.TagList) != 0 {
-			t.Fatalf("non-build job %q inherited runner tags %v", job.Name, job.TagList)
+			t.Fatalf("unrelated job %q inherited runner tags %v", job.Name, job.TagList)
 		}
 	}
 
-	if buildRunner == 0 {
-		t.Fatal("release has no executed tagged build job")
+	if len(seen) != len(expected) {
+		t.Fatal("release has no successful build and consumer checks jobs")
 	}
 
 	for _, job := range jobs {
-		if job.Name != "Build: release files" && job.Runner.ID == buildRunner {
-			t.Fatalf("non-build job %q ran on the tagged build runner %d", job.Name, buildRunner)
+		if len(expected[job.Name]) == 0 && capableRunners[job.Runner.ID] {
+			t.Fatalf("untagged job %q ran on a tagged capability runner %d", job.Name, job.Runner.ID)
 		}
 	}
 }

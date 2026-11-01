@@ -223,6 +223,10 @@ func TestIsolate_ScrubsEveryFamilyAndRestoresAfterTheScope(t *testing.T) {
 		canaries[key] = "planted-" + key
 	}
 
+	for _, key := range runcontext.Tag().Keys() {
+		canaries[key] = "planted-" + key
+	}
+
 	for key, value := range canaries {
 		t.Setenv(key, value)
 	}

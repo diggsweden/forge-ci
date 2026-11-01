@@ -22,6 +22,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/config"
 	"github.com/diggsweden/forge-ci/internal/domain/output"
 	"github.com/diggsweden/forge-ci/internal/domain/snapshotimage"
+	"github.com/diggsweden/forge-ci/internal/testutil/evidence"
 	"github.com/diggsweden/forge-ci/internal/testutil/fakeoutputsink"
 	"github.com/stretchr/testify/require"
 )
@@ -280,7 +281,14 @@ func TestAutomaticNPMProducerWithRealExistingBuild(t *testing.T) {
 	runner := &artifactRunner{run: func(request appsnapshot.ArtifactBuildRequest) error {
 		env := slices.Concat(request.Env, []string{"npm_config_audit=false", "npm_config_fund=false", "npm_config_update_notifier=false"})
 
-		return appbuild.NPMReleaseBuild(t.Context(), discardSummary{}, &npm.Adapter{Bin: npmBin, Env: env}, nil, output.Annotator{}, io.Discard, io.Discard, appbuild.NPMReleaseBuildInput{Dir: request.Dir})
+		var diagnostic evidence.Diagnostic
+
+		err := appbuild.NPMReleaseBuild(t.Context(), discardSummary{}, &npm.Adapter{Bin: npmBin, Env: env}, nil, output.Annotator{}, io.Discard, &diagnostic, appbuild.NPMReleaseBuildInput{Dir: request.Dir})
+		if err != nil {
+			t.Logf("npm producer stderr: %s", diagnostic.Text(env))
+		}
+
+		return err
 	}}
 	require.NoError(t, appsnapshot.BuildArtifact(t.Context(), &git{head: plan.SourceSHA}, runner, plan, appsnapshot.BuildArtifactInput{Name: "web", Environment: []string{"PATH=" + filepath.Dir(npmBin) + ":/usr/bin:/bin"}}))
 	require.FileExists(t, "web/test-ran")

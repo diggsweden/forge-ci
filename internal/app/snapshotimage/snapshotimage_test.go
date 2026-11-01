@@ -106,6 +106,25 @@ func TestUnsupportedSnapshotRequestsFailBeforeBuild(t *testing.T) {
 	}
 }
 
+func TestArtifactOnlySnapshotOptOutDoesNotWeakenStableSigningPolicy(t *testing.T) {
+	in := input(t, "sign:\n  method: sigstore\ncontainers:\n  - name: app\n")
+	git := &git{head: in.SourceSHA}
+	_, err := appsnapshot.Plan(t.Context(), git, in)
+	require.ErrorContains(t, err, "signing must be NONE")
+
+	in.Publish = false
+	plan, err := appsnapshot.Plan(t.Context(), git, in)
+	require.NoError(t, err)
+	require.False(t, plan.Enabled)
+	require.Empty(t, plan.Builds)
+	require.Empty(t, plan.Images)
+
+	// Opting out of images must not rewrite the shared stable configuration.
+	in.Publish = true
+	_, err = appsnapshot.Plan(t.Context(), git, in)
+	require.ErrorContains(t, err, "signing must be NONE")
+}
+
 func TestNativeBuildAndArtifactInputsRefuseBeforeTools(t *testing.T) {
 	in := input(t, "artifacts:\n  - name: server\n    project-type: go\ncontainers:\n  - name: app\n    from: [server]\n")
 	plan, err := appsnapshot.Plan(t.Context(), &git{head: in.SourceSHA}, in)
@@ -144,12 +163,12 @@ func TestReadPlanStrictAndAtomicReceiptCollection(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "prior-complete", string(body))
 
-	receipt := snapshotimage.Receipt{Version: 1, SourceSHA: plan.SourceSHA, SourceBranch: plan.SourceBranch, Name: "app", ImageRepository: plan.Images[0].ImageRepository, Tag: plan.Images[0].Tag, Digest: "sha256:" + strings.Repeat("b", 64), Platforms: plan.Images[0].Platforms}
-	receipt.Ref = receipt.ImageRepository + "@" + receipt.Digest
-	require.NoError(t, appsnapshot.WriteJSON(filepath.Join(receipts, "app.json"), receipt))
+	r := snapshotimage.Receipt{Version: 1, SourceSHA: plan.SourceSHA, SourceBranch: plan.SourceBranch, Name: "app", ImageRepository: plan.Images[0].ImageRepository, Tag: plan.Images[0].Tag, Digest: "sha256:" + strings.Repeat("b", 64), Platforms: plan.Images[0].Platforms}
+	r.Ref = r.ImageRepository + "@" + r.Digest
+	require.NoError(t, appsnapshot.WriteJSON(filepath.Join(receipts, "app.json"), r))
 	sink := fakeoutputsink.New(t)
 	require.NoError(t, appsnapshot.Collect(t.Context(), sink, plan, receipts, output))
-	require.Contains(t, sink.Single("container-images-json"), receipt.Ref)
+	require.Contains(t, sink.Single("container-images-json"), r.Ref)
 }
 
 func TestCollectEmitsPortableGitLabScalarOutputs(t *testing.T) {
