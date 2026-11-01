@@ -11,7 +11,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/diggsweden/forge-ci/internal/cli/secretenv"
+	"github.com/diggsweden/forge-ci/internal/secretenv"
 
 	"github.com/urfave/cli/v3"
 
@@ -82,7 +82,7 @@ func runBuild(ctx context.Context, cmd *cli.Command) error {
 		_, err := appcontainer.BuildAndScan(ctx, builder, ociregistry.WithAuthFile(buildInput.AuthFile), trivy.New(secretenv.Names()...), dep.OutputSink, os.Stderr, os.Stderr, deps.Annotator(cmd),
 			appcontainer.BuildAndScanInput{
 				Build:        buildInput,
-				EnableScan:   cmd.Bool("scan"),
+				EnableScan:   cmd.Bool(flagScan),
 				ScanSeverity: cmd.String("scan-severity"),
 				TrivyVersion: cmd.String("trivy-version"),
 			})
@@ -94,7 +94,7 @@ func runBuild(ctx context.Context, cmd *cli.Command) error {
 // scanFlags returns the in-process scan flags of `container build`.
 func scanFlags() []cli.Flag {
 	return []cli.Flag{
-		&cli.BoolFlag{Name: "scan", Sources: planfile.Vars(planScopeBuild, "scan", "ENABLE_SCAN"), Usage: "scan the exported layout before pushing or retaining it; fail on fixable findings at/above --scan-severity and on unfixed CRITICAL findings .trivyignore.yaml does not approve (push-by-digest and oci modes)"},
+		&cli.BoolFlag{Name: flagScan, Sources: planfile.Vars(planScopeBuild, "scan", "ENABLE_SCAN"), Usage: "scan the exported layout before pushing or retaining it; fail on fixable findings at/above --scan-severity and on unfixed CRITICAL findings .trivyignore.yaml does not approve (push-by-digest and oci modes)"},
 		&cli.StringFlag{Name: "scan-severity", Value: "CRITICAL,HIGH", Sources: planfile.Vars(planScopeBuild, "scan-severity", "SCAN_SEVERITY"), Usage: "trivy severity filter and gate threshold"},
 		&cli.StringFlag{Name: "trivy-version", Sources: planfile.Vars(planScopeBuild, "trivy-version", "TRIVY_VERSION"), Usage: "version embedded in the GitLab container-scanning report"},
 	}

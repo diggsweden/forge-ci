@@ -20,8 +20,8 @@ import (
 	"github.com/diggsweden/forge-ci/internal/cli/cienv"
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
 	"github.com/diggsweden/forge-ci/internal/cli/regflags"
-	"github.com/diggsweden/forge-ci/internal/cli/secretenv"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/secretenv"
 )
 
 func signerImageGroup() *cli.Command {
@@ -64,15 +64,15 @@ upload. Without these flags the existing immediate-publish behavior is retained.
 func multiarchImageParamFlags() []cli.Flag {
 	return []cli.Flag{
 		&cli.StringFlag{Name: "repository-suffix", Sources: cli.EnvVars("IMAGE_REPOSITORY_SUFFIX"), Usage: "suffix for the derived image repository (e.g. -signer); unused with --image-repository"},
-		&cli.StringFlag{Name: "image-repository", Sources: cli.EnvVars("IMAGE_REPOSITORY"), Usage: "full destination OCI repository without a tag or digest; overrides the derived destination, preserving source labels"},
+		&cli.StringFlag{Name: flagImageRepository, Sources: cli.EnvVars("IMAGE_REPOSITORY"), Usage: "full destination OCI repository without a tag or digest; overrides the derived destination, preserving source labels"},
 		&cli.StringFlag{Name: "tag-prefix", Sources: cli.EnvVars("IMAGE_TAG_PREFIX"), Usage: "prefix prepended to the source-SHA image and manifest tags (e.g. signer-)"},
 		&cli.StringFlag{Name: "tag", Usage: "explicit index tag name instead of tag-prefix + source-sha; architecture tags append -<arch>; mutually exclusive with tag-prefix"},
-		&cli.StringFlag{Name: "name", Value: "image", Sources: cli.EnvVars("IMAGE_METADATA_NAME"), Usage: "basename for the per-arch/manifest metadata files and dirs shared across the two phases"},
+		&cli.StringFlag{Name: flagName, Value: "image", Sources: cli.EnvVars("IMAGE_METADATA_NAME"), Usage: "basename for the per-arch/manifest metadata files and dirs shared across the two phases"},
 	}
 }
 
 func multiarchImageArchsFlag() cli.Flag {
-	return &cli.StringFlag{Name: "archs", Value: "amd64\narm64", Sources: cli.EnvVars("IMAGE_ARCHS"), Usage: "newline-separated architectures to include"}
+	return &cli.StringFlag{Name: flagArchs, Value: "amd64\narm64", Sources: cli.EnvVars("IMAGE_ARCHS"), Usage: "newline-separated architectures to include"}
 }
 
 func signerImageBuildArchCmd() *cli.Command {
@@ -94,7 +94,7 @@ architecture builds on a native runner, never under CPU emulation.`,
 			&cli.StringSliceFlag{Name: "label", Usage: "key=value image label beside the source, revision and title labels (repeatable)"},
 			&cli.StringFlag{Name: "cache-tag", Usage: "with --stage: reuse a bounded architecture slot in the image repository after checking its platform, revision and --require-label values; reads anonymously"},
 			&cli.StringSliceFlag{Name: flagRequireLabel, Usage: "required cache child config label as key=value (repeatable)"},
-			&cli.StringFlag{Name: "metadata-dir", Sources: cli.EnvVars("IMAGE_METADATA_DIR"), Usage: "directory for <name>-<arch>.json (default <name>-arch-<arch>)"},
+			&cli.StringFlag{Name: flagMetadataDir, Sources: cli.EnvVars("IMAGE_METADATA_DIR"), Usage: "directory for <name>-<arch>.json (default <name>-arch-<arch>)"},
 		),
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			builder, err := imageBuilderFromCmd(cmd)
@@ -110,10 +110,10 @@ architecture builds on a native runner, never under CPU emulation.`,
 				ServerURL:        cmd.String(flagServerURL),
 				Repository:       cmd.String(flagRepository),
 				RepositorySuffix: cmd.String("repository-suffix"),
-				ImageRepository:  cmd.String("image-repository"),
+				ImageRepository:  cmd.String(flagImageRepository),
 				TagPrefix:        cmd.String("tag-prefix"),
 				TagName:          cmd.String("tag"),
-				Name:             cmd.String("name"),
+				Name:             cmd.String(flagName),
 				Title:            cmd.String("title"),
 				Containerfile:    cmd.String(flagContainerfile),
 				Context:          cmd.String(flagContext),
@@ -122,7 +122,7 @@ architecture builds on a native runner, never under CPU emulation.`,
 				Labels:           cmd.StringSlice("label"),
 				CacheTag:         cmd.String("cache-tag"),
 				CacheLabels:      cmd.StringSlice(flagRequireLabel),
-				MetadataDir:      cmd.String("metadata-dir"),
+				MetadataDir:      cmd.String(flagMetadataDir),
 				RetryAttempts:    cmd.Int(flagRetryAttempts),
 				RetryDelay:       time.Duration(cmd.Int(flagRetryDelaySeconds)) * time.Second,
 			}
@@ -156,7 +156,7 @@ outputs.`,
 			multiarchImageArchsFlag(),
 			&cli.StringSliceFlag{Name: flagRequireLabel, Usage: "required child config label as key=value (repeatable); checked before any upload"},
 			&cli.StringFlag{Name: flagManifestOutput, Usage: "optional file for exact verified index bytes, suitable for sbom index --index-file; '-' is not supported"},
-			&cli.StringFlag{Name: "metadata-dir", Sources: cli.EnvVars("IMAGE_METADATA_DIR"), Usage: "directory for <name>.json (default <name>-dist)"},
+			&cli.StringFlag{Name: flagMetadataDir, Sources: cli.EnvVars("IMAGE_METADATA_DIR"), Usage: "directory for <name>.json (default <name>-dist)"},
 			&cli.StringFlag{Name: "scan-output-template", Usage: "with --from-layouts: scan every staged architecture before any upload and refuse publication on a finding the container gate blocks; Trivy JSON path must contain {arch} or {platform}"},
 			&cli.StringFlag{Name: "sbom-output-template", Usage: "with --from-layouts and --scan-output-template: generate per-architecture CycloneDX SBOMs from the staged bytes before upload; path must contain {arch} or {platform}"},
 			&cli.StringFlag{Name: "index-sbom-output", Usage: "with staged inventories and --manifest-output: write an index SBOM binding every selected platform; emits image-sbom-sha256"},
@@ -178,15 +178,15 @@ outputs.`,
 					ServerURL:        cmd.String(flagServerURL),
 					Repository:       cmd.String(flagRepository),
 					RepositorySuffix: cmd.String("repository-suffix"),
-					ImageRepository:  cmd.String("image-repository"),
+					ImageRepository:  cmd.String(flagImageRepository),
 					TagPrefix:        cmd.String("tag-prefix"),
 					TagName:          cmd.String("tag"),
 					RequiredLabels:   cmd.StringSlice(flagRequireLabel),
 					CacheTagPrefix:   cmd.String("cache-tag-prefix"),
 					ManifestOutput:   cmd.String(flagManifestOutput),
-					Name:             cmd.String("name"),
-					Archs:            splitSignerLines(cmd.String("archs")),
-					MetadataDir:      cmd.String("metadata-dir"),
+					Name:             cmd.String(flagName),
+					Archs:            splitSignerLines(cmd.String(flagArchs)),
+					MetadataDir:      cmd.String(flagMetadataDir),
 					RetryAttempts:    cmd.Int(flagRetryAttempts),
 					RetryDelay:       time.Duration(cmd.Int(flagRetryDelaySeconds)) * time.Second,
 				}

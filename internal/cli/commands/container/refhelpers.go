@@ -84,7 +84,7 @@ func refCanonicalCmd() *cli.Command {
 
 func refNameCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "name",
+		Name:  subCmdName,
 		Usage: "print an image repository/name with any tag or digest removed",
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: flagRef, Required: true, Sources: cli.EnvVars("IMAGE_REF"), Usage: "image reference"},

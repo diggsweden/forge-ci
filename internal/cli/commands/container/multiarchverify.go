@@ -30,9 +30,9 @@ func multiarchImageVerifyCmd() *cli.Command {
 				in := appcontainer.SignerImageAssembleInput{
 					AuthFile: cmd.String(flagAuthFile), SourceSHA: cmd.String(flagSourceSHA),
 					ServerURL: cmd.String(flagServerURL), Repository: cmd.String(flagRepository),
-					RepositorySuffix: cmd.String("repository-suffix"), ImageRepository: cmd.String("image-repository"),
-					TagPrefix: cmd.String("tag-prefix"), TagName: cmd.String("tag"), Name: cmd.String("name"),
-					Archs: splitSignerLines(cmd.String("archs")), RequiredLabels: cmd.StringSlice(flagRequireLabel),
+					RepositorySuffix: cmd.String("repository-suffix"), ImageRepository: cmd.String(flagImageRepository),
+					TagPrefix: cmd.String("tag-prefix"), TagName: cmd.String("tag"), Name: cmd.String(flagName),
+					Archs: splitSignerLines(cmd.String(flagArchs)), RequiredLabels: cmd.StringSlice(flagRequireLabel),
 					ManifestOutput: cmd.String(flagManifestOutput),
 				}
 				if err := appcontainer.VerifyMultiarchImageManifest(ctx, ociregistry.WithAuthFile(in.AuthFile), dep.OutputSink, cmd.String("ref"), in); err != nil {

@@ -69,7 +69,7 @@ func layoutRecordCmd() *cli.Command {
 
 func layoutPublishCmd() *cli.Command {
 	return &cli.Command{
-		Name: "publish", Usage: "verify the complete staged platform set before uploading any image",
+		Name: subCmdPublish, Usage: "verify the complete staged platform set before uploading any image",
 		Description: "Run only in a job depending on ALL selected build/scan jobs. Download the current run's artifacts as separate subdirectories, without merging their files. Checks every local blob and binding before the first registry write; emits platform-digests JSON after all uploads and read-backs succeed. Bare repositories publish tagless by digest. Partial upload failures may leave unreferenced images; retries reuse the same layouts.",
 		Flags: append(layoutIdentityFlags(),
 			&cli.StringFlag{Name: "layouts-dir", Required: true, Usage: "parent containing exactly one artifact directory per selected platform"},

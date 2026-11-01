@@ -25,7 +25,7 @@ const defaultArtifactsFile = ".forge-ci/artifacts.yml"
 
 func releaseImagesPlanCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "plan",
+		Name:  subCmdPlan,
 		Usage: "plan the release images artifacts.yml declares: one build per container and architecture, one publication per container",
 		Description: `Reads the containers: section of artifacts.yml and writes three outputs:
 builds, a JSON array with one entry per container and architecture for the
@@ -64,7 +64,7 @@ EXAMPLE:
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "image-plan-json", Sources: cli.EnvVars("IMAGE_PLAN_JSON"), Usage: "resolved consumer image policy as builds/images JSON; admitted against --image-repository instead of loading artifacts.yml; supports content-addressed base tags"},
 			&cli.StringFlag{Name: "file", Value: defaultArtifactsFile, Sources: cli.EnvVars("ARTIFACTS_CONFIG"), Usage: "path to the artifacts.yml file declaring the containers; without it and the default file, the root Containerfile is the repository's image"},
-			&cli.StringFlag{Name: "image-repository", Sources: cli.EnvVars("IMAGE_REPOSITORY"), Usage: "the one repository the release's images publish to, e.g. ghcr.io/owner/app; empty is the forge's own registry, <server host>/<owner>/<repository>"},
+			&cli.StringFlag{Name: flagImageRepository, Sources: cli.EnvVars("IMAGE_REPOSITORY"), Usage: "the one repository the release's images publish to, e.g. ghcr.io/owner/app; empty is the forge's own registry, <server host>/<owner>/<repository>"},
 			&cli.StringFlag{Name: flagServerURL, Sources: cienv.ServerURL(), Usage: "forge server URL, whose registry an empty --image-repository names"},
 			&cli.StringFlag{Name: flagRepository, Sources: cienv.Repository(), Usage: "owner/repo the image repositories are derived from"},
 			// No environment source: the event's ref name, which the tag chain
@@ -148,7 +148,7 @@ func releasePlanRegistryUser(cmd *cli.Command, imageRepository string) (string, 
 // releasePlanImageRepository is --image-repository, or the forge's own
 // registry for this repository, as the signer defaults it.
 func releasePlanImageRepository(cmd *cli.Command) (string, error) {
-	if repository := strings.TrimSpace(cmd.String("image-repository")); repository != "" {
+	if repository := strings.TrimSpace(cmd.String(flagImageRepository)); repository != "" {
 		return repository, nil
 	}
 
