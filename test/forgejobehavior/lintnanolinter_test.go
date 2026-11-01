@@ -31,8 +31,9 @@ exit "${FAKE_NANOLINTER_STATUS:-0}"
 
 // The lint step runs the job's own nanolinter with the mandated floor, the
 // caller's exclusions and the offline switch, and its status is nanolinter's.
-// It installs nothing: without nanolinter on PATH it stops, and says what the
-// job is missing. The real engine applies the immutable policy after execution.
+// It installs no nanolinter: without one on PATH it stops, and says what the
+// job is missing. The pinned, checksum-verified engine applies the immutable
+// policy after execution.
 func TestLintNanolinter(t *testing.T) {
 	t.Parallel()
 	action := loadAction(t, "lint-nanolinter")

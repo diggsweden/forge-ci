@@ -4,7 +4,7 @@
 
 name: 'Lint with nanolinter'
 description: >-
-  The pull-request lint gate: run the repository's nanolinter plan with a mandated floor of checks that its nanolinter.toml cannot switch off. The step runs the nanolinter the job already has, so run the job in a nanolinter image, or on a runner that provides the pinned nanolinter and its tools. It installs nothing and needs no secret; a blocking finding fails the step.
+  The pull-request lint gate: run the repository's nanolinter plan with a mandated floor of checks that its nanolinter.toml cannot switch off. The step runs the nanolinter the job already has, so run the job in a nanolinter image, or on a runner that provides the pinned nanolinter and its tools. It needs no secret. The admin policy is applied by the forge-ci engine this action pins: it is downloaded from the forge's package registry and checksum-verified, unless the job already holds that verified build or FORGE_CI_BIN names one (checksum-verified too). A blocking finding fails the step.
 inputs:
   required-lints:
     description: >-
@@ -18,7 +18,7 @@ inputs:
     default: ''
   offline:
     description: >-
-      'true' passes --offline: checks that need the network are skipped and tools use their caches. For a runner or job image without network access.
+      'true' passes --offline: checks that need the network are skipped and tools use their caches. For a runner or job image without network access, which must then also provide the pinned forge-ci engine through FORGE_CI_BIN.
     required: false
     default: 'false'
 
@@ -56,6 +56,11 @@ runs:
         # FORGE_CI_BIN replacement cannot select a more permissive engine.
         # shellcheck source=.engine/bin/lib-forge-ci.sh
         source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
-        if [ -z "${FORGE_CI_BIN:-}" ]; then fetch_forge_ci; fi
+        if [ -z "${FORGE_CI_BIN:-}" ] && ! fetch_forge_ci; then
+          if [ "${LINT_OFFLINE}" = true ]; then
+            echo "  offline: true cannot download the engine either: set FORGE_CI_BIN to the pinned forge-ci build (its checksum is verified)" >&2
+          fi
+          exit 69
+        fi
         SIGNER_STRICT=1 verify_forge_ci
         LANG=C.UTF-8 LC_ALL=C.UTF-8 run_forge_ci policy nanolinter -- nanolinter verify "${arguments[@]}" --report sarif --out -

@@ -742,7 +742,8 @@ for them; every `pullrequest.yml` in the examples, such as
 
 nanolinter is the only lint engine: the layer has no MegaLinter action. Tests
 run in the consumer's own job, for example through `build-go`, which runs
-`go test ./...`. A pull-request job receives no secret and installs nothing.
+`go test ./...`. A pull-request job receives no secret and installs no
+toolchain; it fetches only the checksum-pinned forge-ci engine.
 
 The gate is the protected branch: require the pull-request jobs as status
 checks. A direct push bypasses them.
@@ -775,10 +776,13 @@ directory of each ecosystem example is the two workflows they add up to.
 ghcr.io by this repository's GitHub workflows, which a Forgejo instance may
 not reach, so no action assumes one. Each runs in whatever the job provides:
 
-- A pull-request job installs nothing and receives no secret. Its lint and
-  build jobs run in the image the `CI_JOB_IMAGE` variable names, which carries
-  nanolinter with its check tools and the toolchain. `lint-nanolinter` stops
-  with a message when the job has no `nanolinter`; it does not download one.
+- A pull-request job installs no toolchain and receives no secret. Its lint
+  and build jobs run in the image the `CI_JOB_IMAGE` variable names, which
+  carries nanolinter with its check tools and the toolchain. `lint-nanolinter`
+  stops with a message when the job has no `nanolinter`; it does not download
+  one. It does fetch the forge-ci engine it pins, which applies the admin
+  policy, from the forge's package registry and verifies its checksum; an
+  offline job provides that build through `FORGE_CI_BIN` instead.
 - The release build job installs its toolchain with `setup-toolchain`: Go,
   and the tools of the consumer's mise config. The Build SBOM generator is
   forge-ci's, as on GitHub and GitLab, where the runtime image carries it:

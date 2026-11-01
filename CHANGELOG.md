@@ -174,6 +174,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lists an artifact from its first file on, so that copy may be partial. The
   job uploads it again, and keeps the earlier copy only once it downloads and
   verifies, so a partial blob fails the job instead of the later publish.
+- Forgejo's `lint-nanolinter` action and the Forgejo guide no longer claim the
+  pull-request lint installs nothing: it fetches the checksum-pinned forge-ci
+  engine that applies the admin policy. With `offline: true` and no
+  `FORGE_CI_BIN`, a failed fetch now says to provide that build.
 - A Go test that panics, hits a runtime fatal error or times out is no longer
   counted as an assertion failure a report-only policy may waive. The crash
   ends the package's test binary, so the tests after it never ran.
