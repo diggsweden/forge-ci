@@ -44,6 +44,7 @@ path = [
   "docs/multiarch-images.md",
   "docs/private-dependencies.md",
   "docs/quickstart-setup-secrets.md",
+  "docs/tutorial-first-pull-request.md",
   "docs/publishing.md",
   "docs/reference.md",
   "docs/sbom.md",

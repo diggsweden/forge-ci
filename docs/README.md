@@ -9,18 +9,25 @@ target the 0.90.0 Go-backed workflow contract.
 > unreleased changes, follow the reviewed-branch procedure in
 > [Runtime Images](runtime-images.md#branch-testing).
 
+New to Forge CI? Start with [Your first pull-request check](tutorial-first-pull-request.md).
+Evaluating it? Read [Workflow Architecture](workflows.md) and the [Threat Model](threat-model.md).
+Wiring a repository? Go to the [GitHub](github.md), [GitLab](gitlab.md) or [Forgejo](forgejo.md) guide.
+
 ## Tutorials
 
 Learn by starting from a working setup.
 
-- [Release signing secrets](quickstart-setup-secrets.md) - Linux key setup and
-  hardware-backed/keyless signing guidance.
+- [Your first pull-request check](tutorial-first-pull-request.md) - From a bare
+  Go repository on GitHub to a checked pull request with `init` and `doctor`,
+  in about fifteen minutes.
 - [Examples](../examples/README.md) - Start from a working Maven, NPM, Gradle, Android, Go, Cargo, or monorepo setup.
 
 ## How-To Guides
 
 Solve a specific task.
 
+- [Release signing secrets](quickstart-setup-secrets.md) - Linux key setup and
+  hardware-backed/keyless signing guidance.
 - [Publishing](publishing.md) - Configure Maven Central, GitHub Packages, containers, App Store Connect, and Google Play.
 - [Gradle publishing](gradle-publishing.md) - Export JVM publications, sign files and observe Central deployment state.
 - [Private dependencies](private-dependencies.md) - Opt into scoped dependency-read credentials for npm, Maven and Gradle.
@@ -34,7 +41,6 @@ Solve a specific task.
 - [GitLab](gitlab.md) - The GitLab components, in the same section order: Catalog and checksum-bound components, the native release policy, signing, SAST reports, forks, troubleshooting, limits and live acceptance.
 - [Forgejo](forgejo.md) - The Forgejo delivery layer, in the same section order: calling it, the signer image and engine binary, the signing boundary, using it from a fork, limits; and the CLI on a Forgejo runner.
 - [Runners and runner lending](runners.md) - What each job kind needs from its runner, the runner variables, and borrowing an ephemeral runner for container builds when the pool denies user namespaces.
-- [Threat Model](threat-model.md) - What forge-ci defends against, what it deliberately doesn't, and where adopter controls layer on top.
 - [Failed Release Recovery](failed-release-recovery.md) - Safe reruns, immutable-tag rules, cleanup, and rollback.
 
 ## Reference
@@ -55,6 +61,7 @@ Understand the design and tradeoffs.
 - [Workflow Architecture](workflows.md) - Orchestrator, stage, and component interaction model.
 - [Ecosystem Support](ecosystems.md) - Artifact-first vs container-first ecosystem model and current support status.
 - [Providers and Runners](providers.md) - Forge detection, the runner/forge-API axes, overrides, and the per-forge capability matrix (GitHub, GitLab, Forgejo, local).
+- [Threat Model](threat-model.md) - What forge-ci defends against, what it deliberately doesn't, and where adopter controls layer on top.
 - [CLI Black Box](cli-black-box.md) - The CLI-as-black-box contract between workflows and the binary.
 
 ### Architecture Decisions

@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `application-tests result=not-waivable` decision line with the reason (test
   errors are never waived, an unrecognised exit status, output over the capture
   limit). See `docs/admin-policy.md`.
+- A tutorial, `docs/tutorial-first-pull-request.md`, from a bare Go repository
+  on GitHub to a checked pull request with `forge-ci init` and `forge-ci doctor`;
+  the docs index lists it under Tutorials and files the signing-secrets guide
+  under How-To.
 - Signed numbered prereleases use the existing release pipeline with
   `release-policy: stable-prerelease`, including release evidence and retry
   behavior. Prereleases do not move stable image aliases or promotion stages;

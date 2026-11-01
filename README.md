@@ -19,6 +19,14 @@ signing, SLSA provenance and pinned third-party actions yourself.
 
 ## Quick Start
 
+Which repositories you need depends on what you are doing. To adopt Forge CI
+in a project, this one is enough. To change Forge CI itself, also check out
+[forge-ci-blackbox-tests](https://github.com/diggsweden/forge-ci-blackbox-tests),
+the companion suite that runs the real binary against fixtures and toolchains,
+with no forge involved. Forge CI's own live consumer trials, which run real
+pull requests and releases on local GitLab and Forgejo instances and on hosted
+GitHub, additionally need a Forge Lab; see [Testing](docs/testing.md).
+
 Install the CLI, then add pull/merge-request checks and release configuration
 for your forge. GitHub, GitLab and Forgejo use their own CI syntax.
 
@@ -156,6 +164,8 @@ see the [examples](examples/README.md) for complete per-forge files.
 
 Start with the [Documentation Index](docs/README.md) for the full map.
 
+- **Tutorial** • [Your first pull-request check](docs/tutorial-first-pull-request.md),
+  from a bare repository to a checked pull request
 - **Examples** • [Ready-made pipelines](examples/README.md) for Go, Cargo,
   Maven, Gradle, npm, Android and a monorepo, on each forge that builds them
 - **Forge guides** • [GitHub](docs/github.md) · [GitLab](docs/gitlab.md) ·
