@@ -51,6 +51,8 @@ path = [
   "docs/workflow-design-policy.md",
   "docs/workflows.md",
   "internal/livetest/consumerpr.md",
+  "internal/livetest/mavenlibrarydevelopment.md",
+  "internal/livetest/mavenlibraryfixture.md",
   "examples/README.md",
   "examples/container-snapshot/README.md",
   "examples/container-snapshot/hello.txt",

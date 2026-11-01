@@ -14,6 +14,45 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func consumerPRTestWorkflow(body string) error {
+	var workflow struct {
+		Jobs map[string]struct {
+			Uses  string `yaml:"uses"`
+			Steps []any  `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal([]byte(body), &workflow); err != nil {
+		return err
+	}
+
+	if len(workflow.Jobs) != 1 {
+		return errors.New("unit baseline requires exactly one original test job")
+	}
+
+	for _, job := range workflow.Jobs {
+		if job.Uses != "" || len(job.Steps) == 0 {
+			return errors.New("unit baseline requires an original test job with steps")
+		}
+	}
+
+	return nil
+}
+
+func TestConsumerPRTestWorkflow(t *testing.T) {
+	for _, tc := range []struct {
+		body string
+		ok   bool
+	}{
+		{`jobs: {test: {name: 'Test (${{ matrix.java }})', steps: [{run: mvn test}]}}`, true},
+		{`jobs: {a: {steps: [{run: mvn test}]}, b: {steps: [{run: mvn test}]}}`, false},
+		{`jobs: {test: {uses: ./.github/workflows/test.yml}}`, false},
+	} {
+		if err := consumerPRTestWorkflow(tc.body); (err == nil) != tc.ok {
+			t.Fatalf("workflow admission: ok=%t err=%v", tc.ok, err)
+		}
+	}
+}
+
 // consumerPRFixture is a unit-check overlay, not an engine release-flow plan.
 // PublicTools is an explicit admission: private tools require origin-scoped
 // authentication and must never silently run through the public installer.
@@ -24,6 +63,7 @@ type consumerPRFixture struct {
 	Prerequisites, Checks  string
 }
 
+// consumerPRDistro is one matrix distro; its JSON names are its field names.
 type consumerPRDistro struct {
 	Name        string `json:"Name"`
 	Image       string `json:"Image"`
@@ -84,9 +124,9 @@ func publicShellPRFixture(runner, action, digest string) consumerPRFixture {
 		Prerequisites: `set -euo pipefail
 if command -v apt-get >/dev/null; then
   apt-get update
-  apt-get install -y git curl ca-certificates pipx fish jq gettext diffutils unzip xz-utils nodejs
+  apt-get install -y git curl ca-certificates pipx file fish jq gettext diffutils unzip xz-utils nodejs npm
 else
-  dnf install -y git curl ca-certificates just pipx fish gettext jq diffutils unzip xz nodejs
+  dnf install -y git curl ca-certificates just pipx file fish gettext jq diffutils unzip xz nodejs
 fi
 node --version`,
 		Checks: "set -euo pipefail\ntest \"$(uname -m)\" = x86_64\njust test-setup\njust test",
@@ -116,7 +156,10 @@ func consumerPRWorkflow(fixture consumerPRFixture) (string, error) {
 		return "          " + strings.ReplaceAll(strings.TrimSuffix(s, "\n"), "\n", "\n          ")
 	}
 
-	return fmt.Sprintf(`name: Consumer PR unit checks
+	return fmt.Sprintf(`# SPDX-FileCopyrightText: The Forge CI Authors
+# SPDX-License-Identifier: CC0-1.0
+
+name: Consumer PR unit checks
 on:
   pull_request:
     branches: [main]
@@ -162,7 +205,15 @@ jobs:
           env -u FORGEJO_TOKEN -u MISE_FORGEJO_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN mise bin-paths "aqua:casey/just@${JUST_VERSION}" >>"${FORGEJO_PATH:-${GITHUB_PATH:?}}"
       - name: Original Bats setup and tests
         shell: bash
+        env:
+          CONSUMER_PR_JUST_VERSION: ${{ matrix.just-version }}
         run: |
+          set -euo pipefail
+          # bin-paths is newline-delimited. Use physical binaries for both Just
+          # and Bats so child tests outside this checkout need no Mise config.
+          just_paths=$(env -u FORGEJO_TOKEN -u MISE_FORGEJO_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN mise bin-paths "aqua:casey/just@${CONSUMER_PR_JUST_VERSION:?}" | paste -sd:)
+          tool_paths=$(env -u FORGEJO_TOKEN -u MISE_FORGEJO_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN mise bin-paths | paste -sd:)
+          export PATH="${just_paths}:${tool_paths}:${PATH}"
 %s
 `, fixture.Runner, strings.TrimSuffix(matrix.String(), "\n"), indent(fixture.Prerequisites), fixture.Action, fixture.Digest, indent(fixture.Checks)), nil
 }
@@ -316,7 +367,9 @@ func TestConsumerPRFixtureVariation(t *testing.T) {
 	}
 
 	job := doc.Jobs["units"]
-	if job.Runner != fixture.Runner || strings.TrimSpace(job.Steps[len(job.Steps)-1].Run) != fixture.Checks || !strings.Contains(workflow, `just-version: "9.8.7"`) {
+
+	checks := strings.TrimSpace(job.Steps[len(job.Steps)-1].Run)
+	if job.Runner != fixture.Runner || !strings.HasSuffix(checks, "\n"+fixture.Checks) || !strings.Contains(checks, `export PATH="${just_paths}:${tool_paths}:${PATH}"`) || !strings.Contains(workflow, `just-version: "9.8.7"`) {
 		t.Fatal("fixture values or shell quoting changed")
 	}
 

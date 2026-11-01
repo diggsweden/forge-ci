@@ -385,9 +385,10 @@ const (
 type ConsumerPlan struct {
 	Pin ConsumerPin
 	// Replace is old, new pairs, applied to every tracked text file at once.
-	Replace   []string
-	Variables map[string]string
-	Secrets   map[string]string
+	Replace        []string
+	Variables      map[string]string
+	Secrets        map[string]string
+	workflowInputs map[string]string
 }
 
 // PlanConsumer reads the consumer's workflows and plans the trial.
@@ -411,6 +412,16 @@ func (layer Layer) PlanConsumer(workflows map[string]string, facts ConsumerFacts
 	}
 
 	plan := ConsumerPlan{Pin: pin, Replace: layer.inPlaceOf(pin), Variables: map[string]string{}, Secrets: map[string]string{}}
+	plan.workflowInputs = map[string]string{}
+
+	for _, name := range sortedKeys(workflows) {
+		migrated, migrationErr := migratePublicationRepository(workflows[name])
+		if migrationErr != nil {
+			return ConsumerPlan{}, fmt.Errorf("%s: %w", name, migrationErr)
+		}
+
+		plan.workflowInputs[workflows[name]] = migrated
+	}
 	// Establish base coordinates across all wrappers first. A shared image
 	// workflow may receive that same variable as image-repository; it is still
 	// the exact base destination, not the final release destination.
@@ -423,27 +434,8 @@ func (layer Layer) PlanConsumer(workflows map[string]string, facts ConsumerFacts
 	}
 
 	for _, name := range sortedKeys(workflows) {
-		text := foldedExpression.ReplaceAllString(workflows[name], " }}")
-
-		for _, input := range sortedKeys(facts.Inputs) {
-			if input == "base-repository" {
-				continue
-			}
-			// Repository variables already bound by a base declaration keep its
-			// exact coordinate when forwarded through shared image execution.
-			if input == "image-repository" && facts.Inputs["base-repository"] != "" {
-				text = plan.withoutBaseRepositoryForwards(text, facts.Inputs["base-repository"])
-			}
-
-			if err = plan.bindInput(name, text, input, facts.Inputs[input]); err != nil {
-				return ConsumerPlan{}, err
-			}
-		}
-
-		for _, secret := range sortedKeys(facts.Secrets) {
-			if err = plan.bindSecret(text, secret, facts.Secrets[secret]); err != nil {
-				return ConsumerPlan{}, err
-			}
+		if err = plan.bindWorkflowFacts(name, workflows[name], facts); err != nil {
+			return ConsumerPlan{}, err
 		}
 	}
 
@@ -478,7 +470,40 @@ func (layer Layer) inPlaceOf(pin ConsumerPin) []string {
 // Render applies the plan to the text of one file. No old string begins
 // inside another's match, so the order of the pairs decides nothing.
 func (plan *ConsumerPlan) Render(text string) string {
+	if migrated, found := plan.workflowInputs[text]; found {
+		text = migrated
+	}
+
 	return strings.NewReplacer(plan.Replace...).Replace(text)
+}
+
+// bindWorkflowFacts binds every input except base-repository, and every
+// secret, the way one workflow passes them.
+func (plan *ConsumerPlan) bindWorkflowFacts(name, workflow string, facts ConsumerFacts) error {
+	text := foldedExpression.ReplaceAllString(plan.workflowInputs[workflow], " }}")
+
+	for _, input := range sortedKeys(facts.Inputs) {
+		if input == "base-repository" {
+			continue
+		}
+		// Repository variables already bound by a base declaration keep its
+		// exact coordinate when forwarded through shared image execution.
+		if input == "image-repository" && facts.Inputs["base-repository"] != "" {
+			text = plan.withoutBaseRepositoryForwards(text, facts.Inputs["base-repository"])
+		}
+
+		if err := plan.bindInput(name, text, input, facts.Inputs[input]); err != nil {
+			return err
+		}
+	}
+
+	for _, secret := range sortedKeys(facts.Secrets) {
+		if err := plan.bindSecret(text, secret, facts.Secrets[secret]); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 var variableExpression = regexp.MustCompile(`^\$\{\{\s*vars\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}$`)
