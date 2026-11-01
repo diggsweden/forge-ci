@@ -107,7 +107,7 @@ func consumerPRSettings(input string) (TrialSettings, error) {
 	}
 
 	settings, err := ParseTrialSettings(TrialPullRequest, words)
-	if err == nil && len(settings.TokenSecrets) != 0 {
+	if err == nil && (len(settings.TokenSecrets) != 0 || len(settings.FileSecrets) != 0) {
 		return settings, errors.New("unit fixtures do not bind consumer secrets")
 	}
 

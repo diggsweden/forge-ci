@@ -20,6 +20,7 @@ import (
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
+	"github.com/diggsweden/forge-ci/internal/retry"
 )
 
 // A probe checks its own claim inside one job, so its conclusion is the whole
@@ -59,6 +60,26 @@ type RunJob struct {
 	Status  string   `json:"status"`
 	RunsOn  []string `json:"runs_on"`
 	Attempt int64    `json:"attempt"`
+	// TaskID is the runner task the job ran as; 0 when no runner ever took
+	// it, as for a job the forge fails before dispatch, and nil from a forge
+	// whose API does not report it.
+	TaskID *int64   `json:"task_id"`
+	Needs  []string `json:"needs"`
+}
+
+// NoLogReason says why a job left no log: the forge failed it before any
+// runner took it, or a runner ran it and the forge served nothing. The
+// first is the forge's own decision, which no runner trace can explain.
+func (job RunJob) NoLogReason() string {
+	if job.TaskID == nil {
+		return "the forge served no log, and its API does not say whether a runner took the job"
+	}
+
+	if *job.TaskID == 0 {
+		return fmt.Sprintf("no runner ever took it (no task; runs-on %v, needs %v): the forge decided it before dispatch", job.RunsOn, job.Needs)
+	}
+
+	return fmt.Sprintf("it ran as task %d, but the forge served no log", *job.TaskID)
 }
 
 // RunArtifact is one artifact a run left in the forge's store.
@@ -145,7 +166,7 @@ func waitForRunOf(tb TB, target Target, repo, file, event string, timeout time.D
 		}
 		// Fatal failures can unwind before the wait's context is cancelled.
 		// Settle our observed run on every exit, preserving the primary failure.
-		cleanup, closeCleanup := context.WithTimeout(context.WithoutCancel(ctx), timeoutAPI)
+		cleanup, closeCleanup := context.WithTimeout(context.WithoutCancel(ctx), timeoutRunSettle)
 		defer closeCleanup()
 
 		if err := cancelObservedWorkflowRun(cleanup, target, repo, observed); err != nil {
@@ -364,6 +385,31 @@ func JobLog(tb TB, target Target, repo string, job RunJob) string {
 	return redactTargetSecrets(target, log)
 }
 
+// JobLogIfServed is JobLog for a scenario that searches every job of a run
+// for one line: it returns false, and logs why, when the forge still fails to
+// serve a job's log after jobLog's retries. Forgejo answers 500 for the job
+// that calls a reusable workflow, which runs nowhere and has no log. Any other
+// failure stays fatal. The search itself must still find its line, so a
+// skipped job can only make the scenario fail, never pass.
+func JobLogIfServed(tb TB, target Target, repo string, job RunJob) (string, bool) {
+	tb.Helper()
+
+	log, err := jobLog(tb, target, repo, job)
+	if errors.Is(err, errServerSide) {
+		tb.Logf("livetest: %s serves no log for job %q (a reusable-workflow caller has none): %v", target.Forge, job.Name, err)
+
+		return "", false
+	}
+
+	if err != nil {
+		tb.Fatalf("livetest: read the log of job %q: %v", job.Name, err)
+	}
+
+	assertNoTargetSecret(tb, target, "the log of job "+job.Name, log)
+
+	return redactTargetSecrets(target, log), true
+}
+
 // JobLogTail returns the end of one job's log with the target's credential
 // redacted, or "" when the forge serves none.
 //
@@ -397,11 +443,53 @@ func jobLog(tb TB, target Target, repo string, job RunJob) (string, error) {
 	ctx, cancel := context.WithTimeout(Context(tb), timeoutWorkflowLog)
 	defer cancel()
 
-	log, err := fetch(ctx, target, actionsURL(target, repo, "/actions/jobs/"+strconv.FormatInt(job.ID, 10)+
-		"/logs?attempt="+strconv.FormatInt(job.Attempt, 10)), maxJobLog)
+	endpoint := actionsURL(target, repo, "/actions/jobs/"+strconv.FormatInt(job.ID, 10)+
+		"/logs?attempt="+strconv.FormatInt(job.Attempt, 10))
 
-	return string(log), err
+	// A finished job's log does not change, so a 5xx is the forge failing to
+	// serve it, not an answer: Forgejo has answered 500 for the log of a job
+	// whose run succeeded. Ask again a few times; any other answer is final.
+	//
+	// A log over the bound keeps its end, where a failure is, and says what
+	// was dropped: refusing it whole lost the one log that explained a failed
+	// release build.
+	var dropped int64
+
+	log, err := retry.Do(ctx, nil, jobLogAttempts, jobLogRetryDelay, func() ([]byte, error) {
+		body, cut, fetchErr := fetchTail(ctx, target, endpoint, maxJobLog-jobLogDropNoteRoom)
+		if fetchErr != nil && !errors.Is(fetchErr, errServerSide) {
+			return nil, retry.Permanent(fetchErr)
+		}
+
+		dropped = cut
+
+		return body, fetchErr
+	}, retry.OnRetry(func(attempt, attempts int, wait time.Duration, err error) {
+		tb.Logf("livetest: the log of job %q was not served (attempt %d/%d), asking again in %s: %v", job.Name, attempt, attempts, wait, err)
+	}))
+	if err != nil {
+		return "", err
+	}
+
+	if dropped > 0 {
+		tb.Logf("livetest: the log of job %q is over %d bytes; its first %d bytes are dropped", job.Name, maxJobLog, dropped)
+
+		return fmt.Sprintf("[livetest: the first %d bytes of this log were dropped; it was over %d bytes]\n", dropped, maxJobLog) + string(log), nil
+	}
+
+	return string(log), nil
 }
+
+// jobLogDropNoteRoom is the room kept under maxJobLog for the note that
+// opens a log whose start was dropped.
+const jobLogDropNoteRoom = 256
+
+// jobLogAttempts and jobLogRetryDelay bound how long a scenario waits for a
+// forge that fails to serve a finished job's log: about 30 seconds in all.
+const (
+	jobLogAttempts   = 4
+	jobLogRetryDelay = 5 * time.Second
+)
 
 // RunArtifacts lists what one run left in the artifact store. An entry the
 // forge lists without an id, a size or an expiry is a failure here, so a

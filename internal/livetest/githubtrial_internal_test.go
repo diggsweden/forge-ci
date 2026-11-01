@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -245,5 +246,51 @@ func TestGPGSignatureMustBeTheTrialKeys(t *testing.T) {
 		if got := signedBy(test.status, trialKey); got != test.want {
 			t.Errorf("%s: signedBy = %v, want %v", test.name, got, test.want)
 		}
+	}
+}
+
+// A job with no log says whether a runner ever took it: a job the forge
+// fails before dispatch has no runner trace to look for.
+func TestNoLogReasonTellsAForgeDecisionFromAMissingLog(t *testing.T) {
+	t.Parallel()
+
+	none, task := int64(0), int64(3883)
+
+	undispatched := RunJob{Name: "Build", RunsOn: []string{"ubuntu-latest"}, Needs: []string{"prepare"}, TaskID: &none}
+	if got := undispatched.NoLogReason(); !strings.Contains(got, "no runner ever took it") ||
+		!strings.Contains(got, "[ubuntu-latest]") || !strings.Contains(got, "[prepare]") {
+		t.Errorf("an undispatched job: %q", got)
+	}
+
+	ran := RunJob{Name: "Build", TaskID: &task}
+	if got := ran.NoLogReason(); !strings.Contains(got, "task 3883") || strings.Contains(got, "no runner") {
+		t.Errorf("a job that ran: %q", got)
+	}
+
+	// A forge that does not report the task says nothing either way.
+	if got := (RunJob{Name: "Build"}).NoLogReason(); !strings.Contains(got, "does not say") || strings.Contains(got, "before dispatch") {
+		t.Errorf("a job of a forge without task_id: %q", got)
+	}
+}
+
+// A signed release signs every subject: one signature beside unsigned files
+// is reported, and signature files are not subjects of their own.
+func TestUnsignedSubjectsListsEveryAssetWithoutAVerifiedSignature(t *testing.T) {
+	t.Parallel()
+
+	assets := map[string]int64{
+		"app.tar.gz": 1, "app.tar.gz.bundle": 2,
+		"app.jar": 3, "app.jar.asc": 4,
+		"checksums.txt": 5,
+		"sbom.cdx.json": 6, "sbom.cdx.json.sig": 7,
+	}
+	bundles := map[string]bool{"app.tar.gz": true}
+	signatures := map[string]bool{"app.jar": true}
+
+	got := unsignedSubjects(assets, bundles, signatures)
+	want := []string{"checksums.txt", "sbom.cdx.json"}
+
+	if !slices.Equal(got, want) {
+		t.Errorf("unsignedSubjects = %v, want %v", got, want)
 	}
 }

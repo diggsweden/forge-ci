@@ -192,7 +192,9 @@ wait_for_child() {
 }
 
 # Packages remain serial within the selected scope. Preserve each test
-# package's working directory and the longest consumer-trial timeout.
+# package's working directory. The binary's limit is the longest
+# consumer-trial wait (150 minutes) plus room for the trial's setup and
+# cleanup, so the trial's own deadline, not a panic, ends a slow run.
 set +e
 status=0
 while IFS= read -r package; do
@@ -201,7 +203,7 @@ while IFS= read -r package; do
 	printf 'FORGE_CI_LIVE_PACKAGE_BEGIN %s\n' "$package" >&8
 	(
 		cd -- "$package" || exit
-		exec "$state/tests/${package##*/}.test" -test.paniconexit0 -test.count=1 -test.timeout=90m -test.v "${filter[@]}" 7>&- 9>&- 8>&-
+		exec "$state/tests/${package##*/}.test" -test.paniconexit0 -test.count=1 -test.timeout=3h -test.v "${filter[@]}" 7>&- 9>&- 8>&-
 	) >&8 2>&1 &
 	suite_pid=$!
 	wait_for_child "$suite_pid"

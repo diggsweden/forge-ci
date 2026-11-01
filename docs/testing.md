@@ -997,7 +997,8 @@ For a release the host also checks that `main` advanced by one commit signed
 by the bot's key, that the final tag is signed and points at it, and that the
 release, draft or published as the consumer asked, offers at least one Cosign
 bundle and each verifies against the trial's public key. Job names and asset
-counts are the consumer's and are not judged. The wait is up to 75 minutes.
+counts are the consumer's and are not judged. The wait is up to 150 minutes,
+long enough for a release that rebuilds its base images.
 
 What the caller brings:
 

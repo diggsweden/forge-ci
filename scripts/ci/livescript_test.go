@@ -302,12 +302,12 @@ func TestRunLiveTests_HappyPathRunsTheSuiteAndKeepsARedactedLog(t *testing.T) {
 	}{
 		"full": {
 			args:     []string{"full"},
-			wantTest: "suite -test.paniconexit0 -test.count=1 -test.timeout=90m -test.v",
+			wantTest: "suite -test.paniconexit0 -test.count=1 -test.timeout=3h -test.v",
 			scenario: "scenario=''",
 		},
 		"focused": {
 			args:     []string{"focused", "TestConformance/Publish"},
-			wantTest: "suite -test.paniconexit0 -test.count=1 -test.timeout=90m -test.v -test.run TestConformance/Publish",
+			wantTest: "suite -test.paniconexit0 -test.count=1 -test.timeout=3h -test.v -test.run TestConformance/Publish",
 			scenario: "scenario=TestConformance/Publish",
 		},
 	}

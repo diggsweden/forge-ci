@@ -6,6 +6,7 @@ package livetest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -59,6 +60,11 @@ func TestWorkflowWaitFatalFailureStillSettlesTheObservedRun(t *testing.T) {
 
 	target := Target{Forge: provider.ForgeForgejo, Host: labHost, Owner: "fixture", CAFile: "captured", caPEM: ca, accepted: true}
 
+	drain := runnerCancelDrain
+	runnerCancelDrain = 0
+
+	defer func() { runnerCancelDrain = drain }()
+
 	func() {
 		defer func() {
 			failure, ok := recover().(acceptanceFailure)
@@ -86,7 +92,7 @@ func TestObservedWorkflowCancellationWaitsForJobsAndUsesOnlyObservedID(t *testin
 			}
 		}
 
-		err := stopObservedWorkflowRun(t.Context(), observed,
+		err := stopObservedWorkflowRun(t.Context(), observed, 0,
 			func(_ context.Context, id int64) (WorkflowRun, error) {
 				check(id)
 
@@ -126,7 +132,7 @@ func TestObservedWorkflowCancellationRefusesIdentityDriftAndSkipsTerminalMutatio
 	for _, drift := range []bool{false, true} {
 		observed := WorkflowRun{ID: 226, WorkflowID: "release.yml", Event: "push"}
 
-		err := stopObservedWorkflowRun(t.Context(), observed,
+		err := stopObservedWorkflowRun(t.Context(), observed, 0,
 			func(context.Context, int64) (WorkflowRun, error) {
 				run := observed
 
@@ -157,7 +163,7 @@ func TestObservedWorkflowCancellationHasBoundedTerminalObservation(t *testing.T)
 		observed := WorkflowRun{ID: 226, WorkflowID: "release.yml", Event: "push", Status: "running"}
 		calls := 0
 
-		err := stopObservedWorkflowRun(ctx, observed,
+		err := stopObservedWorkflowRun(ctx, observed, 0,
 			func(context.Context, int64) (WorkflowRun, error) { return observed, nil },
 			func(context.Context, int64) error {
 				calls++
@@ -175,7 +181,7 @@ func TestObservedWorkflowFailureSettlesIndependentJobWithoutChangingPrimaryConcl
 	observed := WorkflowRun{ID: 228, WorkflowID: "release.yml", Event: "push", Status: "failure"}
 	cancelled, observations := 0, 0
 
-	err := stopObservedWorkflowRun(t.Context(), observed,
+	err := stopObservedWorkflowRun(t.Context(), observed, 0,
 		func(_ context.Context, id int64) (WorkflowRun, error) {
 			if id != 228 {
 				t.Fatalf("unowned run read: %d", id)
@@ -205,4 +211,125 @@ func TestObservedWorkflowFailureSettlesIndependentJobWithoutChangingPrimaryConcl
 	if err != nil || cancelled != 1 || observations != 2 || observed.Status != "failure" {
 		t.Fatalf("cancelled=%d observations=%d primary=%s err=%v", cancelled, observations, observed.Status, err)
 	}
+}
+
+// Forgejo answers a cancel with 500 "run has changed" while the run's runners
+// report; giving up there left run 436 building after its repository went.
+func TestObservedWorkflowCancellationAsksAgainWhenTheForgeFailsToAnswer(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		observed := WorkflowRun{ID: 436, WorkflowID: "release.yml", Event: "release", Status: "failure"}
+		attempts, cancelled := 0, false
+
+		err := stopObservedWorkflowRun(t.Context(), observed, 0,
+			func(context.Context, int64) (WorkflowRun, error) { return observed, nil },
+			func(context.Context, int64) error {
+				attempts++
+				if attempts < 3 {
+					return fmt.Errorf("POST cancel: HTTP 500: run has changed: %w", errServerSide)
+				}
+
+				cancelled = true
+
+				return nil
+			},
+			func(_ context.Context, id int64) ([]RunJob, error) {
+				status := "running"
+				if cancelled {
+					status = "cancelled"
+				}
+
+				return []RunJob{{ID: 5287, RunID: id, Status: status}}, nil
+			})
+		if err != nil || attempts != 3 || !cancelled {
+			t.Fatalf("attempts=%d cancelled=%t err=%v", attempts, cancelled, err)
+		}
+	})
+}
+
+func TestObservedWorkflowCancellationKeepsAClientRefusalFinal(t *testing.T) {
+	observed := WorkflowRun{ID: 436, WorkflowID: "release.yml", Event: "release", Status: "running"}
+	attempts := 0
+
+	err := stopObservedWorkflowRun(t.Context(), observed, 0,
+		func(context.Context, int64) (WorkflowRun, error) { return observed, nil },
+		func(context.Context, int64) error {
+			attempts++
+
+			return errors.New("POST cancel: HTTP 403")
+		},
+		func(_ context.Context, id int64) ([]RunJob, error) {
+			return []RunJob{{ID: 5287, RunID: id, Status: "running"}}, nil
+		})
+	if err == nil || attempts != 1 {
+		t.Fatalf("attempts=%d err=%v", attempts, err)
+	}
+}
+
+// The forge shows a cancelled job finished before its runner has heard of
+// the cancel, so a cancel is followed by the drain; a run that settled on its
+// own needs none.
+func TestObservedWorkflowCancellationDrainsOnlyAfterItCancelled(t *testing.T) {
+	for _, running := range []bool{true, false} {
+		synctest.Test(t, func(t *testing.T) {
+			observed := WorkflowRun{ID: 436, WorkflowID: "release.yml", Event: "release", Status: "failure"}
+			cancelled := false
+			start := time.Now()
+
+			err := stopObservedWorkflowRun(t.Context(), observed, time.Minute,
+				func(context.Context, int64) (WorkflowRun, error) { return observed, nil },
+				func(context.Context, int64) error {
+					cancelled = true
+
+					return nil
+				},
+				func(_ context.Context, id int64) ([]RunJob, error) {
+					status := "failure"
+					if running && !cancelled {
+						status = "running"
+					}
+
+					return []RunJob{{ID: 5287, RunID: id, Status: status}}, nil
+				})
+
+			waited := time.Since(start)
+			if err != nil || cancelled != running || (waited >= time.Minute) != running {
+				t.Fatalf("running=%t cancelled=%t waited=%s err=%v", running, cancelled, waited, err)
+			}
+		})
+	}
+}
+
+// A cancel whose answer failed (a proxy's 502) may still have been applied;
+// the run then settles at the next poll and the runner still needs the drain.
+func TestObservedWorkflowCancellationDrainsAfterAnUnansweredCancel(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		observed := WorkflowRun{ID: 436, WorkflowID: "release.yml", Event: "release", Status: "running"}
+		applied := false
+		start := time.Now()
+
+		err := stopObservedWorkflowRun(t.Context(), observed, time.Minute,
+			func(context.Context, int64) (WorkflowRun, error) {
+				if applied {
+					return WorkflowRun{ID: 436, WorkflowID: "release.yml", Event: "release", Status: "cancelled"}, nil
+				}
+
+				return observed, nil
+			},
+			func(context.Context, int64) error {
+				applied = true
+
+				return fmt.Errorf("POST cancel: HTTP 502: %w", errServerSide)
+			},
+			func(_ context.Context, id int64) ([]RunJob, error) {
+				status := "running"
+				if applied {
+					status = "cancelled"
+				}
+
+				return []RunJob{{ID: 5287, RunID: id, Status: status}}, nil
+			})
+		if waited := time.Since(start); err != nil || waited < time.Minute {
+			t.Fatalf("waited=%s err=%v, want the drain after a cancel the forge applied", waited, err)
+		}
+	})
 }

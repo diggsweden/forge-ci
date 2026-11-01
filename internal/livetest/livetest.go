@@ -104,16 +104,17 @@ const (
 // Deadlines for waits against a real forge. They are constants: a run that
 // needs longer waits changes them here, in review.
 const (
-	timeoutAPI          = time.Minute      // one forge or registry API call
-	timeoutScratch      = 2 * time.Minute  // creating or deleting a scratch project
-	timeoutCLI          = 3 * time.Minute  // one forge-ci invocation
-	timeoutLayerPush    = 3 * time.Minute  // snapshotting the layer and pushing it to a scratch repository
-	timeoutLayerRun     = 20 * time.Minute // a workflow of the layer from its trigger to its last job, queue time included
-	timeoutConsumerRun  = 75 * time.Minute // a real consumer's workflow in a trial, the longest release included
-	timeoutWorkflowLog  = 3 * time.Minute  // fetching a finished run's logs
-	timeoutWorkflowPoll = 4 * time.Minute  // a run from commit to terminal state, queue time included
-	timeoutWorkflow     = 5 * time.Minute  // dispatching a workflow run
-	timeoutHTTPShort    = 30 * time.Second // one short probing HTTP request
+	timeoutAPI          = time.Minute       // one forge or registry API call
+	timeoutRunSettle    = 5 * time.Minute   // cancelling a run, its jobs stopping and the cancel reaching the runner
+	timeoutScratch      = 2 * time.Minute   // creating or deleting a scratch project
+	timeoutCLI          = 3 * time.Minute   // one forge-ci invocation
+	timeoutLayerPush    = 3 * time.Minute   // snapshotting the layer and pushing it to a scratch repository
+	timeoutLayerRun     = 20 * time.Minute  // a workflow of the layer from its trigger to its last job, queue time included
+	timeoutConsumerRun  = 150 * time.Minute // a real consumer's workflow in a trial, a release rebuilding its base images included
+	timeoutWorkflowLog  = 3 * time.Minute   // fetching a finished run's logs
+	timeoutWorkflowPoll = 4 * time.Minute   // a run from commit to terminal state, queue time included
+	timeoutWorkflow     = 5 * time.Minute   // dispatching a workflow run
+	timeoutHTTPShort    = 30 * time.Second  // one short probing HTTP request
 )
 
 // liveForges are the forge kinds this tier drives. A contract may carry

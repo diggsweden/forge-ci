@@ -77,7 +77,8 @@ func RetainJobLog(tb TB, target Target, repo string, job RunJob, secrets ...map[
 
 	log, err := jobLog(tb, target, repo, job)
 	if err != nil {
-		tb.Logf("livetest: job %d log unavailable; no full evidence retained", job.ID)
+		// The error names the redacted endpoint and the status, never a body.
+		tb.Logf("livetest: job %d log unavailable; no full evidence retained: %v", job.ID, err)
 
 		return ""
 	}

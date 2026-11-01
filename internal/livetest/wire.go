@@ -73,6 +73,12 @@ func decode(ctx context.Context, target Target, method, endpoint string, body, i
 	if !accepted(resp.StatusCode, accept) {
 		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 
+		// A 5xx is the forge failing to answer, as for fetch, so a caller
+		// may ask again; any other status is the answer.
+		if resp.StatusCode >= http.StatusInternalServerError {
+			return resp.StatusCode, fmt.Errorf("%s %s: HTTP %d: %s: %w: %w", method, redact(endpoint), resp.StatusCode, detail, errServerSide, errs.ErrValidation)
+		}
+
 		return resp.StatusCode, fmt.Errorf("%s %s: HTTP %d: %s: %w", method, redact(endpoint), resp.StatusCode, detail, errs.ErrValidation)
 	}
 
@@ -91,6 +97,23 @@ func decode(ctx context.Context, target Target, method, endpoint string, body, i
 // errAbsent marks a fetch the forge answered with 404: the resource is not
 // there, which a caller may treat as an outcome rather than a failure.
 var errAbsent = errors.New("absent")
+
+// errServerSide marks a fetch the forge answered with a 5xx status: the
+// forge failed to serve, which says nothing about the resource, so a caller
+// that reads an artifact of a finished run may ask again.
+var errServerSide = errors.New("forge failed to serve")
+
+// fetchStatusError is the error for a GET the forge answered with code.
+func fetchStatusError(endpoint string, code int) error {
+	switch {
+	case code == http.StatusNotFound:
+		return fmt.Errorf("GET %s: HTTP %d: %w: %w", redact(endpoint), code, errAbsent, errs.ErrValidation)
+	case code >= http.StatusInternalServerError:
+		return fmt.Errorf("GET %s: HTTP %d: %w: %w", redact(endpoint), code, errServerSide, errs.ErrValidation)
+	default:
+		return fmt.Errorf("GET %s: HTTP %d: %w", redact(endpoint), code, errs.ErrValidation)
+	}
+}
 
 func fetch(ctx context.Context, target Target, endpoint string, limit int64) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
@@ -112,12 +135,8 @@ func fetch(ctx context.Context, target Target, endpoint string, limit int64) ([]
 
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("GET %s: HTTP %d: %w: %w", redact(endpoint), resp.StatusCode, errAbsent, errs.ErrValidation)
-	}
-
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GET %s: HTTP %d: %w", redact(endpoint), resp.StatusCode, errs.ErrValidation)
+		return nil, fetchStatusError(endpoint, resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
@@ -130,6 +149,87 @@ func fetch(ctx context.Context, target Target, endpoint string, limit int64) ([]
 	}
 
 	return body, nil
+}
+
+// fetchTail is fetch for a body whose end matters most, a log: a body over
+// keep bytes is not an error, its last keep bytes are returned, cut forward to
+// a line start, with how many bytes before them were dropped.
+func fetchTail(ctx context.Context, target Target, endpoint string, keep int) ([]byte, int64, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, 0, fmt.Errorf("build request: %w", err)
+	}
+
+	authorize(req, target)
+
+	client, err := targetHTTPClient(target, timeoutAPI)
+	if err != nil {
+		return nil, 0, fmt.Errorf("configure target HTTP trust: %w", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("GET %s: %w", redact(endpoint), err)
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, 0, fetchStatusError(endpoint, resp.StatusCode)
+	}
+
+	tail := tailWriter{keep: keep}
+	if _, err := io.Copy(&tail, resp.Body); err != nil {
+		return nil, 0, fmt.Errorf("read %s: %w", redact(endpoint), err)
+	}
+
+	return tail.bytes()
+}
+
+// tailWriter keeps the last keep bytes written to it and counts the rest.
+type tailWriter struct {
+	keep        int
+	buf         []byte
+	dropped     int64
+	lastDropped byte
+}
+
+// Write compacts only once the buffer holds twice keep, so a long body costs
+// linear copying, not keep bytes per chunk.
+func (tail *tailWriter) Write(p []byte) (int, error) {
+	tail.buf = append(tail.buf, p...)
+
+	if len(tail.buf) >= 2*tail.keep {
+		tail.compact()
+	}
+
+	return len(p), nil
+}
+
+func (tail *tailWriter) compact() {
+	if over := len(tail.buf) - tail.keep; over > 0 {
+		tail.dropped += int64(over)
+		tail.lastDropped = tail.buf[over-1]
+		tail.buf = append(tail.buf[:0], tail.buf[over:]...)
+	}
+}
+
+// bytes returns what was kept. When the drop cut a line, the rest of that line
+// goes too, so a cut rune or half a line does not open it, unless nothing
+// whole would be left.
+func (tail *tailWriter) bytes() ([]byte, int64, error) {
+	tail.compact()
+
+	if tail.dropped == 0 || tail.lastDropped == '\n' {
+		return tail.buf, tail.dropped, nil
+	}
+
+	if newline := bytes.IndexByte(tail.buf, '\n'); newline >= 0 && newline+1 < len(tail.buf) {
+		tail.dropped += int64(newline + 1)
+		tail.buf = tail.buf[newline+1:]
+	}
+
+	return tail.buf, tail.dropped, nil
 }
 
 func accepted(status int, accept []int) bool {

@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -870,12 +871,16 @@ func (trial *GitHubTrial) CheckRelease(repo string, tree GitHubConsumerTree, fin
 	bundles := trial.verifyBundles(repo, assets, trust)
 	signatures := trial.verifyGPGSignatures(repo, assets, key)
 
-	if bundles+signatures == 0 {
+	// Every subject carries its own verified signature: one signed file
+	// beside nine unsigned ones is not a signed release.
+	if unsigned := unsignedSubjects(assets, bundles, signatures); len(bundles)+len(signatures) == 0 {
 		trial.tb.Errorf("the release %s offers no Cosign bundle and no GPG signature beside its subject", final)
+	} else if len(unsigned) != 0 {
+		trial.tb.Errorf("the release %s offers %d assets without a verified signature: %v", final, len(unsigned), unsigned)
 	}
 
 	trial.tb.Logf("release %s: %d assets, %d Cosign bundles verified against %s, %d GPG signatures verified against %s",
-		final, len(assets), bundles, trust, signatures, key.Fingerprint)
+		final, len(assets), len(bundles), trust, len(signatures), key.Fingerprint)
 
 	return assets
 }
@@ -970,7 +975,7 @@ func (trial *GitHubTrial) checkReleaseCommit(repo string, tree GitHubConsumerTre
 
 // verifyBundles verifies each <subject>.bundle asset against its subject with
 // trust, and counts them.
-func (trial *GitHubTrial) verifyBundles(repo string, assets map[string]int64, trust CosignTrust) int {
+func (trial *GitHubTrial) verifyBundles(repo string, assets map[string]int64, trust CosignTrust) map[string]bool {
 	trial.tb.Helper()
 
 	if _, err := exec.LookPath("cosign"); err != nil {
@@ -978,7 +983,7 @@ func (trial *GitHubTrial) verifyBundles(repo string, assets map[string]int64, tr
 	}
 
 	dir := trial.tempDir("release")
-	verified := 0
+	verified := map[string]bool{}
 
 	for name, id := range assets {
 		subject, isBundle := strings.CutSuffix(name, ".bundle")
@@ -993,7 +998,7 @@ func (trial *GitHubTrial) verifyBundles(repo string, assets map[string]int64, tr
 		args := append(append([]string{"verify-blob", "--bundle", filepath.Join(dir, name)}, trust.verifyArgs()...), filepath.Join(dir, subject))
 		trial.run(dir, nil, "cosign", args...)
 
-		verified++
+		verified[subject] = true
 	}
 
 	return verified
@@ -1002,11 +1007,11 @@ func (trial *GitHubTrial) verifyBundles(repo string, assets map[string]int64, tr
 // verifyGPGSignatures verifies each <subject>.asc beside its subject and
 // requires the signature to be the trial key's own: gpg --verify alone also
 // accepts any other key in the keyring.
-func (trial *GitHubTrial) verifyGPGSignatures(repo string, assets map[string]int64, key TrialGPGKey) int {
+func (trial *GitHubTrial) verifyGPGSignatures(repo string, assets map[string]int64, key TrialGPGKey) map[string]bool {
 	trial.tb.Helper()
 
 	dir := trial.tempDir("release-gpg")
-	verified := 0
+	verified := map[string]bool{}
 
 	for name, id := range assets {
 		subject, isSignature := strings.CutSuffix(name, ".asc")
@@ -1027,10 +1032,34 @@ func (trial *GitHubTrial) verifyGPGSignatures(repo string, assets map[string]int
 			continue
 		}
 
-		verified++
+		verified[subject] = true
 	}
 
 	return verified
+}
+
+// releaseSignatureSuffixes name the signature files of a release, which
+// sign a subject and are not subjects themselves.
+var releaseSignatureSuffixes = []string{".bundle", ".asc", ".sig", ".pem"}
+
+// unsignedSubjects lists, sorted, the assets that are not signatures and have
+// no verified Cosign bundle or GPG signature.
+func unsignedSubjects(assets map[string]int64, bundles, signatures map[string]bool) []string {
+	var unsigned []string
+
+	for name := range assets {
+		if slices.ContainsFunc(releaseSignatureSuffixes, func(suffix string) bool { return strings.HasSuffix(name, suffix) }) {
+			continue
+		}
+
+		if !bundles[name] && !signatures[name] {
+			unsigned = append(unsigned, name)
+		}
+	}
+
+	slices.Sort(unsigned)
+
+	return unsigned
 }
 
 // signedBy reports whether gpg's machine-readable status names a valid

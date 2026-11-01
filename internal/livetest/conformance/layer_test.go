@@ -197,7 +197,7 @@ func (s layerScenario) logJobs(t *testing.T, jobs []livetest.RunJob, secrets ...
 
 			t.Logf("job %q log (tail):\n%s", job.Name, log)
 		} else {
-			t.Logf("job %q: the forge served no log", job.Name)
+			t.Logf("job %q: %s", job.Name, job.NoLogReason())
 		}
 	}
 }

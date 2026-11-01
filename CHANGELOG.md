@@ -187,6 +187,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   but Buildah 1.39 (Debian 13, the Forgejo runner's) reads only the context's,
   so a release image whose own allowlist admitted its prebuilt binary failed
   at `COPY` there while building locally.
+- The Forgejo and GitLab consumer trials wait up to 150 minutes for the
+  consumer's run, and a live test binary may run 3 hours. A release that
+  rebuilds its base images (Nanolinter's, on one runner per architecture)
+  ran past the former 75 minutes and the trial failed with the run still
+  building.
 - A re-run of a failed job that uploads to the `--blob-store` no longer takes
   its own blob artifact from the failed attempt as stored on sight; Forgejo
   lists an artifact from its first file on, so that copy may be partial. The

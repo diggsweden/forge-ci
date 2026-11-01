@@ -50,7 +50,7 @@ func TestForgejoMavenLibraryConsumer_Stable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if settings.Workflow != "release.yml" || settings.NextVersion != "" || settings.InterruptAfter != "" || len(settings.Images) != 0 || len(settings.TokenSecrets) != 0 {
+	if settings.Workflow != "release.yml" || settings.NextVersion != "" || settings.InterruptAfter != "" || len(settings.Images) != 0 || len(settings.TokenSecrets) != 0 || len(settings.FileSecrets) != 0 {
 		t.Fatal("this focused case requires one uninterrupted release.yml file release")
 	}
 

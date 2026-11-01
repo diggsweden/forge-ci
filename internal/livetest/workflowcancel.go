@@ -14,10 +14,21 @@ import (
 
 var errObservedRun = errors.New("observed workflow run refused")
 
+// runnerCancelDrain is how long a cancel is given to reach the runner once the
+// forge shows the run settled.
+//
+// Forgejo marks a cancelled job finished at once; its runner learns of the
+// cancel only from the answer to its next task-state report, about a second
+// later, and only then stops the job. A repository deleted inside that window
+// takes the task with it: the runner's reports then fail with "resource does
+// not exist", it never learns of the cancel, and the job keeps its runner
+// slot and CPU, with its log lost, until it ends on its own.
+var runnerCancelDrain = 15 * time.Second
+
 // Cancel only the exact run already observed by this wait, before its caller's
 // keep-scratch cleanup archives the repository. No run listing or prefix sweep.
 func cancelObservedWorkflowRun(ctx context.Context, target Target, repo string, observed WorkflowRun) error {
-	return stopObservedWorkflowRun(ctx, observed,
+	return stopObservedWorkflowRun(ctx, observed, runnerCancelDrain,
 		func(ctx context.Context, id int64) (WorkflowRun, error) {
 			var run WorkflowRun
 
@@ -37,7 +48,16 @@ func cancelObservedWorkflowRun(ctx context.Context, target Target, repo string, 
 		})
 }
 
-func stopObservedWorkflowRun(ctx context.Context, observed WorkflowRun,
+// stopObservedWorkflowRun cancels the observed run unless it has settled, and
+// returns once it and every one of its jobs has stopped, plus drain when it
+// asked to cancel, so the runner hears of the cancel before anything is
+// deleted. A cancel answered 5xx counts as asked: a proxy can fail the answer
+// to a cancel the forge applied.
+//
+// A cancel the forge fails to answer (5xx) is asked again at the next poll:
+// Forgejo updates the run under an optimistic lock and answers 500 "run has
+// changed" while the run's runners report, which on a busy run is often.
+func stopObservedWorkflowRun(ctx context.Context, observed WorkflowRun, drain time.Duration,
 	read func(context.Context, int64) (WorkflowRun, error),
 	cancel func(context.Context, int64) error,
 	jobs func(context.Context, int64) ([]RunJob, error),
@@ -46,41 +66,33 @@ func stopObservedWorkflowRun(ctx context.Context, observed WorkflowRun,
 		return nil
 	}
 
-	cancelled := false
+	cancelled, asked := false, false
 
 	for {
-		current, err := read(ctx, observed.ID)
-		if err != nil {
-			return err
-		}
-
-		if current.ID != observed.ID || current.WorkflowID != observed.WorkflowID || current.Event != observed.Event {
-			return fmt.Errorf("observed workflow run identity changed: %w", errObservedRun)
-		}
-
-		entries, err := jobs(ctx, observed.ID)
-		if err != nil {
-			return err
-		}
-
-		settled, err := runSettled(current, entries)
+		settled, err := observedRunSettled(ctx, observed, read, jobs)
 		if err != nil {
 			return err
 		}
 
 		if settled {
-			return nil
+			if !asked {
+				return nil
+			}
+
+			return pause(ctx, drain)
 		}
 
 		if !cancelled {
+			asked = true
+
 			// A failed top-level run can still have an independent running job.
-			if err := cancel(ctx, observed.ID); err != nil {
+			if cancelled, err = askToCancel(ctx, cancel, observed.ID); err != nil {
 				return err
 			}
 
-			cancelled = true
-
-			continue
+			if cancelled {
+				continue
+			}
 		}
 
 		select {
@@ -88,6 +100,54 @@ func stopObservedWorkflowRun(ctx context.Context, observed WorkflowRun,
 			return ctx.Err()
 		case <-time.After(workflowPollInterval):
 		}
+	}
+}
+
+// observedRunSettled reads the observed run and its jobs and reports whether
+// all of them have stopped, refusing a run that is no longer the one observed.
+func observedRunSettled(ctx context.Context, observed WorkflowRun,
+	read func(context.Context, int64) (WorkflowRun, error),
+	jobs func(context.Context, int64) ([]RunJob, error),
+) (bool, error) {
+	current, err := read(ctx, observed.ID)
+	if err != nil {
+		return false, err
+	}
+
+	if current.ID != observed.ID || current.WorkflowID != observed.WorkflowID || current.Event != observed.Event {
+		return false, fmt.Errorf("observed workflow run identity changed: %w", errObservedRun)
+	}
+
+	entries, err := jobs(ctx, observed.ID)
+	if err != nil {
+		return false, err
+	}
+
+	return runSettled(current, entries)
+}
+
+// askToCancel reports whether the forge took the cancel. A cancel it failed
+// to answer is not taken and not an error, so the caller asks again.
+func askToCancel(ctx context.Context, cancel func(context.Context, int64) error, id int64) (bool, error) {
+	err := cancel(ctx, id)
+	if err == nil {
+		return true, nil
+	}
+
+	if errors.Is(err, errServerSide) {
+		return false, nil
+	}
+
+	return false, err
+}
+
+// pause waits for wait, or until ctx ends.
+func pause(ctx context.Context, wait time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(wait):
+		return nil
 	}
 }
 
