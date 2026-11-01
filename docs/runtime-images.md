@@ -57,6 +57,10 @@ debian:13-slim
 These are internal Containerfile stages, not dependencies on separately
 published runtime images. Android's `FROM java` shares the JDK version and
 installation recipe. Layer reuse depends on matching platform, inputs and cache.
+Two further stages, `go-toolchain` (the Go release, taken from the official
+`golang` image pinned by tag and digest) and `go-tools` (yq and
+publiccode-parser compiled with it), only feed `runtime-base` and
+`runtime-go-1.27` and are not published.
 
 ## Workflow → image mapping
 
@@ -244,6 +248,18 @@ See [Forge migration review](forge-migration.md) for the cross-provider checks.
 Exact versions are pinned in the Containerfile or bootstrap helper, with
 Renovate updates made through source changes. The defaults below identify the
 release lines, not a request to install the latest version on each rebuild.
+
+`yq` and `publiccode-parser` are built from source in an unpublished
+`go-tools` stage, with the same Go release the Go image ships, rather than
+installed as upstream release binaries. A release binary carries the Go
+standard library its project last released with, so a Go security fix reached
+the image only with the next upstream release; built here, the next Go bump
+rebuilds both. The versions remain the bootstrap helpers' pins
+(`scripts/bootstrap/install-yq.sh` and `install-publiccode-parser.sh`), which
+plain-runner jobs still install as SHA-256-verified release binaries. The
+image build fetches the module source through the Go module proxy and verifies
+it against the Go checksum database, and refuses a module that asks for a newer
+Go than the pinned one.
 
 | Toolchain | Default in image | Selection/override |
 |---|---|---|

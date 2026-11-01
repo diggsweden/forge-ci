@@ -30,12 +30,81 @@
 # forge-ci. WORKDIR is /workspace.
 # Tool versions are pinned via Renovate (datasource comments below or in
 # the install-*.sh helpers).
+#
+# Two unpublished stages come first: go-toolchain holds the Go release the go
+# stage ships, and go-tools compiles yq and publiccode-parser with it (see
+# there for why).
 
-# DEBIAN_VERSION lives in the global ARG scope (before any FROM) because a
+# DEBIAN_VERSION and GOLANG_IMAGE live in the global ARG scope (before any FROM) because a
 # FROM line can only reference ARGs declared globally — a stage-scoped ARG is
 # invisible to a later FROM. See the pinning rationale at the base stage below.
 # renovate: datasource=docker depName=debian versioning=docker
 ARG DEBIAN_VERSION=13-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
+# The Go release (go-toolchain below), Debian trixie like the base.
+# renovate: datasource=docker depName=golang versioning=docker
+ARG GOLANG_IMAGE=1.27.3-trixie@sha256:fbb7ae40b62ff8afe31662df570d39b4f5052ac32b90dae8e60d7657a20a74f4
+
+# =============================================================================
+# Go toolchain (not published; the go stage and go-tools copy it)
+# =============================================================================
+
+# The official golang image, pinned by tag and OCI index digest like debian
+# above: its build verifies the go.dev release archive against Go's published
+# SHA-256, and the digest fixes what this file gets. Its tag is the one Go
+# version pin in this file; the workflows' smoke tests read it from here.
+FROM golang:${GOLANG_IMAGE} AS go-toolchain
+
+RUN go version
+
+# =============================================================================
+# Go tools built from source (not published; base copies the binaries)
+# =============================================================================
+
+# yq and publiccode-parser are pure Go, and their release binaries carry the
+# standard library of whatever Go their project last released with: a Go
+# security fix reached this image only when upstream cut a new release. Built
+# here with the Go above, the next Go image bump rebuilds them with the fix.
+#
+# The versions are the bootstrap helpers' pins, which plain-runner jobs install
+# as checksummed release binaries; sourcing the helpers keeps one pin per tool.
+# `go install module@version` takes the module from the Go module proxy and
+# checks it against the Go checksum database (sum.golang.org), which records
+# one immutable hash per module version: that check stands in for the
+# helpers' SHA-256 pins. GOTOOLCHAIN=local refuses a module that asks for a
+# newer Go instead of fetching one, so the binaries are always built with
+# go-toolchain's Go. The flags follow each project's release build (goreleaser): yq
+# keeps its version in source; publiccode-parser takes it, and the commit
+# date its --version prints, from ldflags.
+FROM go-toolchain AS go-tools
+
+ENV CGO_ENABLED=0 \
+    GOTOOLCHAIN=local \
+    GOBIN=/opt/go-tools
+
+COPY scripts/bootstrap/install-common.sh scripts/bootstrap/install-yq.sh scripts/bootstrap/install-publiccode-parser.sh /tmp/bootstrap/
+
+# A pinned `go install` asks sum.golang.org, which go itself does not retry.
+# hadolint ignore=SC1091
+RUN bash -c 'set -euo pipefail \
+  && source /tmp/bootstrap/install-yq.sh \
+  && source /tmp/bootstrap/install-publiccode-parser.sh \
+  && retry() { \
+       local attempt; \
+       for attempt in 1 2 3 4 5; do \
+         "$@" && return 0; \
+         [[ "$attempt" -eq 5 ]] || sleep $((attempt * 5)); \
+       done; \
+       return 1; \
+     } \
+  && publiccode_module=github.com/italia/publiccode-parser-go/v5 \
+  && retry go install -trimpath -ldflags "-s -w" "github.com/mikefarah/yq/v4@${YQ_VERSION}" \
+  && publiccode_date="$(retry go list -m -f "{{.Time.UTC.Format \"2006-01-02T15:04:05Z\"}}" "${publiccode_module}@${PUBLICCODE_PARSER_VERSION}")" \
+  && retry go install -trimpath \
+       -ldflags "-s -w -X main.version=${PUBLICCODE_PARSER_VERSION#v} -X main.date=${publiccode_date}" \
+       "${publiccode_module}/publiccode-parser@${PUBLICCODE_PARSER_VERSION}" \
+  && [[ "$(/opt/go-tools/yq --version)" == *" version ${YQ_VERSION}" ]] \
+  && [[ "$(/opt/go-tools/publiccode-parser --version 2>&1)" == "${PUBLICCODE_PARSER_VERSION#v} ${publiccode_date}" ]]' \
+  && go version -m /opt/go-tools/yq /opt/go-tools/publiccode-parser
 
 # =============================================================================
 # Base stage
@@ -77,13 +146,14 @@ COPY templates /opt/forge-ci/templates
 # archives are built separately by release-binary.yml.
 COPY cli-prebuilt/forge-ci /usr/local/bin/forge-ci
 
-# Install binary tools via the shared helpers, then promote them to /usr/local/bin
-# and clean up temporary files. PATH reuse is helper-specific: cosign always
-# bootstraps the repository-pinned verifier.
+# yq and publiccode-parser come from go-tools, built with the image's Go.
+COPY --from=go-tools /opt/go-tools/yq /opt/go-tools/publiccode-parser /usr/local/bin/
+
+# Install the other binary tools via the shared helpers, then promote them to
+# /usr/local/bin and clean up temporary files. PATH reuse is helper-specific:
+# cosign always bootstraps the repository-pinned verifier.
 # hadolint ignore=SC1091
 RUN bash -c 'set -euo pipefail \
-  && source /opt/forge-ci/scripts/bootstrap/install-yq.sh && install_yq \
-  && install -m 0755 "$(command -v yq)" /usr/local/bin/yq \
   && source /opt/forge-ci/scripts/bootstrap/install-git-cliff.sh && install_git_cliff \
   && install -m 0755 "$(command -v git-cliff)" /usr/local/bin/git-cliff \
   && source /opt/forge-ci/scripts/bootstrap/install-gh.sh && install_gh \
@@ -92,11 +162,9 @@ RUN bash -c 'set -euo pipefail \
   && install -m 0755 "$(command -v glab)" /usr/local/bin/glab \
   && source /opt/forge-ci/scripts/bootstrap/install-mise.sh && install_mise \
   && install -m 0755 "$(command -v mise)" /usr/local/bin/mise \
-  && source /opt/forge-ci/scripts/bootstrap/install-publiccode-parser.sh && install_publiccode_parser \
-  && install -m 0755 "$(command -v publiccode-parser)" /usr/local/bin/publiccode-parser \
   && source /opt/forge-ci/scripts/bootstrap/install-cosign.sh && install_cosign \
   && install -m 0755 "$(command -v cosign)" /usr/local/bin/cosign' \
-  && rm -rf /tmp/yq-bin /tmp/git-cliff-bin /tmp/gh-bin /tmp/glab-bin /tmp/mise-bin /tmp/publiccode-parser-bin /tmp/cosign-bin \
+  && rm -rf /tmp/git-cliff-bin /tmp/gh-bin /tmp/glab-bin /tmp/mise-bin /tmp/cosign-bin \
   && yq --version \
   && git-cliff --version \
   && gh --version \
@@ -144,6 +212,13 @@ ARG RUST_VERSION=1.99.1
 # renovate: datasource=crate depName=cargo-cyclonedx
 ARG CARGO_CYCLONEDX_VERSION=0.5.9
 
+# Every download in this file retries transient failures, a refused connection
+# or a brief 404 from a mirror among them: one image build makes a dozen of
+# them on two architectures, and one lost request failed the whole release.
+# The toolchains other than Go are fetched over HTTPS from each project's own
+# host and are not pinned by digest, unlike the signer image's tools: that
+# image holds the signing keys, and Renovate bumps these versions, which a
+# stale digest would fail.
 # Install rustup + the linkers needed for the artifact-first cross-compile
 # matrix the build-cargo.yml workflow defaults to (linux/amd64 + linux/arm64).
 # Adopters wanting darwin/windows must extend this image or run the build
@@ -176,8 +251,6 @@ ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
 
 FROM base AS go
 
-# renovate: datasource=golang-version depName=go
-ARG GO_VERSION=1.27.3
 # renovate: datasource=github-releases depName=CycloneDX/cyclonedx-gomod
 ARG CYCLONEDX_GOMOD_VERSION=v1.12.0
 
@@ -193,25 +266,12 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends gcc libc6-dev gettext \
   && rm -rf /var/lib/apt/lists/*
 
-# Every download in this file retries transient failures, a refused connection
-# or a brief 404 from a mirror among them: one image build makes a dozen of
-# them on two architectures, and one lost request failed the whole release.
-# A pinned `go install` asks sum.golang.org, which go itself does not retry.
-# The toolchains are fetched over HTTPS from each project's own host and are
-# not pinned by digest, unlike the signer image's tools: that image holds the
-# signing keys, and Renovate bumps these versions, which a stale digest would
-# fail.
-RUN arch="$(dpkg --print-architecture)" \
-  && case "$arch" in \
-       amd64) go_arch=amd64 ;; \
-       arm64) go_arch=arm64 ;; \
-       *) printf 'unsupported arch: %s\n' "$arch" >&2; exit 1 ;; \
-     esac \
-  && curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 30 "https://go.dev/dl/go${GO_VERSION}.linux-${go_arch}.tar.gz" \
-       -o /tmp/go.tar.gz \
-  && tar -C /usr/local -xzf /tmp/go.tar.gz \
-  && rm -f /tmp/go.tar.gz \
-  && mkdir -p "$GOPATH" \
+# The Go release is go-toolchain's, the one go-tools builds yq and
+# publiccode-parser with. A pinned `go install` asks sum.golang.org, which go
+# itself does not retry.
+COPY --from=go-toolchain /usr/local/go /usr/local/go
+
+RUN mkdir -p "$GOPATH" \
   && for attempt in 1 2 3 4 5; do \
        GOBIN=/usr/local/bin go install "github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@${CYCLONEDX_GOMOD_VERSION}" && break; \
        if [ "$attempt" -eq 5 ]; then exit 1; fi; \

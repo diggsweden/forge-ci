@@ -109,13 +109,13 @@
     {
       "description": "Hold each runtime image toolchain on the line its published image name or docs promise (containers/runtime/images.json: go-1.27, node-24, java-25, android-35; Maven 3.x, Gradle 8.x). Moving a line is a deliberate change, not a Renovate update.",
       "matchManagers": [
-        "custom.regex"
+        "dockerfile"
       ],
       "matchFileNames": [
         "containers/runtime/Containerfile"
       ],
       "matchDepNames": [
-        "go"
+        "golang"
       ],
       "allowedVersions": "/^1\\.27\\./"
     },
@@ -230,7 +230,7 @@
       "managerFilePatterns": [
         "/(^|/)containers/runtime/Containerfile$/"
       ],
-      "description": "Update the runtime image's toolchain ARGs (Rust, Go, Node, JDK, Maven, Gradle, Android, SBOM generators). The debian base ARG carries a digest and is left to the dockerfile manager. Keep CARGO_CYCLONEDX_VERSION and CYCLONEDX_GOMOD_VERSION in step with their bootstrap helpers (TestSBOMGeneratorPinsMatchTheRuntimeImage).",
+      "description": "Update the runtime image's toolchain ARGs (Rust, Node, JDK, Maven, Gradle, Android, SBOM generators). The debian and golang image ARGs carry a digest and are left to the dockerfile manager. Keep CARGO_CYCLONEDX_VERSION and CYCLONEDX_GOMOD_VERSION in step with their bootstrap helpers (TestSBOMGeneratorPinsMatchTheRuntimeImage).",
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\s*\\nARG \\w+=(?<currentValue>[^\\s@]+)\\n"
       ]
