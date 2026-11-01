@@ -8,31 +8,37 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/diggsweden/forge-ci/internal/domain/container"
+	domainpublish "github.com/diggsweden/forge-ci/internal/domain/publish"
+)
+
+var (
+	errNPMRecipeOrImage    = errors.New("require absolute native recipe directory and digest-pinned Node image")
+	errNPMPublishableName  = errors.New("require publishable npm metadata with a package name")
+	errNPMLibraryEntry     = errors.New("library fixture requires a stable package with a main or exports entry")
+	errNPMApplicationBin   = errors.New("require npm application metadata with a bin")
+	errNPMOracleRelative   = errors.New("require absolute installed-package oracle script")
+	errNPMOracleNotRegular = errors.New("oracle must be a regular CI policy file")
+	errNPMSourceBranch     = errors.New("require source branch different from main")
+	errNPMRecipeStructure  = errors.New("native npm recipe structure changed")
 )
 
 // NPMApplicationFixtureConfig is trusted CI policy, never application source.
 // Oracle runs in the pinned Node job against an installed retained tarball.
 type NPMApplicationFixtureConfig struct {
 	RecipeDirectory, NodeImage, Oracle, Branch string
+	// Library admits a public package's main/exports entry instead of a CLI bin.
+	Library bool
 }
 
 //go:embed testdata/npm-application-development.yml
 var npmApplicationDevelopment string
-
-var (
-	errNPMRecipeOrImage     = errors.New("require absolute native recipe directory and digest-pinned Node image")
-	errNPMApplicationModel  = errors.New("require npm application metadata with a package name and bin")
-	errNPMOracleNotAbsolute = errors.New("require absolute installed-package oracle script")
-	errNPMOracleNotRegular  = errors.New("oracle must be a regular CI policy file")
-	errNPMSourceBranch      = errors.New("require source branch different from main")
-	errNPMRecipeStructure   = errors.New("native npm recipe structure changed")
-)
 
 // NewNPMApplicationFixture overlays the native npm recipe, or its development
 // variation, in Consumer's private index and commits it.
@@ -55,7 +61,7 @@ func npmApplicationFixture(ctx context.Context, source Consumer, config NPMAppli
 		return source, errNPMRecipeOrImage
 	}
 
-	if err := validateNPMPackage(ctx, source); err != nil {
+	if err := validateNPMPackage(ctx, source, config.Library, development); err != nil {
 		return source, err
 	}
 
@@ -69,16 +75,17 @@ func npmApplicationFixture(ctx context.Context, source Consumer, config NPMAppli
 		return source, err
 	}
 
-	pin, err := ReadConsumerPin(map[string]string{"release.yml": string(recipe)})
+	pin, err := ReadConsumerPin(map[string]string{trialReleaseWorkflow: string(recipe)})
 	if err != nil {
 		return source, err
 	}
 
-	var workflow string
+	workflow := string(recipe)
+
 	if development {
 		workflow, err = npmDevelopmentWorkflow(ctx, source, config, pin)
 	} else {
-		workflow, err = npmStableReleaseWorkflow(string(recipe), config, pin)
+		workflow, err = npmStableReleaseWorkflow(workflow, pin, config.NodeImage)
 	}
 
 	if err != nil {
@@ -89,7 +96,7 @@ func npmApplicationFixture(ctx context.Context, source Consumer, config NPMAppli
 		return source, err
 	}
 
-	files, err := npmFixtureFiles(config, development, workflow, oracle)
+	files, err := npmFixtureFiles(config.RecipeDirectory, workflow, oracle, development)
 	if err != nil {
 		return source, err
 	}
@@ -117,7 +124,7 @@ const npmApplicationBuildSteps = `      - name: Build original npm application
           RELEASE_SHA: ${{ needs.prepare.outputs.release-sha }}
         run: |
           set -euo pipefail
-          mkdir -p retained-package
+          mkdir -p retained-package dist
           cp -- ./*.tgz retained-package/
           node --input-type=module -e 'import fs from "node:fs"; const p=JSON.parse(fs.readFileSync("package.json")); fs.writeFileSync("retained-package/package-metadata.json", JSON.stringify({name:p.name,version:p.version}));'
           (cd retained-package && sha256sum ./*.tgz > SHA256SUMS)
@@ -190,10 +197,67 @@ const npmApplicationStableConsumers = `  installed-oracle:
           sha256sum -c SHA256SUMS
 `
 
-// npmDevelopmentWorkflow renders the development variation for a source
-// branch other than main, refusing a consumer without a Containerfile.
+// validateNPMPackage admits only publishable package metadata with a bin, or,
+// for a library, a stable main or exports entry.
+func validateNPMPackage(ctx context.Context, source Consumer, library, development bool) error {
+	body, err := githubWorkflow(ctx, source, "package.json")
+	if err != nil {
+		return err
+	}
+
+	var model struct {
+		Name    string          `json:"name"`
+		Version string          `json:"version"`
+		Bin     json.RawMessage `json:"bin"`
+		Main    string          `json:"main"`
+		Exports json.RawMessage `json:"exports"`
+		Private bool            `json:"private"`
+	}
+	if err = json.Unmarshal([]byte(body), &model); err != nil {
+		return err
+	}
+
+	if !regexp.MustCompile(`^(@[a-z0-9._-]+/)?[a-z0-9][a-z0-9._-]*$`).MatchString(model.Name) || model.Private {
+		return errNPMPublishableName
+	}
+
+	if !library {
+		if len(model.Bin) == 0 || string(model.Bin) == "null" {
+			return errNPMApplicationBin
+		}
+
+		return nil
+	}
+
+	if development || (model.Main == "" && (len(model.Exports) == 0 || string(model.Exports) == "null")) {
+		return errNPMLibraryEntry
+	}
+
+	if _, err := domainpublish.NPMPackedEntrypoint([]byte(body)); err != nil {
+		return fmt.Errorf("library fixture packed metadata: %w", err)
+	}
+
+	return nil
+}
+
+// readNPMOracle reads the operator-supplied installed-package oracle script.
+func readNPMOracle(path string) ([]byte, error) {
+	if !filepath.IsAbs(path) {
+		return nil, errNPMOracleRelative
+	}
+
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return nil, errNPMOracleNotRegular
+	}
+
+	return os.ReadFile(path) //nolint:gosec // operator-supplied oracle, checked above as an absolute regular file.
+}
+
+// npmDevelopmentWorkflow renders the development recipe for a source branch
+// other than main that carries a Containerfile.
 func npmDevelopmentWorkflow(ctx context.Context, source Consumer, config NPMApplicationFixtureConfig, pin ConsumerPin) (string, error) {
-	if _, err := source.git.run(ctx, source.stage, "check-ref-format", "refs/heads/"+config.Branch); err != nil || config.Branch == "main" || config.Branch == "" {
+	if _, err := source.git.run(ctx, source.stage, "check-ref-format", "refs/heads/"+config.Branch); err != nil || config.Branch == defaultBranch || config.Branch == "" {
 		return "", errNPMSourceBranch
 	}
 
@@ -204,10 +268,12 @@ func npmDevelopmentWorkflow(ctx context.Context, source Consumer, config NPMAppl
 	return strings.NewReplacer("@ACTIONS@", pin.Actions, "@WORKFLOWS@", pin.Workflows, "@PIN@", pin.Commit, "@IMAGE@", config.NodeImage, "@BRANCH@", "'"+strings.ReplaceAll(config.Branch, "'", "''")+"'").Replace(npmApplicationDevelopment), nil
 }
 
-// npmStableReleaseWorkflow reuses native preparation, artifact handoff and
-// signing, and publishes the application package independently of container
-// publication.
-func npmStableReleaseWorkflow(workflow string, config NPMApplicationFixtureConfig, pin ConsumerPin) (string, error) {
+// npmStableReleaseWorkflow rewrites the native release recipe so it publishes
+// the application package independently of container publication, reusing
+// native preparation, artifact handoff and signing.
+func npmStableReleaseWorkflow(workflow string, pin ConsumerPin, image string) (string, error) {
+	// Reuse native preparation, artifact handoff and signing. This variation
+	// publishes the application package independently of container publication.
 	start, end := strings.Index(workflow, "  release-images:\n"), strings.Index(workflow, "  handoff:\n")
 
 	buildStart, buildEnd := strings.Index(workflow, "      - uses: "+pin.Actions+"setup-toolchain@"), strings.Index(workflow, "      - uses: "+pin.Actions+"upload-dist@")
@@ -217,69 +283,27 @@ func npmStableReleaseWorkflow(workflow string, config NPMApplicationFixtureConfi
 
 	workflow = workflow[:start] + workflow[end:]
 	workflow = workflow[:buildStart] + npmApplicationBuildSteps + workflow[buildEnd:]
-	workflow = strings.NewReplacer("@IMAGE@", config.NodeImage, "publish-container-images: 'true'", "publish-container-images: 'false'", "needs: [build, release-images]", "needs: [build]", "prepare, build, release-images, handoff", "prepare, build, handoff", "          IMAGES_RESULT: ${{ needs.release-images.result }}\n", "", `--job "Images=${IMAGES_RESULT}" `, "", "          forge-ci artifact download --name release-images --dir dist\n", "", "      release-images-path: dist/release-images.json\n", "").Replace(workflow)
-	workflow = strings.Replace(workflow, "      # The default request already matches package.json; select version-bump", "      version-bump: npm\n      version-bump-image: "+config.NodeImage+"\n      # The default request already matches package.json; select version-bump", 1)
-	workflow = strings.Replace(workflow, "    env:\n      ARTIFACT_NAME:", "    container:\n      image: "+config.NodeImage+"\n    env:\n      ARTIFACT_NAME:", 1)
-	workflow += strings.NewReplacer("@ACTIONS@", pin.Actions, "@PIN@", pin.Commit, "@IMAGE@", config.NodeImage).Replace(npmApplicationStableConsumers)
+	workflow = strings.NewReplacer("@IMAGE@", image, "publish-container-images: 'true'", "publish-container-images: 'false'", "needs: [build, release-images]", "needs: [build]", "prepare, build, release-images, handoff", "prepare, build, handoff", "          IMAGES_RESULT: ${{ needs.release-images.result }}\n", "", `--job "Images=${IMAGES_RESULT}" `, "", "          forge-ci artifact download --name release-images --dir dist\n", "", "      release-images-path: dist/release-images.json\n", "").Replace(workflow)
+	workflow = strings.Replace(workflow, "      # The default request already matches package.json; select version-bump", "      version-bump: npm\n      version-bump-image: "+image+"\n      # The default request already matches package.json; select version-bump", 1)
+	workflow = strings.Replace(workflow, "    env:\n      ARTIFACT_NAME:", "    container:\n      image: "+image+"\n    env:\n      ARTIFACT_NAME:", 1)
+	workflow += strings.NewReplacer("@ACTIONS@", pin.Actions, "@PIN@", pin.Commit, "@IMAGE@", image).Replace(npmApplicationStableConsumers)
 
 	return workflow, nil
 }
 
-// validateNPMPackage requires the consumer's package.json to name the package
-// and declare a bin.
-func validateNPMPackage(ctx context.Context, source Consumer) error {
-	body, err := githubWorkflow(ctx, source, "package.json")
-	if err != nil {
-		return err
-	}
-
-	var model struct {
-		Name    string          `json:"name"`
-		Version string          `json:"version"`
-		Bin     json.RawMessage `json:"bin"`
-	}
-	if err = json.Unmarshal([]byte(body), &model); err != nil {
-		return err
-	}
-
-	if !regexp.MustCompile(`^(@[a-z0-9._-]+/)?[a-z0-9][a-z0-9._-]*$`).MatchString(model.Name) || len(model.Bin) == 0 || string(model.Bin) == "null" {
-		return errNPMApplicationModel
-	}
-
-	return nil
-}
-
-// readNPMOracle reads the installed-package oracle, an absolute regular file.
-func readNPMOracle(oracle string) ([]byte, error) {
-	if !filepath.IsAbs(oracle) {
-		return nil, errNPMOracleNotAbsolute
-	}
-
-	info, err := os.Lstat(oracle)
-	if err != nil || !info.Mode().IsRegular() {
-		return nil, errNPMOracleNotRegular
-	}
-
-	return os.ReadFile(oracle) //nolint:gosec // operator-supplied oracle, checked above as an absolute regular file.
-}
-
-// npmFixtureFiles lists the files the fixture stages in the consumer's index.
-func npmFixtureFiles(config NPMApplicationFixtureConfig, development bool, workflow string, oracle []byte) (map[string]string, error) {
+// npmFixtureFiles is the CI overlay: the rendered workflow, the oracle and the
+// declaration, plus the recipe's changelog inputs for a stable release.
+func npmFixtureFiles(recipeDirectory, workflow string, oracle []byte, development bool) (map[string]string, error) {
 	name := ".forgejo/workflows/release.yml"
 	if development {
-		name = ".forgejo/workflows/development.yml"
+		name = forgejoDevelopmentWorkflow
 	}
 
 	files := map[string]string{name: workflow, ".forge-ci/npm-oracle.sh": string(oracle), ".forge-ci/npm-application.yml": "artifacts:\n  - name: application\n    project-type: npm\n    working-directory: .\ncontainers:\n  - name: application\n    container-file: Containerfile\n    context: .\n    platforms: linux/amd64\n    enable-scan: false\n    enable-slsa: false\n"}
 
 	if !development {
-		for _, path := range []string{".chglog/config-keepachangelog.yml", ".chglog/config-minimal.yml", ".chglog/CHANGELOG-keepachangelog.tpl", ".chglog/CHANGELOG-minimal.tpl"} {
-			text, readErr := os.ReadFile(filepath.Join(config.RecipeDirectory, path)) //nolint:gosec // operator-supplied recipe directory joined with a fixed changelog file name.
-			if readErr != nil {
-				return nil, readErr
-			}
-
-			files[path] = string(text)
+		if err := readNPMChangelogInputs(recipeDirectory, files); err != nil {
+			return nil, err
 		}
 	}
 	// Snapshot planning must see a container-only declaration: npm's original
@@ -290,4 +314,18 @@ func npmFixtureFiles(config NPMApplicationFixtureConfig, development bool, workf
 	}
 
 	return files, nil
+}
+
+// readNPMChangelogInputs copies the recipe's changelog inputs into files.
+func readNPMChangelogInputs(recipeDirectory string, files map[string]string) error {
+	for _, path := range []string{".chglog/config-keepachangelog.yml", ".chglog/config-minimal.yml", ".chglog/CHANGELOG-keepachangelog.tpl", ".chglog/CHANGELOG-minimal.tpl"} {
+		text, err := os.ReadFile(filepath.Join(recipeDirectory, path)) //nolint:gosec // operator-supplied recipe directory joined with a fixed changelog file name.
+		if err != nil {
+			return err
+		}
+
+		files[path] = string(text)
+	}
+
+	return nil
 }

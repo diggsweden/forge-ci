@@ -60,6 +60,10 @@ func NewMavenApplicationConsumerFixture(tb TB, source Consumer, recipe, image st
 		if strings.HasSuffix(file, "/release.yml") {
 			text = regexp.MustCompile(`(?m)^(      image: |      version-bump-image: ).*$`).ReplaceAllString(text, "${1}"+image)
 			text = strings.ReplaceAll(text, "ARTIFACT_NAME: hello-maven", "ARTIFACT_NAME: "+artifact)
+			// An application may own build.finalName (for example an unversioned
+			// Spring Boot JAR). Keep its POM intact and require one built JAR,
+			// rather than guessing its filename or choosing an ambiguous output.
+			text = strings.Replace(text, `          cp -- "target/${ARTIFACT_NAME}-${RELEASE_TAG#v}.jar" dist/`, mavenApplicationJarHandoff, 1)
 		}
 
 		if err := source.stageFile(ctx, "100644", file, text); err != nil {
@@ -80,6 +84,26 @@ func NewMavenApplicationConsumerFixture(tb TB, source Consumer, recipe, image st
 
 	return source
 }
+
+// The handoff skips the JARs the engine's release assembly never ships
+// (original-*, sources, Javadoc, tests). Several remaining JARs are accepted
+// only beside the versioned main JAR, as when an assembly writes an
+// unversioned executable JAR; all of them ship, as the engine would ship them.
+const mavenApplicationJarHandoff = `          shopt -s nullglob
+          jars=()
+          for jar in target/*.jar; do
+            case "${jar##*/}" in original-*|*-sources.jar|*-javadoc.jar|*-tests.jar) continue ;; esac
+            jars+=("$jar")
+          done
+          versioned="target/${ARTIFACT_NAME}-${RELEASE_TAG#v}.jar"
+          if [ "${#jars[@]}" -eq 1 ]; then
+            cp -- "${jars[0]}" "dist/${ARTIFACT_NAME}-${RELEASE_TAG#v}.jar"
+          elif [ "${#jars[@]}" -gt 1 ] && [ -f "$versioned" ]; then
+            cp -- "${jars[@]}" dist/
+          else
+            echo "Maven application fixture requires one target JAR, or several beside ${versioned}; found ${#jars[@]}" >&2
+            exit 1
+          fi`
 
 func (config MavenLibraryFixtureConfig) validate() error {
 	if !filepath.IsAbs(config.RecipeDirectory) {

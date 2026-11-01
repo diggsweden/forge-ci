@@ -36,6 +36,8 @@ const minimalBotEmail = "forge-lab-minimal@hosted.invalid"
 // Current working-tree source is copied only into new test repositories. This
 // route deliberately does not call EnsureEngine or publish any runtime image.
 func TestGitHubMinimalPreparation(t *testing.T) {
+	RegisterLiveScenario(t)
+
 	if os.Getenv(GitHubContextEnv) == "" || os.Getenv("FORGE_CI_LIVE_BIN") == "" || os.Getenv("FORGE_CI_LIVE_EXTERNAL_REGISTRY_TOKEN_FILE") == "" {
 		t.Skip("select test-live-github-minimal inside Forge Lab's hosted session")
 	}
@@ -154,6 +156,15 @@ func minimalEngineSource(t *testing.T, trial *GitHubTrial, root, destination str
 
 	for _, name := range minimalPreparationWorkflows {
 		minimalCopy(t, filepath.Join(root, ".github/workflows", name), filepath.Join(destination, ".github/workflows", name))
+	}
+
+	embedded, err := minimalEmbeddedAssets(t.Context(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, relative := range embedded {
+		minimalCopy(t, filepath.Join(root, relative), filepath.Join(destination, relative))
 	}
 }
 

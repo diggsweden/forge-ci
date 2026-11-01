@@ -15,6 +15,8 @@ import (
 )
 
 func TestForgejoConsumerPRUnitChecks(t *testing.T) {
+	RegisterLiveScenario(t)
+
 	root := os.Getenv("FORGE_CI_LIVE_CONSUMER")
 	if root == "" {
 		t.Skip("explicit read-only consumer checkout required")

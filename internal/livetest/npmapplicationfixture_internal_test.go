@@ -4,22 +4,41 @@
 package livetest
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	domainpublish "github.com/diggsweden/forge-ci/internal/domain/publish"
 )
 
 func TestNPMApplicationFixtureSourceBoundary(t *testing.T) {
-	for _, format := range []string{"sha1", "sha256"} {
-		t.Run(format, func(t *testing.T) {
+	for _, variant := range []string{
+		"sha1/application", "sha256/application",
+		"sha1/library", "sha256/library",
+		"sha1/library-main", "sha256/library-main",
+		"sha1/private-library", "sha256/private-library",
+	} {
+		t.Run(variant, func(t *testing.T) {
+			format, kind, _ := strings.Cut(variant, "/")
 			root, git := stageTestRepo(t, format)
+
 			pkg := `{"name":"@example/application","version":"2.1.0","bin":{"app":"dist/cli.js"}}`
+			if kind != "application" {
+				pkg = `{"name":"@example/library","version":"2.1.0","exports":"./src/cli.js","private":` + strconv.FormatBool(kind == "private-library") + `}`
+			}
+
+			if kind == "library-main" {
+				pkg = `{"name":"@example/library","version":"2.1.0","exports":null,"main":"src/cli.js"}`
+			}
+
 			stageTestWrite(t, root, "package.json", pkg, 0644)
 			stageTestWrite(t, root, "Containerfile", "FROM scratch\n", 0644)
 			stageTestWrite(t, root, "src/cli.js", "#!/usr/bin/env node\n", 0755)
@@ -38,8 +57,18 @@ func TestNPMApplicationFixtureSourceBoundary(t *testing.T) {
 			}
 
 			config := NPMApplicationFixtureConfig{RecipeDirectory: recipe, NodeImage: "docker.io/library/node:24.17.0-trixie@sha256:" + strings.Repeat("a", 64), Oracle: oracle, Branch: "development"}
+
+			config.Library = kind != "application"
 			for _, development := range []bool{false, true} {
 				fixture, err := npmApplicationFixture(t.Context(), source, config, development)
+				if kind == "private-library" || (config.Library && development) {
+					if err == nil {
+						t.Fatal("accepted private publication or unsupported library image-development mode")
+					}
+
+					continue
+				}
+
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -125,6 +154,55 @@ func TestNPMApplicationFixtureSourceBoundary(t *testing.T) {
 
 			if _, err := npmApplicationFixture(t.Context(), linked, config, false); err == nil {
 				t.Fatal("followed package metadata symlink")
+			}
+		})
+	}
+}
+
+func TestNPMApplicationLibraryMetadataRefusesBeforeWorkflowPreparation(t *testing.T) {
+	for _, metadata := range []string{
+		`"main":"src/index.js","exports":{ ".":"./missing.js"}`,
+		`"main":"src/index.js","exports":["./src/index.js"]`,
+		`"main":"src/index.js","exports":42`,
+		`"exports":"src/index.js"`,
+		`"exports":"./src/./index.js"`,
+		`"exports":"./src/index.js "`,
+		`"exports":"./src/index.js\u0001"`,
+		`"main":"../outside.js"`,
+	} {
+		t.Run(metadata, func(t *testing.T) {
+			root, git := stageTestRepo(t, "sha1")
+			stageTestWrite(t, root, "package.json", `{"name":"@example/library","version":"2.1.0",`+metadata+`}`, 0o644)
+			stageTestCommit(t, git, root)
+
+			source, err := openConsumer(t.Context(), git, root, t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Neither policy path exists. Metadata refusal must precede reading
+			// these files or preparing a workflow/signing cycle.
+			config := NPMApplicationFixtureConfig{
+				Library: true, RecipeDirectory: filepath.Join(t.TempDir(), "absent-recipe"),
+				Oracle:    filepath.Join(t.TempDir(), "absent-oracle"),
+				NodeImage: "docker.io/library/node:24.17.0-trixie@sha256:" + strings.Repeat("a", 64),
+			}
+
+			result, err := npmApplicationFixture(t.Context(), source, config, false)
+			if !errors.Is(err, errs.ErrValidation) || !strings.Contains(fmt.Sprint(err), "library fixture packed metadata") {
+				t.Fatalf("metadata was not refused before policy preparation: %v", err)
+			}
+
+			if result.Commit != source.Commit {
+				t.Fatal("refusal changed source commit")
+			}
+
+			if err := git.requireClean(t.Context(), root, "."); err != nil {
+				t.Fatal(err)
+			}
+
+			staged, err := git.run(t.Context(), source.stage, "diff", "--cached", "--name-only", source.Commit)
+			if err != nil || staged != "" {
+				t.Fatalf("refusal staged workflow changes: %s, %v", staged, err)
 			}
 		})
 	}

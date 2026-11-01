@@ -12,35 +12,36 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/diggsweden/forge-ci/internal/livetest"
 )
 
 func main() {
+	if len(os.Args) == 4 && os.Args[1] == "classify-run" {
+		status, err := strconv.Atoi(os.Args[2])
+		if err != nil || status < 0 || status > 255 {
+			usage()
+		}
+
+		result, err := classifyRun(status, os.Args[3])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "live result: %v\n", err)
+			os.Exit(2)
+		}
+
+		fmt.Printf("%d %s\n", result.ExitCode, result.Verdict)
+
+		return
+	}
 	// `preflight runner-arch` prints only the architecture the lab's runners
 	// execute, which the run script builds the runner binaries for.
 	// `preflight consumer-trial-layer` prints only the URL a Forgejo consumer
 	// trial serves the layer under test from, which the lab's kaniko job image
 	// names as its source.
 	if len(os.Args) == 2 {
-		var (
-			fact string
-			err  error
-		)
-
-		switch os.Args[1] {
-		case "signing-inputs":
-			err = livetest.CheckReusedSigningInputs(os.Getenv("FORGE_CI_LIVE_SIGNING_KEY_DIR"))
-			fact = "reused signing input metadata accepted (key validity remains signer-verified)"
-		case "runner-arch":
-			fact, err = livetest.LabRunnerArch()
-		case "consumer-trial-layer":
-			fact, err = livetest.ConsumerTrialLayerURL()
-		default:
-			usage()
-		}
-
+		fact, err := preflightFact(os.Args[1])
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "live preflight: %v\n", err)
 			os.Exit(2)
@@ -65,7 +66,45 @@ func main() {
 		summary.Selected, summary.Generation, livetest.ResourcePrefix, summary.Explanation)
 }
 
+// classifyRun reads the retained log only for a clean exit; any other status
+// is classified from the status alone.
+func classifyRun(status int, path string) (livetest.LiveRunResult, error) {
+	var log *os.File
+
+	if status == 0 {
+		file, err := os.Open(path) //nolint:gosec // Explicit operator-owned retained log.
+		if err != nil {
+			return livetest.LiveRunResult{}, err
+		}
+
+		defer func() { _ = file.Close() }()
+
+		log = file
+	}
+
+	return livetest.ClassifyLiveRun(log, status)
+}
+
+// preflightFact returns the single fact one preflight mode prints.
+func preflightFact(mode string) (string, error) {
+	switch mode {
+	case "signing-inputs":
+		err := livetest.CheckReusedSigningInputs(os.Getenv("FORGE_CI_LIVE_SIGNING_KEY_DIR"))
+
+		return "reused signing input metadata accepted (key validity remains signer-verified)", err
+	case "runner-arch":
+		return livetest.LabRunnerArch()
+	case "consumer-trial-layer":
+		return livetest.ConsumerTrialLayerURL()
+	default:
+		usage()
+
+		return "", nil
+	}
+}
+
 func usage() {
+	fmt.Fprintln(os.Stderr, "       preflight classify-run <exit-code> <retained-log>")
 	fmt.Fprintln(os.Stderr, "usage: preflight [signing-inputs | runner-arch | consumer-trial-layer] (signing-inputs checks only FORGE_CI_LIVE_SIGNING_KEY_DIR; other modes read the forgeci lab contract)")
 	os.Exit(2)
 }

@@ -15,6 +15,8 @@ import (
 )
 
 func TestForgejoSnapshotFinalizeAcknowledged(t *testing.T) {
+	RegisterLiveScenario(t)
+
 	var ack struct {
 		Repos    []string `json:"Repos"`
 		Package  string   `json:"Package"`

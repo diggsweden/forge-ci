@@ -51,6 +51,8 @@ const (
 // consumer asked, offers at least one Cosign bundle and each verifies against
 // the trial's public key. Job names and asset counts are the consumer's.
 func TestForgejoLayer_ConsumerTrial(t *testing.T) {
+	livetest.RegisterLiveScenario(t)
+
 	root := os.Getenv(consumerCheckoutEnv)
 	if root == "" {
 		t.Skip("no consumer checkout is named; run `just test-live-forgejo-consumer <checkout> <pull-request|release>`")
@@ -96,7 +98,7 @@ func runForgejoConsumerTrial(t *testing.T, root string, private bool) {
 			t.Fatal(err)
 		}
 
-		consumer = livetest.NewNPMApplicationFixture(t, consumer, livetest.NPMApplicationFixtureConfig{RecipeDirectory: recipe, NodeImage: image, Oracle: os.Getenv("FORGE_CI_LIVE_NPM_APPLICATION_ORACLE")}, false)
+		consumer = livetest.NewNPMApplicationFixture(t, consumer, livetest.NPMApplicationFixtureConfig{RecipeDirectory: recipe, NodeImage: image, Oracle: os.Getenv("FORGE_CI_LIVE_NPM_APPLICATION_ORACLE"), Library: os.Getenv("FORGE_CI_LIVE_NPM_LIBRARY") == "true"}, false)
 	}
 
 	if image := os.Getenv("FORGE_CI_LIVE_MAVEN_APPLICATION_IMAGE"); image != "" {
@@ -106,6 +108,14 @@ func runForgejoConsumerTrial(t *testing.T, root string, private bool) {
 		}
 
 		consumer = livetest.NewMavenApplicationConsumerFixture(t, consumer, recipe, image)
+	}
+
+	if image := os.Getenv("FORGE_CI_LIVE_MAVEN_TESTCONTAINERS_IMAGE"); image != "" {
+		if private || settings.Event != livetest.TrialRelease || livetest.RunnerArch(t, target) != "amd64" || livetest.DemoName() != "" || livetest.PrivilegedRunnerLabel(t, target) == "" || os.Getenv("FORGE_CI_LIVE_MAVEN_APPLICATION_IMAGE") == "" {
+			t.Fatal("Maven Testcontainers acceptance requires a public disposable native amd64 Maven application fixture and acknowledged privileged runner capacity")
+		}
+
+		consumer = livetest.WithMavenContainerTests(t, consumer, image, livetest.PrivilegedRunnerLabel(t, target))
 	}
 
 	workflows := consumer.Workflows(t)

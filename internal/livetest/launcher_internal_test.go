@@ -5,6 +5,7 @@ package livetest
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -23,7 +24,7 @@ import (
 // Exercise the actual launcher with inert build/preflight collaborators and
 // the signal fixture in this test executable. No provider or container is used.
 func TestLiveLauncherWaitsForCleanupAndReleasesLock(t *testing.T) {
-	for _, mode := range []string{"launcher signal", "process-group signal", "just recipe signal", "just release recipe signal"} {
+	for _, mode := range []string{"launcher signal", "process-group signal", "just recipe signal", "just release recipe signal", "provider-scoped signal"} {
 		t.Run(mode, func(t *testing.T) {
 			root := t.TempDir()
 			script, packageDir := newLauncherFixture(t, root)
@@ -36,8 +37,12 @@ func TestLiveLauncherWaitsForCleanupAndReleasesLock(t *testing.T) {
 
 			command.Env = []string{"PATH=" + filepath.Join(root, "tools") + ":" + testenv.ToolPath(t, "flock", "jq") + ":" + gnu + ":/usr/bin:/bin", "HOME=" + root,
 				"XDG_STATE_HOME=" + filepath.Join(root, "state"), "TMPDIR=" + root,
-				"FORGE_CI_LIVE_SIGNAL_FIXTURE=" + root, "FORGE_CI_LIVE_FIXTURE_BINARY=" + os.Args[0], "FORGE_CI_LIVE_PACKAGE_DIR=" + packageDir,
+				"FORGE_CI_LIVE_LAUNCHER_FIXTURE=" + root, "FORGE_CI_LIVE_FIXTURE_BINARY=" + os.Args[0], "FORGE_CI_LIVE_PACKAGE_DIR=" + packageDir,
 				"FORGE_CI_LIVE_CLEANUP_HANDSHAKE=1"}
+			if mode == "provider-scoped signal" {
+				command.Env = append(command.Env, liveProviderEnv+"=forgejo")
+			}
+
 			command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 			var output evidence.Diagnostic
@@ -64,6 +69,11 @@ func TestLiveLauncherWaitsForCleanupAndReleasesLock(t *testing.T) {
 			lock := filepath.Join(root, "state/forge-ci/live.lock")
 			requireLiveLock(t, ctx, lock, true)
 
+			providerLock := filepath.Join(root, "state/forge-ci/live-forgejo.lock")
+			if mode == "provider-scoped signal" {
+				requireLiveLock(t, ctx, providerLock, true)
+			}
+
 			if mode == "process-group signal" {
 				if err := syscall.Kill(-command.Process.Pid, syscall.SIGTERM); err != nil {
 					t.Fatal(err)
@@ -74,6 +84,10 @@ func TestLiveLauncherWaitsForCleanupAndReleasesLock(t *testing.T) {
 
 			waitFixtureFile(t, ctx, root, "cleaning", done)
 			requireLiveLock(t, ctx, lock, true)
+
+			if mode == "provider-scoped signal" {
+				requireLiveLock(t, ctx, providerLock, true)
+			}
 
 			if err := os.WriteFile(filepath.Join(root, "finish-cleanup"), nil, 0o600); err != nil {
 				t.Fatal(err)
@@ -95,15 +109,36 @@ func TestLiveLauncherWaitsForCleanupAndReleasesLock(t *testing.T) {
 			}
 
 			requireLiveLock(t, ctx, lock, false)
+
+			if mode == "provider-scoped signal" {
+				requireLiveLock(t, ctx, providerLock, false)
+			}
 		})
 	}
+}
+
+// Set the fixture's input only after TestMain has installed the normal suite
+// lifecycle. A fixture-specific TestMain branch must not make this regression pass.
+func TestLiveLauncherLifecycleFixture(t *testing.T) {
+	root := os.Getenv("FORGE_CI_LIVE_LAUNCHER_FIXTURE")
+	if root == "" {
+		return
+	}
+
+	wantDigest := fmt.Sprintf("%x", sha256.Sum256([]byte("#!/bin/sh\nexit 0\n")))
+	if got := os.Getenv(runnerBinarySHA256Env); got != wantDigest {
+		t.Fatalf("TestMain replaced launcher's runner digest: got %s, want %s", got, wantDigest)
+	}
+
+	t.Setenv("FORGE_CI_LIVE_SIGNAL_FIXTURE", root)
+	TestSuiteSignalFixture(t)
 }
 
 func liveLauncherCommand(t *testing.T, ctx context.Context, root, script, mode, gnu string) *exec.Cmd {
 	t.Helper()
 
 	if !strings.HasPrefix(mode, "just ") {
-		return exec.CommandContext(ctx, filepath.Join(gnu, "bash"), script, "focused", "^TestSuiteSignalFixture$")
+		return exec.CommandContext(ctx, filepath.Join(gnu, "bash"), script, "focused", "^TestLiveLauncherLifecycleFixture$")
 	}
 
 	just, err := exec.LookPath("just")
@@ -115,7 +150,7 @@ func liveLauncherCommand(t *testing.T, ctx context.Context, root, script, mode, 
 	if mode == "just release recipe signal" {
 		args = append(args, "test-live-gitlab-release", filepath.Join(root, "job.tar"), filepath.Join(root, "signer.tar"))
 	} else {
-		args = append(args, "test-live", "^TestSuiteSignalFixture$")
+		args = append(args, "test-live", "^TestLiveLauncherLifecycleFixture$")
 	}
 
 	return exec.CommandContext(ctx, just, args...)
@@ -174,14 +209,18 @@ set -eu
 mode=$1
 shift
 case "$mode" in
-  run) printf 'inert preflight\n' ;;
+  run)
+    if [[ "${2:-}" = classify-run ]]; then
+      if [[ "$3" = 130 ]]; then printf '130 interrupted\n'; else printf '%s failed\n' "$3"; fi
+    else printf 'inert preflight\n'; fi
+    ;;
   list) printf '%s\n' "$FORGE_CI_LIVE_PACKAGE_DIR" ;;
   build|test)
     while [[ "$1" != -o ]]; do shift; done
     output=$2
     if [[ "$mode" = test ]]; then
       output="${output%/}/livetest.test"
-      printf '#!/bin/bash\nexec "$FORGE_CI_LIVE_FIXTURE_BINARY" -test.run=^TestSuiteSignalFixture$\n' > "$output"
+      printf '#!/bin/bash\nexec "$FORGE_CI_LIVE_FIXTURE_BINARY" -test.run=^TestLiveLauncherLifecycleFixture$\n' > "$output"
     else
       printf '#!/bin/sh\nexit 0\n' > "$output"
     fi

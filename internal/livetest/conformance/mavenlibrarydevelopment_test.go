@@ -17,6 +17,8 @@ import (
 )
 
 func TestForgejoMavenLibraryConsumer_Development(t *testing.T) {
+	livetest.RegisterLiveScenario(t)
+
 	root := os.Getenv(consumerCheckoutEnv)
 	if root == "" {
 		t.Skip("set FORGE_CI_LIVE_CONSUMER")

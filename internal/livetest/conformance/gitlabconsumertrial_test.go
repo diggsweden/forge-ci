@@ -30,6 +30,8 @@ import (
 // that same canary to the protected signer environment then permits the actual
 // checks, on the same MR commit. No signing credential is used by this trial.
 func TestGitLabLayer_ConsumerTrial(t *testing.T) {
+	livetest.RegisterLiveScenario(t)
+
 	root := os.Getenv(consumerCheckoutEnv)
 	if root == "" {
 		t.Skip("use just test-live-gitlab-consumer <checkout> <prepared-job-image.tar>")
@@ -118,6 +120,8 @@ func runGitLabConsumerTrial(t *testing.T, root string, private bool) {
 		t.Fatal(writeErr)
 	}
 
+	livetest.RetainGitLabJobLogsAfter(t, target, repo, map[string]string{variable: canary})
+
 	// GitLab takes a pushed branch in after git has returned, and refuses a
 	// merge request opened before then: "source_branch does not exist".
 	if waitErr := retry.Run(ctx, nil, 30, 2*time.Second, func() error {
@@ -185,7 +189,7 @@ func runGitLabConsumerTrial(t *testing.T, root string, private bool) {
 	}
 	// Success must retain the same bounded trace evidence before scratch
 	// cleanup; summaries alone lose Rust test counts and gate diagnostics.
-	passedTrace := gitlabTrialTrace(t, ctx, client, project, passed.ID, "check")
+	passedTrace := gitlabTrialTrace(t, ctx, client, project, passed.ID, "check", "Check: build and test", "Check: lint")
 	t.Log(strings.ReplaceAll(passedTrace, target.Token, "[REDACTED]"))
 
 	settings, _, err := client.Projects.GetProject(project, nil, gitlabapi.WithContext(ctx))
