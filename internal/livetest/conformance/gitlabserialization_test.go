@@ -212,6 +212,7 @@ func waitGitLabParentSuccess(t *testing.T, ctx context.Context, client *gitlabap
 		}
 
 		if run.Status == "failed" || run.Status == "canceled" {
+			logGitLabTrace(t, gitlabTrialTrace(t, ctx, client, project, pipeline))
 			t.Fatalf("release parent %d ended %s", pipeline, run.Status)
 		}
 

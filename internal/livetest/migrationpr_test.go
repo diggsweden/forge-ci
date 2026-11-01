@@ -73,7 +73,8 @@ func TestForgejoConsumerPRUnitChecks(t *testing.T) {
 	run := WaitForConsumerRun(t, target, repo, settings.Workflow, "pull_request", "")
 	t.Logf("consumer PR result: run=%d status=%s", run.ID, run.Status)
 
-	for _, job := range RunJobs(t, target, repo, run.ID) {
+	jobs := RunJobs(t, target, repo, run.ID)
+	for _, job := range jobs {
 		t.Logf("consumer job: id=%d name=%s status=%s", job.ID, job.Name, job.Status)
 
 		if len(job.RunsOn) == 0 || job.Attempt == 0 {
@@ -91,6 +92,7 @@ func TestForgejoConsumerPRUnitChecks(t *testing.T) {
 	}
 
 	if run.Status != "success" {
+		StopOnInfrastructure(t, ForgejoJobFailures(jobs))
 		t.Fatal("consumer unit PR failed; retained original application check traces")
 	}
 }

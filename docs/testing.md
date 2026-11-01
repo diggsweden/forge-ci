@@ -596,6 +596,20 @@ under `${XDG_STATE_HOME:-$HOME/.local/state}/forge-ci/live-runs/<run>` for
 The tier is human-invoked and has no owning workflow, so there is no CI
 artifact to retrieve instead.
 
+The run ends with one `Live result:` line: `passed`, `failed`, `interrupted`,
+`skipped` when no registered scenario ran, or `infrastructure` when the lab,
+not the product, failed every test that failed (still a non-zero exit). Beside
+the log, `verdict.json` records the same verdict for tooling: the run inputs
+the log's header shows (`started_at`, `source_commit`, `profile`, `provider`,
+`scenario` and the same `forge_ci_live_*` consumer inputs, handed over by the
+script as values), then, read from the redacted log alone, each leaf test's
+`name`, repository-relative `package`, `result` (`pass`, `fail`, `skip` or
+`unfinished`) and `elapsed_seconds`, the `FORGE_CI_LIVE_INFRASTRUCTURE` lines,
+and the `Admin policy sha256:…` decisions the log shows. The test results come
+from the `-test.v` text the log already holds, by the same reading that decides
+the verdict, so the retained log stays the readable evidence and the two cannot
+disagree.
+
 One live run per lab account runs at a time. Scenarios delete and recreate
 fixed `fci-<scenario>` repositories, so two concurrent runs would clobber each
 other; the script takes a non-blocking `flock` on
@@ -1093,6 +1107,18 @@ The next trial deletes and recreates its scratch repositories normally.
 **Diagnosing a failing in-runner scenario.** A failing scenario prints the tail
 of the job log itself, on both forges, because a bare conclusion is the same
 defect as a missing tool discovered mid-run: right answer, useless vocabulary.
+
+A job the lab failed to run says nothing about the product, so every place
+that judges a failed job first asks why it failed. On GitLab that is the job's
+`failure_reason`: `runner_system_failure`, `stuck_or_timeout_failure`,
+`scheduler_failure`, `api_failure`, `data_integrity_failure` and
+`runner_unsupported` are the lab's, and every other reason, or none, is the
+product's; only a job with no reason at all is read for the log's
+`Job failed (system failure)` line. On Forgejo it is a job with `runs-on` that
+no runner took (`task_id` 0). When the lab caused every failure, the test ends
+with a `FORGE_CI_LIVE_INFRASTRUCTURE <test> <job>: <reason>` line; one product
+failure among them keeps the product's verdict. Nothing is retried: release
+scenarios are not idempotent, and a retry would hide a flaky lab.
 
 When the log is not enough, because the job passed but produced the wrong artifact,
 or the failure is in state teardown is about to delete, `FORGE_CI_LIVE_KEEP_SCRATCH=1`

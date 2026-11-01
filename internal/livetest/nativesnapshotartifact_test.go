@@ -496,14 +496,20 @@ include:
 
 	trees := map[string]map[string][]byte{}
 
+	var failures []JobFailure
+
 	for _, job := range jobs {
 		t.Logf("native snapshot job: forge=gitlab pipeline=%d job=%d name=%s status=%s", job.Pipeline.ID, job.ID, job.Name, job.Status)
 
 		if job.Status == "failed" {
-			trace, _, _ := client.Jobs.GetTraceFile(project, job.ID, gitlabapi.WithContext(t.Context()))
-			if trace != nil {
-				body, _ := io.ReadAll(io.LimitReader(trace, 16384))
-				t.Log(redactTargetSecrets(target, string(body)))
+			var tail string
+			if trace, _, _ := client.Jobs.GetTraceFile(project, job.ID, gitlabapi.WithContext(t.Context())); trace != nil {
+				tail = logTail(trace)
+				t.Log(redactTargetSecrets(target, tail))
+			}
+
+			if !job.AllowFailure {
+				failures = append(failures, ClassifyGitLabJob(job.Name, job.FailureReason, tail))
 			}
 		}
 
@@ -536,6 +542,7 @@ include:
 	}
 
 	if run.Status != "success" {
+		StopOnInfrastructure(t, failures)
 		t.Fatalf("GitLab snapshot pipeline %d ended %s", run.ID, run.Status)
 	}
 

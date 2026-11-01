@@ -200,6 +200,9 @@ func (s layerScenario) logJobs(t *testing.T, jobs []livetest.RunJob, secrets ...
 			t.Logf("job %q: %s", job.Name, job.NoLogReason())
 		}
 	}
+
+	// After the evidence: a run the lab failed ends here as infrastructure.
+	livetest.StopOnInfrastructure(t, livetest.ForgejoJobFailures(jobs))
 }
 
 // requireBranches holds the repository to exactly the named branches, each at

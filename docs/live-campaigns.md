@@ -27,7 +27,9 @@ Focused local suites support `FORGE_CI_LIVE_PROVIDER=forgejo` or `gitlab`.
 Selection is checked by Go preflight, runtime provider selection and runner
 architecture selection. A single-provider run cannot claim the full profile.
 The retained report names its execution provider and preserves the complete
-contract identity/provenance.
+contract identity/provenance. Read each lane's outcome from the `verdict.json`
+beside its log; an `infrastructure` verdict is the lab's failure, not the
+product's: fix the lab and run the case again rather than counting it either way.
 
 The launcher takes the existing `live.lock` shared and its provider lock
 exclusive. Different providers can overlap; the same provider remains exclusive

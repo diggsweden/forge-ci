@@ -149,15 +149,18 @@ export FORGE_CI_LIVE_CREDENTIAL_PROXY_BIN="$state/credential-proxy"
 export FORGE_CI_LIVE_PROBE_JSON_BIN="$state/probe-json"
 export FORGE_CI_LIVE_LAYER_BIN="$state/forge-ci-layer"
 
+started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+source_commit=$(git -C "$repo_root" rev-parse --verify HEAD 2>/dev/null || printf 'unavailable')
 {
-	printf 'started_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-	printf 'source_commit=%s\n' "$(git -C "$repo_root" rev-parse --verify HEAD 2>/dev/null || printf 'unavailable')"
+	printf 'started_at=%s\n' "$started_at"
+	printf 'source_commit=%s\n' "$source_commit"
 	printf 'profile=%s\n' "$profile"
 	printf 'provider=%s\n' "$provider_scope"
 	printf 'scenario=%q\n' "$scenario"
 	# What a consumer recipe was given, so the run can be repeated from its
 	# log. A setting names a variable or a secret and never carries a secret.
 	# An external registry's token stays in its file; its path and user are logged.
+	# livetest.LiveRunInputs is this list for verdict.json; a test keeps the two equal.
 	for input in FORGE_CI_LIVE_DEMO FORGE_CI_LIVE_CONSUMER FORGE_CI_LIVE_CONSUMER_EVENT FORGE_CI_LIVE_CONSUMER_SETTINGS FORGE_CI_LIVE_CONSUMER_VISIBILITY FORGE_CI_LIVE_IMAGE_PLAN_JOB_IMAGE \
 		FORGE_CI_LIVE_EXTERNAL_REGISTRY_TOKEN_FILE FORGE_CI_LIVE_EXTERNAL_REGISTRY_USER; do
 		[[ -z "${!input:-}" ]] || printf '%s=%q\n' "${input,,}" "${!input}"
@@ -221,8 +224,12 @@ if [[ "$interrupted" -ne 0 ]]; then status=130; fi
 set -e
 
 # Result interpretation belongs to the Go test harness, including all-skipped
-# trees and log-read failures; shell retains build/process supervision only.
-classification=$(cd -- "$repo_root" && "$go_bin" run ./internal/livetest/preflight classify-run "$status" "$log" 7>&- 9>&-) || classification='1 failed'
+# trees, lab failures and log-read failures; shell retains build/process
+# supervision only. The classifier also writes verdict.json beside the log,
+# read from the redacted log and given the run's header as values, not as the
+# shell-quoted text the log holds.
+classification=$(cd -- "$repo_root" && FORGE_CI_LIVE_RUN_STARTED_AT="$started_at" FORGE_CI_LIVE_RUN_SOURCE_COMMIT="$source_commit" \
+	FORGE_CI_LIVE_RUN_SCENARIO="$scenario" "$go_bin" run ./internal/livetest/preflight classify-run "$status" "$log" 7>&- 9>&-) || classification='1 failed'
 read -r status verdict <<<"$classification"
 if [[ "$interrupted" -ne 0 ]]; then
 	status=130
@@ -230,4 +237,5 @@ if [[ "$interrupted" -ne 0 ]]; then
 fi
 printf 'Live result: %s\n' "$verdict"
 printf 'Live log: %s (retained for 30 days)\n' "$log"
+[[ ! -f "$run_dir/verdict.json" ]] || printf 'Live verdict: %s\n' "$run_dir/verdict.json"
 exit "$status"

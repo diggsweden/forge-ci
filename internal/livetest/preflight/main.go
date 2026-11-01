@@ -11,7 +11,9 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -66,23 +68,66 @@ func main() {
 		summary.Selected, summary.Generation, livetest.ResourcePrefix, summary.Explanation)
 }
 
-// classifyRun reads the retained log only for a clean exit; any other status
-// is classified from the status alone.
+// classifyRun classifies the run and writes its verdict.json beside the
+// retained log. A clean exit must have a readable log to be judged; any other
+// status is a failure the log can at most explain, so a log that cannot be
+// opened or read then leaves the status to classify it alone.
 func classifyRun(status int, path string) (livetest.LiveRunResult, error) {
-	var log *os.File
+	var log io.Reader
 
-	if status == 0 {
-		file, err := os.Open(path) //nolint:gosec // Explicit operator-owned retained log.
-		if err != nil {
-			return livetest.LiveRunResult{}, err
-		}
-
+	file, err := os.Open(path) //nolint:gosec // Explicit operator-owned retained log.
+	if err == nil {
 		defer func() { _ = file.Close() }()
 
 		log = file
+	} else if status == 0 {
+		return livetest.LiveRunResult{}, err
 	}
 
-	return livetest.ClassifyLiveRun(log, status)
+	// A log that breaks off fails a clean exit; a failed one keeps its status.
+	verdict, err := livetest.ReadLiveRun(log, status)
+	if err != nil && status == 0 {
+		return livetest.LiveRunResult{}, err
+	} else if err != nil {
+		fmt.Fprintf(os.Stderr, "live result: %v\n", err)
+	}
+
+	verdict.Run = livetest.LiveRunHeaderFrom(os.Getenv)
+	relativePackages(&verdict)
+
+	// The verdict file serves tooling; the Live result line stays the
+	// human's, so a verdict that cannot be written does not change it.
+	if writeErr := livetest.WriteLiveRunVerdict(filepath.Dir(path), verdict); writeErr != nil {
+		fmt.Fprintf(os.Stderr, "live result: %v\n", writeErr)
+	}
+
+	return verdict.Result(), nil
+}
+
+// relativePackages names each package by its directory relative to the
+// repository, where the run script runs the classifier, not by the absolute
+// path the log has. A path it cannot relate is kept as it is.
+func relativePackages(verdict *livetest.LiveRunVerdict) {
+	root, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	relative := func(dir string) string {
+		if rel, relErr := filepath.Rel(root, dir); relErr == nil && filepath.IsLocal(rel) {
+			return "./" + filepath.ToSlash(rel)
+		}
+
+		return dir
+	}
+
+	for i := range verdict.Tests {
+		verdict.Tests[i].Package = relative(verdict.Tests[i].Package)
+	}
+
+	for i := range verdict.Infrastructure {
+		verdict.Infrastructure[i].Package = relative(verdict.Infrastructure[i].Package)
+	}
 }
 
 // preflightFact returns the single fact one preflight mode prints.

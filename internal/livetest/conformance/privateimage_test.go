@@ -73,6 +73,8 @@ func TestInRunner_PrivateGHCRJobImage(t *testing.T) {
 				t.Fatalf("expected planner and one smoke job, got %d jobs", len(jobs))
 			}
 
+			livetest.StopOnInfrastructure(t, livetest.ForgejoJobFailures(jobs))
+
 			coldPull := false
 
 			for _, job := range jobs {

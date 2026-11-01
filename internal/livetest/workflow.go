@@ -200,18 +200,19 @@ func logWorkflowFailure(ctx context.Context, tb TB, target Target, repo, name st
 	tb.Helper()
 
 	// Log before scratch cleanup, rather than making every caller remember.
-	log := runLogTail(ctx, target, repo)
+	endpoint, judge, ok := failedRunLog(ctx, target, repo)
+	if !ok {
+		return
+	}
+
+	log := runLogTail(ctx, target, endpoint)
 	if log != "" {
 		assertNoTargetSecret(tb, target, "the job log of "+name, log)
 		tb.Logf("livetest: %s job log for %q (tail):\n%s", target.Forge, name, redactTargetSecrets(target, log))
 	}
 
 	// A job the runner never started cannot establish a product failure.
-	if marker, ok := systemFailure(log); ok {
-		tb.Fatalf("livetest: %s never ran the job for %q (%q); the runner failed to prepare it, "+
-			"so this says nothing about the product -- the lab is what to look at",
-			target.Forge, name, marker)
-	}
+	StopOnInfrastructure(tb, judge(log))
 }
 
 // latestRunStatus reads the most recent run's raw status, or "" while none is
@@ -255,25 +256,8 @@ func decodeQuiet(ctx context.Context, target Target, endpoint string, into any) 
 	return decode(ctx, target, http.MethodGet, endpoint, nil, into, http.StatusOK)
 }
 
-// systemFailure reports whether a job log describes a job that never ran,
-// returning the marker that says so.
-//
-// Only GitLab's wording is listed, because it is the only one observed. Forgejo
-// surely has an equivalent, but inventing its phrasing would add a pattern
-// nothing has ever matched — a check that cannot fire, which is the shape this
-// file exists to avoid. Add it when a real log shows it.
-func systemFailure(log string) (string, bool) {
-	for _, marker := range []string{"Job failed (system failure)"} {
-		if strings.Contains(log, marker) {
-			return marker, true
-		}
-	}
-
-	return "", false
-}
-
-// runLogTail returns the end of the failing run's job log, or "" when it cannot
-// be read.
+// runLogTail returns the end of the failing run's job log at endpoint, or ""
+// when it cannot be read.
 //
 // An in-runner scenario that fails reports a conclusion and nothing else: the
 // product ran inside a job, so the assertion sees "failure" and the reason stays
@@ -284,14 +268,7 @@ func systemFailure(log string) (string, bool) {
 // Best effort by design. This runs on a path that is already failing, so a log
 // that cannot be fetched must not replace the real verdict with an error about
 // fetching logs.
-func runLogTail(ctx context.Context, target Target, repo string) string {
-	const keep = 4000
-
-	endpoint, ok := runLogEndpoint(ctx, target, repo)
-	if !ok {
-		return ""
-	}
-
+func runLogTail(ctx context.Context, target Target, endpoint string) string {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return ""
@@ -299,7 +276,7 @@ func runLogTail(ctx context.Context, target Target, repo string) string {
 
 	authorize(req, target)
 
-	client, err := targetHTTPClient(target, timeoutHTTPShort)
+	client, err := targetHTTPClient(target, timeoutAPI)
 	if err != nil {
 		return ""
 	}
@@ -315,29 +292,41 @@ func runLogTail(ctx context.Context, target Target, repo string) string {
 		return ""
 	}
 
-	// Bounded: a job log can be megabytes, and the tail is where the failure is.
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil || len(body) == 0 {
-		return ""
-	}
-
 	// Forgejo answers with a zip of one log per job; GitLab's job trace is plain
 	// text. Decided by what the response says it is rather than by forge, so a
 	// forge that changes its mind does not silently produce a screen of binary.
 	if strings.Contains(resp.Header.Get("Content-Type"), "zip") {
-		body = []byte(unzipFirst(body))
+		// A zip is read whole, its directory being at its end; bounded, as
+		// the archive of a run that wrote without end could be anything.
+		archive, err := io.ReadAll(io.LimitReader(resp.Body, maxJobLog))
+		if err != nil {
+			return ""
+		}
+
+		return unzipFirstTail(archive)
 	}
 
-	if len(body) > keep {
-		body = body[len(body)-keep:]
+	// Streamed to its end, keeping only the last part: the failure, and the
+	// line saying the runner never ran the job, is where the log ends.
+	return logTail(resp.Body)
+}
+
+// logTail reads r to its end and returns what jobLogTail keeps of it, or ""
+// when it cannot be read.
+func logTail(r io.Reader) string {
+	tail := tailWriter{keep: jobLogTail}
+	if _, err := io.Copy(&tail, r); err != nil {
+		return ""
 	}
+
+	body, _, _ := tail.bytes()
 
 	return string(body)
 }
 
-// unzipFirst returns the contents of the first file in a zip, or "" when it
+// unzipFirstTail returns the end of the first file in a zip, or "" when it
 // cannot be read. Best effort, for the same reason as its caller.
-func unzipFirst(archive []byte) string {
+func unzipFirstTail(archive []byte) string {
 	reader, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
 	if err != nil || len(reader.File) == 0 {
 		return ""
@@ -350,40 +339,40 @@ func unzipFirst(archive []byte) string {
 
 	defer func() { _ = file.Close() }()
 
-	// Bounded again: the compressed bound above says nothing about the
-	// decompressed size.
-	content, err := io.ReadAll(io.LimitReader(file, 1<<20))
-	if err != nil {
-		return ""
-	}
-
-	return string(content)
+	return logTail(file)
 }
 
-// runLogEndpoint resolves where the latest run's log lives on this forge.
+// failedRunLog resolves where the latest failed run's log lives on this forge,
+// and how to judge that run's failure once its log has been read.
 //
 // Both forges need an id first, and neither spells it the same way: GitLab's log
 // is a job trace under the project, Forgejo's is a run log under the repository
 // (paths taken from the instance's own swagger rather than assumed).
-func runLogEndpoint(ctx context.Context, target Target, repo string) (string, bool) {
+func failedRunLog(ctx context.Context, target Target, repo string) (string, func(log string) []JobFailure, bool) {
 	switch target.Forge {
 	case provider.ForgeGitLab:
 		var jobs []struct {
-			ID int `json:"id"`
+			ID            int    `json:"id"`
+			Name          string `json:"name"`
+			FailureReason string `json:"failure_reason"`
 		}
 
 		project := url.PathEscape(target.Owner + "/" + repo)
 		// A skipped downstream job can have a newer ID than the producer that
 		// failed. Ask for failed jobs so its empty trace cannot hide the cause.
 		if _, err := decodeQuiet(ctx, target, target.BaseURL()+"/api/v4/projects/"+project+"/jobs?scope%5B%5D=failed&per_page=1", &jobs); err != nil || len(jobs) == 0 {
-			return "", false
+			return "", nil, false
 		}
 
-		return fmt.Sprintf("%s/api/v4/projects/%s/jobs/%d/trace", target.BaseURL(), project, jobs[0].ID), true
+		judge := func(log string) []JobFailure {
+			return []JobFailure{ClassifyGitLabJob(jobs[0].Name, jobs[0].FailureReason, log)}
+		}
+
+		return fmt.Sprintf("%s/api/v4/projects/%s/jobs/%d/trace", target.BaseURL(), project, jobs[0].ID), judge, true
 	case provider.ForgeForgejo, provider.ForgeGitHub, provider.ForgeLocal:
 		var payload struct {
 			Runs []struct {
-				ID int `json:"id"`
+				ID int64 `json:"id"`
 			} `json:"workflow_runs"`
 		}
 
@@ -393,13 +382,26 @@ func runLogEndpoint(ctx context.Context, target Target, repo string) (string, bo
 		// 352: resource does not exist", which reads as "no log yet".
 		base := target.BaseURL() + "/api/v1/repos/" + target.Owner + "/" + repo
 		if _, err := decodeQuiet(ctx, target, base+"/actions/runs", &payload); err != nil || len(payload.Runs) == 0 {
-			return "", false
+			return "", nil, false
 		}
 
-		return fmt.Sprintf("%s/actions/runs/%d/logs", base, payload.Runs[0].ID), true
+		run := payload.Runs[0].ID
+
+		// Forgejo's run log has no reason in it; its jobs say whether a runner
+		// took them. Unreadable jobs judge nothing, leaving the product's verdict.
+		judge := func(string) []JobFailure {
+			var jobs []RunJob
+			if _, err := decodeQuiet(ctx, target, fmt.Sprintf("%s/actions/runs/%d/jobs", base, run), &jobs); err != nil {
+				return nil
+			}
+
+			return ForgejoJobFailures(jobs)
+		}
+
+		return fmt.Sprintf("%s/actions/runs/%d/logs", base, run), judge, true
 	}
 
-	return "", false
+	return "", nil, false
 }
 
 // ReleaseAssetURL asks the forge where a release asset can be downloaded.

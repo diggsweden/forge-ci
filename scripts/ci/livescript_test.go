@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -736,5 +737,26 @@ func TestRunLiveTests_ScopedLaneRespectsLegacyExclusiveLock(t *testing.T) {
 
 			requireNoEvidence(t, run)
 		})
+	}
+}
+
+// verdict.json records the consumer inputs livetest.LiveRunInputs names, and
+// the log's header those its loop names: the two lists must stay one, so the
+// verdict never takes an input the log's header would not show.
+func TestRunLiveTests_HeaderInputsAreTheVerdictsInputs(t *testing.T) {
+	t.Parallel()
+
+	script := string(reporoot.ReadFile(t, "scripts/ci/run-live-tests.sh"))
+
+	_, loop, found := strings.Cut(script, "\tfor input in ")
+	loop, _, ended := strings.Cut(loop, "; do")
+
+	if !found || !ended {
+		t.Fatal("run-live-tests.sh has no header input loop")
+	}
+
+	logged := strings.Fields(strings.ReplaceAll(loop, "\\\n", " "))
+	if !slices.Equal(logged, livetest.LiveRunInputs) {
+		t.Fatalf("the header logs %v, verdict.json records %v", logged, livetest.LiveRunInputs)
 	}
 }

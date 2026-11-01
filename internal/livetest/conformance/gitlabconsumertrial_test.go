@@ -291,6 +291,8 @@ func gitlabTrialTrace(t *testing.T, ctx context.Context, client *gitlabapi.Clien
 	// job's, whatever order GitLab lists the jobs in.
 	var produced, failed strings.Builder
 
+	var failures []livetest.JobFailure
+
 	for _, job := range jobs {
 		t.Logf("job %s: %s", job.Name, job.Status)
 
@@ -308,8 +310,21 @@ func gitlabTrialTrace(t *testing.T, ctx context.Context, client *gitlabapi.Clien
 			into = &produced
 		}
 
+		trace := gitlabFinishedTrace(t, ctx, client, project, job.ID)
 		fmt.Fprintf(into, "\n=== job %s (%s) ===\n", job.Name, job.Status)
-		into.WriteString(gitlabFinishedTrace(t, ctx, client, project, job.ID))
+		into.WriteString(trace)
+
+		if job.Status == "failed" && !job.AllowFailure {
+			failures = append(failures, livetest.ClassifyGitLabJob(job.Name, job.FailureReason, trace))
+		}
+	}
+
+	// Every failure judgement reads the jobs here first: a pipeline the lab
+	// failed ends as infrastructure, with its traces kept, before any caller
+	// can call it the product's.
+	if livetest.OnlyInfrastructure(failures) {
+		logGitLabTrace(t, failed.String())
+		livetest.StopOnInfrastructure(t, failures)
 	}
 
 	return produced.String() + failed.String()

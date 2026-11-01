@@ -152,8 +152,10 @@ jobs:
 		t.Logf("diagnostic artifact retained: id=%d name=%s", artifact.ID, artifact.Name)
 	}
 
+	runJobs := RunJobs(t, target, consumer, run.ID)
 	contextRan := false
-	for _, job := range RunJobs(t, target, consumer, run.ID) {
+
+	for _, job := range runJobs {
 		contextRan = contextRan || (job.Name == "probe" && job.Status == "success")
 		if len(job.RunsOn) == 0 || job.Attempt == 0 || job.Status == "skipped" {
 			t.Logf("non-runner wrapper: id=%d name=%s status=%s attempt=%d", job.ID, job.Name, job.Status, job.Attempt)
@@ -184,6 +186,7 @@ jobs:
 	}
 
 	if run.Status != "success" {
+		StopOnInfrastructure(t, ForgejoJobFailures(runJobs))
 		t.Fatal("diagnostic transport failed; inspect retained traces")
 	}
 
