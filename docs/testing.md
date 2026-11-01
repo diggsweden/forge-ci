@@ -357,6 +357,17 @@ and [GitHub trials](#trying-a-consumer-on-github). `just test-live` is the local
 GitLab/Forgejo conformance suite; it does not run the hosted GitHub trial.
 For a retained demonstration, use [`just demo <forge> <name>`](#showing-a-consumer).
 
+A trial answers one of two questions; keep them apart.
+
+- **Does an example work?** Run its demo, `test/live/demos/hello-go-cli` for
+  example, whose CI files are the example filled in and kept so by a unit
+  test. Do not copy an example into a scratch checkout by hand: such copies
+  went live missing a release workflow or the files a release reads.
+- **Does Forge CI work for this project?** Run the project's own checkout
+  with its own workflows. The trial moves only the Forge CI pin to the
+  candidate; never replace the project's workflows with an example's, since
+  its own policy tests then rightly fail and the run proves neither.
+
 #### Operator card
 
 The four commands an operator types, in order; the sections below say what

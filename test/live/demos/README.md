@@ -29,6 +29,11 @@ workflows in `test/live/github/workflows`. `hello-maven` is a Maven jar;
 its binary extracted from the image. `hello-npm-package` adds an installable,
 scoped npm package without a container. `hello-cargo-workspace` adds two
 workspace binaries, each with its own runtime image and binary export target.
+`hello-go-cli` and `hello-go-service` show the `go-cli` and `go-service`
+examples: their source is their own, and every CI file is the example's,
+filled in by `internal/livetest/exampledemos_internal_test.go`, which fails when
+one drifts. After changing an example, rewrite them with
+`go test ./internal/livetest -run TestExampleDemosAreTheirExamples -args -update-demos`.
 A demo for another ecosystem or feature is one more directory in the same shape;
 `internal/livetest/demos_internal_test.go` renders every consumer here for
 each forge it declares and parses its artifact configuration, so malformed
@@ -46,6 +51,8 @@ inputs fail `just test-unit`. Rendering is not a live-flow pass.
 | hello-cargo-workspace | GitHub | Shared version; two binaries and images |
 | hello-android | GitHub PR/build | Demo flavor, unit tests, unsigned release APK/AAB |
 | hello-ios | GitHub PR/build | macOS ARM64 simulator tests, XcodeGen app, unsigned archive |
+| hello-go-cli | Forgejo, GitLab MR gate | The go-cli example as shipped; `cmd/my-cli` layout |
+| hello-go-service | Forgejo, GitLab MR gate | The go-service example as shipped; binaries and runtime image |
 
 Record live results separately by commit, provider, visibility and flow. Local
 package, binary and Android build tests do not establish registry permissions,
