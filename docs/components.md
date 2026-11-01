@@ -536,6 +536,14 @@ uses: diggsweden/forge-ci/.github/workflows/security-openssf-scorecard.yml@v0.90
 | `release-orchestrator.yml` | Production release control plane | Production releases |
 | `release-snapshot-orchestrator.yml` | Lightweight snapshot release control plane (npm/SBOM-only) | Development branches |
 
+The release orchestrator's inputs named `release.*` and `changelog.*` are options of one run's release and
+changelog steps: draft or not, which SBOM layers, signing on or off, the
+signer allowlist, attach patterns, the changelog configuration and whether to
+bump. Hyphenated inputs wire the pipeline: images, refs, environments and
+promotion targets. What is built, signed and published is declared in
+`.forge-ci/artifacts.yml`, not in inputs; `release.sboms` caps the per-artifact
+`sboms` there, and the plan reports a cap with no overlap.
+
 ### Snapshot vs Production Release
 
 | Aspect | Snapshot | Production |

@@ -28,7 +28,8 @@
 #   RELEASE_GPG_PUBLIC_KEY: For tag/signature verification
 #   MAVEN_CENTRAL_USERNAME: For Maven Central publishing (when publish-to includes maven-central)
 #   MAVEN_CENTRAL_PASSWORD: For Maven Central publishing (when publish-to includes maven-central)
-#   NPM_TOKEN: Reserved for future npmjs.org support; current NPM publishing uses GITHUB_TOKEN
+#   NPM_TOKEN: read by the npm snapshot publish and reported by the prerequisites
+#              check; the release's npm publishing uses GITHUB_TOKEN
 #   CODE_SCANNING_TOKEN: Optional — uploads scan results to Code Scanning
 #                      (requires code_scanning_alerts:write — GitHub App or fine-grained PAT)
 #   The caller passes the secrets its release uses by name in an explicit
@@ -40,15 +41,8 @@
 #   id-token: write       # Keyless cosign OIDC (sign + attest, no GitHub attestation API)
 #   actions: read         # Download workflow artifacts
 #
-# Forge CI workflow design
-# - Removed single-artifact inline mode
-# - Only supports artifacts-config file
-# - Separate artifacts[] and containers[] sections
-# - Container configuration moved to containers[] section
-#
-# Build Types: application (default), library
-# Publishing: Controlled via build-type, require-authorization, publish-to fields
-# Containers: Separate section with explicit dependencies
+# What is built, signed and published comes from .forge-ci/artifacts.yml; see
+# https://github.com/diggsweden/forge-ci/blob/main/docs/artifacts-reference.md
 name: Orchestrate Release
 on:
   workflow_call: # yamllint disable-line rule:truthy
