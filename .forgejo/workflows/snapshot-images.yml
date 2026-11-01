@@ -74,6 +74,7 @@ env:
   SNAPSHOT_NAMESPACE: ${{ inputs['artifact-name'] }}
 jobs:
   coordinates:
+    name: "Check: layer and builder coordinates"
     runs-on: ${{ fromJSON(inputs['runner-label']) }}
     outputs:
       helpers_repository: ${{ steps.validate.outputs.helpers_repository }}
@@ -149,6 +150,7 @@ jobs:
             if [ -n "${ARTIFACT_JOB_IMAGE_RUST_INPUT:-}" ]; then printf 'artifact_job_image_rust=%s\n' "${ARTIFACT_JOB_IMAGE_RUST_INPUT}"; fi
           } >> "${FORGEJO_OUTPUT}"
   plan:
+    name: "Check: plan"
     needs: coordinates
     runs-on: ${{ fromJSON(inputs['runner-label']) }}
     env:
@@ -211,6 +213,7 @@ jobs:
           ARM64_RUNNER: ${{ inputs['runner-label-arm64'] }}
         run: test -n "${ARM64_RUNNER}"
   produce:
+    name: "Build: ${{ matrix.artifact.name }}"
     needs: [coordinates, plan]
     if: ${{ needs.plan.outputs.enabled == 'true' && inputs['context-artifact'] == '' }}
     runs-on: ${{ fromJSON(inputs['runner-label']) }}
@@ -279,6 +282,7 @@ jobs:
           run_forge_ci artifact upload --name "${SNAPSHOT_NAMESPACE}-producer-${ARTIFACT_NAME}" \
             --dir "snapshot-source/_snapshot-artifacts/${ARTIFACT_NAME}" --include-hidden --if-no-files error --retention-days 1
   context:
+    name: "Prepare: image inputs"
     needs: [coordinates, plan, produce]
     if: ${{ !failure() && !cancelled() && needs.plan.outputs.enabled == 'true' && inputs['context-artifact'] == '' }}
     runs-on: ${{ fromJSON(inputs['runner-label']) }}
@@ -322,6 +326,7 @@ jobs:
           run_forge_ci artifact upload --name "${SNAPSHOT_NAMESPACE}-context" \
             --dir snapshot-source/snapshot-context --include-hidden --if-no-files error --retention-days 1
   build:
+    name: "Build: ${{ matrix.build.name }} (${{ matrix.build.arch }})"
     needs: [coordinates, plan, context]
     if: ${{ !failure() && !cancelled() && needs.plan.outputs.enabled == 'true' && (needs.context.result == 'success' || inputs['context-artifact'] != '') }}
     runs-on: ${{ fromJSON(matrix.build.arch == 'arm64' && inputs['runner-label-arm64'] || inputs['runner-label']) }}
@@ -393,6 +398,7 @@ jobs:
             --dir "snapshot-source/snapshot-layouts/${IMAGE_NAME}-arch-${IMAGE_ARCH}" --blob-store "${SNAPSHOT_NAMESPACE}-blob" \
             --include-hidden --if-no-files error --retention-days 1
   publish:
+    name: "Publish: ${{ matrix.image.name }}"
     needs: [coordinates, plan, build]
     if: ${{ needs.plan.outputs.enabled == 'true' && needs.build.result == 'success' }}
     runs-on: ${{ fromJSON(inputs['runner-label']) }}
@@ -460,6 +466,7 @@ jobs:
           run_forge_ci artifact upload --name "${SNAPSHOT_NAMESPACE}-receipt-${IMAGE_NAME}" --file "snapshot-receipts/${IMAGE_NAME}.json" --if-no-files error
           run_forge_ci artifact upload --name "${SNAPSHOT_NAMESPACE}-evidence-${IMAGE_NAME}" --dir "snapshot-evidence/${IMAGE_NAME}" --if-no-files ignore
   collect:
+    name: Summary
     needs: [coordinates, plan, build, publish]
     if: ${{ !failure() && !cancelled() && needs.plan.result == 'success' }}
     runs-on: ${{ fromJSON(inputs['runner-label']) }}

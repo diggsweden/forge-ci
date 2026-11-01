@@ -122,7 +122,7 @@ env:
 
 jobs:
   coordinates:
-    name: Validate helper and builder coordinates
+    name: "Check: layer and builder coordinates"
     runs-on: ${{ fromJSON(inputs['runner-label']) }}
     timeout-minutes: 5
     outputs:
@@ -210,7 +210,7 @@ jobs:
           } >>"${FORGEJO_OUTPUT}"
 
   plan:
-    name: Plan release images
+    name: "Check: plan"
     needs: coordinates
     runs-on: ${{ fromJSON(inputs['runner-label']) }}
     timeout-minutes: 10
@@ -312,7 +312,7 @@ jobs:
           exit 1
 
   build:
-    name: Build ${{ matrix.build.name }} (${{ matrix.build.arch }})
+    name: "Build: ${{ matrix.build.name }} (${{ matrix.build.arch }})"
     needs: [coordinates, plan]
     # Each architecture builds on a runner of its own architecture: a build
     # runs the Containerfile's steps, and none may rely on CPU emulation.
@@ -504,7 +504,7 @@ jobs:
             --include-hidden
 
   publish:
-    name: Publish ${{ matrix.image.name }}
+    name: "Publish: ${{ matrix.image.name }}"
     needs: [coordinates, plan, build]
     runs-on: ${{ fromJSON(inputs['runner-label']) }}
     timeout-minutes: 45
@@ -761,7 +761,7 @@ jobs:
             --if-no-files error
 
   collect:
-    name: Collect the release image ledger
+    name: Summary
     needs: [coordinates, plan, publish]
     runs-on: ${{ fromJSON(inputs['runner-label']) }}
     timeout-minutes: 10

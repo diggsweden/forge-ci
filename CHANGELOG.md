@@ -358,6 +358,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The snapshot flow's jobs are named by stage like the release flow's,
   `Prepare`, `Build: <name> (Maven)`, `Publish: npm package`, `Summary`;
   a branch rule that required one of the old names must be updated.
+- The Forgejo `snapshot-images.yml` and `release-images.yml` jobs carry the
+  same stage names, `Check: plan`, `Build: <name> (<arch>)`,
+  `Publish: <image>`, `Summary`; the snapshot jobs had no display names and
+  the release jobs had prose ones.
 - **BREAKING:** `forge-ci` with no command is a usage error (exit 2), like a
   bare command group: it prints a short start card on stderr naming `init`
   and `doctor` instead of the full reference at exit 0. `--help` and `help`
