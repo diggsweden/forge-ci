@@ -147,8 +147,9 @@ func relativePackages(verdict *livetest.LiveRunVerdict) {
 // campaign.env before campaign-prepare puts it in place; `campaign-plan <dir>
 // <forgejo|gitlab> <cases-file>` prints the lane the script runs, for the
 // commit checked out in the working directory; `campaign-runtime-targets
-// <repository> <forgejo|gitlab>=<cases-file>...` prints the runtime targets
-// campaign-prepare builds for those lanes, one a line.
+// <repository> <forgejo|gitlab>=<cases-file>... [flavor=<job-image flavor>...]`
+// prints the runtime targets campaign-prepare builds for those lanes, one a
+// line, and refuses a case naming a nanolinter image of another flavor.
 func campaign(mode string, args []string) error {
 	switch {
 	case mode == "campaign-env-check" && len(args) == 1:
@@ -156,7 +157,17 @@ func campaign(mode string, args []string) error {
 
 		return err
 	case mode == "campaign-runtime-targets" && len(args) >= 2:
-		targets, err := livetest.CampaignRuntimeTargets(args[0], args[1:])
+		var lanes, flavors []string
+
+		for _, arg := range args[1:] {
+			if flavor, isFlavor := strings.CutPrefix(arg, "flavor="); isFlavor {
+				flavors = append(flavors, flavor)
+			} else {
+				lanes = append(lanes, arg)
+			}
+		}
+
+		targets, err := livetest.CampaignRuntimeTargets(args[0], lanes, flavors)
 		for _, target := range targets {
 			fmt.Println(target)
 		}
@@ -205,7 +216,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "       preflight classify-run <exit-code> <retained-log>")
 	fmt.Fprintln(os.Stderr, "       preflight campaign-env-check <campaign.env>")
 	fmt.Fprintln(os.Stderr, "       preflight campaign-plan <dir> <forgejo|gitlab> <cases-file>")
-	fmt.Fprintln(os.Stderr, "       preflight campaign-runtime-targets <repository> <forgejo|gitlab>=<cases-file>...")
+	fmt.Fprintln(os.Stderr, "       preflight campaign-runtime-targets <repository> <forgejo|gitlab>=<cases-file>... [flavor=<flavor>...]")
 	fmt.Fprintln(os.Stderr, "usage: preflight [signing-inputs | runner-arch | consumer-trial-layer | host-tools] (signing-inputs checks only FORGE_CI_LIVE_SIGNING_KEY_DIR; host-tools checks only this host; other modes read the forgeci lab contract)")
 	os.Exit(2)
 }

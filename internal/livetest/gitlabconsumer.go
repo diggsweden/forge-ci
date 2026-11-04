@@ -419,6 +419,21 @@ func gitlabGateExtraJobImages(body []byte) ([]string, error) {
 	return names, nil
 }
 
+// gitlabGateLints reports whether a gate includes the nanolinter component,
+// which lints in the trial's lint image, $CI_LINT_IMAGE.
+func gitlabGateLints(body []byte) (bool, error) {
+	_, entries, err := gitlabGateComponents(body)
+	if err != nil {
+		return false, err
+	}
+
+	return slices.ContainsFunc(entries, func(entry *yaml.Node) bool {
+		_, name, _, known := gitlabGateComponent(gitlabMappingValue(entry, "component"))
+
+		return known && name == gitlabLintComponent
+	}), nil
+}
+
 // gitlabGateImage is, for each component a gate may include, the input that
 // takes its image, the placeholder the consumer writes there, and the image
 // the trial binds. A build component runs forge-ci from its runtime image, so
@@ -431,10 +446,11 @@ type gitlabGateImage struct {
 	build bool
 }
 
-// The check component, the placeholder of the job image, and the input that
+// The check and lint components, the placeholder of the job image, and the input that
 // takes a build component's image.
 const (
 	gitlabCheckComponent = "check"
+	gitlabLintComponent  = "nanolinter"
 	gitlabJobPlaceholder = "$CI_JOB_IMAGE"
 	gitlabRuntimeInput   = "runtime-image"
 )
@@ -443,7 +459,7 @@ func gitlabJobImage(images GitLabGateImages) string { return images.Job }
 
 var gitlabGateImageInputs = map[string]gitlabGateImage{
 	gitlabCheckComponent:   {input: "job-image", placeholder: gitlabJobPlaceholder, image: gitlabJobImage},
-	"nanolinter":           {input: "nanolinter-image", placeholder: "$CI_LINT_IMAGE", image: func(images GitLabGateImages) string { return images.Lint }},
+	gitlabLintComponent:    {input: "nanolinter-image", placeholder: "$CI_LINT_IMAGE", image: func(images GitLabGateImages) string { return images.Lint }},
 	"build-go":             {input: gitlabRuntimeInput, placeholder: gitlabJobPlaceholder, image: gitlabJobImage, build: true},
 	"build-maven":          {input: gitlabRuntimeInput, placeholder: gitlabJobPlaceholder, image: gitlabJobImage, build: true},
 	"build-npm":            {input: gitlabRuntimeInput, placeholder: gitlabJobPlaceholder, image: gitlabJobImage, build: true},
@@ -520,7 +536,7 @@ func gitlabGateBoundImage(name, value string, use gitlabGateImage, images GitLab
 	}
 
 	missing := "job-archive="
-	if name == "nanolinter" {
+	if name == gitlabLintComponent {
 		missing = "lint-archive="
 	}
 

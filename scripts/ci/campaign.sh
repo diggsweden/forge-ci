@@ -11,10 +11,12 @@
 #
 # prepare builds and publishes the images of this checkout's HEAD with the
 # live recipes: the signer and kaniko job images, the Buildah job image
-# archive, and the archive of each runtime image the named lanes' cases need
-# (preflight campaign-runtime-targets). It exports every demo as a one-commit
-# checkout under <dir>/demos/<name>, and writes <dir>/campaign.env: KEY=value
-# lines of image references and archive paths, no secrets.
+# archive and the archive of each runtime image the named lanes' cases need
+# (preflight campaign-runtime-targets). It publishes each job-image=
+# nanolinter image too, and saves it as an archive. It exports every demo as
+# a one-commit checkout under <dir>/demos/<name>, and writes
+# <dir>/campaign.env: KEY=value lines of image references and archive paths,
+# no secrets.
 #
 # lane runs the plan the preflight makes of a cases file (internal/livetest,
 # campaign.go, says what a case is and refuses what it is not), in order,
@@ -82,9 +84,10 @@ prepare() {
 	fi
 	bash "$repo_root/scripts/ci/engine-binary.sh" check
 	# A runtime image archive per target the lanes' cases need, read before
-	# anything is built so a cases file the preflight refuses costs no build.
+	# anything is built so a cases file the preflight refuses, one naming a
+	# nanolinter flavor not given among them, costs no build.
 	local targets
-	targets=$(preflight campaign-runtime-targets "$repo_root" "${lanes[@]}") || exit 2
+	targets=$(preflight campaign-runtime-targets "$repo_root" "${lanes[@]}" "${flavors[@]/#/flavor=}") || exit 2
 	local commit
 	commit=$(git -C "$repo_root" rev-parse --verify HEAD)
 
@@ -106,9 +109,9 @@ prepare() {
 	done
 
 	local -a entries=("CAMPAIGN_COMMIT=$commit")
-	local value signer_archive=$dir/images/forge-ci-live-signer.tar
-	value=$(bash "$repo_root/scripts/ci/publish-live-image.sh" kaniko-job "$forge_lab")
-	entries+=("KANIKO_JOB_IMAGE=$value")
+	local value signer_archive=$dir/images/forge-ci-live-signer.tar kaniko_archive=$dir/images/forge-ci-kaniko-job.tar
+	value=$(bash "$repo_root/scripts/ci/publish-live-image.sh" kaniko-job "$forge_lab" "$kaniko_archive")
+	entries+=("KANIKO_JOB_IMAGE=$value" "FORGE_CI_LIVE_KANIKO_JOB_IMAGE_ARCHIVE=$kaniko_archive")
 	value=$(bash "$repo_root/scripts/ci/publish-live-image.sh" signer "$forge_lab" "$signer_archive")
 	entries+=("FORGE_CI_LIVE_SIGNER_IMAGE=$value" "FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE=$signer_archive")
 	value=$(just --justfile "$repo_root/justfile" buildah-job-image-archive "$dir/images")
@@ -122,11 +125,18 @@ prepare() {
 		entries+=("FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_${target^^}=$value")
 		[[ "$target" != go ]] || entries+=("FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE=$value")
 	done
+	# Each nanolinter job image as JOB_IMAGE_<FLAVOR>, the reference a Forgejo
+	# case's CI_JOB_IMAGE takes, and LINT_IMAGE_ARCHIVE_<FLAVOR>, the archive a
+	# GitLab case's lint-archive= takes.
+	local lint_archive
 	for flavor in "${flavors[@]}"; do
 		value=$(just --justfile "$forge_lab/justfile" --working-directory "$forge_lab" \
 			publish-image --account forgeci "nanolinter-$flavor" "${job_images[$flavor]}")
+		lint_archive=$dir/images/nanolinter-$flavor.tar
+		podman save --quiet --format docker-archive --output "$lint_archive" "${job_images[$flavor]}"
 		key=${flavor^^}
-		entries+=("JOB_IMAGE_${key//-/_}=$value")
+		key=${key//-/_}
+		entries+=("JOB_IMAGE_$key=$value" "LINT_IMAGE_ARCHIVE_$key=$lint_archive")
 	done
 
 	# Written beside its place, checked as a lane will read it, then moved in.

@@ -48,7 +48,7 @@ func isCampaignProvider(provider string) bool {
 // takes by name; every other key is only an @NAME value.
 var campaignExported = []string{
 	"FORGE_CI_LIVE_SIGNER_IMAGE", "FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE", "FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE",
-	"FORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE",
+	"FORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE", "FORGE_CI_LIVE_KANIKO_JOB_IMAGE_ARCHIVE",
 }
 
 // campaignScenarioTarget is the runtime target of FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE,
@@ -59,6 +59,31 @@ const campaignScenarioTarget = "go"
 // archive of campaign.env: @FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE, the scenarios'
 // go image, or @GitLabJobImageArchiveEnv<TARGET>.
 var campaignRuntimeArchive = regexp.MustCompile(`@` + strings.TrimSuffix(GitLabJobImageArchiveEnv, "_") + `(?:_([A-Z][A-Z0-9]*))?\b`)
+
+// The campaign.env keys of a nanolinter job image prepared with
+// job-image=<flavor>:<image>, each followed by campaignFlavorKey(flavor): its
+// reference, a Forgejo case's CI_JOB_IMAGE, and its archive, a GitLab case's
+// lint-archive=.
+const (
+	campaignJobImagePrefix    = "JOB_IMAGE_"
+	campaignLintArchivePrefix = "LINT_IMAGE_ARCHIVE_"
+)
+
+// campaignFlavorRef is a cases file's reference to a nanolinter job image of
+// campaign.env, and its flavor's key.
+var campaignFlavorRef = regexp.MustCompile(`@(?:` + campaignJobImagePrefix + `|` + campaignLintArchivePrefix + `)([A-Z][A-Z0-9_]*)\b`)
+
+// campaignFlavor is a job-image= flavor, as campaign prepare accepts it.
+var campaignFlavor = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+
+// campaignFlavorKey is a flavor in campaign.env's keys: capitals, '-' as '_'.
+func campaignFlavorKey(flavor string) string {
+	return strings.ToUpper(strings.ReplaceAll(flavor, "-", "_"))
+}
+
+// campaignLintArchive is a GitLab consumer's setting of the nanolinter image
+// archive its gate lints in, the trial's FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE.
+const campaignLintArchive = "lint-archive"
 
 var (
 	campaignKey     = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
@@ -203,12 +228,6 @@ func campaignCaseArgs(dir, provider string, env map[string]string, words []strin
 		return nil, fmt.Errorf("no such demo in %s: %w", filepath.Join(dir, "demos"), errs.ErrValidation)
 	}
 
-	if provider == campaignGitLab {
-		if err := campaignHasGateImages(env, filepath.Join(dir, "demos", words[1], filepath.FromSlash(GitLabGateFile))); err != nil {
-			return nil, err
-		}
-	}
-
 	if words[2] != "pull-request" && words[2] != "release" {
 		return nil, fmt.Errorf("a consumer event is pull-request or release: %w", errs.ErrValidation)
 	}
@@ -218,18 +237,46 @@ func campaignCaseArgs(dir, provider string, env map[string]string, words []strin
 		return nil, err
 	}
 
+	if provider == campaignGitLab {
+		gate, gateErr := readCampaignGate(filepath.Join(dir, "demos", words[1], filepath.FromSlash(GitLabGateFile)), words[3:])
+		if gateErr != nil {
+			return nil, gateErr
+		}
+
+		if gateErr = campaignHasGateImages(env, gate); gateErr != nil {
+			return nil, gateErr
+		}
+	}
+
 	return consumerRecipe(provider, words[2], filepath.Join(dir, "demos", words[1]), archives, settings)
 }
 
-// campaignHasGateImages refuses a demo whose GitLab gate at path checks in a
-// further job image campaign.env has no archive of.
-func campaignHasGateImages(env map[string]string, path string) error {
-	names, err := demoGateExtraJobImages(path)
+// readCampaignGate reads the GitLab gate at path of a consumer with the
+// settings words, and refuses the consumer when its gate lints and it names
+// no lint-archive=, or it names one for a gate that does not lint.
+func readCampaignGate(path string, words []string) (demoGate, error) {
+	gate, err := readDemoGate(path)
 	if err != nil {
-		return err
+		return demoGate{}, err
 	}
 
-	for _, name := range names {
+	named := slices.ContainsFunc(words, func(word string) bool { return strings.HasPrefix(word, campaignLintArchive+"=") })
+
+	switch {
+	case gate.lints && !named:
+		return demoGate{}, fmt.Errorf("the demo's gate lints in $CI_LINT_IMAGE; name its nanolinter flavor's archive, %s=@%s<FLAVOR>: %w",
+			campaignLintArchive, campaignLintArchivePrefix, errs.ErrValidation)
+	case !gate.lints && named:
+		return demoGate{}, fmt.Errorf("the demo's gate does not lint, so it takes no %s=: %w", campaignLintArchive, errs.ErrValidation)
+	}
+
+	return gate, nil
+}
+
+// campaignHasGateImages refuses a demo whose GitLab gate checks in a further
+// job image campaign.env has no archive of.
+func campaignHasGateImages(env map[string]string, gate demoGate) error {
+	for _, name := range gate.extraJobs {
 		if env[GitLabJobImageArchiveEnv+name] == "" {
 			return fmt.Errorf("the demo's gate checks in $CI_JOB_IMAGE_%s and campaign.env has no %s%s; prepare the campaign with this cases file: %w",
 				name, GitLabJobImageArchiveEnv, name, errs.ErrValidation)
@@ -252,7 +299,7 @@ func campaignSettings(provider string, env map[string]string, words []string) (m
 			return nil, nil, err
 		}
 
-		if provider != campaignGitLab || !slices.Contains([]string{"job-archive", "build-archive", "signer-archive"}, key) {
+		if provider != campaignGitLab || !slices.Contains([]string{"job-archive", "build-archive", "signer-archive", campaignLintArchive}, key) {
 			settings = append(settings, key+"="+value)
 
 			continue
@@ -262,30 +309,53 @@ func campaignSettings(provider string, env map[string]string, words []string) (m
 			return nil, nil, fmt.Errorf("%s= is named twice: %w", key, errs.ErrValidation)
 		}
 
+		if value == "" {
+			return nil, nil, fmt.Errorf("%s= names no archive: %w", key, errs.ErrValidation)
+		}
+
 		archives[key] = value
 	}
 
 	return archives, settings, nil
 }
 
-// consumerRecipe is the consumer recipe of provider and event, with its arguments.
+// consumerRecipe is the consumer recipe of provider and event, with its
+// arguments. A GitLab merge request takes its lint archive as the recipe's
+// optional last argument, a release as the setting lint-archive=, which the
+// recipe takes out of the trial's settings.
 func consumerRecipe(provider, event, checkout string, archives map[string]string, settings []string) ([]string, error) {
+	lint, lints := archives[campaignLintArchive]
+	images := len(archives)
+
+	if lints {
+		images--
+	}
+
 	switch {
 	case provider == campaignForgejo:
 		return append([]string{"test-live-forgejo-consumer", checkout, event}, settings...), nil
 	case event == "pull-request":
-		if len(archives) != 1 || archives["job-archive"] == "" || len(settings) != 0 {
-			return nil, fmt.Errorf("a GitLab merge request takes job-archive= alone: %w", errs.ErrValidation)
+		if images != 1 || archives["job-archive"] == "" || len(settings) != 0 {
+			return nil, fmt.Errorf("a GitLab merge request takes job-archive= and lint-archive= alone: %w", errs.ErrValidation)
 		}
 
-		return []string{"test-live-gitlab-consumer", checkout, archives["job-archive"]}, nil
+		args := []string{"test-live-gitlab-consumer", checkout, archives["job-archive"]}
+		if lints {
+			args = append(args, lint)
+		}
+
+		return args, nil
 	default:
-		if len(archives) != 3 {
+		if images != 3 {
 			return nil, fmt.Errorf("a GitLab release takes job-archive=, build-archive= and signer-archive=: %w", errs.ErrValidation)
 		}
 
-		return append([]string{"test-live-gitlab-consumer-release", checkout,
-			archives["job-archive"], archives["build-archive"], archives["signer-archive"]}, settings...), nil
+		args := []string{"test-live-gitlab-consumer-release", checkout, archives["job-archive"], archives["build-archive"], archives["signer-archive"]}
+		if lints {
+			args = append(args, campaignLintArchive+"="+lint)
+		}
+
+		return append(args, settings...), nil
 	}
 }
 
@@ -317,10 +387,22 @@ func campaignSettingValue(env map[string]string, word string) (string, string, e
 // @FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE (go) or @GitLabJobImageArchiveEnv<TARGET>,
 // and on GitLab the scenarios' go image and every $CI_JOB_IMAGE_<TARGET> the
 // gate of a named demo checks in. Each must be a target of
-// containers/runtime/images.json.
-func CampaignRuntimeTargets(root string, lanes []string) ([]string, error) {
+// containers/runtime/images.json. Every nanolinter job image a case names
+// must be of one of flavors, the job-image= flavors the campaign publishes,
+// and a GitLab consumer names lint-archive= when its demo's gate lints.
+func CampaignRuntimeTargets(root string, lanes, flavors []string) ([]string, error) {
 	if len(lanes) == 0 {
 		return nil, fmt.Errorf("name the lanes the campaign runs, <forgejo|gitlab>=<cases file>: %w", errs.ErrValidation)
+	}
+
+	prepared := map[string]bool{}
+
+	for _, flavor := range flavors {
+		if !campaignFlavor.MatchString(flavor) {
+			return nil, fmt.Errorf("a job image flavor is lowercase letters, digits and hyphens, got %q: %w", flavor, errs.ErrValidation)
+		}
+
+		prepared[campaignFlavorKey(flavor)] = true
 	}
 
 	body, err := os.ReadFile(filepath.Join(root, "containers", "runtime", "images.json")) //nolint:gosec // This repository's roster, read as data.
@@ -344,10 +426,14 @@ func CampaignRuntimeTargets(root string, lanes []string) ([]string, error) {
 		}
 
 		err = eachLine(cases, func(number int, line string) error {
-			return campaignCaseTargets(root, provider, strings.Fields(line), targets)
+			if caseErr := campaignCaseTargets(root, provider, strings.Fields(line), prepared, targets); caseErr != nil {
+				return fmt.Errorf("%s:%d: %w", cases, number, caseErr)
+			}
+
+			return nil
 		})
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", cases, err)
+			return nil, err
 		}
 	}
 
@@ -365,8 +451,9 @@ func CampaignRuntimeTargets(root string, lanes []string) ([]string, error) {
 	return slices.Sorted(maps.Keys(targets)), nil
 }
 
-// campaignCaseTargets adds the runtime targets one case of provider needs.
-func campaignCaseTargets(root, provider string, words []string, targets map[string]bool) error {
+// campaignCaseTargets adds the runtime targets one case of provider needs,
+// and refuses a nanolinter job image of a flavor not prepared.
+func campaignCaseTargets(root, provider string, words []string, prepared, targets map[string]bool) error {
 	if len(words) == 0 || strings.HasPrefix(words[0], "#") {
 		return nil
 	}
@@ -379,6 +466,10 @@ func campaignCaseTargets(root, provider string, words []string, targets map[stri
 				targets[strings.ToLower(match[1])] = true
 			}
 		}
+
+		if err := campaignFlavorsPrepared(word, prepared); err != nil {
+			return err
+		}
 	}
 
 	switch {
@@ -390,12 +481,12 @@ func campaignCaseTargets(root, provider string, words []string, targets map[stri
 			return fmt.Errorf("not a demo name: %q: %w", words[1], errs.ErrValidation)
 		}
 
-		names, err := demoGateExtraJobImages(filepath.Join(root, "test", "live", "demos", words[1], "consumer", filepath.FromSlash(GitLabGateFile)))
+		gate, err := readCampaignGate(filepath.Join(root, "test", "live", "demos", words[1], "consumer", filepath.FromSlash(GitLabGateFile)), words[2:])
 		if err != nil {
 			return err
 		}
 
-		for _, name := range names {
+		for _, name := range gate.extraJobs {
 			targets[strings.ToLower(name)] = true
 		}
 	}
@@ -403,24 +494,49 @@ func campaignCaseTargets(root, provider string, words []string, targets map[stri
 	return nil
 }
 
-// demoGateExtraJobImages lists the names in the $CI_JOB_IMAGE_<NAME> a demo's
-// GitLab gate at path checks in; a demo without a gate checks in none.
-func demoGateExtraJobImages(path string) ([]string, error) {
-	gate, err := os.ReadFile(path) //nolint:gosec // A demo of this repository, read as data.
+// campaignFlavorsPrepared refuses a case's word that names a nanolinter job
+// image of a flavor not prepared.
+func campaignFlavorsPrepared(word string, prepared map[string]bool) error {
+	for _, match := range campaignFlavorRef.FindAllStringSubmatch(word, -1) {
+		if !prepared[match[1]] {
+			return fmt.Errorf("%s names a nanolinter job image the campaign does not publish; add job-image=%s:<local image>: %w",
+				word, strings.ToLower(strings.ReplaceAll(match[1], "_", "-")), errs.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
+// demoGate is what a demo's GitLab gate runs in beside $CI_JOB_IMAGE: the
+// NAME of each $CI_JOB_IMAGE_<NAME> it checks in, and whether it lints in
+// $CI_LINT_IMAGE.
+type demoGate struct {
+	extraJobs []string
+	lints     bool
+}
+
+// readDemoGate reads the demo's GitLab gate at path; a demo without one runs
+// in nothing further.
+func readDemoGate(path string) (demoGate, error) {
+	body, err := os.ReadFile(path) //nolint:gosec // A demo of this repository, read as data.
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
+		return demoGate{}, nil
 	}
 
 	if err != nil {
-		return nil, err
+		return demoGate{}, err
 	}
 
-	names, err := gitlabGateExtraJobImages(gate)
+	var gate demoGate
+	if gate.extraJobs, err = gitlabGateExtraJobImages(body); err == nil {
+		gate.lints, err = gitlabGateLints(body)
+	}
+
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
+		return demoGate{}, fmt.Errorf("%s: %w", path, err)
 	}
 
-	return names, nil
+	return gate, nil
 }
 
 // WriteCampaignPlan writes plan for the lane script, which reads it without

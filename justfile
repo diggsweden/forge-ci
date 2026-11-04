@@ -1179,11 +1179,12 @@ test-live-github-release-api organization_id:
 # Run a clean consumer's own GitLab MR gate with a prebuilt Docker image archive.
 # Uses the same lab preflight, serial lock, redacted evidence and scratch cleanup.
 [arg('checkout', help='Absolute path to a clean consumer checkout')]
+[arg('lint_archive', help='Path to the prepared Docker archive of the nanolinter image, for a gate that lints; default FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE')]
 [arg('image_archive', help='Path to the prepared Docker image archive for the consumer MR job')]
 [doc('Live GitLab MR; network, destructive')]
 [group('live')]
-test-live-gitlab-consumer checkout image_archive:
-    @FORGE_CI_LIVE_CONSUMER="$1" FORGE_CI_LIVE_CONSUMER_IMAGE_ARCHIVE="$2" \
+test-live-gitlab-consumer checkout image_archive lint_archive="":
+    @FORGE_CI_LIVE_CONSUMER="$1" FORGE_CI_LIVE_CONSUMER_IMAGE_ARCHIVE="$2" FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE="${3:-${FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE:-}}" \
         exec bash scripts/ci/run-live-tests.sh focused '^TestGitLabLayer_ConsumerTrial$'
 
 # Exercise signed native GitLab release jobs with caller-prepared image archives.
@@ -1198,16 +1199,28 @@ test-live-gitlab-release job_image_archive signer_image_archive:
 # Run a clean consumer's .gitlab/build-release.sh under the pinned release policy.
 # The consumer trial signs distro packages and needs the guarded full-release profile.
 [arg('checkout', help='Absolute path to a clean consumer checkout with its GitLab check and build scripts')]
-[arg('settings', help='Optional KEY=value consumer variables scoped to the key-free release build')]
+[arg('settings', help='Optional KEY=value consumer variables scoped to the key-free release build, and lint-archive=<nanolinter image archive> for a gate that lints')]
 [arg('job_image_archive', help='Path to the prepared Docker archive for the non-root check image')]
 [arg('build_image_archive', help='Path to the prepared Docker archive for the release builder')]
 [arg('signer_image_archive', help='Path to the prepared Docker archive for the signer image')]
 [doc('Live GitLab consumer release; network, destructive')]
 [group('live')]
 test-live-gitlab-consumer-release checkout job_image_archive build_image_archive signer_image_archive *settings:
-    @FORGE_CI_LIVE_CONSUMER="$1" FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE="$2" FORGE_CI_LIVE_BUILD_IMAGE_ARCHIVE="$3" FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE="$4" \
-        FORGE_CI_LIVE_CONSUMER_SETTINGS="$(shift 4; printf '%s\n' "$@")" \
-        exec bash scripts/ci/run-live-tests.sh focused '^TestGitLabRelease_ConsumerTrial$'
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export FORGE_CI_LIVE_CONSUMER="$1" FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE="$2" FORGE_CI_LIVE_BUILD_IMAGE_ARCHIVE="$3" FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE="$4"
+    shift 4
+    # lint-archive= is the trial's image, as for `just demo gitlab`, not a setting.
+    settings=()
+    for word in "$@"; do
+        case "$word" in
+        lint-archive=*) export FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE="${word#*=}" ;;
+        *) settings+=("$word") ;;
+        esac
+    done
+    FORGE_CI_LIVE_CONSUMER_SETTINGS="$(printf '%s\n' "${settings[@]}")"
+    export FORGE_CI_LIVE_CONSUMER_SETTINGS
+    exec bash scripts/ci/run-live-tests.sh focused '^TestGitLabRelease_ConsumerTrial$'
 
 # Exercise one cold base publication and verified warm reuse in native release jobs.
 [arg('job_image_archive', help='Path to the prepared Docker archive for the non-root check image')]
@@ -1222,9 +1235,9 @@ test-live-gitlab-base-images job_image_archive build_image_archive signer_image_
 # Prepare a live campaign: everything its lanes take, built from HEAD once.
 #
 # Publishes the kaniko job and signer images and each named nanolinter job
-# image (package nanolinter-<flavor>) with Forge Lab, saves the signer image,
-# the Buildah job image and each runtime image the named lanes' cases and
-# the GitLab gates of their demos take as archives, exports every demo of
+# image (package nanolinter-<flavor>) with Forge Lab, saves those images, the
+# Buildah job image and each runtime image the named lanes' cases and the
+# GitLab gates of their demos take as archives, exports every demo of
 # test/live/demos as a one-commit checkout under <dir>/demos, and writes
 # <dir>/campaign.env: image references, archive paths and CAMPAIGN_COMMIT, no
 # secrets. A dirty checkout or a stale engine checksum is refused. A relative
@@ -1237,8 +1250,8 @@ test-live-gitlab-base-images job_image_archive build_image_archive signer_image_
 #
 # docs/live-campaigns.md, Run a campaign, has the whole run.
 [arg('dir', help='Absolute campaign directory: new, empty, or an earlier campaign to replace')]
-[arg('forge_lab', help='Absolute path to the Forge Lab checkout used to publish the images')]
 [arg('lanes', help='<forgejo|gitlab>=<cases file> per lane the campaign runs, and optional job-image=<flavor>:<local image>, published as nanolinter-<flavor>')]
+[arg('forge_lab', help='Absolute path to the Forge Lab checkout used to publish the images')]
 [doc('Live; build and publish a campaign of this commit; network')]
 [group('live')]
 campaign-prepare forge_lab dir +lanes:

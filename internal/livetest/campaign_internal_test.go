@@ -40,6 +40,27 @@ func newCampaign(t *testing.T, env, cases string) (string, string) {
 	return dir, casesPath
 }
 
+// lintingGate is a GitLab gate that lints in $CI_LINT_IMAGE and checks in
+// $CI_JOB_IMAGE.
+var lintingGate = "include:\n" +
+	"  - component: $CI_SERVER_FQDN/team/engine/nanolinter@" + strings.Repeat("a", 40) + "\n    inputs:\n      nanolinter-image: $CI_LINT_IMAGE\n" +
+	"  - component: $CI_SERVER_FQDN/team/engine/check@" + strings.Repeat("a", 40) + "\n    inputs:\n      job-image: $CI_JOB_IMAGE\n"
+
+// writeFile writes body to path, making its directory.
+func writeFile(t *testing.T, path, body string) string {
+	t.Helper()
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	return path
+}
+
 func TestPlanCampaignLane_ExpandsAndMapsEveryCaseInOrder(t *testing.T) {
 	t.Parallel()
 
@@ -82,9 +103,12 @@ func TestPlanCampaignLane_MapsAGitLabConsumerToItsRecipes(t *testing.T) {
 	t.Parallel()
 
 	dir, cases := newCampaign(t, "CAMPAIGN_COMMIT="+campaignHead+"\nFORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE=/c/signer.tar\n"+
-		"FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA=/c/java.tar\nFORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_NODE=/c/node.tar\nFORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE=/c/buildah.tar\n",
-		"consumer hello-maven pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA\n"+
-			"consumer hello-maven release job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA build-archive=/b.tar signer-archive=@FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE version-bump=maven job-user=65532:65532\n")
+		"FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA=/c/java.tar\nFORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_NODE=/c/node.tar\nFORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE=/c/buildah.tar\nFORGE_CI_LIVE_KANIKO_JOB_IMAGE_ARCHIVE=/c/kaniko.tar\n"+
+		"LINT_IMAGE_ARCHIVE_JAVA=/c/lint-java.tar\n",
+		"consumer hello-maven pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA lint-archive=@LINT_IMAGE_ARCHIVE_JAVA\n"+
+			"consumer hello-maven release job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA build-archive=/b.tar signer-archive=@FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE version-bump=maven lint-archive=@LINT_IMAGE_ARCHIVE_JAVA job-user=65532:65532\n"+
+			"consumer hello-go-cli pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA\n")
+	writeFile(t, filepath.Join(dir, "demos", "hello-maven", filepath.FromSlash(GitLabGateFile)), lintingGate)
 
 	plan, err := PlanCampaignLane(dir, "gitlab", cases, campaignHead)
 	if err != nil {
@@ -92,18 +116,25 @@ func TestPlanCampaignLane_MapsAGitLabConsumerToItsRecipes(t *testing.T) {
 	}
 
 	// Every runtime archive reaches every case, for a gate's further job
-	// images, and so does the Buildah job image.
+	// images, and so do the builder job images; a lint archive is a case's own.
 	if want := []string{
 		"FORGE_CI_LIVE_PROVIDER=gitlab", "FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE=/c/signer.tar", "FORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE=/c/buildah.tar",
-		"FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA=/c/java.tar", "FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_NODE=/c/node.tar",
+		"FORGE_CI_LIVE_KANIKO_JOB_IMAGE_ARCHIVE=/c/kaniko.tar", "FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA=/c/java.tar", "FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_NODE=/c/node.tar",
 	}; !slices.Equal(plan.Env, want) {
 		t.Errorf("env %q, want %q", plan.Env, want)
 	}
 
+	// The merge request takes its lint archive as the recipe's last
+	// argument, the release as its first setting; a gate that does not lint
+	// takes none.
 	checkout := filepath.Join(dir, "demos", "hello-maven")
-	if len(plan.Cases) != 2 ||
-		!slices.Equal(plan.Cases[0].Args, []string{"test-live-gitlab-consumer", checkout, "/c/java.tar"}) ||
-		!slices.Equal(plan.Cases[1].Args, []string{"test-live-gitlab-consumer-release", checkout, "/c/java.tar", "/b.tar", "/c/signer.tar", "version-bump=maven", "job-user=65532:65532"}) {
+	if len(plan.Cases) != 3 ||
+		!slices.Equal(plan.Cases[0].Args, []string{"test-live-gitlab-consumer", checkout, "/c/java.tar", "/c/lint-java.tar"}) ||
+		!slices.Equal(plan.Cases[1].Args, []string{
+			"test-live-gitlab-consumer-release", checkout, "/c/java.tar", "/b.tar", "/c/signer.tar",
+			"lint-archive=/c/lint-java.tar", "version-bump=maven", "job-user=65532:65532",
+		}) ||
+		!slices.Equal(plan.Cases[2].Args, []string{"test-live-gitlab-consumer", filepath.Join(dir, "demos", "hello-go-cli"), "/c/java.tar"}) {
 		t.Fatalf("cases %q", plan.Cases)
 	}
 }
@@ -137,8 +168,12 @@ func TestPlanCampaignLane_RefusesWhatItCannotRead(t *testing.T) {
 		"a bad setting key":        {"forgejo", good, "consumer hello-go-cli release $(id)=x\n", "want key=value"},
 		"a missing campaign value": {"forgejo", good, "consumer hello-go-cli release CI_JOB_IMAGE=@JOB_IMAGE_RUST\n", "campaign.env has no JOB_IMAGE_RUST"},
 		"a bad campaign name":      {"forgejo", good, "consumer hello-go-cli release CI_JOB_IMAGE=@JOB-IMAGE\n", "campaign.env has no JOB-IMAGE"},
-		"a GitLab MR without job":  {"gitlab", good, "consumer hello-go-cli pull-request\n", "job-archive= alone"},
-		"a GitLab MR setting":      {"gitlab", good, "consumer hello-go-cli pull-request job-archive=/a.tar version=1.0.0\n", "job-archive= alone"},
+		"a GitLab MR without job":  {"gitlab", good, "consumer hello-go-cli pull-request\n", "job-archive= and lint-archive= alone"},
+		"a GitLab MR setting":      {"gitlab", good, "consumer hello-go-cli pull-request job-archive=/a.tar version=1.0.0\n", "job-archive= and lint-archive= alone"},
+		"a GitLab empty archive":   {"gitlab", good, "consumer hello-go-cli pull-request job-archive=\n", "job-archive= names no archive"},
+		"a lint gate without lint": {"gitlab", good, "consumer hello-maven pull-request job-archive=/a.tar\n", "name its nanolinter flavor's archive"},
+		"lint for no lint gate":    {"gitlab", good, "consumer hello-go-cli pull-request job-archive=/a.tar lint-archive=/l.tar\n", "takes no lint-archive="},
+		"a lint archive twice":     {"gitlab", good, "consumer hello-maven release job-archive=/a lint-archive=/l lint-archive=/m\n", "lint-archive= is named twice"},
 		"a GitLab release short":   {"gitlab", good, "consumer hello-go-cli release job-archive=/a.tar\n", "build-archive="},
 		"a GitLab archive twice":   {"gitlab", good, "consumer hello-go-cli pull-request job-archive=/a.tar job-archive=/b.tar\n", "job-archive= is named twice"},
 		"a NUL byte":               {"forgejo", good, "scenario TestA\x00\n", "a NUL byte"},
@@ -152,6 +187,8 @@ func TestPlanCampaignLane_RefusesWhatItCannotRead(t *testing.T) {
 			if name == "no case" {
 				dir, cases = newCampaign(t, tc.env, tc.cases)
 			}
+
+			writeFile(t, filepath.Join(dir, "demos", "hello-maven", filepath.FromSlash(GitLabGateFile)), lintingGate)
 
 			_, err := PlanCampaignLane(dir, tc.provider, cases, campaignHead)
 			if !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), tc.want) {
@@ -185,34 +222,25 @@ func TestWriteCampaignPlan_IsNULTerminatedFields(t *testing.T) {
 
 // A campaign prepares the runtime images the cases of its lanes name, and on
 // GitLab the scenarios' go image and the further job images of the named
-// demos' gates; a name images.json does not build is refused.
+// demos' gates; a name images.json does not build is refused, and so is a
+// nanolinter image of a flavor the campaign does not publish or a GitLab
+// consumer whose gate lints and that names no lint archive.
 func TestCampaignRuntimeTargets_ComeFromTheLanesCasesAndTheirDemosGates(t *testing.T) {
 	t.Parallel()
 
-	write := func(path, body string) string {
-		t.Helper()
-
-		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-			t.Fatal(err)
-		}
-
-		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-			t.Fatal(err)
-		}
-
-		return path
-	}
-
 	gate := "include:\n  - component: $CI_SERVER_FQDN/team/engine/check@" + strings.Repeat("a", 40) + "\n    inputs:\n      job-image: $CI_JOB_IMAGE_NODE\n"
 	root := t.TempDir()
-	write(filepath.Join(root, "containers", "runtime", "images.json"), `[{"target":"go"},{"target":"java"},{"target":"node"},{"target":"rust"}]`)
-	write(filepath.Join(root, "test", "live", "demos", "hello-monorepo", "consumer", ".gitlab", "merge-request.yml"), gate)
+	writeFile(t, filepath.Join(root, "containers", "runtime", "images.json"), `[{"target":"go"},{"target":"java"},{"target":"node"},{"target":"rust"}]`)
+	writeFile(t, filepath.Join(root, "test", "live", "demos", "hello-monorepo", "consumer", ".gitlab", "merge-request.yml"), gate)
+	writeFile(t, filepath.Join(root, "test", "live", "demos", "hello-maven", "consumer", ".gitlab", "merge-request.yml"), lintingGate)
 
 	cases := t.TempDir()
-	java := write(filepath.Join(cases, "java.cases"), "# a lane\nconsumer hello-maven pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA\n")
-	monorepo := write(filepath.Join(cases, "monorepo.cases"), "consumer hello-monorepo pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_RUST\n")
-	scenarios := write(filepath.Join(cases, "scenarios.cases"), "scenario TestGitLabRelease_MinimalSignedArtifacts\n")
-	cobol := write(filepath.Join(cases, "cobol.cases"), "consumer hello-maven pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_COBOL\n")
+	java := writeFile(t, filepath.Join(cases, "java.cases"), "# a lane\nconsumer hello-maven pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA lint-archive=@LINT_IMAGE_ARCHIVE_JAVA\n")
+	monorepo := writeFile(t, filepath.Join(cases, "monorepo.cases"), "consumer hello-monorepo pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_RUST\n")
+	scenarios := writeFile(t, filepath.Join(cases, "scenarios.cases"), "scenario TestGitLabRelease_MinimalSignedArtifacts\n")
+	forgejo := writeFile(t, filepath.Join(cases, "forgejo.cases"), "consumer hello-maven pull-request CI_JOB_IMAGE=@JOB_IMAGE_JAVASCRIPT_TYPESCRIPT\n")
+	cobol := writeFile(t, filepath.Join(cases, "cobol.cases"), "consumer hello-monorepo pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_COBOL\n")
+	flavors := []string{"java", "javascript-typescript"}
 
 	for _, tc := range []struct {
 		lanes []string
@@ -221,30 +249,44 @@ func TestCampaignRuntimeTargets_ComeFromTheLanesCasesAndTheirDemosGates(t *testi
 		{[]string{"gitlab=" + java}, []string{"java"}},
 		{[]string{"gitlab=" + monorepo}, []string{"node", "rust"}},
 		// A Forgejo lane runs no GitLab gate and no GitLab scenario.
-		{[]string{"forgejo=" + monorepo, "forgejo=" + scenarios}, []string{"rust"}},
+		{[]string{"forgejo=" + monorepo, "forgejo=" + scenarios, "forgejo=" + forgejo}, []string{"rust"}},
 		{[]string{"gitlab=" + scenarios, "gitlab=" + java}, []string{"go", "java"}},
 	} {
-		if targets, err := CampaignRuntimeTargets(root, tc.lanes); err != nil || !slices.Equal(targets, tc.want) {
+		if targets, err := CampaignRuntimeTargets(root, tc.lanes, flavors); err != nil || !slices.Equal(targets, tc.want) {
 			t.Errorf("%q: targets %q, %v; want %q", tc.lanes, targets, err, tc.want)
 		}
 	}
 
-	if _, err := CampaignRuntimeTargets(root, []string{"gitlab=" + cobol}); !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), `"cobol"`) {
-		t.Errorf("an unknown target was not refused: %v", err)
-	}
+	unlinted := writeFile(t, filepath.Join(cases, "unlinted.cases"), "consumer hello-maven pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA\n")
+	overlinted := writeFile(t, filepath.Join(cases, "overlinted.cases"), "consumer hello-monorepo pull-request job-archive=/j.tar lint-archive=/l.tar\n")
 
-	for _, lanes := range [][]string{nil, {java}, {"github=" + java}, {"gitlab="}} {
-		if _, err := CampaignRuntimeTargets(root, lanes); !errors.Is(err, errs.ErrValidation) {
-			t.Errorf("%q: not refused: %v", lanes, err)
+	for _, tc := range []struct {
+		lanes, flavors []string
+		want           string
+	}{
+		{[]string{"gitlab=" + cobol}, flavors, `"cobol"`},
+		{[]string{"gitlab=" + java}, []string{"go"}, "add job-image=java:<local image>"},
+		{[]string{"forgejo=" + forgejo}, nil, "add job-image=javascript-typescript:<local image>"},
+		{[]string{"gitlab=" + unlinted}, flavors, unlinted + ":1: the demo's gate lints"},
+		{[]string{"gitlab=" + overlinted}, flavors, "takes no lint-archive="},
+		{[]string{"gitlab=" + java}, []string{"Java"}, "a job image flavor"},
+		{nil, flavors, "name the lanes"},
+		{[]string{java}, flavors, "want <forgejo|gitlab>="},
+		{[]string{"github=" + java}, flavors, "want <forgejo|gitlab>="},
+		{[]string{"gitlab="}, flavors, "want <forgejo|gitlab>="},
+	} {
+		if _, err := CampaignRuntimeTargets(root, tc.lanes, tc.flavors); !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%q with %q: got %v, want a validation error naming %q", tc.lanes, tc.flavors, err, tc.want)
 		}
 	}
 
-	// The repository's own campaign names only targets it builds.
+	// The repository's own campaign names only targets it builds, and
+	// nanolinter images of the flavors its cases files ask for.
 	repo := reporoot.Path(t)
 	if _, err := CampaignRuntimeTargets(repo, []string{
 		"forgejo=" + filepath.Join(repo, "test", "live", "campaigns", "k3s-private-forgejo.cases"),
 		"gitlab=" + filepath.Join(repo, "test", "live", "campaigns", "k3s-private-gitlab.cases"),
-	}); err != nil {
+	}, []string{"go", "java", "javascript-typescript", "rust"}); err != nil {
 		t.Fatal(err)
 	}
 }

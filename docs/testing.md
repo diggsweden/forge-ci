@@ -1547,7 +1547,7 @@ or pass `platform checkout --object-format sha256` to avoid metadata discovery.
 ##### Trying a consumer MR gate
 
 ```text
-just test-live-gitlab-consumer /absolute/clean-consumer /absolute/job-image.tar
+just test-live-gitlab-consumer /absolute/clean-consumer /absolute/job-image.tar [/absolute/lint-image.tar]
 ```
 
 This command and `test-live-gitlab-consumer-release` run both public and private
@@ -1569,7 +1569,9 @@ The focused trial accepts one full-SHA-pinned `check` component and, beside
 it, at most one `nanolinter` component, each matching `forge-ci-repository` and
 leaving its image to the trial: `job-image: $CI_JOB_IMAGE` and
 `nanolinter-image: $CI_LINT_IMAGE`. A gate with the nanolinter component needs
-`FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE`, a nanolinter flavour image archive. The
+a nanolinter flavour image archive: the recipe's third argument, or
+`FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE`; the release recipe takes it as the setting
+`lint-archive=`. The
 trial rewrites those coordinates to the lab's engine commit and served image
 digests, preserving the consumer's commands and other files.
 Deployment outside the trial requires the published image digest, as in
