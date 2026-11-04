@@ -7,8 +7,6 @@ import (
 	"context"
 	_ "embed"
 	"errors"
-	"fmt"
-	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -21,13 +19,12 @@ import (
 )
 
 var (
-	errServiceRecipeOrImage       = errors.New("name an absolute native recipe directory and a full digest-pinned Java job image")
-	errServiceReadinessURL        = errors.New("readiness must be an explicit http://127.0.0.1:<port>/<project-endpoint> URL")
-	errServiceReadinessPort       = errors.New("readiness requires a valid container port")
-	errServiceSourceBranch        = errors.New("select a valid source branch different from policy main")
-	errServiceFixtureRelative     = errors.New("fixture must be an absolute CI script path")
-	errServiceFixtureNotRegular   = errors.New("fixture must be a regular CI script")
-	errConflictingServiceVariable = errors.New("conflicting service variable")
+	errServiceRecipeOrImage     = errors.New("name an absolute native recipe directory and a full digest-pinned Java job image")
+	errServiceReadinessURL      = errors.New("readiness must be an explicit http://127.0.0.1:<port>/<project-endpoint> URL")
+	errServiceReadinessPort     = errors.New("readiness requires a valid container port")
+	errServiceSourceBranch      = errors.New("select a valid source branch different from policy main")
+	errServiceFixtureRelative   = errors.New("fixture must be an absolute CI script path")
+	errServiceFixtureNotRegular = errors.New("fixture must be a regular CI script")
 )
 
 // MavenServiceDevelopmentConfig supplies trusted trial infrastructure. Fixture
@@ -35,23 +32,6 @@ var (
 // it runs in the Java job, never on the controller or in the source checkout.
 type MavenServiceDevelopmentConfig struct {
 	RecipeDirectory, JavaImage, Branch, ReadinessURL, Fixture string
-}
-
-// MavenServiceDevelopmentVariables writes shared bindings once and refuses a
-// caller plan that would change the operator-supplied repository authority.
-func MavenServiceDevelopmentVariables(plan, runtime map[string]string) (map[string]string, error) {
-	result := make(map[string]string, len(plan)+len(runtime))
-	maps.Copy(result, plan)
-
-	for key, value := range runtime {
-		if previous, found := result[key]; found && previous != value {
-			return nil, fmt.Errorf("%w %s", errConflictingServiceVariable, key)
-		}
-
-		result[key] = value
-	}
-
-	return result, nil
 }
 
 //go:embed testdata/maven-service-development.yml.tmpl

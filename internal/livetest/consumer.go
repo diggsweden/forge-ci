@@ -7,6 +7,7 @@ package livetest
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -409,6 +410,25 @@ type ConsumerPlan struct {
 	Variables      map[string]string
 	Secrets        map[string]string
 	workflowInputs map[string]string
+}
+
+// MergeConsumerVariables binds the trial's runtime values without overwriting
+// conflicting consumer-plan values. Neither input is modified; errors name the
+// variable, never its value.
+func MergeConsumerVariables(plan, runtime map[string]string) (map[string]string, error) {
+	result := make(map[string]string, len(plan)+len(runtime))
+	maps.Copy(result, plan)
+
+	for _, key := range sortedKeys(runtime) {
+		value := runtime[key]
+		if previous, found := result[key]; found && previous != value {
+			return nil, fmt.Errorf("consumer variable %s conflicts with the trial's runtime binding: %w", key, errs.ErrValidation)
+		}
+
+		result[key] = value
+	}
+
+	return result, nil
 }
 
 // PlanConsumer reads the consumer's workflows and plans the trial.

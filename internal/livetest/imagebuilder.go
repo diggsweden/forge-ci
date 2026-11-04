@@ -5,7 +5,11 @@ package livetest
 
 import (
 	"fmt"
+	"maps"
 	"os"
+	"strings"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
@@ -165,4 +169,78 @@ func (c ImageBuilderChoice) JobImage(tb TB, target Target, repo string, layer La
 	}
 
 	return PushKanikoJobImage(tb, target, repo, c.kanikoArchive, layer)
+}
+
+// ValidateKanikoDevelopmentJob admits the explicit builder bindings of a native
+// development fixture before the trial creates remote resources. This checks
+// the supported fixture shape, not arbitrary workflow or shell semantics.
+func ValidateKanikoDevelopmentJob(workflow, jobName, imageVariable string) error {
+	var document struct {
+		Env  map[string]string `yaml:"env"`
+		Jobs map[string]struct {
+			Name      string            `yaml:"name"`
+			Container yaml.Node         `yaml:"container"`
+			Env       map[string]string `yaml:"env"`
+			Steps     []struct {
+				Uses string `yaml:"uses"`
+			} `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal([]byte(workflow), &document); err != nil {
+		return fmt.Errorf("parse development workflow: %w", err)
+	}
+
+	matched := 0
+
+	for _, job := range document.Jobs {
+		if job.Name != jobName {
+			continue
+		}
+
+		matched++
+
+		env := make(map[string]string, len(document.Env)+len(job.Env))
+		maps.Copy(env, document.Env)
+		maps.Copy(env, job.Env)
+
+		image := job.Container.Value
+		if job.Container.Kind == yaml.MappingNode {
+			var container struct {
+				Image string `yaml:"image"`
+			}
+			if err := job.Container.Decode(&container); err != nil {
+				return fmt.Errorf("parse development job container: %w", err)
+			}
+
+			image = container.Image
+		}
+
+		prepared := false
+
+		for _, step := range job.Steps {
+			if strings.Contains(step.Uses, "/actions/setup-buildah@") {
+				return fmt.Errorf("development job %q explicitly prepares Buildah; use setup-image-builder for kaniko: %w", jobName, errs.ErrValidation)
+			}
+
+			prepared = prepared || strings.Contains(step.Uses, "/actions/setup-image-builder@")
+		}
+
+		if consumerVariableName(env["CI_IMAGE_BUILDER"]) != "CI_IMAGE_BUILDER" || consumerVariableName(env["CI_IMAGE_BUILDER_JOB_IMAGE"]) != "CI_IMAGE_BUILDER_JOB_IMAGE" || consumerVariableName(image) != imageVariable || !prepared {
+			return fmt.Errorf("development job %q needs env.CI_IMAGE_BUILDER and env.CI_IMAGE_BUILDER_JOB_IMAGE from their repository variables, container image from vars.%s, and setup-image-builder for kaniko: %w", jobName, imageVariable, errs.ErrValidation)
+		}
+	}
+
+	if matched != 1 {
+		return fmt.Errorf("kaniko development requires exactly one job named %q: %w", jobName, errs.ErrValidation)
+	}
+
+	return nil
+}
+
+func consumerVariableName(expression string) string {
+	if match := variableExpression.FindStringSubmatch(expression); match != nil {
+		return match[1]
+	}
+
+	return ""
 }

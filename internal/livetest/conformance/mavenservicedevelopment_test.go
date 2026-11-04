@@ -52,7 +52,15 @@ func runForgejoMavenServiceCase(t *testing.T, root string, private bool) {
 		t.Fatal("service development requires native linux/amd64")
 	}
 
-	privileged := buildahRunner(t, target, "the Maven service development trial builds and runs its service image with Buildah on the privileged runner; its kaniko wiring is not built")
+	builder := livetest.ChooseImageBuilder(t, target)
+	// This end-to-end trial also starts the published service with Podman.
+	// Keep its existing container runner for both builders and readiness.
+	buildLabel := livetest.PrivilegedRunnerLabel(t, target)
+	if buildLabel == "" {
+		livetest.NotCoveredf(t, "service readiness runs the published image with Podman and needs the contract's runner.privileged_label independently of the image builder")
+	}
+
+	t.Logf("development image builder: %s; container/readiness runner: %q", builder.Builder, buildLabel)
 
 	recipe, err := filepath.Abs("../../../test/live/demos/hello-maven-service/consumer")
 	if err != nil {
@@ -68,6 +76,7 @@ func runForgejoMavenServiceCase(t *testing.T, root string, private bool) {
 	admitted := source.Commit
 	consumer := livetest.NewMavenServiceDevelopmentFixture(t, source, config)
 	layer, repo := newConsumerRepos(t, target, consumer, "consumer-development", private)
+	jobImage := consumerBuilderJobImage(t, target, builder, layer)
 
 	registry, err := livetest.RegistryHost(target)
 	if err != nil {
@@ -81,24 +90,26 @@ func runForgejoMavenServiceCase(t *testing.T, root string, private bool) {
 		t.Fatal(err)
 	}
 
-	main := consumer.Push(t, repo, plan)
-	head := consumer.PushChange(t, repo, config.Branch, main)
-	requireObjectFormats(t, consumer.ObjectFormat, head, layer.Commit)
-
-	scenario := layerScenario{target: target, repo: repo, layer: layer, label: privileged}
-	defer func() {
-		scenario.requireBranches(t, map[string]string{"main": main, config.Branch: head})
-		scenario.requireNone(t, "/tags", "/releases")
-	}()
-
-	variables, err := livetest.MavenServiceDevelopmentVariables(plan.Variables, map[string]string{
+	variables, err := livetest.MergeConsumerVariables(plan.Variables, map[string]string{
+		"CI_IMAGE_BUILDER": builder.Builder, "CI_IMAGE_BUILDER_JOB_IMAGE": jobImage,
 		layerRunnerVariable:     runnerLabelsJSON(t, livetest.RunnerLabel(t, target)),
-		containerRunnerVariable: runnerLabelsJSON(t, privileged), "FORGE_CI_REPOSITORY": layer.Repository,
+		containerRunnerVariable: runnerLabelsJSON(t, buildLabel), "FORGE_CI_REPOSITORY": layer.Repository,
 		"SERVICE_IMAGE_REPOSITORY": image, "DEVELOPMENT_REGISTRY_USERNAME": target.CredentialUsername,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	main := consumer.Push(t, repo, plan)
+	head := consumer.PushChange(t, repo, config.Branch, main)
+	requireObjectFormats(t, consumer.ObjectFormat, head, layer.Commit)
+	scenario := layerScenario{target: target, repo: repo, layer: layer, label: buildLabel}
+
+	defer func() {
+		scenario.requireBranches(t, map[string]string{"main": main, config.Branch: head})
+		scenario.requireNone(t, "/tags", "/releases")
+	}()
+
 	// Forgejo's variables API is unavailable while repository Actions are off.
 	livetest.EnableActions(t, target, repo)
 

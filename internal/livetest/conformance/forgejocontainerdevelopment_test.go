@@ -40,7 +40,9 @@ func TestForgejoLayer_ContainerDevelopment(t *testing.T) {
 			}
 
 			target := livetest.Accept(t, provider.ForgeForgejo)
-			privileged := buildahRunner(t, target, "the container-first development trial builds with Buildah on the privileged runner; its kaniko wiring is not built")
+			builder := livetest.ChooseImageBuilder(t, target)
+			buildLabel := builder.RunnerLabels[0]
+			t.Logf("development image builder: %s; runner: %q", builder.Builder, buildLabel)
 
 			if livetest.RunnerArch(t, target) != "amd64" {
 				t.Fatal("the Cargo fixture requires a native linux/amd64 image builder")
@@ -55,7 +57,14 @@ func TestForgejoLayer_ContainerDevelopment(t *testing.T) {
 				t.Fatal("the consumer must supply only .forgejo/workflows/development.yml")
 			}
 
+			if builder.Builder == livetest.ImageBuilderKaniko {
+				if err := livetest.ValidateKanikoDevelopmentJob(workflows[workflow], "Check: development container", "CI_IMAGE_BUILDER_JOB_IMAGE"); err != nil {
+					t.Fatal(err)
+				}
+			}
+
 			layer, repo := newConsumerRepos(t, target, consumer, "container-development", visibility.Private)
+			jobImage := consumerBuilderJobImage(t, target, builder, layer)
 
 			registry, err := livetest.RegistryHost(target)
 			if err != nil {
@@ -66,6 +75,17 @@ func TestForgejoLayer_ContainerDevelopment(t *testing.T) {
 
 			plan, err := layer.PlanConsumer(workflows, livetest.ConsumerFacts{
 				Inputs: map[string]string{"forge-ci-repository": layer.Repository},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			label := livetest.RunnerLabel(t, target)
+
+			variables, err := livetest.MergeConsumerVariables(plan.Variables, map[string]string{
+				layerRunnerVariable: runnerLabelsJSON(t, label), containerRunnerVariable: runnerLabelsJSON(t, buildLabel),
+				"CI_IMAGE_BUILDER": builder.Builder, "CI_IMAGE_BUILDER_JOB_IMAGE": jobImage,
+				"FORGE_CI_REPOSITORY": layer.Repository, "DEVELOPMENT_REGISTRY_USERNAME": target.CredentialUsername,
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -107,18 +127,13 @@ func TestForgejoLayer_ContainerDevelopment(t *testing.T) {
 				}
 			}()
 
-			label := livetest.RunnerLabel(t, target)
 			livetest.EnableActions(t, target, repo)
 
-			for name, value := range plan.Variables {
+			for name, value := range variables {
 				livetest.SetRepoVariable(t, target, repo, name, value)
 			}
 
-			livetest.SetRepoVariable(t, target, repo, layerRunnerVariable, runnerLabelsJSON(t, label))
-			livetest.SetRepoVariable(t, target, repo, containerRunnerVariable, runnerLabelsJSON(t, privileged))
-			livetest.SetRepoVariable(t, target, repo, "FORGE_CI_REPOSITORY", layer.Repository)
 			// The sole build/publish job consumes the account's package credential.
-			livetest.SetRepoVariable(t, target, repo, "DEVELOPMENT_REGISTRY_USERNAME", target.CredentialUsername)
 			livetest.SetRepoSecret(t, target, repo, "DEVELOPMENT_REGISTRY_TOKEN", target.Token)
 			head = consumer.PushChange(t, repo, "development", main)
 			t.Logf("consumer %s at %s; development %s; layer %s; image %s", root, consumer.Commit, head, layer.Commit, image)
@@ -136,7 +151,7 @@ func TestForgejoLayer_ContainerDevelopment(t *testing.T) {
 			}
 
 			// The one job builds the image, so it runs on the container runner.
-			assertLayerJobs(t, jobs, run.ID, privileged, "Check: development container")
+			assertLayerJobs(t, jobs, run.ID, buildLabel, "Check: development container")
 
 			var source struct {
 				Branch string `json:"prettyref"`

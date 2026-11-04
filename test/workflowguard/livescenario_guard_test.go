@@ -49,10 +49,13 @@ var privilegedDirect = map[string]string{
 	livetestTree + "/conformance/gitlabrelease_test.go":             "the Go CLI fixture's checks are Buildah's own integration tests, its subject",
 	livetestTree + "/conformance/gitlabconsumerdevelopment_test.go": "the Buildah branch of its own GitLabKaniko selection",
 	livetestTree + "/conformance/layerconsumertrial_test.go":        "Maven Testcontainers need user namespaces to run containers, and the Buildah branch of the trial's CI_IMAGE_BUILDER",
+	livetestTree + "/conformance/mavenservicedevelopment_test.go":   "Podman service readiness needs user namespaces independently of the selected image builder",
 }
 
 // buildahNamed are the live files whose fixtures may name Buildah, and why.
 var buildahNamed = map[string]string{
+	livetestTree + "/imagebuilder.go":                  "Kaniko development admission rejects an explicit setup-buildah action",
+	livetestTree + "/imagebuilder_internal_test.go":    "negative admission regression for an explicit setup-buildah action",
 	livetestTree + "/nativesnapshotartifact_test.go":    "the Buildah capability probe, run only when the selection is Buildah",
 	livetestTree + "/conformance/gitlabrelease_test.go": "the build-image probe checks the build image's own Buildah",
 }

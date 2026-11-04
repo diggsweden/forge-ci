@@ -42,6 +42,10 @@ func runForgejoNPMApplicationDevelopment(t *testing.T, root string, private bool
 	}
 
 	target := livetest.Accept(t, provider.ForgeForgejo)
+	builder := livetest.ChooseImageBuilder(t, target)
+	label := builder.RunnerLabels[0]
+	t.Logf("development image builder: %s; runner: %q", builder.Builder, label)
+
 	if livetest.RunnerArch(t, target) != "amd64" {
 		t.Fatal("npm application requires native linux/amd64")
 	}
@@ -51,37 +55,38 @@ func runForgejoNPMApplicationDevelopment(t *testing.T, root string, private bool
 		t.Fatal(err)
 	}
 
-	c := livetest.NPMApplicationFixtureConfig{RecipeDirectory: recipe, NodeImage: os.Getenv("FORGE_CI_LIVE_NPM_APPLICATION_IMAGE"), Oracle: os.Getenv("FORGE_CI_LIVE_NPM_APPLICATION_ORACLE"), Branch: os.Getenv("FORGE_CI_LIVE_NPM_APPLICATION_BRANCH")}
-	consumer := livetest.NewNPMApplicationFixture(t, livetest.OpenConsumer(t, target, root), c, true)
+	config := livetest.NPMApplicationFixtureConfig{RecipeDirectory: recipe, NodeImage: os.Getenv("FORGE_CI_LIVE_NPM_APPLICATION_IMAGE"), Oracle: os.Getenv("FORGE_CI_LIVE_NPM_APPLICATION_ORACLE"), Branch: os.Getenv("FORGE_CI_LIVE_NPM_APPLICATION_BRANCH")}
+	consumer := livetest.NewNPMApplicationFixture(t, livetest.OpenConsumer(t, target, root), config, true)
 	layer, repo := newConsumerRepos(t, target, consumer, "npm-application-development", private)
+	jobImage := consumerBuilderJobImage(t, target, builder, layer)
 
 	plan, err := layer.PlanConsumer(consumer.Workflows(t), livetest.ConsumerFacts{Inputs: map[string]string{"forge-ci-repository": layer.Repository}})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	main := consumer.Push(t, repo, plan)
-	head := consumer.PushChange(t, repo, c.Branch, main)
-	label := buildahRunner(t, target, "the npm application development trial builds with Buildah on the privileged runner; its kaniko wiring is not built")
-
-	scenario := layerScenario{target: target, repo: repo, layer: layer, label: label}
-	defer func() {
-		scenario.requireBranches(t, map[string]string{"main": main, c.Branch: head})
-		scenario.requireNone(t, "/tags", "/releases")
-	}()
-
 	registry, err := livetest.RegistryHost(target)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	variables, err := livetest.MavenServiceDevelopmentVariables(plan.Variables, map[string]string{
+	variables, err := livetest.MergeConsumerVariables(plan.Variables, map[string]string{
+		"CI_IMAGE_BUILDER": builder.Builder, "CI_IMAGE_BUILDER_JOB_IMAGE": jobImage,
 		layerRunnerVariable: runnerLabelsJSON(t, livetest.RunnerLabel(t, target)), containerRunnerVariable: runnerLabelsJSON(t, label),
 		"FORGE_CI_REPOSITORY": layer.Repository, "SERVICE_IMAGE_REPOSITORY": registry + "/" + strings.ToLower(livetest.RepoSlug(target, repo)), "DEVELOPMENT_REGISTRY_USERNAME": target.CredentialUsername,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	main := consumer.Push(t, repo, plan)
+	head := consumer.PushChange(t, repo, config.Branch, main)
+	scenario := layerScenario{target: target, repo: repo, layer: layer, label: label}
+
+	defer func() {
+		scenario.requireBranches(t, map[string]string{"main": main, config.Branch: head})
+		scenario.requireNone(t, "/tags", "/releases")
+	}()
 
 	livetest.EnableActions(t, target, repo)
 

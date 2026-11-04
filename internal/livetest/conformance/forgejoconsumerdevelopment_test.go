@@ -38,7 +38,7 @@ func runForgejoConsumerDevelopment(t *testing.T, acceptance developmentAcceptanc
 
 	root := os.Getenv(consumerCheckoutEnv)
 	if root == "" {
-		t.Skipf("name a clean development consumer with FORGE_CI_LIVE_CONSUMER and a pinned %s", acceptance.imageVariable)
+		t.Skip("name a clean development consumer with FORGE_CI_LIVE_CONSUMER and provide its selected development job image")
 	}
 
 	if livetest.DemoName() != "" {
@@ -46,7 +46,9 @@ func runForgejoConsumerDevelopment(t *testing.T, acceptance developmentAcceptanc
 	}
 
 	image := os.Getenv(acceptance.imageVariable)
-	if !regexp.MustCompile(`^\S+@sha256:[0-9a-f]{64}$`).MatchString(image) {
+	kaniko := acceptance.buildsImages && livetest.SelectedImageBuilder(t, provider.ForgeForgejo) == livetest.ImageBuilderKaniko
+
+	if !kaniko && !regexp.MustCompile(`^\S+@sha256:[0-9a-f]{64}$`).MatchString(image) {
 		t.Fatalf("%s must name the job image by SHA-256 digest", acceptance.imageVariable)
 	}
 
@@ -59,9 +61,15 @@ func runForgejoConsumerDevelopment(t *testing.T, acceptance developmentAcceptanc
 			target := livetest.Accept(t, provider.ForgeForgejo)
 
 			// The runner the development job is expected on.
-			jobLabel := livetest.RunnerLabel(t, target)
+			label := livetest.RunnerLabel(t, target)
+			jobLabel := label
+
+			var builder livetest.ImageBuilderChoice
+
 			if acceptance.buildsImages {
-				jobLabel = buildahRunner(t, target, "the image-building development trial builds with Buildah on the privileged runner; its kaniko wiring is not built")
+				builder = livetest.ChooseImageBuilder(t, target)
+				jobLabel = builder.RunnerLabels[0]
+				t.Logf("development image builder: %s; runner: %q", builder.Builder, jobLabel)
 			}
 
 			if acceptance.checkPublication != nil && livetest.RunnerArch(t, target) != "amd64" {
@@ -77,11 +85,45 @@ func runForgejoConsumerDevelopment(t *testing.T, acceptance developmentAcceptanc
 				t.Fatal("the consumer must supply .forgejo/workflows/development.yml")
 			}
 
+			if kaniko {
+				if err := livetest.ValidateKanikoDevelopmentJob(workflows[workflow], acceptance.jobName, acceptance.imageVariable); err != nil {
+					t.Fatal(err)
+				}
+			}
+
 			layer, repo := newConsumerRepos(t, target, consumer, "consumer-development", visibility.Private)
 
 			plan, err := layer.PlanConsumer(workflows, livetest.ConsumerFacts{
 				Inputs: map[string]string{"forge-ci-repository": layer.Repository},
 			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			developmentImage := image
+			runtime := map[string]string{
+				layerRunnerVariable: runnerLabelsJSON(t, label), "FORGE_CI_REPOSITORY": layer.Repository,
+				acceptance.imageVariable: image,
+			}
+
+			if acceptance.buildsImages {
+				runtime[containerRunnerVariable] = runnerLabelsJSON(t, jobLabel)
+				runtime["CI_IMAGE_BUILDER"] = builder.Builder
+				runtime["CI_IMAGE_BUILDER_JOB_IMAGE"] = consumerBuilderJobImage(t, target, builder, layer)
+
+				if kaniko {
+					// The selected archive is the complete development job image,
+					// including its toolchain, not a second builder-only container.
+					developmentImage = runtime["CI_IMAGE_BUILDER_JOB_IMAGE"]
+					runtime[acceptance.imageVariable] = developmentImage
+				}
+			}
+
+			if acceptance.checkPublication != nil {
+				runtime["DEVELOPMENT_REGISTRY_USERNAME"] = target.CredentialUsername
+			}
+
+			variables, err := livetest.MergeConsumerVariables(plan.Variables, runtime)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -123,28 +165,18 @@ func runForgejoConsumerDevelopment(t *testing.T, acceptance developmentAcceptanc
 				}
 			}()
 
-			label := livetest.RunnerLabel(t, target)
 			livetest.EnableActions(t, target, repo)
 
-			for name, value := range plan.Variables {
+			for name, value := range variables {
 				livetest.SetRepoVariable(t, target, repo, name, value)
 			}
 
-			livetest.SetRepoVariable(t, target, repo, layerRunnerVariable, runnerLabelsJSON(t, label))
-			livetest.SetRepoVariable(t, target, repo, "FORGE_CI_REPOSITORY", layer.Repository)
-			livetest.SetRepoVariable(t, target, repo, acceptance.imageVariable, image)
-
-			if acceptance.buildsImages {
-				livetest.SetRepoVariable(t, target, repo, containerRunnerVariable, runnerLabelsJSON(t, jobLabel))
-			}
-
 			if acceptance.checkPublication != nil {
-				livetest.SetRepoVariable(t, target, repo, "DEVELOPMENT_REGISTRY_USERNAME", target.CredentialUsername)
 				livetest.SetRepoSecret(t, target, repo, "DEVELOPMENT_REGISTRY_TOKEN", target.Token)
 			}
 
 			head := consumer.PushChange(t, repo, "development", main)
-			t.Logf("consumer %s at %s; development %s; layer %s; image %s", root, consumer.Commit, head, layer.Commit, image)
+			t.Logf("consumer %s at %s; development %s; layer %s; image %s", root, consumer.Commit, head, layer.Commit, developmentImage)
 			run := livetest.WaitForConsumerRun(t, target, repo, workflow, "push", "")
 			jobs := livetest.RunJobs(t, target, repo, run.ID)
 			scenario := layerScenario{target: target, repo: repo, layer: layer, label: label}

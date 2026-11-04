@@ -53,7 +53,7 @@ func TestForgejoLayer_RustDevelopment(t *testing.T) {
 
 	root := os.Getenv(consumerCheckoutEnv)
 	if root == "" {
-		t.Skip("set FORGE_CI_LIVE_CONSUMER to the clean wallet-r2ps development fixture and CI_RUST_BUILD_IMAGE to RustBuild")
+		t.Skip("set FORGE_CI_LIVE_CONSUMER to the clean wallet-r2ps development fixture; Buildah uses CI_RUST_BUILD_IMAGE, Kaniko uses FORGE_CI_LIVE_KANIKO_JOB_IMAGE_ARCHIVE with the Rust toolchain")
 	}
 
 	if livetest.DemoName() != "" {

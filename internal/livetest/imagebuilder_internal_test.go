@@ -5,6 +5,7 @@ package livetest
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
@@ -95,5 +96,62 @@ func TestSelectedImageBuilderReadsEachForgesSetting(t *testing.T) {
 
 	if env := ImageBuilderEnv(provider.ForgeGitHub); env != "" {
 		t.Errorf("GitHub has no live builder setting, got %q", env)
+	}
+}
+
+func TestKanikoDevelopmentAdmissionRefusesBuildahOnlyRecipes(t *testing.T) {
+	t.Parallel()
+
+	const workflow = `env:
+  CI_IMAGE_BUILDER: ${{ vars.CI_IMAGE_BUILDER }}
+  CI_IMAGE_BUILDER_JOB_IMAGE: ${{ vars.CI_IMAGE_BUILDER_JOB_IMAGE }}
+jobs:
+  development:
+    name: "Check: development container"
+    container:
+      image: ${{ vars.CI_IMAGE_BUILDER_JOB_IMAGE }}
+    steps:
+      - uses: https://forge.invalid/owner/engine/.forgejo/actions/setup-image-builder@pin
+`
+
+	for _, tc := range []struct {
+		name, old, replacement string
+		valid                  bool
+	}{
+		{name: "selected job container", valid: true},
+		{name: "scalar container", old: "container:\n      image:", replacement: "container:", valid: true},
+		{name: "compact expression", old: "CI_IMAGE_BUILDER: ${{ vars.CI_IMAGE_BUILDER }}", replacement: "CI_IMAGE_BUILDER: ${{vars.CI_IMAGE_BUILDER}}", valid: true},
+		{name: "Buildah setup", old: "actions/setup-image-builder@", replacement: "actions/setup-buildah@"},
+		{name: "missing setup", old: "actions/setup-image-builder@", replacement: "actions/other@"},
+		{name: "fixed builder", old: "CI_IMAGE_BUILDER: ${{ vars.CI_IMAGE_BUILDER }}", replacement: "CI_IMAGE_BUILDER: buildah"},
+		{name: "missing image environment", old: "  CI_IMAGE_BUILDER_JOB_IMAGE: ${{ vars.CI_IMAGE_BUILDER_JOB_IMAGE }}\n"},
+		{name: "fixed container", old: "image: ${{ vars.CI_IMAGE_BUILDER_JOB_IMAGE }}", replacement: "image: registry.invalid/buildah@sha256:abc"},
+		{name: "different job", old: "Check: development container", replacement: "other job"},
+		{name: "job overrides selection", old: "    steps:", replacement: "    env:\n      CI_IMAGE_BUILDER: buildah\n    steps:"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			input := workflow
+			if tc.old != "" {
+				input = strings.Replace(input, tc.old, tc.replacement, 1)
+			}
+
+			err := ValidateKanikoDevelopmentJob(input, "Check: development container", "CI_IMAGE_BUILDER_JOB_IMAGE")
+			if tc.valid && err != nil {
+				t.Fatal(err)
+			}
+
+			if !tc.valid && !errors.Is(err, errs.ErrValidation) {
+				t.Fatalf("incompatible recipe was not refused before a live trial: %v", err)
+			}
+		})
+	}
+
+	// A combined Rust/kaniko job image is supplied under the recipe's existing
+	// toolchain variable as well as CI_IMAGE_BUILDER_JOB_IMAGE.
+	rust := strings.Replace(workflow, "image: ${{ vars.CI_IMAGE_BUILDER_JOB_IMAGE }}", "image: ${{ vars.CI_RUST_BUILD_IMAGE }}", 1)
+	if err := ValidateKanikoDevelopmentJob(rust, "Check: development container", "CI_RUST_BUILD_IMAGE"); err != nil {
+		t.Fatal(err)
 	}
 }

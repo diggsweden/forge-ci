@@ -28,6 +28,7 @@ package conformance_test
 import (
 	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
@@ -39,8 +40,8 @@ const (
 	// layer schedules by.
 	layerRunnerVariable = "CI_RUNNER_LABEL"
 
-	// containerRunnerVariable is the repository variable a job that builds
-	// images with Buildah schedules by instead, when it is set.
+	// containerRunnerVariable is the repository variable image jobs schedule
+	// by when it is set.
 	containerRunnerVariable = "CI_RUNNER_LABEL_CONTAINER"
 
 	// layerMain is the consumer branch a fixture workflow is committed to.
@@ -113,6 +114,26 @@ func buildahRunner(t *testing.T, target livetest.Target, why string) string {
 	}
 
 	return livetest.ChooseImageBuilder(t, target).RunnerLabels[0]
+}
+
+// The runner pulls the builder image before job credentials are available.
+// Serve it from the already-public scratch layer, keeping the consumer's
+// visibility and its publication assertions independent of the build tools.
+func consumerBuilderJobImage(t *testing.T, target livetest.Target, builder livetest.ImageBuilderChoice, layer livetest.Layer) string {
+	t.Helper()
+
+	if builder.Builder != livetest.ImageBuilderKaniko {
+		return ""
+	}
+
+	_, repo, found := strings.Cut(layer.Repository, "/")
+	if !found || repo == "" {
+		t.Fatal("the scratch layer must name its owner/repository before publishing a builder image")
+	}
+
+	livetest.SweepPackagesAfter(t, target, repo)
+
+	return builder.JobImage(t, target, repo, layer)
 }
 
 // render fills a fixture for this scenario's repository.

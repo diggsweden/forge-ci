@@ -180,6 +180,24 @@ build job cannot get an image signed and promoted under a tag outside the
 release it was authorised for. The rule is enforced by the party with
 something to lose.
 
+## Builder-neutral execution
+
+Builder neutrality means a shared build contract and policy, with the smallest
+native execution adapter each forge needs. It does not require identical job
+infrastructure:
+
+- Go owns build validation, scans, evidence formats and publication checks.
+- The delivery layer owns scheduling, scoped credentials and artifact transport.
+- The builder adapter constructs the image and states its actual capabilities.
+
+GitHub keeps its hosted job for setup and artifact actions. Buildah runs on the
+host; Kaniko runs in a disposable Docker action because it replaces and cleans
+its own filesystem. Forgejo and GitLab use their existing Kaniko job-container
+model. These are deliberate execution differences, not separate policy paths.
+Keep administrator settings small and consistent; add a platform adapter only
+where a concrete runtime constraint requires it. Unsupported capabilities fail
+explicitly rather than silently selecting another builder.
+
 ## Per-forge delivery parity
 
 The shared CLI owns the artifact, ledger and verification contracts; the
@@ -193,12 +211,12 @@ acceptance result for every combination.
 | Run-artifact transport | Run-scoped ZIP blob | Runner-native artifacts and needs | Per-file artifact API | **Deliberate:** native transports; their extraction checks differ as described above. |
 | Runtime selection | Bootstrap resolves the CLI ref and matching runtime images | Supplied runtime images; check/release/snapshot job images are digest-pinned | Supplied job image or setup-toolchain; checksum-bound engine binary | **Deliberate:** execution models differ; shipped workflows/components must not retain release-specific runtime defaults. |
 | Artifact build fan-out | release-build-stage derives jobs from the declaration | Build-pipeline planner emits a child pipeline | Caller composes the build workflows/commands | **Gap:** no equivalent automatic Forgejo artifact fan-out stage. |
-| Linux image builders | Reusable container and snapshot workflows select Buildah | Release and snapshot image jobs support Buildah or Kaniko | Release and snapshot image workflows support Buildah or Kaniko | **Gap:** GitHub reusable image workflows do not yet expose Kaniko selection. |
+| Linux image builders | Buildah on the host or Kaniko in an isolated Docker action | Release and snapshot image jobs support Buildah or Kaniko | Release and snapshot image workflows support Buildah or Kaniko | **Deliberate:** shared CLI contracts and checks; native execution adapters differ. Buildah remains the default. |
 | Container signing roles | Staged builds; separate publication, child-evidence and index-signing jobs | Key-free build/export jobs; separate signing/publication jobs | Key-free image builds; separate protected signing/publication workflow | **Parity:** signing authority is downstream of builds; the exact handoff and trust assumptions still differ. |
 | Release signing modes | Reusable flows expose keyless, GPG and KMS/key options | Protected release flow uses a Cosign key, with optional GPG package sidecars | Protected release flow uses a Cosign key, with optional GPG package sidecars | **Gap:** GitLab/Forgejo release entry points do not expose every signing mode the CLI supports. |
 | Transparency default | Public for the Sigstore flow | None unless selected | None unless selected | **Deliberate:** keyless needs public transparency; key-based private flows can avoid public disclosure. |
 | Release branch selection | Required branch input | Project default unless supplied | main unless supplied | **Deliberate:** caller/default discovery differs; each flow still verifies the selected release identity. |
-| Tagless snapshot images | snapshot-images workflow | snapshot-images component and generated child jobs | snapshot-images workflow | **Parity:** independent image snapshots exist on all three; builder selection differs in the row above. |
+| Tagless snapshot images | snapshot-images workflow | snapshot-images component and generated child jobs | snapshot-images workflow | **Parity:** independent image snapshots exist on all three, using the native execution models above. |
 | Base-image lifecycle wrappers | CLI composition; no dedicated base-image workflow family | release with base-images enabled | Release-image, verify/promote-base workflows and prune-base-images action | **Gap:** GitHub lacks the dedicated base-policy wrapper surface. |
 | Forge package publication wrappers | Maven/npm registry workflows | publish-forge-packages component | CLI composition | **Gap:** no equivalent reusable Forgejo package-publisher workflow. |
 | Xcode/iOS build wrapper | Hosted macOS workflow | No Xcode build component | No Xcode build workflow | **Gap:** CLI capability is not reusable delivery-layer or runner coverage. |

@@ -1918,9 +1918,41 @@ the snapshot workflow receives as the consumer's `CI_IMAGE_BUILDER` and
 project, and build on the ordinary runner; under Buildah they need
 `runner.privileged_label`. A lab that cannot run the selected builder
 reports them not covered. A Forgejo consumer trial selects its builder with
-`CI_IMAGE_BUILDER` and refuses a different Forgejo setting. Forgejo
-development trials that build images are wired for Buildah alone and are not
-covered under kaniko.
+`CI_IMAGE_BUILDER` and refuses a different Forgejo setting.
+
+The Forgejo container, Rust, npm application and Maven service development
+trials also use `FORGE_CI_LIVE_FORGEJO_IMAGE_BUILDER` (Buildah by default).
+Kaniko uses `FORGE_CI_LIVE_KANIKO_JOB_IMAGE_ARCHIVE`, labelled for and served
+from the trial's existing public scratch layer. The consumer keeps its selected
+visibility; the builder image does not become a consumer publication.
+
+The native container and Rust trials run the consumer's own development
+workflow. A Kaniko run admits its image-building job before creating remote
+resources: it must use the pinned `setup-image-builder` action, forward
+`vars.CI_IMAGE_BUILDER` and `vars.CI_IMAGE_BUILDER_JOB_IMAGE` to the same-named
+job (or workflow) environment entries, and take its job container from
+`vars.CI_IMAGE_BUILDER_JOB_IMAGE` (container trial) or `vars.CI_RUST_BUILD_IMAGE`
+(Rust trial). Both scalar `container:` and `container.image:` bindings are
+supported. This is a bounded fixture contract, not a general workflow validator;
+an old workflow that explicitly prepares Buildah is refused with an actionable
+error rather than silently running another builder.
+
+For Rust, the archive must be the complete development job image built FROM
+`containers/kaniko-job`, including the required Rust toolchain. The trial binds
+that one admitted image to both image variables; `CI_RUST_BUILD_IMAGE` is only
+needed separately for a Buildah run. Native container recipes likewise need all
+their pre-build tools in the archive. Tools used after a Kaniko build, including
+Trivy when scanning in the same job, must survive its root-filesystem cleanup
+under `/kaniko`; see `containers/kaniko-job/Containerfile`.
+
+The npm application and Maven service fixtures call the shared snapshot
+workflow, which already selects the builder and job container. Maven still
+needs `runner.privileged_label` for its Podman service-readiness check with
+either builder; it keeps the existing single container-runner binding. The
+registry/signer smoke remains an explicit Buildah storage-capability probe and
+is not covered by a Kaniko run. Conflicting consumer-plan/runtime bindings fail
+before a consumer push or workflow start; the error names the variable without
+printing its value.
 
 ##### 0.90.0 acceptance goals
 
