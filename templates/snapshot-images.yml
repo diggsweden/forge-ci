@@ -19,6 +19,14 @@ spec:
       regex: '^[^[:space:]''@]+$'
     forge-ci-repository:
       regex: '^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)+$'
+    server-url:
+      description: >-
+        This GitLab instance's URL as CI_SERVER_URL reads, https://host[:port] without a path, for example https://gitlab.example.com. The job token goes only there: each job refuses to run when CI_SERVER_URL, which a project or pipeline variable can set, differs.
+      regex: '^https://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$'
+    registry:
+      description: >-
+        This instance's container registry as CI_REGISTRY reads, host[:port], for example registry.gitlab.example.com, or empty when the project has none. GitLab configures it apart from the web host, so it is stated, not derived; each job refuses to run when CI_REGISTRY differs, and kaniko's job token read goes to it.
+      regex: '^$|^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$'
     job-image:
       regex: '^[^[:space:]]+@sha256:[0-9a-f]{64}$'
     build-image:
@@ -75,6 +83,8 @@ include:
     inputs:
       engine-sha: $[[ component.sha ]]
       forge-ci-repository: $[[ inputs.forge-ci-repository ]]
+      server-url: $[[ inputs.server-url ]]
+      registry: $[[ inputs.registry ]]
       job-image: $[[ inputs.job-image ]]
       build-image: $[[ inputs.build-image ]]
       image-builder: $[[ inputs.image-builder ]]

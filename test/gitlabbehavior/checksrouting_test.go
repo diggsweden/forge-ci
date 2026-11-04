@@ -198,7 +198,7 @@ rc_engine() {
 			sha := strings.Repeat("a", 40)
 			command.Env = []string{"PATH=/usr/bin:/bin", "RC_WORK=" + dir, "FAILURE=" + failure,
 				"RELEASE_REQUEST_SHA=" + sha, "RC_REQUEST_ALLOWED_SIGNERS=fixture signer", "CI_COMMIT_TAG=release-request/v1.2.3",
-				"RELEASE_TAG=v1.2.3", "RC_RELEASE_BRANCH=main", "CI_PROJECT_PATH=owner/project", "CI_SERVER_URL=https://gitlab.invalid"}
+				"RELEASE_TAG=v1.2.3", "RC_RELEASE_BRANCH=main", "CI_PROJECT_PATH=owner/project", "RC_SERVER_URL=https://gitlab.invalid"}
 
 			out, err := command.CombinedOutput()
 			if (err == nil) != (failure == "none") || strings.Contains(string(out), "consumer-command") != (failure == "none") {

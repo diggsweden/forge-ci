@@ -39,9 +39,10 @@ var documentedComponent = regexp.MustCompile(`^[^@\s]+/forge-ci/([a-z0-9-]+)@\S+
 // checked; what replaces it is the adopter's.
 var documentedPlaceholder = regexp.MustCompile(`PIN_[A-Z0-9_]*|REPLACE_[A-Z0-9_]+|FIXME|<[^<>]+>`)
 
-// demoPlaceholder is an image the live tier binds before it pushes a demo's
-// gate, so the value GitLab checks is the trial's, never this text.
-var demoPlaceholder = regexp.MustCompile(`^\$CI_(JOB_IMAGE(_[A-Z0-9]+)?|LINT_IMAGE)$`)
+// demoPlaceholder is an image or the instance's URL, which the live tier
+// binds before it pushes a demo's gate, so the value GitLab checks is the
+// trial's, never this text.
+var demoPlaceholder = regexp.MustCompile(`^\$CI_(JOB_IMAGE(_[A-Z0-9]+)?|LINT_IMAGE|SERVER_URL)$`)
 
 // documentedInclude is one include of a component where an adopter reads it.
 type documentedInclude struct {

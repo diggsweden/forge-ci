@@ -18,11 +18,13 @@ include:
   - component: $CI_SERVER_FQDN/itiquette/forge-ci/nanolinter@2f4e845cee96973d1082bf00a5a18689c1482148
     inputs:
       forge-ci-repository: itiquette/forge-ci
+      server-url: $CI_SERVER_URL
       job-name: "Check: lint"
       nanolinter-image: $CI_LINT_IMAGE
   - component: $CI_SERVER_FQDN/itiquette/forge-ci/check@2f4e845cee96973d1082bf00a5a18689c1482148
     inputs:
       forge-ci-repository: itiquette/forge-ci
+      server-url: $CI_SERVER_URL
       job-name: "Check: build and test"
       job-image: $CI_JOB_IMAGE
       job-user: "65532:65532"

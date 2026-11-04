@@ -140,12 +140,14 @@ the steps are these.
      - component: gitlab.example.com/team/ci/forge-ci/nanolinter@0.90.0
        inputs:
          forge-ci-repository: team/ci/forge-ci
+         server-url: https://gitlab.example.com
          nanolinter-image: "ghcr.io/itiquette/nanolinter:go@sha256:PIN_DIGEST"
      # check is checksum-bound: include it by the engine commit, never a version;
      # see Checksum-bound engine bootstrap in docs/gitlab.md.
      - component: gitlab.example.com/team/ci/forge-ci/check@PIN_FORGE_CI_SHA
        inputs:
          forge-ci-repository: team/ci/forge-ci
+         server-url: https://gitlab.example.com
          job-image: registry.example.com/team/check-tools@sha256:PIN_IMAGE_DIGEST
          commands:
            - just test-unit
@@ -181,11 +183,14 @@ images and pins, a validating regex. The inputs that are not obvious:
 | Component | Input | Meaning |
 |---|---|---|
 | `check` | `forge-ci-repository` | The project serving the component and its engine package, including subgroups. |
+| | `server-url` | This instance's URL as `CI_SERVER_URL` reads, `https://host[:port]` without a path, for example `https://gitlab.example.com`; required. Each job refuses to start when `CI_SERVER_URL` differs, and derives `CI_API_V4_URL` from it. See [The instance as a literal](#the-instance-as-a-literal). |
 | | `job-image` | Digest-pinned image for the check job. |
 | | `job-user` | UID or `UID:GID` the job runs as, for example `65532:65532` for the runtime images' `nonroot`. Empty, the default, keeps the image's user. See [The job's user](#the-jobs-user). |
 | | `commands` | The consumer's check commands; a failure fails the job. `job-name` (default `check`) and `stage` (default `test`) name the job. |
 | | `enforce-lint`, `enforce-vulnerabilities`, `enforce-application-tests`, `enforce-reproducible-builds` | The administrator's [check enforcement](admin-policy.md) for the gates the commands run through `forge-ci`; default `true`. |
 | `release` | `forge-ci-repository`, `consumer-project` | The engine project, and the only project allowed to run this policy. |
+| | `server-url` | This instance's URL as `CI_SERVER_URL` reads, `https://host[:port]` without a path, for example `https://gitlab.example.com`; required. Each job refuses to start when `CI_SERVER_URL` differs, and derives `CI_API_V4_URL` from it. See [The instance as a literal](#the-instance-as-a-literal). |
+| | `registry` | This instance's container registry as `CI_REGISTRY` reads, `host[:port]`, for example `registry.gitlab.example.com`, or empty when the project has none; required. GitLab configures it apart from the web host, so it is stated, not derived. Each job refuses to start when `CI_REGISTRY` differs; the project's image repository is derived from it. |
 | | `job-image`, `build-image`, `signer-image` | Digest-pinned images for key-free jobs, the build job, and the signing jobs. |
 | | `job-user` | UID or `UID:GID` the `job-image` jobs run as, for example `65532:65532` with a runtime image. Empty, the default, keeps the image's user. |
 | | `publication-project`, `publication-image-repository` | The separate project that owns final images, and the exact registry repository in it. |
@@ -208,8 +213,8 @@ images and pins, a validating regex. The inputs that are not obvious:
 | | `release-asset-retention` | How many of the newest releases keep every file; older ones keep their checksums and signatures, upload and link both deleted. Empty, the default, deletes nothing. See [Old releases' files](#old-releases-files). |
 | | `base-images` | Default `false`; see [Content-addressed base images](#content-addressed-base-images). |
 | | `enforce-lint`, `enforce-vulnerabilities`, `enforce-application-tests`, `enforce-reproducible-builds` | The administrator's [check enforcement](admin-policy.md) for the checks and build jobs and the image scans; default `true`. |
-| `nanolinter` | `forge-ci-repository`, `nanolinter-image`, `required-lints`, `enable-gitlab-sast` | The project serving the component and its engine package (required), the flavour image (required, pinned by digest, as the examples show), the mandated floor (default `secrets,sast`), and the SAST report. `enforce-lint` and `enforce-vulnerabilities`, default `true`, are the administrator's [check enforcement](admin-policy.md). |
-| `megalinter` | `forge-ci-repository`, `megalinter-image`, `enable-gitlab-sast` | Required digest-pinned image; the rest as for `nanolinter`. |
+| `nanolinter` | `forge-ci-repository`, `server-url`, `nanolinter-image`, `required-lints`, `enable-gitlab-sast` | The project serving the component and its engine package (required), the flavour image (required, pinned by digest, as the examples show), the mandated floor (default `secrets,sast`), and the SAST report. `enforce-lint` and `enforce-vulnerabilities`, default `true`, are the administrator's [check enforcement](admin-policy.md). |
+| `megalinter` | `forge-ci-repository`, `server-url`, `megalinter-image`, `enable-gitlab-sast` | Required digest-pinned image; the rest as for `nanolinter`. |
 | `build-*` | `working-directory`, `version`, `skip-tests`, `enable-build-sbom`, `runtime-image` | Common to every build component; `runtime-image` is required and pinned by `@sha256:`; `build-go` and `build-cargo` add `platforms` and `artifact-name`, `build-go` also `main-package` (relative to `working-directory`), `build-maven` `build-type` and `profile`, `build-gradle-android` the module, flavour and signing inputs. `enforce-application-tests`, default `true`, is the administrator's [check enforcement](admin-policy.md); the job's `runtime-image` must carry an engine from this release or later. |
 | `publish-*` | `project-type`, `working-directory`, `runtime-image` | `runtime-image` as for `build-*`. `publish-maven-central` adds `profile` and `settings-path`; `publish-apple-appstore` takes none of these, only `platform`, `skip-validation`, `runner-tags` and `macos-image`. |
 
@@ -249,12 +254,28 @@ Set the project's **Minimum role to use pipeline variables** to **No one
 allowed** (Settings > CI/CD > Variables, or the project API's
 `ci_pipeline_variables_minimum_override_role: no_one_allowed`). A pipeline
 variable, set when a pipeline is run by hand, triggered or created through the
-API, outranks the job's own variables and GitLab's predefined ones. Whoever
-may set one can point `CI_SERVER_URL`, `CI_API_V4_URL` or `CI_REGISTRY` at
-another host, and the release jobs send `RELEASE_TOKEN` and
-`RELEASE_REGISTRY_TOKEN` to those. Project and group variables outrank the
-predefined ones in the same way; only maintainers set them, and maintainers
-can already read the project's release variables.
+API, outranks the job's own variables and GitLab's predefined ones, and so do
+project and group variables. Whoever may set one could point `CI_SERVER_URL`,
+`CI_API_V4_URL` or `CI_REGISTRY` at another host, where the release jobs would
+send `RELEASE_TOKEN` and `RELEASE_REGISTRY_TOKEN`. The jobs no longer read
+those variables for a token's destination (see
+[The instance as a literal](#the-instance-as-a-literal)), so the setting is
+defence in depth: it keeps every other predefined variable the jobs read as
+GitLab set it.
+
+### The instance as a literal
+
+Every policy component (`check`, `nanolinter`, `megalinter`, `release` and
+`snapshot-images`) takes the instance's URL as `server-url`, and `release`
+and `snapshot-images` take its container registry as `registry`, from the
+administrator's include. Each job's start assigns them read only and refuses
+to run when `CI_SERVER_URL`, or `CI_REGISTRY`, is not the literal, before it
+fetches anything or reads a token; it then sets `CI_API_V4_URL` to
+`<server-url>/api/v4` and, for `release`, `CI_REGISTRY_IMAGE` to
+`<registry>/<consumer-project>` in lower case, as GitLab derives them. A
+variable that points the jobs elsewhere stops them instead of receiving the
+job token or a release token. The URL is an origin, `https://host[:port]`: an
+instance served under a relative URL path is not supported.
 
 | Secret | Used for |
 |---|---|
@@ -488,6 +509,7 @@ include:
   - component: gitlab.example.com/team/ci/forge-ci/megalinter@0.90.0
     inputs:
       forge-ci-repository: team/ci/forge-ci
+      server-url: https://gitlab.example.com
       megalinter-image: "REPLACE_WITH_REVIEWED_IMAGE_AT_SHA256_DIGEST"
 ```
 
@@ -509,6 +531,7 @@ include:
   - component: gitlab.example.com/team/ci/forge-ci/check@PIN_FORGE_CI_SHA
     inputs:
       forge-ci-repository: team/ci/forge-ci
+      server-url: https://gitlab.example.com
       job-image: registry.example.com/team/check-tools@sha256:PIN_IMAGE_DIGEST
       commands:
         - just test-unit
@@ -659,6 +682,8 @@ include:
   - component: gitlab.example.com/team/ci/forge-ci/release@PIN_FORGE_CI_SHA
     inputs:
       forge-ci-repository: team/ci/forge-ci
+      server-url: https://gitlab.example.com
+      registry: registry.gitlab.example.com
       consumer-project: team/app
       job-image: ghcr.io/diggsweden/forge-ci-runtime-go-1.27@sha256:PIN_DIGEST
       job-user: "65532:65532"
@@ -806,6 +831,7 @@ include:
   - component: gitlab.example.com/team/ci/forge-ci/nanolinter@0.90.0
     inputs:
       forge-ci-repository: team/ci/forge-ci
+      server-url: https://gitlab.example.com
       nanolinter-image: "ghcr.io/itiquette/nanolinter:go@sha256:PIN_DIGEST"
       enforce-lint: true
       enforce-vulnerabilities: true
@@ -814,6 +840,7 @@ include:
   - component: gitlab.example.com/team/ci/forge-ci/check@PIN_FORGE_CI_SHA
     inputs:
       forge-ci-repository: team/ci/forge-ci
+      server-url: https://gitlab.example.com
       job-image: registry.example.com/team/check-tools@sha256:PIN_DIGEST
       commands:
         - bash .gitlab/check-release.sh

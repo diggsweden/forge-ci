@@ -28,7 +28,7 @@ func generateSnapshot(t *testing.T, plan string, extra ...string) (map[string]an
 	cmd.Dir = dir
 	cmd.Env = append([]string{
 		"PATH=" + os.Getenv("PATH"), "HOME=" + dir,
-		"CI_PIPELINE_ID=42", "SNAPSHOT_LAYER_PROJECT=org/engine", "SNAPSHOT_ENGINE_SHA=" + strings.Repeat("a", 40),
+		"CI_PIPELINE_ID=42", "RC_SERVER_URL=https://gitlab.invalid", "RC_REGISTRY=registry.gitlab.invalid", "SNAPSHOT_LAYER_PROJECT=org/engine", "SNAPSHOT_ENGINE_SHA=" + strings.Repeat("a", 40),
 		"SNAPSHOT_JOB_IMAGE=registry.example/tools@sha256:" + strings.Repeat("b", 64),
 		"SNAPSHOT_BUILD_IMAGE=registry.example/build@sha256:" + strings.Repeat("c", 64),
 		`SNAPSHOT_ARM64_TAGS=["native-arm64"]`, `SNAPSHOT_AMD64_TAGS=["native-amd64"]`,

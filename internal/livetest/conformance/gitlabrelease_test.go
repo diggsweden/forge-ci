@@ -464,6 +464,7 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 		"component": strings.TrimPrefix(target.BaseURL(), "https://") + "/" + layer.Repository + "/release@" + layer.Commit,
 		"inputs": withGitChglog(map[string]any{
 			"forge-ci-repository": layer.Repository, "consumer-project": project,
+			"server-url": target.BaseURL(), "registry": registry,
 			"job-image": jobImage, "job-user": settings.JobUser, "build-image": buildImage, "signer-image": signerImage,
 			"publication-project":          livetest.RepoSlug(target, publication),
 			"publication-image-repository": registry + "/" + livetest.RepoSlug(target, publication),
@@ -500,7 +501,7 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 	if bases {
 		policyIncludes = append(policyIncludes, map[string]any{
 			"component": strings.TrimPrefix(target.BaseURL(), "https://") + "/" + layer.Repository + "/check@" + layer.Commit,
-			"inputs": map[string]any{"forge-ci-repository": layer.Repository, "job-image": jobImage,
+			"inputs": map[string]any{"forge-ci-repository": layer.Repository, "server-url": target.BaseURL(), "job-image": jobImage,
 				"job-name": "candidate-check", "commands": []string{"test -f next-release-request.txt"}},
 		})
 		policyConfig["candidate-check"] = map[string]any{

@@ -239,7 +239,9 @@ func runNanolinterScriptWith(t *testing.T, dir, workspace string, inputs map[str
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
-	rendered := strings.NewReplacer("$[[ component.sha ]]", strings.TrimSpace(string(pin)),
+	// The local forge stands in for the instance, under the name the job
+	// holds CI_SERVER_URL to.
+	rendered := strings.NewReplacer("$[[ component.sha ]]", strings.TrimSpace(string(pin)), "$[[ inputs.server-url ]]", "file://"+dir,
 		"$[[ inputs.required-lints ]]", "secrets,sast", "$[[ inputs.enable-gitlab-sast ]]", "false",
 		"$[[ inputs.enforce-lint ]]", inputs["enforce-lint"], "$[[ inputs.enforce-vulnerabilities ]]", inputs["enforce-vulnerabilities"]).Replace(script[0])
 	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", rendered)

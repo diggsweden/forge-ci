@@ -452,7 +452,10 @@ const (
 	gitlabCheckComponent = "check"
 	gitlabLintComponent  = "nanolinter"
 	gitlabJobPlaceholder = "$CI_JOB_IMAGE"
-	gitlabRuntimeInput   = "runtime-image"
+	// gitlabServerPlaceholder stands where a gate states the instance's URL,
+	// the literal the jobs hold CI_SERVER_URL to: the trial's lab.
+	gitlabServerPlaceholder = "$CI_SERVER_URL"
+	gitlabRuntimeInput      = "runtime-image"
 )
 
 func gitlabJobImage(images GitLabGateImages) string { return images.Job }
@@ -477,7 +480,18 @@ var releaseVersionPin = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(
 // trial with the component's placeholder: $CI_JOB_IMAGE for check and the
 // build components, $CI_LINT_IMAGE for nanolinter. check is pinned by full
 // SHA; nanolinter and the build components by full SHA or release version.
-// check and nanolinter name the engine project in forge-ci-repository.
+// check and nanolinter name the engine project in forge-ci-repository and
+// the instance in server-url, $CI_SERVER_URL, which the trial binds to its lab.
+// gitlabGateCoordinatesBindable reports whether a gate component is pinned
+// as the trial binds it and names the engine project and the instance by
+// the coordinates the trial replaces.
+func gitlabGateCoordinatesBindable(name, pin, project string, forgeCIRepository, serverURL *yaml.Node) bool {
+	pinned := fixtureObjectID(pin) || (name != gitlabCheckComponent && releaseVersionPin.MatchString(pin))
+
+	return pinned && (forgeCIRepository == nil || project == forgeCIRepository.Value) &&
+		(serverURL == nil || serverURL.Value == gitlabServerPlaceholder)
+}
+
 func bindGitLabGateComponent(entry *yaml.Node, layer Layer, images GitLabGateImages) (string, string, error) {
 	component := gitlabMappingValue(entry, "component")
 	inputs := gitlabMappingValue(entry, "inputs")
@@ -492,10 +506,11 @@ func bindGitLabGateComponent(entry *yaml.Node, layer Layer, images GitLabGateIma
 	jobImage := gitlabMappingValue(inputs, use.input)
 	fields := []*yaml.Node{jobImage}
 
-	var forgeCIRepository *yaml.Node
+	var forgeCIRepository, serverURL *yaml.Node
 	if !use.build {
 		forgeCIRepository = gitlabMappingValue(inputs, "forge-ci-repository")
-		fields = append(fields, forgeCIRepository)
+		serverURL = gitlabMappingValue(inputs, "server-url")
+		fields = append(fields, forgeCIRepository, serverURL)
 	}
 
 	for _, field := range fields {
@@ -506,10 +521,9 @@ func bindGitLabGateComponent(entry *yaml.Node, layer Layer, images GitLabGateIma
 
 	image, placeholder, missing := gitlabGateBoundImage(name, jobImage.Value, use, images)
 
-	pinned := fixtureObjectID(pin) || (name != gitlabCheckComponent && releaseVersionPin.MatchString(pin))
-	if !pinned || (forgeCIRepository != nil && project != forgeCIRepository.Value) || !placeholder {
-		return "", "", fmt.Errorf("pin the %s component (check by full SHA), match forge-ci-repository and use %s: %s: %w",
-			name, use.input, use.placeholder, errs.ErrValidation)
+	if !gitlabGateCoordinatesBindable(name, pin, project, forgeCIRepository, serverURL) || !placeholder {
+		return "", "", fmt.Errorf("pin the %s component (check by full SHA), match forge-ci-repository, use %s: %s and server-url: %s: %w",
+			name, use.input, use.placeholder, gitlabServerPlaceholder, errs.ErrValidation)
 	}
 
 	if image == "" {
@@ -521,6 +535,7 @@ func bindGitLabGateComponent(entry *yaml.Node, layer Layer, images GitLabGateIma
 
 	if forgeCIRepository != nil {
 		forgeCIRepository.Value = layer.Repository
+		serverURL.Value = layer.ServerURL
 	}
 
 	return name, project, nil

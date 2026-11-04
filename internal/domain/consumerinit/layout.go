@@ -145,6 +145,7 @@ func Replacements(forge provider.ForgeAPI, example string, src Source, defaults 
 			add(runtime.placeholder, defaults.RuntimeImages[runtime.family])
 		}
 
+		add("server-url: https://gitlab.example.com", "server-url: https://"+src.Host)
 		add("gitlab.example.com/team/ci/forge-ci", src.Host+"/"+src.Repository)
 		add("team/ci/forge-ci", src.Repository)
 		add("@0.90.0", "@"+strings.TrimPrefix(src.Tag, "v"))

@@ -26,6 +26,7 @@ include:
   - component: $CI_SERVER_FQDN/team/engine/check@` + strings.Repeat("a", 40) + `
     inputs:
       forge-ci-repository: team/engine
+      server-url: $CI_SERVER_URL
       job-image: $CI_JOB_IMAGE
       commands:
         - 'nanolinter verify --require secrets,sast'
@@ -140,6 +141,7 @@ func TestGitLabConsumerRefusesAGateThatNeverRunsForMergeRequests(t *testing.T) {
   - component: $CI_SERVER_FQDN/team/engine/check@` + strings.Repeat("a", 40) + `
     inputs:
       forge-ci-repository: team/engine
+      server-url: $CI_SERVER_URL
       job-image: $CI_JOB_IMAGE
       commands: ['go test ./...']
 `
@@ -165,11 +167,13 @@ include:
   - component: $CI_SERVER_FQDN/team/engine/nanolinter@` + strings.Repeat("a", 40) + `
     inputs:
       forge-ci-repository: team/engine
+      server-url: $CI_SERVER_URL
       job-name: "Check: lint"
       nanolinter-image: $CI_LINT_IMAGE
   - component: $CI_SERVER_FQDN/team/engine/check@` + strings.Repeat("a", 40) + `
     inputs:
       forge-ci-repository: team/engine
+      server-url: $CI_SERVER_URL
       job-image: $CI_JOB_IMAGE
       commands: ['mvn verify']
 `
@@ -197,6 +201,7 @@ include:
 	lint, check := parsed.Include[0], parsed.Include[1]
 	if lint.Component != "gitlab.k3s.forgelab/forgeci/fci-engine/nanolinter@"+layer.Commit ||
 		lint.Inputs["forge-ci-repository"] != layer.Repository || lint.Inputs["nanolinter-image"] != images.Lint ||
+		lint.Inputs["server-url"] != layer.ServerURL || check.Inputs["server-url"] != layer.ServerURL ||
 		lint.Inputs["job-name"] != "Check: lint" || check.Inputs["job-image"] != images.Job {
 		t.Fatalf("the components were not bound: %+v", parsed.Include)
 	}
@@ -205,6 +210,7 @@ include:
 	for _, bad := range []string{
 		strings.ReplaceAll(pipeline, "nanolinter-image: $CI_LINT_IMAGE", "nanolinter-image: unreviewed:latest"),
 		strings.ReplaceAll(pipeline, "nanolinter-image: $CI_LINT_IMAGE", "nanolinter-image: $CI_JOB_IMAGE"),
+		strings.Replace(pipeline, "server-url: $CI_SERVER_URL", "server-url: https://elsewhere.invalid", 1),
 		strings.ReplaceAll(pipeline, "team/engine/nanolinter@", "team/engine/megalinter@"),
 		strings.ReplaceAll(pipeline, "team/engine/check@", "team/engine/nanolinter@"),
 		strings.ReplaceAll(pipeline, nanolinter, strings.ReplaceAll(nanolinter, strings.Repeat("a", 40), "main")),
@@ -234,10 +240,12 @@ include:
   - component: $CI_SERVER_FQDN/team/engine/nanolinter@0.90.0
     inputs:
       forge-ci-repository: team/engine
+      server-url: $CI_SERVER_URL
       nanolinter-image: $CI_LINT_IMAGE
   - component: $CI_SERVER_FQDN/team/engine/check@` + strings.Repeat("a", 40) + `
     inputs:
       forge-ci-repository: team/engine
+      server-url: $CI_SERVER_URL
       job-image: $CI_JOB_IMAGE
       commands: ['cargo test']
   - component: $CI_SERVER_FQDN/team/engine/build-cargo@0.90.0
@@ -304,6 +312,7 @@ func TestGitLabConsumerBindsAFurtherJobImagePerCheck(t *testing.T) {
 		return `  - component: $CI_SERVER_FQDN/` + project + `/check@` + strings.Repeat("a", 40) + `
     inputs:
       forge-ci-repository: ` + project + `
+      server-url: $CI_SERVER_URL
       job-name: ` + name + `
       job-image: ` + image + `
       job-user: "65532:65532"
@@ -356,6 +365,7 @@ func TestGitLabConsumerBindsAFurtherJobImagePerCheck(t *testing.T) {
 		strings.Replace(pipeline, "job-name: check-frontend", "job-name: nanolinter", 1) + `  - component: $CI_SERVER_FQDN/team/engine/nanolinter@` + strings.Repeat("a", 40) + `
     inputs:
       forge-ci-repository: team/engine
+      server-url: $CI_SERVER_URL
       nanolinter-image: $CI_LINT_IMAGE
 `,
 	} {

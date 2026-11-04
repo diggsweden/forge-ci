@@ -173,7 +173,7 @@ func TestPublicationRegistryBelongsToTheSeparateProject(t *testing.T) {
 			script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
 			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", `source "$1"; rc_publication_scope`, "publication-scope", script)
 
-			command.Env = []string{"PATH=/usr/bin:/bin", "CI_REGISTRY=registry.invalid", "CI_PROJECT_PATH=owner/source",
+			command.Env = []string{"PATH=/usr/bin:/bin", "RC_REGISTRY=registry.invalid", "CI_PROJECT_PATH=owner/source",
 				"RC_PUBLICATION_PROJECT=" + tc.project, "RC_PUBLICATION_IMAGE_REPOSITORY=" + tc.image}
 
 			if err := command.Run(); (err == nil) != tc.allowed {

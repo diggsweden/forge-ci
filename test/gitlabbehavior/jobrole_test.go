@@ -151,7 +151,7 @@ func runReleaseJobStart(t *testing.T, start, user, spoof string) (string, string
 		"GIT_STRATEGY=empty", "GIT_SUBMODULE_STRATEGY=none",
 		"CI_PROJECT_PATH=team/app", "CI_COMMIT_REF_PROTECTED=true",
 		"CI_PIPELINE_SOURCE=parent_pipeline", "CI_COMMIT_TAG=release-request/v1.0.0",
-		"CI_SERVER_URL=https://gitlab.invalid",
+		"CI_SERVER_URL=https://gitlab.invalid", "CI_REGISTRY=registry.gitlab.invalid",
 	}
 
 	output, err := command.CombinedOutput()

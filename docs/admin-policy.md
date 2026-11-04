@@ -75,12 +75,14 @@ include:
   - component: gitlab.example.com/team/ci/forge-ci/nanolinter@0.90.0
     inputs:
       forge-ci-repository: team/ci/forge-ci
+      server-url: https://gitlab.example.com
       nanolinter-image: "ghcr.io/itiquette/nanolinter:go@sha256:PIN_DIGEST"
       enforce-lint: true
       enforce-vulnerabilities: true
   - component: gitlab.example.com/team/ci/forge-ci/check@PIN_FORGE_CI_SHA
     inputs:
       forge-ci-repository: team/ci/forge-ci
+      server-url: https://gitlab.example.com
       job-image: registry.example.com/team/check-tools@sha256:PIN_DIGEST
       commands:
         - bash .gitlab/merge-request-checks.sh

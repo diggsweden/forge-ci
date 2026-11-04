@@ -203,7 +203,7 @@ func TestReleaseImageBuilderAdmitsOnlyTheKanikoJobImage(t *testing.T) {
 				"image-builder", script)
 
 			command.Env = append([]string{"PATH=/usr/bin:/bin", "RC_WORK=" + work, "HELPERS_ENGINE_ARCH=amd64", "USABLE_STATUS=" + tc.usable,
-				"FORGE_CI_REPOSITORY_URL=https://gitlab.invalid/team/engine.git", "CI_REGISTRY=registry.invalid", "CI_JOB_TOKEN=job-token-canary"}, tc.env...)
+				"FORGE_CI_REPOSITORY_URL=https://gitlab.invalid/team/engine.git", "RC_REGISTRY=registry.invalid", "CI_JOB_TOKEN=job-token-canary"}, tc.env...)
 
 			output, err := command.CombinedOutput()
 			if (err == nil) != tc.admitted || !strings.Contains(string(output), tc.wantError) {
@@ -262,8 +262,8 @@ func TestReleaseRequestCheckRefusesAnImageStageThatWouldStop(t *testing.T) {
 			t.Parallel()
 
 			work := t.TempDir()
-			env := append([]string{"RC_WORK=" + work, "RELEASE_TAG=v1.2.3", "CI_REGISTRY=registry.invalid", "CI_REGISTRY_IMAGE=registry.invalid/team/app",
-				"CI_SERVER_URL=https://gitlab.invalid", "CI_PROJECT_PATH=team/app"}, tc.env...)
+			env := append([]string{"RC_WORK=" + work, "RELEASE_TAG=v1.2.3", "RC_REGISTRY=registry.invalid", "RC_REGISTRY_IMAGE=registry.invalid/team/app",
+				"RC_SERVER_URL=https://gitlab.invalid", "CI_PROJECT_PATH=team/app"}, tc.env...)
 
 			output, err := runReleaseFunction(t, work, "rc_check_release_images "+tc.args+" .forge-ci/artifacts.yml '' '[]'", env...)
 			if (err == nil) != (tc.wantError == "") || !strings.Contains(output, tc.wantError) {
@@ -377,8 +377,8 @@ func TestReleaseImageBuildHandsOffReadableLayouts(t *testing.T) {
 		`umask 077; rc_images_build amd64 buildah ''`
 
 	output, err := runReleaseFunction(t, work, body, "RC_WORK="+work, "CI_PROJECT_DIR="+project,
-		"CI_JOB_TOKEN=job-token", "CI_DEPENDENCY_PROXY_PASSWORD=proxy-password", "CI_REGISTRY_IMAGE=registry.example.com/group/app",
-		"RELEASE_TAG=v1.2.3", "RELEASE_SHA="+strings.Repeat("a", 40), "CI_SERVER_URL=https://gitlab.example.com", "CI_PROJECT_PATH=group/app")
+		"CI_JOB_TOKEN=job-token", "CI_DEPENDENCY_PROXY_PASSWORD=proxy-password", "RC_REGISTRY_IMAGE=registry.example.com/group/app",
+		"RELEASE_TAG=v1.2.3", "RELEASE_SHA="+strings.Repeat("a", 40), "RC_SERVER_URL=https://gitlab.example.com", "CI_PROJECT_PATH=group/app")
 	if err != nil {
 		t.Fatalf("image build failed: %v\n%s", err, output)
 	}

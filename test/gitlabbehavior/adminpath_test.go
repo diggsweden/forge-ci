@@ -111,7 +111,7 @@ forge-ci by-name
 			"PATH=/usr/bin:/bin", "HOME=" + dir, "HELPERS=" + helpers, "ENGINE=" + filepath.Join(dir, "engine"),
 			"RC_HELPERS_DIR=" + helpers, "RC_WORK=" + filepath.Join(dir, "work"), "rc_job_role=" + start.role,
 			"RC_ADMIN_LINT=false", "RC_ADMIN_VULNERABILITIES=true", "RC_ADMIN_APPLICATION_TESTS=false", "RC_ADMIN_REPRODUCIBLE_BUILDS=true",
-			"CI_PROJECT_DIR=" + dir, "CI_SERVER_URL=https://gitlab.invalid", "CI_PROJECT_PATH=team/app",
+			"CI_PROJECT_DIR=" + dir, "CI_SERVER_URL=https://gitlab.invalid", "CI_REGISTRY=registry.gitlab.invalid", "RC_SERVER_URL=https://gitlab.invalid", "CI_PROJECT_PATH=team/app",
 			"CI_COMMIT_SHA=" + strings.Repeat("a", 40), "CI_DEFAULT_BRANCH=main", "consumer_object_format=sha1",
 		}
 

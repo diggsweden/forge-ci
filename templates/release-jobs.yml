@@ -15,6 +15,10 @@ spec:
       regex: '^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)+$'
     consumer-project:
       regex: '^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)+$'
+    server-url:
+      regex: '^https://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$'
+    registry:
+      regex: '^$|^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$'
     job-image:
       regex: '^[^[:space:]]+@sha256:[0-9a-f]{64}$'
     job-user:
@@ -205,6 +209,8 @@ stages: [check, prepare, build, images, sign, publish]
     readonly RC_RELEASE_POLICY='$[[ inputs.release-policy ]]' \
       RC_FORGE_CI_REPOSITORY='$[[ inputs.forge-ci-repository ]]' \
       RC_CONSUMER_PROJECT='$[[ inputs.consumer-project ]]' \
+      RC_SERVER_URL='$[[ inputs.server-url ]]' \
+      RC_REGISTRY='$[[ inputs.registry ]]' \
       RC_PUBLICATION_PROJECT='$[[ inputs.publication-project ]]' \
       RC_PUBLICATION_IMAGE_REPOSITORY='$[[ inputs.publication-image-repository ]]' \
       RC_PUBLIC_KEY_SHA256='$[[ inputs.cosign-public-key-sha256 ]]' \
@@ -228,6 +234,16 @@ stages: [check, prepare, build, images, sign, publish]
       FORGE_CI_COSIGN_TRANSPARENCY='$[[ inputs.transparency-log ]]'
     # The engine reads the transparency setting from its environment.
     export FORGE_CI_COSIGN_TRANSPARENCY
+    # The release tokens go to the instance and its registry, which a
+    # project or pipeline variable can point elsewhere: hold CI_SERVER_URL
+    # and CI_REGISTRY to the literals, and derive the API and the project's
+    # image repository from them, as GitLab does.
+    if [ "${CI_SERVER_URL-}" != "${RC_SERVER_URL}" ] || [ "${CI_REGISTRY-}" != "${RC_REGISTRY}" ]; then
+      echo "ERROR: CI_SERVER_URL is '${CI_SERVER_URL-}' and CI_REGISTRY '${CI_REGISTRY-}', not server-url '${RC_SERVER_URL}' and registry '${RC_REGISTRY}'; remove the variables that set them." >&2
+      exit 1
+    fi
+    readonly RC_REGISTRY_IMAGE="${RC_REGISTRY:+${RC_REGISTRY}/${RC_CONSUMER_PROJECT,,}}"
+    export CI_API_V4_URL="${RC_SERVER_URL}/api/v4" CI_REGISTRY_IMAGE="${RC_REGISTRY_IMAGE}"
     expected='$[[ inputs.engine-sha ]]'
     reference='$[[ inputs.engine-reference ]]'
     test "${reference}" = "${expected}"
@@ -251,7 +267,7 @@ stages: [check, prepare, build, images, sign, publish]
     export SIGN_AND_PUBLISH_STATE_DIR="${RC_WORK}/state"
     mkdir -m 0700 "${SIGN_AND_PUBLISH_STATE_DIR}"
     export FORGE_CI_PACKAGE_PROVIDER=gitlab
-    export FORGE_CI_REPOSITORY_URL="${CI_SERVER_URL:?}/${RC_FORGE_CI_REPOSITORY:?}.git"
+    export FORGE_CI_REPOSITORY_URL="${RC_SERVER_URL}/${RC_FORGE_CI_REPOSITORY:?}.git"
     git_options=(-c core.hooksPath=/dev/null -c credential.helper=)
     if [ -n "${CI_SERVER_TLS_CA_FILE:-}" ]; then
       for bundle in /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt; do

@@ -14,6 +14,14 @@ spec:
       regex: '^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)+$'
     consumer-project:
       regex: '^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)+$'
+    server-url:
+      description: >-
+        This GitLab instance's URL as CI_SERVER_URL reads, https://host[:port] without a path, for example https://gitlab.example.com. The release tokens go only there: each job refuses to run when CI_SERVER_URL, which a project or pipeline variable can set, differs.
+      regex: '^https://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$'
+    registry:
+      description: >-
+        This instance's container registry as CI_REGISTRY reads, host[:port], for example registry.gitlab.example.com, or empty when the project has none. GitLab configures it apart from the web host, so it is stated, not derived; each job refuses to run when CI_REGISTRY differs, and the images go to it.
+      regex: '^$|^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$'
     job-image:
       description: Tools for consumer checks and changelog rendering, run as an ordinary user (see job-user).
       regex: '^[^[:space:]]+@sha256:[0-9a-f]{64}$'
@@ -177,6 +185,8 @@ release:
           engine-reference: $[[ component.reference ]]
           forge-ci-repository: $[[ inputs.forge-ci-repository ]]
           consumer-project: $[[ inputs.consumer-project ]]
+          server-url: $[[ inputs.server-url ]]
+          registry: $[[ inputs.registry ]]
           job-image: $[[ inputs.job-image ]]
           job-user: $[[ inputs.job-user ]]
           build-image: $[[ inputs.build-image ]]

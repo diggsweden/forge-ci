@@ -10,6 +10,10 @@ spec:
     forge-ci-repository:
       description: Project serving this component and its public engine package, including any subgroups.
       regex: '^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)+$'
+    server-url:
+      description: >-
+        This GitLab instance's URL as CI_SERVER_URL reads, https://host[:port] without a path, for example https://gitlab.example.com. The job token goes only there: each job refuses to run when CI_SERVER_URL, which a project or pipeline variable can set, differs.
+      regex: '^https://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$'
     job-image:
       description: Digest-pinned image containing Bash, Git, curl, sha256sum and the consumer's pinned check tools.
       regex: '^[^[:space:]]+@sha256:[0-9a-f]{64}$'
@@ -87,6 +91,15 @@ spec:
         exit 1
       fi
       echo "job user: uid=${job_uid} gid=${job_gid}"
+      # The instance as written: a project or pipeline variable outranks
+      # the predefined CI_SERVER_URL and CI_API_V4_URL, and the job token
+      # goes where they point. Hold the one to the literal, derive the other.
+      readonly RC_SERVER_URL='$[[ inputs.server-url ]]'
+      if [ "${CI_SERVER_URL-}" != "${RC_SERVER_URL}" ]; then
+        echo "ERROR: CI_SERVER_URL is '${CI_SERVER_URL-}', not server-url '${RC_SERVER_URL}'; remove the variable that sets it." >&2
+        exit 1
+      fi
+      export CI_API_V4_URL="${RC_SERVER_URL}/api/v4"
       # Check before any checkout or consumer command, not after unsetting a
       # misplaced key. GitLab protected variables also need environment scopes.
       for name in RELEASE_SSH_SIGNING_KEY RELEASE_COSIGN_PRIVATE_KEY \
@@ -122,7 +135,7 @@ spec:
         RC_ADMIN_REPRODUCIBLE_BUILDS='$[[ inputs.enforce-reproducible-builds ]]'
       export FORGE_CI_PACKAGE_PROVIDER=gitlab
       # The engine's project as written, never a variable a project can set.
-      export FORGE_CI_REPOSITORY_URL="${CI_SERVER_URL:?}/$[[ inputs.forge-ci-repository ]].git"
+      export FORGE_CI_REPOSITORY_URL="${RC_SERVER_URL}/$[[ inputs.forge-ci-repository ]].git"
       RC_HELPERS_DIR=$(mktemp -d /tmp/forge-ci-helpers.XXXXXXXX)
       readonly RC_HELPERS_DIR
       trap 'rm -rf -- "${RC_HELPERS_DIR}"' EXIT
@@ -163,7 +176,7 @@ spec:
       export CI_OUTPUT="${RC_HELPERS_DIR}/outputs.env"
       # The combined bundle keeps both self-hosted forge and public tool access.
       "${FORGE_CI_BIN}" platform checkout --workspace "${CI_PROJECT_DIR:?}" \
-        --server-url "${CI_SERVER_URL:?}" --repository "${CI_PROJECT_PATH:?}" \
+        --server-url "${RC_SERVER_URL}" --repository "${CI_PROJECT_PATH:?}" \
         --ref "${CI_COMMIT_SHA}" --object-format "${consumer_object_format}" \
         --fetch-base "${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:-${CI_DEFAULT_BRANCH:?}}"
       cd "${CI_PROJECT_DIR}"

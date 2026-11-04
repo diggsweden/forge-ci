@@ -61,6 +61,7 @@ func TestCheckRefusesSigningMaterialAndMutablePinsBeforeCheckout(t *testing.T) {
 
 			script := strings.NewReplacer(
 				"$[[ inputs.job-user ]]", "",
+				"$[[ inputs.server-url ]]", "https://gitlab.invalid",
 				"$[[ component.sha ]]", strings.Repeat("a", 40),
 				"$[[ component.reference ]]", tc.reference,
 				"/tmp/forge-ci-helpers.XXXXXXXX", filepath.Join(dir, "helpers.XXXXXXXX"),

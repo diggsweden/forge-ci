@@ -6,6 +6,10 @@ spec:
       regex: '^([0-9a-f]{40}|[0-9a-f]{64})$'
     forge-ci-repository:
       regex: '^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)+$'
+    server-url:
+      regex: '^https://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$'
+    registry:
+      regex: '^$|^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$'
     job-image:
       regex: '^[^[:space:]]+@sha256:[0-9a-f]{64}$'
     build-image:
@@ -47,6 +51,16 @@ spec:
         echo "ERROR: GIT_STRATEGY is '${GIT_STRATEGY-}', not empty; remove the variable that sets it." >&2
         exit 1
       fi
+      # The instance and its registry as written: a project variable
+      # outranks the predefined CI_SERVER_URL, CI_API_V4_URL and CI_REGISTRY,
+      # and the job token goes where they point. Hold two to the literals,
+      # derive the API.
+      readonly RC_SERVER_URL='$[[ inputs.server-url ]]' RC_REGISTRY='$[[ inputs.registry ]]'
+      if [ "${CI_SERVER_URL-}" != "${RC_SERVER_URL}" ] || [ "${CI_REGISTRY-}" != "${RC_REGISTRY}" ]; then
+        echo "ERROR: CI_SERVER_URL is '${CI_SERVER_URL-}' and CI_REGISTRY '${CI_REGISTRY-}', not server-url '${RC_SERVER_URL}' and registry '${RC_REGISTRY}'; remove the variables that set them." >&2
+        exit 1
+      fi
+      export CI_API_V4_URL="${RC_SERVER_URL}/api/v4"
       export FORGE_CI_PROVIDER=gitlab FORGE_CI_PACKAGE_PROVIDER=gitlab \
         SNAPSHOT_LAYER_PROJECT='$[[ inputs.forge-ci-repository ]]' \
         SNAPSHOT_ENGINE_SHA='$[[ inputs.engine-sha ]]' \
@@ -57,9 +71,9 @@ spec:
       # The administrator's settings, which every engine call passes as flags.
       readonly SNAPSHOT_ADMIN_APPLICATION_TESTS='$[[ inputs.enforce-application-tests ]]' \
         SNAPSHOT_ADMIN_VULNERABILITIES='$[[ inputs.enforce-vulnerabilities ]]'
-      export SNAPSHOT_SERVER=${CI_SERVER_URL:?}
+      export SNAPSHOT_SERVER=${RC_SERVER_URL}
       export SNAPSHOT_REPOSITORY=${CI_PROJECT_PATH:?}
-      export FORGE_CI_REPOSITORY_URL="${CI_SERVER_URL}/${SNAPSHOT_LAYER_PROJECT}.git"
+      export FORGE_CI_REPOSITORY_URL="${RC_SERVER_URL}/${SNAPSHOT_LAYER_PROJECT}.git"
       export SNAPSHOT_HELPERS="${CI_PROJECT_DIR:?}/snapshot-engine"
       if [ -n "${CI_SERVER_TLS_CA_FILE:-}" ]; then
         ca_bundle="${CI_PROJECT_DIR}/snapshot-ca.crt"

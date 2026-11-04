@@ -88,7 +88,7 @@ snapshot_gitlab_generate() {
 		return 1
 	}
 	jq --arg project "${SNAPSHOT_LAYER_PROJECT:?}" --arg pin "${SNAPSHOT_ENGINE_SHA:?}" \
-		--arg pipeline "${CI_PIPELINE_ID:?}" --arg context "${context}" \
+		--arg server "${RC_SERVER_URL:?}" --arg registry "${RC_REGISTRY?}" --arg pipeline "${CI_PIPELINE_ID:?}" --arg context "${context}" \
 		--arg job_image "${SNAPSHOT_JOB_IMAGE:?}" --arg build_image "${SNAPSHOT_BUILD_IMAGE:?}" \
 		--arg builder "${CI_IMAGE_BUILDER:-buildah}" --arg kaniko_image "${CI_IMAGE_BUILDER_JOB_IMAGE:-}" \
 		--arg go_image "${SNAPSHOT_ARTIFACT_IMAGE_GO:-${SNAPSHOT_JOB_IMAGE}}" \
@@ -114,7 +114,7 @@ snapshot_gitlab_generate() {
 		($plan.builds | map({job: buildjob, artifacts: true})) as $buildneeds |
 		{
 		  include: [{project: $project, ref: $pin, file: "/templates/snapshot-image-jobs.yml", inputs: {
-		    "engine-sha": $pin, "forge-ci-repository": $project,
+		    "engine-sha": $pin, "forge-ci-repository": $project, "server-url": $server, "registry": $registry,
 		    "job-image": $job_image, "build-image": $build_image,
 		    "runner-tags": $tags, "image-builder": $builder, "builder-job-image": $kaniko_image,
 		    "enforce-application-tests": $tests, "enforce-vulnerabilities": $vulnerabilities

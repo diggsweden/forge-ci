@@ -27,6 +27,7 @@
 #     - component: $CI_SERVER_FQDN/diggsweden/forge-ci/nanolinter@0.90.0
 #       inputs:
 #         forge-ci-repository: diggsweden/forge-ci
+#         server-url: https://gitlab.example.com
 #         nanolinter-image: "ghcr.io/itiquette/nanolinter:java@sha256:PIN_DIGEST"
 spec:
   component: [sha]
@@ -61,9 +62,13 @@ spec:
       default: true
       description: >-
         Enforcement setting: false reports vulnerability findings (osv, trivy-fs and the like) without failing the job. Set it only in the administrator's own policy include. See docs/admin-policy.md.
+    server-url:
+      description: >-
+        This GitLab instance's URL as CI_SERVER_URL reads, https://host[:port] without a path, for example https://gitlab.example.com. The job token goes only there: each job refuses to run when CI_SERVER_URL, which a project or pipeline variable can set, differs.
+      regex: '^https://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$'
     forge-ci-repository:
       description: >-
-        Project serving this component and its public engine package, including any subgroups. The SARIF to GitLab-SAST conversion runs the engine binary that this component's commit records, downloaded from that project's generic packages and checked against the recorded checksum. May name $CI_PROJECT_PATH: lib-forge-ci.sh refuses an expanded path that is not a project on CI_SERVER_URL before any download.
+        Project serving this component and its public engine package, including any subgroups. The SARIF to GitLab-SAST conversion runs the engine binary that this component's commit records, downloaded from that project's generic packages and checked against the recorded checksum. May name $CI_PROJECT_PATH: lib-forge-ci.sh refuses an expanded path that is not a project on server-url before any download.
 ---
 "$[[ inputs.job-name ]]":
   stage: $[[ inputs.stage ]]
@@ -93,6 +98,15 @@ spec:
       # reach the engine as its flags, never through the environment.
       readonly REQUIRED_LINTS='$[[ inputs.required-lints ]]' ENABLE_GITLAB_SAST='$[[ inputs.enable-gitlab-sast ]]' \
         RC_ADMIN_LINT='$[[ inputs.enforce-lint ]]' RC_ADMIN_VULNERABILITIES='$[[ inputs.enforce-vulnerabilities ]]'
+      # The instance as written: a project or pipeline variable outranks
+      # the predefined CI_SERVER_URL and CI_API_V4_URL, and the job token
+      # goes where they point. Hold the one to the literal, derive the other.
+      readonly RC_SERVER_URL='$[[ inputs.server-url ]]'
+      if [ "${CI_SERVER_URL-}" != "${RC_SERVER_URL}" ]; then
+        echo "ERROR: CI_SERVER_URL is '${CI_SERVER_URL-}', not server-url '${RC_SERVER_URL}'; remove the variable that sets it." >&2
+        exit 1
+      fi
+      export CI_API_V4_URL="${RC_SERVER_URL}/api/v4"
 
       # opengrep (inside nanolinter) hardcodes paths under the image's home; the
       # flavour image's /home/nanolinter is writable, so cosign's sigstore cache
@@ -134,7 +148,7 @@ spec:
         depth=()
         if [ "$(git rev-parse --is-shallow-repository)" = true ]; then depth=(--unshallow); fi
         if ! GIT_TERMINAL_PROMPT=0 git "${fetch_options[@]}" fetch --quiet --no-tags "${depth[@]}" \
-          "${CI_SERVER_URL:?}/${CI_PROJECT_PATH:?}.git" "+refs/heads/${target}:refs/remotes/origin/${target}"; then
+          "${RC_SERVER_URL}/${CI_PROJECT_PATH:?}.git" "+refs/heads/${target}:refs/remotes/origin/${target}"; then
           echo "cannot fetch the merge request's target branch ${target} (a pipeline error, not a lint finding)" >&2
           exit 1
         fi
@@ -146,7 +160,7 @@ spec:
           set -euo pipefail
           expected='$[[ component.sha ]]'
           export FORGE_CI_PACKAGE_PROVIDER=gitlab
-          export FORGE_CI_REPOSITORY_URL="${CI_SERVER_URL:?}/${RC_FORGE_CI_REPOSITORY:?}.git"
+          export FORGE_CI_REPOSITORY_URL="${RC_SERVER_URL}/${RC_FORGE_CI_REPOSITORY:?}.git"
           helpers=$(mktemp -d /tmp/forge-ci-helpers.XXXXXXXX)
           trap 'rm -rf -- "${helpers}"' EXIT
           git_options=(-c core.hooksPath=/dev/null -c credential.helper=)

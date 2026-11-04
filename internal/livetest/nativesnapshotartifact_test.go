@@ -456,7 +456,7 @@ func TestGitLabSnapshotArtifactFirst(t *testing.T) {
 	}
 
 	workflow := strings.NewReplacer("ENGINE_REPOSITORY", RepoSlug(target, engine), "ENGINE_SHA", engineSHA, "FORGE_HOST", strings.TrimPrefix(target.BaseURL(), "https://"), "TOOLS_IMAGE", snapshotNativeToolsImage, "IMAGE_REPOSITORY", imageRepository, "BUILD_TAGS", string(tagJSON), "BUILD_IMAGE", buildImage,
-		"IMAGE_BUILDER", choice.Builder, "BUILDER_JOB_IMAGE", strconv.Quote(builderJobImage)).Replace(`workflow:
+		"IMAGE_BUILDER", choice.Builder, "BUILDER_JOB_IMAGE", strconv.Quote(builderJobImage), "REGISTRY_HOST", registry).Replace(`workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "api"'
 stages: [deploy]
@@ -466,6 +466,8 @@ include:
       branch: feature/artifact-source
       image-repository: IMAGE_REPOSITORY
       forge-ci-repository: ENGINE_REPOSITORY
+      server-url: https://FORGE_HOST
+      registry: REGISTRY_HOST
       job-image: TOOLS_IMAGE
       build-image: BUILD_IMAGE
       artifact-job-image-go: TOOLS_IMAGE

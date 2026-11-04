@@ -48,6 +48,7 @@ include:
   - component: $CI_SERVER_FQDN/itiquette/forge-ci/nanolinter@0.90.0
     inputs:
       forge-ci-repository: itiquette/forge-ci
+      server-url: $CI_SERVER_URL
       nanolinter-image: $CI_LINT_IMAGE
 
   # The consumer's own checks at the pipeline commit, in an image that carries
@@ -58,6 +59,7 @@ include:
   - component: $CI_SERVER_FQDN/itiquette/forge-ci/check@2f4e845cee96973d1082bf00a5a18689c1482148
     inputs:
       forge-ci-repository: itiquette/forge-ci
+      server-url: $CI_SERVER_URL
       job-image: $CI_JOB_IMAGE
       commands:
         - go vet ./...

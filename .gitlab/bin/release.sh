@@ -84,7 +84,7 @@ rc_checkout() {
 	local ref=$1 format=sha1
 	if [ "${#RELEASE_REQUEST_SHA}" -eq 64 ]; then format=sha256; fi
 	rc_engine platform checkout \
-		--workspace "${RC_WORK}/consumer" --server-url "${CI_SERVER_URL:?}" \
+		--workspace "${RC_WORK}/consumer" --server-url "${RC_SERVER_URL}" \
 		--repository "${CI_PROJECT_PATH:?}" --ref "${ref}" --object-format "${format}" --fetch-all-refs
 	cd -- "${RC_WORK}/consumer" || return
 }
@@ -109,7 +109,7 @@ rc_release_checkout() {
 	fi
 	rc_engine release validate-tag --release-sha "${RELEASE_SHA}" --tag "${RELEASE_TAG}" \
 		--expected-parent "${RELEASE_REQUEST_SHA}" --changelog-only "${bump_args[@]}" \
-		--repo-url "${CI_SERVER_URL}/${CI_PROJECT_PATH}.git"
+		--repo-url "${RC_SERVER_URL}/${CI_PROJECT_PATH}.git"
 }
 
 # rc_image_builder prepares the image job's builder before any Containerfile
@@ -136,9 +136,9 @@ rc_image_builder() {
 		return
 	fi
 	# The job token reads what the runner pulled the job's image with.
-	if [ -n "${CI_REGISTRY:-}" ]; then
+	if [ -n "${RC_REGISTRY:-}" ]; then
 		auth_args=(--auth-file "${RC_WORK:?}/builder-auth.json")
-		printf '%s' "${CI_JOB_TOKEN:?}" | rc_engine container login --registry "${CI_REGISTRY}" \
+		printf '%s' "${CI_JOB_TOKEN:?}" | rc_engine container login --registry "${RC_REGISTRY}" \
 			--registry-username gitlab-ci-token --registry-password-file - "${auth_args[@]}" || return
 	fi
 	rc_engine container image usable-digest --ref "${CI_IMAGE_BUILDER_JOB_IMAGE}" \
@@ -397,7 +397,7 @@ rc_plan_release_images() {
 	if [ "${arm64_tags}" != '[]' ]; then archs=amd64,arm64; fi
 	rc_engine container release-images plan --file "${config}" --image-plan-json '' \
 		--release-tag "${RELEASE_TAG}" --release-platforms "${platforms}" \
-		--image-repository "${CI_REGISTRY_IMAGE:?}" --server-url "${CI_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
+		--image-repository "${RC_REGISTRY_IMAGE:?}" --server-url "${RC_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
 		--registry-username gitlab-ci-token --runner-archs "${archs}" --output "${output}"
 }
 
@@ -449,8 +449,8 @@ rc_images_build() {
 		# the builder for pulls (docs/gitlab.md).
 		unset CI_JOB_TOKEN CI_REGISTRY_PASSWORD CI_DEPLOY_PASSWORD CI_DEPENDENCY_PROXY_PASSWORD
 		rc_engine container release-images build --plan "${CI_PROJECT_DIR}/_release-images-plan/plan.json" \
-			--arch "${arch}" --image-repository "${CI_REGISTRY_IMAGE:?}" --release-tag "${RELEASE_TAG}" \
-			--release-sha "${RELEASE_SHA}" --server-url "${CI_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
+			--arch "${arch}" --image-repository "${RC_REGISTRY_IMAGE:?}" --release-tag "${RELEASE_TAG}" \
+			--release-sha "${RELEASE_SHA}" --server-url "${RC_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
 			--created "${created}" --source-dir consumer --metadata-dir staged --image-builder "${CI_IMAGE_BUILDER}"
 	) || return
 	# kaniko deletes the root filesystem after its builds; take the tools from
@@ -477,12 +477,12 @@ rc_images_publish() {
 	# shellcheck source=scripts/bootstrap/install-trivy.sh
 	source "${RC_HELPERS_DIR}/scripts/bootstrap/install-trivy.sh"
 	install_trivy
-	printf '%s' "${CI_JOB_TOKEN:?}" | rc_engine container login --registry "${CI_REGISTRY:?}" \
+	printf '%s' "${CI_JOB_TOKEN:?}" | rc_engine container login --registry "${RC_REGISTRY:?}" \
 		--registry-username gitlab-ci-token --registry-password-file - --auth-file "${auth_file}"
 	rc_engine container release-images publish --enforce-vulnerabilities="${RC_ADMIN_VULNERABILITIES:?}" \
 		--plan "${CI_PROJECT_DIR}/_release-images-plan/plan.json" \
-		--image-repository "${CI_REGISTRY_IMAGE:?}" --release-tag "${RELEASE_TAG}" --release-sha "${RELEASE_SHA}" \
-		--server-url "${CI_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
+		--image-repository "${RC_REGISTRY_IMAGE:?}" --release-tag "${RELEASE_TAG}" --release-sha "${RELEASE_SHA}" \
+		--server-url "${RC_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
 		--layouts-dir "${layouts}" --output-dir "${images}" --auth-file "${auth_file}"
 	rm -f -- "${auth_file}"
 	for file in "${images}"/*; do
@@ -587,8 +587,8 @@ rc_sign_release() {
 		rc_publication_scope
 		REGISTRY_USER="${RELEASE_REGISTRY_USER:?}" REGISTRY_TOKEN="${RELEASE_REGISTRY_TOKEN:?}" \
 			rc_engine container release-images import --dist-dir "${DIST_DIR}" --ledger "${DIST_DIR}/release-images.json" \
-			--tag "${RELEASE_TAG}" --registry "${CI_REGISTRY}" --server-url "${CI_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
-			--expected-image-repository "${CI_REGISTRY_IMAGE}" --destination-repository "${RC_PUBLICATION_IMAGE_REPOSITORY:?}" \
+			--tag "${RELEASE_TAG}" --registry "${RC_REGISTRY}" --server-url "${RC_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
+			--expected-image-repository "${RC_REGISTRY_IMAGE}" --destination-repository "${RC_PUBLICATION_IMAGE_REPOSITORY:?}" \
 			--output-ledger "${DIST_DIR}/release-images-publication.json"
 	fi
 	export COSIGN_KEY="${RELEASE_COSIGN_PRIVATE_KEY:?}" COSIGN_PASSWORD="${RELEASE_COSIGN_PASSPHRASE:?}"
@@ -605,11 +605,11 @@ rc_sign_release() {
 		--output "${DIST_DIR}/slsa-provenance.intoto.json" --method kms --key env://COSIGN_KEY \
 		--bundle "${DIST_DIR}/slsa-provenance.intoto.json.bundle"
 	if [ -f "${DIST_DIR}/release-images-publication.json" ]; then
-		local base_repository="${CI_REGISTRY_IMAGE}-base"
+		local base_repository="${RC_REGISTRY_IMAGE}-base"
 		if [ "${RC_BASE_IMAGES}" = true ]; then base_repository="${RC_PUBLICATION_IMAGE_REPOSITORY}/bases"; fi
 		REGISTRY_USER="${RELEASE_REGISTRY_USER:?}" REGISTRY_TOKEN="${RELEASE_REGISTRY_TOKEN:?}" \
 			rc_engine container release-images sign --ledger "${DIST_DIR}/release-images-publication.json" --method kms --key env://COSIGN_KEY \
-			--server-url "${CI_SERVER_URL}" --repository "${CI_PROJECT_PATH}" --registry "${CI_REGISTRY}" \
+			--server-url "${RC_SERVER_URL}" --repository "${CI_PROJECT_PATH}" --registry "${RC_REGISTRY}" \
 			--expected-image-repository "${RC_PUBLICATION_IMAGE_REPOSITORY}" --expected-base-repository "${base_repository}"
 	fi
 	rc_engine release sign --method kms --key env://COSIGN_KEY --no-checksums-file --no-release-artifacts-dir \
@@ -630,7 +630,7 @@ rc_promote_release() {
 	if [ ! -f "${DIST_DIR}/release-images-publication.json" ]; then return; fi
 	REGISTRY_USER="${RELEASE_REGISTRY_USER:?}" REGISTRY_TOKEN="${RELEASE_REGISTRY_TOKEN:?}" \
 		rc_engine container release-images promote --ledger "${DIST_DIR}/release-images-publication.json" \
-		--server-url "${CI_SERVER_URL}" --repository "${CI_PROJECT_PATH}" --registry "${CI_REGISTRY}" \
+		--server-url "${RC_SERVER_URL}" --repository "${CI_PROJECT_PATH}" --registry "${RC_REGISTRY}" \
 		--expected-image-repository "${RC_PUBLICATION_IMAGE_REPOSITORY}" --journal "${CI_PROJECT_DIR}/_release-promote/image-promotions.jsonl"
 }
 
@@ -642,14 +642,14 @@ rc_sign_bases() {
 	rc_publication_scope
 	REGISTRY_USER="${RELEASE_REGISTRY_USER:?}" REGISTRY_TOKEN="${RELEASE_REGISTRY_TOKEN:?}" \
 		rc_engine container base-images import --ledger "${DIST_DIR}/base-images.json" \
-		--dist-dir "${DIST_DIR}" --source-repository "${CI_REGISTRY_IMAGE}/bases" \
+		--dist-dir "${DIST_DIR}" --source-repository "${RC_REGISTRY_IMAGE}/bases" \
 		--expected-repository "${RC_PUBLICATION_IMAGE_REPOSITORY}/bases" \
-		--registry "${CI_REGISTRY}" --server-url "${CI_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
+		--registry "${RC_REGISTRY}" --server-url "${RC_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
 		--output-ledger "${DIST_DIR}/base-images-publication.json"
 	REGISTRY_USER="${RELEASE_REGISTRY_USER:?}" REGISTRY_TOKEN="${RELEASE_REGISTRY_TOKEN:?}" \
 		rc_engine container base-images sign --ledger "${DIST_DIR}/base-images-publication.json" \
 		--expected-repository "${RC_PUBLICATION_IMAGE_REPOSITORY}/bases" \
-		--registry "${CI_REGISTRY}" --server-url "${CI_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
+		--registry "${RC_REGISTRY}" --server-url "${RC_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
 		--workflow gitlab/release.yml --source-sha "${RELEASE_SHA}" --started-on "$(git log -1 --format=%cI)" \
 		--method kms --key env://COSIGN_KEY
 }
@@ -662,7 +662,7 @@ rc_publication_scope() {
 		return 1
 	fi
 	case "${RC_PUBLICATION_IMAGE_REPOSITORY:?}" in
-	"${CI_REGISTRY:?}/${RC_PUBLICATION_PROJECT}" | "${CI_REGISTRY}/${RC_PUBLICATION_PROJECT}/"*) ;;
+	"${RC_REGISTRY:?}/${RC_PUBLICATION_PROJECT}" | "${RC_REGISTRY}/${RC_PUBLICATION_PROJECT}/"*) ;;
 	*)
 		echo 'ERROR: publication images must belong to the separate publication project.' >&2
 		return 1
@@ -683,7 +683,7 @@ rc_promote_bases() {
 		REGISTRY_USER="${RELEASE_REGISTRY_USER:?}" REGISTRY_TOKEN="${RELEASE_REGISTRY_TOKEN:?}" \
 			rc_engine container base-images promote --all-images-json "${images}" \
 			--expected-repository "${RC_PUBLICATION_IMAGE_REPOSITORY}/bases" \
-			--registry "${CI_REGISTRY}" --server-url "${CI_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
+			--registry "${RC_REGISTRY}" --server-url "${RC_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
 			--expected-workflow gitlab/release.yml --cosign-public-key-path trusted.pub \
 			--cosign-public-key-sha256 "${RC_PUBLIC_KEY_SHA256}"
 	)
@@ -708,7 +708,7 @@ rc_cleanup_release() {
 	if [ ! -f "${DIST_DIR}/release-images-publication.json" ]; then return; fi
 	GITLAB_TOKEN="${RELEASE_REGISTRY_TOKEN:?}" REGISTRY_USER="${RELEASE_REGISTRY_USER:?}" REGISTRY_TOKEN="${RELEASE_REGISTRY_TOKEN:?}" \
 		rc_engine container release-images cleanup --ledger "${DIST_DIR}/release-images-publication.json" \
-		--server-url "${CI_SERVER_URL}" --repository "${RC_PUBLICATION_PROJECT}" --registry "${CI_REGISTRY}" \
+		--server-url "${RC_SERVER_URL}" --repository "${RC_PUBLICATION_PROJECT}" --registry "${RC_REGISTRY}" \
 		--expected-image-repository "${RC_PUBLICATION_IMAGE_REPOSITORY}"
 }
 

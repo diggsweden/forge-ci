@@ -599,6 +599,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   application id to the other, so a job that set it for one handed it to
   the other. `PACKAGE_NAME` is no longer read; rename it in your job env or
   pass the flag.
+- **BREAKING:** The GitLab policy components (`check`, `nanolinter`,
+  `megalinter`, `release` and `snapshot-images`) require `server-url`, the
+  instance's `https://host[:port]`, and `release` and `snapshot-images` also
+  `registry`, its container registry `host[:port]` (empty when the project has
+  none). A project or pipeline variable outranks the predefined
+  `CI_SERVER_URL`, `CI_API_V4_URL` and `CI_REGISTRY`, so it could send the job
+  token, `RELEASE_TOKEN` or `RELEASE_REGISTRY_TOKEN` to another host. Each
+  job's start now refuses to run when `CI_SERVER_URL` or `CI_REGISTRY` is not
+  the literal, sets `CI_API_V4_URL` and `CI_REGISTRY_IMAGE` from the literals,
+  and sends tokens only there. The registry is stated, not derived: GitLab
+  configures it apart from the web host. Add both inputs to the policy's
+  includes. "No one allowed" for pipeline variables stays as defence in depth.
 - **BREAKING:** `nanolinter-image` is required and admits only a digest pin,
   `<image>@sha256:<64 hex>`, on the GitLab `nanolinter` component, on
   `lint-nanolinter.yml` and, with `lint-engine: nanolinter`, on

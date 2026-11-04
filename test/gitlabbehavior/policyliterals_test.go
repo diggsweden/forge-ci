@@ -58,7 +58,20 @@ func TestGitLabJobsTakeThePolicyFromTheirLiteralInputs(t *testing.T) {
 		{
 			name: "release start", path: "templates/release-jobs.yml", script: releaseRequestStart,
 			given: release, stop: "object_format=sha1", env: releaseEnv,
-			derived: map[string]string{"FORGE_CI_REPOSITORY_URL": "https://gitlab.invalid/team/engine.git"},
+			derived: map[string]string{
+				"FORGE_CI_REPOSITORY_URL": "https://gitlab.invalid/team/engine.git", "CI_API_V4_URL": "https://gitlab.invalid/api/v4",
+				"CI_REGISTRY_IMAGE": "registry.gitlab.invalid/team/app",
+			},
+		},
+		{
+			name: "release start on another server", path: "templates/release-jobs.yml", script: releaseRequestStart,
+			given: release, stop: "object_format=sha1", env: append(slices.Clone(releaseEnv), "CI_SERVER_URL=https://evil.invalid"),
+			wantError: "CI_SERVER_URL is 'https://evil.invalid'",
+		},
+		{
+			name: "release start on another registry", path: "templates/release-jobs.yml", script: releaseRequestStart,
+			given: release, stop: "object_format=sha1", env: append(slices.Clone(releaseEnv), "CI_REGISTRY=evil.invalid"),
+			wantError: "CI_REGISTRY 'evil.invalid'",
 		},
 		{
 			name: "release start under another clone", path: "templates/release-jobs.yml", script: releaseRequestStart,
@@ -73,7 +86,20 @@ func TestGitLabJobsTakeThePolicyFromTheirLiteralInputs(t *testing.T) {
 		{
 			name: "snapshot start", path: "templates/snapshot-image-jobs.yml", script: snapshotStart,
 			given: map[string]any{"image-builder": "kaniko", "builder-job-image": kaniko}, stop: `git init --quiet "${SNAPSHOT_HELPERS}"`,
-			env: snapshotEnv, derived: map[string]string{"FORGE_CI_REPOSITORY_URL": "https://gitlab.invalid/team/engine.git"},
+			env: snapshotEnv, derived: map[string]string{
+				"FORGE_CI_REPOSITORY_URL": "https://gitlab.invalid/team/engine.git", "SNAPSHOT_SERVER": "https://gitlab.invalid",
+				"CI_API_V4_URL": "https://gitlab.invalid/api/v4",
+			},
+		},
+		{
+			name: "snapshot start on another server", path: "templates/snapshot-image-jobs.yml", script: snapshotStart,
+			stop: `git init --quiet "${SNAPSHOT_HELPERS}"`, env: append(slices.Clone(snapshotEnv), "CI_SERVER_URL=https://evil.invalid"),
+			wantError: "CI_SERVER_URL is 'https://evil.invalid'",
+		},
+		{
+			name: "snapshot start on another registry", path: "templates/snapshot-image-jobs.yml", script: snapshotStart,
+			stop: `git init --quiet "${SNAPSHOT_HELPERS}"`, env: append(slices.Clone(snapshotEnv), "CI_REGISTRY=evil.invalid"),
+			wantError: "CI_REGISTRY 'evil.invalid'",
 		},
 		{
 			name: "snapshot start under another clone", path: "templates/snapshot-image-jobs.yml", script: snapshotStart,
@@ -87,10 +113,29 @@ func TestGitLabJobsTakeThePolicyFromTheirLiteralInputs(t *testing.T) {
 		{
 			name: "check start", path: "templates/check.yml", script: checkStart, given: map[string]any{"job-user": ""},
 			stop: "RC_HELPERS_DIR=$(mktemp", env: []string{"FAKE_UID=1000", "FAKE_GID=1000", "CI_COMMIT_SHA=" + pin, "RC_FORGE_CI_REPOSITORY=evil/engine"},
-			derived: map[string]string{"FORGE_CI_REPOSITORY_URL": "https://gitlab.invalid/team/engine.git"},
+			derived: map[string]string{"FORGE_CI_REPOSITORY_URL": "https://gitlab.invalid/team/engine.git", "CI_API_V4_URL": "https://gitlab.invalid/api/v4"},
 		},
-		{name: "nanolinter", path: "templates/nanolinter.yml", script: lintScript("templates/nanolinter.yml"), stop: "git_config_count="},
-		{name: "megalinter", path: "templates/megalinter.yml", script: lintScript("templates/megalinter.yml"), stop: "git_config_count="},
+		{
+			name: "check start on another server", path: "templates/check.yml", script: checkStart, given: map[string]any{"job-user": ""},
+			stop: "RC_HELPERS_DIR=$(mktemp", env: []string{"FAKE_UID=1000", "FAKE_GID=1000", "CI_COMMIT_SHA=" + pin, "CI_SERVER_URL=https://evil.invalid"},
+			wantError: "CI_SERVER_URL is 'https://evil.invalid'",
+		},
+		{
+			name: "nanolinter", path: "templates/nanolinter.yml", script: lintScript("templates/nanolinter.yml"), stop: "git_config_count=",
+			derived: map[string]string{"CI_API_V4_URL": "https://gitlab.invalid/api/v4"},
+		},
+		{
+			name: "nanolinter on another server", path: "templates/nanolinter.yml", script: lintScript("templates/nanolinter.yml"), stop: "git_config_count=",
+			env: []string{"CI_SERVER_URL=https://evil.invalid"}, wantError: "CI_SERVER_URL is 'https://evil.invalid'",
+		},
+		{
+			name: "megalinter", path: "templates/megalinter.yml", script: lintScript("templates/megalinter.yml"), stop: "git_config_count=",
+			derived: map[string]string{"CI_API_V4_URL": "https://gitlab.invalid/api/v4"},
+		},
+		{
+			name: "megalinter on another server", path: "templates/megalinter.yml", script: lintScript("templates/megalinter.yml"), stop: "git_config_count=",
+			env: []string{"CI_SERVER_URL=https://evil.invalid"}, wantError: "CI_SERVER_URL is 'https://evil.invalid'",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -123,7 +168,7 @@ func TestGitLabJobsTakeThePolicyFromTheirLiteralInputs(t *testing.T) {
 			// Every value, as a project variable would set it.
 			env := make([]string, 0, len(want)+3)
 
-			env = append(env, "PATH=/usr/bin:/bin", "CI_SERVER_URL=https://gitlab.invalid", "rc_job_role=sign")
+			env = append(env, "PATH=/usr/bin:/bin", "CI_SERVER_URL=https://gitlab.invalid", "CI_REGISTRY=registry.gitlab.invalid", "rc_job_role=sign")
 			for name := range want {
 				env = append(env, name+"=hostile-"+strings.ToLower(name))
 			}
@@ -265,7 +310,8 @@ var derivedPolicyNames = map[string]string{
 	"RC_RELEASE_BRANCH":          "rc_release_context, from release-branch or the default branch",
 	"RC_FORGE_CI_REPOSITORY":     "the lint components' held variable",
 	"SNAPSHOT_HELPERS":           "the snapshot start's checkout of the engine",
-	"SNAPSHOT_SERVER":            "the snapshot start, from CI_SERVER_URL",
+	"SNAPSHOT_SERVER":            "the snapshot start, from server-url",
+	"RC_REGISTRY_IMAGE":          "the release start, from registry and consumer-project, as GitLab derives CI_REGISTRY_IMAGE",
 	"SNAPSHOT_REPOSITORY":        "the snapshot start, from CI_PROJECT_PATH",
 	"SNAPSHOT_REGISTRY_USER":     "a credential of the snapshot/registry environment",
 	"SNAPSHOT_REGISTRY_PASSWORD": "a credential of the snapshot/registry environment",
@@ -300,6 +346,108 @@ func TestGitLabScriptsReadPolicyValuesOnlyFromLiterals(t *testing.T) {
 			if _, derived := derivedPolicyNames[match[1]]; !literal[match[1]] && !derived {
 				t.Errorf("%s reads %s, which no policy component assigns from an input", path, match[1])
 			}
+		}
+	}
+}
+
+// serverVariable is a predefined variable naming where a job's tokens go: the
+// instance, its API or its registry. A project or pipeline variable outranks
+// each of them.
+var serverVariable = regexp.MustCompile(`\$\{?!?(CI_SERVER_URL|CI_API_V4_URL|CI_API_GRAPHQL_URL|CI_REGISTRY|CI_REGISTRY_IMAGE|CI_SERVER_HOST|CI_SERVER_FQDN|CI_SERVER_PORT|CI_SERVER_PROTOCOL)\b`)
+
+// serverLiteral is the regex of a policy component's server-url input.
+const serverLiteral = `^https://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$`
+
+// Every policy component takes the instance as a literal, server-url, that
+// admits exactly an https origin, and its jobs send their tokens only where
+// the literal points: a script line that reads a predefined server
+// variable compares it with, or derives it from, the literal. The release
+// and snapshot components take the registry the same way, since GitLab
+// configures it apart from the web host.
+func TestGitLabTokenDestinationsComeFromTheServerLiteral(t *testing.T) {
+	t.Parallel()
+
+	admitted := []string{"https://gitlab.example.com", "https://gitlab.example.com:8443", "https://10.0.0.1"}
+	refused := []string{
+		"", "http://gitlab.example.com", "https://gitlab.example.com/", "https://gitlab.example.com/gitlab",
+		"https://user:pass@gitlab.example.com", "https://gitlab.example.com?x=1", "https://gitlab.example.com#x",
+		"https://gitlab.example.com\nhttps://evil.invalid", "$CI_SERVER_URL", "https://-evil.invalid",
+	}
+
+	for _, path := range policyTemplates {
+		spec := componentSpecInputs(t, path)
+
+		input, declared := spec["server-url"]
+		if pattern, _ := input["regex"].(string); !declared || pattern != serverLiteral {
+			t.Errorf("%s: server-url must be declared with regex %s, got %v", path, serverLiteral, input["regex"])
+
+			continue
+		}
+
+		admits := regexp.MustCompile(serverLiteral).MatchString
+		for _, value := range admitted {
+			if !admits(value) {
+				t.Errorf("server-url refuses %q", value)
+			}
+		}
+
+		for _, value := range refused {
+			if admits(value) {
+				t.Errorf("server-url admits %q", value)
+			}
+		}
+
+		if _, hasDefault := input["default"]; hasDefault {
+			t.Errorf("%s: server-url has a default; the administrator states it", path)
+		}
+
+		if strings.Contains(path, "release") || strings.Contains(path, "snapshot") {
+			registry, ok := spec["registry"]
+			if _, hasDefault := registry["default"]; !ok || hasDefault {
+				t.Errorf("%s: registry must be a required literal input", path)
+			}
+		}
+	}
+
+	texts := make([]string, 0, len(policyTemplates)+2)
+	for _, path := range policyTemplates {
+		_, body, _ := strings.Cut(string(reporoot.ReadFile(t, path)), "\n---\n")
+		texts = append(texts, path+"\x00"+body)
+	}
+
+	for _, path := range []string{".gitlab/bin/release.sh", ".gitlab/bin/snapshot-images.sh"} {
+		texts = append(texts, path+"\x00"+string(reporoot.ReadFile(t, path)))
+	}
+
+	held := 0
+
+	for _, entry := range texts {
+		path, text, _ := strings.Cut(entry, "\x00")
+		for number, line := range strings.Split(text, "\n") {
+			if trimmed := strings.TrimSpace(line); strings.HasPrefix(trimmed, "#") || !serverVariable.MatchString(line) {
+				continue
+			}
+
+			if !strings.Contains(line, "${RC_SERVER_URL}") && !strings.Contains(line, "${RC_REGISTRY}") {
+				t.Errorf("%s:%d reads %s; take the instance from the server-url or registry literal: %s",
+					path, number+1, serverVariable.FindStringSubmatch(line)[1], strings.TrimSpace(line))
+
+				continue
+			}
+
+			held++
+		}
+	}
+
+	if held == 0 {
+		t.Fatal("no job holds a server variable to its literal; the guard has drifted")
+	}
+
+	for _, path := range []string{"templates/release-jobs.yml", "templates/snapshot-image-jobs.yml", "templates/check.yml", "templates/nanolinter.yml", "templates/megalinter.yml"} {
+		text := string(reporoot.ReadFile(t, path))
+		if !strings.Contains(text, `RC_SERVER_URL='$[[ inputs.server-url ]]'`) || !strings.Contains(text, `"${CI_SERVER_URL-}" != "${RC_SERVER_URL}"`) ||
+			!strings.Contains(text, `CI_API_V4_URL="${RC_SERVER_URL}/api/v4"`) {
+			t.Errorf("%s: the job start must assign RC_SERVER_URL from server-url, hold CI_SERVER_URL to it and derive CI_API_V4_URL", path)
 		}
 	}
 }

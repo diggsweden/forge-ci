@@ -57,6 +57,7 @@ var exampleDemoValues = strings.NewReplacer(
 	"ghcr.io/diggsweden/forge-ci-runtime-node-24@sha256:PIN_NODE_IMAGE_DIGEST", gitlabJobPlaceholder+"_NODE",
 	// A Go build runs in the trial's job image too.
 	"ghcr.io/diggsweden/forge-ci-runtime-go-1.27@sha256:PIN_GO_IMAGE_DIGEST", gitlabJobPlaceholder,
+	"server-url: https://gitlab.example.com", "server-url: "+gitlabServerPlaceholder,
 	"gitlab.example.com/team/ci/forge-ci", "$CI_SERVER_FQDN/itiquette/forge-ci",
 	"team/ci/forge-ci", "itiquette/forge-ci",
 )

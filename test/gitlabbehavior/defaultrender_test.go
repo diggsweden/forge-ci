@@ -25,6 +25,8 @@ import (
 var requiredInputFixtures = map[string]any{
 	"forge-ci-repository":              "team/engine",
 	"consumer-project":                 "team/app",
+	"server-url":                       "https://gitlab.invalid",
+	"registry":                         "registry.gitlab.invalid",
 	"job-image":                        "registry.invalid/team/job@sha256:" + strings.Repeat("1", 64),
 	"build-image":                      "registry.invalid/team/build@sha256:" + strings.Repeat("2", 64),
 	"signer-image":                     "registry.invalid/team/signer@sha256:" + strings.Repeat("3", 64),
