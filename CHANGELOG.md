@@ -605,6 +605,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   application id to the other, so a job that set it for one handed it to
   the other. `PACKAGE_NAME` is no longer read; rename it in your job env or
   pass the flag.
+- **BREAKING:** An empty GitLab `release-platforms` exports linux/amd64
+  alone; `build-runner-tags-arm64` no longer selects linux/arm64 for the
+  export jobs, it only serves it. The images still build each container's
+  declared platforms, linux/amd64 when it declares none, as on every forge.
+  A release whose containers declare linux/arm64 and that exports files is
+  refused at the release request until `release-platforms` names the
+  platforms, so the images and the exports build the same architectures.
 - **BREAKING:** The GitLab policy components (`check`, `nanolinter`,
   `megalinter`, `release` and `snapshot-images`) require `server-url`, the
   instance's `https://host[:port]`, and `release` and `snapshot-images` also

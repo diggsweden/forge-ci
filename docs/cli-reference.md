@@ -1929,7 +1929,7 @@ EXAMPLE:
 | `--server-url` | forge server URL, whose registry an empty --image-repository names | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo the image repositories are derived from | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
 | `--release-tag` | release tag the image tags are made of, e.g. v1.2.3 (required) | string | `""` | n/a |
-| `--release-platforms` | comma-separated subset of each container's platforms to build; empty builds them all | string | `""` | `$RELEASE_PLATFORMS` |
+| `--release-platforms` | comma-separated subset of each container's platforms to build; empty builds every declared platform, linux/amd64 when a container declares none | string | `""` | `$RELEASE_PLATFORMS` |
 | `--label` | key=value label every image carries after the standard ones, such as org.opencontainers.image.licenses=MIT (repeatable); a standard provenance label is refused | string | `""` | n/a |
 | `--output` | write the builds/images plan to this file instead of the builds, images and image-names outputs | string | `""` | n/a |
 | `--runner-archs` | with --output: comma-separated architectures that have a native build job; empty admits every one | string | `""` | n/a |

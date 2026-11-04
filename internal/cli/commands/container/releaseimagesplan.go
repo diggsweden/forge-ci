@@ -82,7 +82,7 @@ EXAMPLE:
 			// No environment source: the event's ref name, which the tag chain
 			// falls back to, is not the release tag on a release-request push.
 			&cli.StringFlag{Name: "release-tag", Required: true, Usage: "release tag the image tags are made of, e.g. v1.2.3"},
-			&cli.StringFlag{Name: "release-platforms", Sources: cli.EnvVars("RELEASE_PLATFORMS"), Usage: "comma-separated subset of each container's platforms to build; empty builds them all"},
+			&cli.StringFlag{Name: "release-platforms", Sources: cli.EnvVars("RELEASE_PLATFORMS"), Usage: "comma-separated subset of each container's platforms to build; empty builds every declared platform, linux/amd64 when a container declares none"},
 			&cli.StringSliceFlag{Name: flagLabel, Usage: "key=value label every image carries after the standard ones, such as org.opencontainers.image.licenses=MIT (repeatable); a standard provenance label is refused"},
 			&cli.StringFlag{Name: flagOutput, Usage: "write the builds/images plan to this file instead of the builds, images and image-names outputs"},
 			&cli.StringFlag{Name: flagRunnerArchs, Usage: "with --output: comma-separated architectures that have a native build job; empty admits every one"},

@@ -77,7 +77,7 @@ spec:
       regex: '^$|^[A-Za-z0-9_.][A-Za-z0-9_./-]*$'
       default: ''
     release-platforms:
-      description: Comma-separated subset of each container's platforms to build, for example linux/amd64. Empty builds them all.
+      description: Comma-separated subset of each container's platforms to build and export, for example linux/amd64. Empty builds each container's declared platforms, linux/amd64 when it declares none, and exports linux/amd64.
       regex: '^$|^linux/(amd64|arm64)(,linux/(amd64|arm64))?$'
       default: ''
     labels:
@@ -100,7 +100,7 @@ spec:
       default: []
     export-files:
       description: >-
-        Run the export commands before the build job: once per selected architecture (release-platforms; empty is amd64, and arm64 when build-runner-tags-arm64 is set), natively on that architecture's runner, in builder-job-image with image-builder, on the release commit and with no credential of the job. Each job's dist/ is laid into the build job's dist/ before the build commands run. Requires builder-job-image.
+        Run the export commands before the build job: once per selected architecture (release-platforms; empty is linux/amd64, and a container that declares linux/arm64 then needs release-platforms named), natively on that architecture's runner, in builder-job-image with image-builder, on the release commit and with no credential of the job. Each job's dist/ is laid into the build job's dist/ before the build commands run. Requires builder-job-image.
       type: boolean
       default: false
     export:

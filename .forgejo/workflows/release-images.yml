@@ -81,7 +81,7 @@ on:
         required: false
         default: ''
       release-platforms:
-        description: Comma-separated subset of each container's declared platforms to build, for example linux/amd64. Empty builds them all.
+        description: Comma-separated subset of each container's declared platforms to build, for example linux/amd64. Empty builds each container's declared platforms, linux/amd64 when it declares none.
         type: string
         required: false
         default: ''

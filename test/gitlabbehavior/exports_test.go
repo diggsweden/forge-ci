@@ -4,10 +4,15 @@
 package gitlabbehavior
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
+
+	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
 const pinnedBuilderImage = "registry.example/kaniko-job@sha256:" + "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -27,6 +32,7 @@ func TestReleaseExportCheckRefusesWhatTheJobsWouldNotCarryOut(t *testing.T) {
 		"amd64 by default":          {args: "true '" + pinnedBuilderImage + "' '' '[]'", commands: `["x"]`},
 		"arm64 without its runner":  {args: "true '" + pinnedBuilderImage + "' 'linux/amd64,linux/arm64' '[]'", commands: `["x"]`, refusal: "build-runner-tags-arm64"},
 		"arm64 with its runner":     {args: "true '" + pinnedBuilderImage + "' 'linux/arm64' '[\"arm64\"]'", commands: `["x"]`},
+		"a runner selects nothing":  {args: "true '" + pinnedBuilderImage + "' '' '[\"arm64\"]'", commands: `["x"]`},
 		"an unknown export-files":   {args: "maybe '' '' '[]'", commands: "[]", refusal: "true or false"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -49,7 +55,9 @@ func TestReleaseExportCheckRefusesWhatTheJobsWouldNotCarryOut(t *testing.T) {
 }
 
 // An export job of an architecture release-platforms leaves out exports
-// nothing; every other runs.
+// nothing; every other runs. Empty selects linux/amd64, the platform a
+// container declares when it names none: the arm64 runner serves an
+// architecture and never selects one.
 func TestReleaseExportJobRunsForTheSelectedArchitectures(t *testing.T) {
 	t.Parallel()
 
@@ -58,7 +66,7 @@ func TestReleaseExportJobRunsForTheSelectedArchitectures(t *testing.T) {
 		selected        bool
 	}{
 		{"amd64", "", true},
-		{"arm64", "", true},
+		{"arm64", "", false},
 		{"amd64", "linux/arm64", false},
 		{"arm64", "linux/amd64,linux/arm64", true},
 		{"arm64", "linux/amd64", false},
@@ -67,6 +75,39 @@ func TestReleaseExportJobRunsForTheSelectedArchitectures(t *testing.T) {
 		if (err == nil) != test.selected {
 			t.Errorf("%s with release-platforms %q: selected=%v, want %v", test.arch, test.platforms, err == nil, test.selected)
 		}
+	}
+}
+
+// Without release-platforms the images build what each container declares
+// and the exports linux/amd64: the request check refuses a plan that would
+// build an arm64 image then, so the two never build different
+// architectures. Named, both build what release-platforms names.
+func TestReleaseExportCheckKeepsTheExportsToTheImagesArchitectures(t *testing.T) {
+	t.Parallel()
+
+	for name, test := range map[string]struct {
+		platforms, plan, refusal string
+	}{
+		"amd64 images":        {plan: `{"builds": [{"arch": "amd64"}]}`},
+		"arm64 images":        {plan: `{"builds": [{"arch": "amd64"}, {"arch": "arm64"}]}`, refusal: "set release-platforms"},
+		"arm64 images, named": {platforms: "linux/amd64,linux/arm64", plan: `{"builds": [{"arch": "amd64"}, {"arch": "arm64"}]}`},
+		"no images, empty":    {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			work := t.TempDir()
+			if test.plan != "" {
+				if err := os.WriteFile(filepath.Join(work, "release-images-plan.json"), []byte(test.plan), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			out, err := runReleaseFunction(t, work, "rc_check_exports true '"+pinnedBuilderImage+"' '"+test.platforms+"' '[\"arm64\"]' <<'EOF'\n[\"x\"]\nEOF\n", "RC_WORK="+work)
+			if (err != nil) != (test.refusal != "") || !strings.Contains(out, test.refusal) {
+				t.Fatalf("err=%v, want refusal %q:\n%s", err, test.refusal, out)
+			}
+		})
 	}
 }
 
@@ -120,5 +161,40 @@ func TestReleaseBuildGathersTheExportsWithoutOverwriting(t *testing.T) {
 
 	if out, err := runReleaseFunction(t, fresh, "rc_gather_exports false", "CI_PROJECT_DIR="+project); err != nil {
 		t.Fatalf("without export-files nothing is gathered: %v\n%s", err, out)
+	}
+}
+
+// emptyReleasePlatforms is what an empty release-platforms builds, stated
+// alike wherever a release takes it.
+const emptyReleasePlatforms = "Empty builds each container's declared platforms, linux/amd64 when it declares none"
+
+// The GitLab release and the Forgejo release-images workflow describe an
+// empty release-platforms alike, as the planner they share carries it out.
+func TestEmptyReleasePlatformsIsDescribedAlikeOnEveryForge(t *testing.T) {
+	t.Parallel()
+
+	described := map[string]string{
+		"templates/release.yml": fmt.Sprint(componentSpecInputs(t, "templates/release.yml")["release-platforms"]["description"]),
+	}
+
+	var workflow struct {
+		On struct {
+			WorkflowCall struct {
+				Inputs map[string]struct {
+					Description string `yaml:"description"`
+				} `yaml:"inputs"`
+			} `yaml:"workflow_call"`
+		} `yaml:"on"`
+	}
+	if err := yaml.Unmarshal(reporoot.ReadFile(t, ".forgejo/workflows/release-images.yml"), &workflow); err != nil {
+		t.Fatal(err)
+	}
+
+	described[".forgejo/workflows/release-images.yml"] = workflow.On.WorkflowCall.Inputs["release-platforms"].Description
+
+	for path, description := range described {
+		if !strings.Contains(description, emptyReleasePlatforms) {
+			t.Errorf("%s: release-platforms is described as %q; want it to state %q", path, description, emptyReleasePlatforms)
+		}
 	}
 }

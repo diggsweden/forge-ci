@@ -776,8 +776,12 @@ architecture, never emulated. With `export-files: true`:
 2. `Build: export amd64` and, with `build-runner-tags-arm64`, `Build: export
    arm64` run the `export` commands on the release commit in
    `builder-job-image` with `image-builder`, as the image jobs do, for each
-   architecture `release-platforms` selects; empty selects amd64, and arm64
-   when its runner is set. `EXPORT_PLATFORM` and `EXPORT_ARCH` name the
+   architecture `release-platforms` selects; empty selects linux/amd64, the
+   platform a container declares when it names none. A container that
+   declares linux/arm64 then needs `release-platforms` named, or the request
+   check refuses, so the images and the exports build the same
+   architectures; `build-runner-tags-arm64` serves arm64 and never selects
+   it. `EXPORT_PLATFORM` and `EXPORT_ARCH` name the
    job's architecture, and the job holds no credential of its own once the
    builder is admitted. The commands write `dist/`, regular files and
    directories only.

@@ -262,14 +262,13 @@ rc_build_handoff() {
 # architecture, natively, in builder-job-image with image-builder.
 
 # rc_export_archs prints the architectures the export jobs run for: those
-# release-platforms names, or without it amd64, and arm64 when its runner
-# is configured.
+# release-platforms names, or without it amd64, the platform a container
+# declares when it names none. A runner serves an architecture; it never
+# selects one.
 rc_export_archs() {
-	local platforms=$1 arm64_tags=$2 platform archs=()
+	local platforms=$1 platform
 	if [ -z "${platforms}" ]; then
-		archs=(amd64)
-		if [ "${arm64_tags}" != '[]' ]; then archs+=(arm64); fi
-		printf '%s\n' "${archs[@]}"
+		echo amd64
 		return
 	fi
 	IFS=, read -r -a platforms_list <<<"${platforms}"
@@ -309,9 +308,17 @@ rc_check_exports() {
 		echo "ERROR: export-files builds in builder-job-image; set it to the image builder's job image pinned by digest" >&2
 		return 1
 	fi
-	archs=$(rc_export_archs "${platforms}" "${arm64_tags}") || return
+	archs=$(rc_export_archs "${platforms}") || return
 	if grep -qx arm64 <<<"${archs}" && [ "${arm64_tags}" = '[]' ]; then
 		echo "ERROR: release-platforms selects linux/arm64 for the export, so set build-runner-tags-arm64 to a native arm64 runner; nothing builds emulated" >&2
+		return 1
+	fi
+	# Without release-platforms the images build what each container
+	# declares and the exports linux/amd64; the image plan this job made
+	# must then build no other architecture, or the two would differ.
+	if [ -z "${platforms}" ] && [ -f "${RC_WORK-}/release-images-plan.json" ] &&
+		grep -Eq '"arch": *"arm64"' "${RC_WORK}/release-images-plan.json"; then
+		echo 'ERROR: a container declares linux/arm64, which the export jobs build only when release-platforms names it; set release-platforms so the images and the exports build the same architectures.' >&2
 		return 1
 	fi
 }
@@ -319,8 +326,7 @@ rc_check_exports() {
 # rc_export_selected succeeds when this job's architecture is selected.
 rc_export_selected() {
 	local arch=$1 platforms=$2
-	if [ -z "${platforms}" ]; then return 0; fi
-	case ",${platforms}," in *",linux/${arch},"*) return 0 ;; esac
+	case ",${platforms:-linux/amd64}," in *",linux/${arch},"*) return 0 ;; esac
 	echo "linux/${arch} is not in release-platforms; this job exports nothing."
 	return 1
 }
