@@ -19,10 +19,10 @@ func TestBuildTimestamp_SubprocessEnvironment(t *testing.T) {
 	for _, inherited := range []string{"1700000000", "1792421899"} {
 		t.Run(inherited, func(t *testing.T) {
 			t.Setenv("SOURCE_DATE_EPOCH", inherited)
-			t.Setenv("FORGE_CI_TIMESTAMP_TEST_KEEP", "keep")
+			t.Setenv("BUILDAH_ISOLATION", "chroot")
 			bins := mockbinary.New(t)
 			bins.Add("buildah", `
-printf 'ARGV %s\nEPOCH %s\nKEEP %s\nAUTH %s\n' "$*" "${SOURCE_DATE_EPOCH-<unset>}" "$FORGE_CI_TIMESTAMP_TEST_KEEP" "${REGISTRY_AUTH_FILE-<unset>}"
+printf 'ARGV %s\nEPOCH %s\nKEEP %s\nAUTH %s\n' "$*" "${SOURCE_DATE_EPOCH-<unset>}" "$BUILDAH_ISOLATION" "${REGISTRY_AUTH_FILE-<unset>}"
 while [ "$#" -gt 0 ]; do
   if [ "$1" = --iidfile ]; then shift; printf 'sha256:test\n' > "$1"; fi
   shift
@@ -80,7 +80,7 @@ done
 						t.Fatalf("timestamp missing: %s", lines[0])
 					}
 
-					for _, want := range []string{wantEpoch, "KEEP keep", "AUTH " + req.AuthFile} {
+					for _, want := range []string{wantEpoch, "KEEP chroot", "AUTH " + req.AuthFile} {
 						if !strings.Contains(strings.Join(lines[:4], "\n"), want) {
 							t.Errorf("missing %q in build subprocess: %s", want, log.String())
 						}
@@ -95,7 +95,7 @@ done
 					}
 				})
 			}
-			// Non-build commands continue to inherit the caller's environment.
+			// Non-build commands retain the allowed timestamp setting too.
 			got, err := adapter.InfoDriver(t.Context(), nil)
 			if err != nil || !strings.Contains(got, "EPOCH "+inherited) {
 				t.Fatalf("info environment: %q, %v", got, err)

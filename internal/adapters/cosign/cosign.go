@@ -104,10 +104,10 @@ type Adapter struct {
 	// config file. The subprocess gets a private copy named config.json.
 	AuthFile string
 
-	// Env, when non-nil, replaces the cosign subprocess environment
-	// (exec.Cmd.Env) wholesale. nil → inherit the parent environment
-	// (the default). Set via NewIsolated to restrict which secrets the
-	// signing subprocess can read.
+	// Env, when non-nil, supplies the cosign subprocess environment instead
+	// of the parent's. Set via NewIsolated to restrict signing credentials.
+	// Verification further filters either source to its runtime, registry and
+	// explicitly selected key authentication policy.
 	Env []string
 
 	// Transparency decides whether each signature is published to the
@@ -623,6 +623,10 @@ func (a *Adapter) runCaptured(ctx context.Context, out io.Writer, args ...string
 	defer cleanup()
 
 	cmd := safeexec.Command(ctx, a.bin(), args...)
+	if len(args) > 0 && (args[0] == "verify" || args[0] == "verify-blob" || args[0] == "verify-attestation") {
+		environment = verificationEnv(environment, args)
+	}
+
 	if environment != nil {
 		cmd.Env = environment
 	}

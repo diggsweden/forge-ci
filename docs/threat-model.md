@@ -79,6 +79,25 @@ deliberately retain inherited authentication inputs. Proxy and TLS settings are
 runtime inputs too, and proxy URLs may contain credentials. GPG package signing
 uses `NewIsolated`; import and cleanup currently use the inherited environment.
 
+All three Cosign verification commands filter both inherited and explicitly
+supplied environments. They keep runtime/proxy/TLS settings and registry auth,
+plus the named `env://` key or the explicitly selected KMS provider's SDK
+namespace (AWS, Google/GCE, Azure, Vault/OpenBao or Cosign PKCS#11). Unrelated
+provider credentials and ambient Sigstore trust/destination overrides such as
+`SIGSTORE_ROOT_FILE`, `TUF_ROOT` and `COSIGN_REPOSITORY` do not reach verification.
+This does not isolate a provider from its own SDK configuration or prevent a
+trusted runner's CA/proxy configuration from controlling network trust/routing.
+
+Buildah and Kaniko use an environment allowlist for all command paths, including
+metadata reads and cleanup. It keeps runtime/proxy/TLS settings, registry auth,
+XDG configuration, container storage/registry/policy configuration, Buildah
+isolation and container user-namespace settings. Unpinned builds retain
+`SOURCE_DATE_EPOCH`; an explicit Buildah timestamp removes the competing inherited
+value. Unrelated signing credentials are excluded. These controls do not constrain
+trusted Containerfile code or validate the contents of host configuration files.
+Subprocess behavior tests cover excluded settings and required authentication;
+an architecture guard inventories the environment-policy execution owners.
+
 A universal subprocess allowlist is not the policy: guessing registry, KMS,
 OIDC, proxy or TLS requirements can break supported signing paths. Revisit a
 specific tool/mode when a concrete unnecessary credential or narrower supported

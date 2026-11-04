@@ -273,7 +273,7 @@ func (a *Adapter) run(ctx context.Context, spec build, layoutDir string, out io.
 	cmd.Stdout = out
 	cmd.Stderr = out
 
-	cmd.Env = append(os.Environ(), env...)
+	cmd.Env = append(safeexec.ImageBuilderEnv(os.Environ()), env...)
 
 	if err := cmd.Run(); err != nil {
 		return safeexec.WrapError(err, "kaniko", "build")

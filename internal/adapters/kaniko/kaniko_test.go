@@ -38,6 +38,28 @@ func fakeExecutor(t *testing.T) *Adapter {
 	return &Adapter{Executor: bins.Path("executor"), euid: func() int { return 0 }}
 }
 
+func TestExecutorRestrictsTheInheritedEnvironment(t *testing.T) {
+	t.Setenv("SIGSTORE_ROOT_FILE", "untrusted")
+	t.Setenv("TUF_ROOT", "untrusted")
+	t.Setenv("COSIGN_REPOSITORY", "untrusted")
+	t.Setenv("GPG_PRIVATE_KEY", "unrelated")
+	t.Setenv("SSL_CERT_FILE", "/runner/ca.pem")
+	t.Setenv("HTTPS_PROXY", "http://proxy.example")
+	bins := mockbinary.New(t)
+	bins.Add("executor", `
+[ -z "${SIGSTORE_ROOT_FILE+set}${TUF_ROOT+set}${COSIGN_REPOSITORY+set}${GPG_PRIVATE_KEY+set}" ] || exit 31
+[ "${SSL_CERT_FILE-}" = /runner/ca.pem ] || exit 32
+[ "${HTTPS_PROXY-}" = http://proxy.example ] || exit 33
+`)
+	adapter := &Adapter{Executor: bins.Path("executor"), euid: func() int { return 0 }}
+
+	if err := adapter.BuildToLayout(t.Context(), container.BuildRequest{
+		Context: t.TempDir(), Mode: container.BuildModePushByDigest, ImageRef: "registry.example/app",
+	}, t.TempDir(), io.Discard); err != nil {
+		t.Fatalf("executor subprocess environment: %v", err)
+	}
+}
+
 func TestBuildToLayout_ArgvShape(t *testing.T) {
 	t.Parallel()
 

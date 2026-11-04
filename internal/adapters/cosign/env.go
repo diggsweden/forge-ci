@@ -95,6 +95,61 @@ func filterEnv(environ []string, allow map[string]bool) []string {
 	return safeexec.EnvKeep(environ, func(name string) bool { return runtimeKeep[name] || allow[name] })
 }
 
+// verificationEnv prevents inherited Sigstore trust roots and alternate signature
+// repositories from changing what a verification request accepts. Registry auth,
+// runner TLS/proxy settings and an explicitly named env:// key remain available.
+// Signing uses its own credential policy, since KMS and keyless signing need
+// provider credentials that verification of a public key does not.
+func verificationEnv(environment []string, args []string) []string {
+	if environment == nil {
+		environment = os.Environ()
+	}
+
+	allow := map[string]bool{
+		"DOCKER_CONFIG": true, "REGISTRY_AUTH_FILE": true, "XDG_RUNTIME_DIR": true,
+	}
+	keyRef := ""
+
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "--key" {
+			keyRef = args[i+1]
+			if name := KeyEnvName(keyRef); name != "" {
+				allow[name] = true
+			}
+		}
+	}
+	// Remote public-key lookup needs the selected provider's authentication,
+	// not every provider's credentials. Keep the SDK namespace only for that
+	// explicitly selected KMS; Sigstore trust/destination overrides are never
+	// SDK authentication settings.
+	for _, entry := range environment {
+		name, _, ok := strings.Cut(entry, "=")
+		if ok && verificationProviderEnv(keyRef, name) {
+			allow[name] = true
+		}
+	}
+
+	return filterEnv(environment, allow)
+}
+
+func verificationProviderEnv(keyRef, name string) bool {
+	scheme, _, _ := strings.Cut(keyRef, ":")
+	switch scheme {
+	case "awskms":
+		return strings.HasPrefix(name, "AWS_")
+	case "gcpkms":
+		return strings.HasPrefix(name, "GOOGLE_") || strings.HasPrefix(name, "GCE_") || name == "CLOUDSDK_AUTH_ACCESS_TOKEN"
+	case "azurekms":
+		return strings.HasPrefix(name, "AZURE_")
+	case "hashivault":
+		return strings.HasPrefix(name, "VAULT_")
+	case "pkcs11":
+		return strings.HasPrefix(name, "COSIGN_PKCS11_")
+	default:
+		return false
+	}
+}
+
 // ForKeyRef returns an Adapter isolated for the signing key it is given.
 //
 // An env:// key names the one variable cosign needs, so the subprocess

@@ -278,7 +278,7 @@ func (a *Adapter) run(ctx context.Context, w io.Writer, args ...string) error {
 }
 
 func (a *Adapter) runWithEnv(ctx context.Context, w io.Writer, env []string, args ...string) error {
-	return a.runWithCommandEnv(ctx, w, append(os.Environ(), env...), args...)
+	return a.runWithCommandEnv(ctx, w, append(safeexec.ImageBuilderEnv(os.Environ()), env...), args...)
 }
 
 // runBuildWithEnv keeps --timestamp authoritative. Newer Buildah defaults
@@ -287,7 +287,7 @@ func (a *Adapter) runWithEnv(ctx context.Context, w io.Writer, env []string, arg
 // normalization and older-version support; without it, leave Buildah's defaults
 // alone. Explicit build arguments are passed through unchanged.
 func (a *Adapter) runBuildWithEnv(ctx context.Context, out io.Writer, env []string, timestamp string, args ...string) error {
-	env = append(os.Environ(), env...)
+	env = append(safeexec.ImageBuilderEnv(os.Environ()), env...)
 	if timestamp != "" {
 		env = safeexec.EnvWithout(env, "SOURCE_DATE_EPOCH")
 	}
@@ -317,9 +317,8 @@ func (a *Adapter) outputWithEnv(ctx context.Context, env []string, args ...strin
 
 func (a *Adapter) outputBytesWithEnv(ctx context.Context, env []string, args ...string) ([]byte, error) {
 	cmd := safeexec.Command(ctx, a.bin(), args...)
-	if len(env) > 0 {
-		cmd.Env = append(os.Environ(), env...)
-	}
+
+	cmd.Env = append(safeexec.ImageBuilderEnv(os.Environ()), env...)
 
 	// Output, not CombinedOutput: callers parse this. InfoDriver reads it as
 	// the graph-driver name and compares it to the configured one, and buildah

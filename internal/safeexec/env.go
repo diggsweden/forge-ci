@@ -61,3 +61,25 @@ var gateToolEnv = map[string]bool{
 func GateToolEnv(env []string) []string {
 	return EnvKeep(env, func(name string) bool { return gateToolEnv[name] })
 }
+
+// ImageBuilderEnv keeps runtime, registry and host container-storage settings,
+// not unrelated credentials or tool-specific trust/destination overrides.
+// SOURCE_DATE_EPOCH remains available for unpinned builds; a request with an
+// explicit timestamp removes it before invoking Buildah.
+func ImageBuilderEnv(env []string) []string {
+	return EnvKeep(env, func(name string) bool {
+		if gateToolEnv[name] {
+			return true
+		}
+
+		switch name {
+		case "XDG_CONFIG_HOME", "SOURCE_DATE_EPOCH", "BUILDAH_ISOLATION",
+			"CONTAINERS_CONF", "CONTAINERS_REGISTRIES_CONF", "CONTAINERS_STORAGE_CONF",
+			"CONTAINERS_POLICY", "STORAGE_DRIVER", "STORAGE_OPTS",
+			"_CONTAINERS_USERNS_CONFIGURED", "_CONTAINERS_ROOTLESS_UID":
+			return true
+		default:
+			return false
+		}
+	})
+}
