@@ -77,6 +77,13 @@ func exampleDemoFiles(example string) map[string]string {
 		files[".forgejo/workflows/release.yml"] = path.Join(dir, "forgejo/release.yml")
 	}
 
+	// The monorepo example has no GitHub pull-request workflow, so its demo
+	// has no GitHub variant.
+	if example != "monorepo" {
+		files[githubDemoWorkflows+"/pullrequest.yml"] = path.Join(dir, "github/pullrequest-workflow.yml")
+		files[githubDemoWorkflows+"/release.yml"] = path.Join(dir, "github/release-workflow.yml")
+	}
+
 	if example == "go-service" {
 		files[".forge-ci/images.yml"] = path.Join(dir, "artifacts-forgejo.yml")
 		files["Containerfile"] = path.Join(dir, "Containerfile.example")
@@ -85,6 +92,10 @@ func exampleDemoFiles(example string) map[string]string {
 
 	return files
 }
+
+// githubDemoWorkflows is where a demo keeps its GitHub workflows, which a
+// GitHub trial renders into .github/workflows.
+const githubDemoWorkflows = "test/live/github/workflows"
 
 // yamlComment is a comment after a value; a FIXME there explains the value
 // and is kept, as an adopter would keep it.
@@ -139,5 +150,33 @@ func TestExampleDemosAreTheirExamples(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// An example demo serves every forge its example has a pull-request
+// workflow for: the example's GitHub workflows once passed no runtime image,
+// which the GitHub renderer requires, and their demos had no GitHub variant.
+func TestExampleDemosServeEveryForgeTheirExampleDoes(t *testing.T) {
+	t.Parallel()
+
+	root := reporoot.Path(t)
+	forges := map[string]string{
+		"github/pullrequest-workflow.yml": githubDemoWorkflows + "/pullrequest.yml",
+		"forgejo/pullrequest.yml":         ".forgejo/workflows/pullrequest.yml",
+		"gitlab/.gitlab-ci.yml":           GitLabGateFile,
+	}
+
+	for demo, example := range exampleDemos {
+		files := exampleDemoFiles(example)
+
+		for workflow, file := range forges {
+			if _, err := os.Stat(filepath.Join(root, "examples", example, filepath.FromSlash(workflow))); err != nil {
+				continue
+			}
+
+			if files[file] != path.Join("examples", example, workflow) {
+				t.Errorf("%s shows %s, which has %s, but its demo has no %s", demo, example, workflow, file)
+			}
+		}
 	}
 }

@@ -1,0 +1,48 @@
+# SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+#
+# SPDX-License-Identifier: CC0-1.0
+name: Release Workflow
+
+# Runs when you push a signed release-request/vX.Y.Z tag; the release creates
+# the final vX.Y.Z tag, never you. Before the first run, set the secrets your
+# artifacts.yml signing method needs (the block below names them) and follow
+# https://github.com/diggsweden/forge-ci/blob/main/docs/github.md#getting-started
+# changelog-creator and release-publisher name the tools; an empty value skips
+# that step.
+on:
+  push:
+    tags:
+      - "release-request/v*"
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  release:
+    uses: diggsweden/forge-ci/.github/workflows/release-orchestrator.yml@v0.90.0
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      actions: read
+      security-events: write
+    secrets:
+      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+      # GPG signs the release commit and tag (the git-signing default).
+      RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
+      RELEASE_GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
+      RELEASE_GPG_PUBLIC_KEY: ${{ secrets.RELEASE_GPG_PUBLIC_KEY }}
+      # Optional: uploads the container scan SARIF to Code Scanning.
+      CODE_SCANNING_TOKEN: ${{ secrets.CODE_SCANNING_TOKEN }}
+    with:
+      branch: main
+      forge-ci-binary-ref: v0.90.0
+      artifacts-config: .forge-ci/artifacts.yml
+      changelog-creator: git-cliff
+      release-publisher: github-cli
+      # The runtime images of the release you call, pinned with it; left
+      # out, the release resolves the same ones.
+      runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base:v0.90.0
+      runtime-image-full: ghcr.io/diggsweden/forge-ci-runtime:v0.90.0
+      runtime-image-go: ghcr.io/diggsweden/forge-ci-runtime-go-1.27:v0.90.0

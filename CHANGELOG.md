@@ -77,6 +77,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The hello-go-cli, hello-go-service and hello-gradle demos run on GitHub:
+  the go-cli, go-service and gradle-app examples' GitHub workflows now pass
+  the runtime images of the release they call, pinned with it, which a
+  GitHub trial points at the engine under test.
 - The hello-android demo has a GitLab merge-request gate: the kotlin
   nanolinter lint gate and the unsigned build and unit tests in Forge CI's
   Android runtime image, as its nonroot user, with no signing credential.

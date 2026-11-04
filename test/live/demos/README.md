@@ -66,9 +66,9 @@ reasons follow the table.
 | hello-npm-package | PR, release | PR, release | MR, release | Publishable scoped package; offline packed-package installation test |
 | hello-android | PR/build | - | MR | Demo flavor, unit tests, unsigned release APK/AAB |
 | hello-ios | PR/build | - | - | macOS ARM64 simulator tests, XcodeGen app, unsigned archive |
-| hello-go-cli | - | PR, release | MR | The go-cli example as shipped; `cmd/my-cli` layout |
-| hello-go-service | - | PR, release | MR | The go-service example as shipped; binaries and runtime image |
-| hello-gradle | - | - | MR | The gradle-app example as shipped; reproducible Java library jars |
+| hello-go-cli | PR, release | PR, release | MR | The go-cli example as shipped; `cmd/my-cli` layout |
+| hello-go-service | PR, release | PR, release | MR | The go-service example as shipped; binaries and runtime image |
+| hello-gradle | PR, release | - | MR | The gradle-app example as shipped; reproducible Java library jars |
 | hello-monorepo | - | - | MR | The monorepo example as shipped; Maven and npm services checked together |
 
 Why a flow is missing:
@@ -82,10 +82,9 @@ Why a flow is missing:
 - **Android on Forgejo**: the Forgejo lane's job image is a nanolinter
   flavour, which has no Android SDK, and the lane publishes no runtime image
   to run the build in.
-- **The example demos on GitHub**: their CI files are the examples', whose
-  GitHub workflows pass no `runtime-image`, which the GitHub renderer
-  requires to point a trial at the engine under test. The monorepo example
-  has no pull-request workflow.
+- **hello-monorepo on GitHub**: its example has no GitHub pull-request
+  workflow, and its release workflow passes no `runtime-image`, which the
+  GitHub renderer requires to point a trial at the engine under test.
 - **The example demos' GitLab releases**: the GitLab examples are the
   merge-request gate; the release policy's commands are the adopter's, and no
   example ships them. The live release also renders with git-chglog from
