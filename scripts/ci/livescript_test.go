@@ -137,13 +137,6 @@ func newLiveRun(t *testing.T, extraEnv ...string) liveRun {
 
 	version, _, _ = strings.Cut(version, "\n")
 	writeExecutable(t, filepath.Join(fakeDir, "go"), strings.ReplaceAll(fakeGoScript, "FAKE_PINNED_GO", "go"+version))
-	// The pinned toolchain the script checks for but never runs here; git,
-	// sha256sum and base64 are real host utilities because the script uses
-	// their output.
-	for _, tool := range []string{"cosign", "jq", "syft", "buildah"} {
-		writeExecutable(t, filepath.Join(fakeDir, tool), "#!/usr/bin/env sh\nexit 0\n")
-	}
-
 	hostDir := t.TempDir()
 
 	for _, utility := range []string{"sh", "env", "tee", "git", "flock", "date", "mktemp", "cut", "chmod", "rm", "dirname", "base64", "sleep"} {
@@ -352,11 +345,20 @@ const fakePreflightReport = "live preflight: 2 provider(s), generation fake-gene
 // with credential-shaped lines, including a colored GitLab field separator.
 const fakeSuiteOutput = "=== RUN TestFake\ntoken glpat-ABCDEFGHIJKLMNOPQRSTUVWX\nAuthorization: Bearer abc.def\ntoken\x1b[0;m=inert-ansi-secret\n--- PASS: TestFake\nok\tfake\t0.01s" // gitleaks:allow -- synthetic redaction canaries.
 
-// requireGoCalls requires preflight, the runner architecture, four product
-// builds, test compilation, package discovery and direct suite execution, in
-// that order.
+// hostToolsPreflight is the launcher's Go check of the host tools.
+const hostToolsPreflight = "run ./internal/livetest/preflight host-tools"
+
+// requireGoCalls requires preflight, the host-tool preflight, the runner
+// architecture, four product builds, test compilation, package discovery and
+// direct suite execution, in that order.
 func requireGoCalls(t *testing.T, calls []string, wantTest string) {
 	t.Helper()
+
+	if len(calls) < 2 || calls[1] != hostToolsPreflight {
+		t.Fatalf("go calls do not check host tools second:\n%s", strings.Join(calls, "\n"))
+	}
+
+	calls = append(calls[:1:1], calls[2:]...)
 
 	if len(calls) != 10 || calls[0] != "run ./internal/livetest/preflight" ||
 		calls[1] != "run ./internal/livetest/preflight runner-arch" || calls[8] != wantTest {
@@ -641,8 +643,8 @@ func TestRunLiveTests_RefusesWhileAnotherRunHoldsTheLock(t *testing.T) {
 		t.Fatalf("stderr does not name the held lock:\n%s", stderr)
 	}
 
-	if calls := run.goCalls(t); len(calls) != 1 || calls[0] != "run ./internal/livetest/preflight" {
-		t.Fatalf("expected only the preflight call, got %v", calls)
+	if calls := run.goCalls(t); len(calls) != 2 || calls[0] != "run ./internal/livetest/preflight" || calls[1] != hostToolsPreflight {
+		t.Fatalf("expected only the preflight calls, got %v", calls)
 	}
 
 	requireNoEvidence(t, run)

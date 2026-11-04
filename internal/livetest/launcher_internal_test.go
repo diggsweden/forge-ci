@@ -192,9 +192,7 @@ func newLauncherFixture(t *testing.T, root string) (string, string) {
 	write("repo/scripts/ci/engine-binary.sh", "#!/bin/sh\nprintf '#!/bin/sh\\nexit 0\\n' > \"$3\"\n")
 	write("tools/go", inertLiveGo)
 
-	for _, name := range []string{"git", "cosign", "syft", "buildah"} {
-		write("tools/"+name, "#!/bin/sh\nexit 0\n")
-	}
+	write("tools/git", "#!/bin/sh\nexit 0\n")
 
 	packageDir := filepath.Join(root, "repo/internal/livetest")
 	if err := os.MkdirAll(packageDir, 0o700); err != nil {

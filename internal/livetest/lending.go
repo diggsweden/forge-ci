@@ -113,9 +113,9 @@ func CheckLocalLending(tb TB, target Target, scenario string) {
 func requireLendingEngine(tb TB, ctx context.Context) string {
 	tb.Helper()
 
-	podman, err := exec.LookPath("podman")
+	podman, err := ResolveHostTool(ctx, "podman")
 	if err != nil {
-		tb.Fatalf("local lending requires rootless Podman")
+		tb.Fatalf("local lending requires rootless Podman: %v", err)
 	}
 
 	run := func(ctx context.Context, input []byte, args ...string) (string, error) {

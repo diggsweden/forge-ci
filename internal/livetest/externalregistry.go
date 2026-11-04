@@ -139,7 +139,7 @@ func VerifyExternalImage(tb TB, registry ExternalRegistry, publicKey, image stri
 	ctx, cancel := context.WithTimeout(Context(tb), timeoutAPI)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "cosign", "verify", "--key", publicKey, "--insecure-ignore-tlog=true", image) //nolint:gosec // G204: kit-authored arguments.
+	cmd := exec.CommandContext(ctx, HostTool(tb, "cosign"), "verify", "--key", publicKey, "--insecure-ignore-tlog=true", image) //nolint:gosec // G204: kit-authored arguments.
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + dir, "DOCKER_CONFIG=" + dir}
 
 	if out, err := cmd.CombinedOutput(); err != nil {

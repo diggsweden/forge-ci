@@ -53,7 +53,8 @@ func main() {
 	// execute, which the run script builds the runner binaries for.
 	// `preflight consumer-trial-layer` prints only the URL a Forgejo consumer
 	// trial serves the layer under test from, which the lab's kaniko job image
-	// names as its source.
+	// names as its source. `preflight host-tools` refuses when a pinned host
+	// tool the scenarios run does not resolve to a real executable.
 	if len(os.Args) == 2 {
 		fact, err := preflightFact(os.Args[1])
 		if err != nil {
@@ -182,6 +183,8 @@ func preflightFact(mode string) (string, error) {
 		return livetest.LabRunnerArch()
 	case "consumer-trial-layer":
 		return livetest.ConsumerTrialLayerURL()
+	case "host-tools":
+		return "host tools resolved: " + strings.Join(livetest.LauncherHostTools, " "), livetest.CheckHostTools(context.Background(), livetest.LauncherHostTools)
 	default:
 		usage()
 
@@ -193,6 +196,6 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "       preflight classify-run <exit-code> <retained-log>")
 	fmt.Fprintln(os.Stderr, "       preflight campaign-env-check <campaign.env>")
 	fmt.Fprintln(os.Stderr, "       preflight campaign-plan <dir> <forgejo|gitlab> <cases-file>")
-	fmt.Fprintln(os.Stderr, "usage: preflight [signing-inputs | runner-arch | consumer-trial-layer] (signing-inputs checks only FORGE_CI_LIVE_SIGNING_KEY_DIR; other modes read the forgeci lab contract)")
+	fmt.Fprintln(os.Stderr, "usage: preflight [signing-inputs | runner-arch | consumer-trial-layer | host-tools] (signing-inputs checks only FORGE_CI_LIVE_SIGNING_KEY_DIR; host-tools checks only this host; other modes read the forgeci lab contract)")
 	os.Exit(2)
 }

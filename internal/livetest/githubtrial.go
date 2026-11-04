@@ -751,7 +751,7 @@ func (trial *GitHubTrial) NewTrialCosignKey() TrialCosignKey {
 
 	dir := trial.tempDir("cosign")
 	key := TrialCosignKey{Passphrase: hex.EncodeToString(raw), path: filepath.Join(dir, "cosign.pub")}
-	trial.run(dir, []string{"COSIGN_PASSWORD=" + key.Passphrase}, "cosign", "generate-key-pair")
+	trial.run(dir, []string{"COSIGN_PASSWORD=" + key.Passphrase}, HostTool(trial.tb, "cosign"), "generate-key-pair")
 
 	private, err := os.ReadFile(filepath.Join(dir, "cosign.key")) //nolint:gosec // the key pair cosign just wrote to the trial's own directory.
 	if err != nil {
@@ -892,8 +892,10 @@ func (trial *GitHubTrial) CheckImage(repo, image, final string, engine GitHubEng
 	trial.tb.Helper()
 
 	reference := "ghcr.io/" + strings.ToLower(engine.Owner+"/"+repo) + "/" + image
+	cosign := HostTool(trial.tb, "cosign")
+
 	for _, tag := range []string{final, strings.TrimPrefix(final, "v")} {
-		output, err := trial.output(trial.tempDir("verify"), "cosign", append(append([]string{"verify"}, trust.verifyArgs()...), reference+":"+tag)...)
+		output, err := trial.output(trial.tempDir("verify"), cosign, append(append([]string{"verify"}, trust.verifyArgs()...), reference+":"+tag)...)
 		if err == nil {
 			trial.tb.Logf("image %s:%s verifies against %s", reference, tag, trust)
 
@@ -978,10 +980,7 @@ func (trial *GitHubTrial) checkReleaseCommit(repo string, tree GitHubConsumerTre
 func (trial *GitHubTrial) verifyBundles(repo string, assets map[string]int64, trust CosignTrust) map[string]bool {
 	trial.tb.Helper()
 
-	if _, err := exec.LookPath("cosign"); err != nil {
-		trial.tb.Fatalf("livetest: cosign is required to verify the release and is not on PATH: %v", err)
-	}
-
+	cosign := HostTool(trial.tb, "cosign")
 	dir := trial.tempDir("release")
 	verified := map[string]bool{}
 
@@ -996,7 +995,7 @@ func (trial *GitHubTrial) verifyBundles(repo string, assets map[string]int64, tr
 		trial.download(repo, id, filepath.Join(dir, name))
 		trial.download(repo, subjectID, filepath.Join(dir, subject))
 		args := append(append([]string{"verify-blob", "--bundle", filepath.Join(dir, name)}, trust.verifyArgs()...), filepath.Join(dir, subject))
-		trial.run(dir, nil, "cosign", args...)
+		trial.run(dir, nil, cosign, args...)
 
 		verified[subject] = true
 	}

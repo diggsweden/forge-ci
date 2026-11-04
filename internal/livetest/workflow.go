@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -514,7 +513,7 @@ func PublishKeylessAssets(tb TB, target Target, repo, tag, stageDir string) Stag
 	return publishBinaryAssets(tb, target, repo, tag, stageDir, []binaryAsset{
 		{source: runnerBinary(tb), name: runnerAssetName},
 		{source: credentialProxyBinary(tb), name: proxyAssetName},
-		{source: hostToolBinary(tb, "cosign"), name: "cosign.gz", gzip: true},
+		{source: HostTool(tb, "cosign"), name: "cosign.gz", gzip: true},
 		{source: probeJSONBinary(tb), name: probeJSONAssetName},
 	})
 }
@@ -623,22 +622,6 @@ func probeJSONBinary(tb TB) string {
 	info, err := os.Stat(path) //nolint:gosec // Guarded lifecycle supplies this exact static helper path.
 	if err != nil || !info.Mode().IsRegular() || info.Mode()&0o111 == 0 {
 		tb.Fatalf("livetest: %s is not an executable regular file", probeJSONBinaryEnv)
-	}
-
-	return path
-}
-
-func hostToolBinary(tb TB, name string) string {
-	tb.Helper()
-
-	path, err := exec.LookPath(name)
-	if err != nil {
-		tb.Fatalf("livetest: %s is required on PATH: %v", name, err)
-	}
-
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Mode()&0o111 == 0 {
-		tb.Fatalf("livetest: %s is not an executable regular file", name)
 	}
 
 	return path

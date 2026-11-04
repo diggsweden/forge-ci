@@ -47,16 +47,14 @@ func CosignKey(tb TB, dir string) (string, string) {
 func CosignKeyWithPassword(tb TB, dir, password string) (string, string) {
 	tb.Helper()
 
-	if _, err := exec.LookPath("cosign"); err != nil {
-		tb.Fatalf("livetest: cosign is required for signing scenarios and is not on PATH: %v", err)
-	}
+	cosign := HostTool(tb, "cosign")
 
 	// Bounded: key generation is local work, so anything slower than this is a
 	// hang rather than a slow machine.
 	ctx, cancel := context.WithTimeout(Context(tb), timeoutAPI)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "cosign", "generate-key-pair", "--output-key-prefix", "lab-cosign")
+	cmd := exec.CommandContext(ctx, cosign, "generate-key-pair", "--output-key-prefix", "lab-cosign") //nolint:gosec // G204: the resolved host cosign with kit-authored arguments.
 	cmd.Dir = dir
 	// Named lab-cosign rather than cosign so the files cannot be mistaken for a
 	// production key by a person, a glob, or a tool assuming the conventional

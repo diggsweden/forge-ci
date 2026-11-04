@@ -111,18 +111,16 @@ const sshKeyFile = "lab-ssh"
 func SSHKey(tb TB, dir string) (string, string) {
 	tb.Helper()
 
-	// Not among the pinned tools the run script checks: it is OpenSSH's, which
+	// Not among LauncherHostTools: it is OpenSSH's, which
 	// git needs on this host anyway to verify the signatures the bot makes.
-	if _, err := exec.LookPath("ssh-keygen"); err != nil {
-		tb.Fatalf("livetest: ssh-keygen (OpenSSH) is required for release scenarios and is not on PATH: %v", err)
-	}
+	sshKeygen := HostTool(tb, "ssh-keygen")
 
 	ctx, cancel := context.WithTimeout(Context(tb), timeoutAPI)
 	defer cancel()
 
 	path := filepath.Join(dir, sshKeyFile)
 
-	cmd := exec.CommandContext(ctx, "ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "livetest", "-f", path) //nolint:gosec // G204: kit-authored arguments.
+	cmd := exec.CommandContext(ctx, sshKeygen, "-q", "-t", "ed25519", "-N", "", "-C", "livetest", "-f", path) //nolint:gosec // G204: kit-authored arguments.
 	if out, err := cmd.CombinedOutput(); err != nil {
 		tb.Fatalf("livetest: ssh-keygen: %v\n%s", err, out)
 	}
@@ -196,11 +194,10 @@ func (signer RequestSigner) tag(ctx context.Context, git layerGit, dir, tag, com
 func GPGKey(tb TB, dir, passphrase string) (string, string) {
 	tb.Helper()
 
-	// Not among the pinned tools the run script checks: only a release that
+	// Not among LauncherHostTools: only a release that
 	// signs packages needs it.
-	if _, err := exec.LookPath("gpg"); err != nil {
-		tb.Fatalf("livetest: gpg (GnuPG) is required to make a release's package signing key and is not on PATH: %v", err)
-	}
+	gpgBinary := HostTool(tb, "gpg")
+	gpgconf := HostTool(tb, "gpgconf")
 
 	home := filepath.Join(dir, "gnupg")
 	if err := os.Mkdir(home, 0o700); err != nil {
@@ -213,7 +210,7 @@ func GPGKey(tb TB, dir, passphrase string) (string, string) {
 	gpg := func(args ...string) string {
 		args = append([]string{"--homedir", home, "--batch", "--pinentry-mode", "loopback", "--passphrase-fd", "0"}, args...)
 
-		cmd := exec.CommandContext(ctx, "gpg", args...) //nolint:gosec // G204: kit-authored arguments.
+		cmd := exec.CommandContext(ctx, gpgBinary, args...) //nolint:gosec // G204: kit-authored arguments.
 		cmd.Stdin = strings.NewReader(passphrase + "\n")
 
 		for key, value := range runtimeEnvironment(tb) {
@@ -235,7 +232,7 @@ func GPGKey(tb TB, dir, passphrase string) (string, string) {
 		ctx, cancel := cleanupContext(timeoutAPI)
 		defer cancel()
 
-		if err := exec.CommandContext(ctx, "gpgconf", "--homedir", home, "--kill", "gpg-agent").Run(); err != nil { //nolint:gosec // G204: kit-authored arguments; bounded cleanup outlives the test's context.
+		if err := exec.CommandContext(ctx, gpgconf, "--homedir", home, "--kill", "gpg-agent").Run(); err != nil { //nolint:gosec // G204: kit-authored arguments; bounded cleanup outlives the test's context.
 			tb.Errorf("livetest: stop the fixture GPG agent: %v", err)
 		}
 	})
@@ -384,7 +381,7 @@ func VerifyBlob(tb TB, target Target, publicKey string, blob, bundle []byte) err
 	ctx, cancel := context.WithTimeout(Context(tb), timeoutAPI)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "cosign", "verify-blob", //nolint:gosec // G204: kit-authored arguments and paths.
+	cmd := exec.CommandContext(ctx, HostTool(tb, "cosign"), "verify-blob", //nolint:gosec // G204: kit-authored arguments and paths.
 		"--key", publicKey, "--bundle", bundlePath, "--new-bundle-format", "--insecure-ignore-tlog=true", blobPath)
 	cmd.Env = ToolEnvironment(tb, target, nil)
 
