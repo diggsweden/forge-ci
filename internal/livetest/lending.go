@@ -210,7 +210,7 @@ func (worker *lendingWorker) start(tb TB, ctx context.Context) {
 	container, err := worker.run(ctx, nil, "create", "--pull=never", "--name", worker.name,
 		"--label", "forge-ci.live=lending", "--label", "forge-ci.repository="+worker.target.Owner+"/"+worker.repo,
 		"--network", "host", "--add-host", "forgejo.compose.forgelab:127.0.0.1",
-		"--user", "1000:1000", "--cap-drop=all", "--security-opt", "no-new-privileges",
+		"--user", lendingWorkerUser, "--cap-drop=all", "--security-opt", "no-new-privileges",
 		"--memory", "512m", "--cpus", "1", "--pids-limit", "128", "--workdir", "/tmp",
 		"--env", "HOME=/tmp/worker", "--env", "SSL_CERT_FILE=/tmp/worker/ca.crt",
 		"--entrypoint", "/bin/sh", lendingWorkerImage, "-c",
@@ -289,11 +289,21 @@ func (worker *lendingWorker) observeOnline(tb TB, ctx context.Context) {
 	tb.Logf("runner=%d online=true architecture=%s profile=unprivileged-container-host-job", worker.created.ID, strings.TrimSpace(arch))
 }
 
+// lendingWorkerUser is the unprivileged UID:GID the lent worker runs as.
+const lendingWorkerUser = "1000:1000"
+
+// lendingJobWorkflow is the one job a lent runner takes. It checks it runs
+// as the worker's user and group both: a check of the UID alone passes a job
+// that kept a privileged group.
+func lendingJobWorkflow(runner string) string {
+	return fmt.Sprintf("on: [push]\njobs:\n  one:\n    runs-on: %s\n    steps:\n      - run: 'test \"$(id -u):$(id -g)\" = %s; uname -m; echo lending-one-job'\n",
+		runner, lendingWorkerUser)
+}
+
 func (worker *lendingWorker) runJob(tb TB) {
 	target, repo, name := worker.target, worker.repo, worker.name
 
-	yaml := fmt.Sprintf("on: [push]\njobs:\n  one:\n    runs-on: %s\n    steps:\n      - run: 'test \"$(id -u)\" = 1000; uname -m; echo lending-one-job'\n", name)
-	if conclusion := RunWorkflow(tb, target, repo, "lending", yaml); conclusion != runSuccess {
+	if conclusion := RunWorkflow(tb, target, repo, "lending", lendingJobWorkflow(name)); conclusion != runSuccess {
 		tb.Fatalf("local lending job concluded %s", conclusion)
 	}
 

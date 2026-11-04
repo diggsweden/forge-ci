@@ -92,3 +92,20 @@ func TestLendingPollingPreservesCancellationAndObservationFailure(t *testing.T) 
 		t.Fatal(err)
 	}
 }
+
+// The lent runner's job asserts the worker's group as well as its user: the
+// container runs as lendingWorkerUser, and a UID check alone passes a job
+// that kept a privileged group.
+func TestLendingJobChecksTheWorkersUserAndGroup(t *testing.T) {
+	t.Parallel()
+
+	workflow := lendingJobWorkflow("lender-1")
+
+	if !strings.Contains(workflow, `test "$(id -u):$(id -g)" = `+lendingWorkerUser+";") {
+		t.Fatalf("the lending job does not check user and group:\n%s", workflow)
+	}
+
+	if !strings.Contains(workflow, "runs-on: lender-1\n") {
+		t.Fatalf("the lending job does not run on its runner:\n%s", workflow)
+	}
+}
