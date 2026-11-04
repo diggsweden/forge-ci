@@ -538,8 +538,8 @@ refuses publication on a finding the container gate blocks, before the first
 upload. Assembly then preserves the existing architecture tags, final manifest
 tag and `image-ref`, `image-digest`, `image-tag` outputs.
 
-For ordinary builds the equivalent is `container build --mode oci --scan
---output-dir <fresh-directory>`, followed by `container layout record`. Transfer
+For ordinary builds the equivalent is `container build --mode oci
+--output-dir <fresh-directory>`, which scans the layout it exports, followed by `container layout record`. Transfer
 the whole directory in the current run's artifact store. A dependent job downloads
 one separate directory per platform and calls `container layout publish` with the
 independently expected repository, full source SHA and complete platform set.
@@ -942,8 +942,8 @@ runners where an installation names them, as other image-building jobs do.
   does not approve; HIGH findings are reported without blocking. Only after the gate permits continuation
   does it upload
   the index under `staging-<final tag>` and record it with `ledger add`.
-  Consumer `enable-scan: false` cannot skip scanning an exported/published OCI
-  layout; the plan job ignores it with a warning. An administrator-built report-only distribution still scans and
+  Every exported or published OCI layout is scanned; there is no consumer switch
+  to skip it. An administrator-built report-only distribution still scans and
   reports findings; scanner/operational, credential, signature and source/digest
   identity errors stay blocking. See [Administrator check enforcement](admin-policy.md).
 - **collect** merges the ledgers into one artifact, `release-images`: a
@@ -1011,12 +1011,12 @@ IDs can pass `image-plan-json` instead of `artifacts-config`. This is the same
 second builder interface. Each build supplies its name, native architecture and
 platform, repository-local Containerfile/context, target, public arguments and
 optional labels. Each image supplies its destination, staging/final tags,
-complete architecture set and, optionally, the legacy `scan` field. Optional ledger policy fields carry
+complete architecture set and, optionally, `scan: true`. Optional ledger policy fields carry
 the image kind, flavor, base ref/input ID and moving tag; `required-labels` are
 checked on every staged child before publication.
 Every published release image is scanned, as with the artifacts declaration:
-an explicit `scan: false` is ignored with a warning, and the administrator
-policy alone decides whether findings block.
+the plan is refused with `scan: false`, and the administrator policy alone
+decides whether findings block.
 Moving tags and architecture-cache slots are part of the same destination
 collision check as final, staging and architecture tags.
 Release SBOM paths use the flavor first, then the effective role (the declared
@@ -1061,8 +1061,8 @@ includes these files, the exact index snapshot and original scan reports.
 Publish every referenced platform inventory with the index BOM. Consumers do
 not need a second registry pull, scan, architecture-record projection or SBOM
 composition loop. Runtime/doctor evidence remains a separate consumer gate.
-Consumer scan opt-outs do not suppress the required vulnerability scan of
-exported/published layouts. Report-only administrator enforcement does not
+There is no consumer opt-out from the vulnerability scan of exported/published
+layouts. Report-only administrator enforcement does not
 change the SBOM evidence contract; base images retain the single-platform
 signing contract described above.
 

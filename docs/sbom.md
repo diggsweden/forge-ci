@@ -223,11 +223,12 @@ Container SBOM scanning (`analyzed-container` layer) is **derived** from source-
 To omit the analyzed-container **SBOM**, set the source artifact's `sboms` to
 exclude `analyzed-container` (e.g. `sboms: build,analyzed-artifact`). This does
 not omit the Trivy vulnerability scan required for exported/published OCI
-layouts. Consumer `enable-scan: false` cannot disable that scan; an
+layouts, which always runs; an
 [administrator-built report-only policy](admin-policy.md) still runs it and
 reports findings, while operational and identity errors remain blocking.
 
-Strict config parsing rejects `containers[].enable-sbom: bool`; use artifact `sboms` instead.
+Strict config parsing rejects `containers[].enable-sbom: bool`; use artifact
+`sboms` instead. It rejects `containers[].enable-scan` too: the scan always runs.
 
 > **Note: the snapshot flow builds no containers.** Its SBOM assembly job uses
 > the selected project type and supported artifact-level layers (`build`,

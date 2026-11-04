@@ -105,8 +105,8 @@ func TestNewConfigPlan_GroupsArtifactsAndDefaultsContainers(t *testing.T) {
 	}
 
 	// Per-container gates default true when artifacts.yml doesn't set them.
-	if !plannedContainer.EnableSLSA || !plannedContainer.EnableScan {
-		t.Errorf("container gates should default true; got EnableSLSA=%v EnableScan=%v", plannedContainer.EnableSLSA, plannedContainer.EnableScan)
+	if !plannedContainer.EnableSLSA {
+		t.Errorf("container gates should default true; got EnableSLSA=%v", plannedContainer.EnableSLSA)
 	}
 
 	if plannedContainer.ScanSeverity != "" {
@@ -116,7 +116,7 @@ func TestNewConfigPlan_GroupsArtifactsAndDefaultsContainers(t *testing.T) {
 
 // TestNewConfigPlan_ContainerGatesPropagateExplicitFalse pins the
 // per-container override path that was dead before this slice:
-// artifacts.yml `enable-scan: false` / `enable-slsa: false` /
+// artifacts.yml `enable-slsa: false` /
 // `scan-severity: CRITICAL` reach release-publish-stage.yml via the
 // typed PlannedContainer rather than the previous hardcoded `true`.
 func TestNewConfigPlan_ContainerGatesPropagateExplicitFalse(t *testing.T) {
@@ -132,7 +132,6 @@ func TestNewConfigPlan_ContainerGatesPropagateExplicitFalse(t *testing.T) {
 			Name:         "image",
 			From:         []string{"go-cli"},
 			EnableSLSA:   &no,
-			EnableScan:   &no,
 			ScanSeverity: "CRITICAL",
 		}},
 	}
@@ -144,10 +143,6 @@ func TestNewConfigPlan_ContainerGatesPropagateExplicitFalse(t *testing.T) {
 
 	if plannedContainer.EnableSLSA {
 		t.Errorf("EnableSLSA=true, want false (explicit override)")
-	}
-
-	if plannedContainer.EnableScan {
-		t.Errorf("EnableScan=true, want false (explicit override)")
 	}
 
 	if plannedContainer.ScanSeverity != "CRITICAL" {

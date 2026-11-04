@@ -138,14 +138,13 @@ func appendSwiftFormatBlock(ctx context.Context, summary ci.SummarySink, outcome
 
 // SwiftLintLintInput drives SwiftLintLint.
 type SwiftLintLintInput struct {
-	Dir           string
-	ConfigPath    string
-	FailOnWarning bool
+	Dir        string
+	ConfigPath string
 }
 
 // SwiftLintLint runs SwiftLint, prints raw output, appends a markdown
-// block, and returns ErrValidation when FailOnWarning is set and the
-// linter found issues.
+// block, and returns ErrValidation when the linter found issues and the
+// administrator lint policy enforces them.
 func SwiftLintLint(
 	ctx context.Context,
 	sl SwiftLintOps,

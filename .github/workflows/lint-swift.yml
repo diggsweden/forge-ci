@@ -56,11 +56,6 @@ on:
         required: false
         default: "*.swift"
         type: string
-      fail-on-warning:
-        description: "Fail the build on linting warnings"
-        required: false
-        default: false
-        type: boolean
       macos-version:
         description: "macOS runner version (macos-13, macos-14, macos-15, macos-26)"
         required: false
@@ -164,7 +159,6 @@ jobs:
         env:
           WORKING_DIRECTORY: ${{ inputs['working-directory'] }}
           SWIFTLINT_CONFIG_PATH: ${{ inputs['swiftlint-config'] }}
-          FAIL_ON_WARNING: ${{ inputs['fail-on-warning'] }}
         run: forge-ci lint swift swiftlint
   summary:
     name: Lint Summary

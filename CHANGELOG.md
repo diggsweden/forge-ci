@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **BREAKING:** Remove the `fail-on-warning` input of `lint-swift.yml` and
+  `lint swift swiftlint --fail-on-warning` (`FAIL_ON_WARNING`), which had
+  no effect: the administrator lint policy decides whether SwiftLint
+  findings block.
+- **BREAKING:** Remove the container `enable-scan` setting of
+  `.forge-ci/artifacts.yml`, which only printed a warning: every exported or
+  published image is scanned. Strict parsing now refuses the key as unknown,
+  as it does `enable-sbom`, and an `image-plan-json` entry with `scan: false`
+  is refused rather than overridden. The config plan loses `enable_scan`, and
+  `container build` loses `--scan` (`ENABLE_SCAN`), which push-by-digest and
+  oci builds ignored. Delete the key and the flag.
 - **BREAKING:** Remove GitLab component inputs that nothing read:
   `artifact-name`, `version` and `project-type` from `publish-apple-appstore`,
   and `artifact-name` from `publish-forge-packages` and `publish-maven-central`.
@@ -418,11 +429,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `containers/kaniko-job/Containerfile`. `docs/runners.md`.
 - **BREAKING:** Every published image is scanned, and the administrator
   policy (`enforce-vulnerabilities`) alone decides whether findings block.
-  A container's `enable-scan: false` no longer skips the scan of release
-  images (Forgejo `release-images.yml`, including `scan: false` in an
-  `image-plan-json` entry) or snapshot images (GitHub, Forgejo and GitLab):
-  the plans ignore it with a warning, as the build and publish route does,
-  the providers always install Trivy, and a frozen snapshot plan with
+  A container can no longer skip the scan of release images (Forgejo
+  `release-images.yml`) or snapshot images (GitHub, Forgejo and GitLab):
+  the `enable-scan` setting is removed (see Removed), the providers always install Trivy, and a frozen snapshot plan with
   `scan: false` is refused. `container multiarch-image assemble
   --from-layouts` and `container build-push-oci-image` now require
   `--scan-output-template`, so a direct final-tag publication is scanned
@@ -442,8 +451,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `release-images.yml` now refuses a declared `scan-severity` other than
   `CRITICAL`. Snapshot images read `scan-severity` with the same parser, so
   lowercase and spaced lists are accepted there too, and record the
-  normalised threshold. The `enable-scan` schema description now says that
-  `false` cannot disable the scan of an exported/published layout.
+  normalised threshold.
 - Forgejo `release-images.yml` and `snapshot-images.yml` hand image layouts
   from build to publish through a run-scoped, content-addressed blob store:
   each layout blob of 1 MiB or more is uploaded once per run as
@@ -467,15 +475,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   variable unset stopped with `REGISTRY_LOGIN_USERNAME: parameter null or not
   set` although `release-images.yml` in the same run logged in.
 - **BREAKING:** Shared build gates refuse legacy `skip-tests: true` and
-  `SKIP_TESTS=true`; exported/published OCI layouts are vulnerability-scanned
-  even with consumer `enable-scan: false`. Keep scanner prerequisites available.
+  `SKIP_TESTS=true`; exported/published OCI layouts are always
+  vulnerability-scanned. Keep scanner prerequisites available.
   Migrate finding exceptions to a reviewed administrator-built engine policy
   and matching protected workflow, binary and image pins. The embedded
   `enforce-lint`, `enforce-vulnerabilities` and `enforce-application-tests`
   settings default to `true`. Report-only distributions still execute checks
   and retain findings; operational, compilation/packaging, credential, signature
-  and source/digest identity errors remain blocking. SwiftLint's legacy
-  `--fail-on-warning` flag is compatibility-only, not enforcement authority.
+  and source/digest identity errors remain blocking. SwiftLint
+  findings follow `enforce-lint` (see Removed for `fail-on-warning`).
   Gradle invokes tests separately before packaging, preserving Android's
   module-bound test aggregate even with task overrides; cache and `NO-SOURCE`
   outcomes do not prove physical test execution. See `docs/admin-policy.md`.
@@ -637,6 +645,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **BREAKING:** Remove the `fail-on-warning` input of `lint-swift.yml` and
+  `lint swift swiftlint --fail-on-warning` (`FAIL_ON_WARNING`), which had
+  no effect: the administrator lint policy decides whether SwiftLint
+  findings block.
 - Remove rustup proxy shims after apt cargo install
 
 ## [0.91.0] - 2026-10-22

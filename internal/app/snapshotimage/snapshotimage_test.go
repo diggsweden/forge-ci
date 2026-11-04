@@ -4,7 +4,6 @@
 package snapshotimage_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/diggsweden/forge-ci/internal/adapters/gitlaboutput"
 	appsnapshot "github.com/diggsweden/forge-ci/internal/app/snapshotimage"
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/output"
 	"github.com/diggsweden/forge-ci/internal/domain/snapshotimage"
 	"github.com/diggsweden/forge-ci/internal/testutil/fakeoutputsink"
@@ -75,19 +75,14 @@ func TestSourcePinLogicalBranchDefaultOnAndOptOut(t *testing.T) {
 	require.Equal(t, 1, git.calls)
 }
 
-// enable-scan: false cannot keep a snapshot image from its scan: the plan
-// scans it and says the legacy opt-out was ignored, as the other routes do.
-func TestScanOptOutIsIgnoredWithAWarning(t *testing.T) {
+// There is no scan opt-out: a configuration that still names one is refused,
+// so the consumer learns it does nothing.
+func TestScanOptOutIsRefused(t *testing.T) {
 	in := input(t, "containers:\n  - name: app\n    enable-scan: false\n")
 
-	var annotations bytes.Buffer
-
-	in.Annotator = output.NewAnnotator(&annotations, output.FormatGitHub)
-	plan, err := appsnapshot.Plan(t.Context(), &git{head: in.SourceSHA}, in)
-	require.NoError(t, err)
-	require.True(t, plan.Images[0].Scan, "a published snapshot image skipped its scan")
-	require.Contains(t, annotations.String(), "enable-scan: false ignored")
-	require.Contains(t, annotations.String(), "administrator policy")
+	_, err := appsnapshot.Plan(t.Context(), &git{head: in.SourceSHA}, in)
+	require.ErrorIs(t, err, errs.ErrInvalidConfig)
+	require.ErrorContains(t, err, `unknown key "enable-scan"`)
 }
 
 func TestNoDeclaredContainersNeverInfersRootImage(t *testing.T) {

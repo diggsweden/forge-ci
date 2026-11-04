@@ -16,8 +16,8 @@ commands.
 The [administrator's immutable engine policy](admin-policy.md) controls whether
 recognized lint, vulnerability and application-test findings block progression.
 All three settings default to enforcing. Legacy `skip-tests: true` (including
-`SKIP_TESTS=true`) is refused, and exported/published OCI layouts are scanned
-even when a consumer sets `enable-scan: false`. SBOM selection is separate from
+`SKIP_TESTS=true`) is refused, and exported/published OCI layouts are always
+scanned. SBOM selection is separate from
 this vulnerability scan.
 
 To report recognized findings without blocking, use a reviewed administrator-built

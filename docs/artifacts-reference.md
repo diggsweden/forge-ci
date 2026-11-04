@@ -747,10 +747,10 @@ with its own tooling may declare only `containers:` and omit `artifacts`; a
 file must declare at least one of the two. Container-first builds need their
 container build path, so choose the appropriate build mode before removing it.
 Use `platforms` for one or multiple native architecture builds. Per-container
-`enable-slsa`, `enable-scan` and `scan-severity` values flow through the typed
-plan without additional workflow-input wiring. SLSA and scanning default to
-enabled; `scan-severity` selects the blocking threshold. Disabling a gate removes its
-corresponding guarantee.
+`enable-slsa` and `scan-severity` values flow through the typed plan without
+additional workflow-input wiring. SLSA defaults to enabled, and disabling it
+removes that guarantee. Every exported or published image is scanned;
+`scan-severity` selects the blocking threshold.
 Container SBOM scanning derives from the source artifacts' `sboms` selection:
 omitting `analyzed-container` (for example, `build,analyzed-artifact`) omits that
 layer rather than configuring a separate container SBOM switch.
@@ -814,20 +814,15 @@ Containers reference artifacts via the `from:` field and are built after all art
 
 The `enable-sbom: bool` field on the container block is unsupported and strict parsing rejects it. Container **SBOM generation** is derived from each source artifact's `sboms` field. The analyzed-container SBOM is generated if any source artifact has `analyzed-container` in its effective sboms, the default for buildable types. Exclude that layer to omit this SBOM, not the mandatory Trivy vulnerability scan of an exported/published OCI layout.
 
-#### `enable-scan`
+#### Unsupported container `enable-scan`
 
-- **Type:** `boolean`
-- **Description:** Legacy scan input; exported/published OCI layouts are scanned even when this is `false`. Under the default enforcing administrator policy, a finding at `scan-severity` or above with a fixed package fails the publish, and so does an unfixed CRITICAL unless `.trivyignore.yaml` approves it; other findings are only listed.
-  An administrator-built report-only distribution still runs the scanner and reports findings. Scanner/operational errors remain blocking. See [Administrator check enforcement](admin-policy.md).
-- **Default:** `true`
-- **Requires:** `CODE_SCANNING_TOKEN` org secret for results to appear in Code Scanning
-- **Example:** `enable-scan: true`
+The `enable-scan: bool` field on the container block is unsupported and strict parsing rejects it. Every exported or published OCI layout is scanned with Trivy; there is no switch to turn the scan off. Under the default enforcing administrator policy, a finding at `scan-severity` or above with a fixed package fails the publish, and so does an unfixed CRITICAL unless `.trivyignore.yaml` approves it; other findings are only listed. An administrator-built report-only distribution still runs the scanner and reports findings; scanner and operational errors remain blocking. See [Administrator check enforcement](admin-policy.md). Results appear in Code Scanning when the `CODE_SCANNING_TOKEN` org secret is set.
 
 #### `scan-severity`
 
 - **Type:** `string` (a trivy severity, or a comma-separated list)
-- **Description:** Blocking threshold of the container scan. Under an enforcing administrator policy, a finding at this severity or above fails the publish when a fixed package exists; see `enable-scan` for unfixed findings. A list blocks at its least severe entry, so `"CRITICAL,HIGH"` blocks at HIGH and above, as the former default did.
-  The scan always reports down to HIGH, or down to the threshold when it is lower: findings below the threshold are listed as "reported, not blocking" and still reach the scan report, SARIF and GitLab report. `enable-scan: false` does not disable scan execution or administrator enforcement.
+- **Description:** Blocking threshold of the container scan. Under an enforcing administrator policy, a finding at this severity or above fails the publish when a fixed package exists; an unfixed CRITICAL fails it unless `.trivyignore.yaml` approves it. A list blocks at its least severe entry, so `"CRITICAL,HIGH"` blocks at HIGH and above, as the former default did.
+  The scan always reports down to HIGH, or down to the threshold when it is lower: findings below the threshold are listed as "reported, not blocking" and still reach the scan report, SARIF and GitLab report.
 - **Default:** `"CRITICAL"`
 - **Example:** `scan-severity: "CRITICAL,HIGH"`
 

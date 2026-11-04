@@ -60,16 +60,14 @@ func swiftLintLintCmd() *cli.Command {
 		Flags: []cli.Flag{
 			commonflags.WorkingDir("directory the linter is rooted at"),
 			&cli.StringFlag{Name: "config", Sources: cli.EnvVars("SWIFTLINT_CONFIG_PATH"), Usage: "path to a .swiftlint.yml config file (passed via --config)"},
-			&cli.BoolFlag{Name: "fail-on-warning", Sources: cli.EnvVars("FAIL_ON_WARNING"), Usage: "legacy compatibility input; administrator lint policy determines findings enforcement"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error {
 				annot := deps.Annotator(cmd)
 
 				return appbuild.SwiftLintLint(ctx, swiftLintRunner{sl: swiftlintad.New()}, d.SummarySink, os.Stderr, os.Stderr, annot, appbuild.SwiftLintLintInput{
-					Dir:           cmd.String("working-dir"),
-					ConfigPath:    cmd.String("config"),
-					FailOnWarning: cmd.Bool("fail-on-warning"),
+					Dir:        cmd.String("working-dir"),
+					ConfigPath: cmd.String("config"),
 				})
 			})
 		},

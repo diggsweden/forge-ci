@@ -885,7 +885,9 @@ build a single native-platform container image with buildah or kaniko, optionall
 ```
 Builds ONE native-platform image (the multi-arch index is assembled separately
 by `container manifest merge`) and, in push-by-digest mode, emits the pushed
-digest for that merge. --scan checks the local layout before publication.
+digest for that merge. In push-by-digest and oci modes the exported layout is
+scanned before publication; findings at or above --scan-severity with a fix,
+and unfixed CRITICAL ones .trivyignore.yaml does not approve, stop it.
 Authentication uses --auth-file when supplied, otherwise the shared config written by
 `container login`; secrets are read from the 0600 tmpfiles materialized by
 `container materialize-build-secrets` and mounted via `RUN --mount=type=secret`;
@@ -909,7 +911,7 @@ EXAMPLES:
 
    # Build, scan the exported layout, then push it by digest
    forge-ci container build --mode push-by-digest --image-ref ghcr.io/org/app \
-     --platform linux/amd64 --scan --scan-severity HIGH
+     --platform linux/amd64 --scan-severity HIGH
 ```
 
 | Flag | Description | Type | Default | Env vars |
@@ -924,12 +926,11 @@ EXAMPLES:
 | `--labels` | newline-separated key=value OCI labels (the labels output of "container metadata") | string | `""` | `$LABELS` |
 | `--source-date-epoch` | unix seconds; clamps image/layer timestamps for reproducible digests | string | `""` | `$SOURCE_DATE_EPOCH` |
 | `--cache-repo` | dedicated registry repo for the layer cache (e.g. ghcr.io/org/buildcache). Empty disables caching. Imported best-effort; --cache-push also exports. | string | `""` | `$BUILD_CACHE_REPO` |
-| `--cache-push` | also export the layer cache on trusted builds; disabled when --scan gates publication | bool | `false` | `$BUILD_CACHE_PUSH` |
+| `--cache-push` | also export the layer cache on trusted builds; disabled in push-by-digest and oci modes, where the scan gates publication | bool | `false` | `$BUILD_CACHE_PUSH` |
 | `--mode` | output mode: push-by-digest \| load \| local \| oci (never exports registry cache) (required) | string | `""` | `$BUILD_MODE` |
 | `--image-ref` | push target (push-by-digest) or local tag (load) | string | `""` | `$IMAGE_REF` |
 | `--output-dir` | destination for local export, or a fresh directory for oci mode | string | `""` | `$OUTPUT_DIR` |
 | `--digest-key` | OutputSink key for the pushed digest (push-by-digest mode) | string | `"digest"` | `$DIGEST_KEY` |
-| `--scan` | scan the exported layout before pushing or retaining it; fail on fixable findings at/above --scan-severity and on unfixed CRITICAL findings .trivyignore.yaml does not approve (push-by-digest and oci modes) | bool | `false` | `$ENABLE_SCAN` |
 | `--scan-severity` | blocking threshold for fixable findings (a level or comma-list whose lowest entry counts); the scan always reports down to HIGH | string | `"CRITICAL"` | `$SCAN_SEVERITY` |
 | `--trivy-version` | version embedded in the GitLab container-scanning report | string | `""` | `$TRIVY_VERSION` |
 | `--image-builder` | image builder type: buildah (default; rootless, needs user namespaces) or kaniko (for a pool that denies them; runs as root in the job image CI_IMAGE_BUILDER_JOB_IMAGE names, builds to a layout only, no load/local modes, no build secrets). Set CI_IMAGE_BUILDER on the repository to select it. | string | `"buildah"` | `$CI_IMAGE_BUILDER` |
@@ -2462,7 +2463,6 @@ EXAMPLE:
 |------|-------------|------|---------|----------|
 | `--working-dir` | directory the linter is rooted at | string | `"."` | `$WORKING_DIRECTORY` |
 | `--config` | path to a .swiftlint.yml config file (passed via --config) | string | `""` | `$SWIFTLINT_CONFIG_PATH` |
-| `--fail-on-warning` | legacy compatibility input; administrator lint policy determines findings enforcement | bool | `false` | `$FAIL_ON_WARNING` |
 
 ## `forge-ci plan`
 

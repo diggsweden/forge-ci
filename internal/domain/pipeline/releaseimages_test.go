@@ -5,7 +5,6 @@ package pipeline_test
 
 import (
 	"errors"
-	"slices"
 	"strings"
 	"testing"
 
@@ -49,7 +48,6 @@ func TestPlanReleaseImages_PublishesTagVariantsOfOneRepository(t *testing.T) {
   - name: app-distroless
     tag-suffix: -distroless
     platforms: linux/amd64,linux/arm64
-    enable-scan: false
 `)
 
 	in := releaseImagesInput()
@@ -62,16 +60,10 @@ func TestPlanReleaseImages_PublishesTagVariantsOfOneRepository(t *testing.T) {
 
 	want := []pipeline.ReleaseImage{
 		{Name: "app", ImageRepository: "ghcr.io/acme/app", CandidateTag: "staging-v1.2.3", FinalTagName: "v1.2.3", Archs: "arm64", Scan: true},
-		// enable-scan: false is a legacy opt-out: published images are
-		// always scanned, and the plan names what it overrode.
 		{Name: "app-distroless", ImageRepository: "ghcr.io/acme/app", CandidateTag: "staging-v1.2.3-distroless", FinalTagName: "v1.2.3-distroless", Archs: "arm64", Scan: true},
 	}
 	if len(plan.Images) != len(want) || plan.Images[0] != want[0] || plan.Images[1] != want[1] {
 		t.Fatalf("images = %+v, want %+v", plan.Images, want)
-	}
-
-	if !slices.Equal(plan.IgnoredScanOptOuts, []string{"app-distroless"}) {
-		t.Errorf("ignored scan opt-outs = %q, want the app-distroless opt-out reported", plan.IgnoredScanOptOuts)
 	}
 
 	if len(plan.Builds) != 2 {

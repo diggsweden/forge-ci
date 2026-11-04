@@ -56,7 +56,6 @@ const (
 	flagSBOM                    = "sbom"
 	flagSBOMPathPattern         = "sbom-path-pattern"
 	flagSBOMSHA256              = "sbom-sha256"
-	flagScan                    = "scan"
 	flagServerURL               = "server-url"
 	flagSource                  = "source"
 	flagSourceSHA               = "source-sha"

@@ -246,7 +246,7 @@ func invariantConfigPlan(t *testing.T) pipeline.ConfigPlan {
 			{Name: "cargo-service", ProjectType: projecttype.Cargo, Cargo: &config.CargoConfig{BuildMode: config.CargoBuildModeContainerFirst}},
 			{Name: "meta", ProjectType: projecttype.Meta},
 		},
-		Containers: []config.Container{{Name: "web", From: []string{"web"}}, {Name: "bare", EnableSLSA: &no, EnableScan: &no}},
+		Containers: []config.Container{{Name: "web", From: []string{"web"}}, {Name: "bare", EnableSLSA: &no}},
 	}
 	if err := config.Validate(cfg); err != nil {
 		t.Fatal(err)

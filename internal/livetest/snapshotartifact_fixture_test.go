@@ -179,9 +179,8 @@ func TestSnapshotArtifactFixtureSeparatesSelectedSource(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Published images are always scanned, so the fixture declares no scan
-	// opt-out; only the image SBOM is off.
-	if len(cfg.Artifacts) != 1 || len(cfg.Containers) != 1 || cfg.Containers[0].EnableScan != nil || cfg.Containers[0].EnableAnalyzedContainerSBOM {
-		t.Fatal("fixture must declare exactly one Go producer, no scan opt-out and the image SBOM disabled")
+	// Only the image SBOM is off; published images are always scanned.
+	if len(cfg.Artifacts) != 1 || len(cfg.Containers) != 1 || cfg.Containers[0].EnableAnalyzedContainerSBOM {
+		t.Fatal("fixture must declare exactly one Go producer and the image SBOM disabled")
 	}
 }

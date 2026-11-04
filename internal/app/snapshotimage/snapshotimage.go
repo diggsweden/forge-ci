@@ -50,8 +50,6 @@ var (
 type PlanInput struct {
 	File, Branch, SourceSHA, ImageRepository string
 	Publish                                  bool
-	// Annotator reports the legacy scan opt-outs the plan ignores.
-	Annotator output.Annotator
 }
 
 // DefaultConfigFile is optional for projects without declared containers.
@@ -103,19 +101,7 @@ func Plan(ctx context.Context, ops appversion.GenerateSnapshotOps, in PlanInput)
 		}
 	}
 
-	plan, err := snapshotimage.New(typed, snapshotimage.Input{SourceSHA: in.SourceSHA, SourceBranch: in.Branch, Tag: strings.TrimSpace(tag.String()), ImageRepository: in.ImageRepository, SourceDateEpoch: epoch, Publish: in.Publish})
-	if err != nil {
-		return plan, err
-	}
-
-	// The same legacy input the build and release routes ignore: published
-	// layouts are always scanned, and the administrator policy decides what
-	// blocks.
-	for _, name := range plan.IgnoredScanOptOuts {
-		in.Annotator.Warningf("container %q: enable-scan: false ignored; snapshot images are always scanned and the administrator policy decides whether findings block", name)
-	}
-
-	return plan, nil
+	return snapshotimage.New(typed, snapshotimage.Input{SourceSHA: in.SourceSHA, SourceBranch: in.Branch, Tag: strings.TrimSpace(tag.String()), ImageRepository: in.ImageRepository, SourceDateEpoch: epoch, Publish: in.Publish})
 }
 
 // loadConfig reads, validates and derives the artifact configuration. Only the

@@ -14,7 +14,7 @@ import (
 )
 
 // The engine scans every exported layout. Its provider must install the scanner
-// even when a legacy consumer passes enable-scan=false, and preserve reports
+// whenever it exports one, offer no consumer scan toggle, and preserve reports
 // after a blocking scan rather than silently losing the evidence.
 func TestPublishedLayoutScanCannotLosePrerequisiteOrReports(t *testing.T) {
 	t.Parallel()
@@ -51,8 +51,8 @@ func TestPublishedLayoutScanCannotLosePrerequisiteOrReports(t *testing.T) {
 					t.Fatalf("consumer can disable scan prerequisite: %s", step.If)
 				}
 			case "Write build plan":
-				if step.Env["ENABLE_SCAN"] != "${{ inputs['push-image'] }}" {
-					t.Fatalf("scan plan is consumer-controlled: %v", step.Env)
+				if _, ok := step.Env["ENABLE_SCAN"]; ok {
+					t.Fatalf("the build plan carries a scan toggle the engine does not read: %v", step.Env)
 				}
 			case "Build and scan retained layout":
 				build = index

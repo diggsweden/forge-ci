@@ -168,13 +168,3 @@ func (c *Container) EnableSLSAEffective() bool {
 
 	return *c.EnableSLSA
 }
-
-// EnableScanEffective returns true unless the user explicitly set
-// `enable-scan: false` on this container. Default: true.
-func (c *Container) EnableScanEffective() bool {
-	if c == nil || c.EnableScan == nil {
-		return true
-	}
-
-	return *c.EnableScan
-}

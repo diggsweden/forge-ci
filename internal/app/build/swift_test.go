@@ -183,11 +183,11 @@ func TestSwiftLintLint_ConsumerCannotDisableAdminLintEnforcement(t *testing.T) {
 	}
 }
 
-func TestSwiftLintLint_FailOnWarningTurnsWarningIntoError(t *testing.T) {
+func TestSwiftLintLint_FindingsFailUnderTheEnforcingPolicy(t *testing.T) {
 	sl := &fakeSwiftLint{output: "x", exitCode: 2}
 	sink := &recordingSummarySink{}
 
-	err := appbuild.SwiftLintLint(context.Background(), sl, sink, &bytes.Buffer{}, &bytes.Buffer{}, output.Annotator{}, appbuild.SwiftLintLintInput{FailOnWarning: true})
+	err := appbuild.SwiftLintLint(context.Background(), sl, sink, &bytes.Buffer{}, &bytes.Buffer{}, output.Annotator{}, appbuild.SwiftLintLintInput{})
 	if err == nil || !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("err = %v, want ErrValidation", err)
 	}

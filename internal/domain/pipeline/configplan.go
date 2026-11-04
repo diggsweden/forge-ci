@@ -163,7 +163,6 @@ type PlannedContainer struct {
 	TagSuffix                   string             `json:"tag_suffix,omitempty"`
 	EnableAnalyzedContainerSBOM bool               `json:"enable_analyzed_container_sbom"`
 	EnableSLSA                  bool               `json:"enable_slsa"`
-	EnableScan                  bool               `json:"enable_scan"`
 	ScanSeverity                string             `json:"scan_severity,omitempty"`
 	BuildSecrets                []string           `json:"build_secrets,omitempty"`
 	BuildArgs                   map[string]string  `json:"build_args,omitempty"`
@@ -345,7 +344,6 @@ func planContainers(artifacts []config.Artifact, containers []config.Container) 
 			TagSuffix:                   c.TagSuffix,
 			EnableAnalyzedContainerSBOM: c.EnableAnalyzedContainerSBOM,
 			EnableSLSA:                  c.EnableSLSAEffective(),
-			EnableScan:                  c.EnableScanEffective(),
 			ScanSeverity:                c.ScanSeverity,
 			BuildSecrets:                slices.Clone(c.BuildSecrets),
 			BuildArgs:                   cloneStringMap(c.BuildArgs),

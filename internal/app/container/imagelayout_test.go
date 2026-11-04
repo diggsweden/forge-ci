@@ -529,7 +529,7 @@ func TestOCIStagingNeverPublishesAndRemovesFailedScan(t *testing.T) {
 			in.Mode, in.OutputDir, in.CachePush = container.BuildModeOCI, filepath.Join(t.TempDir(), "layout"), true
 			sink := fakeoutputsink.New(t)
 
-			digest, err := appcontainer.BuildAndScan(t.Context(), builder, pusher, scanner, sink, io.Discard, io.Discard, output.Annotator{}, appcontainer.BuildAndScanInput{Build: in, EnableScan: true})
+			digest, err := appcontainer.BuildAndScan(t.Context(), builder, pusher, scanner, sink, io.Discard, io.Discard, output.Annotator{}, appcontainer.BuildAndScanInput{Build: in})
 			if failedScan {
 				require.ErrorIs(t, err, os.ErrPermission)
 				require.NoDirExists(t, in.OutputDir)

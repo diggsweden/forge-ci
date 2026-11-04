@@ -35,7 +35,9 @@ func buildCmd() *cli.Command {
 		Usage: "build a single native-platform container image with buildah or kaniko, optionally pushing it by digest",
 		Description: `Builds ONE native-platform image (the multi-arch index is assembled separately
 by ` + "`container manifest merge`" + `) and, in push-by-digest mode, emits the pushed
-digest for that merge. --scan checks the local layout before publication.
+digest for that merge. In push-by-digest and oci modes the exported layout is
+scanned before publication; findings at or above --scan-severity with a fix,
+and unfixed CRITICAL ones .trivyignore.yaml does not approve, stop it.
 Authentication uses --auth-file when supplied, otherwise the shared config written by
 ` + "`container login`" + `; secrets are read from the 0600 tmpfiles materialized by
 ` + "`container materialize-build-secrets`" + ` and mounted via ` + "`RUN --mount=type=secret`" + `;
@@ -59,13 +61,13 @@ EXAMPLES:
 
    # Build, scan the exported layout, then push it by digest
    forge-ci container build --mode push-by-digest --image-ref ghcr.io/org/app \
-     --platform linux/amd64 --scan --scan-severity HIGH`,
+     --platform linux/amd64 --scan-severity HIGH`,
 		Flags:  append(append(buildImageFlags(), scanFlags()...), imageBuilderFlags()...),
 		Action: runBuild,
 	}
 }
 
-// runBuild builds one platform and applies any requested scan before publication.
+// runBuild builds one platform and, in the publishing modes, scans it before publication.
 func runBuild(ctx context.Context, cmd *cli.Command) error {
 	buildInput, err := buildImageInputFromCmd(cmd)
 	if err != nil {
@@ -81,7 +83,6 @@ func runBuild(ctx context.Context, cmd *cli.Command) error {
 		_, err := appcontainer.BuildAndScan(ctx, builder, ociregistry.WithAuthFile(buildInput.AuthFile), trivy.New(), dep.OutputSink, os.Stderr, os.Stderr, deps.Annotator(cmd),
 			appcontainer.BuildAndScanInput{
 				Build:        buildInput,
-				EnableScan:   cmd.Bool(flagScan),
 				ScanSeverity: cmd.String("scan-severity"),
 				TrivyVersion: cmd.String("trivy-version"),
 			})
@@ -93,7 +94,6 @@ func runBuild(ctx context.Context, cmd *cli.Command) error {
 // scanFlags returns the in-process scan flags of `container build`.
 func scanFlags() []cli.Flag {
 	return []cli.Flag{
-		&cli.BoolFlag{Name: flagScan, Sources: planfile.Vars(planScopeBuild, "scan", "ENABLE_SCAN"), Usage: "scan the exported layout before pushing or retaining it; fail on fixable findings at/above --scan-severity and on unfixed CRITICAL findings .trivyignore.yaml does not approve (push-by-digest and oci modes)"},
 		&cli.StringFlag{Name: "scan-severity", Value: security.DefaultContainerBlockSeverity, Sources: planfile.Vars(planScopeBuild, "scan-severity", "SCAN_SEVERITY"), Usage: "blocking threshold for fixable findings (a level or comma-list whose lowest entry counts); the scan always reports down to HIGH"},
 		&cli.StringFlag{Name: "trivy-version", Sources: planfile.Vars(planScopeBuild, "trivy-version", "TRIVY_VERSION"), Usage: "version embedded in the GitLab container-scanning report"},
 	}
@@ -113,7 +113,7 @@ func buildImageFlags() []cli.Flag {
 		&cli.StringFlag{Name: "labels", Sources: planfile.Vars(planScopeBuild, "labels", "LABELS"), Usage: "newline-separated key=value OCI labels (the labels output of \"container metadata\")"},
 		&cli.StringFlag{Name: "source-date-epoch", Sources: planfile.Vars(planScopeBuild, "source-date-epoch", "SOURCE_DATE_EPOCH"), Usage: "unix seconds; clamps image/layer timestamps for reproducible digests"},
 		&cli.StringFlag{Name: "cache-repo", Sources: planfile.Vars(planScopeBuild, "cache-repo", "BUILD_CACHE_REPO"), Usage: "dedicated registry repo for the layer cache (e.g. ghcr.io/org/buildcache). Empty disables caching. Imported best-effort; --cache-push also exports."},
-		&cli.BoolFlag{Name: "cache-push", Sources: planfile.Vars(planScopeBuild, "cache-push", "BUILD_CACHE_PUSH"), Usage: "also export the layer cache on trusted builds; disabled when --scan gates publication"},
+		&cli.BoolFlag{Name: "cache-push", Sources: planfile.Vars(planScopeBuild, "cache-push", "BUILD_CACHE_PUSH"), Usage: "also export the layer cache on trusted builds; disabled in push-by-digest and oci modes, where the scan gates publication"},
 		&cli.StringFlag{Name: "mode", Required: true, Sources: planfile.Vars(planScopeBuild, "mode", "BUILD_MODE"), Usage: "output mode: push-by-digest | load | local | oci (never exports registry cache)"},
 		&cli.StringFlag{Name: flagImageRef, Sources: planfile.Vars(planScopeBuild, flagImageRef, "IMAGE_REF"), Usage: "push target (push-by-digest) or local tag (load)"},
 		&cli.StringFlag{Name: flagOutputDir, Sources: planfile.Vars(planScopeBuild, flagOutputDir, "OUTPUT_DIR"), Usage: "destination for local export, or a fresh directory for oci mode"},

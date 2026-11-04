@@ -194,14 +194,12 @@ type Container struct {
 	// tag variants (v1.2.3, v1.2.3-distroless).
 	ImageName string `yaml:"image-name,omitempty"`
 	TagSuffix string `yaml:"tag-suffix,omitempty"`
-	// EnableSLSA / EnableScan use pointer-bool so the planner can
-	// distinguish "unset" (nil) from "explicitly false" — both default to
-	// true (per the publish-container.yml input defaults), but an explicit
-	// `false` must reach the workflow as a per-container override.
-	// EnableScan is a legacy input: false cannot disable the scan of an
-	// exported/published layout or administrator enforcement.
+	// EnableSLSA uses pointer-bool so the planner can distinguish "unset"
+	// (nil) from "explicitly false": it defaults to true (per the
+	// publish-container.yml input default), but an explicit `false` must
+	// reach the workflow as a per-container override. There is no scan
+	// toggle: every exported or published layout is scanned.
 	EnableSLSA *bool `yaml:"enable-slsa,omitempty"`
-	EnableScan *bool `yaml:"enable-scan,omitempty"`
 	// ScanSeverity is this container's scan blocking threshold: a level, or
 	// a comma-list whose least severe entry counts. Empty → the default
 	// (CRITICAL). The scan reports down to HIGH whatever the threshold.

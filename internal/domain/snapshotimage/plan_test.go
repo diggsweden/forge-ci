@@ -18,7 +18,7 @@ func fixture(t *testing.T) snapshotimage.Plan {
 
 	tag, err := version.ComposeSnapshotContainerTag("1.2.3", "manual-branch", "aaaaaaa")
 	require.NoError(t, err)
-	plan, err := snapshotimage.New(pipeline.ConfigPlan{Containers: pipeline.ContainerSets{All: []pipeline.PlannedContainer{{Name: "app", ContainerFile: "Containerfile", Context: ".", Platforms: "linux/amd64,linux/arm64", EnableScan: true, ImageName: "team/app", TagSuffix: "-slim"}}}}, snapshotimage.Input{SourceSHA: strings.Repeat("a", 40), SourceBranch: "manual-branch", Tag: tag, ImageRepository: "registry.example/team/base", Publish: true})
+	plan, err := snapshotimage.New(pipeline.ConfigPlan{Containers: pipeline.ContainerSets{All: []pipeline.PlannedContainer{{Name: "app", ContainerFile: "Containerfile", Context: ".", Platforms: "linux/amd64,linux/arm64", ImageName: "team/app", TagSuffix: "-slim"}}}}, snapshotimage.Input{SourceSHA: strings.Repeat("a", 40), SourceBranch: "manual-branch", Tag: tag, ImageRepository: "registry.example/team/base", Publish: true})
 	require.NoError(t, err)
 
 	return plan
@@ -45,17 +45,15 @@ func TestMatrixPolicyAndNameResolution(t *testing.T) {
 	}
 }
 
-// A published snapshot image is always scanned: the plan overrides a legacy
-// enable-scan: false and names it, and a frozen plan without the scan is
-// refused.
+// A published snapshot image is always scanned, and a frozen plan without the
+// scan is refused.
 func TestEveryPlannedImageIsScanned(t *testing.T) {
 	tag, err := version.ComposeSnapshotContainerTag("1.2.3", "manual-branch", "aaaaaaa")
 	require.NoError(t, err)
 
-	plan, err := snapshotimage.New(pipeline.ConfigPlan{Containers: pipeline.ContainerSets{All: []pipeline.PlannedContainer{{Name: "app", ContainerFile: "Containerfile", Context: ".", Platforms: "linux/amd64", EnableScan: false}}}}, snapshotimage.Input{SourceSHA: strings.Repeat("a", 40), SourceBranch: "manual-branch", Tag: tag, ImageRepository: "registry.example/team/app", Publish: true})
+	plan, err := snapshotimage.New(pipeline.ConfigPlan{Containers: pipeline.ContainerSets{All: []pipeline.PlannedContainer{{Name: "app", ContainerFile: "Containerfile", Context: ".", Platforms: "linux/amd64"}}}}, snapshotimage.Input{SourceSHA: strings.Repeat("a", 40), SourceBranch: "manual-branch", Tag: tag, ImageRepository: "registry.example/team/app", Publish: true})
 	require.NoError(t, err)
 	require.True(t, plan.Images[0].Scan)
-	require.Equal(t, []string{"app"}, plan.IgnoredScanOptOuts)
 
 	plan.Images[0].Scan = false
 	require.ErrorContains(t, plan.Validate(), "without its scan")
@@ -68,7 +66,7 @@ func TestScanSeverityIsTheNormalisedThreshold(t *testing.T) {
 	require.NoError(t, err)
 
 	plan := func(severity string) (snapshotimage.Plan, error) {
-		return snapshotimage.New(pipeline.ConfigPlan{Containers: pipeline.ContainerSets{All: []pipeline.PlannedContainer{{Name: "app", ContainerFile: "Containerfile", Context: ".", Platforms: "linux/amd64", EnableScan: true, ScanSeverity: severity}}}}, snapshotimage.Input{SourceSHA: strings.Repeat("a", 40), SourceBranch: "manual-branch", Tag: tag, ImageRepository: "registry.example/team/app", Publish: true})
+		return snapshotimage.New(pipeline.ConfigPlan{Containers: pipeline.ContainerSets{All: []pipeline.PlannedContainer{{Name: "app", ContainerFile: "Containerfile", Context: ".", Platforms: "linux/amd64", ScanSeverity: severity}}}}, snapshotimage.Input{SourceSHA: strings.Repeat("a", 40), SourceBranch: "manual-branch", Tag: tag, ImageRepository: "registry.example/team/app", Publish: true})
 	}
 
 	for severity, want := range map[string]string{"": "CRITICAL", "critical": "CRITICAL", "CRITICAL, high": "HIGH", "medium": "MEDIUM"} {

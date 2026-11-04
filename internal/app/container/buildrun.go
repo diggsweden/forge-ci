@@ -17,13 +17,10 @@ import (
 )
 
 // BuildAndScanInput drives BuildAndScan: the build-image parameters plus the
-// in-build vulnerability scan toggle/threshold.
+// threshold of the vulnerability scan every exported layout gets.
 type BuildAndScanInput struct {
 	Build BuildImageInput
 
-	// EnableScan is retained for callers; false cannot disable admin-required
-	// scan execution for exported/published layouts.
-	EnableScan bool
 	// ScanSeverity is the scan's blocking threshold; see
 	// appsecurity.ScanContainerInput.Severity.
 	ScanSeverity string
@@ -60,10 +57,6 @@ func BuildAndScan(
 
 	if trivy == nil {
 		return "", fmt.Errorf("admin policy requires a vulnerability scanner: %w", errs.ErrDependencyUnavailable)
-	}
-
-	if !in.EnableScan {
-		_, _ = fmt.Fprintln(out, "Consumer enable-scan=false ignored: admin policy requires scan execution.")
 	}
 
 	// --cache-to writes during the build, before a scan could refuse it.

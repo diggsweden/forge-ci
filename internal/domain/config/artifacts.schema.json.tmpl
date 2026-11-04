@@ -137,10 +137,6 @@
           "type": "boolean",
           "description": "Generate SLSA build provenance for this container. Default: true. Set false to disable on a debug/testing container that shouldn't carry provenance."
         },
-        "enable-scan": {
-          "type": "boolean",
-          "description": "Legacy scan input. Default: true. false cannot disable the Trivy scan of an exported/published OCI layout or administrator enforcement; the administrator policy decides whether findings block."
-        },
         "scan-severity": {
           "type": "string",
           "description": "Per-container blocking threshold of the vulnerability scan: a finding at this level or above with a fixed package blocks the publish; an unfixed CRITICAL blocks unless .trivyignore.yaml approves it. A level or a comma-list whose least severe entry counts ('CRITICAL,HIGH' blocks at HIGH). Default 'CRITICAL'. HIGH findings are always reported, blocking or not."

@@ -248,7 +248,6 @@
               "platforms": "linux/amd64,linux/arm64",
               "enable_analyzed_container_sbom": true,
               "enable_slsa": true,
-              "enable_scan": true,
               "build_args": {
                 "VERSION": "${VERSION}"
               },

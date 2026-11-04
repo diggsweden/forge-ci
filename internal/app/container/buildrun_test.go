@@ -66,7 +66,6 @@ func TestBuildAndScan_ScansTheLayoutBeforePublishingIt(t *testing.T) {
 
 	digest, err := appcontainer.BuildAndScan(context.Background(), builder, pusher, scanner, sink, io.Discard, io.Discard, output.Annotator{}, appcontainer.BuildAndScanInput{
 		Build:        pushByDigestInput(),
-		EnableScan:   true,
 		ScanSeverity: "CRITICAL,HIGH",
 	})
 	if err != nil {
@@ -102,7 +101,7 @@ func TestBuildAndScan_FailurePreventsImageAndCachePublication(t *testing.T) {
 	in := pushByDigestInput()
 	in.CacheRepo, in.CachePush = "registry.example/cache", true
 
-	digest, err := appcontainer.BuildAndScan(t.Context(), builder, pusher, scanner, sink, io.Discard, io.Discard, output.Annotator{}, appcontainer.BuildAndScanInput{Build: in, EnableScan: true})
+	digest, err := appcontainer.BuildAndScan(t.Context(), builder, pusher, scanner, sink, io.Discard, io.Discard, output.Annotator{}, appcontainer.BuildAndScanInput{Build: in})
 	if !errors.Is(err, os.ErrPermission) || digest != "" || pusher.calls != 0 || builder.got.CachePush || builder.got.CacheRepo != "registry.example/cache" || len(sink.Keys()) != 0 {
 		t.Fatalf("failed scan published or lost cache reads: digest=%q err=%v", digest, err)
 	}
@@ -110,21 +109,20 @@ func TestBuildAndScan_FailurePreventsImageAndCachePublication(t *testing.T) {
 	assertPublicationLayoutRemoved(t, builder.layout)
 }
 
-func TestBuildAndScan_ConsumerCannotDisableAdminScan(t *testing.T) {
+func TestBuildAndScan_ScansEveryPublishingBuild(t *testing.T) {
 	t.Parallel()
 
 	scanner := &fakeTrivy{}
 
 	_, err := appcontainer.BuildAndScan(context.Background(), &fakeBuilder{}, &fakePusher{digest: oneDigest}, scanner, fakeoutputsink.New(t), io.Discard, io.Discard, output.Annotator{}, appcontainer.BuildAndScanInput{
-		Build:      pushByDigestInput(),
-		EnableScan: false,
+		Build: pushByDigestInput(),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if len(scanner.runs) != 1 {
-		t.Errorf("consumer disabled the admin scan: %v", scanner.runs)
+		t.Errorf("a push-by-digest build was not scanned: %v", scanner.runs)
 	}
 }
 
@@ -135,8 +133,7 @@ func TestBuildAndScan_NoScanWhenNoDigest(t *testing.T) {
 
 	// load mode emits no digest → nothing to scan.
 	_, err := appcontainer.BuildAndScan(context.Background(), &fakeBuilder{}, &fakePusher{}, scanner, fakeoutputsink.New(t), io.Discard, io.Discard, output.Annotator{}, appcontainer.BuildAndScanInput{
-		Build:      appcontainer.BuildImageInput{Context: ".", Containerfile: "Containerfile", Mode: container.BuildModeLoad, ImageRef: "app:test"},
-		EnableScan: true,
+		Build: appcontainer.BuildImageInput{Context: ".", Containerfile: "Containerfile", Mode: container.BuildModeLoad, ImageRef: "app:test"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -180,7 +177,7 @@ func TestBuildAndScan_ForwardsTheExactRequestedSeverity(t *testing.T) {
 			if _, err := appcontainer.BuildAndScan(context.Background(),
 				&fakeBuilder{}, &fakePusher{digest: oneDigest}, scanner, fakeoutputsink.New(t),
 				io.Discard, io.Discard, output.Annotator{},
-				appcontainer.BuildAndScanInput{Build: pushByDigestInput(), EnableScan: true, ScanSeverity: tc.requested},
+				appcontainer.BuildAndScanInput{Build: pushByDigestInput(), ScanSeverity: tc.requested},
 			); err != nil {
 				t.Fatal(err)
 			}
@@ -207,7 +204,7 @@ func TestBuildAndScan_RefusesAnUnsupportedSeverity(t *testing.T) {
 	_, err := appcontainer.BuildAndScan(context.Background(),
 		&fakeBuilder{}, &fakePusher{digest: oneDigest}, scanner, fakeoutputsink.New(t),
 		io.Discard, io.Discard, output.Annotator{},
-		appcontainer.BuildAndScanInput{Build: pushByDigestInput(), EnableScan: true, ScanSeverity: "CRITICAL,SEVERE"},
+		appcontainer.BuildAndScanInput{Build: pushByDigestInput(), ScanSeverity: "CRITICAL,SEVERE"},
 	)
 	if err == nil {
 		t.Fatal("an unsupported severity reached the scan")

@@ -276,7 +276,7 @@ func executionContainerPlan(t *testing.T) pipeline.ConfigPlan {
 			{Name: "cargo-service", ProjectType: projecttype.Cargo, Cargo: &config.CargoConfig{BuildMode: config.CargoBuildModeContainerFirst}},
 		},
 		Containers: []config.Container{
-			{Name: "bare", EnableSLSA: new(false), EnableScan: new(false)},
+			{Name: "bare", EnableSLSA: new(false)},
 			{Name: "mixed", From: []string{"cargo-service", "go-service", "npm-b", "maven-b", "gradle-b", "go-cli", "cargo-cli", "maven-a", "npm-a", "gradle-a"}, EnableSLSA: new(false)},
 		},
 	})

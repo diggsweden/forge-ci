@@ -68,9 +68,6 @@ type Plan struct {
 	Tag             string                     `json:"tag"`
 	Builds          []Build                    `json:"builds"`
 	Images          []Image                    `json:"images"`
-	// IgnoredScanOptOuts names the containers whose legacy enable-scan:
-	// false the plan overrode; the caller reports them.
-	IgnoredScanOptOuts []string `json:"-"`
 }
 
 // Dependency is a built artifact a native build needs at a given destination.
@@ -140,10 +137,6 @@ func New(cfg pipeline.ConfigPlan, in Input) (Plan, error) {
 		image, builds, err := planContainer(cfg, in, plan.BaseVersion, ctr)
 		if err != nil {
 			return plan, err
-		}
-
-		if !ctr.EnableScan {
-			plan.IgnoredScanOptOuts = append(plan.IgnoredScanOptOuts, ctr.Name)
 		}
 
 		plan.Images = append(plan.Images, image)

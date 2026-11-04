@@ -144,18 +144,7 @@ func ResolveReleaseImagesPlan(in EmitReleaseImagesPlanInput, annot output.Annota
 }
 
 func resolveReleaseImagesPlan(in EmitReleaseImagesPlanInput, annot output.Annotator) (pipeline.ReleaseImagesPlan, error) {
-	plan, err := planReleaseImages(in, annot)
-	if err != nil {
-		return plan, err
-	}
-
-	// The same legacy input the build route ignores: published layouts are
-	// always scanned, and the administrator policy decides what blocks.
-	for _, name := range plan.IgnoredScanOptOuts {
-		annot.Warningf("container %q: enable-scan: false ignored; release images are always scanned and the administrator policy decides whether findings block", name)
-	}
-
-	return plan, nil
+	return planReleaseImages(in, annot)
 }
 
 func planReleaseImages(in EmitReleaseImagesPlanInput, annot output.Annotator) (pipeline.ReleaseImagesPlan, error) {

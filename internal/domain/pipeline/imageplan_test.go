@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
 )
 
@@ -128,7 +129,7 @@ func TestReadImageBuildPlan_RejectsUnknownFieldsAndTrailingDocuments(t *testing.
 	}
 }
 
-func TestReadImageBuildPlan_ScansByDefaultAndOverridesExplicitOptOut(t *testing.T) {
+func TestReadImageBuildPlan_ScansByDefaultAndRefusesAnOptOut(t *testing.T) {
 	t.Parallel()
 
 	ordinary, err := pipeline.PlanReleaseImages(plannedContainers(t, "  - name: app\n"), releaseImagesInput())
@@ -155,19 +156,17 @@ func TestReadImageBuildPlan_ScansByDefaultAndOverridesExplicitOptOut(t *testing.
 	image["scan"] = false
 	body, err = json.Marshal(raw)
 	require.NoError(t, err)
-	plan, err = pipeline.ReadImageBuildPlan(string(body), "ghcr.io/acme/app", "v1.2.3")
-	require.NoError(t, err)
-	require.True(t, plan.Images[0].Scan, "an explicit scan opt-out must not skip the publication gate")
-	require.Equal(t, []string{plan.Images[0].Name}, plan.IgnoredScanOptOuts)
+	_, err = pipeline.ReadImageBuildPlan(string(body), "ghcr.io/acme/app", "v1.2.3")
+	require.ErrorIs(t, err, errs.ErrInvalidConfig, "an explicit scan opt-out must not skip the publication gate")
+	require.ErrorContains(t, err, "scan: false is not supported")
 
-	// A base image's opt-out is overridden the same way.
+	// A base image's opt-out is refused the same way.
 	base := resolvedBasePlan()
 	base.Images[0].Scan = false
 	body, err = json.Marshal(base)
 	require.NoError(t, err)
-	plan, err = pipeline.ReadImageBuildPlan(string(body), "ghcr.io/acme/app-base", "v1.2.3")
-	require.NoError(t, err)
-	require.True(t, plan.Images[0].Scan)
+	_, err = pipeline.ReadImageBuildPlan(string(body), "ghcr.io/acme/app-base", "v1.2.3")
+	require.ErrorIs(t, err, errs.ErrInvalidConfig)
 }
 
 func TestReadImageBuildPlan_NormalizesArchitectureTransport(t *testing.T) {

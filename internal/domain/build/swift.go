@@ -17,7 +17,7 @@ const (
 	// SwiftLintPassed indicates the linter exited 0.
 	SwiftLintPassed SwiftLintOutcome = "passed"
 	// SwiftLintWarned indicates the linter exited non-zero AND the workflow
-	// allows warnings (FAIL_ON_WARNING=false). Only used by SwiftLint —
+	// allows warnings. Only used by SwiftLint —
 	// swift-format has no concept of "warning that's not a failure".
 	SwiftLintWarned SwiftLintOutcome = "warned"
 	// SwiftLintFailed indicates the linter exited non-zero AND must fail the step.

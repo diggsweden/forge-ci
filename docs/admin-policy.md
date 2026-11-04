@@ -48,7 +48,8 @@ ignore or narrow tests (`skipTests`, `maven.test.skip[.exec]`,
 `maven.test.failure.ignore`, fail-never, rerunning failed tests, and test
 selection such as `-Dtest` or `-Dgroups`, in any spelling Maven accepts) and Gradle task exclusions are refused at the engine's build
 gates. A project's own POM and `.mvn/maven.config` stay its responsibility.
-`enable-scan=false` cannot disable the scan of an exported/published layout.
+Every exported or published layout is scanned; there is no consumer switch to
+turn the scan off.
 Forgejo lint/build actions checksum-verify their pinned engine even when a
 consumer supplies `FORGE_CI_BIN`. GitLab's Nanolinter component bootstraps and
 verifies that engine before lint execution, independently of optional SAST upload.

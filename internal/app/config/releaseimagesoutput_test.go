@@ -25,8 +25,8 @@ func TestEmitReleaseImagesPlan_MultipleNamesUseRunnerMultilineOutput(t *testing.
 
 	in := pipeline.ReleaseImagesInput{ImageRepository: "ghcr.io/acme/app", Repository: "acme/app", ReleaseTag: "v1.2.3"}
 	plan, err := pipeline.PlanReleaseImages([]pipeline.PlannedContainer{
-		{Name: "steady", TagSuffix: "-steady", ContainerFile: "Containerfile", Context: ".", Platforms: "linux/amd64", EnableScan: true},
-		{Name: "changing", TagSuffix: "-changing", ContainerFile: "Containerfile", Context: ".", Platforms: "linux/amd64", EnableScan: true},
+		{Name: "steady", TagSuffix: "-steady", ContainerFile: "Containerfile", Context: ".", Platforms: "linux/amd64"},
+		{Name: "changing", TagSuffix: "-changing", ContainerFile: "Containerfile", Context: ".", Platforms: "linux/amd64"},
 	}, in)
 	require.NoError(t, err)
 	body, err := json.Marshal(plan)

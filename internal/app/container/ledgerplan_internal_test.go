@@ -40,7 +40,7 @@ func TestResolvedImagePlan_UsesThePublicationSBOMPolicy(t *testing.T) {
 			)
 
 			plan, err := pipeline.PlanReleaseImages([]pipeline.PlannedContainer{{
-				Name: "app", ContainerFile: "Containerfile", Context: ".", Platforms: "linux/amd64", EnableScan: true,
+				Name: "app", ContainerFile: "Containerfile", Context: ".", Platforms: "linux/amd64",
 			}}, pipeline.ReleaseImagesInput{ImageRepository: repository, Repository: "acme/app", ReleaseTag: tag})
 			require.NoError(t, err)
 

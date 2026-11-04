@@ -707,11 +707,9 @@ jobs:
           # Lowercased below: an OCI repository path cannot hold the owner's capitals.
           BUILD_CACHE_REPO: ${{ inputs['push-image'] && inputs['build-cache'] && format('{0}/{1}/buildcache', inputs.registry, github.repository_owner) || '' }}
           BUILD_CACHE_PUSH: "false"
-          # The internal scan gates retention of the local layout;
-          # SARIF + GitLab reports are written for the upload steps below.
-          # Load-only validation has no publication scan; every exported
-          # layout is scanned, independently of consumer enforcement inputs.
-          ENABLE_SCAN: ${{ inputs['push-image'] }}
+          # The build scans every layout it exports (push-image), which gates
+          # retention of the local layout; SARIF + GitLab reports are written
+          # for the upload steps below. Load-only validation has no scan.
           SCAN_SEVERITY: ${{ inputs['scan-severity'] }}
         # `plan write` picks the destination up from $FORGE_CI_PLAN (job
         # env), so the writer and every reader name the same file. It is this
@@ -733,7 +731,6 @@ jobs:
             --set "auth-file=${BUILD_AUTH_FILE}" \
             --set "cache-repo=${BUILD_CACHE_REPO,,}" \
             --set "cache-push=${BUILD_CACHE_PUSH}" \
-            --set "scan=${ENABLE_SCAN}" \
             --set "scan-severity=${SCAN_SEVERITY}"
       - name: Build and scan retained layout
         id: build

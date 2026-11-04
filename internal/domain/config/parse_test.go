@@ -604,11 +604,10 @@ func TestParse_RetainsAliasExpansionGuard(t *testing.T) {
 // `if !EnableSLSAEffective()`, passes just as well when parsing drops the field
 // entirely and leaves the pointer nil.
 //
-// Both directions of that are real. A dropped `enable-slsa: false` generates
-// provenance for a container the operator excluded; a dropped
-// `enable-scan: false` runs a scan that was deliberately disabled. The pointer
-// itself is checked alongside the effective value, because that is what
-// separates "parsed as false" from "not parsed at all".
+// A dropped `enable-slsa: false` generates provenance for a container the
+// operator excluded. The pointer itself is checked alongside the effective
+// value, because that is what separates "parsed as false" from "not parsed at
+// all".
 func TestParse_ExplicitBooleanChoicesSurviveParsing(t *testing.T) {
 	t.Parallel()
 
@@ -640,7 +639,7 @@ containers:
 	t.Run("explicit false is preserved", func(t *testing.T) {
 		t.Parallel()
 
-		ct := parseContainer(t, "    enable-slsa: false\n    enable-scan: false\n")
+		ct := parseContainer(t, "    enable-slsa: false\n")
 
 		for _, file := range []struct {
 			name string
@@ -648,7 +647,6 @@ containers:
 			eff  bool
 		}{
 			{"enable-slsa", ct.EnableSLSA, ct.EnableSLSAEffective()},
-			{"enable-scan", ct.EnableScan, ct.EnableScanEffective()},
 		} {
 			if file.ptr == nil {
 				t.Errorf("%s: pointer is nil, so the explicit false was dropped and the default turns it back on", file.name)
@@ -669,7 +667,7 @@ containers:
 	t.Run("explicit true is preserved", func(t *testing.T) {
 		t.Parallel()
 
-		ct := parseContainer(t, "    enable-slsa: true\n    enable-scan: true\n")
+		ct := parseContainer(t, "    enable-slsa: true\n")
 
 		for _, file := range []struct {
 			name string
@@ -677,7 +675,6 @@ containers:
 			eff  bool
 		}{
 			{"enable-slsa", ct.EnableSLSA, ct.EnableSLSAEffective()},
-			{"enable-scan", ct.EnableScan, ct.EnableScanEffective()},
 		} {
 			if file.ptr == nil || !*file.ptr || !file.eff {
 				t.Errorf("%s: explicit true not preserved (ptr=%v, effective=%v)", file.name, file.ptr, file.eff)
@@ -690,14 +687,33 @@ containers:
 
 		ct := parseContainer(t, "")
 
-		if ct.EnableSLSA != nil || ct.EnableScan != nil {
-			t.Errorf("omitted flags produced non-nil pointers (slsa=%v scan=%v); "+
+		if ct.EnableSLSA != nil {
+			t.Errorf("omitted flag produced a non-nil pointer (slsa=%v); "+
 				"the tri-state collapses and a later explicit false becomes indistinguishable",
-				ct.EnableSLSA, ct.EnableScan)
+				ct.EnableSLSA)
 		}
 
-		if !ct.EnableSLSAEffective() || !ct.EnableScanEffective() {
+		if !ct.EnableSLSAEffective() {
 			t.Error("omitted flags must default to on")
 		}
 	})
+}
+
+// TestParse_RefusesRemovedContainerToggles pins that the container toggles
+// removed before the first release are refused by name, not ignored: a
+// consumer who sets one learns it does nothing. Every exported or published
+// layout is scanned, and SBOM layers come from the artifacts' sboms.
+func TestParse_RefusesRemovedContainerToggles(t *testing.T) {
+	t.Parallel()
+
+	for _, key := range []string{"enable-scan", "enable-sbom"} {
+		for _, value := range []string{"false", "true"} {
+			doc := "artifacts:\n  - name: x\n    project-type: npm\ncontainers:\n  - name: img\n    " + key + ": " + value + "\n"
+
+			cfg, err := config.Parse([]byte(doc))
+			require.ErrorIs(t, err, errs.ErrInvalidConfig, "%s: %s", key, value)
+			require.Nil(t, cfg)
+			require.Contains(t, err.Error(), `unknown key "`+key+`" (line 6)`)
+		}
+	}
 }

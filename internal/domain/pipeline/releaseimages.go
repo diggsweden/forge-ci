@@ -79,19 +79,6 @@ type ReleaseImage struct {
 type ReleaseImagesPlan struct {
 	Builds []ReleaseImageBuild `json:"builds"`
 	Images []ReleaseImage      `json:"images"`
-	// IgnoredScanOptOuts names the images that asked not to be scanned, a
-	// legacy consumer opt-out the plan overrides; the caller reports them.
-	IgnoredScanOptOuts []string `json:"-"`
-}
-
-// requireScans scans every image, recording the opt-outs it overrides.
-func (plan *ReleaseImagesPlan) requireScans() {
-	for index := range plan.Images {
-		if !plan.Images[index].Scan {
-			plan.IgnoredScanOptOuts = append(plan.IgnoredScanOptOuts, plan.Images[index].Name)
-			plan.Images[index].Scan = true
-		}
-	}
 }
 
 // PlanReleaseImages turns the declared containers into the release-images
@@ -140,8 +127,6 @@ func PlanReleaseImages(containers []PlannedContainer, in ReleaseImagesInput) (Re
 		plan.Builds = append(plan.Builds, builds...)
 	}
 
-	plan.requireScans()
-
 	return plan, nil
 }
 
@@ -166,7 +151,7 @@ func planReleaseImage(container PlannedContainer, in ReleaseImagesInput) (Releas
 		ImageRepository: repository,
 		CandidateTag:    "staging-" + finalTagName,
 		FinalTagName:    finalTagName,
-		Scan:            container.EnableScan,
+		Scan:            true,
 	}
 
 	buildArgs := make([]string, 0, len(container.BuildArgs))

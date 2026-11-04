@@ -154,24 +154,30 @@ func TestEmitReleaseImagesPlan_ContainersWithoutArtifacts(t *testing.T) {
 	}
 }
 
-// enable-scan: false cannot keep a release image from its scan: the plan
-// scans it and says the legacy opt-out was ignored, as the build route does.
-func TestEmitReleaseImagesPlan_IgnoresTheScanOptOutWithAWarning(t *testing.T) {
+// Every release image is scanned, and a configuration that still names the
+// removed scan opt-out is refused before any output is written.
+func TestEmitReleaseImagesPlan_ScansEveryImageAndRefusesTheOptOut(t *testing.T) {
 	t.Parallel()
-	path := writeYAML(t, "containers:\n  - name: app\n    enable-scan: false\n")
+
+	images := pipeline.ReleaseImagesInput{ImageRepository: "ghcr.io/acme/app", Repository: "acme/app", ReleaseTag: "v1.2.3"}
 	sink := fakeoutputsink.New(t)
 
-	var annotations bytes.Buffer
-
-	plan, err := appconfig.EmitReleaseImagesPlan(context.Background(), sink, output.NewAnnotator(&annotations, output.FormatGitHub), appconfig.EmitReleaseImagesPlanInput{
-		Config: appconfig.EmitConfigPlanInput{Path: path},
-		Images: pipeline.ReleaseImagesInput{ImageRepository: "ghcr.io/acme/app", Repository: "acme/app", ReleaseTag: "v1.2.3"},
+	plan, err := appconfig.EmitReleaseImagesPlan(context.Background(), sink, output.Annotator{}, appconfig.EmitReleaseImagesPlanInput{
+		Config: appconfig.EmitConfigPlanInput{Path: writeYAML(t, "containers:\n  - name: app\n")},
+		Images: images,
 	})
 	require.NoError(t, err)
 	require.True(t, plan.Images[0].Scan, "a published release image skipped its scan")
 	require.Contains(t, sink.Single("images"), `"scan":true`)
-	require.Contains(t, annotations.String(), "enable-scan: false ignored")
-	require.Contains(t, annotations.String(), "administrator policy")
+
+	refused := fakeoutputsink.New(t)
+	_, err = appconfig.EmitReleaseImagesPlan(context.Background(), refused, output.Annotator{}, appconfig.EmitReleaseImagesPlanInput{
+		Config: appconfig.EmitConfigPlanInput{Path: writeYAML(t, "containers:\n  - name: app\n    enable-scan: false\n")},
+		Images: images,
+	})
+	require.ErrorIs(t, err, errs.ErrInvalidConfig)
+	require.ErrorContains(t, err, `unknown key "enable-scan"`)
+	require.Empty(t, refused.Keys())
 }
 
 func TestEmitReleaseImagesPlan_ResolvedPolicyUsesTheSameOutputContract(t *testing.T) {
@@ -179,7 +185,7 @@ func TestEmitReleaseImagesPlan_ResolvedPolicyUsesTheSameOutputContract(t *testin
 
 	in := pipeline.ReleaseImagesInput{ImageRepository: "ghcr.io/acme/app", Repository: "acme/app", ReleaseTag: "v1.2.3"}
 	want, err := pipeline.PlanReleaseImages([]pipeline.PlannedContainer{{
-		Name: "app", ContainerFile: "Containerfile", Context: ".", Platforms: "linux/amd64", EnableScan: true,
+		Name: "app", ContainerFile: "Containerfile", Context: ".", Platforms: "linux/amd64",
 	}}, in)
 	require.NoError(t, err)
 	body, err := json.Marshal(want)

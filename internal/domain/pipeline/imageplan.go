@@ -21,9 +21,9 @@ import (
 )
 
 // UnmarshalJSON preserves the declarative planner's scan-by-default policy for
-// resolved input too; an explicit false is a legacy opt-out the plan then
-// overrides (see ReleaseImagesPlan.requireScans). Keep strict field admission
-// even though the outer decoder delegates this object.
+// resolved input too: an omitted scan is a scan, and ReadImageBuildPlan
+// refuses an explicit false. Keep strict field admission even though the
+// outer decoder delegates this object.
 func (image *ReleaseImage) UnmarshalJSON(body []byte) error {
 	type wireImage ReleaseImage
 
@@ -58,13 +58,15 @@ func ReadImageBuildPlan(body, expectedRepository, releaseTag string) (ReleaseIma
 	}
 	// Workflows and the assembly CLI consume one architecture per line.
 	for idx := range plan.Images {
+		if !plan.Images[idx].Scan {
+			return ReleaseImagesPlan{}, fmt.Errorf("image build plan image %q: scan: false is not supported: every published image is scanned, and the administrator policy decides whether findings block; remove the field: %w", plan.Images[idx].Name, errs.ErrInvalidConfig)
+		}
+
 		plan.Images[idx].Archs = strings.Join(strings.Fields(plan.Images[idx].Archs), "\n")
 		if parsed, ok := version.ParseSemverTag(releaseTag); ok && parsed.Prerelease != "" && plan.Images[idx].ImageKind != string(imageledger.ImageKindBase) {
 			plan.Images[idx].MovingTagName = ""
 		}
 	}
-
-	plan.requireScans()
 
 	if err := validateImageBuildPlan(plan, expectedRepository, releaseTag); err != nil {
 		return ReleaseImagesPlan{}, err

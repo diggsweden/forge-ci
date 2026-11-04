@@ -184,7 +184,6 @@ func executionBoundaryConfigPlan(t *testing.T) string {
 containers:
   - name: early
     enable-slsa: false
-    enable-scan: false
   - name: late
     from: [api,lib]
     enable-slsa: false
