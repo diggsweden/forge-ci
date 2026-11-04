@@ -32,6 +32,7 @@ jobs:
     outputs:
       branch: ${{ steps.branch.outputs.branch }}
       image-tag: ${{ steps.branch.outputs.image-tag }}
+      image-namespace: ${{ steps.branch.outputs.image-namespace }}
     steps:
       - name: Find the branch whose head is the release request
         id: branch
@@ -43,6 +44,7 @@ jobs:
           SERVER_URL: ${{ github.server_url }}
           SHA: ${{ github.sha }}
           RELEASE_BRANCH: ${{ vars.RELEASE_BRANCH }}
+          IMAGE_NAMESPACE: ${{ vars.FORGE_CI_IMAGE_NAMESPACE }}
         run: |
           set -euo pipefail
           if [[ -n "$RELEASE_BRANCH" ]]; then
@@ -62,8 +64,12 @@ jobs:
             exit 1
           fi
           printf 'Release branch: %s\n' "$branch"
-          printf 'branch=%s\n' "$branch" >>"$GITHUB_OUTPUT"
-          printf 'image-tag=sha-%s\n' "${SHA:0:7}" >>"$GITHUB_OUTPUT"
+          # GitHub keeps the owner's capitals; an OCI repository path cannot.
+          {
+            printf 'branch=%s\n' "$branch"
+            printf 'image-tag=sha-%s\n' "${SHA:0:7}"
+            printf 'image-namespace=%s\n' "${IMAGE_NAMESPACE:-ghcr.io/${GITHUB_REPOSITORY_OWNER,,}}"
+          } >>"$GITHUB_OUTPUT"
 
   blackbox:
     # TEMPORARY bootstrap pause until Nanolinter is published. Set the repository
@@ -244,7 +250,7 @@ jobs:
     steps:
       - name: Poll for this commit's runtime images
         env:
-          NAMESPACE: ${{ vars.FORGE_CI_IMAGE_NAMESPACE || format('ghcr.io/{0}', github.repository_owner) }}
+          NAMESPACE: ${{ needs.resolve-branch.outputs.image-namespace }}
           IMAGE_TAG: ${{ needs.resolve-branch.outputs.image-tag }}
         run: |
           set -euo pipefail
@@ -291,13 +297,13 @@ jobs:
       RELEASE_GPG_PUBLIC_KEY: ${{ secrets.RELEASE_GPG_PUBLIC_KEY }}
     with:
       branch: ${{ needs.resolve-branch.outputs.branch }}
-      runtime-image: ${{ vars.FORGE_CI_IMAGE_NAMESPACE || format('ghcr.io/{0}', github.repository_owner) }}/forge-ci-runtime-base:${{ needs.resolve-branch.outputs.image-tag }}
-      runtime-image-full: ${{ vars.FORGE_CI_IMAGE_NAMESPACE || format('ghcr.io/{0}', github.repository_owner) }}/forge-ci-runtime:${{ needs.resolve-branch.outputs.image-tag }}
-      runtime-image-java: ${{ vars.FORGE_CI_IMAGE_NAMESPACE || format('ghcr.io/{0}', github.repository_owner) }}/forge-ci-runtime-java-25:${{ needs.resolve-branch.outputs.image-tag }}
-      runtime-image-node: ${{ vars.FORGE_CI_IMAGE_NAMESPACE || format('ghcr.io/{0}', github.repository_owner) }}/forge-ci-runtime-node-24:${{ needs.resolve-branch.outputs.image-tag }}
-      runtime-image-rust: ${{ vars.FORGE_CI_IMAGE_NAMESPACE || format('ghcr.io/{0}', github.repository_owner) }}/forge-ci-runtime-rust-stable:${{ needs.resolve-branch.outputs.image-tag }}
-      runtime-image-go: ${{ vars.FORGE_CI_IMAGE_NAMESPACE || format('ghcr.io/{0}', github.repository_owner) }}/forge-ci-runtime-go-1.27:${{ needs.resolve-branch.outputs.image-tag }}
-      runtime-image-android: ${{ vars.FORGE_CI_IMAGE_NAMESPACE || format('ghcr.io/{0}', github.repository_owner) }}/forge-ci-runtime-android-35:${{ needs.resolve-branch.outputs.image-tag }}
+      runtime-image: ${{ needs.resolve-branch.outputs.image-namespace }}/forge-ci-runtime-base:${{ needs.resolve-branch.outputs.image-tag }}
+      runtime-image-full: ${{ needs.resolve-branch.outputs.image-namespace }}/forge-ci-runtime:${{ needs.resolve-branch.outputs.image-tag }}
+      runtime-image-java: ${{ needs.resolve-branch.outputs.image-namespace }}/forge-ci-runtime-java-25:${{ needs.resolve-branch.outputs.image-tag }}
+      runtime-image-node: ${{ needs.resolve-branch.outputs.image-namespace }}/forge-ci-runtime-node-24:${{ needs.resolve-branch.outputs.image-tag }}
+      runtime-image-rust: ${{ needs.resolve-branch.outputs.image-namespace }}/forge-ci-runtime-rust-stable:${{ needs.resolve-branch.outputs.image-tag }}
+      runtime-image-go: ${{ needs.resolve-branch.outputs.image-namespace }}/forge-ci-runtime-go-1.27:${{ needs.resolve-branch.outputs.image-tag }}
+      runtime-image-android: ${{ needs.resolve-branch.outputs.image-namespace }}/forge-ci-runtime-android-35:${{ needs.resolve-branch.outputs.image-tag }}
       artifacts-config: .forge-ci/artifacts.yml
       forge-ci-binary-ref: ${{ github.sha }}
       changelog-creator: git-cliff

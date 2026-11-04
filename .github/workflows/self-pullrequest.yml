@@ -15,7 +15,23 @@ concurrency:
 permissions:
   contents: read
 jobs:
+  # GitHub keeps the owner's capitals, which an OCI repository path cannot
+  # hold, and expressions cannot lowercase.
+  image-namespace:
+    name: Resolve runtime image namespace
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      namespace: ${{ steps.namespace.outputs.namespace }}
+    steps:
+      - name: Derive the runtime image namespace
+        id: namespace
+        env:
+          IMAGE_NAMESPACE: ${{ vars.FORGE_CI_IMAGE_NAMESPACE }}
+        run: printf 'namespace=%s\n' "${IMAGE_NAMESPACE:-ghcr.io/${GITHUB_REPOSITORY_OWNER,,}}" >>"$GITHUB_OUTPUT"
   validate:
+    needs: [image-namespace]
     uses: ./.github/workflows/pullrequest-orchestrator.yml
     permissions:
       actions: read
@@ -28,7 +44,7 @@ jobs:
       forge-ci-binary-ref: ${{ github.event.pull_request.head.sha }}
       # Released 0.90.0 images do not exist before the first release; use the
       # repository's rolling pre-release image line.
-      runtime-image: ${{ vars.FORGE_CI_IMAGE_NAMESPACE || format('ghcr.io/{0}', github.repository_owner) }}/forge-ci-runtime-base:v0.90.0-pre
+      runtime-image: ${{ needs.image-namespace.outputs.namespace }}/forge-ci-runtime-base:v0.90.0-pre
       # This repo dogfoods nanolinter via the dedicated `lint` job below,
       # which sets up Go for the go-* checks. Disable the orchestrator
       # lint engine so it doesn't run a second, Go-less `nanolinter verify`

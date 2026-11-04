@@ -38,10 +38,10 @@ func TestSelfRuntimeCacheIsRepositoryScoped(t *testing.T) {
 				caches++
 
 				if id == "verify" {
-					require.Equal(t, "${{ github.event_name != 'pull_request' && format('ghcr.io/{0}-buildcache', github.repository) || '' }}", cache)
+					require.Equal(t, "${{ github.event_name != 'pull_request' && needs.image-coordinates.outputs.build-cache-repo || '' }}", cache)
 					require.Empty(t, step.Env["BUILD_CACHE_PUSH"])
 				} else {
-					require.Equal(t, "ghcr.io/${{ github.repository }}-buildcache", cache)
+					require.Equal(t, "${{ needs.image-coordinates.outputs.build-cache-repo }}", cache)
 					require.Equal(t, "true", step.Env["BUILD_CACHE_PUSH"])
 				}
 			}
@@ -57,6 +57,8 @@ func TestSelfRuntimeCacheIsRepositoryScoped(t *testing.T) {
 		require.Equal(t, 1, logins, id)
 	}
 
+	// The repository-scoped cache, lowercased once for every job.
+	require.Contains(t, string(reporoot.ReadFile(t, ".github/workflows/self-runtime-container.yml")), `printf 'build-cache-repo=ghcr.io/%s-buildcache\n' "${GITHUB_REPOSITORY,,}"`)
 	require.Equal(t, "read", workflow.Jobs["verify"].Permissions["packages"])
 	require.Equal(t, "write", workflow.Jobs["publish-arch"].Permissions["packages"])
 }

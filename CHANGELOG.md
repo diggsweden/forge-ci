@@ -64,6 +64,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `snapshot-images.yml` takes a `registry` input, the registry host of the
+  default image repository (default `ghcr.io`), which the snapshot
+  orchestrator passes on.
 - Administrator policy setting `enforce-reproducible-builds` (strict
   reproducible builds, default `true`). With `false`, missing Maven
   `project.build.outputTimestamp` or Gradle reproducible-archive settings are
@@ -209,6 +212,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `TRIVY_PLATFORM`, which the multi-arch build sets per leg; it runs in an
   empty directory with configuration loading disabled, and the ignore file
   reaches it by absolute path.
+- Image paths derived from the repository owner or name are lowercased, as
+  an OCI repository path requires: the snapshot image default for a
+  non-GHCR registry, the publish build cache, the bootstrap runtime-image
+  namespace, and the runtime images, build cache and release images of the
+  repository's own workflows. A test refuses an unlowercased one.
+- The MegaLinter GitLab component no longer ends the job when its
+  best-effort SAST conversion fails; GitLab's errexit used to stop the
+  script there. `just test-fuzz-all` and `just upgrade-list` now fail when
+  `go list` or `go test -list` fails instead of skipping the package.
 - The `install-forge-ci` action installs the binary of the repository it
   comes from, and trusts that repository's signer. It ran the installer
   without naming a repository, so a fork's action installed upstream's

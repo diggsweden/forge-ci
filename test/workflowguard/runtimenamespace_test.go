@@ -4,6 +4,7 @@
 package workflowguard
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -12,10 +13,26 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// TestOwnerDerivedImagePathsAreLowercased refuses an image path built from
+// the owner or repository as GitHub spells it: an OCI repository path cannot
+// hold capitals, and an expression cannot lowercase, so these are derived in a
+// shell step and passed on.
+func TestOwnerDerivedImagePathsAreLowercased(t *testing.T) {
+	t.Parallel()
+
+	unlowered := regexp.MustCompile(`format\('[^']*ghcr\.io[^']*', github\.repository(_owner)?\)|ghcr\.io/\$\{\{ github\.repository(_owner)? \}\}`)
+
+	for _, path := range yamlFiles(t, ".github/workflows") {
+		if match := unlowered.Find(reporoot.ReadFile(t, path)); match != nil {
+			t.Errorf("%s builds an image path from the owner or repository unlowercased: %s", path, match)
+		}
+	}
+}
+
 func TestRuntimePublicationNamespaceCoherence(t *testing.T) {
 	t.Parallel()
 
-	const namespace = "${{ vars.FORGE_CI_IMAGE_NAMESPACE || format('ghcr.io/{0}', github.repository_owner) }}"
+	const namespace = "${{ needs.image-coordinates.outputs.image-namespace }}"
 
 	text := string(reporoot.ReadFile(t, ".github/workflows/self-runtime-container.yml"))
 
@@ -51,7 +68,8 @@ func TestRuntimePublicationNamespaceCoherence(t *testing.T) {
 
 	require.Equal(t, 7, count, "build-and-scan, readback, SBOM, attestation, metadata, merge and retention")
 	require.Contains(t, text, "org.opencontainers.image.source=https://github.com/${{ github.repository }}")
-	require.Contains(t, text, "BUILD_CACHE_REPO: ghcr.io/${{ github.repository }}-buildcache")
-	require.NotContains(t, text, "ghcr.io/${{ github.repository_owner }}/")
+	require.Contains(t, text, "BUILD_CACHE_REPO: ${{ needs.image-coordinates.outputs.build-cache-repo }}")
+	require.Contains(t, text, `"${IMAGE_NAMESPACE:-ghcr.io/${GITHUB_REPOSITORY_OWNER,,}}"`)
+	require.Contains(t, text, `"${GITHUB_REPOSITORY,,}"`)
 	require.Contains(t, text, "forge-ci container validate namespace")
 }

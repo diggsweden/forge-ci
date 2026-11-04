@@ -360,7 +360,9 @@ same-run uploads without rebuilding. Its public additions are:
 | output `container-images-json` | Exact collected image inventory with source identity, platforms and immutable digest refs |
 
 The standalone GitHub `snapshot-images.yml` takes required `branch`, optional
-`source-sha`, `image-repository`, `registry-user` and secret `registry-password`.
+`source-sha`, `image-repository`, `registry`, `registry-user` and secret
+`registry-password`. An empty `image-repository` defaults to
+`<registry>/<owner>/<repository>`, lowercased; `registry` defaults to `ghcr.io`.
 Without `source-sha`, it resolves the selected branch once. With it, it checks
 out that exact commit while retaining the logical branch for naming.
 Its `use-build-artifacts` default is `false`: required artifact-first producers
