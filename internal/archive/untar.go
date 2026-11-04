@@ -152,54 +152,9 @@ func untarStripOne(archive, dest string, limits tarLimits) error {
 	}
 	defer func() { _ = staging.Close() }()
 
-	root := staging.Root()
-
 	expanded := &io.LimitedReader{R: gz, N: limits.streamSize + 1}
-	tr := tar.NewReader(expanded)
-
-	var totalBytes int64
-
-	entryCount := 0
-
-	for {
-		hdr, err := tr.Next()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-
-		if err != nil {
-			// A stream that hit its expanded budget runs out mid-header, so
-			// tar reports a truncated archive rather than this package
-			// reporting a limit. Both are refusals, but only one tells the
-			// operator that the archive was too big rather than corrupt, and
-			// only one carries the same sentinel as every other cap here.
-			if expanded.N == 0 {
-				return fmt.Errorf("tar: archive exceeds %d expanded bytes: %w", limits.streamSize, errs.ErrValidation)
-			}
-
-			return fmt.Errorf("tar next: %w: %w", err, errs.ErrMalformedInput)
-		}
-
-		entryCount++
-		if entryCount > limits.entries {
-			return fmt.Errorf("tar: archive exceeds %d entries: %w", limits.entries, errs.ErrValidation)
-		}
-
-		stripped, err := stripFirstComponent(hdr.Name)
-		if err != nil {
-			return err
-		}
-
-		if stripped == "" {
-			continue // skip the archive root entry itself
-		}
-
-		written, err := writeTarEntry(root, tr, hdr, filepath.FromSlash(stripped), totalBytes, limits)
-		if err != nil {
-			return err
-		}
-
-		totalBytes += written
+	if err := extractEntries(staging.Root(), expanded, limits, stripFirstComponent); err != nil {
+		return err
 	}
 
 	// Tar EOF precedes the gzip trailer. Read to gzip EOF before committing,
@@ -228,6 +183,100 @@ func untarStripOne(archive, dest string, limits tarLimits) error {
 	}
 
 	return staging.InstallWithRelativeSymlinks()
+}
+
+// ExtractTar extracts an uncompressed tar stream into dest, keeping every
+// entry's path as it is: the flattened filesystem of an image, for example.
+// It applies UntarStripOne's defenses to the stream: absolute and
+// parent-traversing entries, symlinks that are absolute or leave dest,
+// hardlinks, devices and other special files are refused; the entry count,
+// the bytes written and the whole stream are bounded; and nothing reaches
+// dest until every entry has been validated in private staging. Existing
+// files in dest are replaced; nothing else in it is touched.
+func ExtractTar(stream io.Reader, dest string) error {
+	return extractTar(stream, dest, defaultTarLimits())
+}
+
+func extractTar(stream io.Reader, dest string, limits tarLimits) error {
+	staging, err := pathsafe.NewArtifactStaging(dest)
+	if err != nil {
+		return fmt.Errorf("open tar destination %s: %w", dest, err)
+	}
+	defer func() { _ = staging.Close() }()
+
+	expanded := &io.LimitedReader{R: stream, N: limits.streamSize + 1}
+	if err := extractEntries(staging.Root(), expanded, limits, entryPath); err != nil {
+		return err
+	}
+
+	// Whatever follows the tar end marker is padding; read it, within its own
+	// budget, so a stream cannot hide unbounded data behind it.
+	padding, err := io.CopyN(io.Discard, expanded, limits.padding+1)
+	if padding > limits.padding {
+		return fmt.Errorf("tar: archive exceeds %d bytes of trailing padding: %w", limits.padding, errs.ErrValidation)
+	}
+
+	if expanded.N == 0 {
+		return fmt.Errorf("tar: archive exceeds %d expanded bytes: %w", limits.streamSize, errs.ErrValidation)
+	}
+
+	if !errors.Is(err, io.EOF) {
+		return fmt.Errorf("tar trailer: %w: %w", err, errs.ErrMalformedInput)
+	}
+
+	return staging.InstallWithRelativeSymlinks()
+}
+
+// extractEntries writes every entry of the tar stream under root, naming each
+// by rename (which refuses unsafe names and returns "" for one to skip), and
+// keeps the entry and byte caps across the stream.
+func extractEntries(root *os.Root, expanded *io.LimitedReader, limits tarLimits, rename func(string) (string, error)) error {
+	tr := tar.NewReader(expanded)
+
+	var totalBytes int64
+
+	entryCount := 0
+
+	for {
+		hdr, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+
+		if err != nil {
+			// A stream that hit its expanded budget runs out mid-header, so
+			// tar reports a truncated archive rather than this package
+			// reporting a limit. Both are refusals, but only one tells the
+			// operator that the archive was too big rather than corrupt, and
+			// only one carries the same sentinel as every other cap here.
+			if expanded.N == 0 {
+				return fmt.Errorf("tar: archive exceeds %d expanded bytes: %w", limits.streamSize, errs.ErrValidation)
+			}
+
+			return fmt.Errorf("tar next: %w: %w", err, errs.ErrMalformedInput)
+		}
+
+		entryCount++
+		if entryCount > limits.entries {
+			return fmt.Errorf("tar: archive exceeds %d entries: %w", limits.entries, errs.ErrValidation)
+		}
+
+		name, err := rename(hdr.Name)
+		if err != nil {
+			return err
+		}
+
+		if name == "" {
+			continue // the archive root entry itself
+		}
+
+		written, err := writeTarEntry(root, tr, hdr, filepath.FromSlash(name), totalBytes, limits)
+		if err != nil {
+			return err
+		}
+
+		totalBytes += written
+	}
 }
 
 // writeTarEntry materializes one tar entry under target. Returns the
@@ -325,6 +374,22 @@ func writeSymlinkEntry(root *os.Root, hdr *tar.Header, target string) error {
 // behaviour of `tar --strip-components=1` skipping the leading dir
 // entry itself).
 func stripFirstComponent(name string) (string, error) {
+	clean, err := entryPath(name)
+	if err != nil {
+		return "", err
+	}
+
+	_, after, ok := strings.Cut(clean, "/")
+	if !ok {
+		return "", nil
+	}
+
+	return after, nil
+}
+
+// entryPath returns the entry's cleaned relative path, "" for the archive
+// root itself, and refuses an absolute or parent-traversing name.
+func entryPath(name string) (string, error) {
 	name = filepath.ToSlash(name)
 	if path.IsAbs(name) {
 		return "", fmt.Errorf("tar: refusing absolute entry: %s: %w", name, errs.ErrValidation)
@@ -337,11 +402,9 @@ func stripFirstComponent(name string) (string, error) {
 	}
 
 	clean := path.Clean(name)
-
-	_, after, ok := strings.Cut(clean, "/")
-	if !ok {
+	if clean == "." {
 		return "", nil
 	}
 
-	return after, nil
+	return clean, nil
 }

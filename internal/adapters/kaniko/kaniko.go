@@ -11,8 +11,12 @@
 // working around them:
 //
 //   - It has no local image store. Every build ends in an OCI layout, which the
-//     ggcr adapter pushes by digest as it does for Buildah; `--mode load` and
-//     `--mode local` are refused.
+//     ggcr adapter pushes by digest as it does for Buildah; `--mode load` is
+//     refused. `--mode local` builds the target to a layout in this process's
+//     own directory and extracts the image's flattened filesystem into
+//     --output-dir through internal/archive, which refuses what Buildah's
+//     export would write but a filesystem export must not: absolute or
+//     escaping symlinks, hardlinks, devices and other special files.
 //   - It replaces the job container's root filesystem with the image's, and
 //     with --cleanup, which every run passes, deletes it after the build, so
 //     a second build in the same job starts from its own base image, not from
@@ -39,6 +43,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/diggsweden/forge-ci/internal/archive"
 	"github.com/diggsweden/forge-ci/internal/domain/container"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/safeexec"
@@ -52,12 +57,20 @@ const DefaultExecutor = "/kaniko/executor"
 // for an installation that places the binary elsewhere.
 type Adapter struct {
 	Executor string
+	// Filesystem flattens a built layout for --mode local.
+	Filesystem LayoutFilesystem
 
 	// euid is the effective uid check; tests substitute it.
 	euid func() int
 	// staged holds build-arch requests between BuildSignerImage and the
 	// export that gives them their layout directory.
 	staged map[string]container.SignerImageBuildToolRequest
+}
+
+// LayoutFilesystem reads the effective filesystem of a verified OCI layout as
+// one tar stream, layers applied in order and whiteouts honoured.
+type LayoutFilesystem interface {
+	ExportLayoutFilesystem(ctx context.Context, directory string) (io.ReadCloser, error)
 }
 
 // New returns an Adapter using the executor at its default path.
@@ -77,13 +90,18 @@ type build struct {
 	CachePush     bool
 }
 
-// Build refuses the modes that need a local image store.
-func (a *Adapter) Build(_ context.Context, req container.BuildRequest, _ io.Writer) error {
+// Build exports a stage's filesystem (--mode local) and refuses the load mode,
+// which needs a local image store.
+func (a *Adapter) Build(ctx context.Context, req container.BuildRequest, out io.Writer) error {
 	if err := req.Validate(); err != nil {
 		return err
 	}
 
-	return fmt.Errorf("kaniko builds to an OCI layout only; --mode %s needs Buildah's local image store, select --image-builder buildah: %w", req.Mode, errs.ErrUsage)
+	if req.Mode != container.BuildModeLocal {
+		return fmt.Errorf("kaniko has no local image store; --mode %s needs Buildah's, select --image-builder buildah: %w", req.Mode, errs.ErrUsage)
+	}
+
+	return a.exportFilesystem(ctx, req, out)
 }
 
 // BuildToLayout builds the image into layoutDir, ready for the ggcr digest push.
@@ -162,6 +180,47 @@ func (a *Adapter) ExportLocalImageToLayout(ctx context.Context, imageRef, layout
 		Labels:        labels,
 		Reproducible:  true,
 	}, layoutDir, out)
+}
+
+// exportFilesystem builds the target into a private layout, which the build
+// keeps through --ignore-path, then extracts its flattened filesystem into
+// req.OutputDir. Image layers are untrusted: the extraction never writes
+// outside the output directory and installs nothing until every entry passed.
+func (a *Adapter) exportFilesystem(ctx context.Context, req container.BuildRequest, out io.Writer) error {
+	if a.Filesystem == nil {
+		return fmt.Errorf("kaniko --mode local needs a layout filesystem reader: %w", errs.ErrDependencyUnavailable)
+	}
+
+	// Resolved before kaniko runs: the job's root filesystem is replaced
+	// during the build, a path named now still means the same place after.
+	outputDir, err := filepath.Abs(req.OutputDir)
+	if err != nil {
+		return fmt.Errorf("resolve output directory: %w", err)
+	}
+
+	layoutDir, err := os.MkdirTemp("", "forge-ci-kaniko-export-*")
+	if err != nil {
+		return fmt.Errorf("create oci layout dir: %w", err)
+	}
+
+	defer func() { _ = os.RemoveAll(layoutDir) }()
+
+	if err := a.BuildToLayout(ctx, req, layoutDir, out); err != nil {
+		return err
+	}
+
+	stream, err := a.Filesystem.ExportLayoutFilesystem(ctx, layoutDir)
+	if err != nil {
+		return fmt.Errorf("read the built filesystem: %w", err)
+	}
+
+	defer func() { _ = stream.Close() }()
+
+	if err := archive.ExtractTar(stream, outputDir); err != nil {
+		return fmt.Errorf("export the built filesystem to %s: %w", outputDir, err)
+	}
+
+	return nil
 }
 
 func (a *Adapter) executor() string {

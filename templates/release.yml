@@ -85,6 +85,16 @@ spec:
       description: Runner tags of a native arm64 runner for the arm64 image builds. Empty, the default, builds no arm64 image; a container that declares linux/arm64 then needs release-platforms narrowed.
       type: array
       default: []
+    export-files:
+      description: >-
+        Run the export commands before the build job: once per selected architecture (release-platforms; empty is amd64, and arm64 when build-runner-tags-arm64 is set), natively on that architecture's runner, in builder-job-image with image-builder, on the release commit and with no credential of the job. Each job's dist/ is laid into the build job's dist/ before the build commands run. Requires builder-job-image.
+      type: boolean
+      default: false
+    export:
+      description: >-
+        Commands that export files from a Containerfile stage into dist/, for example `forge-ci container build --mode local --platform "$EXPORT_PLATFORM" --output-dir "dist/linux-$EXPORT_ARCH"`. EXPORT_PLATFORM and EXPORT_ARCH name the job's architecture. Set export-files with them; without it they are refused. No single quote.
+      type: array
+      default: []
     changelog-creator:
       default: git-cliff
       options: [git-chglog, git-cliff]
@@ -169,6 +179,8 @@ release:
           image-builder: $[[ inputs.image-builder ]]
           builder-job-image: $[[ inputs.builder-job-image ]]
           build-runner-tags-arm64: $[[ inputs.build-runner-tags-arm64 ]]
+          export-files: $[[ inputs.export-files ]]
+          export: $[[ inputs.export ]]
           changelog-creator: $[[ inputs.changelog-creator ]]
           changelog-config: $[[ inputs.changelog-config ]]
           commit-body-config: $[[ inputs.commit-body-config ]]

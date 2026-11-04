@@ -18,9 +18,9 @@ containers:
     container-file: Containerfile
     context: .
     target: runtime
-    # The builder RUNs cargo, so every platform needs a native runner;
-    # linux/amd64 only.
-    platforms: linux/amd64
+    # The builder RUNs cargo, so every platform builds on a native runner of
+    # its own; the release selects them with RELEASE_PLATFORMS.
+    platforms: linux/amd64,linux/arm64
     extract:
       binary:
         target: export-binary

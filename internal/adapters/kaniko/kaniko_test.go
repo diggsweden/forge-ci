@@ -4,12 +4,23 @@
 package kaniko
 
 import (
+	"archive/tar"
+	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/layout"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
+	"github.com/google/go-containerregistry/pkg/v1/static"
+	"github.com/google/go-containerregistry/pkg/v1/types"
+
+	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
 	"github.com/diggsweden/forge-ci/internal/domain/container"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/testutil/mockbinary"
@@ -114,9 +125,6 @@ func TestAdapter_RefusesWhatNeedsALocalStoreOrSecrets(t *testing.T) {
 	for name, run := range map[string]func() error{
 		"load mode": func() error {
 			return adapter.Build(t.Context(), container.BuildRequest{Context: ".", Mode: container.BuildModeLoad, ImageRef: "app:test"}, &strings.Builder{})
-		},
-		"local mode": func() error {
-			return adapter.Build(t.Context(), container.BuildRequest{Context: ".", Mode: container.BuildModeLocal, OutputDir: t.TempDir()}, &strings.Builder{})
 		},
 		"build secrets": func() error {
 			return adapter.BuildToLayout(t.Context(), container.BuildRequest{Context: ".", Mode: container.BuildModeOCI, OutputDir: t.TempDir(), Secrets: []string{"id=npm,src=/tmp/npmrc"}}, t.TempDir(), &strings.Builder{})
@@ -355,6 +363,143 @@ else echo 'READS <none>'; fi`)
 
 			if !strings.Contains(log.String(), "--ignore-path "+filepath.Dir(dockerfile)) {
 				t.Errorf("the staged containerfile must be kept out of kaniko's way:\n%s", log.String())
+			}
+		})
+	}
+}
+
+// layoutExecutor stands in for /kaniko/executor in local mode: it writes the
+// prepared layout where --oci-layout-path points, as kaniko would.
+func layoutExecutor(t *testing.T, fixture string) *Adapter {
+	t.Helper()
+
+	bins := mockbinary.New(t)
+	bins.Add("executor", `while [ $# -gt 0 ]; do if [ "$1" = --oci-layout-path ]; then cp -R '`+fixture+`'/. "$2"; fi; shift; done`)
+
+	return &Adapter{Executor: bins.Path("executor"), euid: func() int { return 0 }, Filesystem: ociregistry.NewAnonymous()}
+}
+
+func layerOf(t *testing.T, entries ...tar.Header) v1.Layer {
+	t.Helper()
+
+	var data bytes.Buffer
+
+	tw := tar.NewWriter(&data)
+
+	for _, hdr := range entries {
+		body := ""
+		if hdr.Typeflag == tar.TypeReg {
+			body = "content of " + hdr.Name
+			hdr.Size = int64(len(body))
+		}
+
+		if err := tw.WriteHeader(&hdr); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := io.WriteString(tw, body); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	return static.NewLayer(data.Bytes(), types.OCIUncompressedLayer)
+}
+
+func layoutFixture(t *testing.T, layers ...v1.Layer) string {
+	t.Helper()
+
+	image, err := mutate.AppendLayers(empty.Image, layers...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dir := t.TempDir()
+
+	path, err := layout.Write(dir, empty.Index)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := path.AppendImage(image); err != nil {
+		t.Fatal(err)
+	}
+
+	return dir
+}
+
+// Local mode builds to a layout and exports the image's effective
+// filesystem: the latest bytes, without what a whiteout deleted.
+func TestBuild_LocalModeExportsTheFlattenedFilesystem(t *testing.T) {
+	t.Parallel()
+
+	fixture := layoutFixture(t,
+		layerOf(t, tar.Header{Name: "hello", Typeflag: tar.TypeReg, Mode: 0o755}, tar.Header{Name: "stale", Typeflag: tar.TypeReg, Mode: 0o644}),
+		layerOf(t, tar.Header{Name: ".wh.stale", Typeflag: tar.TypeReg, Mode: 0o644}),
+	)
+	output := filepath.Join(t.TempDir(), "dist", "linux-amd64")
+
+	var log strings.Builder
+
+	err := layoutExecutor(t, fixture).Build(t.Context(), container.BuildRequest{Context: ".", Target: "export-binary", Mode: container.BuildModeLocal, OutputDir: output}, &log)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, log.String())
+	}
+
+	if body, err := os.ReadFile(filepath.Join(output, "hello")); err != nil || string(body) != "content of hello" {
+		t.Fatalf("exported binary: %q %v", body, err)
+	}
+
+	if _, err := os.Lstat(filepath.Join(output, "stale")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a whited-out file was exported: %v", err)
+	}
+}
+
+// Image layers are untrusted: a hostile member stops the export before
+// anything reaches the output directory. An escaping symlink never reaches
+// the extractor: go-containerregistry's flattening already drops it, so the
+// export succeeds without it (internal/archive refuses one on its own; see
+// its tests).
+func TestBuild_LocalModeRefusesHostileLayers(t *testing.T) {
+	t.Parallel()
+
+	for name, hostile := range map[string]tar.Header{
+		"parent traversal": {Name: "../escape", Typeflag: tar.TypeReg, Mode: 0o644},
+		"absolute path":    {Name: "/escape", Typeflag: tar.TypeReg, Mode: 0o644},
+		"symlink escape":   {Name: "link", Typeflag: tar.TypeSymlink, Linkname: "../../escape"},
+		"device":           {Name: "null", Typeflag: tar.TypeChar, Devmajor: 1, Devminor: 3},
+		"hardlink":         {Name: "again", Typeflag: tar.TypeLink, Linkname: "hello"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			fixture := layoutFixture(t, layerOf(t, tar.Header{Name: "hello", Typeflag: tar.TypeReg, Mode: 0o755}, hostile))
+			parent := t.TempDir()
+			output := filepath.Join(parent, "dist")
+
+			err := layoutExecutor(t, fixture).Build(t.Context(), container.BuildRequest{Context: ".", Mode: container.BuildModeLocal, OutputDir: output}, &strings.Builder{})
+
+			leaks := []string{filepath.Join(parent, "escape"), "/escape", filepath.Join(output, hostile.Name)}
+
+			if name == "symlink escape" {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err == nil {
+					t.Fatal("a hostile layer was exported")
+				}
+
+				leaks = append(leaks, filepath.Join(output, "hello"))
+			}
+
+			for _, leaked := range leaks {
+				if _, statErr := os.Lstat(leaked); !errors.Is(statErr, os.ErrNotExist) {
+					t.Errorf("%s exists after a refused export: %v", leaked, statErr)
+				}
 			}
 		})
 	}

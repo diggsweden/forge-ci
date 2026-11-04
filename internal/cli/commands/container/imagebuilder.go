@@ -15,6 +15,7 @@ import (
 
 	"github.com/diggsweden/forge-ci/internal/adapters/buildah"
 	"github.com/diggsweden/forge-ci/internal/adapters/kaniko"
+	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
 	domaincontainer "github.com/diggsweden/forge-ci/internal/domain/container"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
@@ -22,8 +23,9 @@ import (
 // The image builders a job can select by type. Buildah is the default:
 // rootless, daemonless, with a local image store for smoke tests. Kaniko is for
 // a runner pool that denies the user namespaces Buildah needs; it builds to a
-// layout only and runs in the job image CI_IMAGE_BUILDER_JOB_IMAGE names. A new
-// builder is an adapter and one more case in newImageBuilder.
+// layout (a local export is extracted from one) and runs in the job image
+// CI_IMAGE_BUILDER_JOB_IMAGE names. A new builder is an adapter and one more
+// case in newImageBuilder.
 const (
 	flagImageBuilder     = "image-builder"
 	flagKanikoExecutor   = "kaniko-executor"
@@ -31,7 +33,7 @@ const (
 	imageBuilderKaniko   = "kaniko"
 	envImageBuilder      = "CI_IMAGE_BUILDER"
 	envKanikoExecutor    = "KANIKO_EXECUTOR"
-	imageBuilderUsage    = "image builder type: buildah (default; rootless, needs user namespaces) or kaniko (for a pool that denies them; runs as root in the job image CI_IMAGE_BUILDER_JOB_IMAGE names, builds to a layout only, no load/local modes, no build secrets)."
+	imageBuilderUsage    = "image builder type: buildah (default; rootless, needs user namespaces) or kaniko (for a pool that denies them; runs as root in the job image CI_IMAGE_BUILDER_JOB_IMAGE names, builds to a layout, exports a stage's files in local mode, no load mode, no build secrets)."
 	kanikoExecutorUsage  = "path of the kaniko executor (default " + kaniko.DefaultExecutor + ")"
 	imageBuilderEnvUsage = " Set " + envImageBuilder + " on the repository to select it."
 )
@@ -106,7 +108,7 @@ func newImageBuilder(name, kanikoExecutor string) (imageBuilder, error) {
 	case imageBuilderBuildah, "":
 		return buildah.New(), nil
 	case imageBuilderKaniko:
-		return &kaniko.Adapter{Executor: kanikoExecutor}, nil
+		return &kaniko.Adapter{Executor: kanikoExecutor, Filesystem: ociregistry.NewAnonymous()}, nil
 	default:
 		return nil, fmt.Errorf("--%s must be %s or %s, got %q: %w", flagImageBuilder, imageBuilderBuildah, imageBuilderKaniko, name, errs.ErrUsage)
 	}

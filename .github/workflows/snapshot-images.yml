@@ -91,6 +91,20 @@ jobs:
       artifact-transfers: ${{ steps.plan.outputs.artifact-transfer-plan-json }}
       artifacts: ${{ steps.plan.outputs.artifacts }}
     steps:
+      # GitHub's runners give Buildah its user namespaces, and this workflow
+      # builds with Buildah only: an organization that selects another
+      # image builder is refused here, never built with Buildah regardless.
+      - name: Require the Buildah image builder
+        env:
+          CI_IMAGE_BUILDER: ${{ vars.CI_IMAGE_BUILDER }}
+        run: |
+          case "${CI_IMAGE_BUILDER:-buildah}" in
+            buildah) ;;
+            *)
+              echo "ERROR: CI_IMAGE_BUILDER is '${CI_IMAGE_BUILDER}', but the GitHub image workflows build with Buildah only; unset it here, or build where the workflows select kaniko (Forgejo, GitLab)" >&2
+              exit 1
+              ;;
+          esac
       - name: Checkout forge-ci bootstrap installers
         id: forge-ci-bootstrap
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3

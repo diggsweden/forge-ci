@@ -12,7 +12,10 @@ crate. It handles no signal, and as a container's first process it ignores
 SIGTERM: `podman run --init` stops it at once.
 
 The builder runs cargo for the platform it builds, so each architecture
-needs a native runner; the releases build `linux/amd64`. The version in
+builds on a native runner of its own: the release exports one binary and
+builds one image per platform `RELEASE_PLATFORMS` selects (`linux/amd64`
+when unset), with the image builder the organization selects, Buildah or
+kaniko. The version in
 `Cargo.toml` stays as committed: the release tag names the release.
 
 Its workflows name Forge CI where it is published, at a placeholder commit;

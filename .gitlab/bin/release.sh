@@ -258,6 +258,128 @@ rc_build_handoff() {
 	fi
 }
 
+# The export jobs: the consumer's export commands, once per selected
+# architecture, natively, in builder-job-image with image-builder.
+
+# rc_export_archs prints the architectures the export jobs run for: those
+# release-platforms names, or without it amd64, and arm64 when its runner
+# is configured.
+rc_export_archs() {
+	local platforms=$1 arm64_tags=$2 platform archs=()
+	if [ -z "${platforms}" ]; then
+		archs=(amd64)
+		if [ "${arm64_tags}" != '[]' ]; then archs+=(arm64); fi
+		printf '%s\n' "${archs[@]}"
+		return
+	fi
+	IFS=, read -r -a platforms_list <<<"${platforms}"
+	for platform in "${platforms_list[@]}"; do
+		case "${platform}" in
+		linux/amd64 | linux/arm64) printf '%s\n' "${platform#linux/}" ;;
+		*)
+			echo "ERROR: release-platforms names '${platform}'; the export jobs build linux/amd64 and linux/arm64" >&2
+			return 1
+			;;
+		esac
+	done
+}
+
+# rc_check_exports refuses, at the release request, an export the jobs would
+# not carry out: commands without export-files, an export without
+# builder-job-image, or one for arm64 without its runner. The export
+# commands arrive on stdin as the interpolated input, data only.
+rc_check_exports() {
+	local enabled=$1 job_image=$2 platforms=$3 arm64_tags=$4 archs commands
+	commands=$(cat)
+	case "${enabled}" in
+	true) ;;
+	false)
+		if [ "${commands//[[:space:]]/}" != '[]' ] && [ -n "${commands//[[:space:]]/}" ]; then
+			echo 'ERROR: the release policy sets export commands but export-files is false; set export-files to true or remove export.' >&2
+			return 1
+		fi
+		return 0
+		;;
+	*)
+		echo "ERROR: export-files must be true or false, got '${enabled}'" >&2
+		return 1
+		;;
+	esac
+	if [[ ! "${job_image}" =~ ^[^[:space:]]+@sha256:[0-9a-f]{64}$ ]]; then
+		echo "ERROR: export-files builds in builder-job-image; set it to the image builder's job image pinned by digest" >&2
+		return 1
+	fi
+	archs=$(rc_export_archs "${platforms}" "${arm64_tags}") || return
+	if grep -qx arm64 <<<"${archs}" && [ "${arm64_tags}" = '[]' ]; then
+		echo "ERROR: release-platforms selects linux/arm64 for the export, so set build-runner-tags-arm64 to a native arm64 runner; nothing builds emulated" >&2
+		return 1
+	fi
+}
+
+# rc_export_selected succeeds when this job's architecture is selected.
+rc_export_selected() {
+	local arch=$1 platforms=$2
+	if [ -z "${platforms}" ]; then return 0; fi
+	case ",${platforms}," in *",linux/${arch},"*) return 0 ;; esac
+	echo "linux/${arch} is not in release-platforms; this job exports nothing."
+	return 1
+}
+
+# rc_export_prepare admits the builder, checks the release commit out and
+# drops every credential of the job before the consumer's commands run.
+rc_export_prepare() {
+	export EXPORT_ARCH=$1 EXPORT_PLATFORM="linux/$1"
+	export CI_IMAGE_BUILDER=$2 CI_IMAGE_BUILDER_JOB_IMAGE=$3
+	if [ "${HELPERS_ENGINE_ARCH:?}" != "${EXPORT_ARCH}" ]; then
+		echo "ERROR: the ${EXPORT_ARCH} export runs on a ${HELPERS_ENGINE_ARCH} runner; it builds natively only" >&2
+		return 1
+	fi
+	rc_image_builder || return
+	rc_release_checkout || return
+	# kaniko deletes the root filesystem after a build; the kaniko job image's
+	# tools under /kaniko take over then, as its own PATH has them.
+	if [ "${CI_IMAGE_BUILDER}" = kaniko ]; then export PATH="${PATH}:/kaniko/tools:/kaniko"; fi
+	unset CI_JOB_TOKEN CI_REGISTRY_PASSWORD CI_DEPLOY_PASSWORD CI_DEPENDENCY_PROXY_PASSWORD
+}
+
+# rc_export_handoff hands this architecture's dist/ to the build job.
+rc_export_handoff() {
+	local handoff="${CI_PROJECT_DIR}/_release-export-$1"
+	if [ ! -d dist ] || [ -L dist ]; then
+		echo 'ERROR: the export commands left no dist/ directory; export-files needs export commands that write it.' >&2
+		return 1
+	fi
+	if [ -n "$(find dist ! -type f ! -type d -print -quit)" ]; then
+		echo 'ERROR: the exported dist/ may hold only regular files and directories.' >&2
+		return 1
+	fi
+	rc_new_handoff "${handoff}" || return
+	cp -R -- dist "${handoff}/dist"
+	# A kaniko build leaves no shell at the paths after_script is run with;
+	# make the hand-off readable for the uploader here.
+	find "${handoff}" \( -type d -o -type f \) -exec chmod u=rwX,go=rX -- {} +
+}
+
+# rc_gather_exports lays every export job's dist/ into the build's, refusing
+# a path two of them, or the checkout, both hold.
+rc_gather_exports() {
+	local enabled=$1 export_dir entry
+	if [ "${enabled}" != true ]; then return 0; fi
+	mkdir -p dist
+	for export_dir in "${CI_PROJECT_DIR}"/_release-export-amd64/dist "${CI_PROJECT_DIR}"/_release-export-arm64/dist; do
+		[ -e "${export_dir}" ] || continue
+		if [ ! -d "${export_dir}" ] || [ -L "${export_dir}" ] || [ -n "$(find "${export_dir}" ! -type f ! -type d -print -quit)" ]; then
+			echo "ERROR: ${export_dir} must be a directory of regular files." >&2
+			return 1
+		fi
+		for entry in "${export_dir}"/* "${export_dir}"/.[!.]*; do
+			[ -e "${entry}" ] || continue
+			rc_require_absent "dist/${entry##*/}" || return
+			cp -R -- "${entry}" dist/
+		done
+	done
+}
+
 # The image stage: plan, one native build job per architecture, and one
 # publishing job, as the Forgejo release-images workflow runs them. The jobs
 # hold the job token alone; their arguments are the policy's literal inputs,

@@ -155,8 +155,12 @@ exactly those, and it builds natively for whatever architecture the pool
 offers.
 
 It is selected per repository by the image builder type, for the verbs that
-build to an OCI layout: `container build` (push-by-digest and oci modes) and
-`multiarch-image build-arch`. The image, the digest push, the scan, the ledger
+build to an OCI layout: `container build` (push-by-digest, oci and local
+modes) and `multiarch-image build-arch`. In local mode kaniko builds the
+target to a private layout and the engine extracts the image's flattened
+filesystem into `--output-dir`, refusing absolute or escaping symlinks,
+hardlinks, devices and other special files, so a `FROM scratch` export stage
+gives the same files under either builder. The image, the digest push, the scan, the ledger
 and the signer are the same as with Buildah. `release-images.yml` reads the
 same variables from the calling organization, so a consumer that builds its
 release images there changes nothing to move between the two.
@@ -170,7 +174,7 @@ release images there changes nothing to move between the two.
 What kaniko does not do, and the engine refuses by name instead of working
 around:
 
-- **No local image store.** `container build --mode load` and `--mode local`,
+- **No local image store.** `container build --mode load`,
   `container build-push-oci-image`'s manifest-list build, `image push`, `manifest push`
   and local `image evidence` need Buildah. A smoke test with `podman run`
   cannot run on such a pool either; a consumer that smoke-tests records the

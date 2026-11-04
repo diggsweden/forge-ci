@@ -64,7 +64,7 @@ func TestReleaseChecksRoutingAndPreparationBarrier(t *testing.T) {
 	_, jobs := releaseRouting(t, "templates/release-jobs.yml")
 
 	auth, checks := jobs["Check: release request"], jobs["Check: consumer checks"]
-	if auth.Tags != "" || !reflect.DeepEqual(auth.Script, []string{"rc_request_checkout", releaseImagesCheck}) {
+	if auth.Tags != "" || !reflect.DeepEqual(auth.Script, []string{"rc_request_checkout", releaseImagesCheck, exportsCheck}) {
 		t.Fatalf("authorization must stay restricted and execute no consumer commands: %+v", auth)
 	}
 
@@ -96,17 +96,29 @@ func TestReleaseChecksRoutingAndPreparationBarrier(t *testing.T) {
 		t.Fatal("version bump must remain optional without weakening the checks barrier")
 	}
 
-	if !reflect.DeepEqual(jobs["Build: release files"].Needs, []any{map[string]any{"job": "Prepare: release commit and tag", "artifacts": false}}) {
+	if !reflect.DeepEqual(jobs["Build: release files"].Needs, []any{
+		map[string]any{"job": "Prepare: release commit and tag", "artifacts": false},
+		map[string]any{"job": "Build: export amd64", "artifacts": true, "optional": true},
+		map[string]any{"job": "Build: export arm64", "artifacts": true, "optional": true},
+	}) {
 		t.Fatal("build bypasses gated release preparation")
+	}
+
+	for _, arch := range []string{"amd64", "arm64"} {
+		if !reflect.DeepEqual(jobs["Build: export "+arch].Needs, []any{map[string]any{"job": "Prepare: release commit and tag", "artifacts": false}}) {
+			t.Fatalf("the %s export bypasses gated release preparation", arch)
+		}
 	}
 
 	// Only the consumer's commands and image builds are scheduled on tagged
 	// runners: the build runner, and a native arm64 runner for arm64.
 	scheduled := map[string]string{
-		"Check: consumer checks":                  "$[[ inputs.checks-runner-tags ]]",
-		"Build: release files":                    "$[[ inputs.build-runner-tags ]]",
-		".forge-ci-release-image-builder-buildah": "$[[ inputs.build-runner-tags ]]",
-		"Images: build arm64":                     "$[[ inputs.build-runner-tags-arm64 ]]",
+		"Check: consumer checks":                   "$[[ inputs.checks-runner-tags ]]",
+		"Build: release files":                     "$[[ inputs.build-runner-tags ]]",
+		".forge-ci-release-image-builder-buildah":  "$[[ inputs.build-runner-tags ]]",
+		"Images: build arm64":                      "$[[ inputs.build-runner-tags-arm64 ]]",
+		".forge-ci-release-export-builder-buildah": "$[[ inputs.build-runner-tags ]]",
+		"Build: export arm64":                      "$[[ inputs.build-runner-tags-arm64 ]]",
 	}
 	for name, job := range jobs {
 		if job.Tags != scheduled[name] {

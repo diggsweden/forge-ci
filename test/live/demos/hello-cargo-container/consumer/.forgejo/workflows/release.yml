@@ -40,7 +40,7 @@ jobs:
   summary:
     name: Summary
     if: ${{ always() && startsWith(forgejo.ref, 'refs/tags/') }}
-    needs: [prepare, build, release-images, handoff, sign-and-publish]
+    needs: [prepare, test, export, build, release-images, handoff, sign-and-publish]
     runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     timeout-minutes: 5
     steps:
@@ -49,21 +49,20 @@ jobs:
           RELEASE_VERSION: ${{ needs.prepare.outputs.release-tag }}
           RELEASE_COMMIT: ${{ needs.prepare.outputs.release-sha }}
           PREPARE_RESULT: ${{ needs.prepare.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          EXPORT_RESULT: ${{ needs.export.result }}
           BUILD_RESULT: ${{ needs.build.result }}
           IMAGES_RESULT: ${{ needs.release-images.result }}
           HANDOFF_RESULT: ${{ needs.handoff.result }}
           PUBLISH_RESULT: ${{ needs.sign-and-publish.result }}
         run: |
-          forge-ci report release --job "Prepare=${PREPARE_RESULT}" --job "Build=${BUILD_RESULT}" \
+          forge-ci report release --job "Prepare=${PREPARE_RESULT}" --job "Test=${TEST_RESULT}" --job "Export=${EXPORT_RESULT}" --job "Build=${BUILD_RESULT}" \
             --job "Images=${IMAGES_RESULT}" --job "Hand-off=${HANDOFF_RESULT}" --job "Publish=${PUBLISH_RESULT}"
-  build:
-    name: 'Build: release files'
+  test:
+    name: 'Test: release'
     needs: prepare
-    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL_CONTAINER || vars.CI_RUNNER_LABEL) }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     timeout-minutes: 30
-    env:
-      ARTIFACT_NAME: hello-cargo-container
-      BUILDAH_ISOLATION: chroot
     steps:
       - uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-forge-ci@c08b59fe61f4b926d80875ce850f6bdc695b1d9a
       - name: Checkout prepared release
@@ -78,23 +77,131 @@ jobs:
           mise-locked: true
       - name: Test
         run: cargo test --locked
-      - uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-buildah@c08b59fe61f4b926d80875ce850f6bdc695b1d9a
+  # The binary is exported by the image builder the organization selects,
+  # one native job per selected platform, as release-images builds the
+  # image. Checked here, before any build starts.
+  export-plan:
+    name: 'Check: export builder and platforms'
+    needs: prepare
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.platforms.outputs['matrix-json'] }}
+      builder: ${{ steps.builder.outputs.builder }}
+      builder_job_image: ${{ steps.builder.outputs.builder_job_image }}
+    steps:
+      - uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-forge-ci@c08b59fe61f4b926d80875ce850f6bdc695b1d9a
+      - name: Plan the release platforms
+        id: platforms
+        env:
+          RELEASE_PLATFORMS: ${{ vars.RELEASE_PLATFORMS || 'linux/amd64' }}
+        run: forge-ci container platform-plan --platforms linux/amd64,linux/arm64 --release-platforms "${RELEASE_PLATFORMS}"
+      # Each platform builds on a runner of its own architecture, never
+      # emulated.
+      - name: Require an arm64 runner for an arm64 export
+        if: ${{ contains(steps.platforms.outputs['platforms-json'], 'linux/arm64') && (vars.CI_RUNNER_LABEL_CONTAINER_ARM64 || vars.CI_RUNNER_LABEL_ARM64 || '') == '' }}
+        run: |
+          echo "ERROR: RELEASE_PLATFORMS selects linux/arm64, so set CI_RUNNER_LABEL_CONTAINER_ARM64 or CI_RUNNER_LABEL_ARM64 to a native arm64 runner; or narrow RELEASE_PLATFORMS to linux/amd64" >&2
+          exit 1
+      - name: Check the image builder
+        id: builder
+        env:
+          BUILDER_INPUT: ${{ vars.CI_IMAGE_BUILDER }}
+          BUILDER_JOB_IMAGE_INPUT: ${{ vars.CI_IMAGE_BUILDER_JOB_IMAGE }}
+        run: |
+          set -euo pipefail
+          builder=${BUILDER_INPUT:-buildah}
+          builder_job_image=
+          case "${builder}" in
+            buildah) ;;
+            kaniko)
+              builder_job_image=${BUILDER_JOB_IMAGE_INPUT}
+              if [[ ! "${builder_job_image}" =~ ^[^[:space:]@]+@sha256:[0-9a-f]{64}$ ]]; then
+                echo "ERROR: CI_IMAGE_BUILDER=kaniko needs CI_IMAGE_BUILDER_JOB_IMAGE, the kaniko job image pinned by digest (<repository>@sha256:<64 hex>); got '${builder_job_image}'" >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "ERROR: CI_IMAGE_BUILDER must be buildah or kaniko, got '${builder}'" >&2
+              exit 1
+              ;;
+          esac
+          printf 'builder=%s\nbuilder_job_image=%s\n' "${builder}" "${builder_job_image}" >>"${FORGEJO_OUTPUT}"
+  export:
+    name: 'Build: export ${{ matrix.leg.suffix }}'
+    needs: [prepare, export-plan]
+    runs-on: ${{ fromJSON(matrix.leg.suffix == 'arm64' && (vars.CI_RUNNER_LABEL_CONTAINER_ARM64 || vars.CI_RUNNER_LABEL_ARM64) || (vars.CI_RUNNER_LABEL_CONTAINER || vars.CI_RUNNER_LABEL)) }}
+    # kaniko's job image, checked above; empty for Buildah, which runs in the
+    # runner's own environment.
+    container: ${{ needs.export-plan.outputs.builder_job_image }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        leg: ${{ fromJSON(needs.export-plan.outputs.matrix) }}
+    env:
+      ARTIFACT_NAME: hello-cargo-container
+      BUILDAH_ISOLATION: chroot
+      CI_IMAGE_BUILDER: ${{ needs.export-plan.outputs.builder }}
+      CI_IMAGE_BUILDER_JOB_IMAGE: ${{ needs.export-plan.outputs.builder_job_image }}
+    steps:
+      - uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-forge-ci@c08b59fe61f4b926d80875ce850f6bdc695b1d9a
+      # kaniko replaces the job container's root filesystem with the image's;
+      # the workspace, a mount, is what survives, so the later steps take
+      # forge-ci from there.
+      - name: Keep forge-ci in the workspace
+        run: |
+          set -euo pipefail
+          mkdir -p -- "${GITHUB_WORKSPACE:?}/.forge-ci-bin"
+          cp -- "$(command -v forge-ci)" "${GITHUB_WORKSPACE}/.forge-ci-bin/forge-ci"
+          echo "${GITHUB_WORKSPACE}/.forge-ci-bin" >>"${FORGEJO_PATH}"
+      - name: Checkout prepared release
+        env:
+          CHECKOUT_REF: ${{ needs.prepare.outputs.release-sha }}
+        run: forge-ci platform checkout --path source
+      - uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-image-builder@c08b59fe61f4b926d80875ce850f6bdc695b1d9a
       # Keep the container-first binary-export witness. It pulls public bases
       # and executes without a registry or signing token. Image publication is
       # a separate release-images job and never consumes the extract declaration.
-      - name: Export binary and declare release files
+      - name: Export ${{ matrix.leg.suffix }} binary
+        working-directory: source
+        env:
+          PLATFORM: ${{ matrix.leg.platform }}
+          ARCH: ${{ matrix.leg.suffix }}
+        run: |
+          set -euo pipefail
+          forge-ci container build --mode local --target export-binary --file Containerfile --context . \
+            --platform "${PLATFORM}" --output-dir "../export/linux-${ARCH}"
+          forge-ci container suffix-extracted-binaries --binaries-dir "../export/linux-${ARCH}" --arch "${ARCH}" --expected-names "${ARTIFACT_NAME}"
+      - name: Upload ${{ matrix.leg.suffix }} binary
+        env:
+          ARCH: ${{ matrix.leg.suffix }}
+        run: forge-ci artifact upload --name "release-binary-${ARCH}" --dir export/ --retention-days 1 --if-no-files error
+  build:
+    name: 'Build: release files'
+    needs: [prepare, test, export]
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
+    timeout-minutes: 15
+    env:
+      ARTIFACT_NAME: hello-cargo-container
+    steps:
+      - uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-forge-ci@c08b59fe61f4b926d80875ce850f6bdc695b1d9a
+      - name: Checkout prepared release
+        env:
+          CHECKOUT_REF: ${{ needs.prepare.outputs.release-sha }}
+        run: forge-ci platform checkout
+      - name: Declare release files
         env:
           RELEASE_TAG: ${{ needs.prepare.outputs.release-tag }}
           RELEASE_SHA: ${{ needs.prepare.outputs.release-sha }}
         run: |
           set -euo pipefail
-          forge-ci container build --mode local --target export-binary --file Containerfile --context . \
-            --platform linux/amd64 --output-dir dist/linux-amd64
-          forge-ci container suffix-extracted-binaries --binaries-dir dist/linux-amd64 --arch amd64 --expected-names "${ARTIFACT_NAME}"
+          # One binary per selected platform, as dist/linux-<arch>/<name>-linux-<arch>.
+          forge-ci artifact download --pattern 'release-binary-*' --merge-multiple --dir dist
           if ! forge-ci release notes --changelog-file CHANGELOG.md --release-version "${RELEASE_TAG}" --target-file dist/release-notes.md; then
             forge-ci release notes --source-file /nonexistent --target-file dist/release-notes.md --release-version "${RELEASE_TAG}" --release-commit "${RELEASE_SHA}"
           fi
-          forge-ci release files declare --asset "dist/linux-amd64/${ARTIFACT_NAME}-linux-amd64"
+          forge-ci release files declare --asset "dist/linux-*/${ARTIFACT_NAME}-linux-*"
       - uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/upload-dist@c08b59fe61f4b926d80875ce850f6bdc695b1d9a
         with:
           artifact-name: release-files
@@ -104,12 +211,13 @@ jobs:
     uses: itiquette/forge-ci/.forgejo/workflows/release-images.yml@c08b59fe61f4b926d80875ce850f6bdc695b1d9a
     with:
       runner-label: ${{ vars.CI_RUNNER_LABEL_CONTAINER || vars.CI_RUNNER_LABEL }}
+      runner-label-arm64: ${{ vars.CI_RUNNER_LABEL_CONTAINER_ARM64 || vars.CI_RUNNER_LABEL_ARM64 }}
       forge-ci-repository: itiquette/forge-ci
       forge-ci-sha: c08b59fe61f4b926d80875ce850f6bdc695b1d9a
       release-tag: ${{ needs.prepare.outputs.release-tag }}
       release-sha: ${{ needs.prepare.outputs.release-sha }}
       artifacts-config: .forge-ci/release-images.yml
-      release-platforms: linux/amd64
+      release-platforms: ${{ vars.RELEASE_PLATFORMS || 'linux/amd64' }}
     secrets:
       RELEASE_REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
   handoff:

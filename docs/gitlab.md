@@ -196,7 +196,8 @@ images and pins, a validating regex. The inputs that are not obvious:
 | | `build-runner-tags` | Runner tags for the build job and, with Buildah, the amd64 image job, for example `[privileged]`. Empty, the default, leaves them untagged. |
 | | `release-images`, `artifacts-config`, `release-platforms` | `true` builds the `containers:` of `artifacts-config` (default `.forge-ci/artifacts.yml`; without it the root `Containerfile`) in the release's image jobs, narrowed to `release-platforms`. Default `false`: no image jobs. See [Release images](#release-images). |
 | | `image-builder`, `builder-job-image` | The image jobs' builder, `buildah` (default) or `kaniko`, and the digest-pinned job image they run in: the Buildah job image or the kaniko job image. |
-| | `build-runner-tags-arm64` | Tags of a native arm64 runner. The arm64 image job exists only when they are set. |
+| | `build-runner-tags-arm64` | Tags of a native arm64 runner. The arm64 image and export jobs exist only when they are set. |
+| | `export-files`, `export` | `true` runs the `export` commands once per selected architecture, natively, in `builder-job-image` with `image-builder`, before the build job, and lays their `dist/` into its own. See [Files exported from a Containerfile](#files-exported-from-a-containerfile). |
 | | `checks-runner-tags` | Runner tags for consumer checks after restricted signed-request authorization. Empty, the default, leaves checks untagged. Authorization and signing stay untagged. |
 | | `changelog-creator`, `changelog-config`, `commit-body-config` | `git-cliff` (default) or `git-chglog`, and the consumer's configuration files, by default `.forge-ci/gitcliff/keepachangelog.toml` and `.forge-ci/gitcliff/minimal.toml`, copies of this repository's [`templates/gitcliff/`](../templates/gitcliff/) that `forge-ci init` writes. git-cliff renders offline, without remote metadata, and reads stable `vX.Y.Z` tags only, overriding any `tag_pattern` in the configuration. A SHA-256 repository needs `git-chglog`, since git-cliff cannot read one. |
 | | `release-policy` | `stable` (default) or `stable-prerelease`, selected in the trusted external policy. GitLab has no native prerelease flag; see [release policy](workflows.md#stable-and-prerelease-policy). |
@@ -702,7 +703,41 @@ The build itself pushes no image: a `dist/release-images.json` from the
 title, version, url, documentation, ref.name and created labels; their
 SBOMs are generated when they are signed. Build secrets, binary extraction
 and base images are not carried out by the image jobs; a binary extraction
-stays in the `build` commands.
+is the export jobs' work.
+
+#### Files exported from a Containerfile
+
+A release file the Containerfile builds, such as the binary of a
+`FROM scratch AS export-binary` stage, is exported by its own jobs, so that
+it is built with the selected image builder on a runner of its own
+architecture, never emulated. With `export-files: true`:
+
+1. `Check: release request` refuses an export the jobs would not carry out:
+   an empty `builder-job-image`, or a `release-platforms` that names
+   linux/arm64 without `build-runner-tags-arm64`. Export commands without
+   `export-files` would have no effect and are refused too.
+2. `Build: export amd64` and, with `build-runner-tags-arm64`, `Build: export
+   arm64` run the `export` commands on the release commit in
+   `builder-job-image` with `image-builder`, as the image jobs do, for each
+   architecture `release-platforms` selects; empty selects amd64, and arm64
+   when its runner is set. `EXPORT_PLATFORM` and `EXPORT_ARCH` name the
+   job's architecture, and the job holds no credential of its own once the
+   builder is admitted. The commands write `dist/`, regular files and
+   directories only.
+3. `Build: release files` lays every export's `dist/` into its own before
+   the `build` commands run, refusing a path two of them hold, so the build
+   declares the files with the rest.
+
+```yaml
+export-files: true
+export:
+  - >-
+    forge-ci container build --mode local --target export-binary
+    --platform "$EXPORT_PLATFORM" --output-dir "dist/linux-$EXPORT_ARCH"
+  - >-
+    forge-ci container suffix-extracted-binaries --binaries-dir "dist/linux-$EXPORT_ARCH"
+    --arch "$EXPORT_ARCH" --expected-names app
+```
 
 #### Version bump
 

@@ -166,10 +166,24 @@ func validNextTrialVersion(settings GitLabReleaseSettings) bool {
 	return settings.NextVersion == "" || (settings.Version != "" && settings.VersionBump != "" && semver.Compare("v"+settings.NextVersion, "v"+settings.Version) > 0)
 }
 
+// GitLabConsumerBuildScript and GitLabConsumerExportScript are the consumer's
+// release build, and its export of files from a Containerfile stage, which
+// the policy's export jobs run with the selected image builder.
+const (
+	GitLabConsumerBuildScript  = ".gitlab/build-release.sh"
+	GitLabConsumerExportScript = ".gitlab/export-release.sh"
+)
+
 // GitLabConsumerBuildCommand scopes literal settings to the consumer's build
 // subprocess, without adding variables to the independent signing policy jobs.
 func GitLabConsumerBuildCommand(variables map[string]string) (string, error) {
-	const command = "bash .gitlab/build-release.sh"
+	return GitLabConsumerCommand(GitLabConsumerBuildScript, variables)
+}
+
+// GitLabConsumerCommand runs the consumer's script with the literal settings
+// scoped to it.
+func GitLabConsumerCommand(script string, variables map[string]string) (string, error) {
+	command := "bash " + script
 	if len(variables) == 0 {
 		return command, nil
 	}

@@ -370,6 +370,20 @@ jobs:
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
           egress-policy: ${{ inputs.egress-policy }}
+      # GitHub's runners give Buildah its user namespaces, and this workflow
+      # builds with Buildah only: an organization that selects another
+      # image builder is refused here, never built with Buildah regardless.
+      - name: Require the Buildah image builder
+        env:
+          CI_IMAGE_BUILDER: ${{ vars.CI_IMAGE_BUILDER }}
+        run: |
+          case "${CI_IMAGE_BUILDER:-buildah}" in
+            buildah) ;;
+            *)
+              echo "ERROR: CI_IMAGE_BUILDER is '${CI_IMAGE_BUILDER}', but the GitHub image workflows build with Buildah only; unset it here, or build where the workflows select kaniko (Forgejo, GitLab)" >&2
+              exit 1
+              ;;
+          esac
       - name: Validate binary extraction mode
         env:
           EXTRACT_TARGET: ${{ inputs['extract-binary-target'] }}

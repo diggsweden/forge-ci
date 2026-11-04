@@ -5,6 +5,7 @@ package archive
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"errors"
 	"os"
@@ -302,5 +303,69 @@ func TestTarLimits_CompressedBytesCapIsItsOwnRefusal(t *testing.T) {
 
 	if !errors.Is(err, errs.ErrValidation) {
 		t.Errorf("err = %v, want ErrValidation", err)
+	}
+}
+
+// The uncompressed stream of ExtractTar shares the loop, and so the caps, of
+// UntarStripOne; this proves the stream entry point is bounded too.
+func TestTarLimits_StreamExtractionIsBounded(t *testing.T) {
+	t.Parallel()
+
+	stream := func() *bytes.Buffer {
+		var data bytes.Buffer
+
+		tw := tar.NewWriter(&data)
+		for _, name := range []string{"a", "b"} {
+			if err := tw.WriteHeader(&tar.Header{Typeflag: tar.TypeReg, Name: name, Size: 4, Mode: 0o644}); err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := tw.Write([]byte("body")); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		if err := tw.Close(); err != nil {
+			t.Fatal(err)
+		}
+
+		return &data
+	}
+
+	for name, shrink := range map[string]func(*tarLimits){
+		"entries":    func(l *tarLimits) { l.entries = 1 },
+		"bytes":      func(l *tarLimits) { l.uncompressedSize = 7 },
+		"stream":     func(l *tarLimits) { l.streamSize = 1024 },
+		"exactly at": func(*tarLimits) {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			limits := defaultTarLimits()
+			if name == "exactly at" {
+				limits.entries, limits.uncompressedSize = 2, 8
+			}
+
+			shrink(&limits)
+
+			dest := filepath.Join(t.TempDir(), "dest")
+
+			err := extractTar(stream(), dest, limits)
+			if name == "exactly at" {
+				if err != nil {
+					t.Fatalf("a stream exactly at its caps was refused: %v", err)
+				}
+
+				return
+			}
+
+			if !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "exceeds") {
+				t.Fatalf("err = %v, want the %s cap to refuse", err, name)
+			}
+
+			if _, statErr := os.Lstat(filepath.Join(dest, "a")); !errors.Is(statErr, os.ErrNotExist) {
+				t.Fatalf("a refused stream installed output: %v", statErr)
+			}
+		})
 	}
 }

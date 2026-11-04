@@ -79,7 +79,15 @@ spec:
     build-runner-tags-arm64:
       type: array
       default: []
-      description: Runner tags of a native arm64 runner; the arm64 image job exists only when they are set.
+      description: Runner tags of a native arm64 runner; the arm64 image and export jobs exist only when they are set.
+    export-files:
+      type: boolean
+      default: false
+      description: Run the export commands once per selected architecture, natively, in builder-job-image with image-builder, before the build job.
+    export:
+      type: array
+      default: []
+      description: Commands exporting files from a Containerfile stage into dist/; EXPORT_PLATFORM and EXPORT_ARCH name the job's architecture. Requires export-files.
     changelog-creator:
       options: [git-chglog, git-cliff]
     changelog-config:
@@ -151,6 +159,10 @@ stages: [check, prepare, build, images, sign, publish]
     case "${rc_job_role:?}" in
       request | checks | changelog | version) own_home=true ;;
       build) want_user= own_home=true ;;
+      export)
+        want_user= own_home=true
+        if [ '$[[ inputs.image-builder ]]' = kaniko ]; then work_parent=${CI_PROJECT_DIR:?}; fi
+        ;;
       image-build)
         want_user=
         if [ '$[[ inputs.image-builder ]]' = kaniko ]; then work_parent=${CI_PROJECT_DIR:?}; fi
@@ -302,6 +314,12 @@ stages: [check, prepare, build, images, sign, publish]
   script:
     - rc_request_checkout
     - rc_check_release_images '$[[ inputs.release-images ]]' '$[[ inputs.image-builder ]]' '$[[ inputs.builder-job-image ]]' '$[[ inputs.artifacts-config ]]' '$[[ inputs.release-platforms ]]' '$[[ inputs.build-runner-tags-arm64 ]]'
+    # The export commands as data, never run here: set without export-files
+    # they would have no effect, and are refused.
+    - |
+      rc_check_exports '$[[ inputs.export-files ]]' '$[[ inputs.builder-job-image ]]' '$[[ inputs.release-platforms ]]' '$[[ inputs.build-runner-tags-arm64 ]]' <<'RC_EXPORT_COMMANDS'
+      $[[ inputs.export ]]
+      RC_EXPORT_COMMANDS
 "Check: consumer checks":
   extends: .forge-ci-release
   stage: check
@@ -372,13 +390,80 @@ stages: [check, prepare, build, images, sign, publish]
   needs:
     - job: "Prepare: release commit and tag"
       artifacts: false
+    - job: "Build: export amd64"
+      artifacts: true
+      optional: true
+    - job: "Build: export arm64"
+      artifacts: true
+      optional: true
   script:
     - rc_release_checkout
+    - rc_gather_exports '$[[ inputs.export-files ]]'
     - $[[ inputs.build ]]
     - rc_build_handoff
   artifacts:
     expire_in: 1 day
     paths: [_release-build/]
+# The export jobs, the image jobs' shape for files: one native job per
+# selected architecture in builder-job-image with image-builder, running the
+# consumer's export commands on the release commit with no credential of the
+# job. Their dist/ is laid into the build job's before its commands run.
+.forge-ci-release-exports:
+  extends: .forge-ci-release
+  stage: build
+  rules:
+    - if: '"$[[ inputs.export-files ]]" == "true"'
+.forge-ci-release-export-job-true:
+  image:
+    name: $[[ inputs.builder-job-image ]]
+.forge-ci-release-export-job-false:
+  image:
+    name: $[[ inputs.job-image ]]
+.forge-ci-release-export-builder:
+  extends: ".forge-ci-release-export-job-$[[ inputs.export-files ]]"
+  image:
+    entrypoint: [""]
+  variables:
+    RC_JOB_USER: ''
+.forge-ci-release-export-builder-buildah:
+  extends: .forge-ci-release-export-builder
+  tags: $[[ inputs.build-runner-tags ]]
+.forge-ci-release-export-builder-kaniko:
+  extends: .forge-ci-release-export-builder
+"Build: export amd64":
+  extends: [.forge-ci-release-exports, ".forge-ci-release-export-builder-$[[ inputs.image-builder ]]"]
+  before_script: [readonly rc_job_role=export, *forge-ci-release-start]
+  after_script: [rc_handoff=_release-export-amd64, *forge-ci-release-handoff]
+  needs:
+    - job: "Prepare: release commit and tag"
+      artifacts: false
+  script:
+    - if ! rc_export_selected amd64 '$[[ inputs.release-platforms ]]'; then exit 0; fi
+    - rc_export_prepare amd64 '$[[ inputs.image-builder ]]' '$[[ inputs.builder-job-image ]]'
+    - $[[ inputs.export ]]
+    - rc_export_handoff amd64
+  artifacts:
+    expire_in: 1 day
+    paths: [_release-export-amd64/]
+"Build: export arm64":
+  extends: [.forge-ci-release-exports, ".forge-ci-release-export-builder-$[[ inputs.image-builder ]]"]
+  before_script: [readonly rc_job_role=export, *forge-ci-release-start]
+  after_script: [rc_handoff=_release-export-arm64, *forge-ci-release-handoff]
+  tags: $[[ inputs.build-runner-tags-arm64 ]]
+  rules:
+    - if: >-
+        '$[[ inputs.export-files ]]' == 'true' && '$[[ inputs.build-runner-tags-arm64 ]]' != '[]'
+  needs:
+    - job: "Prepare: release commit and tag"
+      artifacts: false
+  script:
+    - if ! rc_export_selected arm64 '$[[ inputs.release-platforms ]]'; then exit 0; fi
+    - rc_export_prepare arm64 '$[[ inputs.image-builder ]]' '$[[ inputs.builder-job-image ]]'
+    - $[[ inputs.export ]]
+    - rc_export_handoff arm64
+  artifacts:
+    expire_in: 1 day
+    paths: [_release-export-arm64/]
 # The image stage, the Forgejo release-images workflow's jobs: the plan at the
 # release commit, one native build per architecture to OCI layouts with no
 # registry write, and one publishing job that scans, pushes the staging images to

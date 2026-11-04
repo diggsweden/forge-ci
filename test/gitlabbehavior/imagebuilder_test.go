@@ -75,8 +75,40 @@ func TestReleaseImageStageTakesItsSettingsFromThePolicy(t *testing.T) {
 	}
 
 	build := body["Build: release files"].(map[string]any)
-	if !reflect.DeepEqual(build["script"], []any{"rc_release_checkout", "$[[ inputs.build ]]", "rc_build_handoff"}) {
+	if !reflect.DeepEqual(build["script"], []any{"rc_release_checkout", "rc_gather_exports '$[[ inputs.export-files ]]'", "$[[ inputs.build ]]", "rc_build_handoff"}) {
 		t.Fatalf("the consumer build gained image work: %+v", build["script"])
+	}
+
+	// The export jobs take the builder, its job image and the architecture
+	// from the policy's literals, as the image jobs do, and run in
+	// builder-job-image on that architecture's runner. The body is rendered
+	// with kaniko and export-files on.
+	withExports := releaseJobsBodyFor(t, "kaniko")
+
+	for arch, rule := range map[string]string{
+		"amd64": `"true" == "true"`,
+		"arm64": `'true' == 'true' && '$[[ inputs.build-runner-tags-arm64 ]]' != '[]'`,
+	} {
+		job := resolveGitLabExtends(withExports, withExports["Build: export "+arch].(map[string]any))
+
+		want := []any{
+			"if ! rc_export_selected " + arch + " '$[[ inputs.release-platforms ]]'; then exit 0; fi",
+			"rc_export_prepare " + arch + " 'kaniko' '$[[ inputs.builder-job-image ]]'",
+			"$[[ inputs.export ]]",
+			"rc_export_handoff " + arch,
+		}
+		if !reflect.DeepEqual(job["script"], want) || job["rules"].([]any)[0].(map[string]any)["if"] != rule {
+			t.Fatalf("the %s export job does not take its builder and architecture from the policy: %+v", arch, job)
+		}
+	}
+
+	exportJob := resolveGitLabExtends(withExports, withExports["Build: export amd64"].(map[string]any))
+	if exportJob["image"].(map[string]any)["name"] != "$[[ inputs.builder-job-image ]]" || exportJob["variables"].(map[string]any)["RC_JOB_USER"] != "" {
+		t.Fatalf("exports must run in builder-job-image as its own user: %+v", exportJob)
+	}
+
+	if body[".forge-ci-release-export-job-false"].(map[string]any)["image"].(map[string]any)["name"] != "$[[ inputs.job-image ]]" {
+		t.Fatal("without export-files the export jobs must name job-image")
 	}
 
 	for arch, script := range map[string]string{
@@ -194,6 +226,11 @@ func TestReleaseImageBuilderAdmitsOnlyTheKanikoJobImage(t *testing.T) {
 
 // releaseImagesCheck is the release request check's refusal of an image stage
 // that would stop after Prepare pushed the release commit and tag.
+// exportsCheck hands the export commands to the request check as data on
+// stdin; it runs none of them.
+const exportsCheck = "rc_check_exports '$[[ inputs.export-files ]]' '$[[ inputs.builder-job-image ]]' '$[[ inputs.release-platforms ]]' '$[[ inputs.build-runner-tags-arm64 ]]' <<'RC_EXPORT_COMMANDS'\n" +
+	"$[[ inputs.export ]]\nRC_EXPORT_COMMANDS\n"
+
 const releaseImagesCheck = "rc_check_release_images '$[[ inputs.release-images ]]' '$[[ inputs.image-builder ]]' " +
 	"'$[[ inputs.builder-job-image ]]' '$[[ inputs.artifacts-config ]]' '$[[ inputs.release-platforms ]]' '$[[ inputs.build-runner-tags-arm64 ]]'"
 
@@ -558,12 +595,12 @@ func TestReleaseJobUserRunsOnlyTheJobImageJobs(t *testing.T) {
 }
 
 // releaseJobsBodyFor decodes the release jobs document with the builder
-// chosen and release images on, so the extends names resolve as GitLab
+// chosen and release images and exports on, so the extends names resolve as GitLab
 // interpolates them.
 func releaseJobsBodyFor(t *testing.T, builder string) map[string]any {
 	t.Helper()
 
-	text := strings.NewReplacer("$[[ inputs.image-builder ]]", builder, "$[[ inputs.release-images ]]", "true").
+	text := strings.NewReplacer("$[[ inputs.image-builder ]]", builder, "$[[ inputs.release-images ]]", "true", "$[[ inputs.export-files ]]", "true").
 		Replace(string(reporoot.ReadFile(t, "templates/release-jobs.yml")))
 
 	var body map[string]any

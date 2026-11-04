@@ -290,9 +290,13 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 	}
 
 	releaseImages := gitlabConsumerReleasesImages(t, consumerRoot)
-	if kaniko && releaseImages && gitlabConsumerBuildRunsBuildah(t, consumerRoot) {
-		livetest.NotCoveredf(t, "the consumer's own build extracts a binary with Buildah, whatever builds the images")
+	// A container build belongs to the export jobs, which build with the
+	// selected builder; the build job has none to select.
+	if consumerRoot != "" && gitlabConsumerBuildRunsAContainerBuild(t, consumerRoot) {
+		t.Fatalf("%s runs a container build, which the build job would run with Buildah whatever image-builder says; move it to %s", livetest.GitLabConsumerBuildScript, livetest.GitLabConsumerExportScript)
 	}
+
+	exportCommand := gitlabConsumerExportCommand(t, consumerRoot, settings.Variables)
 
 	recovery := scenario == gitlabInterruptedConsumerRelease
 
@@ -310,7 +314,8 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 		requestTag, finalTag = "release-request/v"+settings.Version, "v"+settings.Version
 	}
 
-	archives := gitlabReleaseArchiveInputs(t, consumerRoot != "" || bases, releaseImages, kaniko)
+	// The export jobs, like the image jobs, run in the builder's job image.
+	archives := gitlabReleaseArchiveInputs(t, consumerRoot != "" || bases, releaseImages || len(exportCommand) != 0, kaniko)
 	if !livetest.Requires(t, provider.ForgeGitLab, livetest.NeedsInRunner) {
 		livetest.NotCoveredf(t, "signed GitLab release requires a deployed runner")
 	}
@@ -427,13 +432,17 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 	}
 
 	// The lab's runners are of one architecture, and only amd64 has an image
-	// job without tags of its own.
+	// or export job without tags of its own.
 	releasePlatforms, artifactsConfig := "", ""
-	if releaseImages {
-		releasePlatforms, artifactsConfig = settings.Variables["RELEASE_PLATFORMS"], gitlabReleaseImagesConfig
+	if releaseImages || len(exportCommand) != 0 {
+		releasePlatforms = settings.Variables["RELEASE_PLATFORMS"]
 		if releasePlatforms != "linux/amd64" {
-			livetest.NotCoveredf(t, "the GitLab release image jobs build %s only on tagged arm64 runners, which the lab has none of", releasePlatforms)
+			livetest.NotCoveredf(t, "the GitLab release image and export jobs build %s only on tagged arm64 runners, which the lab has none of", releasePlatforms)
 		}
+	}
+
+	if releaseImages {
+		artifactsConfig = gitlabReleaseImagesConfig
 	}
 
 	policyIncludes := []any{map[string]any{
@@ -459,6 +468,8 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 			"release-platforms":    releasePlatforms,
 			"image-builder":        imageBuilder,
 			"builder-job-image":    builderJobImage,
+			"export-files":         len(exportCommand) != 0,
+			"export":               exportCommand,
 		}),
 	}}
 	// The consumer's own merge-request gate, for merge-request pipelines only,
@@ -666,12 +677,16 @@ func gitlabConsumerReleasesImages(t *testing.T, consumerRoot string) bool {
 	return err == nil
 }
 
-// gitlabConsumerBuildRunsBuildah reports whether the consumer's own release
-// build runs a container build, which is Buildah's whatever builds the images.
-func gitlabConsumerBuildRunsBuildah(t *testing.T, consumerRoot string) bool {
+// gitlabConsumerBuildRunsAContainerBuild reports whether the consumer's own
+// release build runs a container build, which belongs to its export.
+func gitlabConsumerBuildRunsAContainerBuild(t *testing.T, consumerRoot string) bool {
 	t.Helper()
 
-	body, err := os.ReadFile(filepath.Join(consumerRoot, ".gitlab", "build-release.sh"))
+	body, err := os.ReadFile(filepath.Join(consumerRoot, livetest.GitLabConsumerBuildScript))
+	if os.IsNotExist(err) {
+		return false
+	}
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -679,10 +694,34 @@ func gitlabConsumerBuildRunsBuildah(t *testing.T, consumerRoot string) bool {
 	return strings.Contains(string(body), "forge-ci container build ")
 }
 
+// gitlabConsumerExportCommand returns the policy's export commands for a
+// consumer that exports files from a Containerfile stage, with its variables
+// scoped to them, or none for one that does not.
+func gitlabConsumerExportCommand(t *testing.T, consumerRoot string, variables map[string]string) []string {
+	t.Helper()
+
+	if consumerRoot == "" {
+		return []string{}
+	}
+
+	if _, err := os.Stat(filepath.Join(consumerRoot, livetest.GitLabConsumerExportScript)); os.IsNotExist(err) {
+		return []string{}
+	} else if err != nil {
+		t.Fatal(err)
+	}
+
+	command, err := livetest.GitLabConsumerCommand(livetest.GitLabConsumerExportScript, variables)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return []string{command}
+}
+
 // gitlabReleaseArchiveInputs reads the archives the recipe names, and reports
 // the scenario not covered when one it needs is missing: with release images,
 // the job image of the selected builder.
-func gitlabReleaseArchiveInputs(t *testing.T, needBuild, releaseImages, kaniko bool) gitlabReleaseArchives {
+func gitlabReleaseArchiveInputs(t *testing.T, needBuild, builderJobs, kaniko bool) gitlabReleaseArchives {
 	t.Helper()
 
 	archives := gitlabReleaseArchives{
@@ -701,15 +740,15 @@ func gitlabReleaseArchiveInputs(t *testing.T, needBuild, releaseImages, kaniko b
 	}
 
 	switch {
-	case releaseImages && kaniko:
+	case builderJobs && kaniko:
 		archives.kaniko = os.Getenv("FORGE_CI_LIVE_KANIKO_JOB_IMAGE_ARCHIVE")
 		if archives.kaniko == "" {
-			livetest.NotCoveredf(t, "kaniko release images require FORGE_CI_LIVE_KANIKO_JOB_IMAGE_ARCHIVE, a saved kaniko job image")
+			livetest.NotCoveredf(t, "kaniko release images and exports require FORGE_CI_LIVE_KANIKO_JOB_IMAGE_ARCHIVE, a saved kaniko job image")
 		}
-	case releaseImages:
+	case builderJobs:
 		archives.buildah = os.Getenv("FORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE")
 		if archives.buildah == "" {
-			livetest.NotCoveredf(t, "Buildah release images require FORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE, a saved Buildah job image")
+			livetest.NotCoveredf(t, "Buildah release images and exports require FORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE, a saved Buildah job image")
 		}
 	}
 

@@ -68,6 +68,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The GitLab `release` component takes `export-files` and `export`: commands
+  that export files from a Containerfile stage, run once per selected
+  architecture in `Build: export amd64` and `Build: export arm64`, natively,
+  in `builder-job-image` with `image-builder`, and laid into the build job's
+  `dist/`. A release's binary export no longer runs in the build job, which
+  had one architecture and no image builder selection. The request check
+  refuses an export without its job image or arm64 runner, and export
+  commands without `export-files`.
+- The kaniko builder supports `container build --mode local`: it builds the
+  target to a private OCI layout and extracts the image's flattened
+  filesystem into `--output-dir` through the engine's bounded tar
+  extraction, which refuses parent-traversing or absolute entries, escaping
+  or absolute symlinks, hardlinks and special files before anything is
+  installed. `CI_IMAGE_BUILDER=kaniko` now also covers a release's file
+  export, which it was refused for.
 - `snapshot-images.yml` takes a `registry` input, the registry host of the
   default image repository (default `ghcr.io`), which the snapshot
   orchestrator passes on.
@@ -225,6 +240,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a UID or GID with a leading zero, such as `065532`. It passed the input check
   and then never equalled what `id -u` prints, so the job failed its own user
   check after it started. Write the number without the zero.
+- The GitHub image workflows, `publish-container.yml` and
+  `snapshot-images.yml`, build with Buildah only and now refuse a
+  `CI_IMAGE_BUILDER` other than `buildah` before they build, instead of
+  building with Buildah regardless.
+- The hello-cargo-container demo's release exports its binary with the
+  selected image builder, one native job per platform `RELEASE_PLATFORMS`
+  selects (`linux/amd64` when unset), on Forgejo and GitLab, and builds its
+  image for the same platforms. It used Buildah on amd64 whatever
+  `CI_IMAGE_BUILDER` said, so a kaniko release failed on a pool that denies
+  user namespaces. A guard refuses a shipped step that names Buildah outside
+  the builder selection, and a demo container step with a hard-coded
+  platform.
 - A GitLab project, group or instance variable no longer changes a policy
   value. These variables outrank a job's own `variables:`, so a consumer
   project's maintainer could replace the allowed request signers, the Cosign

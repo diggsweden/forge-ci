@@ -14,6 +14,7 @@ import (
 
 	"github.com/diggsweden/forge-ci/internal/adapters/buildah"
 	"github.com/diggsweden/forge-ci/internal/adapters/kaniko"
+	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
@@ -30,7 +31,7 @@ func TestNewImageBuilder_SelectsTheAdapterByName(t *testing.T) {
 
 	kan, err := newImageBuilder("kaniko", "/opt/kaniko/executor")
 	require.NoError(t, err)
-	require.Equal(t, &kaniko.Adapter{Executor: "/opt/kaniko/executor"}, kan)
+	require.Equal(t, &kaniko.Adapter{Executor: "/opt/kaniko/executor", Filesystem: ociregistry.NewAnonymous()}, kan)
 
 	_, err = newImageBuilder("docker", "")
 	require.ErrorIs(t, err, errs.ErrUsage)
