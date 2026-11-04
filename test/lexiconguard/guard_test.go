@@ -4,6 +4,7 @@
 package lexiconguard
 
 import (
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -37,10 +38,9 @@ func isSkippedDir(rel string) bool {
 	return path.Base(rel) == ".git" || rel == "dist" || rel == "node_modules"
 }
 
-// walkGoSources calls visit once per Go file in the repository, with its
-// absolute path and its repo-relative slash-separated name. The relative form
-// is what guards report and what their allow-lists are keyed on, so it is
-// computed here rather than in each caller.
+// walkGoSources calls visit once per repository Go file, excluding independent
+// Go checkouts identified by both go.mod and Git metadata. Standalone example
+// modules remain covered, and a .git marker alone cannot hide compilable source.
 func walkGoSources(root string, visit func(path, rel string) error) (int, error) {
 	visited := 0
 	err := filepath.WalkDir(root, func(file string, entry fs.DirEntry, err error) error {
@@ -58,6 +58,24 @@ func walkGoSources(root string, visit func(path, rel string) error) (int, error)
 		if entry.IsDir() {
 			if isSkippedDir(rel) {
 				return filepath.SkipDir
+			}
+
+			if rel != "." {
+				module, moduleErr := os.Stat(filepath.Join(file, "go.mod"))
+				if moduleErr == nil && module.Mode().IsRegular() {
+					checkout, checkoutErr := os.Stat(filepath.Join(file, ".git"))
+					if checkoutErr == nil && (checkout.IsDir() || checkout.Mode().IsRegular()) {
+						return filepath.SkipDir
+					}
+
+					if checkoutErr != nil && !errors.Is(checkoutErr, fs.ErrNotExist) {
+						return checkoutErr
+					}
+				}
+
+				if moduleErr != nil && !errors.Is(moduleErr, fs.ErrNotExist) {
+					return moduleErr
+				}
 			}
 
 			return nil
@@ -82,10 +100,20 @@ func TestWalkGoSources_SkipsOnlyNonSourceDirectories(t *testing.T) {
 	for _, rel := range []string{
 		"main.go", "dist/goreleaser.go", "node_modules/pkg/x.go", ".git/hooks/x.go", "vendored/.git/x.go",
 		"internal/app/dist/compiled.go", "internal/app/node_modules/compiled.go",
+		"nested/go.mod", "nested/.git/HEAD", "nested/copied.go",
+		".claude/worktrees/other/go.mod", ".claude/worktrees/other/.git", ".claude/worktrees/other/copied.go",
+		"examples/standalone/go.mod", "examples/standalone/compiled.go",
+		"internal/plain/.git", "internal/plain/compiled.go",
 	} {
 		file := filepath.Join(root, filepath.FromSlash(rel))
 		require.NoError(t, os.MkdirAll(filepath.Dir(file), 0o700))
-		require.NoError(t, os.WriteFile(file, []byte("package p\n"), 0o600))
+
+		body := "package p\n"
+		if filepath.Base(file) == "go.mod" {
+			body = "module example.invalid/nested\n"
+		}
+
+		require.NoError(t, os.WriteFile(file, []byte(body), 0o600))
 	}
 
 	var seen []string
@@ -97,7 +125,7 @@ func TestWalkGoSources_SkipsOnlyNonSourceDirectories(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, len(seen), visited)
-	require.ElementsMatch(t, []string{"main.go", "internal/app/dist/compiled.go", "internal/app/node_modules/compiled.go"}, seen)
+	require.ElementsMatch(t, []string{"main.go", "internal/app/dist/compiled.go", "internal/app/node_modules/compiled.go", "internal/plain/compiled.go", "examples/standalone/compiled.go"}, seen)
 }
 
 // singleSource is one single-sourcing rule: the spellings that must appear in
