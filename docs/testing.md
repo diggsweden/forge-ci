@@ -433,8 +433,9 @@ optional components and does not select account `forgeci`.
 
 Back in the forge-ci checkout, provide the pinned Go toolchain and the
 launcher's host tools: `base64`, `cosign`, `flock`, `jq`, `syft`, `buildah`,
-`git` and `sha256sum`. A Mise shim counts only when `mise which` resolves it
-to an installed tool; otherwise run `mise install && mise reshim`. Buildah
+`git` and `sha256sum`. A Mise shim counts only when it links to mise and
+`mise which` resolves it to an installed tool other than mise; otherwise run
+`mise install && mise reshim`. Buildah
 must work for the current user. The suite builds
 host binaries and runner binaries for the architecture the contract's
 `runner.arch` names, writes caches/evidence, runs containers

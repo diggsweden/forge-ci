@@ -67,7 +67,12 @@ func resolveHostTool(ctx context.Context, name, dir string) (string, error) {
 		return "", fmt.Errorf("%s is required and is not on PATH: %w", name, errs.ErrValidation)
 	}
 
-	if mise, shim := miseShim(path); shim {
+	mise, shim, err := miseShim(path)
+	if err != nil {
+		return "", fmt.Errorf("%s on PATH: %w", name, err)
+	}
+
+	if shim {
 		path, err = miseWhich(ctx, mise, name, dir)
 		if err != nil {
 			return "", fmt.Errorf("%s on PATH is a mise shim with nothing installed behind it (%w); run mise install && mise reshim: %w", name, err, errs.ErrValidation)
@@ -79,6 +84,12 @@ func resolveHostTool(ctx context.Context, name, dir string) (string, error) {
 		return "", fmt.Errorf("%s resolves to %s, which cannot be read: %w", name, path, err)
 	}
 
+	// Copying or hashing mise in place of the tool is what resolving shims
+	// prevents, so a resolution that still ends at mise is refused.
+	if filepath.Base(resolved) == miseCommand && name != miseCommand {
+		return "", fmt.Errorf("%s resolves to %s, the mise binary rather than the tool; run mise install && mise reshim: %w", name, resolved, errs.ErrValidation)
+	}
+
 	info, err := os.Stat(resolved)
 	if err != nil || !info.Mode().IsRegular() || info.Mode()&0o111 == 0 {
 		return "", fmt.Errorf("%s resolves to %s, which is not an executable regular file: %w", name, resolved, errs.ErrValidation)
@@ -87,20 +98,24 @@ func resolveHostTool(ctx context.Context, name, dir string) (string, error) {
 	return resolved, nil
 }
 
-// miseShim reports whether path is a mise shim, and the mise binary to ask.
-// Shims live in mise's shims directory and are, by default, symlinks to mise.
-func miseShim(path string) (string, bool) {
+// miseShim reports whether path is a mise shim, and the mise binary to ask:
+// the one the shim links to. On Unix mise makes every shim a symlink to its
+// own binary. Any other file in mise's shims directory, such as a plugin's
+// shell shim, runs whichever mise PATH finds, and nothing in mise's layout
+// places that binary beside the shims, so such a file is refused rather than
+// resolved through a mise found on PATH.
+func miseShim(path string) (string, bool, error) {
 	target, err := filepath.EvalSymlinks(path)
 	if err == nil && filepath.Base(target) == miseCommand && filepath.Base(path) != miseCommand {
-		return target, true
+		return target, true, nil
 	}
 
 	dir := filepath.Dir(path)
 	if filepath.Base(dir) == "shims" && filepath.Base(filepath.Dir(dir)) == miseCommand {
-		return miseCommand, true
+		return "", false, fmt.Errorf("%s is in mise's shims directory but is not a link to mise, so the mise to ask is unknown; run mise reshim, or put the installed tool ahead of the shims on PATH: %w", path, errs.ErrValidation)
 	}
 
-	return "", false
+	return "", false, nil
 }
 
 func miseWhich(ctx context.Context, mise, name, dir string) (string, error) {
