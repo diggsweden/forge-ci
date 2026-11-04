@@ -112,7 +112,7 @@ on:
       enforce-vulnerabilities:
         description: Enforcement setting; false lets publication report image vulnerability findings without failing. Every image is still scanned. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md.
         type: boolean
-        default: true
+        default: false
     outputs:
       ledger-json:
         description: Checked published-image ledger; consumers retain their own base/release policy.

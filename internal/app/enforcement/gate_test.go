@@ -39,6 +39,30 @@ type failedWriter struct{}
 
 func (failedWriter) Write([]byte) (int, error) { return 0, io.ErrClosedPipe }
 
+func TestDefaultFindingsRemainVisibleAndExplicitTrueBlocks(t *testing.T) {
+	for _, check := range enforcement.Checks {
+		var out bytes.Buffer
+		if err := Findings(t.Context(), &out, check, 2); err != nil {
+			t.Fatalf("default %s findings blocked: %v", check, err)
+		}
+
+		if !strings.Contains(out.String(), "result=findings count=2 enforcement=false source=embedded-default") {
+			t.Fatalf("default %s findings were hidden: %s", check, &out)
+		}
+
+		out.Reset()
+
+		ctx := WithAdmin(t.Context(), enforcement.Admin{check: "true"})
+		if err := Findings(ctx, &out, check, 2); !errors.Is(err, errs.ErrValidation) {
+			t.Fatalf("explicit %s enforcement did not block: %v", check, err)
+		}
+
+		if !strings.Contains(out.String(), "enforcement=true source=flag") {
+			t.Fatalf("explicit %s source was lost: %s", check, &out)
+		}
+	}
+}
+
 func TestLintRunsAndKeepsInfrastructureFailuresBlocking(t *testing.T) {
 	for _, enforced := range []bool{true, false} {
 		for _, status := range []int{0, 1, 64, 69, 70, 78, 125, 130} {
@@ -240,11 +264,11 @@ func TestFlagReachesTheGateAndItsReceipt(t *testing.T) {
 
 	out.Reset()
 
-	if err := Findings(ctx, &out, enforcement.Vulnerabilities, 1); !errors.Is(err, errs.ErrValidation) {
-		t.Fatalf("an unset setting lost its enforcing default: %v", err)
+	if err := Findings(ctx, &out, enforcement.Vulnerabilities, 1); err != nil {
+		t.Fatalf("an unset setting lost its report-only default: %v", err)
 	}
 
-	if !strings.Contains(out.String(), "vulnerabilities result=findings count=1 enforcement=true source=embedded-default\n") {
+	if !strings.Contains(out.String(), "vulnerabilities result=findings count=1 enforcement=false source=embedded-default\n") {
 		t.Fatalf("receipt does not show the default:\n%s", out.String())
 	}
 

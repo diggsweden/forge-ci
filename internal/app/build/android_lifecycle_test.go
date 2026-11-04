@@ -238,7 +238,7 @@ func TestAndroidReleaseBuild_SignedCallPrefixesAndCleanup(t *testing.T) {
 				causes[step] = errors.New("owned " + step + " failure")
 			}
 
-			ctx, cancel := context.WithCancelCause(t.Context())
+			ctx, cancel := context.WithCancelCause(enforcingTests(t.Context()))
 			defer cancel(nil)
 
 			var events []string

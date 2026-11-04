@@ -9,12 +9,12 @@
       "enforce-lint": {
         "required": false,
         "type": "boolean",
-        "default": true
+        "default": false
       },
       "enforce-vulnerabilities": {
         "required": false,
         "type": "boolean",
-        "default": true
+        "default": false
       },
       "forge-ci-binary-ref": {
         "required": false,
@@ -116,17 +116,17 @@
       "enforce-application-tests": {
         "required": false,
         "type": "boolean",
-        "default": true
+        "default": false
       },
       "enforce-reproducible-builds": {
         "required": false,
         "type": "boolean",
-        "default": true
+        "default": false
       },
       "enforce-vulnerabilities": {
         "required": false,
         "type": "boolean",
-        "default": true
+        "default": false
       },
       "file-pattern": {
         "required": false,
@@ -294,12 +294,12 @@
       "enforce-application-tests": {
         "required": false,
         "type": "boolean",
-        "default": true
+        "default": false
       },
       "enforce-vulnerabilities": {
         "required": false,
         "type": "boolean",
-        "default": true
+        "default": false
       },
       "forge-ci-binary-ref": {
         "required": false,

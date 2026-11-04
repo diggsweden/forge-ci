@@ -4426,7 +4426,7 @@ EXAMPLES:
 | `--json-file` | destination path for the raw trivy JSON findings | string | `"trivy-results.json"` | `$CONTAINER_JSON_FILE` |
 | `--sarif-file` | destination path for the trivy SARIF findings | string | `"trivy-results.sarif"` | `$CONTAINER_SARIF_FILE` |
 | `--gitlab-report-file` | destination path for the GitLab container-scanning report | string | `"gl-container-scanning-report.json"` | `$CONTAINER_GITLAB_REPORT_FILE` |
-| `--fail-on-severity` | blocking threshold: a finding at this level or above fails the scan when a fixed package exists, an unfixed CRITICAL fails it unless approved, everything else is reported; HIGH is always reported (a level or comma-list whose lowest entry counts, e.g. 'CRITICAL,HIGH' blocks at HIGH) | string | `"CRITICAL"` | `$CONTAINER_FAIL_ON_SEVERITY` |
+| `--fail-on-severity` | threshold when --enforce-vulnerabilities=true: a finding at this level or above fails the scan when a fixed package exists, an unfixed CRITICAL fails it unless approved; findings are report-only by default, HIGH is always reported (a level or comma-list whose lowest entry counts, e.g. 'CRITICAL,HIGH' blocks at HIGH) | string | `"CRITICAL"` | `$CONTAINER_FAIL_ON_SEVERITY` |
 | `--ignore-file` | Trivy ignore file approving findings, with reasons and expiry (default: .trivyignore.yaml when present) | string | `""` | `$CONTAINER_IGNORE_FILE` |
 | `--trivy-version` | trivy version string embedded in the SARIF / GitLab report | string | `""` | `$TRIVY_VERSION` |
 

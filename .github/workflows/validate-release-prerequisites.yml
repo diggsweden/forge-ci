@@ -45,7 +45,7 @@ on:
         description: "Enforcement setting: false reports missing reproducible-build settings without failing; the check still runs. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md."
         type: boolean
         required: false
-        default: true
+        default: false
       config-plan-json:
         description: "Typed config-plan-json emitted by config parse-artifacts."
         required: true

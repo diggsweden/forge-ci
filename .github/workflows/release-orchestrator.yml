@@ -51,17 +51,17 @@ on:
         description: "Enforcement setting: false reports recognized test assertion failures without failing; the tests still run. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md."
         type: boolean
         required: false
-        default: true
+        default: false
       enforce-vulnerabilities:
         description: "Enforcement setting: false reports vulnerability findings without failing; the scans still run. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md."
         type: boolean
         required: false
-        default: true
+        default: false
       enforce-reproducible-builds:
         description: "Enforcement setting: false reports missing reproducible-build settings without failing; the check still runs. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md."
         type: boolean
         required: false
-        default: true
+        default: false
       # === artifacts.yml LOCATION ===
       artifacts-config:
         description: "Path to the artifacts config file. Defaults to .forge-ci/artifacts.yml. If the file is absent AND the repo has exactly one ecosystem manifest at root (pom.xml, package.json, Cargo.toml, go.mod), forge-ci auto-derives the equivalent plan in-memory."

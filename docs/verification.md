@@ -1055,8 +1055,8 @@ multi-tenant secret reuse, etc.), see [docs/threat-model.md](threat-model.md).
 ### Hard gates, no silent failures
 
 Checks distinguish execution, findings and enforcement. The default
-administrator policy blocks recognized lint, vulnerability and application-test
-findings. An administrator setting at `false` still runs checks and
+administrator policy reports recognized lint, vulnerability and application-test
+findings without blocking; explicit `true` enables enforcement. A setting at `false` still runs checks and
 reports their findings; it does not waive operational failures, missing tools,
 invalid reports, credentials, signatures or source/digest identity errors.
 See [Administrator check enforcement](admin-policy.md) for the settings,
@@ -1068,7 +1068,7 @@ who owns them, and migration from legacy consumer opt-outs.
 | **Container vulnerability scan** (trivy, CRITICAL with or without a fixed package by default; HIGH reported) | Required for exported/published OCI layouts | Reviewed `.trivyignore.yaml` exceptions with reason and expiry and `scan-severity` select findings; administrator policy controls blocking. There is no consumer switch to skip execution. |
 | **Application tests** in Go, Maven, npm, Cargo and Gradle/Android build gates | Required invocation (npm only when a test script exists) | Legacy `skip-tests: true` is refused. Administrator report-only policy permits only recognized test findings; setup, compilation and packaging errors stay blocking. Inspect native reports for actual test execution. |
 | **Artifact-presence verification** in publish-container | Required | Drop the `from:` entry in artifacts.yml so the verify step is skipped |
-| **JVM reproducibility settings** (Maven `outputTimestamp`, Gradle archive task settings, checked statically) | Required (strict by default) | Administrator `enforce-reproducible-builds: false` reports missing settings without blocking; there is no consumer or per-artifact opt-out |
+| **JVM reproducibility settings** (Maven `outputTimestamp`, Gradle archive task settings, checked statically) | Required invocation, report-only findings by default | Explicit `enforce-reproducible-builds: true` blocks missing settings; there is no per-artifact execution opt-out |
 | **Cargo lockfile + toolchain pin** | Required | None. `Cargo.lock` and either `rust-toolchain.toml` or `rust-toolchain` are mandatory for every Cargo artifact |
 
 A passing pipeline must be read alongside its selected checks, native execution
@@ -1204,8 +1204,8 @@ are distinct. A future authorized release is needed to validate this hosted fix.
 | Go (container-first) | image-embedded binary | Caller-selected `go build` flags inside the Containerfile | Caller-owned; forge-ci timestamps the image, not the compile sandbox |
 | Cargo (artifact-first) | release binary | `cargo build --release --locked --target <triple>` + pinned toolchain/lockfile | Build command and prerequisite checks are wired; build-script and generated-content determinism remain caller-owned |
 | Cargo (container-first) | image-embedded binary | Caller-selected Cargo flags, toolchain and lockfile inside the Containerfile | `validate cargo` checks the committed lockfile/toolchain pin; it does not establish binary reproducibility |
-| Maven | main jar, sources jar | `<project.build.outputTimestamp>` in `pom.xml` | Caller-owned; checked by `validate jvm-reproducibility` (release fails if missing under the default strict admin policy) |
-| Gradle (JVM + Android) | jar, war, distZip, distTar, APK | `preserveFileTimestamps = false` + `reproducibleFileOrder = true` on `AbstractArchiveTask` | Caller-owned; its text is checked by `validate jvm-reproducibility` (release fails if missing under the default strict admin policy) |
+| Maven | main jar, sources jar | `<project.build.outputTimestamp>` in `pom.xml` | Caller-owned; checked by `validate jvm-reproducibility` (missing settings report by default, block with `enforce-reproducible-builds: true`) |
+| Gradle (JVM + Android) | jar, war, distZip, distTar, APK | `preserveFileTimestamps = false` + `reproducibleFileOrder = true` on `AbstractArchiveTask` | Caller-owned; its text is checked by `validate jvm-reproducibility` (missing settings report by default, block with `enforce-reproducible-builds: true`) |
 | NPM | `.tgz` | npm ≥ 10 (fixed in npm/cli#3536) | Runtime image pins node 24 LTS (npm 10+) |
 | Container image (both flows) | OCI image-config + layer blobs | `SOURCE_DATE_EPOCH` env on the build step (buildah `--timestamp`) | Yes, automatic (computed once in `prep` from `git log -1 --format=%ct HEAD`) |
 
@@ -1245,11 +1245,11 @@ For each artifact it:
 - Reads `pom.xml` (Maven) or `build.gradle{,.kts}` (Gradle) under the artifact's `working-directory`.
 - For Maven: real XML parse looking for `<project.build.outputTimestamp>` under `<properties>`.
 - For Gradle: line-by-line substring check for `preserveFileTimestamps = false` AND `reproducibleFileOrder = true`. Tolerates Kotlin and Groovy DSL forms, with or without whitespace around `=`.
-- Emits a GitHub Actions `::error::` annotation when the setting is missing, and prints an actionable fix snippet: the exact `<project.build.outputTimestamp>` or `tasks.withType(AbstractArchiveTask)` block to paste. It then prints the `reproducible-builds` admin-policy decision.
-  Under the default strict policy it exits non-zero, so the release stops at `validate prerequisites`; with `enforce-reproducible-builds: false` the missing settings are annotated as warnings and the release continues. Unreadable or malformed build files always stop it.
+- Annotates missing settings and prints an actionable fix snippet: the exact `<project.build.outputTimestamp>` or `tasks.withType(AbstractArchiveTask)` block to paste. It then prints the `reproducible-builds` admin-policy decision.
+  Under the default `false`, missing settings are warnings and the release continues. With explicit `enforce-reproducible-builds: true`, they are errors and the release stops at `validate prerequisites`. Unreadable or malformed build files always stop it.
 
-Under the default policy the check is a hard gate on the settings, and always a static one: it reads the
-committed build files and never runs Maven or Gradle. A release cannot reach
+The check always reads the committed build files without running Maven or Gradle.
+With enforcement enabled, a release cannot reach
 publish with the settings missing, but a pass is not proof that the archive is
 byte-identical. The Gradle check reads line text and skips `//` line comments,
 with no block-comment, string or evaluation-order awareness, so a setting that

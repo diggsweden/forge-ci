@@ -81,7 +81,7 @@ func TestGoForwardingBoundary_ExactReleaseInputs(t *testing.T) {
 				version, binary = "9.8.7", "release-bundle"
 			}
 
-			if err := appbuild.GoReleaseBuild(t.Context(), &recordingSummarySink{}, tool, sbom, &stdout, &stderr, in); err != nil {
+			if err := appbuild.GoReleaseBuild(enforcingTests(t.Context()), &recordingSummarySink{}, tool, sbom, &stdout, &stderr, in); err != nil {
 				t.Fatal(err)
 			}
 

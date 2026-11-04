@@ -56,8 +56,8 @@ func TestContainerReportBoundary_CompleteFindingAssociations(t *testing.T) {
 		return 0, os.WriteFile(scanOutput(args), []byte(boundaryTrivyJSON), 0o600)
 	}}
 
-	err := appsecurity.ScanContainer(t.Context(), scanner, io.Discard, io.Discard, output.Annotator{}, in)
-	// The default gate blocks on the CRITICAL only; the HIGH it reports
+	err := appsecurity.ScanContainer(enforcingVulnerabilities(t.Context()), scanner, io.Discard, io.Discard, output.Annotator{}, in)
+	// With enforcement enabled, the severity gate blocks on the CRITICAL only; the HIGH it reports
 	// without blocking still reaches both reports below.
 	if !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "1 blocking container vulnerability") {
 		t.Fatalf("gate=%v", err)
@@ -219,7 +219,7 @@ func TestContainerReportBoundary_OneFailedReportLeavesItsSibling(t *testing.T) {
 
 			var diagnostics bytes.Buffer
 
-			err := appsecurity.ScanContainer(t.Context(), scanner, io.Discard, io.Discard, output.NewAnnotator(&diagnostics, output.FormatGitHub), in)
+			err := appsecurity.ScanContainer(enforcingVulnerabilities(t.Context()), scanner, io.Discard, io.Discard, output.NewAnnotator(&diagnostics, output.FormatGitHub), in)
 			if !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "Found 1 blocking container vulnerability") {
 				t.Errorf("err = %v, want the gate's verdict", err)
 			}

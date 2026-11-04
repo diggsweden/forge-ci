@@ -42,7 +42,7 @@ on:
         description: "Enforcement setting: false reports recognized test assertion failures without failing; the tests still run. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md."
         type: boolean
         required: false
-        default: true
+        default: false
       library:
         description: "Build an Android library AAR; application signing and APK/AAB variants do not apply."
         required: false

@@ -111,7 +111,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the engine: `--enforce-lint`, `--enforce-vulnerabilities`,
   `--enforce-application-tests` and `--enforce-reproducible-builds`, global
   flags taking exactly `true` or `false`, each given at most once. They have
-  no environment variable; the embedded `policy.json` stays the enforcing
+  no environment variable; the embedded `policy.json` stays the report-only
   default for every setting not given. `policy show` adds each setting's
   `sources` (`embedded-default` or `flag`), and every decision line ends in
   `source=`. A flag is administrator policy only where the administrator's
@@ -167,7 +167,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fuse-overlayfs from Debian's packages, so image jobs install nothing at run
   time. Like the kaniko job image, it is built and pinned by the organization.
 - Administrator policy setting `enforce-reproducible-builds` (strict
-  reproducible builds, default `true`). With `false`, missing Maven
+  reproducible builds, default `false`). With `false`, missing Maven
   `project.build.outputTimestamp` or Gradle reproducible-archive settings are
   reported with their fix and policy decision without stopping the release.
   Unreadable or malformed build files still block. See `docs/admin-policy.md`.
@@ -610,6 +610,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING:** All four `enforce-*` settings now default to `false` in the
+  engine, GitHub workflows, Forgejo actions/workflows, GitLab components and
+  live controller. Checks still run and retain their findings. Set each input
+  or CLI flag explicitly to `true` to make that class of recognized findings
+  block, using the administrator-owned entry point for required policy.
+  Tool/configuration/report errors, compilation and packaging failures,
+  cancellation, credentials, signatures and source/digest verification still
+  block. Adopt matching workflow, binary and runtime-image versions together.
 - **BREAKING:** GitHub container image workflows keep the checkout in `source/`
   and require context and Containerfile paths relative to that checkout. Use
   `.` or `services/api` for the context. Absolute workspace-root paths and paths
@@ -760,10 +768,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   --from-layouts` and `container build-push-oci-image` now require
   `--scan-output-template`, so a direct final-tag publication is scanned
   too; pass it, with Trivy on the runner. Images that relied on the opt-out
-  publish only when their findings pass the gate or are approved in
-  `.trivyignore.yaml`.
-- **BREAKING:** The container vulnerability gate blocks only on CRITICAL by
-  default. `scan-severity` (`container build --scan-severity`,
+  publish only after a completed scan; enforced findings must pass the gate
+  or be approved in `.trivyignore.yaml`.
+- **BREAKING:** With `enforce-vulnerabilities: true`, the container
+  vulnerability gate blocks only on CRITICAL by default.
+  `scan-severity` (`container build --scan-severity`,
   `security scan container --fail-on-severity`, the `publish-container.yml`
   input) is now the blocking threshold alone, default `CRITICAL`; a
   comma-list blocks at its least severe entry. The scan still reports HIGH
@@ -801,10 +810,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING:** Shared build gates refuse legacy `skip-tests: true` and
   `SKIP_TESTS=true`; exported/published OCI layouts are always
   vulnerability-scanned. Keep scanner prerequisites available.
-  Migrate finding exceptions to a reviewed administrator-built engine policy
-  and matching protected workflow, binary and image pins. The embedded
+  Select finding enforcement in a reviewed administrator-owned entry point
+  with matching workflow, binary and image pins. The embedded
   `enforce-lint`, `enforce-vulnerabilities` and `enforce-application-tests`
-  settings default to `true`. Report-only distributions still execute checks
+  settings default to `false`. Report-only gates still execute checks
   and retain findings; operational, compilation/packaging, credential, signature
   and source/digest identity errors remain blocking. SwiftLint
   findings follow `enforce-lint` (see Removed for `fail-on-warning`).

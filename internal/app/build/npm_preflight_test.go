@@ -235,8 +235,9 @@ func TestNPMReleaseBuild_LocalPreflightPreservesNativeSelection(t *testing.T) {
 				stdout, stderr, annotations bytes.Buffer
 			)
 
+			testCtx := enforcingTests(t.Context())
 			npmRunner := npmPreflightRunner(func(ctx context.Context, gotDir string, out, errout io.Writer, args []string) error {
-				require.Equal(t, t.Context(), ctx)
+				require.Equal(t, testCtx, ctx)
 				require.Equal(t, dir, gotDir)
 				require.Same(t, &stderr, errout)
 
@@ -269,7 +270,7 @@ func TestNPMReleaseBuild_LocalPreflightPreservesNativeSelection(t *testing.T) {
 
 				return nil
 			})
-			err = appbuild.NPMReleaseBuild(t.Context(), summary, npmRunner, npxRunner, output.NewAnnotator(&annotations, output.FormatGitHub), &stdout, &stderr, appbuild.NPMReleaseBuildInput{
+			err = appbuild.NPMReleaseBuild(testCtx, summary, npmRunner, npxRunner, output.NewAnnotator(&annotations, output.FormatGitHub), &stdout, &stderr, appbuild.NPMReleaseBuildInput{
 				Dir: dir, EnableBuildSBOM: true,
 				PackageScope: tc.scope, ScriptName: tc.script, SBOMToolVersion: "4.2.1", NodeVersion: "24",
 			})

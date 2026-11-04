@@ -23,14 +23,14 @@ func adminInputEnvironment(check enforcement.Check) string {
 	return "FORGE_CI_LIVE_ADMIN_" + strings.ToUpper(strings.ReplaceAll(string(check), "-", "_"))
 }
 
-// The controller has four independent booleans, all enabled by default. These
+// The controller has four independent booleans, all report-only by default. These
 // become literal inputs in its own callers, never job environment settings.
 func readAdminInputs(getenv func(string) string) (map[string]bool, error) {
 	values := make(map[string]bool, len(enforcement.Checks))
 	for _, check := range enforcement.Checks {
 		name := adminInputEnvironment(check)
 
-		value := true
+		value := false
 
 		if raw := getenv(name); raw != "" {
 			parsed, err := enforcement.ParseAdminValue(name, raw)

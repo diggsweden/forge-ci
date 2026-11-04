@@ -35,7 +35,7 @@ func TestContainerFreshness_NoOldEvidenceOrPartialPublication(t *testing.T) {
 
 	cause := errors.New("owned scanner failure")
 
-	for _, mode := range []string{"no-write", "empty", "malformed", "empty-object", "unknown-only", "status", "tool-error", "link", "oversized", "clean", "clean-empty-array", "clean-named-omitted", "clean-named-null", "findings"} {
+	for _, mode := range []string{"no-write", "empty", "malformed", "empty-object", "unknown-only", "status", "tool-error", "link", "oversized", "clean", "clean-empty-array", "clean-named-omitted", "clean-named-null", "findings", "findings-report-only"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 
@@ -92,7 +92,7 @@ func TestContainerFreshness_NoOldEvidenceOrPartialPublication(t *testing.T) {
 					require.NoError(t, f.Close())
 
 					return 0, nil
-				case "findings":
+				case "findings", "findings-report-only":
 					body = boundaryTrivyJSON
 				}
 
@@ -107,7 +107,12 @@ func TestContainerFreshness_NoOldEvidenceOrPartialPublication(t *testing.T) {
 
 			var out bytes.Buffer
 
-			err := appsecurity.ScanContainer(t.Context(), scanner, &out, &out, output.Annotator{}, appsecurity.ScanContainerInput{ImageRef: "registry.invalid/owner/image:tag", JSONFile: raw, SARIFFile: sarif, GitLabReportFile: gitlab})
+			ctx := t.Context()
+			if mode == "findings" {
+				ctx = enforcingVulnerabilities(ctx)
+			}
+
+			err := appsecurity.ScanContainer(ctx, scanner, &out, &out, output.Annotator{}, appsecurity.ScanContainerInput{ImageRef: "registry.invalid/owner/image:tag", JSONFile: raw, SARIFFile: sarif, GitLabReportFile: gitlab})
 			want := errs.ErrMalformedInput
 
 			switch mode {
@@ -121,6 +126,10 @@ func TestContainerFreshness_NoOldEvidenceOrPartialPublication(t *testing.T) {
 				want = nil
 			case "findings":
 				want = errs.ErrValidation
+			case "findings-report-only":
+				want = nil
+
+				require.Contains(t, out.String(), "enforcement=false source=embedded-default")
 			}
 
 			require.ErrorIs(t, err, want)
@@ -134,7 +143,7 @@ func TestContainerFreshness_NoOldEvidenceOrPartialPublication(t *testing.T) {
 			require.Equal(t, "outside unchanged", string(body))
 
 			for _, path := range []string{raw, sarif, gitlab} {
-				if mode == "findings" || clean && path == raw {
+				if strings.HasPrefix(mode, "findings") || clean && path == raw {
 					body, readErr := os.ReadFile(path)
 					require.NoError(t, readErr)
 					require.True(t, json.Valid(body))

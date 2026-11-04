@@ -24,7 +24,7 @@ func testWorkflowAdmin(t *testing.T) *workflowAdmin {
 
 	admin, err := newWorkflowAdmin(t.Context(), root, commit, func(key string) string {
 		if key == adminInputEnvironment(enforcement.ReproducibleBuilds) {
-			return ""
+			return "true"
 		}
 
 		return "false"
@@ -36,7 +36,7 @@ func testWorkflowAdmin(t *testing.T) *workflowAdmin {
 	return admin
 }
 
-func TestAdminInputsDefaultEnabledAndCanBeDisabledIndependently(t *testing.T) {
+func TestAdminInputsDefaultReportOnlyAndCanBeEnabledIndependently(t *testing.T) {
 	t.Parallel()
 
 	defaults, err := readAdminInputs(func(string) string { return "" })
@@ -44,10 +44,10 @@ func TestAdminInputsDefaultEnabledAndCanBeDisabledIndependently(t *testing.T) {
 		t.Fatalf("defaults=%v err=%v", defaults, err)
 	}
 
-	for _, disabled := range enforcement.Checks {
+	for _, enabled := range enforcement.Checks {
 		values, err := readAdminInputs(func(key string) string {
-			if key == adminInputEnvironment(disabled) {
-				return "false"
+			if key == adminInputEnvironment(enabled) {
+				return "true"
 			}
 
 			return ""
@@ -57,8 +57,8 @@ func TestAdminInputsDefaultEnabledAndCanBeDisabledIndependently(t *testing.T) {
 		}
 
 		for _, check := range enforcement.Checks {
-			if !defaults[enforcement.Setting(check)] || values[enforcement.Setting(check)] != (check != disabled) {
-				t.Fatalf("settings are not independent: disabled=%s defaults=%v values=%v", disabled, defaults, values)
+			if defaults[enforcement.Setting(check)] || values[enforcement.Setting(check)] != (check == enabled) {
+				t.Fatalf("settings are not independent: enabled=%s defaults=%v values=%v", enabled, defaults, values)
 			}
 		}
 	}

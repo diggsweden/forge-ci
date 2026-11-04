@@ -170,7 +170,7 @@ Every build workflow takes `enforce-application-tests`, and the lint,
 container-publication and validation workflows take the
 `enforce-lint`, `enforce-vulnerabilities` or `enforce-reproducible-builds`
 their gates apply: the administrator's
-[check enforcement](admin-policy.md), default `true`; the orchestrators
+[check enforcement](admin-policy.md), default `false`; the orchestrators
 forward them. Whoever writes the call can pass them, so set them only in the
 administrator's entry point, the ruleset-required workflow, and never in a
 consumer's own workflow.
@@ -286,7 +286,7 @@ Direct-call input defaults are maintained here rather than in each example:
 | `working-directory` | No | `"."` | Project directory |
 | `branch` | No | `""` | Empty selects the triggering ref |
 | `skip-tests` | No | `false` | Legacy compatibility input; `true` is refused. Tests run under administrator-owned enforcement; inspect native reports for actual execution. |
-| `enforce-application-tests` | No | `true` | Administrator setting; see [check enforcement](admin-policy.md) |
+| `enforce-application-tests` | No | `false` | Administrator setting; see [check enforcement](admin-policy.md) |
 | `enable-build-sbom` | No | `true` | Run Build SBOM generation |
 | `runtime-image` | No | `""` | Empty selects the Android runtime image of the resolved forge-ci version |
 | `forge-ci-binary-ref` | No | `""` | forge-ci revision whose runtime image is selected; empty resolves the current stable release |

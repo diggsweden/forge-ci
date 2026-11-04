@@ -54,12 +54,12 @@ spec:
         Convert nanolinter's SARIF to a GitLab SAST report and publish it as artifacts:reports:sast (populates the MR Security tab; display needs GitLab Ultimate). When false, the SARIF is kept as a plain artifact only.
     enforce-lint:
       type: boolean
-      default: true
+      default: false
       description: >-
         Enforcement setting: false reports lint findings without failing the job. Set it only in the administrator's own policy include; the checks still run. See docs/admin-policy.md.
     enforce-vulnerabilities:
       type: boolean
-      default: true
+      default: false
       description: >-
         Enforcement setting: false reports vulnerability findings (osv, trivy-fs and the like) without failing the job. Set it only in the administrator's own policy include. See docs/admin-policy.md.
     server-url:

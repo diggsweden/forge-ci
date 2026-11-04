@@ -321,7 +321,7 @@ description. The inputs they share:
 | `release-policy` | no, in prepare and sign/publish | `stable` (default) or `stable-prerelease`; pass the same value to both workflows. See [release policy](workflows.md#stable-and-prerelease-policy). |
 | `transparency-log` | no, in the four signer workflows | `none` (the default) or `public`: whether signatures are also written to the public Sigstore transparency log. One value for every workflow of an organization; see [The transparency log](#the-transparency-log). |
 | `release-asset-retention` | no, in `sign-and-publish-release.yml` | How many of the newest releases keep every file; older ones keep their checksums and signatures. Empty, the default, deletes nothing. See [Old releases' files](#old-releases-files). |
-| `enforce-vulnerabilities`, `enforce-application-tests` | no, in `release-images.yml` (vulnerabilities) and `snapshot-images.yml` (both) | The administrator's [check enforcement](admin-policy.md), default `true`, written out as literals in a protected, code-owner-reviewed workflow; no workflow reads them from a variable. |
+| `enforce-vulnerabilities`, `enforce-application-tests` | no, in `release-images.yml` (vulnerabilities) and `snapshot-images.yml` (both) | [Check enforcement](admin-policy.md), default `false`; checks still run. Write mandated values as literals in a protected, code-owner-reviewed workflow; no workflow reads them from a variable. |
 
 A secret-free `coordinates` job validates the repository and the image
 coordinate before any container starts: no credentials, query or fragment in
@@ -350,7 +350,7 @@ alone. Each `action.yml` documents its own inputs and outputs.
 
 The `lint-nanolinter` action takes `enforce-lint` and `enforce-vulnerabilities`,
 and `build-go`, `build-cargo` and `build-maven` take `enforce-application-tests`:
-the administrator's [check enforcement](admin-policy.md), default `'true'`,
+the administrator's [check enforcement](admin-policy.md), default `'false'`,
 passed to the engine as flags. They are the administrator's only in a
 protected, code-owner-reviewed workflow file, written out as literals, which
 `check-l3-isolation` requires; the actions never read them from a variable or

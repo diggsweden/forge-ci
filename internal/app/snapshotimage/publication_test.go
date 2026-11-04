@@ -26,7 +26,9 @@ import (
 
 	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
+	appenforcement "github.com/diggsweden/forge-ci/internal/app/enforcement"
 	appsnapshot "github.com/diggsweden/forge-ci/internal/app/snapshotimage"
+	"github.com/diggsweden/forge-ci/internal/domain/enforcement"
 	"github.com/diggsweden/forge-ci/internal/domain/output"
 	"github.com/diggsweden/forge-ci/internal/domain/snapshotimage"
 	"github.com/diggsweden/forge-ci/internal/domain/version"
@@ -191,7 +193,13 @@ func TestPublicationCompleteNativeSetAndScanBarrier(t *testing.T) {
 				syftOps = syft
 			}
 
-			_, err := appsnapshot.Publish(t.Context(), ociregistry.WithAuthFile(in.AuthFile), scannerOps, syftOps, fakeoutputsink.New(t), nil, io.Discard, output.Annotator{}, plan, in)
+			ctx := t.Context()
+			if defect == "failed scan" {
+				// This fixture returns vulnerability findings, not a tool failure.
+				ctx = appenforcement.WithAdmin(ctx, enforcement.Admin{enforcement.Vulnerabilities: "true"})
+			}
+
+			_, err := appsnapshot.Publish(ctx, ociregistry.WithAuthFile(in.AuthFile), scannerOps, syftOps, fakeoutputsink.New(t), nil, io.Discard, output.Annotator{}, plan, in)
 			require.Error(t, err)
 			require.Zero(t, writes.Load(), fmt.Sprint(err))
 

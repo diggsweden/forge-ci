@@ -64,11 +64,11 @@ on:
       enforce-application-tests:
         description: Enforcement setting; false lets the artifact builds report recognized test assertion failures without failing. Tests still run. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md.
         type: boolean
-        default: true
+        default: false
       enforce-vulnerabilities:
         description: Enforcement setting; false lets publication report image vulnerability findings without failing. Every image is still scanned. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md.
         type: boolean
-        default: true
+        default: false
     outputs:
       source-sha:
         value: ${{ jobs.plan.outputs.source-sha }}

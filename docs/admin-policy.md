@@ -1,8 +1,8 @@
 # Administrator check enforcement
 
 Forge CI separates **running a check**, **reporting its findings**, and
-**blocking progression**. The administrator owns four settings, all enabled
-by default:
+**blocking progression**. The administrator owns four settings, all `false`
+by default in the engine and every forge's public entry points:
 
 | Setting | Findings it decides |
 |---|---|
@@ -11,7 +11,7 @@ by default:
 | `enforce-application-tests` | Recognized application test assertion failures |
 | `enforce-reproducible-builds` | Missing declared reproducible-build settings |
 
-Setting a value to `false` permits that class of recognized findings to be
+The default `false` permits that class of recognized findings to be
 reported without failing the gate. It does not skip the check and does not turn
 findings into a clean pass. Compilation, packaging, scanner startup, invalid
 reports, cancellation, credentials, signatures, source binding and digest
@@ -20,7 +20,7 @@ verification are outside these exceptions.
 ## Who sets them, and how
 
 The engine carries an embedded default, `internal/domain/enforcement/policy.json`,
-with every setting `true`. A setting is replaced at run time, without
+with every setting `false`. A setting is replaced at run time, without
 rebuilding the engine, by a flag on the command line that runs the gate:
 
 ```bash
@@ -33,6 +33,10 @@ The flags `--enforce-lint`, `--enforce-vulnerabilities`,
 so every gate honours them. They take exactly `true` or `false`; any other
 spelling, an empty value or the same flag given twice is refused. A setting
 not given keeps the embedded default.
+
+Set a setting explicitly to `true` to make its findings block. Ordinary callers
+can also opt into enforcement. Organisation-wide required policy belongs in
+the forge's protected/required entry point described below.
 
 There is deliberately no second source. The flags have no environment
 variable; no plan file, policy-file path, artifact, file in the checkout or
@@ -51,8 +55,9 @@ whoever writes the call can pass them. A consumer that calls a reusable
 workflow or includes a component with `enforce-lint: false` in its own file
 gets a green job. A setting is the administrator's only when it is written in
 an **entry point the consumer cannot change** and that entry point's jobs are
-the ones the forge requires. The consumer's own files never set a setting,
-and its own jobs are never the required gate. The examples, demos and
+the ones the forge requires. For organisation-mandated policy, the consumer's
+own files do not supply these settings and its own jobs are not the required
+gate. The examples, demos and
 `forge-ci init` output set none; a guard keeps it so.
 
 | Forge | The administrator's entry point | Where the settings are written |
@@ -118,7 +123,7 @@ turn include-mode merging into configuration isolation or make the external CI
 configuration path immutable. Use policy injection for that authority boundary.
 
 The release component already has this shape: the policy includes it, every
-`enforce-*` input is required, and each job assigns them to read-only values
+`enforce-*` input defaults to `false`, and each job assigns them to read-only values
 in its script. A project, group or instance variable cannot supply or change
 one.
 
@@ -192,14 +197,14 @@ wants a different default everywhere: change `policy.json` in its
 independently controlled Forge CI distribution, review it, build the engine
 and runtime images, and update the protected pipeline pins and binary/image
 digests together. A malformed embedded policy fails gates closed; omitted
-keys default to `true`; unknown keys, duplicate keys and non-boolean values
+keys default to `false`; unknown keys, duplicate keys and non-boolean values
 are refused.
 
 ## The receipt
 
 ### Live harness administrator inputs
 
-The live controller passes the same four settings independently, all `true` by
+The live controller passes the same four settings independently, all `false` by
 default. Each controller variable accepts exactly `true` or `false`:
 
 | Existing administrator input | Live controller variable |
@@ -212,12 +217,12 @@ default. Each controller variable accepts exactly `true` or `false`:
 For a single scenario, use invocation-only assignments:
 
 ```bash
-FORGE_CI_LIVE_ADMIN_LINT=false \
-FORGE_CI_LIVE_ADMIN_APPLICATION_TESTS=false \
+FORGE_CI_LIVE_ADMIN_LINT=true \
+FORGE_CI_LIVE_ADMIN_APPLICATION_TESTS=true \
 just test-live '^TestGitLabRelease_MinimalSignedArtifacts$'
 ```
 
-The other two settings remain enabled. These variables belong to the controller;
+The other two settings remain report-only. These variables belong to the controller;
 it translates them into the existing literal inputs/flags, not job variables.
 
 The controller writes literal inputs in the Forgejo/GitHub wrappers it generates
@@ -310,12 +315,12 @@ behavior; these settings are not a generic `continue-on-error` switch.
 
 ## Reproducible builds
 
-`enforce-reproducible-builds` is strict reproducible builds. With the default
-`true`, `validate jvm-reproducibility` (part of `validate prerequisites`) stops
+`enforce-reproducible-builds: true` is strict reproducible builds.
+`validate jvm-reproducibility` (part of `validate prerequisites`) then stops
 the release when a planned Maven artifact's `pom.xml` lacks a non-empty
 `<project.build.outputTimestamp>`, or a Gradle/Android build script lacks
 `preserveFileTimestamps = false` and `reproducibleFileOrder = true`. With
-`false`, the same check still runs, prints each missing setting with its fix
+the default `false`, the same check still runs, prints each missing setting with its fix
 and the `reproducible-builds` policy decision, and annotates a warning instead
 of an error. An unreadable or malformed `pom.xml`, a missing Gradle build
 script and an unsafe working directory remain blocking. Cargo's `Cargo.lock`

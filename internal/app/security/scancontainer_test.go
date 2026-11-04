@@ -15,10 +15,18 @@ import (
 	"strings"
 	"testing"
 
+	appenforcement "github.com/diggsweden/forge-ci/internal/app/enforcement"
 	appsecurity "github.com/diggsweden/forge-ci/internal/app/security"
+	"github.com/diggsweden/forge-ci/internal/domain/enforcement"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/output"
 )
+
+// Threshold/blocking tests opt into enforcement rather than relying on the
+// shipped default; operational-failure cases keep testing report-only mode.
+func enforcingVulnerabilities(ctx context.Context) context.Context {
+	return appenforcement.WithAdmin(ctx, enforcement.Admin{enforcement.Vulnerabilities: "true"})
+}
 
 // recordingTrivy captures invocations and optionally pre-stages output files.
 type recordingTrivy struct {
@@ -119,7 +127,7 @@ func TestScanContainer_FailsWhenFindingsAtThreshold(t *testing.T) {
 
 	var log bytes.Buffer
 
-	err := appsecurity.ScanContainer(context.Background(), trivy, &log, &bytes.Buffer{}, output.Annotator{}, appsecurity.ScanContainerInput{
+	err := appsecurity.ScanContainer(enforcingVulnerabilities(t.Context()), trivy, &log, &bytes.Buffer{}, output.Annotator{}, appsecurity.ScanContainerInput{
 		ImageRef:         "ghcr.io/example/img@sha256:deadbeef",
 		JSONFile:         jsonPath,
 		SARIFFile:        sarifPath,
@@ -168,7 +176,7 @@ func TestScanContainer_IdentifiesEmbeddedGoRuntime(t *testing.T) {
 			"InstalledVersion":"v1.27.1","FixedVersion":"1.27.2","Severity":"CRITICAL"
 		}]}]}`)}
 
-	err := appsecurity.ScanContainer(t.Context(), trivy, &log, io.Discard, output.Annotator{}, appsecurity.ScanContainerInput{
+	err := appsecurity.ScanContainer(enforcingVulnerabilities(t.Context()), trivy, &log, io.Discard, output.Annotator{}, appsecurity.ScanContainerInput{
 		ImageRef:         "registry.example/java@sha256:fixture",
 		JSONFile:         filepath.Join(dir, "trivy.json"),
 		SARIFFile:        filepath.Join(dir, "trivy.sarif"),
@@ -337,7 +345,7 @@ func TestScanContainer_UnfixedFindingsBlockOnlyWhenCritical(t *testing.T) {
 
 			var out bytes.Buffer
 
-			err := appsecurity.ScanContainer(t.Context(), &recordingTrivy{writeJSON: []byte(tc.body)}, &out, io.Discard, output.Annotator{}, appsecurity.ScanContainerInput{
+			err := appsecurity.ScanContainer(enforcingVulnerabilities(t.Context()), &recordingTrivy{writeJSON: []byte(tc.body)}, &out, io.Discard, output.Annotator{}, appsecurity.ScanContainerInput{
 				ImageRef:         "img",
 				JSONFile:         filepath.Join(dir, "trivy.json"),
 				SARIFFile:        filepath.Join(dir, "trivy.sarif"),
@@ -389,7 +397,7 @@ func TestScanContainer_ThresholdDecidesWhichFixableFindingsBlock(t *testing.T) {
 
 			trivy := &recordingTrivy{writeJSON: []byte(tc.body)}
 
-			err := appsecurity.ScanContainer(t.Context(), trivy, &out, io.Discard, output.Annotator{}, appsecurity.ScanContainerInput{
+			err := appsecurity.ScanContainer(enforcingVulnerabilities(t.Context()), trivy, &out, io.Discard, output.Annotator{}, appsecurity.ScanContainerInput{
 				ImageRef:         "img",
 				JSONFile:         filepath.Join(dir, "trivy.json"),
 				SARIFFile:        filepath.Join(dir, "trivy.sarif"),

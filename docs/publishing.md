@@ -15,7 +15,8 @@ commands.
 
 The [administrator's check enforcement settings](admin-policy.md) control whether
 recognized lint, vulnerability, application-test and reproducible-build findings
-block progression. All four default to enforcing. Legacy `skip-tests: true` (including
+block progression. All four default to report-only; explicit `true` enables
+enforcement. Legacy `skip-tests: true` (including
 `SKIP_TESTS=true`) is refused, and exported/published OCI layouts are always
 scanned. SBOM selection is separate from
 this vulnerability scan.

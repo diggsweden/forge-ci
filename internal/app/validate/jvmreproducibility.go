@@ -37,7 +37,7 @@ type JVMReproducibilityInput struct {
 // rebuilding, which belongs to the black-box reproducibility tier.
 //
 // A missing setting is a reproducible-builds finding. The administrator's
-// enforce-reproducible-builds policy (strict by default) decides whether
+// enforce-reproducible-builds policy (report-only by default) decides whether
 // findings block; either way the report includes the exact snippet to paste
 // into pom.xml / build.gradle. An unreadable or malformed build file, or a
 // missing Gradle build script, is never a finding and always blocks. There

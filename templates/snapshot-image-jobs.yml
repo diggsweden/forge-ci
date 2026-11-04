@@ -25,10 +25,10 @@ spec:
       default: ''
     enforce-application-tests:
       type: boolean
-      default: true
+      default: false
     enforce-vulnerabilities:
       type: boolean
-      default: true
+      default: false
 ---
 .forge-ci-snapshot:
   image:

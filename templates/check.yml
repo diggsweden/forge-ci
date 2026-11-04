@@ -32,19 +32,19 @@ spec:
       description: Consumer check commands; their failures fail this job.
     enforce-lint:
       type: boolean
-      default: true
+      default: false
       description: Enforcement setting the job's forge-ci and FORGE_CI_BIN apply, set only in the administrator's entry point; false reports lint findings without failing. See docs/admin-policy.md.
     enforce-vulnerabilities:
       type: boolean
-      default: true
+      default: false
       description: Enforcement setting the job's forge-ci and FORGE_CI_BIN apply, set only in the administrator's entry point; false reports vulnerability findings without failing.
     enforce-application-tests:
       type: boolean
-      default: true
+      default: false
       description: Enforcement setting the job's forge-ci and FORGE_CI_BIN apply, set only in the administrator's entry point; false reports recognized test assertion failures without failing. Tests still run.
     enforce-reproducible-builds:
       type: boolean
-      default: true
+      default: false
       description: Enforcement setting the job's forge-ci and FORGE_CI_BIN apply, set only in the administrator's entry point; false reports missing reproducible-build settings without failing.
 ---
 "$[[ inputs.job-name ]]":

@@ -85,6 +85,7 @@ export FORGE_CI_LIVE_FORGEJO_IMAGE_BUILDER=kaniko
 export FORGE_CI_LIVE_ADMIN_LINT=false
 export FORGE_CI_LIVE_ADMIN_VULNERABILITIES=false
 export FORGE_CI_LIVE_ADMIN_APPLICATION_TESTS=false
+export FORGE_CI_LIVE_ADMIN_REPRODUCIBLE_BUILDS=true
 just campaign-lane ~/campaigns/k3s forgejo test/live/campaigns/k3s-private-forgejo.cases &
 FORGE_CI_LIVE_GITLAB_IMAGE_BUILDER=kaniko \
   just campaign-lane ~/campaigns/k3s gitlab test/live/campaigns/k3s-private-gitlab.cases &
@@ -113,9 +114,9 @@ Unknown declarations, mismatches, duplicate declarations and
 settings after a case are refused. Preparation validates the declaration syntax
 before building images. The checked-in private k3s lanes require private visibility
 and Kaniko; set the corresponding Forgejo or GitLab image-builder selector.
-The four administrator settings are independent and default to `true`. For these
+The four administrator settings are independent and default to `false`. For these
 lanes the controller sets lint, vulnerabilities and application tests to `false`,
-leaving reproducible builds enabled. Each controller variable accepts exactly
+explicitly enabling reproducible builds as their declarations require. Each controller variable accepts exactly
 `true` or `false`; invalid values refuse preflight. Checks still run when their
 findings are nonblocking.
 
@@ -128,7 +129,7 @@ gate include bound to the captured administrator gate. Forgejo and GitHub wrappe
 receive only the settings declared by the called engine workflow/action at its
 exact pinned Git commit, including when local uncommitted files differ.
 The run header and verdict record the controller's four `FORGE_CI_LIVE_ADMIN_*`
-inputs. The embedded engine default stays enforcing; no lab-only policy source
+inputs. The embedded engine default stays report-only; no lab-only policy source
 edit or checksum rebuild is needed to choose the run's settings.
 
 A cases file then holds one case a line: `consumer <demo> <pull-request|release>

@@ -28,7 +28,7 @@ image | extract)
 		unset FORGE_CI_PLAN
 	fi
 	exec forge-ci container build --image-builder kaniko --auth-file "$auth_file" \
-		--output-dir "$output" --enforce-vulnerabilities="${ADMIN_VULNERABILITIES:-true}"
+		--output-dir "$output" --enforce-vulnerabilities="${ADMIN_VULNERABILITIES:-false}"
 	;;
 snapshot)
 	unset FORGE_CI_PLAN

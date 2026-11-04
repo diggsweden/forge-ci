@@ -45,8 +45,36 @@ func TestPolicyDecodeRefusesAmbiguity(t *testing.T) {
 	}
 
 	policy, err := decode([]byte(`{"enforce-lint":false}`))
-	if err != nil || policy.EnforceLint || !policy.EnforceVulnerabilities || !policy.EnforceApplicationTests || !policy.EnforceReproducibleBuilds {
-		t.Fatalf("safe omitted defaults: %+v %v", policy, err)
+	if err != nil || policy.EnforceLint || policy.EnforceVulnerabilities || policy.EnforceApplicationTests || policy.EnforceReproducibleBuilds {
+		t.Fatalf("omitted report-only defaults: %+v %v", policy, err)
+	}
+}
+
+func TestShippedPolicyReportsAllClassesAndAllowsExplicitEnforcement(t *testing.T) {
+	t.Parallel()
+
+	defaults, err := Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, check := range Checks {
+		decision, err := defaults.Decide(check, 2)
+		if err != nil || decision.Enforced || decision.Findings != 2 || decision.Source != EmbeddedDefault {
+			t.Fatalf("default %s lost findings or enabled enforcement: %+v %v", check, decision, err)
+		}
+
+		enabled, err := defaults.WithAdmin(Admin{check: "true"})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for _, other := range Checks {
+			decision, err := enabled.Decide(other, 2)
+			if err != nil || decision.Enforced != (other == check) {
+				t.Fatalf("enabling %s changed %s incorrectly: %+v %v", check, other, decision, err)
+			}
+		}
 	}
 }
 
@@ -61,10 +89,10 @@ func TestCurrentPolicyCannotBeReplacedByConsumerState(t *testing.T) {
 	t.Chdir(root)
 
 	for _, name := range []string{"ENFORCE_LINT", "ENFORCE_VULNERABILITIES", "ENFORCE_APPLICATION_TESTS", "FORGE_CI_ENFORCE_LINT", "FORGE_CI_POLICY"} {
-		t.Setenv(name, "false")
+		t.Setenv(name, "true")
 	}
 
-	if err := os.WriteFile(filepath.Join(root, "policy.json"), []byte(`{"enforce-lint":false,"enforce-vulnerabilities":false,"enforce-application-tests":false}`), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "policy.json"), []byte(`{"enforce-lint":true,"enforce-vulnerabilities":true,"enforce-application-tests":true,"enforce-reproducible-builds":true}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -73,7 +101,7 @@ func TestCurrentPolicyCannotBeReplacedByConsumerState(t *testing.T) {
 		t.Fatalf("consumer state replaced policy: %+v %v", after, err)
 	}
 
-	after.EnforceLint = false
+	after.EnforceLint = !after.EnforceLint
 
 	unchanged, _ := Current()
 	if unchanged != before {

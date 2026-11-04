@@ -245,7 +245,7 @@ func TestGoTest_BuildsArgsAndRunsInDir(t *testing.T) {
 		{
 			name: "with tags",
 			in:   appbuild.GoTestInput{Dir: "src", BuildTags: "integration"},
-			want: []string{"test", "-tags", "integration", "./..."},
+			want: []string{"test", "-json", "-tags", "integration", "./..."},
 			dir:  "src",
 		},
 		{
@@ -253,25 +253,25 @@ func TestGoTest_BuildsArgsAndRunsInDir(t *testing.T) {
 			// a different command line, and go treats it differently.
 			name: "no tags omits the flag entirely",
 			in:   appbuild.GoTestInput{Dir: "src"},
-			want: []string{"test", "./..."},
+			want: []string{"test", "-json", "./..."},
 			dir:  "src",
 		},
 		{
 			name: "whitespace-only tags count as none",
 			in:   appbuild.GoTestInput{Dir: "src", BuildTags: "   "},
-			want: []string{"test", "./..."},
+			want: []string{"test", "-json", "./..."},
 			dir:  "src",
 		},
 		{
 			name: "tags are trimmed",
 			in:   appbuild.GoTestInput{Dir: "src", BuildTags: "  integration  "},
-			want: []string{"test", "-tags", "integration", "./..."},
+			want: []string{"test", "-json", "-tags", "integration", "./..."},
 			dir:  "src",
 		},
 		{
 			name: "no dir runs in the current one",
 			in:   appbuild.GoTestInput{},
-			want: []string{"test", "./..."},
+			want: []string{"test", "-json", "./..."},
 			dir:  ".",
 		},
 	} {

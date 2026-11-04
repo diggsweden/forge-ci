@@ -19,6 +19,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	appenforcement "github.com/diggsweden/forge-ci/internal/app/enforcement"
+	"github.com/diggsweden/forge-ci/internal/domain/enforcement"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/testutil/ghaenv"
 	"github.com/diggsweden/forge-ci/internal/testutil/testfs"
@@ -188,7 +190,7 @@ func TestGradleAndroidRun_BindsSigningEnvironmentAndBlobSources(t *testing.T) {
 
 					before := os.Environ()
 
-					ctx, cancel := context.WithCancel(t.Context())
+					ctx, cancel := context.WithCancel(appenforcement.WithAdmin(t.Context(), enforcement.Admin{enforcement.ApplicationTests: "true"}))
 					defer cancel()
 
 					testCause := errors.New("owned CLI test failure")
@@ -481,7 +483,8 @@ func TestGradleAndroidRun_DisabledOptionsSources(t *testing.T) {
 
 				return nil
 			}}
-			require.NoError(t, gradleAndroidRunCmd(ops).Run(t.Context(), args))
+			ctx := appenforcement.WithAdmin(t.Context(), enforcement.Admin{enforcement.ApplicationTests: "true"})
+			require.NoError(t, gradleAndroidRunCmd(ops).Run(ctx, args))
 			require.Equal(t, 2, ops.calls)
 			require.Equal(t, [][]string{{"app:test"}, wantArgs}, invocations)
 

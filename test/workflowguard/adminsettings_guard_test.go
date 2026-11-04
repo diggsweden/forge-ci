@@ -31,7 +31,7 @@ import (
 //     from an environment variable the engine would refuse.
 //
 // This repository's own pipelines (self-*.yml) call the reusable workflows
-// directly and keep the enforcing defaults; examples and demos are consumer
+// directly and inherit the shipped defaults; examples and demos are consumer
 // configuration.
 
 var adminSettings = []string{"lint", "vulnerabilities", "application-tests", "reproducible-builds"}

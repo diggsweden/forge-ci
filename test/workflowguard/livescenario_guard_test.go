@@ -54,8 +54,8 @@ var privilegedDirect = map[string]string{
 
 // buildahNamed are the live files whose fixtures may name Buildah, and why.
 var buildahNamed = map[string]string{
-	livetestTree + "/imagebuilder.go":                  "Kaniko development admission rejects an explicit setup-buildah action",
-	livetestTree + "/imagebuilder_internal_test.go":    "negative admission regression for an explicit setup-buildah action",
+	livetestTree + "/imagebuilder.go":                   "Kaniko development admission rejects an explicit setup-buildah action",
+	livetestTree + "/imagebuilder_internal_test.go":     "negative admission regression for an explicit setup-buildah action",
 	livetestTree + "/nativesnapshotartifact_test.go":    "the Buildah capability probe, run only when the selection is Buildah",
 	livetestTree + "/conformance/gitlabrelease_test.go": "the build-image probe checks the build image's own Buildah",
 }

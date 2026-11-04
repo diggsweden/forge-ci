@@ -65,11 +65,11 @@ spec:
       default: []
     enforce-application-tests:
       type: boolean
-      default: true
+      default: false
       description: Enforcement setting; false lets the snapshot artifact builds report recognized test assertion failures without failing. Tests still run. See docs/admin-policy.md.
     enforce-vulnerabilities:
       type: boolean
-      default: true
+      default: false
       description: Enforcement setting; false lets publication report image vulnerability findings without failing. Every image is still scanned. See docs/admin-policy.md.
     context-job:
       description: Advanced prepared-context override. Parent producer needs Snapshot plan and exports _snapshot-context. Default builds required artifacts automatically.

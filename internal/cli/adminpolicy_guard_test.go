@@ -88,7 +88,7 @@ func TestAdminSettingReachesThePolicyOfItsInvocation(t *testing.T) {
 	} {
 		shown := runShow(t, args)
 
-		if shown.Settings["enforce-lint"] || !shown.Settings["enforce-vulnerabilities"] || !shown.Settings["enforce-reproducible-builds"] {
+		if shown.Settings["enforce-lint"] || shown.Settings["enforce-vulnerabilities"] || shown.Settings["enforce-application-tests"] || !shown.Settings["enforce-reproducible-builds"] {
 			t.Errorf("%v: settings %v", args, shown.Settings)
 		}
 

@@ -129,7 +129,7 @@ func TestAndroidReleaseBuild_SelectedTaskPreflight(t *testing.T) {
 				return nil
 			}
 
-			err := appbuild.AndroidReleaseBuild(t.Context(), sink, sink, ops, output.NewAnnotator(&annotations, output.FormatGitHub), &stdout, &stderr, in)
+			err := appbuild.AndroidReleaseBuild(enforcingTests(t.Context()), sink, sink, ops, output.NewAnnotator(&annotations, output.FormatGitHub), &stdout, &stderr, in)
 			if tc.refuse {
 				assert.True(t, errors.Is(err, errs.ErrUsage) || errors.Is(err, errs.ErrValidation), "expected task preflight classification, got %v", err)
 

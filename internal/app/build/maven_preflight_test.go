@@ -210,7 +210,7 @@ func TestMavenReleaseBuild_LocalPreflightPreservesNativeOrder(t *testing.T) {
 			beforeInput := in
 			beforeInput.CLIOpts = slices.Clone(in.CLIOpts)
 
-			ctx, cancel := context.WithCancel(t.Context())
+			ctx, cancel := context.WithCancel(enforcingTests(t.Context()))
 			defer cancel()
 
 			stdout, stderr := bytes.NewBufferString("prior stdout\n"), bytes.NewBufferString("prior stderr\n")

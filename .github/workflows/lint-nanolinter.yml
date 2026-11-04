@@ -33,12 +33,12 @@ on:
         description: "Enforcement setting: false reports lint findings without failing; the checks still run. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md."
         type: boolean
         required: false
-        default: true
+        default: false
       enforce-vulnerabilities:
         description: "Enforcement setting: false reports vulnerability findings without failing; the scans still run. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md."
         type: boolean
         required: false
-        default: true
+        default: false
       nanolinter-image:
         description: "Required nanolinter flavour image to lint in, pinned by @sha256:<64 lowercase hex>: core, go, java, kotlin, javascript-typescript, rust or swift, e.g. ghcr.io/itiquette/nanolinter:java@sha256:<digest>"
         required: true

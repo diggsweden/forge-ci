@@ -124,7 +124,7 @@ func TestNPMReleaseBuild_RunsFullSequence(t *testing.T) {
 
 	var out bytes.Buffer
 
-	err := appbuild.NPMReleaseBuild(context.Background(), &recordingSummarySink{}, npmRunner, npxRunner, output.Annotator{}, &out, &out, appbuild.NPMReleaseBuildInput{
+	err := appbuild.NPMReleaseBuild(enforcingTests(t.Context()), &recordingSummarySink{}, npmRunner, npxRunner, output.Annotator{}, &out, &out, appbuild.NPMReleaseBuildInput{
 		Dir: dir, EnableBuildSBOM: true,
 		PackageScope:    "@org",
 		SBOMToolVersion: "4.2.1",

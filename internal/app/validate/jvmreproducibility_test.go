@@ -19,8 +19,8 @@ import (
 	"github.com/diggsweden/forge-ci/internal/testutil/testfs"
 )
 
-// helper to run the validator with no-op annot routing under the strict
-// default admin policy, so these tests hold in any administrator distribution.
+// helper to run the validator with no-op annot routing and explicit enforcement,
+// so these tests hold in any administrator distribution.
 // Returns stdout, stderr, and the validator's error.
 func runJVMRepro(t *testing.T, plan string) (string, string, error) {
 	t.Helper()

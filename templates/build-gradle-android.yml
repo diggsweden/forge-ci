@@ -79,7 +79,7 @@ spec:
       description: Legacy input; true is refused. Admin policy controls findings, and tests still run.
     enforce-application-tests:
       type: boolean
-      default: true
+      default: false
       description: Enforcement setting; false lets recognized test assertion failures be reported without failing the build. Tests still run. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md.
     enable-build-sbom:
       type: boolean

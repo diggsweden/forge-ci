@@ -49,7 +49,7 @@ inputs:
   enforce-application-tests:
     description: "Enforcement setting, true or false: false reports recognized test assertion failures without failing; the tests still run. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md."
     required: false
-    default: 'true'
+    default: 'false'
   enable-build-sbom:
     description: "'false' skips the Build SBOM, and with it the cyclonedx-gomod install."
     required: false

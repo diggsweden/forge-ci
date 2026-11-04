@@ -3,7 +3,7 @@
 
 // Package enforcement defines the administrator's check policy.
 //
-// policy.json, embedded when the engine is built, is the enforcing default.
+// policy.json, embedded when the engine is built, is the report-only default.
 // Any of the four settings may be replaced at run time, and only as an
 // explicit command-line value (see Admin); it is administrator policy where
 // the administrator's entry point writes that command line. There
@@ -252,8 +252,8 @@ func decode(body []byte) (Policy, error) {
 	if _, err = decoder.Token(); err != io.EOF {
 		return Policy{}, fmt.Errorf("trailing admin policy data: %w", errs.ErrInvalidConfig)
 	}
-	// Omitted settings retain the documented enforcing defaults.
-	policy := Policy{EnforceLint: true, EnforceVulnerabilities: true, EnforceApplicationTests: true, EnforceReproducibleBuilds: true}
+	// Omitted settings retain the documented report-only defaults.
+	var policy Policy
 	if value, set := values["enforce-lint"]; set {
 		policy.EnforceLint = value
 	}

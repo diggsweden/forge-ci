@@ -147,7 +147,7 @@ func TestSwiftFormatLint_FailedReturnsValidationError(t *testing.T) {
 	sf := &fakeSwiftFormat{output: "a.swift:1:1: line too long", exitCode: 1}
 	sink := &recordingSummarySink{}
 
-	err := appbuild.SwiftFormatLint(context.Background(), files, sf, sink, &bytes.Buffer{}, &bytes.Buffer{}, output.Annotator{}, appbuild.SwiftFormatLintInput{})
+	err := appbuild.SwiftFormatLint(enforcingLint(t.Context()), files, sf, sink, &bytes.Buffer{}, &bytes.Buffer{}, output.Annotator{}, appbuild.SwiftFormatLintInput{})
 	if err == nil || !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("err = %v, want ErrValidation", err)
 	}
@@ -174,7 +174,7 @@ func TestSwiftLintLint_ConsumerCannotDisableAdminLintEnforcement(t *testing.T) {
 	sl := &fakeSwiftLint{output: "x", exitCode: 2}
 
 	sink := &recordingSummarySink{}
-	if err := appbuild.SwiftLintLint(context.Background(), sl, sink, &bytes.Buffer{}, &bytes.Buffer{}, output.Annotator{}, appbuild.SwiftLintLintInput{}); !errors.Is(err, errs.ErrValidation) {
+	if err := appbuild.SwiftLintLint(enforcingLint(t.Context()), sl, sink, &bytes.Buffer{}, &bytes.Buffer{}, output.Annotator{}, appbuild.SwiftLintLintInput{}); !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("consumer disabled enforcement: %v", err)
 	}
 
@@ -187,7 +187,7 @@ func TestSwiftLintLint_FindingsFailUnderTheEnforcingPolicy(t *testing.T) {
 	sl := &fakeSwiftLint{output: "x", exitCode: 2}
 	sink := &recordingSummarySink{}
 
-	err := appbuild.SwiftLintLint(context.Background(), sl, sink, &bytes.Buffer{}, &bytes.Buffer{}, output.Annotator{}, appbuild.SwiftLintLintInput{})
+	err := appbuild.SwiftLintLint(enforcingLint(t.Context()), sl, sink, &bytes.Buffer{}, &bytes.Buffer{}, output.Annotator{}, appbuild.SwiftLintLintInput{})
 	if err == nil || !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("err = %v, want ErrValidation", err)
 	}
