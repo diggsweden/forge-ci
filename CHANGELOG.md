@@ -271,6 +271,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--platform`, as the scan gate does, for each platform's layout and for a
   registry image pulled by digest, so Trivy reads that platform's image and
   no other.
+- The snapshot live scenarios and the GitLab base-image fixture build with
+  the run's image builder instead of Buildah regardless. On a lab without a
+  privileged runner they failed asking for one, though the snapshot flow
+  builds with kaniko on Forgejo and GitLab. They now push the kaniko job
+  image under kaniko, and the base fixture builds in the release's export
+  jobs with `multiarch-image build-arch --stage`. Forgejo scenarios select
+  with the new `FORGE_CI_LIVE_FORGEJO_IMAGE_BUILDER`. A lab that cannot run
+  the selected builder reports them not covered. `docs/testing.md`.
+- A live run that asks for `FORGE_CI_LIVE_CONSUMER_VISIBILITY=private`
+  makes every repository holding the code under test private. The snapshot,
+  migration and diagnostic consumers were public whatever the run asked.
+  Engine layers, job images and probe assets stay public in every run, with
+  a recorded reason, as the public forge-ci distribution they stand in for.
+  A guard refuses a literal visibility, a public repository without a
+  reason, or a creating request outside the helpers.
 - The GitLab `release` component accepts an `artifacts-config` under
   `.forge-ci/`, such as the default `.forge-ci/artifacts.yml` named
   explicitly. Its regex refused a path that starts with a dot, so GitLab

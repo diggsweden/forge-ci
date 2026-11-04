@@ -39,7 +39,7 @@ func TestWebURLs_ResolveOnEveryForge(t *testing.T) {
 			t.Parallel()
 
 			target := livetest.Accept(t, forge)
-			repo := livetest.NewScratchRepo(t, target, "weburl")
+			repo := livetest.NewPublicScratchRepo(t, target, "weburl", "the scenario proves that the links printed for a human answer an anonymous request")
 			slug := livetest.RepoSlug(target, repo)
 
 			adapter := livetest.Provider(t, target, repo)

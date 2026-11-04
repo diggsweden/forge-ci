@@ -62,16 +62,16 @@ func runGitLabConsumerTrial(t *testing.T, root string, private bool) {
 		consumer = consumer.WithGitLabGateFromSource(t, gate)
 	}
 
-	engineRepo := livetest.NewScratchRepo(t, target, "gitlab-consumer-layer")
+	engineRepo := livetest.NewPublicScratchRepo(t, target, "gitlab-consumer-layer", livetest.ReadLayerAnonymously)
 	layer := livetest.PushLayer(t, target, engineRepo)
 	image := livetest.PushJobImage(t, target, engineRepo, os.Getenv("FORGE_CI_LIVE_CONSUMER_IMAGE_ARCHIVE"))
 	repo := livetest.NewBareScratchRepo(t, target, "gitlab-consumer-trial", consumer.ObjectFormat, private)
 
 	images := livetest.GitLabGateImages{Job: image, ExtraJobs: livetest.PushGitLabGateExtraJobImages(t, target, consumer, func(name string) string {
-		return livetest.NewScratchRepo(t, target, "gitlab-consumer-job-image-"+strings.ToLower(name))
+		return livetest.NewPublicScratchRepo(t, target, "gitlab-consumer-job-image-"+strings.ToLower(name), livetest.ReadJobImageAnonymously)
 	})}
 	if archive := os.Getenv("FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE"); archive != "" {
-		images.Lint = livetest.PushJobImage(t, target, livetest.NewScratchRepo(t, target, "gitlab-consumer-lint-image"), archive)
+		images.Lint = livetest.PushJobImage(t, target, livetest.NewPublicScratchRepo(t, target, "gitlab-consumer-lint-image", livetest.ReadJobImageAnonymously), archive)
 	}
 
 	client, err := gitlabapi.NewClient(target.Token, gitlabapi.WithBaseURL(target.BaseURL()+"/api/v4/"),

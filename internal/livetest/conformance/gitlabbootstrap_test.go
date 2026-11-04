@@ -43,7 +43,7 @@ func TestGitLabBootstrap_PublishesAndDownloadsTheRecordedBinary(t *testing.T) {
 			t.Skip("native job-token publication requires a deployed runner")
 		}
 
-		repo := livetest.NewScratchRepo(t, target, "bootstrap-job")
+		repo := livetest.NewPublicScratchRepo(t, target, "bootstrap-job", "an in-runner job downloads the published engine binary from its release without credentials")
 
 		const tag = "v0.0.1-bootstrap"
 

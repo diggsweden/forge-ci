@@ -44,7 +44,7 @@ func TestForgejoNPMLibrary_RegistryConsumer(t *testing.T) {
 		t.Fatal("require an exact stable version of a disposable package under the admitted owner")
 	}
 
-	repo := livetest.NewScratchRepo(t, target, "npm-library-consumer")
+	repo := livetest.NewPublicScratchRepo(t, target, "npm-library-consumer", "the scenario proves a fresh anonymous install from the registry")
 	if !slices.Contains(livetest.PublishedPackageVersions(t, target, repo, "npm", name), version) {
 		t.Fatal("the requested package version is not present before consumption")
 	}

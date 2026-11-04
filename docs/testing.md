@@ -827,8 +827,22 @@ Public and private consumer cases both run by default. Set
 resources. The same variable applies to the GitLab MR and consumer-release
 recipes. Visibility is supplied in the initial creation request and checked
 through the provider before any consumer source is pushed. Private trials also
-require an anonymous repository API read to be refused. Helper, image and
-policy fixtures keep their separately defined visibility.
+require an anonymous repository API read to be refused.
+
+A run that asks for `private` alone makes every repository that holds the
+code under test private: the consumer, scenario, policy and publication
+repositories. The repositories that stand in for the public forge-ci
+distribution or the lab's infrastructure stay public in every run, each with
+its reason (`NewPublicScratchRepo`), and their scenarios run: an engine
+layer, whose source and binary package the product's jobs fetch anonymously,
+a job image the runner pulls without the job's credentials, a release asset
+an in-runner probe downloads, and the pages and packages whose anonymous
+read is the subject. An authenticated bootstrap for a private distribution
+is on the [roadmap](roadmap.md). A scenario whose subject is one
+visibility, such as the private job-token probes, is not covered in a run
+that asks for the other. `test/workflowguard` refuses a literal visibility,
+a public repository without a reason, or a creating request outside these
+helpers.
 
 The small fixtures keep the coverage axes explicit without rebuilding every
 consumer for every hash combination:
@@ -1869,13 +1883,28 @@ are of one architecture, so a release on an arm64 lab, whose image job needs
 tagged runners, is not covered. A development scenario that builds images
 runs its job in its consumer image archive, which must then be a kaniko job
 image, untagged, with `CI_IMAGE_BUILDER` and `CI_IMAGE_BUILDER_JOB_IMAGE`
-added to that job alone. What builds with Buildah whatever the setting stays
-as it was: the base-image fixture, whose build runs Buildah itself, and a
-consumer build that extracts a binary with `forge-ci container build`, such
-as hello-cargo-container's, are not covered under kaniko; the Go CLI
-integration fixture's checks still need `runner.privileged_label`, and are
-not covered without it; `TestGitLabRelease_BuildImageCapability` probes a
+added to that job alone. The base-image fixture builds its base in the
+release's export jobs with the selected builder (`multiarch-image build-arch
+--stage`), and its build job only scans and uploads the staged layout when no
+verified base exists. A consumer build that extracts a binary with `forge-ci
+container build`, such as hello-cargo-container's, belongs to its export
+script. The Go CLI integration fixture's checks are Buildah's own
+integration tests, so they still need `runner.privileged_label`, and are not
+covered without it; `TestGitLabRelease_BuildImageCapability` probes a
 Buildah builder. The minimal release builds no image.
+
+The snapshot scenarios (`TestForgejoSnapshotArtifactFirst`,
+`TestGitLabSnapshotArtifactFirst`) build with the run's builder too: on
+GitLab this setting, on Forgejo `FORGE_CI_LIVE_FORGEJO_IMAGE_BUILDER`, which
+the snapshot workflow receives as the consumer's `CI_IMAGE_BUILDER` and
+`CI_IMAGE_BUILDER_JOB_IMAGE`. Under kaniko they push the kaniko job image of
+`FORGE_CI_LIVE_KANIKO_JOB_IMAGE_ARCHIVE`, labelled with their engine
+project, and build on the ordinary runner; under Buildah they need
+`runner.privileged_label`. A lab that cannot run the selected builder
+reports them not covered. A Forgejo consumer trial selects its builder with
+`CI_IMAGE_BUILDER` and refuses a different Forgejo setting. Forgejo
+development trials that build images are wired for Buildah alone and are not
+covered under kaniko.
 
 ##### 0.90.0 acceptance goals
 

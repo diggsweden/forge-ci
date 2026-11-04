@@ -145,8 +145,8 @@ func TestGitLabRelease_BuildImageCapability(t *testing.T) {
 	}
 
 	target := livetest.Accept(t, provider.ForgeGitLab)
-	label := privilegedRunner(t, target)
-	repo := livetest.NewScratchRepo(t, target, "build-image-probe")
+	label := buildahRunner(t, target, "this probe checks the build image's own Buildah on the privileged runner")
+	repo := livetest.NewPublicScratchRepo(t, target, "build-image-probe", livetest.ReadProbeAssetAnonymously)
 	image := livetest.PushJobImage(t, target, repo, archive)
 
 	const tag = "v0.0.9-build-probe"
@@ -285,9 +285,6 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 	// release's image jobs with the selected builder; the minimal release
 	// builds none.
 	kaniko := livetest.GitLabKaniko(t)
-	if kaniko && bases {
-		livetest.NotCoveredf(t, "the base-image fixture's build runs Buildah itself; it has no kaniko build")
-	}
 
 	releaseImages := gitlabConsumerReleasesImages(t, consumerRoot)
 	// A container build belongs to the export jobs, which build with the
@@ -297,6 +294,11 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 	}
 
 	exportCommand := gitlabConsumerExportCommand(t, consumerRoot, settings.Variables)
+	// The base fixture builds in the export jobs, with the selected builder;
+	// the build job only publishes what they staged.
+	if bases {
+		exportCommand = gitlabBaseExport
+	}
 
 	recovery := scenario == gitlabInterruptedConsumerRelease
 
@@ -349,12 +351,12 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 		}
 	}
 
-	layer := livetest.PushLayer(t, target, gitlabReleaseRepo(t, target, "release-engine"))
+	layer := livetest.PushLayer(t, target, gitlabReleaseRepo(t, target, "release-engine", livetest.ReadLayerAnonymously))
 
 	images := pushGitLabReleaseImages(t, target, archives, layer)
 	jobImage, buildImage, signerImage := images.job, images.build, images.signer
-	publication := gitlabReleaseRepo(t, target, "release-publication")
-	policyRepo := gitlabReleaseRepo(t, target, "release-owned-policy")
+	publication := gitlabReleaseRepo(t, target, "release-publication", "")
+	policyRepo := gitlabReleaseRepo(t, target, "release-owned-policy", "")
 
 	objectFormat := "sha1"
 	if consumer != nil {
@@ -419,8 +421,12 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 	// Buildah's image builds go to the contract's runner that permits user
 	// namespaces, with the build job; kaniko's image jobs stay on the
 	// ordinary runner, in the kaniko job image.
+	// The builder's jobs, image and export alike, resolve the selection, and
+	// a lab that cannot run it reports the scenario not covered.
 	buildRunnerTags := []string{}
-	if label := livetest.PrivilegedRunnerLabel(t, target); label != "" && (bases || consumer != nil) && !kaniko {
+	if releaseImages || len(exportCommand) != 0 {
+		buildRunnerTags = livetest.ChooseImageBuilder(t, target).RunnerLabels
+	} else if label := livetest.PrivilegedRunnerLabel(t, target); label != "" && consumer != nil && !kaniko {
 		buildRunnerTags = append(buildRunnerTags, label)
 	}
 
@@ -436,6 +442,11 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 	releasePlatforms, artifactsConfig := "", ""
 	if releaseImages || len(exportCommand) != 0 {
 		releasePlatforms = settings.Variables["RELEASE_PLATFORMS"]
+		// The base fixture takes no consumer settings: empty is amd64.
+		if bases && releasePlatforms == "" {
+			releasePlatforms = "linux/amd64"
+		}
+
 		if releasePlatforms != "linux/amd64" {
 			livetest.NotCoveredf(t, "the GitLab release image and export jobs build %s only on tagged arm64 runners, which the lab has none of", releasePlatforms)
 		}
@@ -520,7 +531,7 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 
 	if consumer != nil {
 		extra := livetest.PushGitLabGateExtraJobImages(t, target, *consumer, func(name string) string {
-			return gitlabReleaseRepo(t, target, "release-job-image-"+strings.ToLower(name))
+			return gitlabReleaseRepo(t, target, "release-job-image-"+strings.ToLower(name), livetest.ReadJobImageAnonymously)
 		})
 		request = consumer.PushGitLabRelease(t, repo, layer, livetest.GitLabGateImages{Job: jobImage, Lint: images.lint, ExtraJobs: extra})
 	} else {
@@ -765,25 +776,25 @@ type gitlabReleaseImages struct{ job, build, buildah, kaniko, signer, lint strin
 func pushGitLabReleaseImages(t *testing.T, target livetest.Target, archives gitlabReleaseArchives, layer livetest.Layer) gitlabReleaseImages {
 	t.Helper()
 
-	images := gitlabReleaseImages{job: livetest.PushJobImage(t, target, gitlabReleaseRepo(t, target, "release-job-image"), archives.job)}
+	images := gitlabReleaseImages{job: livetest.PushJobImage(t, target, gitlabReleaseRepo(t, target, "release-job-image", livetest.ReadJobImageAnonymously), archives.job)}
 
 	images.build = images.job
 
 	if archives.build != "" {
-		images.build = livetest.PushJobImage(t, target, gitlabReleaseRepo(t, target, "release-build-image"), archives.build)
+		images.build = livetest.PushJobImage(t, target, gitlabReleaseRepo(t, target, "release-build-image", livetest.ReadJobImageAnonymously), archives.build)
 	}
 
 	if archives.buildah != "" {
-		images.buildah = livetest.PushJobImage(t, target, gitlabReleaseRepo(t, target, "release-buildah-job-image"), archives.buildah)
+		images.buildah = livetest.PushJobImage(t, target, gitlabReleaseRepo(t, target, "release-buildah-job-image", livetest.ReadJobImageAnonymously), archives.buildah)
 	}
 
 	if archives.kaniko != "" {
-		images.kaniko = livetest.PushKanikoJobImage(t, target, gitlabReleaseRepo(t, target, "release-kaniko-job-image"), archives.kaniko, layer)
+		images.kaniko = livetest.PushKanikoJobImage(t, target, gitlabReleaseRepo(t, target, "release-kaniko-job-image", livetest.ReadJobImageAnonymously), archives.kaniko, layer)
 	}
 
-	images.signer = livetest.PushJobImage(t, target, gitlabReleaseRepo(t, target, "release-signer-image"), archives.signer)
+	images.signer = livetest.PushJobImage(t, target, gitlabReleaseRepo(t, target, "release-signer-image", livetest.ReadJobImageAnonymously), archives.signer)
 	if archives.lint != "" {
-		images.lint = livetest.PushJobImage(t, target, gitlabReleaseRepo(t, target, "release-lint-image"), archives.lint)
+		images.lint = livetest.PushJobImage(t, target, gitlabReleaseRepo(t, target, "release-lint-image", livetest.ReadJobImageAnonymously), archives.lint)
 	}
 
 	return images
@@ -817,11 +828,17 @@ var gitlabReleaseSecrets = []string{
 
 // gitlabReleaseRepo makes one of a release's helper projects: a scratch one a
 // trial resets and deletes, or in demo mode a kept one named after the demo.
-func gitlabReleaseRepo(t *testing.T, target livetest.Target, scenario string) string {
+// A project the jobs read without credentials names why in public, and is
+// public; any other follows the run's visibility.
+func gitlabReleaseRepo(t *testing.T, target livetest.Target, scenario, public string) string {
 	t.Helper()
 
 	if demo := livetest.DemoName(); demo != "" {
 		return livetest.NewDemoRepo(t, target, livetest.DemoHelperRepo(demo, strings.TrimPrefix(scenario, "release-")), "sha1", true)
+	}
+
+	if public != "" {
+		return livetest.NewPublicScratchRepo(t, target, scenario, public)
 	}
 
 	return livetest.NewScratchRepo(t, target, scenario)

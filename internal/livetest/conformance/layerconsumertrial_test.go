@@ -199,6 +199,17 @@ func runForgejoConsumerTrial(t *testing.T, root string, private bool) {
 	if os.Getenv("FORGE_CI_LIVE_NPM_APPLICATION_IMAGE") != "" {
 		variables["NPM_APPLICATION_REGISTRY"] = strings.TrimRight(target.BaseURL(), "/") + "/api/packages/" + target.Owner + "/npm/"
 	}
+	// The trial's CI_IMAGE_BUILDER is its builder selection; the run-wide
+	// Forgejo setting may not say otherwise.
+	trialBuilder := settings.Variables["CI_IMAGE_BUILDER"]
+	if trialBuilder == "" {
+		trialBuilder = livetest.ImageBuilderBuildah
+	}
+
+	if selected := os.Getenv(livetest.ForgejoImageBuilderEnv); selected != "" && selected != trialBuilder {
+		t.Fatalf("%s=%s, but the trial's CI_IMAGE_BUILDER selects %s; give the builder once", livetest.ForgejoImageBuilderEnv, selected, trialBuilder)
+	}
+
 	// Buildah's image builds go to the contract's runner that permits user
 	// namespaces; kaniko's stay on the ordinary runner, which may deny them.
 	if privileged := livetest.PrivilegedRunnerLabel(t, target); privileged != "" && settings.Variables["CI_IMAGE_BUILDER"] != "kaniko" {
@@ -354,7 +365,7 @@ func newConsumerRepos(t *testing.T, target livetest.Target, consumer livetest.Co
 		return layer, livetest.NewDemoRepo(t, target, livetest.DemoRepo(demo), consumer.ObjectFormat, false)
 	}
 
-	layer := livetest.PushLayer(t, target, livetest.NewScratchRepo(t, target, livetest.LayerScenario(name)))
+	layer := livetest.PushLayer(t, target, livetest.NewPublicScratchRepo(t, target, livetest.LayerScenario(name), livetest.ReadLayerAnonymously))
 	repo := livetest.NewBareScratchRepo(t, target, name, consumer.ObjectFormat, private)
 
 	// A consumer's release publishes under names of its own choosing.

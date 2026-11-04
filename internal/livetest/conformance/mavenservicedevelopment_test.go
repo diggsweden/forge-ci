@@ -52,7 +52,7 @@ func runForgejoMavenServiceCase(t *testing.T, root string, private bool) {
 		t.Fatal("service development requires native linux/amd64")
 	}
 
-	privileged := privilegedRunner(t, target)
+	privileged := buildahRunner(t, target, "the Maven service development trial builds and runs its service image with Buildah on the privileged runner; its kaniko wiring is not built")
 
 	recipe, err := filepath.Abs("../../../test/live/demos/hello-maven-service/consumer")
 	if err != nil {

@@ -49,7 +49,7 @@ func TestInRunner_KeylessSigningAgainstTheLabCA(t *testing.T) {
 			fulcioURL, oidcIssuer := livetest.FulcioConfig(t, target)
 			// A fresh path per run: GitLab will not issue an ID token for a
 			// repository path that has been used and deleted before.
-			repo := livetest.NewScratchRepoUnique(t, target, "keyless")
+			repo := livetest.NewPublicScratchRepoUnique(t, target, "keyless", livetest.ReadProbeAssetAnonymously)
 
 			livetest.PrepareTag(t, target, repo, tag)
 			staged := livetest.PublishKeylessAssets(t, target, repo, tag, t.TempDir())

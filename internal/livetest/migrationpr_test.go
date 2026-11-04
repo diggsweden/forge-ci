@@ -28,8 +28,8 @@ func TestForgejoConsumerPRUnitChecks(t *testing.T) {
 	}
 
 	target := Accept(t, provider.ForgeForgejo)
-	engine := NewBareScratchRepo(t, target, "consumer-pr-engine", "sha1", false)
-	repo := NewBareScratchRepo(t, target, "consumer-pr-units", "sha1", false)
+	engine := NewPublicBareScratchRepo(t, target, "consumer-pr-engine", "sha1", ReadLayerAnonymously)
+	repo := NewBareScratchRepo(t, target, "consumer-pr-units", "sha1", ScenarioPrivate(t))
 	digest, _ := readLayerBinary(t, reporoot.Path(t))
 	sha, _, _ := nativeSnapshotTree(t, target, engine, snapshotCandidateFiles(t))
 	nativeSnapshotPublishEngine(t, target, engine)

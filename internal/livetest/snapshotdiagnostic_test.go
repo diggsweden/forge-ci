@@ -91,8 +91,8 @@ cat snapshot-plan.json
 	}
 
 	files[".forgejo/workflows/snapshot-images.yml"] = filePayload{Body: string(body), Mode: 0644}
-	engine := NewBareScratchRepo(t, target, "snapshot-diagnostic-engine", "sha1", false)
-	consumer := NewBareScratchRepo(t, target, "snapshot-diagnostic-source", "sha1", false)
+	engine := NewPublicBareScratchRepo(t, target, "snapshot-diagnostic-engine", "sha1", ReadLayerAnonymously)
+	consumer := NewBareScratchRepo(t, target, "snapshot-diagnostic-source", "sha1", ScenarioPrivate(t))
 	engineSHA, _, _ := nativeSnapshotTree(t, target, engine, files)
 	nativeSnapshotPublishEngine(t, target, engine)
 

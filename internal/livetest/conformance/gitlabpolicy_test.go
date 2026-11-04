@@ -166,7 +166,7 @@ func TestGitLabPolicy_JobTokenCannotWriteThePublicationRegistry(t *testing.T) {
 	}
 
 	target := livetest.Accept(t, provider.ForgeGitLab)
-	publication := livetest.NewScratchRepo(t, target, "publication-registry")
+	publication := livetest.NewPublicScratchRepo(t, target, "publication-registry", "the producer's job downloads its probe asset without credentials")
 	build := livetest.NewScratchRepo(t, target, "publication-producer")
 	livetest.RestrictGitLabJobToken(t, target, build)
 	sentinel := livetest.PushImage(t, target, publication, "v0.0.0-sentinel")

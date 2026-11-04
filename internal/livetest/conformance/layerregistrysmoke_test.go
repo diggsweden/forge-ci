@@ -80,7 +80,7 @@ func runLayerRegistrySignerSmoke(t *testing.T, private bool) {
 		name     = "layer-registry-smoke"
 	)
 
-	privileged := privilegedRunner(t, livetest.Accept(t, provider.ForgeForgejo))
+	privileged := buildahRunner(t, livetest.Accept(t, provider.ForgeForgejo), "the registry signer smoke probes Buildah's storage on the privileged runner")
 
 	signer, ok := livetest.SignerImage(t)
 	if !ok {

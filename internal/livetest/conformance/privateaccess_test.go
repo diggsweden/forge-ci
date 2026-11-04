@@ -23,6 +23,8 @@ func TestInRunner_PrivateSourceBranchAcceptsJobToken(t *testing.T) {
 		t.Run(string(forge), func(t *testing.T) {
 			t.Parallel()
 
+			livetest.RequireVisibility(t, true, "the scenario proves a private repository refuses an anonymous read and admits the job token")
+
 			target := livetest.Accept(t, forge)
 			repo := livetest.NewBareScratchRepo(t, target, "private-source-token", "sha1", true)
 			livetest.CommitFiles(t, target, repo, livetest.FileCommit{

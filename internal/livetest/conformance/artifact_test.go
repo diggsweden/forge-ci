@@ -159,7 +159,7 @@ func TestInRunner_ArtifactRoundTripsThroughTheStore(t *testing.T) {
 			t.Parallel()
 
 			target := livetest.Accept(t, forge)
-			repo := livetest.NewScratchRepo(t, target, "artifact-roundtrip")
+			repo := livetest.NewPublicScratchRepo(t, target, "artifact-roundtrip", livetest.ReadProbeAssetAnonymously)
 
 			livetest.PrepareTag(t, target, repo, tag)
 			livetest.PublishBinaryAsset(t, target, repo, tag, t.TempDir())
@@ -253,7 +253,7 @@ func TestInRunner_GitLabReleaseHandoffRejectsTamperedBytes(t *testing.T) {
 	}
 
 	target := livetest.Accept(t, provider.ForgeGitLab)
-	repo := livetest.NewScratchRepo(t, target, "release-handoff-rejection")
+	repo := livetest.NewPublicScratchRepo(t, target, "release-handoff-rejection", livetest.ReadProbeAssetAnonymously)
 
 	const tag = "v0.0.9-probe"
 	livetest.PrepareTag(t, target, repo, tag)

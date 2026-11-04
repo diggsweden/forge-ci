@@ -72,7 +72,7 @@ func newLayerScenario(t *testing.T, name string, private bool, objectFormat stri
 	}
 
 	scenario := layerScenario{target: target, label: livetest.RunnerLabel(t, target)}
-	scenario.layer = livetest.PushLayer(t, target, livetest.NewScratchRepo(t, target, livetest.LayerScenario(name)))
+	scenario.layer = livetest.PushLayer(t, target, livetest.NewPublicScratchRepo(t, target, livetest.LayerScenario(name), livetest.ReadLayerAnonymously))
 	scenario.repo = livetest.NewBareScratchRepo(t, target, name, objectFormat, private)
 	seed := livetest.CommitFiles(t, target, scenario.repo, livetest.FileCommit{
 		Branch: layerMain, Message: "test: initialize the layer consumer",
@@ -100,19 +100,19 @@ func runnerLabelsJSON(t *testing.T, label string) string {
 	return string(encoded)
 }
 
-// privilegedRunner is the contract's runner that permits user namespaces, or
-// skips: a scenario that builds images with Buildah cannot run on the
-// ordinary runner, which may deny them.
-func privilegedRunner(t *testing.T, target livetest.Target) string {
+// buildahRunner is the contract's runner that permits user namespaces, for a
+// scenario whose image builds are wired for Buildah only, which why says. It
+// resolves the run's builder selection: a run that selects kaniko, or a lab
+// without that runner, reports the scenario not covered rather than building
+// with Buildah regardless.
+func buildahRunner(t *testing.T, target livetest.Target, why string) string {
 	t.Helper()
 
-	label := livetest.PrivilegedRunnerLabel(t, target)
-	if label == "" {
-		t.Skip("the contract names no runner that permits user namespaces, which rootless Buildah needs; " +
-			"start the lab's runners with the full-release acknowledgement and mint the contract again")
+	if livetest.SelectedImageBuilder(t, target.Forge) == livetest.ImageBuilderKaniko {
+		livetest.NotCoveredf(t, "%s, and the run selects kaniko (%s=kaniko)", why, livetest.ImageBuilderEnv(target.Forge))
 	}
 
-	return label
+	return livetest.ChooseImageBuilder(t, target).RunnerLabels[0]
 }
 
 // render fills a fixture for this scenario's repository.

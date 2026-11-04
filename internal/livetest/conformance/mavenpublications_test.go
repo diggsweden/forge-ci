@@ -30,7 +30,7 @@ func TestInRunner_ExportedMavenPublications(t *testing.T) {
 			t.Run(string(forge)+"/"+mode, func(t *testing.T) {
 				t.Parallel()
 				target := livetest.Accept(t, forge)
-				repo := livetest.NewScratchRepo(t, target, "mavenfiles-"+mode)
+				repo := livetest.NewPublicScratchRepo(t, target, "mavenfiles-"+mode, livetest.ReadProbeAssetAnonymously)
 
 				version := forgePackageVersion(time.Now())
 				if mode == "snapshot" {

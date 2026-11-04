@@ -62,7 +62,7 @@ func runForgejoNPMApplicationDevelopment(t *testing.T, root string, private bool
 
 	main := consumer.Push(t, repo, plan)
 	head := consumer.PushChange(t, repo, c.Branch, main)
-	label := privilegedRunner(t, target)
+	label := buildahRunner(t, target, "the npm application development trial builds with Buildah on the privileged runner; its kaniko wiring is not built")
 
 	scenario := layerScenario{target: target, repo: repo, layer: layer, label: label}
 	defer func() {

@@ -82,3 +82,4 @@ Current architectural decisions and the constraints future changes must retain.
 - [Validation Invariants](validation-invariants.md) - Invariants and regressions from native consumer trials.
 - [Scripts](scripts.md) - Remaining bootstrap scripts and the workflow surface moved to the Go binary.
 - [Workflow Design Policy](workflow-design-policy.md) - Design rules for maintainers extending the workflow graph.
+- [Roadmap](roadmap.md) - Product features agreed for later, and why each waits.

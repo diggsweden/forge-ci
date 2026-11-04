@@ -178,11 +178,11 @@ func createInitialisedRepo(ctx context.Context, tb TB, target Target, repo strin
 	tb.Helper()
 
 	endpoint, body := target.BaseURL()+"/api/v1/user/repos", map[string]any{
-		fieldName: repo, fieldDefaultBranch: defaultBranch, fieldPrivate: false, "auto_init": true,
+		fieldName: repo, fieldDefaultBranch: defaultBranch, fieldPrivate: false, fieldAutoInit: true,
 	}
 	if target.Forge == provider.ForgeGitLab {
 		endpoint, body = target.BaseURL()+"/api/v4/projects", map[string]any{
-			fieldName: repo, fieldPath: repo, "visibility": visibilityPublic, fieldDefaultBranch: defaultBranch,
+			fieldName: repo, fieldPath: repo, fieldVisibility: visibilityPublic, fieldDefaultBranch: defaultBranch,
 			"initialize_with_readme": true, "auto_devops_enabled": false,
 		}
 	}

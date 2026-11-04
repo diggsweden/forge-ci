@@ -50,6 +50,7 @@ func TestInRunner_PrivateGHCRJobImage(t *testing.T) {
 			target := livetest.Accept(t, forge)
 			arch := livetest.RunnerArch(t, target)
 			requirePrivateGHCRImage(t, ref, credential, arch)
+			livetest.RequireVisibility(t, true, "the scenario pulls a private job image into a private repository's job")
 			repo := livetest.NewBareScratchRepo(t, target, "private-job-image", "sha1", true)
 			livetest.CommitFiles(t, target, repo, livetest.FileCommit{
 				Branch: "main", Message: "test: initialize private image pull probe",

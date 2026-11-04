@@ -78,7 +78,7 @@ func TestInRunner_ForgePackages_NPMPublishReachesTheRegistry(t *testing.T) {
 			t.Parallel()
 
 			target := livetest.Accept(t, forge)
-			repo := livetest.NewScratchRepo(t, target, "pkgnpm")
+			repo := livetest.NewPublicScratchRepo(t, target, "pkgnpm", livetest.ReadProbeAssetAnonymously)
 
 			livetest.PrepareTag(t, target, repo, tag)
 			livetest.PublishBinaryAsset(t, target, repo, tag, t.TempDir())
@@ -383,7 +383,7 @@ func TestInRunner_ForgePackages_MavenDeployReachesTheRegistry(t *testing.T) {
 			t.Parallel()
 
 			target := livetest.Accept(t, forge)
-			repo := livetest.NewScratchRepo(t, target, "pkgmvn")
+			repo := livetest.NewPublicScratchRepo(t, target, "pkgmvn", livetest.ReadProbeAssetAnonymously)
 
 			livetest.PrepareTag(t, target, repo, tag)
 			livetest.PublishBinaryAsset(t, target, repo, tag, t.TempDir())

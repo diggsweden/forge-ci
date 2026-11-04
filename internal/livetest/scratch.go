@@ -47,6 +47,8 @@ const (
 	fieldPrivate       = "private"
 	fieldDefaultBranch = "default_branch"
 	fieldPath          = "path"
+	fieldAutoInit      = "auto_init"
+	fieldVisibility    = "visibility"
 )
 
 // labClients caches one module client per accepted target. Construction makes
@@ -59,12 +61,32 @@ var labClients sync.Map
 func ScratchRepo(scenario string) string { return ResourcePrefix + scenario }
 
 // NewScratchRepo brings an empty repository into existence at a known state and
-// registers its teardown.
+// registers its teardown. It is private when the run asks for private
+// repositories only (ScenarioPrivate), and public otherwise.
 //
 // It deletes first. A previous run that died between create and cleanup would
 // otherwise leave a repository whose contents no scenario planned, and "start
 // from empty" would be a lie told once and believed forever after.
 func NewScratchRepo(tb TB, target Target, scenario string) string {
+	tb.Helper()
+
+	return newScratchRepo(tb, target, scenario, ScenarioPrivate(tb))
+}
+
+// NewPublicScratchRepo is NewScratchRepo for a repository that stands in for
+// the public forge-ci distribution or the lab's infrastructure, which reason
+// names (one of the Read*Anonymously reasons): an engine layer, a job image,
+// a probe's release asset, or a scenario whose subject is an anonymous read.
+// It is public in every run, a private one included, and the scenario runs;
+// only the repositories holding the code under test follow the run.
+func NewPublicScratchRepo(tb TB, target Target, scenario, reason string) string {
+	tb.Helper()
+	requirePublicReason(tb, ScratchRepo(scenario), reason)
+
+	return newScratchRepo(tb, target, scenario, false)
+}
+
+func newScratchRepo(tb TB, target Target, scenario string, private bool) string {
 	tb.Helper()
 	requireAccepted(tb, target)
 
@@ -79,11 +101,51 @@ func NewScratchRepo(tb TB, target Target, scenario string) string {
 	ctx, cancel := context.WithTimeout(Context(tb), timeoutScratch)
 	defer cancel()
 
-	if err := repos.Recreate(ctx, repo); err != nil {
-		tb.Fatalf("livetest: reset and create %s/%s: %v", target.Owner, repo, err)
+	// The module creates public repositories only; a private one gets the
+	// same initialisation from the one creating request made here, after the
+	// module's own delete and inside its prefix.
+	if !private {
+		if err := repos.Recreate(ctx, repo); err != nil {
+			tb.Fatalf("livetest: reset and create %s/%s: %v", target.Owner, repo, err)
+		}
+
+		return repo
 	}
 
+	if err := repos.Delete(ctx, repo); err != nil {
+		tb.Fatalf("livetest: reset %s/%s: %v", target.Owner, repo, err)
+	}
+
+	createPrivateScratchRepo(ctx, tb, target, repo)
+
 	return repo
+}
+
+// createPrivateScratchRepo creates a private repository initialised as the
+// module's public one is: on Forgejo with a first commit on main, on GitLab
+// bare, because GitLab's README initialisation is asynchronous.
+func createPrivateScratchRepo(ctx context.Context, tb TB, target Target, repo string) {
+	tb.Helper()
+
+	endpoint, body := target.BaseURL()+"/api/v1/user/repos", map[string]any{
+		fieldName: repo, fieldDefaultBranch: defaultBranch, fieldPrivate: true, fieldAutoInit: true,
+	}
+
+	switch target.Forge {
+	case provider.ForgeForgejo:
+	case provider.ForgeGitLab:
+		endpoint, body = target.BaseURL()+"/api/v4/projects", map[string]any{
+			fieldName: repo, fieldPath: repo, fieldVisibility: visibilityPrivate,
+		}
+	case provider.ForgeGitHub, provider.ForgeLocal:
+		tb.Fatalf("livetest: private scratch repositories are unsupported on %s", target.Forge)
+	}
+
+	if err := discard(ctx, target, http.MethodPost, endpoint, body, http.StatusCreated); err != nil {
+		tb.Fatalf("livetest: create private %s/%s: %v", target.Owner, repo, err)
+	}
+
+	requireScratchVisibility(ctx, tb, target, repo, true)
 }
 
 // keepOrDeleteAfter registers a scratch repository's teardown.
@@ -125,7 +187,27 @@ func keepOrDeleteAfter(tb TB, target Target, repo string) {
 // The module's lifecycle creates an initialised SHA-1 repository and has no
 // option for either, so the one creating request is made here, after the
 // module's own delete and inside its prefix.
+//
+// private is the visibility of the scenario's case: a ConsumerVisibility's,
+// ScenarioPrivate's, or one RequireVisibility admitted. A visibility the run
+// does not ask for fails the test before anything is created.
 func NewBareScratchRepo(tb TB, target Target, scenario, objectFormat string, private bool) string {
+	tb.Helper()
+	requireRunVisibility(tb, ScratchRepo(scenario), private)
+
+	return newBareScratchRepo(tb, target, scenario, objectFormat, private)
+}
+
+// NewPublicBareScratchRepo is NewBareScratchRepo for a public repository the
+// product or the scenario reads without credentials, as NewPublicScratchRepo.
+func NewPublicBareScratchRepo(tb TB, target Target, scenario, objectFormat, reason string) string {
+	tb.Helper()
+	requirePublicReason(tb, ScratchRepo(scenario), reason)
+
+	return newBareScratchRepo(tb, target, scenario, objectFormat, false)
+}
+
+func newBareScratchRepo(tb TB, target Target, scenario, objectFormat string, private bool) string {
 	tb.Helper()
 	requireAccepted(tb, target)
 
@@ -155,7 +237,7 @@ func createBareRepo(ctx context.Context, tb TB, target Target, repo, objectForma
 
 	if target.Forge == provider.ForgeGitLab {
 		body := map[string]any{
-			fieldName: repo, fieldPath: repo, "visibility": visibilityName(private), fieldDefaultBranch: defaultBranch,
+			fieldName: repo, fieldPath: repo, fieldVisibility: visibilityName(private), fieldDefaultBranch: defaultBranch,
 			"initialize_with_readme": false, "repository_object_format": objectFormat,
 			"auto_devops_enabled": false, "only_allow_merge_if_pipeline_succeeds": true,
 			"allow_merge_on_skipped_pipeline": false,
@@ -178,7 +260,7 @@ func createBareRepo(ctx context.Context, tb TB, target Target, repo, objectForma
 	}
 
 	body := map[string]any{
-		fieldName: repo, fieldDefaultBranch: defaultBranch, fieldPrivate: private, "auto_init": false, "object_format_name": objectFormat,
+		fieldName: repo, fieldDefaultBranch: defaultBranch, fieldPrivate: private, fieldAutoInit: false, "object_format_name": objectFormat,
 	}
 	if err := discard(ctx, target, http.MethodPost, target.BaseURL()+"/api/v1/user/repos", body, http.StatusCreated); err != nil {
 		tb.Fatalf("livetest: create %s/%s with object format %s: %v", target.Owner, repo, objectFormat, err)
@@ -296,6 +378,12 @@ func setActions(ctx context.Context, tb TB, target Target, repo string, enabled 
 // this suite owns, and a lab is disposable -- which is the trade being made.
 func NewScratchRepoUnique(tb TB, target Target, scenario string) string {
 	tb.Helper()
+
+	return newScratchRepoUnique(tb, target, scenario, ScenarioPrivate(tb))
+}
+
+func newScratchRepoUnique(tb TB, target Target, scenario string, private bool) string {
+	tb.Helper()
 	requireAccepted(tb, target)
 
 	// Lowercase alphanumerics only. This name reaches the URLs the SDKs build
@@ -310,7 +398,7 @@ func NewScratchRepoUnique(tb TB, target Target, scenario string) string {
 	// be reused can at least be swept.
 	sweepScratchRepos(tb, target, ScratchRepo(scenario)+"-")
 
-	return NewScratchRepo(tb, target, scenario+"-"+unique)
+	return newScratchRepo(tb, target, scenario+"-"+unique, private)
 }
 
 // DeleteScratchRepo removes a scratch repository and what the forge keeps
@@ -566,4 +654,13 @@ func scratchClient(target Target) (*labclient.Client, error) {
 	}
 
 	return client, nil
+}
+
+// NewPublicScratchRepoUnique is NewScratchRepoUnique for a repository read
+// without credentials, as NewPublicScratchRepo.
+func NewPublicScratchRepoUnique(tb TB, target Target, scenario, reason string) string {
+	tb.Helper()
+	requirePublicReason(tb, ScratchRepo(scenario), reason)
+
+	return newScratchRepoUnique(tb, target, scenario, false)
 }

@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -81,16 +82,26 @@ func TestSnapshotNativeExactCleanup(t *testing.T) {
 
 const snapshotNativeToolsImage = "ghcr.io/diggsweden/forge-ci-runtime-go-1.27@sha256:450b351477a8cf8ea9f5a58d704d24a046162dc696f452bfc6190de25e80b05e"
 
+// TestGitLabSnapshotBuilderCapability probes Buildah's capability on the
+// contract's privileged runner. A run that selects kaniko has none to probe:
+// TestGitLabSnapshotArtifactFirst builds its snapshot with kaniko instead.
 func TestGitLabSnapshotBuilderCapability(t *testing.T) {
 	RegisterLiveScenario(t)
 	target := Accept(t, provider.ForgeGitLab)
-	label := PrivilegedRunnerLabel(t, target)
 
-	if label == "" || RunnerArch(t, target) != "amd64" {
-		t.Fatal("advertised native amd64 privileged runner required")
+	if SelectedImageBuilder(t, target.Forge) != ImageBuilderBuildah {
+		NotCoveredf(t, "this probe checks Buildah's user namespaces on the privileged runner, and the run selects kaniko; TestGitLabSnapshotArtifactFirst builds with kaniko")
 	}
 
-	repo := NewBareScratchRepo(t, target, "snapshot-builder-probe", "sha1", false)
+	choice := ChooseImageBuilder(t, target)
+
+	if RunnerArch(t, target) != "amd64" {
+		t.Fatal("this focused snapshot probe requires a native amd64 runner")
+	}
+
+	label := choice.RunnerLabels[0]
+
+	repo := NewPublicBareScratchRepo(t, target, "snapshot-builder-probe", "sha1", ReadLayerAnonymously)
 	files := snapshotCandidateFiles(t)
 	sha, _, _ := nativeSnapshotTree(t, target, repo, files)
 	nativeSnapshotPublishEngine(t, target, repo)
@@ -129,7 +140,7 @@ func TestGitLabSnapshotBuilderCapability(t *testing.T) {
 		t.Fatalf("native snapshot builder capability failed: %s", status)
 	}
 
-	t.Logf("native GitLab snapshot builder passed: repository=%s pinned-helper=%s image=%s runner=%s", RepoSlug(target, repo), sha, snapshotNativeToolsImage, label)
+	t.Logf("native GitLab snapshot builder passed: builder=buildah repository=%s pinned-helper=%s image=%s runner=%s", RepoSlug(target, repo), sha, snapshotNativeToolsImage, label)
 }
 
 func TestForgejoSnapshotArtifactFirst(t *testing.T) {
@@ -144,17 +155,17 @@ func TestForgejoSnapshotArtifactFirst(t *testing.T) {
 		t.Fatal("this focused snapshot smoke requires native amd64")
 	}
 
-	engine := NewBareScratchRepo(t, target, "snapshot-engine", "sha1", false)
-	consumer := NewBareScratchRepo(t, target, "snapshot-artifact", "sha1", false)
+	// The snapshot builds with the run's builder, on the runner it needs;
+	// the workflow reads it from the consumer's CI_IMAGE_BUILDER variables.
+	choice := ChooseImageBuilder(t, target)
+
+	engine := NewPublicBareScratchRepo(t, target, "snapshot-engine", "sha1", ReadLayerAnonymously)
+	consumer := NewBareScratchRepo(t, target, "snapshot-artifact", "sha1", ScenarioPrivate(t))
 	engineSHA, _, _ := nativeSnapshotTree(t, target, engine, snapshotCandidateFiles(t))
 	nativeSnapshotPublishEngine(t, target, engine)
+	jobImage := choice.JobImage(t, target, engine, nativeSnapshotLayer(target, engine))
 
-	privileged := PrivilegedRunnerLabel(t, target)
-	if privileged == "" {
-		t.Fatal("native Buildah snapshot acceptance requires the advertised privileged runner")
-	}
-
-	label, err := json.Marshal([]string{privileged})
+	label, err := json.Marshal(choice.RunnerLabels)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,6 +204,12 @@ jobs:
 	source := nativeSnapshotSelected(t, target, consumer, dir, git)
 	EnableActions(t, target, consumer)
 	SetRepoVariable(t, target, consumer, "CI_RUNNER_LABEL", string(label))
+	SetRepoVariable(t, target, consumer, "CI_IMAGE_BUILDER", choice.Builder)
+
+	if jobImage != "" {
+		SetRepoVariable(t, target, consumer, "CI_IMAGE_BUILDER_JOB_IMAGE", jobImage)
+	}
+
 	SetRepoSecret(t, target, consumer, "SNAPSHOT_REGISTRY_PASSWORD", target.Token)
 
 	ctx, cancel := context.WithTimeout(Context(t), time.Minute)
@@ -244,7 +261,13 @@ jobs:
 	}
 
 	snapshotRegistryCanary(t, t.Context(), receipt.Ref, receipt.Tag, target.CredentialUsername, target.Token, file.SHA256, source, options...)
-	t.Logf("native snapshot accepted: forge=forgejo run=%d candidate=%s policy=%s source=%s ref=%s tag=%s mode=%s sha256=%s", run.ID, engineSHA, policy, source, receipt.Ref, receipt.Tag, file.Mode, file.SHA256)
+	t.Logf("native snapshot accepted: forge=forgejo builder=%s run=%d candidate=%s policy=%s source=%s ref=%s tag=%s mode=%s sha256=%s", choice.Builder, run.ID, engineSHA, policy, source, receipt.Ref, receipt.Tag, file.Mode, file.SHA256)
+}
+
+// nativeSnapshotLayer is the layer coordinate a snapshot's engine repository
+// serves, which a kaniko job image's source label must name.
+func nativeSnapshotLayer(target Target, engine string) Layer {
+	return Layer{ServerURL: strings.TrimSuffix(target.endpoint.WebBaseURL, "/"), Repository: RepoSlug(target, engine)}
 }
 
 func waitSnapshotDispatch(t *testing.T, target Target, repo, source string) WorkflowRun {
@@ -400,15 +423,25 @@ func TestGitLabSnapshotArtifactFirst(t *testing.T) {
 		t.Fatal("focused GitLab snapshot smoke requires native amd64")
 	}
 
-	privileged := PrivilegedRunnerLabel(t, target)
-	if privileged == "" {
-		NotCoveredf(t, "existing native Buildah-capable GitLab runner unavailable")
-	}
+	// The snapshot builds with the run's builder: Buildah on the privileged
+	// runner in the tools image, or kaniko on the ordinary runner in the
+	// kaniko job image, which is then the build image too.
+	choice := ChooseImageBuilder(t, target)
 
-	engine := NewBareScratchRepo(t, target, "snapshot-engine", "sha1", false)
-	consumer := NewBareScratchRepo(t, target, "snapshot-artifact", "sha1", false)
+	engine := NewPublicBareScratchRepo(t, target, "snapshot-engine", "sha1", ReadLayerAnonymously)
+	consumer := NewBareScratchRepo(t, target, "snapshot-artifact", "sha1", ScenarioPrivate(t))
 	engineSHA, _, _ := nativeSnapshotTree(t, target, engine, snapshotCandidateFiles(t))
 	nativeSnapshotPublishEngine(t, target, engine)
+
+	buildImage := snapshotNativeToolsImage
+	if jobImage := choice.JobImage(t, target, engine, nativeSnapshotLayer(target, engine)); jobImage != "" {
+		buildImage = jobImage
+	}
+
+	builderJobImage := ""
+	if choice.Builder == ImageBuilderKaniko {
+		builderJobImage = buildImage
+	}
 
 	registry, err := RegistryHost(target)
 	if err != nil {
@@ -417,12 +450,13 @@ func TestGitLabSnapshotArtifactFirst(t *testing.T) {
 
 	imageRepository := registry + "/" + strings.ToLower(RepoSlug(target, consumer))
 
-	tagJSON, err := json.Marshal([]string{privileged})
+	tagJSON, err := json.Marshal(choice.RunnerLabels)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	workflow := strings.NewReplacer("ENGINE_REPOSITORY", RepoSlug(target, engine), "ENGINE_SHA", engineSHA, "FORGE_HOST", strings.TrimPrefix(target.BaseURL(), "https://"), "TOOLS_IMAGE", snapshotNativeToolsImage, "IMAGE_REPOSITORY", imageRepository, "BUILD_TAGS", string(tagJSON)).Replace(`workflow:
+	workflow := strings.NewReplacer("ENGINE_REPOSITORY", RepoSlug(target, engine), "ENGINE_SHA", engineSHA, "FORGE_HOST", strings.TrimPrefix(target.BaseURL(), "https://"), "TOOLS_IMAGE", snapshotNativeToolsImage, "IMAGE_REPOSITORY", imageRepository, "BUILD_TAGS", string(tagJSON), "BUILD_IMAGE", buildImage,
+		"IMAGE_BUILDER", choice.Builder, "BUILDER_JOB_IMAGE", strconv.Quote(builderJobImage)).Replace(`workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "api"'
 stages: [deploy]
@@ -433,9 +467,11 @@ include:
       image-repository: IMAGE_REPOSITORY
       forge-ci-repository: ENGINE_REPOSITORY
       job-image: TOOLS_IMAGE
-      build-image: TOOLS_IMAGE
+      build-image: BUILD_IMAGE
       artifact-job-image-go: TOOLS_IMAGE
       build-runner-tags: BUILD_TAGS
+      image-builder: IMAGE_BUILDER
+      builder-job-image: BUILDER_JOB_IMAGE
 `)
 	files := snapshotCanaryFiles(false)
 	files[".gitlab-ci.yml"] = filePayload{Body: workflow, Mode: 0644}
@@ -557,7 +593,7 @@ include:
 	}
 
 	snapshotRegistryCanary(t, t.Context(), receipt.Ref, receipt.Tag, target.CredentialUsername, target.Token, file.SHA256, source, options...)
-	t.Logf("native snapshot accepted: forge=gitlab pipeline=%d candidate=%s policy=%s source=%s ref=%s tag=%s mode=%s sha256=%s", run.ID, engineSHA, policy, source, receipt.Ref, receipt.Tag, file.Mode, file.SHA256)
+	t.Logf("native snapshot accepted: forge=gitlab builder=%s pipeline=%d candidate=%s policy=%s source=%s ref=%s tag=%s mode=%s sha256=%s", choice.Builder, run.ID, engineSHA, policy, source, receipt.Ref, receipt.Tag, file.Mode, file.SHA256)
 }
 
 func nativeSnapshotGitLabSettle(t *testing.T, client *gitlabapi.Client, project string, id int64) {

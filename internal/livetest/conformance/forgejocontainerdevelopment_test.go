@@ -40,7 +40,7 @@ func TestForgejoLayer_ContainerDevelopment(t *testing.T) {
 			}
 
 			target := livetest.Accept(t, provider.ForgeForgejo)
-			privileged := privilegedRunner(t, target)
+			privileged := buildahRunner(t, target, "the container-first development trial builds with Buildah on the privileged runner; its kaniko wiring is not built")
 
 			if livetest.RunnerArch(t, target) != "amd64" {
 				t.Fatal("the Cargo fixture requires a native linux/amd64 image builder")

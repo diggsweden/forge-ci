@@ -11,6 +11,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/random"
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/provider"
 )
 
 // The trial labels a kaniko job image with the layer it runs from, and only an
@@ -71,5 +72,28 @@ func TestGitLabKanikoReadsTheTrialsSetting(t *testing.T) {
 		if got := GitLabKaniko(t); got != want {
 			t.Errorf("%s=%q: GitLabKaniko() = %v, want %v", GitLabImageBuilderEnv, value, got, want)
 		}
+	}
+}
+
+func TestSelectedImageBuilderReadsEachForgesSetting(t *testing.T) {
+	t.Setenv(GitLabImageBuilderEnv, ImageBuilderKaniko)
+	t.Setenv(ForgejoImageBuilderEnv, "")
+
+	if got := SelectedImageBuilder(t, provider.ForgeGitLab); got != ImageBuilderKaniko {
+		t.Errorf("GitLab builder = %q, want kaniko", got)
+	}
+
+	if got := SelectedImageBuilder(t, provider.ForgeForgejo); got != ImageBuilderBuildah {
+		t.Errorf("Forgejo builder = %q, want buildah: the GitLab setting must not select it", got)
+	}
+
+	t.Setenv(ForgejoImageBuilderEnv, ImageBuilderKaniko)
+
+	if got := SelectedImageBuilder(t, provider.ForgeForgejo); got != ImageBuilderKaniko {
+		t.Errorf("Forgejo builder = %q, want kaniko", got)
+	}
+
+	if env := ImageBuilderEnv(provider.ForgeGitHub); env != "" {
+		t.Errorf("GitHub has no live builder setting, got %q", env)
 	}
 }

@@ -104,7 +104,7 @@ func TestInRunner_ForgeInjectedRegistryCredentialAuthenticates(t *testing.T) {
 			t.Parallel()
 
 			target := livetest.Accept(t, forge)
-			repo := livetest.NewScratchRepo(t, target, "regauth")
+			repo := livetest.NewPublicScratchRepo(t, target, "regauth", livetest.ReadProbeAssetAnonymously)
 
 			livetest.PrepareTag(t, target, repo, tag)
 			staged := livetest.PublishRegistryAuthAssets(t, target, repo, tag, t.TempDir())

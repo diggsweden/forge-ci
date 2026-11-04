@@ -84,7 +84,7 @@ func runGitLabDevelopment(t *testing.T, root string, private bool, acceptance de
 		t.Fatal("the development consumer must include .gitlab/merge-request.yml from its branch .gitlab-ci.yml")
 	}
 
-	engine := livetest.NewScratchRepo(t, target, "gitlab-development-layer")
+	engine := livetest.NewPublicScratchRepo(t, target, "gitlab-development-layer", livetest.ReadLayerAnonymously)
 	layer := livetest.PushLayer(t, target, engine)
 
 	archive := os.Getenv("FORGE_CI_LIVE_CONSUMER_IMAGE_ARCHIVE")
@@ -113,7 +113,7 @@ func runGitLabDevelopment(t *testing.T, root string, private bool, acceptance de
 	}
 
 	if lint := os.Getenv("FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE"); lint != "" {
-		images.Lint = livetest.PushJobImage(t, target, livetest.NewScratchRepo(t, target, "gitlab-development-lint"), lint)
+		images.Lint = livetest.PushJobImage(t, target, livetest.NewPublicScratchRepo(t, target, "gitlab-development-lint", livetest.ReadJobImageAnonymously), lint)
 	}
 
 	repo := livetest.NewBareScratchRepo(t, target, "gitlab-consumer-development", consumer.ObjectFormat, private)

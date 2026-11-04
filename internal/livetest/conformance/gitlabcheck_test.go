@@ -38,12 +38,15 @@ func TestGitLabCheck_ChecksOutPrivateConsumerWithJobToken(t *testing.T) {
 func runGitLabCheck(t *testing.T, private bool) {
 	t.Helper()
 
+	// Each case checks out a consumer of its own visibility.
+	livetest.RequireVisibility(t, private, "this case checks out a consumer of the other visibility")
+
 	if !livetest.Requires(t, provider.ForgeGitLab, livetest.NeedsInRunner) {
 		livetest.NotCoveredf(t, "the selected endpoints provide no GitLab runner for component execution")
 	}
 
 	target := livetest.Accept(t, provider.ForgeGitLab)
-	engine := livetest.NewScratchRepo(t, target, "check-engine")
+	engine := livetest.NewPublicScratchRepo(t, target, "check-engine", livetest.ReadLayerAnonymously)
 	root := reporoot.Path(t)
 
 	client, err := gitlabapi.NewClient(target.Token,

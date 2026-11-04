@@ -244,7 +244,7 @@ func TestGitLabRelease_PromotionRetryAfterRegistryWrite(t *testing.T) {
 	}
 
 	target := livetest.Accept(t, provider.ForgeGitLab)
-	repo := livetest.NewScratchRepo(t, target, "promotion-retry")
+	repo := livetest.NewPublicScratchRepo(t, target, "promotion-retry", livetest.ReadProbeAssetAnonymously)
 	project := livetest.RepoSlug(target, repo)
 
 	const candidateTag, finalTag, assetTag = "staging-v0.0.1", "v0.0.1", "v0.0.9-probe"

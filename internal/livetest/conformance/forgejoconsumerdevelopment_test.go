@@ -61,7 +61,7 @@ func runForgejoConsumerDevelopment(t *testing.T, acceptance developmentAcceptanc
 			// The runner the development job is expected on.
 			jobLabel := livetest.RunnerLabel(t, target)
 			if acceptance.buildsImages {
-				jobLabel = privilegedRunner(t, target)
+				jobLabel = buildahRunner(t, target, "the image-building development trial builds with Buildah on the privileged runner; its kaniko wiring is not built")
 			}
 
 			if acceptance.checkPublication != nil && livetest.RunnerArch(t, target) != "amd64" {

@@ -70,3 +70,13 @@ func TestConsumerVisibilityRequiresExplicitProviderFacts(t *testing.T) {
 		}
 	}
 }
+
+func TestScenarioPrivateOnlyWhenTheRunAsksForPrivateAlone(t *testing.T) {
+	for value, want := range map[string]bool{"": false, "both": false, "public": false, "private": true} {
+		t.Setenv(consumerVisibilityEnv, value)
+
+		if got := ScenarioPrivate(t); got != want {
+			t.Errorf("%s=%q: ScenarioPrivate() = %v, want %v", consumerVisibilityEnv, value, got, want)
+		}
+	}
+}

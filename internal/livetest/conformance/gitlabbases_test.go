@@ -137,18 +137,42 @@ func mergeGitLabNextCandidate(t *testing.T, client *gitlabapi.Client, target liv
 	return merged.MergeCommitSHA
 }
 
-// One tiny amd64 scratch image, no consumer toolchain or release matrix. The
-// second request must find verified evidence and never enter the build branch.
+// gitlabBaseInputID is the base fixture's content-addressed input identity.
+const gitlabBaseInputID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+// gitlabBaseExport builds the base fixture, one tiny scratch image, in the
+// release's export jobs: once per selected architecture, natively, with the
+// policy's image builder (Buildah or kaniko) in its job image, and with no
+// credential. The engine's builder-neutral two-phase build stages the image
+// as an OCI layout, uploading nothing; the build job publishes it only when
+// the release finds no verified base. Export commands take no single quote.
+var gitlabBaseExport = []string{
+	`base_context=$(mktemp -d)`,
+	`printf "one immutable base fixture\n" > "${base_context}/base.txt"`,
+	`printf "FROM scratch\nCOPY base.txt /base.txt\n" > "${base_context}/Containerfile"`,
+	`forge-ci container multiarch-image build-arch --stage --arch "${EXPORT_ARCH}" --source-sha "${RELEASE_SHA}"` +
+		` --containerfile "${base_context}/Containerfile" --context "${base_context}"` +
+		` --image-repository "${CI_REGISTRY_IMAGE}/bases" --tag "staging-` + gitlabBaseInputID + `-go"` +
+		` --name base --metadata-dir "dist/base-arch-${EXPORT_ARCH}"`,
+}
+
+// The second request must find verified evidence and never publish the
+// staged base: no consumer toolchain or release matrix, and no image builder
+// in this job, which only scans and uploads what the export jobs staged.
 const gitlabBaseBuild = `# Verification uses an isolated subprocess, including on a warm-only build.
 # A tool-manager shim needing additional environment is not a usable verifier.
 env -i HOME="${HOME}" PATH="${PATH}" cosign version
-mkdir dist
+# The export jobs' staged base layouts arrive in dist/; they are no release file.
+mkdir -p dist
+base_layouts="${RC_WORK}/base-layouts"
+mkdir -m 0700 "${base_layouts}"
+for layout in dist/base-arch-*; do mv -- "${layout}" "${base_layouts}/"; done
 printf '%s\n' "${COSIGN_PUBLIC_KEY%$'\n'}" > "${RC_WORK}/base-key.pub"
 printf '%s\n' "${RC_PUBLIC_KEY_SHA256}" > "${RC_WORK}/base-key.sha256"
 forge-ci platform stage-public-key --source "${RC_WORK}/base-key.pub" \
   --digest-file "${RC_WORK}/base-key.sha256" --workspace "$PWD" --destination .base-trust.pub
 printf 'go\n' > .base-flavors
-base_id=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+base_id=` + gitlabBaseInputID + `
 forge-ci --format json container base-images validate --expected-repository "${RC_PUBLICATION_IMAGE_REPOSITORY}/bases" \
   --expected-source "${CI_PROJECT_URL}" --expected-workflow gitlab/release.yml \
   --cosign-public-key-path .base-trust.pub --cosign-public-key-sha256 "${RC_PUBLIC_KEY_SHA256}" \
@@ -158,21 +182,19 @@ if jq -e '.all_found == true' dist/base-verification.json >/dev/null; then
   printf 'reused\n' > dist/base-use.txt
 else
   test "${RELEASE_TAG}" = v0.0.1
-  mkdir -m 0700 "${RC_WORK}/buildah"
-  export CONTAINERS_STORAGE_CONF="${RC_WORK}/buildah/storage.conf" TMPDIR="${RC_WORK}/buildah/tmp"
-  forge-ci container setup-buildah --install-packages=false --temp-dir "${RC_WORK}/buildah" \
-    --storage-conf "${CONTAINERS_STORAGE_CONF}" --storage-root "${RC_WORK}/buildah/storage" \
-    --container-tmpdir "${TMPDIR}" --env-file "${RC_WORK}/buildah.env"
-  mkdir "${RC_WORK}/base-context"
-  printf 'one immutable base fixture\n' > "${RC_WORK}/base-context/base.txt"
-  printf 'FROM scratch\nCOPY base.txt /base.txt\n' > "${RC_WORK}/base-context/Containerfile"
-  buildah build --isolation chroot --network host --pull=never --platform linux/amd64 \
-    --timestamp 946684800 --manifest localhost/fci-base-fixture "${RC_WORK}/base-context"
+  archs=$(cd "${base_layouts}" && for layout in base-arch-*; do printf '%s\n' "${layout#base-arch-}"; done)
+  test -n "${archs}"
+  # shellcheck source=/dev/null
+  source "${RC_HELPERS_DIR}/scripts/bootstrap/install-trivy.sh"
+  install_trivy
   auth="${RC_WORK}/registry-auth.json"
   printf '%s' "${CI_REGISTRY_PASSWORD}" | forge-ci container login --registry "${CI_REGISTRY}" \
     --registry-username "${CI_REGISTRY_USER}" --registry-password-file - --auth-file "${auth}"
-  digest=$(forge-ci container manifest push --local-manifest localhost/fci-base-fixture \
-    --destination "${CI_REGISTRY_IMAGE}/bases:staging-${base_id}-go" --auth-file "${auth}")
+  (cd "${base_layouts}" && forge-ci container multiarch-image assemble --from-layouts --archs "${archs}" \
+    --source-sha "${RELEASE_SHA:?}" --image-repository "${CI_REGISTRY_IMAGE}/bases" --tag "staging-${base_id}-go" \
+    --name base --auth-file "${auth}" --scan-output-template "${RC_WORK}/base-scan-{arch}.json" \
+    --manifest-output "${RC_WORK}/base-index.json" --metadata-dir "${RC_WORK}/base-dist")
+  digest="sha256:$(sha256sum "${RC_WORK}/base-index.json" | cut -d " " -f 1)"
   forge-ci container ledger add --ledger dist/base-images.json --image-kind base --role base --flavor go \
     --base-input-id "${base_id}" --image-name "${CI_REGISTRY_IMAGE}/bases" --digest "${digest}" \
     --final-tag-name "${base_id}-go" --derive-candidate-tag --default-sbom

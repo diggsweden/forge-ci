@@ -120,7 +120,7 @@ func TestInRunner_ProductDetectsItsRunner(t *testing.T) {
 			t.Parallel()
 
 			target := livetest.Accept(t, forge)
-			repo := livetest.NewScratchRepo(t, target, "inrunner-product")
+			repo := livetest.NewPublicScratchRepo(t, target, "inrunner-product", livetest.ReadProbeAssetAnonymously)
 
 			livetest.PrepareTag(t, target, repo, tag)
 			livetest.PublishBinaryAsset(t, target, repo, tag, t.TempDir())
@@ -201,7 +201,7 @@ func TestInRunner_NoGitHubAnnotationsOnOtherForges(t *testing.T) {
 			t.Parallel()
 
 			target := livetest.Accept(t, forge)
-			repo := livetest.NewScratchRepo(t, target, "inrunner-annot")
+			repo := livetest.NewPublicScratchRepo(t, target, "inrunner-annot", livetest.ReadProbeAssetAnonymously)
 
 			livetest.PrepareTag(t, target, repo, tag)
 			livetest.PublishBinaryAsset(t, target, repo, tag, t.TempDir())
@@ -239,7 +239,7 @@ func TestInRunner_StepSummaryReachesAReader(t *testing.T) {
 			t.Parallel()
 
 			target := livetest.Accept(t, forge)
-			repo := livetest.NewScratchRepo(t, target, "inrunner-summary")
+			repo := livetest.NewPublicScratchRepo(t, target, "inrunner-summary", livetest.ReadProbeAssetAnonymously)
 
 			livetest.PrepareTag(t, target, repo, tag)
 			livetest.PublishBinaryAsset(t, target, repo, tag, t.TempDir())
@@ -308,7 +308,7 @@ func TestInRunner_StepOutputsReachTheRunnersOutputFile(t *testing.T) {
 			t.Parallel()
 
 			target := livetest.Accept(t, forge)
-			repo := livetest.NewScratchRepo(t, target, "inrunner-output")
+			repo := livetest.NewPublicScratchRepo(t, target, "inrunner-output", livetest.ReadProbeAssetAnonymously)
 
 			livetest.PrepareTag(t, target, repo, tag)
 			livetest.PublishBinaryAsset(t, target, repo, tag, t.TempDir())
