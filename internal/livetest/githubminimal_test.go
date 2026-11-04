@@ -25,13 +25,8 @@ import (
 
 	githubadapter "github.com/diggsweden/forge-ci/internal/adapters/github"
 	domaincontainer "github.com/diggsweden/forge-ci/internal/domain/container"
-	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
-	"github.com/diggsweden/forge-ci/internal/domain/projecttype"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
-
-const minimalNodeImage = "ghcr.io/itiquette/forge-ci-runtime-node-24@sha256:e90d3dcfdbe048329e0eb23cad813b95722fcb077b2261038da34bbca91e6d91"
-const minimalBotEmail = "forge-lab-minimal@hosted.invalid"
 
 // Current working-tree source is copied only into new test repositories. This
 // route deliberately does not call EnsureEngine or publish any runtime image.
@@ -240,9 +235,9 @@ func minimalRepository(t *testing.T, trial *GitHubTrial, name string) string {
 func minimalPreparation(t *testing.T, trial *GitHubTrial, engine, commit string, multi bool) {
 	t.Helper()
 
-	name, leaf := "minimal-single", "version-bump.yml"
+	name := "minimal-single"
 	if multi {
-		name, leaf = "minimal-multi", "release-prepare-stage.yml"
+		name = "minimal-multi"
 	}
 
 	repo := minimalRepository(t, trial, name)
@@ -269,51 +264,13 @@ func minimalPreparation(t *testing.T, trial *GitHubTrial, engine, commit string,
 	minimalWrite(t, dir, "CHANGELOG.md", "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- Minimal preparation fixture.\n")
 	minimalWrite(t, dir, "allowed_signers", minimalBotEmail+" "+public+"\n")
 
-	with := "      project-type: npm\n"
-
 	if multi {
 		// npm reformats this valid inline object while updating the lockfile.
 		minimalWrite(t, dir, "package-lock.json", "{\n  \"name\": \"minimal-preparation\",\n  \"version\": \"0.0.1\",\n  \"lockfileVersion\": 3,\n  \"requires\": true,\n  \"packages\": {\n    \"\": {\n      \"name\": \"minimal-preparation\",\n      \"version\": \"0.0.1\",\n      \"engines\": { \"node\": \">=18\" }\n    }\n  }\n}\n")
 		minimalWrite(t, dir, "second/gradle.properties", "version=0.0.1\n")
-
-		plan := pipeline.ReleasePrepareStagePlan{Version: pipeline.ReleasePlanVersion, Stage: "prepare", Targets: pipeline.ReleasePrepareTargets{
-			VersionBump: pipeline.TargetPlan[pipeline.PlannedArtifact]{Runs: true, Items: []pipeline.PlannedArtifact{
-				{Name: "native", ProjectType: projecttype.NPM, WorkingDirectory: "."},
-				{Name: "text", ProjectType: projecttype.Gradle, WorkingDirectory: "second"},
-			}}}}
-
-		planJSON, err := json.Marshal(plan)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		with = "      authorized-source-sha: ${{ github.sha }}\n      forge-ci-binary-ref: " + commit + "\n      prepare-stage-plan-json: '" + string(planJSON) + "'\n"
 	}
 
-	workflow := `name: Minimal version preparation
-on:
-  push:
-    tags: ['release-request/v*']
-permissions:
-  contents: read
-jobs:
-  prepare:
-    uses: ENGINE/.github/workflows/LEAF@COMMIT
-    permissions:
-      contents: write
-      actions: read
-    with:
-      branch: main
-      runtime-image: IMAGE
-      git-signing-method: ssh
-      bot-name: Forge Lab Minimal
-      bot-email: EMAIL
-WITH    secrets:
-      RELEASE_SSH_SIGNING_KEY: ${{ secrets.RELEASE_SSH_SIGNING_KEY }}
-      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-`
-	workflow = strings.NewReplacer("ENGINE", engine, "LEAF", leaf, "COMMIT", commit, "IMAGE", minimalNodeImage, "EMAIL", minimalBotEmail, "WITH", with).Replace(workflow)
-	minimalWrite(t, dir, ".github/workflows/release.yml", workflow)
+	minimalWrite(t, dir, ".github/workflows/release.yml", minimalPreparationWorkflow(t, engine, commit, multi))
 	trial.git(dir, "init", "--quiet", "--object-format=sha1", "--initial-branch=main")
 	trial.git(dir, "add", "--all")
 	trial.commit(dir, "feat: add minimal version preparation fixture", "")
