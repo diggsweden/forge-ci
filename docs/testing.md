@@ -1793,7 +1793,7 @@ GitLab sets it to `linux/<runner.arch>` when it is not given, and refuses a
 selection of another architecture before anything is pushed, because the lab's
 runners build and run what is selected and a release never emulates. On
 GitLab it is also the policy's `release-platforms` when the consumer declares
-release images in `.forge-ci/release-images.yml`. Duplicate
+release images. Duplicate
 or malformed names are refused;
 values are shell-quoted as data. These settings are recorded in the live log
 and do not enter the independent preparation, signing, or publication commands.
@@ -1849,10 +1849,15 @@ default, keeps the privileged runner. On GitLab the builder is the release
 policy's `image-builder` input, so it is this trial setting and not a consumer
 variable: `CI_IMAGE_BUILDER=` among the consumer settings is refused.
 
-A consumer releases images on GitLab when it declares them in
-`.forge-ci/release-images.yml`, the file its Forgejo release names as
-`artifacts-config`: the harness then sets `release-images: true`, that file,
-and the lab's one platform as `release-platforms`. The release's image jobs
+A consumer releases images on GitLab when its `.forge-ci/artifacts.yml`
+declares containers: the harness then sets `release-images: true`, leaves
+`artifacts-config` empty, the release component's default, and passes the
+lab's one platform as `release-platforms`. A consumer whose artifacts.yml
+carries a shape release images refuse, such as `extract`, declares them in
+`.forge-ci/release-images.yml` instead, the file its Forgejo release names as
+`artifacts-config`, and the harness names it too. A consumer with both files
+whose artifacts.yml would serve, or with release-images.yml and no containers
+in artifacts.yml, is refused: one release reads one declaration. The release's image jobs
 run in the builder's job image of this commit, a saved archive: under Buildah,
 the default, the Buildah job image named by
 `FORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE`

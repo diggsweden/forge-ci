@@ -5,8 +5,9 @@
 # Release build, called by the pinned release policy in a key-free job. It
 # leaves the unsigned hand-off in dist/: the packed package, its CycloneDX
 # Build SBOM, release notes, checksums and the manifest. The runtime image is
-# the release policy's: its image jobs build .forge-ci/release-images.yml over
-# the release checkout with image-context/, the package unpacked, laid on top.
+# the release policy's: its image jobs build the containers of
+# .forge-ci/artifacts.yml over the release checkout with image-context/, the
+# package unpacked, laid on top.
 # The policy's isolated version-bump job must commit the package and lockfile
 # version first; the unsigned build never repairs a stale release commit.
 set -euo pipefail

@@ -4,6 +4,7 @@
 package livetest
 
 import (
+	"cmp"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,8 +15,9 @@ import (
 )
 
 // The GitLab image demos push no image of their own: the release's image jobs
-// build what .forge-ci/release-images.yml declares, the file their Forgejo
-// release names too, from image-context/ where the Containerfile needs it.
+// build the one container their declaration holds, artifacts.yml unless it
+// needs release-images.yml (see GitLabReleaseImages), from image-context/
+// where the Containerfile needs it.
 func TestGitLabImageDemosLeaveTheirImagesToTheReleaseImageJobs(t *testing.T) {
 	t.Parallel()
 
@@ -40,7 +42,12 @@ func TestGitLabImageDemosLeaveTheirImagesToTheReleaseImageJobs(t *testing.T) {
 				t.Errorf("image-context in the build is %t, want %t", !context, context)
 			}
 
-			declared, err := os.ReadFile(filepath.Join(consumer, ".forge-ci", "release-images.yml"))
+			images, declaration, err := GitLabReleaseImages(consumer)
+			if err != nil || !images {
+				t.Fatalf("the GitLab release builds no images: %v", err)
+			}
+
+			declared, err := os.ReadFile(filepath.Join(consumer, cmp.Or(declaration, GitLabDefaultArtifactsConfig)))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -48,11 +55,6 @@ func TestGitLabImageDemosLeaveTheirImagesToTheReleaseImageJobs(t *testing.T) {
 			parsed, err := config.Parse(declared)
 			if err != nil || len(parsed.Containers) != 1 {
 				t.Fatalf("release images: %v", err)
-			}
-
-			forgejo, err := os.ReadFile(filepath.Join(consumer, ".forgejo", "workflows", "release.yml"))
-			if err != nil || !strings.Contains(string(forgejo), "artifacts-config: .forge-ci/release-images.yml") {
-				t.Fatalf("the Forgejo release names another declaration: %v", err)
 			}
 		})
 	}

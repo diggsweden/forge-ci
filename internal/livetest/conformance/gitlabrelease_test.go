@@ -286,7 +286,11 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 	// builds none.
 	kaniko := livetest.GitLabKaniko(t)
 
-	releaseImages := gitlabConsumerReleasesImages(t, consumerRoot)
+	releaseImages, releaseImagesConfig, err := livetest.GitLabReleaseImages(consumerRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// A container build belongs to the export jobs, which build with the
 	// selected builder; the build job has none to select.
 	if consumerRoot != "" && gitlabConsumerBuildRunsAContainerBuild(t, consumerRoot) {
@@ -453,7 +457,7 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 	}
 
 	if releaseImages {
-		artifactsConfig = gitlabReleaseImagesConfig
+		artifactsConfig = releaseImagesConfig
 	}
 
 	policyIncludes := []any{map[string]any{
@@ -666,27 +670,6 @@ func requireGitLabPolicyMergeRequest(t *testing.T, client *gitlabapi.Client, pro
 // build is empty when the release builds with the job image, lint when the
 // consumer's merge-request gate has no nanolinter component.
 type gitlabReleaseArchives struct{ job, build, buildah, kaniko, signer, lint string }
-
-// gitlabReleaseImagesConfig is where a consumer declares the images its GitLab
-// release builds, as its Forgejo release's artifacts-config.
-const gitlabReleaseImagesConfig = ".forge-ci/release-images.yml"
-
-// gitlabConsumerReleasesImages reports whether the consumer declares release
-// images for the release's image jobs.
-func gitlabConsumerReleasesImages(t *testing.T, consumerRoot string) bool {
-	t.Helper()
-
-	if consumerRoot == "" {
-		return false
-	}
-
-	_, err := os.Stat(filepath.Join(consumerRoot, gitlabReleaseImagesConfig))
-	if err != nil && !os.IsNotExist(err) {
-		t.Fatal(err)
-	}
-
-	return err == nil
-}
 
 // gitlabConsumerBuildRunsAContainerBuild reports whether the consumer's own
 // release build runs a container build, which belongs to its export.

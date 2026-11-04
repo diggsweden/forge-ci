@@ -5,10 +5,10 @@
 # Release build, called by the pinned release policy in a key-free job. It
 # leaves the unsigned hand-off in dist/: the jar, its CycloneDX Build SBOM,
 # release notes, checksums and the manifest. The runtime image is the release
-# policy's: its image jobs build .forge-ci/release-images.yml over the release
-# checkout with image-context/, the jar, laid on top. The policy's
-# version-bump: maven put the release version into the release commit; the
-# build requires it there.
+# policy's: its image jobs build the containers of .forge-ci/artifacts.yml
+# over the release checkout with image-context/, the jar, laid on top. The
+# policy's version-bump: maven put the release version into the release
+# commit; the build requires it there.
 set -euo pipefail
 umask 077
 

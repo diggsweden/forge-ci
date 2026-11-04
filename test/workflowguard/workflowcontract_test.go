@@ -1054,3 +1054,41 @@ func TestSelfGatesProveTheForgejoLayerBinary(t *testing.T) {
 		}
 	}
 }
+
+// TestPullRequestGateRunsDeadcode holds the deadcode check to the pull-request
+// gate. It is not part of `just lint`, so without a CI step nothing runs it
+// and an unreachable function lands unseen. The job must install the pinned
+// tools with mise (deadcode is pinned there, built with the pinned Go) and run
+// the recipe unconditionally.
+func TestPullRequestGateRunsDeadcode(t *testing.T) {
+	t.Parallel()
+
+	const recipe = "just lint-go-deadcode"
+
+	body, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".github", "workflows", "self-pullrequest.yml"))
+	require.NoError(t, err)
+
+	var workflow eventWorkflow
+	require.NoError(t, yaml.Unmarshal(body, &workflow))
+
+	gates := jobsRunning(workflow, recipe)
+	if len(gates) != 1 {
+		t.Fatalf("self-pullrequest.yml runs %q in %v, want exactly one job", recipe, gates)
+	}
+
+	installed := false
+
+	for _, step := range workflow.Jobs[gates[0]].Steps {
+		if strings.Contains(step.Run, "mise install\n") || strings.HasSuffix(strings.TrimSpace(step.Run), "mise install") {
+			installed = true
+		}
+
+		if strings.Contains(step.Run, recipe) && (step.If != "" || step.Continue.Kind != 0) {
+			t.Errorf("job %s must run %q unconditionally, got if=%q continue-on-error=%q", gates[0], recipe, step.If, step.Continue.Value)
+		}
+	}
+
+	if !installed {
+		t.Errorf("job %s runs %q without `mise install`, so the pinned deadcode is not on PATH", gates[0], recipe)
+	}
+}
