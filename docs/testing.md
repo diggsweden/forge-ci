@@ -476,11 +476,14 @@ just test-live '^TestRunnerLending_LocalLifecycle/job$'
 just test-live '^TestRunnerLending_LocalLifecycle/(idle|cancel)$'
 ```
 
-It requires the `forgeci` Compose Forgejo contract, local rootless Podman and
-the cached digest-pinned Forgejo 13.2.0 runner image named in
-`internal/livetest/lending.go`. `LAB_TARGETS_FILE` selects a dedicated contract
-as usual. No Forge Lab source change, administrator credential, persistent
-runner change, privileged profile, or hosted GitHub dispatch is involved.
+It requires an accepted `forgeci` contract for a disposable Forgejo endpoint on
+either the Compose or k3s road, local rootless Podman and the cached digest-pinned
+Forgejo 13.2.0 runner image named in `internal/livetest/lending.go`. The lent
+worker remains a local rootless Podman container even when Forgejo runs on k3s.
+`LAB_TARGETS_FILE` selects a dedicated contract as usual; use a separate absolute
+path per road when retaining both contracts. No Forge Lab source change,
+administrator credential, persistent runner change, privileged profile, or
+hosted GitHub dispatch is involved.
 
 Provisioning is a local-container substitute for the hosted provisioning edge.
 The receiving Forgejo, repository-scoped ephemeral registration, runner binary,
@@ -511,6 +514,13 @@ unconfirmed instead of claiming release. These live cases retain their failing
 automatic-retirement assertions until the provisioning contract or upstream
 runner gains a supported retirement mechanism. See
 [Unused-runner retirement limitation](runners.md#unused-runner-retirement-limitation).
+
+Current-source k3s validation at `abf3e805` reproduced this documented limitation:
+`job` passed, while `idle` and `cancel` failed their automatic-retirement
+assertions. Each per-runner REST deletion probe returned HTTP 401; exact
+controller fallback cleanup removed both registrations and their containers.
+Successful fallback cleanup does not make those two cases pass, and this is the
+existing pinned Forgejo 13.2.0 retirement limitation, not a new k3s regression.
 
 For the focused active-job interruption check, set
 `FORGE_CI_LIVE_INTERRUPT_PROBE=gitlab-workflow` and run
