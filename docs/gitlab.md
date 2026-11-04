@@ -243,6 +243,17 @@ job also refuses to start when a release secret it does not use is visible to
 it (`is available to the wrong release job`), so a wrongly scoped variable fails
 closed.
 
+Set the project's **Minimum role to use pipeline variables** to **No one
+allowed** (Settings > CI/CD > Variables, or the project API's
+`ci_pipeline_variables_minimum_override_role: no_one_allowed`). A pipeline
+variable, set when a pipeline is run by hand, triggered or created through the
+API, outranks the job's own variables and GitLab's predefined ones. Whoever
+may set one can point `CI_SERVER_URL`, `CI_API_V4_URL` or `CI_REGISTRY` at
+another host, and the release jobs send `RELEASE_TOKEN` and
+`RELEASE_REGISTRY_TOKEN` to those. Project and group variables outrank the
+predefined ones in the same way; only maintainers set them, and maintainers
+can already read the project's release variables.
+
 | Secret | Used for |
 |---|---|
 | `RELEASE_SSH_SIGNING_KEY` | The signed release commit and final tag; a deploy key that may push to the project. |

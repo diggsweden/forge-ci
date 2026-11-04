@@ -262,6 +262,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The GitLab guide requires *Minimum role to use pipeline variables* set to
+  *No one allowed*. A pipeline variable outranks GitLab's predefined
+  variables, so whoever could set one could point `CI_SERVER_URL`,
+  `CI_API_V4_URL` or `CI_REGISTRY` at another host, where the release jobs
+  send `RELEASE_TOKEN` and `RELEASE_REGISTRY_TOKEN`.
 - `container image-evidence` names the platform it scans to Trivy with
   `--platform`, as the scan gate does, for each platform's layout and for a
   registry image pulled by digest, so Trivy reads that platform's image and
