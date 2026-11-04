@@ -14,6 +14,8 @@
 # Consume (pin a released version):
 #   include:
 #     - component: $CI_SERVER_FQDN/diggsweden/forge-ci/build-npm@0.90.0
+#       inputs:
+#         runtime-image: ghcr.io/diggsweden/forge-ci-runtime-node-24@sha256:PIN_DIGEST
 spec:
   inputs:
     stage:
@@ -52,6 +54,7 @@ spec:
       description: Node major version, reported in the build summary.
     runtime-image:
       description: forge-ci runtime image carrying Node + npm, pinned by @sha256.
+      regex: '^[^[:space:]]+@sha256:[0-9a-f]{64}$'
 ---
 "$[[ inputs.job-name ]]":
   stage: $[[ inputs.stage ]]

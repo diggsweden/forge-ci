@@ -576,3 +576,48 @@ func TestReleaseWithoutReleaseImagesNeedsNoBuilderJobImage(t *testing.T) {
 		t.Fatalf("with its builder job image:\n%s", strings.Join(problems, "\n"))
 	}
 }
+
+// A release with images renders a configuration GitLab accepts for each
+// image builder, with and without export jobs, and with artifacts-config
+// naming a file under .forge-ci/, the documented default's directory: an
+// input GitLab refuses fails the policy pipeline as GitLab creates it, so
+// the release child never starts.
+func TestReleaseWithImagesRendersAValidConfiguration(t *testing.T) {
+	t.Parallel()
+
+	builderImage := "registry.invalid/team/builder-job@sha256:" + strings.Repeat("7", 64)
+	export := []any{`forge-ci container build --mode local --platform "$EXPORT_PLATFORM" --output-dir "dist/linux-$EXPORT_ARCH"`}
+
+	for _, builder := range []string{"buildah", "kaniko"} {
+		for _, exports := range []bool{false, true} {
+			for _, config := range []string{"", ".forge-ci/artifacts.yml", ".forge-ci/release-images.yml", "deploy/artifacts.yml"} {
+				inputs := map[string]any{
+					"release-images": true, "image-builder": builder, "builder-job-image": builderImage,
+					"artifacts-config": config, "release-platforms": "linux/amd64",
+					"job-user": "65532:65532", "version-bump": "npm",
+					"export-files": exports, "export": []any{},
+				}
+				if exports {
+					inputs["export"] = export
+				}
+
+				if builder == "buildah" {
+					inputs["build-runner-tags"] = []any{"privileged"}
+				}
+
+				if problems := gitlabRenderProblems(t, "templates/release.yml", inputs); len(problems) != 0 {
+					t.Errorf("%s, export-files %t, artifacts-config %q:\n%s", builder, exports, config, strings.Join(problems, "\n"))
+				}
+			}
+		}
+	}
+
+	// A path that leaves the repository or quotes the script stays refused.
+	for _, config := range []string{"/etc/artifacts.yml", "it's.yml", "-artifacts.yml"} {
+		if problems := gitlabRenderProblems(t, "templates/release.yml", map[string]any{
+			"release-images": true, "builder-job-image": builderImage, "artifacts-config": config,
+		}); len(problems) == 0 {
+			t.Errorf("artifacts-config %q was accepted", config)
+		}
+	}
+}

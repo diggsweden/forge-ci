@@ -20,6 +20,7 @@
 #   include:
 #     - component: $CI_SERVER_FQDN/diggsweden/forge-ci/build-gradle-android@0.90.0
 #       inputs:
+#         runtime-image: ghcr.io/diggsweden/forge-ci-runtime-android-35@sha256:PIN_DIGEST
 #         build-module: app
 #         enable-signing: true
 spec:
@@ -86,6 +87,7 @@ spec:
       description: Pinned cyclonedx-gradle-plugin version.
     runtime-image:
       description: forge-ci runtime image carrying JDK + Gradle + Android SDK, pinned by @sha256.
+      regex: '^[^[:space:]]+@sha256:[0-9a-f]{64}$'
 ---
 "$[[ inputs.job-name ]]":
   stage: $[[ inputs.stage ]]

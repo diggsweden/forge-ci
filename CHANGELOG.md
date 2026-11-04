@@ -258,6 +258,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The GitLab `release` component accepts an `artifacts-config` under
+  `.forge-ci/`, such as the default `.forge-ci/artifacts.yml` named
+  explicitly. Its regex refused a path that starts with a dot, so GitLab
+  failed the policy pipeline as it created it and a release with images
+  never started its child pipeline.
 - The `job-user` input of the GitLab `check` and `release` components refuses
   a UID or GID with a leading zero, such as `065532`. It passed the input check
   and then never equalled what `id -u` prints, so the job failed its own user
@@ -533,6 +538,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING:** The `runtime-image` input of the GitLab `build-*`,
+  `publish-forge-packages` and `publish-maven-central` components admits only
+  a digest pin, `<image>@sha256:<64 hex>`, as GitLab checks it before any job
+  runs. It took any text, though its description asked for a digest, and the
+  job container receives the checkout and the job token. Pin the image by
+  its digest. The components' Consume headers now show the input.
 - **BREAKING:** The GitLab `release` and `snapshot-images` free-text inputs
   now have regexes, because the jobs quote them in their scripts. None may
   contain a single quote. `publication-project` is a project path,

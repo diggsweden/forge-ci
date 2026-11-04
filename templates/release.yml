@@ -66,7 +66,7 @@ spec:
       default: false
     artifacts-config:
       description: Path of the artifacts.yml declaring the containers. Empty reads .forge-ci/artifacts.yml.
-      regex: '^$|^[A-Za-z0-9_][A-Za-z0-9_./-]*$'
+      regex: '^$|^[A-Za-z0-9_.][A-Za-z0-9_./-]*$'
       default: ''
     release-platforms:
       description: Comma-separated subset of each container's platforms to build, for example linux/amd64. Empty builds them all.

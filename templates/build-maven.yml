@@ -16,6 +16,7 @@
 #   include:
 #     - component: $CI_SERVER_FQDN/diggsweden/forge-ci/build-maven@0.90.0
 #       inputs:
+#         runtime-image: ghcr.io/diggsweden/forge-ci-runtime-java-25@sha256:PIN_DIGEST
 #         build-type: app
 spec:
   inputs:
@@ -62,6 +63,7 @@ spec:
       description: JDK major version, reported in the build summary.
     runtime-image:
       description: forge-ci runtime image carrying Maven, pinned by @sha256.
+      regex: '^[^[:space:]]+@sha256:[0-9a-f]{64}$'
 ---
 "$[[ inputs.job-name ]]":
   stage: $[[ inputs.stage ]]

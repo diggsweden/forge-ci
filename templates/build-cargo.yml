@@ -15,6 +15,7 @@
 #   include:
 #     - component: $CI_SERVER_FQDN/diggsweden/forge-ci/build-cargo@0.90.0
 #       inputs:
+#         runtime-image: ghcr.io/diggsweden/forge-ci-runtime-rust-stable@sha256:PIN_DIGEST
 #         version: "$CI_COMMIT_TAG"
 spec:
   inputs:
@@ -46,6 +47,7 @@ spec:
       description: Generate the cargo-cyclonedx Build SBOM.
     runtime-image:
       description: forge-ci runtime image carrying cargo + cargo-cyclonedx, pinned by @sha256.
+      regex: '^[^[:space:]]+@sha256:[0-9a-f]{64}$'
 ---
 "$[[ inputs.job-name ]]":
   stage: $[[ inputs.stage ]]

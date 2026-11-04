@@ -65,7 +65,7 @@ spec:
       default: false
       description: Build, scan and stage the containers artifacts-config declares in the image jobs, for signing.
     artifacts-config:
-      regex: '^$|^[A-Za-z0-9_][A-Za-z0-9_./-]*$'
+      regex: '^$|^[A-Za-z0-9_.][A-Za-z0-9_./-]*$'
       default: ''
     release-platforms:
       regex: '^$|^linux/(amd64|arm64)(,linux/(amd64|arm64))?$'
