@@ -26,21 +26,26 @@ spec:
       regex: '^[^[:space:]]+@sha256:[0-9a-f]{64}$'
     publication-project:
       description: Separate GitLab project owning final container images; source job tokens must not write it.
+      regex: '^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)+$'
     publication-image-repository:
       description: Exact registry repository in the publication project, without tag or digest.
+      regex: '^[^[:space:]''@]+$'
     cosign-public-key-sha256:
       regex: '^[0-9a-f]{64}$'
     release-git-url:
       description: Repository SSH write URL; the prepare key must be a scoped deploy key. Empty is this project on the GitLab web host, port 22.
+      regex: '^[^[:space:]'']*$'
       default: ''
     release-git-host-key-fingerprint:
       description: Independently supplied SSH host key fingerprint, SHA256:<base64> alone.
+      regex: '^SHA256:[A-Za-z0-9+/]{43}=?$'
     request-allowed-signers:
       description: Trusted OpenSSH allowed-signers text for human release-request tags; supplied by the external policy.
+      regex: '\A[^'']+\z'
     bot-name:
-      type: string
+      regex: '^[^''[:cntrl:]]+$'
     bot-email:
-      type: string
+      regex: '^[^''[:space:]]+@[^''[:space:]]+$'
     checks:
       type: array
       description: Required checks on the request commit, without signing or publication secrets.
@@ -78,9 +83,9 @@ spec:
     changelog-creator:
       options: [git-chglog, git-cliff]
     changelog-config:
-      type: string
+      regex: '^[A-Za-z0-9_.][A-Za-z0-9_./-]*$'
     commit-body-config:
-      type: string
+      regex: '^[A-Za-z0-9_.][A-Za-z0-9_./-]*$'
     sign-distro-packages:
       type: boolean
     release-asset-retention:
@@ -109,30 +114,13 @@ stages: [check, prepare, build, images, sign, publish]
       user: $RC_JOB_USER
   cache: []
   interruptible: false
+  # Only what the runner reads before the job's shell is a job variable; the
+  # start holds each to its literal. The policy's values are not variables:
+  # the start assigns them from the inputs.
   variables:
     GIT_STRATEGY: empty
     GIT_SUBMODULE_STRATEGY: none
-    RC_FORGE_CI_REPOSITORY: $[[ inputs.forge-ci-repository ]]
     RC_JOB_USER: '$[[ inputs.job-user ]]'
-    RC_CONSUMER_PROJECT: $[[ inputs.consumer-project ]]
-    RC_SIGNER_IMAGE: $[[ inputs.signer-image ]]
-    RC_PUBLICATION_PROJECT: $[[ inputs.publication-project ]]
-    RC_PUBLICATION_IMAGE_REPOSITORY: $[[ inputs.publication-image-repository ]]
-    RC_PUBLIC_KEY_SHA256: $[[ inputs.cosign-public-key-sha256 ]]
-    RC_GIT_URL: $[[ inputs.release-git-url ]]
-    RC_GIT_HOST_KEY: $[[ inputs.release-git-host-key-fingerprint ]]
-    RC_REQUEST_ALLOWED_SIGNERS: $[[ inputs.request-allowed-signers ]]
-    RC_BOT_NAME: $[[ inputs.bot-name ]]
-    RC_BOT_EMAIL: $[[ inputs.bot-email ]]
-    RC_CHANGELOG_CREATOR: $[[ inputs.changelog-creator ]]
-    RC_CHANGELOG_CONFIG: $[[ inputs.changelog-config ]]
-    RC_COMMIT_BODY_CONFIG: $[[ inputs.commit-body-config ]]
-    RC_SIGN_DISTRO_PACKAGES: '$[[ inputs.sign-distro-packages ]]'
-    RC_RELEASE_ASSET_RETENTION: '$[[ inputs.release-asset-retention ]]'
-    RC_BASE_IMAGES: '$[[ inputs.base-images ]]'
-    FORGE_CI_COSIGN_TRANSPARENCY: $[[ inputs.transparency-log ]]
-    RC_RELEASE_BRANCH_INPUT: $[[ inputs.release-branch ]]
-    RC_VERSION_BUMP: '$[[ inputs.version-bump ]]'
 # The signer jobs name their image alone, which takes no user; job-user is
 # job-image's, so they clear it.
 .forge-ci-release-signer:
@@ -143,7 +131,9 @@ stages: [check, prepare, build, images, sign, publish]
 # Each job's start, its before_script, is its role, then this. A project,
 # group or instance variable outranks every other, the job's predefined
 # name included, so what the job may do follows from the role, a literal of
-# this file, and never from a variable.
+# this file, and never from a variable. So do the policy's values: the
+# start assigns each from its input, read only, and release.sh reads them
+# there. A variable the runner needs is held to its literal instead.
 .forge-ci-release-start:
   - &forge-ci-release-start |
     set -euo pipefail
@@ -186,8 +176,34 @@ stages: [check, prepare, build, images, sign, publish]
       exit 1
     fi
     echo "job user: uid=${job_uid} gid=${job_gid}"
-    export RC_RELEASE_POLICY='$[[ inputs.release-policy ]]'
-    readonly RC_RELEASE_POLICY
+    if [ "${GIT_STRATEGY-}" != empty ] || [ "${GIT_SUBMODULE_STRATEGY-}" != none ]; then
+      echo "ERROR: GIT_STRATEGY is '${GIT_STRATEGY-}' and GIT_SUBMODULE_STRATEGY '${GIT_SUBMODULE_STRATEGY-}', not empty and none; remove the variables that set them." >&2
+      exit 1
+    fi
+    # The policy, from the inputs as written. Each replaces any variable of
+    # its name; the inputs' regexes and options keep quotes out of them.
+    readonly RC_RELEASE_POLICY='$[[ inputs.release-policy ]]' \
+      RC_FORGE_CI_REPOSITORY='$[[ inputs.forge-ci-repository ]]' \
+      RC_CONSUMER_PROJECT='$[[ inputs.consumer-project ]]' \
+      RC_PUBLICATION_PROJECT='$[[ inputs.publication-project ]]' \
+      RC_PUBLICATION_IMAGE_REPOSITORY='$[[ inputs.publication-image-repository ]]' \
+      RC_PUBLIC_KEY_SHA256='$[[ inputs.cosign-public-key-sha256 ]]' \
+      RC_GIT_URL='$[[ inputs.release-git-url ]]' \
+      RC_GIT_HOST_KEY='$[[ inputs.release-git-host-key-fingerprint ]]' \
+      RC_REQUEST_ALLOWED_SIGNERS='$[[ inputs.request-allowed-signers ]]' \
+      RC_BOT_NAME='$[[ inputs.bot-name ]]' \
+      RC_BOT_EMAIL='$[[ inputs.bot-email ]]' \
+      RC_CHANGELOG_CREATOR='$[[ inputs.changelog-creator ]]' \
+      RC_CHANGELOG_CONFIG='$[[ inputs.changelog-config ]]' \
+      RC_COMMIT_BODY_CONFIG='$[[ inputs.commit-body-config ]]' \
+      RC_SIGN_DISTRO_PACKAGES='$[[ inputs.sign-distro-packages ]]' \
+      RC_RELEASE_ASSET_RETENTION='$[[ inputs.release-asset-retention ]]' \
+      RC_BASE_IMAGES='$[[ inputs.base-images ]]' \
+      RC_RELEASE_BRANCH_INPUT='$[[ inputs.release-branch ]]' \
+      RC_VERSION_BUMP='$[[ inputs.version-bump ]]' \
+      FORGE_CI_COSIGN_TRANSPARENCY='$[[ inputs.transparency-log ]]'
+    # The engine reads the transparency setting from its environment.
+    export FORGE_CI_COSIGN_TRANSPARENCY
     expected='$[[ inputs.engine-sha ]]'
     reference='$[[ inputs.engine-reference ]]'
     test "${reference}" = "${expected}"

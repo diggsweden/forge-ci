@@ -7,6 +7,12 @@
 # version" and "Build: release files" execute consumer code, and the "Images:
 # build" jobs the consumer's Containerfiles, with the job token alone. Native
 # artifacts carry data; they are never dotenv reports or sourced.
+#
+# The policy's values, RC_* and FORGE_CI_COSIGN_TRANSPARENCY, are the
+# readonly literals the job's start assigns from its inputs; a project,
+# group or instance variable of the same name never reaches them. The
+# other names read here are GitLab's predefined variables, the release
+# secrets and what the start or these functions set.
 
 rc_engine() { "${FORGE_CI_BIN:?}" "$@"; }
 
@@ -70,7 +76,7 @@ rc_release_context() {
 		echo "ERROR: release branch is not a valid branch name: ${RC_RELEASE_BRANCH}" >&2
 		return 1
 	fi
-	export RELEASE_POLICY="${RC_RELEASE_POLICY:-stable}"
+	export RELEASE_POLICY="${RC_RELEASE_POLICY:?}"
 	rc_engine version derive-release --ref-name "${CI_COMMIT_TAG}" --require-release-request
 }
 

@@ -203,14 +203,14 @@ func runNanolinterScript(t *testing.T, dir, workspace string, env ...string) (st
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
-	rendered := strings.ReplaceAll(script[0], "$[[ component.sha ]]", strings.TrimSpace(string(pin)))
+	rendered := strings.NewReplacer("$[[ component.sha ]]", strings.TrimSpace(string(pin)),
+		"$[[ inputs.required-lints ]]", "secrets,sast", "$[[ inputs.enable-gitlab-sast ]]", "false").Replace(script[0])
 	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", rendered)
 	command.Dir = workspace
 
 	command.Env = append([]string{
 		"PATH=" + dir + ":/usr/bin:/bin", "TMPDIR=" + dir, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null",
 		"CI_SERVER_URL=file://" + dir, "CI_PROJECT_PATH=group/app", "CI_PROJECT_DIR=" + workspace, "CI_JOB_TOKEN=job-token",
-		"REQUIRED_LINTS=secrets,sast", "ENABLE_GITLAB_SAST=false",
 		"RC_FORGE_CI_REPOSITORY=engine",
 		"SARIF_FILE=" + filepath.Join(dir, "out.sarif"), "GL_SAST_FILE=" + filepath.Join(dir, "gl.json"),
 	}, env...)

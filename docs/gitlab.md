@@ -802,6 +802,52 @@ role also decides the job's user, home and work directory. Nothing the policy
 relies on reads `CI_JOB_NAME` or another variable, since a project, group or
 instance variable outranks every other, the predefined ones included.
 
+**The policy's values are literals of the job's script.** A project
+maintainer can set project variables, and a project, group or instance
+variable reaches every job and outranks the job's own `variables:`. So no
+value the policy relies on is a job variable. Each job's start assigns the
+policy's inputs as read-only shell variables from the inputs as written, the
+same way it takes its role, and `.gitlab/bin/release.sh` reads only those:
+the engine project and its fetch URL, `consumer-project`, the publication
+project and image repository, the Cosign key digest, the release Git URL and
+host key, the request's allowed signers, the bot identity, the changelog
+settings, `sign-distro-packages`, `base-images`, `release-branch`,
+`version-bump`, `release-asset-retention` and `transparency-log`, which the
+engine reads as `FORGE_CI_COSIGN_TRANSPARENCY` and the start exports. A
+variable of the same name is replaced. The image builder and its job image
+reach the image jobs as script arguments. Three runner settings must stay
+job variables, because the runner reads them before the job's shell:
+`RC_JOB_USER`, `GIT_STRATEGY` and `GIT_SUBMODULE_STRATEGY`. The start refuses
+any of them that differs from its literal. Since the inputs are quoted in
+the script, none of the free-text inputs may contain a single quote, and
+their regexes refuse one before the pipeline starts.
+
+The snapshot component works the same way: the engine project and commit,
+the image builder and its job image, the branch, the image repository, the
+job images, the context job and the runner tags are literals of the job's
+script. The generated child jobs get their image, architecture and context
+job as script arguments. The check component's engine project and the lint
+components' `required-lints` and `enable-gitlab-sast` are literals too. The
+lint components' `forge-ci-repository` stays a variable so that it can name
+`$CI_PROJECT_PATH`: what runs is bound by the component's commit and the
+engine's recorded checksum, not by the project path.
+
+Only GitLab knows some facts, and a variable can still shadow them:
+`CI_PROJECT_PATH`, `CI_COMMIT_REF_PROTECTED`, `CI_PIPELINE_SOURCE`,
+`CI_COMMIT_TAG`, `CI_COMMIT_SHA`, `CI_SERVER_URL` and the registry
+coordinates. Where a literal exists, the jobs compare the fact with it
+(`consumer-project`). The engine and the consumer checkout are bound by
+commit, and the request by its signature and the literal allowed signers.
+The jobs still send their tokens to the GitLab API and registry those
+variables name. So the rest of the protection comes from GitLab: protect
+the release-request tags and the release branch, scope each
+secret to its environment as [Secrets and tokens](#secrets-and-tokens)
+lists, and keep the secrets out of reach of the people who maintain the
+consumer project. A secret a project maintainer can read or replace is
+not protected by any template. Runner-level variables such as
+`CI_DEBUG_TRACE` take effect before any script runs, so restrict them at
+the instance or group.
+
 **The request is the head of the release branch.** As on Forgejo, the release
 commit is pushed on top of the request commit without force, so a request that
 is not the tip of the release branch is refused. The branch is the

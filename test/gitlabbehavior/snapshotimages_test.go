@@ -31,7 +31,7 @@ func generateSnapshot(t *testing.T, plan string, extra ...string) (map[string]an
 		"CI_PIPELINE_ID=42", "SNAPSHOT_LAYER_PROJECT=org/engine", "SNAPSHOT_ENGINE_SHA=" + strings.Repeat("a", 40),
 		"SNAPSHOT_JOB_IMAGE=registry.example/tools@sha256:" + strings.Repeat("b", 64),
 		"SNAPSHOT_BUILD_IMAGE=registry.example/build@sha256:" + strings.Repeat("c", 64),
-		`SNAPSHOT_ARM64_TAGS=json:["native-arm64"]`, `SNAPSHOT_AMD64_TAGS=json:["native-amd64"]`,
+		`SNAPSHOT_ARM64_TAGS=["native-arm64"]`, `SNAPSHOT_AMD64_TAGS=["native-amd64"]`,
 	}, extra...)
 
 	out, err := cmd.CombinedOutput()
@@ -76,6 +76,17 @@ func TestSnapshotNativeChildPipelineHasWholeBuildBarrierAndBoundContext(t *testi
 	arm := jobs["Snapshot: build worker arm64"].(map[string]any)
 	if arm["tags"].([]any)[0] != "native-arm64" {
 		t.Fatal("arm64 did not route to native runner")
+	}
+
+	// A project variable outranks a job's own, so each generated job names
+	// its image, architecture and context job as arguments, not variables.
+	if script := yamlStrings(arm["script"]); arm["variables"] != nil || len(script) != 1 ||
+		script[0] != `snapshot_gitlab_build 'worker' 'arm64' 'Build: snapshot dependencies'` {
+		t.Fatalf("the arm64 build runs %q with variables %v", script, arm["variables"])
+	}
+
+	if script := yamlStrings(jobs["Snapshot: publish api"].(map[string]any)["script"]); len(script) != 1 || script[0] != `snapshot_gitlab_publish 'api'` {
+		t.Fatalf("the api publisher runs %q", script)
 	}
 
 	context := arm["needs"].([]any)[1].(map[string]any)
@@ -320,10 +331,10 @@ func TestSnapshotBuildHandsOffItsOwnReadableLayouts(t *testing.T) {
 
 			body := `snapshot_gitlab_checkout() { :; }; snapshot_apply_context() { :; }; ` +
 				`snapshot_build() { mkdir -p snapshot-source/snapshot-layouts/api-arch-amd64; touch snapshot-source/snapshot-layouts/api-arch-amd64/api-amd64.json; }; ` +
-				`umask 077; snapshot_gitlab_build`
+				`umask 077; snapshot_gitlab_build api amd64 ''`
 			cmd := exec.CommandContext(t.Context(), "bash", "--noprofile", "--norc", "-c", `set -euo pipefail; source "$1"; `+body, "snapshot", filepath.Join(reporoot.Path(t), ".gitlab/bin/snapshot-images.sh"))
 			cmd.Dir = dir
-			cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + dir, "SNAPSHOT_NAME=api", "SNAPSHOT_ARCH=amd64"}
+			cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + dir}
 
 			out, err := cmd.CombinedOutput()
 			if planted {

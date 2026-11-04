@@ -218,6 +218,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A GitLab project, group or instance variable no longer changes a policy
+  value. These variables outrank a job's own `variables:`, so a consumer
+  project's maintainer could replace the allowed request signers, the Cosign
+  key digest, the publication project and image repository, the engine
+  project, base-image and package signing, the release branch, the version
+  bump, asset retention, Sigstore transparency, the release Git URL and host
+  key, the bot identity, the changelog settings or the consumer-project check
+  of `release`. The same went for the engine commit and project, image
+  builder, image repository, branch and job images of `snapshot-images`, the
+  engine project of `check`, and the lint floor of `nanolinter`. Each job's
+  start now assigns these from its inputs as read-only literals. The runner
+  settings that must stay variables, `RC_JOB_USER`, `GIT_STRATEGY` and
+  `GIT_SUBMODULE_STRATEGY`, are refused when they differ from their
+  literals. The generated snapshot jobs pass their image, architecture and
+  context job as arguments.
 - A GitLab `release` job's release secrets, home and hand-off no longer
   follow its name. The job start read `CI_JOB_NAME`, which a project, group
   or instance variable can set like any other: one could give a key-free
@@ -438,6 +453,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING:** The GitLab `release` and `snapshot-images` free-text inputs
+  now have regexes, because the jobs quote them in their scripts. None may
+  contain a single quote. `publication-project` is a project path,
+  `release-git-host-key-fingerprint` is `SHA256:<base64>` alone,
+  `publication-image-repository` and `image-repository` have no whitespace
+  or digest, `bot-email` is one address, and `changelog-config`,
+  `commit-body-config`, `artifacts-config` and `branch` are plain paths.
+  `builder-job-image` is pinned by digest or empty, and `required-lints` of
+  `nanolinter` is a comma-separated list of check ids. Supply values that
+  match. The policy's job variables are gone: `RC_*` other than
+  `RC_JOB_USER`, `SNAPSHOT_*`, `CI_IMAGE_BUILDER*`, `REQUIRED_LINTS` and
+  `ENABLE_GITLAB_SAST`. A variable of one of those names has no effect.
 - **BREAKING (GitHub Enterprise Server):** A GitHub workflow that cannot tell
   which repository serves forge-ci stops in its bootstrap resolver, before
   any checkout, and says to set `FORGE_CI_REPOSITORY`. GitHub Enterprise

@@ -27,22 +27,25 @@ spec:
     signer-image:
       regex: '^[^[:space:]]+@sha256:[0-9a-f]{64}$'
     publication-project:
-      type: string
+      regex: '^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)+$'
     publication-image-repository:
-      type: string
+      description: The registry repository in publication-project that receives final images, without tag or digest.
+      regex: '^[^[:space:]''@]+$'
     cosign-public-key-sha256:
       regex: '^[0-9a-f]{64}$'
     release-git-url:
-      type: string
+      regex: '^[^[:space:]'']*$'
       default: ''
     release-git-host-key-fingerprint:
-      type: string
+      description: The SSH host key fingerprint of release-git-url's host, SHA256:<base64> alone.
+      regex: '^SHA256:[A-Za-z0-9+/]{43}=?$'
     request-allowed-signers:
-      type: string
+      description: OpenSSH allowed-signers text of the people who may sign a release request, without a single quote, since the jobs quote it in their script.
+      regex: '\A[^'']+\z'
     bot-name:
-      type: string
+      regex: '^[^''[:cntrl:]]+$'
     bot-email:
-      type: string
+      regex: '^[^''[:space:]]+@[^''[:space:]]+$'
     checks:
       type: array
     checks-runner-tags:
@@ -88,9 +91,11 @@ spec:
     changelog-config:
       description: Consumer config used by the selected changelog renderer.
       default: .forge-ci/gitcliff/keepachangelog.toml
+      regex: '^[A-Za-z0-9_.][A-Za-z0-9_./-]*$'
     commit-body-config:
       description: Consumer config used to render the release commit body.
       default: .forge-ci/gitcliff/minimal.toml
+      regex: '^[A-Za-z0-9_.][A-Za-z0-9_./-]*$'
     sign-distro-packages:
       type: boolean
       default: true

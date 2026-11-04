@@ -21,14 +21,15 @@ func TestReleasePolicyComesFromTrustedInputNotAmbientVariables(t *testing.T) {
 
 	for _, policy := range []string{"stable", "stable-prerelease"} {
 		t.Run(policy, func(t *testing.T) {
-			binding := strings.NewReplacer("$[[ inputs.release-policy ]]", policy, "$[[ inputs.job-user ]]", "").Replace(prefix)
+			binding := renderScript(t, "templates/release-jobs.yml", prefix, map[string]any{"release-policy": policy, "job-user": ""})
 			program := binding + `source "$1"
 rc_engine() { printf 'selected=%s\n' "$RELEASE_POLICY"; }
 rc_release_context
 `
 			cmd := exec.CommandContext(t.Context(), "/bin/bash", "--noprofile", "--norc", "-c", program, "release-policy", filepath.Join(reporoot.Path(t), ".gitlab/bin/release.sh"))
 			cmd.Dir = t.TempDir()
-			cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + cmd.Dir, "CI_DEFAULT_BRANCH=main", "CI_COMMIT_TAG=release-request/v1.0.0", "CI_COMMIT_SHA=" + strings.Repeat("a", 40), "RC_RELEASE_POLICY=stable-prerelease", "RELEASE_POLICY=stable-prerelease"}
+			cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + cmd.Dir, "CI_DEFAULT_BRANCH=main", "CI_COMMIT_TAG=release-request/v1.0.0", "CI_COMMIT_SHA=" + strings.Repeat("a", 40), "RC_RELEASE_POLICY=stable-prerelease", "RELEASE_POLICY=stable-prerelease",
+				"GIT_STRATEGY=empty", "GIT_SUBMODULE_STRATEGY=none"}
 
 			output, err := cmd.CombinedOutput()
 			// The job start says which user it runs as, then the policy.

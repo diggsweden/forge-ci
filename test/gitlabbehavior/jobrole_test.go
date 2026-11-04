@@ -135,8 +135,8 @@ func runReleaseJobStart(t *testing.T, start, user, spoof string) (string, string
 	const probe = `printf 'home=%s\nhelpers=%s\n' "${HOME}" "${RC_HELPERS_DIR}"; exit 3`
 
 	pin := strings.Repeat("a", 40)
-	script := strings.NewReplacer("$[[ inputs.job-user ]]", "65532:65532", "$[[ inputs.engine-sha ]]", pin,
-		"$[[ inputs.engine-reference ]]", pin, "object_format=sha1\n", probe+"\n").Replace(start)
+	script := strings.Replace(renderScript(t, "templates/release-jobs.yml", start,
+		map[string]any{"job-user": "65532:65532", "engine-sha": pin, "engine-reference": pin}), "object_format=sha1\n", probe+"\n", 1)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
@@ -146,9 +146,10 @@ func runReleaseJobStart(t *testing.T, start, user, spoof string) (string, string
 	command.Env = []string{
 		"PATH=/usr/bin:/bin", "HOME=" + imageHome, "CI_PROJECT_DIR=" + project, "FAKE_UID=65532", "FAKE_GID=65532",
 		"CI_JOB_NAME=" + spoof, "rc_job_role=sign", "RC_JOB_USER=" + user,
-		"CI_PROJECT_PATH=team/app", "RC_CONSUMER_PROJECT=team/app", "CI_COMMIT_REF_PROTECTED=true",
+		"GIT_STRATEGY=empty", "GIT_SUBMODULE_STRATEGY=none",
+		"CI_PROJECT_PATH=team/app", "CI_COMMIT_REF_PROTECTED=true",
 		"CI_PIPELINE_SOURCE=parent_pipeline", "CI_COMMIT_TAG=release-request/v1.0.0",
-		"CI_SERVER_URL=https://gitlab.invalid", "RC_FORGE_CI_REPOSITORY=team/engine",
+		"CI_SERVER_URL=https://gitlab.invalid",
 	}
 
 	output, err := command.CombinedOutput()

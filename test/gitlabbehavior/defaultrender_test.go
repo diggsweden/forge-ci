@@ -199,6 +199,29 @@ func repositoryTemplate(include map[string]any) string {
 func renderComponent(t *testing.T, path string, given map[string]any) (map[string]any, []string) {
 	t.Helper()
 
+	values, document, problems := componentInputValues(t, path, given)
+
+	var parsed any
+	if err := yaml.Unmarshal([]byte(document), &parsed); err != nil {
+		t.Fatalf("%s is not YAML: %v", path, err)
+	}
+
+	rendered, err := interpolateGitLab(parsed, values)
+	if err != nil {
+		problems = append(problems, fmt.Sprintf("%s: %v", path, err))
+	}
+
+	body, _ := rendered.(map[string]any)
+
+	return body, problems
+}
+
+// componentInputValues is the interpolation values of a component, each
+// input the value given, else its default, else its fixture, the document
+// after its spec, and what GitLab refuses in the values.
+func componentInputValues(t *testing.T, path string, given map[string]any) (map[string]any, string, []string) {
+	t.Helper()
+
 	text := string(reporoot.ReadFile(t, path))
 
 	var spec struct {
@@ -239,19 +262,30 @@ func renderComponent(t *testing.T, path string, given map[string]any) (map[strin
 		values["inputs."+name] = value
 	}
 
-	var parsed any
-	if err := yaml.Unmarshal([]byte(document), &parsed); err != nil {
-		t.Fatalf("%s is not YAML: %v", path, err)
+	return values, document, problems
+}
+
+// renderScript interpolates a component's inputs in a script, as GitLab
+// does, each the value given, else its default, else its fixture.
+func renderScript(t *testing.T, path, script string, given map[string]any) string {
+	t.Helper()
+
+	values, _, problems := componentInputValues(t, path, given)
+	if len(problems) != 0 {
+		t.Fatal(strings.Join(problems, "\n"))
 	}
 
-	rendered, err := interpolateGitLab(parsed, values)
+	rendered, err := interpolateGitLab(script, values)
 	if err != nil {
-		problems = append(problems, fmt.Sprintf("%s: %v", path, err))
+		t.Fatal(err)
 	}
 
-	body, _ := rendered.(map[string]any)
+	text, ok := rendered.(string)
+	if !ok {
+		t.Fatalf("%s renders a script that is not text", path)
+	}
 
-	return body, problems
+	return text
 }
 
 // gitlabInputProblem is GitLab's refusal of an input value, if any.

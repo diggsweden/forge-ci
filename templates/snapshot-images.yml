@@ -7,13 +7,16 @@ spec:
   inputs:
     branch:
       description: Logical source branch to resolve exactly once.
+      regex: '^[A-Za-z0-9_][A-Za-z0-9_./-]*$'
     publish-containers:
       type: boolean
       default: true
     artifacts-config:
       default: .forge-ci/artifacts.yml
+      regex: '^[A-Za-z0-9_.][A-Za-z0-9_./-]*$'
     image-repository:
       description: Trusted full base OCI repository.
+      regex: '^[^[:space:]''@]+$'
     forge-ci-repository:
       regex: '^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)+$'
     job-image:
@@ -41,6 +44,7 @@ spec:
       options: [buildah, kaniko]
       default: buildah
     builder-job-image:
+      regex: '^$|^[^[:space:]]+@sha256:[0-9a-f]{64}$'
       default: ''
     runner-tags:
       type: array
@@ -54,6 +58,7 @@ spec:
     context-job:
       description: Advanced prepared-context override. Parent producer needs Snapshot plan and exports _snapshot-context. Default builds required artifacts automatically.
       default: 'Snapshot: plan'
+      regex: '^[^''[:cntrl:]]+$'
 ---
 include:
   - project: $[[ inputs.forge-ci-repository ]]
@@ -76,22 +81,24 @@ include:
     - if: '$CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api" || $CI_PIPELINE_SOURCE == "schedule"'
       when: on_success
     - when: never
-  variables:
-    SNAPSHOT_BRANCH: $[[ inputs.branch ]]
-    SNAPSHOT_PUBLISH: '$[[ inputs.publish-containers ]]'
-    SNAPSHOT_CONFIG: $[[ inputs.artifacts-config ]]
-    SNAPSHOT_IMAGE_REPOSITORY: $[[ inputs.image-repository ]]
-    SNAPSHOT_JOB_IMAGE: $[[ inputs.job-image ]]
-    SNAPSHOT_BUILD_IMAGE: $[[ inputs.build-image ]]
-    SNAPSHOT_ARTIFACT_IMAGE_GO: $[[ inputs.artifact-job-image-go ]]
-    SNAPSHOT_ARTIFACT_IMAGE_JAVA: $[[ inputs.artifact-job-image-java ]]
-    SNAPSHOT_ARTIFACT_IMAGE_NODE: $[[ inputs.artifact-job-image-node ]]
-    SNAPSHOT_ARTIFACT_IMAGE_RUST: $[[ inputs.artifact-job-image-rust ]]
-    SNAPSHOT_CONTEXT_JOB: $[[ inputs.context-job ]]
-    SNAPSHOT_RUNNER_TAGS: 'json:$[[ inputs.runner-tags ]]'
-    SNAPSHOT_AMD64_TAGS: 'json:$[[ inputs.build-runner-tags ]]'
-    SNAPSHOT_ARM64_TAGS: 'json:$[[ inputs.build-runner-tags-arm64 ]]'
   script:
+    # The policy as written, read only: a project variable outranks a job's
+    # own. The tags are JSON arrays, which jq reads.
+    - |
+      readonly SNAPSHOT_BRANCH='$[[ inputs.branch ]]' \
+        SNAPSHOT_PUBLISH='$[[ inputs.publish-containers ]]' \
+        SNAPSHOT_CONFIG='$[[ inputs.artifacts-config ]]' \
+        SNAPSHOT_IMAGE_REPOSITORY='$[[ inputs.image-repository ]]' \
+        SNAPSHOT_JOB_IMAGE='$[[ inputs.job-image ]]' \
+        SNAPSHOT_BUILD_IMAGE='$[[ inputs.build-image ]]' \
+        SNAPSHOT_ARTIFACT_IMAGE_GO='$[[ inputs.artifact-job-image-go ]]' \
+        SNAPSHOT_ARTIFACT_IMAGE_JAVA='$[[ inputs.artifact-job-image-java ]]' \
+        SNAPSHOT_ARTIFACT_IMAGE_NODE='$[[ inputs.artifact-job-image-node ]]' \
+        SNAPSHOT_ARTIFACT_IMAGE_RUST='$[[ inputs.artifact-job-image-rust ]]' \
+        SNAPSHOT_CONTEXT_JOB='$[[ inputs.context-job ]]' \
+        SNAPSHOT_RUNNER_TAGS='$[[ inputs.runner-tags ]]' \
+        SNAPSHOT_AMD64_TAGS='$[[ inputs.build-runner-tags ]]' \
+        SNAPSHOT_ARM64_TAGS='$[[ inputs.build-runner-tags-arm64 ]]'
     - command -v jq >/dev/null || { echo 'GitLab snapshot job-image requires jq for native child-pipeline generation' >&2; exit 69; }
     - snapshot_plan
     - snapshot_gitlab_generate snapshot-plan.json snapshot-child.yml

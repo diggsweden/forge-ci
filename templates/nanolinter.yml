@@ -45,6 +45,7 @@ spec:
       default: "secrets,sast"
       description: >-
         Mandated lint floor — comma-separated check ids passed to `nanolinter verify --require`. These checks are forced to run AND block regardless of the project's nanolinter.toml, so they cannot be silently skipped. Empty disables the floor.
+      regex: '^[A-Za-z0-9_.,-]*$'
     enable-gitlab-sast:
       type: boolean
       default: true
@@ -65,14 +66,15 @@ spec:
   variables:
     # The whole history, for the comparison with the merge request's target.
     GIT_DEPTH: "0"
-    REQUIRED_LINTS: "$[[ inputs.required-lints ]]"
-    ENABLE_GITLAB_SAST: "$[[ inputs.enable-gitlab-sast ]]"
     RC_FORGE_CI_REPOSITORY: "$[[ inputs.forge-ci-repository ]]"
     SARIF_FILE: nanolinter-security.sarif
     GL_SAST_FILE: gl-sast-report.json
   script:
     - |
       set -uo pipefail
+      # The floor and the report as written: a project variable outranks a
+      # job's own, so neither is one.
+      readonly REQUIRED_LINTS='$[[ inputs.required-lints ]]' ENABLE_GITLAB_SAST='$[[ inputs.enable-gitlab-sast ]]'
 
       # opengrep (inside nanolinter) hardcodes paths under the image's home; the
       # flavour image's /home/nanolinter is writable, so cosign's sigstore cache

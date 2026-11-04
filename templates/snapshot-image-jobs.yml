@@ -17,6 +17,7 @@ spec:
       options: [buildah, kaniko]
       default: buildah
     builder-job-image:
+      regex: '^$|^[^[:space:]]+@sha256:[0-9a-f]{64}$'
       default: ''
 ---
 .forge-ci-snapshot:
@@ -26,19 +27,27 @@ spec:
   tags: $[[ inputs.runner-tags ]]
   inherit:
     variables: false
+  # A project, group or instance variable outranks a job's own, so the
+  # policy's values are not job variables: the start assigns them from the
+  # inputs, read only, and holds the runner's GIT_STRATEGY to its literal.
   variables:
     GIT_STRATEGY: empty
-    FORGE_CI_PROVIDER: gitlab
-    FORGE_CI_PACKAGE_PROVIDER: gitlab
-    SNAPSHOT_LAYER_PROJECT: $[[ inputs.forge-ci-repository ]]
-    SNAPSHOT_ENGINE_SHA: $[[ inputs.engine-sha ]]
-    CI_IMAGE_BUILDER: $[[ inputs.image-builder ]]
-    CI_IMAGE_BUILDER_JOB_IMAGE: $[[ inputs.builder-job-image ]]
   before_script:
     - |
       set -euo pipefail
       umask 077
       unset BASH_ENV ENV
+      if [ "${GIT_STRATEGY-}" != empty ]; then
+        echo "ERROR: GIT_STRATEGY is '${GIT_STRATEGY-}', not empty; remove the variable that sets it." >&2
+        exit 1
+      fi
+      export FORGE_CI_PROVIDER=gitlab FORGE_CI_PACKAGE_PROVIDER=gitlab \
+        SNAPSHOT_LAYER_PROJECT='$[[ inputs.forge-ci-repository ]]' \
+        SNAPSHOT_ENGINE_SHA='$[[ inputs.engine-sha ]]' \
+        CI_IMAGE_BUILDER='$[[ inputs.image-builder ]]' \
+        CI_IMAGE_BUILDER_JOB_IMAGE='$[[ inputs.builder-job-image ]]'
+      readonly FORGE_CI_PROVIDER FORGE_CI_PACKAGE_PROVIDER SNAPSHOT_LAYER_PROJECT SNAPSHOT_ENGINE_SHA \
+        CI_IMAGE_BUILDER CI_IMAGE_BUILDER_JOB_IMAGE
       export SNAPSHOT_SERVER=${CI_SERVER_URL:?}
       export SNAPSHOT_REPOSITORY=${CI_PROJECT_PATH:?}
       export FORGE_CI_REPOSITORY_URL="${CI_SERVER_URL}/${SNAPSHOT_LAYER_PROJECT}.git"
@@ -70,10 +79,10 @@ spec:
           find "${handoff}" \( -type d -o -type f \) -exec chmod u=rwX,go=rX -- {} +
         fi
       done
+# The generated produce, build and publish jobs give their script, which
+# names their artifact or image, architecture and context job as arguments.
 .forge-ci-snapshot-produce:
   extends: .forge-ci-snapshot
-  script:
-    - snapshot_gitlab_produce
   artifacts:
     expire_in: 1 day
     paths: [_snapshot-artifacts/]
@@ -89,8 +98,6 @@ spec:
   image:
     name: $[[ inputs.build-image ]]
     entrypoint: ['']
-  script:
-    - snapshot_gitlab_build
   artifacts:
     expire_in: 1 day
     paths: [snapshot-layouts/]
@@ -100,8 +107,6 @@ spec:
   environment:
     name: snapshot/registry
     action: prepare
-  script:
-    - snapshot_gitlab_publish
   artifacts:
     expire_in: 7 days
     paths: [snapshot-receipts/, snapshot-evidence/]

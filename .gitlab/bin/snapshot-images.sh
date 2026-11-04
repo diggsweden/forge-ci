@@ -4,6 +4,10 @@
 
 # Native GitLab transport only. Image policy and every executable container
 # operation remain in `container snapshot-images`, shared with the other forges.
+# A project, group or instance variable outranks a job's own, so no policy
+# value is a job variable: the job starts assign them from the inputs, read
+# only, and the generated jobs pass their image, architecture and context
+# job as arguments.
 snapshot_gitlab_checkout() {
 	local sha
 	sha=$(snapshot_engine container snapshot-images read-plan --plan snapshot-plan.json --field source-sha) || return
@@ -21,14 +25,17 @@ snapshot_gitlab_handoff() {
 	mv -- "$1" "$2"
 }
 
+# snapshot_gitlab_build name arch context-job builds one image natively; an
+# empty context job is the child's own context job.
 snapshot_gitlab_build() {
+	local name=${1:?} arch=${2:?} context=${3-}
 	snapshot_gitlab_checkout
-	if [ -n "${SNAPSHOT_CONTEXT_JOB:-}" ]; then
+	if [ -n "${context}" ]; then
 		snapshot_apply_context _snapshot-context snapshot-plan.json
 	else
 		snapshot_apply_context snapshot-context snapshot-plan.json
 	fi
-	snapshot_build "${SNAPSHOT_NAME:?}" "${SNAPSHOT_ARCH:?}"
+	snapshot_build "${name}" "${arch}"
 	snapshot_gitlab_handoff snapshot-source/snapshot-layouts snapshot-layouts || return
 	# A kaniko build leaves no shell at the paths after_script is run with;
 	# make the hand-off readable for the uploader here.
@@ -36,10 +43,11 @@ snapshot_gitlab_build() {
 }
 
 snapshot_gitlab_produce() {
+	local name=${1:?}
 	snapshot_gitlab_checkout
 	_forge_ci_arch
 	test "${HELPERS_ENGINE_ARCH}" = amd64
-	snapshot_build_artifact "${SNAPSHOT_NAME:?}"
+	snapshot_build_artifact "${name}"
 	snapshot_gitlab_handoff snapshot-source/_snapshot-artifacts _snapshot-artifacts || return
 }
 
@@ -51,28 +59,25 @@ snapshot_gitlab_gather() {
 }
 
 snapshot_gitlab_publish() {
+	local name=${1:?}
 	# Checkout only reads the scanner policy; no source commands are executed.
 	snapshot_gitlab_checkout
 	if [ -f snapshot-source/.trivyignore.yaml ]; then cp snapshot-source/.trivyignore.yaml .; fi
-	snapshot_evidence_tools "${SNAPSHOT_NAME:?}"
+	snapshot_evidence_tools "${name}"
 	SNAPSHOT_REGISTRY_USER=${SNAPSHOT_REGISTRY_USER:-${CI_REGISTRY_USER:-}}
 	SNAPSHOT_REGISTRY_PASSWORD=${SNAPSHOT_REGISTRY_PASSWORD:-${CI_REGISTRY_PASSWORD:-}}
-	snapshot_publish "${SNAPSHOT_NAME}" snapshot-layouts
+	snapshot_publish "${name}" snapshot-layouts
 }
 
-# JSON is YAML: jq safely serializes names, branch inputs and runner tags. The
-# generated native jobs extend a SHA-pinned template. Every publisher depends
-# on ALL native builds, not just the architectures of its own image.
+# JSON is YAML: jq safely serializes names, branch inputs and runner tags, and
+# @sh the generated jobs' arguments. The generated native jobs extend a
+# SHA-pinned template. Every publisher depends on ALL native builds, not just
+# the architectures of its own image.
 snapshot_gitlab_generate() {
 	local plan=$1 output=$2
 	local context=${SNAPSHOT_CONTEXT_JOB:-}
 	if [ "${context}" = 'Snapshot: plan' ]; then context=; fi
-	# The prefix forces GitLab's typed array input into a string variable;
-	# without surrounding text interpolation preserves the YAML array type.
 	local tags=${SNAPSHOT_RUNNER_TAGS:-[]} amd64=${SNAPSHOT_AMD64_TAGS:-[]} arm64=${SNAPSHOT_ARM64_TAGS:-[]}
-	tags=${tags#json:}
-	amd64=${amd64#json:}
-	arm64=${arm64#json:}
 	if [ "${CI_IMAGE_BUILDER:-buildah}" = kaniko ]; then
 		[[ "${CI_IMAGE_BUILDER_JOB_IMAGE:-}" =~ @sha256:[0-9a-f]{64}$ ]]
 		test "${SNAPSHOT_BUILD_IMAGE:?}" = "${CI_IMAGE_BUILDER_JOB_IMAGE}"
@@ -117,7 +122,7 @@ snapshot_gitlab_generate() {
 		  . + {($a | producerjob): {
 		    extends: ".forge-ci-snapshot-produce", stage: "artifacts", tags: $amd64,
 		    image: {name: ($a | artifactimage), entrypoint: [""]},
-		    variables: {SNAPSHOT_NAME: $a.name}, needs: [parent]
+		    script: ["snapshot_gitlab_produce " + ([$a.name] | @sh)], needs: [parent]
 		  }})) +
 		(if $context == "" and ($plan.images | length > 0) then
 		  {"Snapshot: context": {
@@ -128,13 +133,13 @@ snapshot_gitlab_generate() {
 		  . + {($b | buildjob): {
 		    extends: ".forge-ci-snapshot-build", stage: "build",
 		    tags: (if $b.arch == "arm64" then $arm64 else $amd64 end),
-		    variables: {SNAPSHOT_NAME: $b.name, SNAPSHOT_ARCH: $b.arch, SNAPSHOT_CONTEXT_JOB: $context},
+		    script: ["snapshot_gitlab_build " + ([$b.name, $b.arch, $context] | @sh)],
 		    needs: ([parent] + if $context == "" then [{job: "Snapshot: context", artifacts: true}] else [{pipeline: $pipeline, job: $context, artifacts: true}] end)
 		  }})) +
 		(reduce $plan.images[] as $im ({};
 		  . + {($im | publishjob): {
 		    extends: ".forge-ci-snapshot-publish", stage: "publish",
-		    variables: {SNAPSHOT_NAME: $im.name}, needs: ([parent] + $buildneeds)
+		    script: ["snapshot_gitlab_publish " + ([$im.name] | @sh)], needs: ([parent] + $buildneeds)
 		  }})) +
 		{"Snapshot: collect": {
 		  extends: ".forge-ci-snapshot-collect", stage: "collect",

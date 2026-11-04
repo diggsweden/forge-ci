@@ -45,7 +45,6 @@ spec:
   variables:
     GIT_STRATEGY: empty
     GIT_SUBMODULE_STRATEGY: none
-    RC_FORGE_CI_REPOSITORY: "$[[ inputs.forge-ci-repository ]]"
     RC_JOB_USER: "$[[ inputs.job-user ]]"
   before_script:
     - |
@@ -95,7 +94,8 @@ spec:
         exit 1
       fi
       export FORGE_CI_PACKAGE_PROVIDER=gitlab
-      export FORGE_CI_REPOSITORY_URL="${CI_SERVER_URL:?}/${RC_FORGE_CI_REPOSITORY:?}.git"
+      # The engine's project as written, never a variable a project can set.
+      export FORGE_CI_REPOSITORY_URL="${CI_SERVER_URL:?}/$[[ inputs.forge-ci-repository ]].git"
       RC_HELPERS_DIR=$(mktemp -d /tmp/forge-ci-helpers.XXXXXXXX)
       readonly RC_HELPERS_DIR
       trap 'rm -rf -- "${RC_HELPERS_DIR}"' EXIT

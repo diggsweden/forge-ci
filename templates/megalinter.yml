@@ -56,13 +56,14 @@ spec:
     GIT_DEPTH: "0"
     SARIF_REPORTER: "true"
     DISABLE_ERRORS: "false"
-    ENABLE_GITLAB_SAST: "$[[ inputs.enable-gitlab-sast ]]"
     RC_FORGE_CI_REPOSITORY: "$[[ inputs.forge-ci-repository ]]"
     SARIF_FILE: megalinter-reports/megalinter-report.sarif
     GL_SAST_FILE: gl-sast-report.json
   script:
     - |
       set -uo pipefail
+      # The report as written: a project variable outranks a job's own.
+      readonly ENABLE_GITLAB_SAST='$[[ inputs.enable-gitlab-sast ]]'
 
       # --- Merge-request base -----------------------------------------------
       # Trust the checkout, then fetch the merge request's target.
