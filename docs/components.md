@@ -518,7 +518,6 @@ artifact names.
 #### `security-openssf-scorecard.yml`
 Generates an OpenSSF security scorecard for the repository. Invoke it explicitly
 from your caller workflow and define `on.schedule` there for scheduled analysis.
-The legacy `cron-schedule` input is ignored and does not schedule runs.
 
 ```yaml
 uses: diggsweden/forge-ci/.github/workflows/security-openssf-scorecard.yml@v0.90.0

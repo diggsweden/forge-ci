@@ -201,7 +201,7 @@ images and pins, a validating regex. The inputs that are not obvious:
 | `nanolinter` | `forge-ci-repository`, `nanolinter-image`, `required-lints`, `enable-gitlab-sast` | The project serving the component and its engine package (required), the flavour image (default the `core` tag; pin your flavour by digest as the examples show), the mandated floor (default `secrets,sast`), and the SAST report. |
 | `megalinter` | `forge-ci-repository`, `megalinter-image`, `enable-gitlab-sast` | Required digest-pinned image; the rest as for `nanolinter`. |
 | `build-*` | `working-directory`, `version`, `skip-tests`, `enable-build-sbom`, `runtime-image` | Common to every build component; `build-go` and `build-cargo` add `platforms` and `artifact-name`, `build-go` also `main-package` (relative to `working-directory`), `build-maven` `build-type` and `profile`, `build-gradle-android` the module, flavour and signing inputs. |
-| `publish-*` | `project-type`, `working-directory`, `runtime-image` | `publish-maven-central` adds `profile` and `settings-path`; `publish-apple-appstore` adds `platform`, `runner-tags` and `macos-image`. |
+| `publish-*` | `project-type`, `working-directory`, `runtime-image` | `publish-maven-central` adds `profile` and `settings-path`; `publish-apple-appstore` takes none of these, only `platform`, `skip-validation`, `runner-tags` and `macos-image`. |
 
 The standalone `publish-maven-central` component also accepts `release-policy`.
 It binds the selected input before authorization; a project environment variable

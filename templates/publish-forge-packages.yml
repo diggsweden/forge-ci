@@ -33,9 +33,6 @@ spec:
     job-name:
       default: publish-forge-packages
       description: Name of the generated job.
-    artifact-name:
-      default: ""
-      description: Logical name of the build artifact consumed (reported; JARs must be present via GitLab artifact passing).
     version:
       default: ""
       description: Release version (reported in the summary).

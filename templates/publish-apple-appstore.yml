@@ -41,15 +41,6 @@ spec:
     job-name:
       default: publish-apple-appstore
       description: Name of the generated job.
-    artifact-name:
-      default: ""
-      description: Logical name of the build artifact consumed (reported; the IPA must be present via GitLab artifact passing).
-    version:
-      default: ""
-      description: Release version (reported in the summary).
-    project-type:
-      default: xcode_ios
-      description: Ecosystem of the artifact (accepted for fan-out symmetry).
     platform:
       default: ios
       options: ["ios", "macos", "tvos"]

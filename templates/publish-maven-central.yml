@@ -45,9 +45,6 @@ spec:
     job-name:
       default: publish-maven-central
       description: Name of the generated job.
-    artifact-name:
-      default: ""
-      description: Logical name of the build artifact consumed (reported in the summary; the JARs must be present via GitLab artifact passing).
     version:
       default: ""
       description: Required immutable release version for Gradle; optional summary value for Maven.

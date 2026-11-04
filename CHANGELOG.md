@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **BREAKING:** Remove GitLab component inputs that nothing read:
+  `artifact-name`, `version` and `project-type` from `publish-apple-appstore`,
+  and `artifact-name` from `publish-forge-packages` and `publish-maven-central`.
+  Drop them from `include: inputs:`; GitLab refuses an unknown input.
+- **BREAKING:** Remove the `cron-schedule` input of
+  `security-openssf-scorecard.yml`, which had no effect. Schedule the caller
+  with `on.schedule`.
 - **BREAKING:** Replace `release-type` and `derive-release --require-stable`
   with `release-policy: stable|stable-prerelease`, without compatibility aliases.
   Keep workflow, binary and runtime-image versions aligned; select prerelease
