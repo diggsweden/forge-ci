@@ -15,7 +15,9 @@
 #   PIN_FORGE_CI_SHA                          the engine commit you authenticated:
 #                                             `check` is checksum-bound and must be
 #                                             included by full commit SHA
-#   PIN_DIGEST, PIN_IMAGE_DIGEST              digests of the reviewed images
+#   PIN_DIGEST                                digest of the reviewed lint image
+#   PIN_JAVA_IMAGE_DIGEST                     digests of the reviewed Forge CI
+#   PIN_NODE_IMAGE_DIGEST                     runtime images, or of your mirror
 #
 # GitHub expands the per-artifact build matrix natively, with a matrix over
 # the plan. GitLab cannot expand a matrix from a value computed at run time,
@@ -54,17 +56,27 @@ include:
       forge-ci-repository: team/ci/forge-ci
       nanolinter-image: "ghcr.io/itiquette/nanolinter:core@sha256:PIN_DIGEST"
 
-  # The consumer's own checks at the pipeline commit, in an image that carries
-  # Bash, Git, curl, sha256sum, a JDK with Maven, and Node.
+  # The consumer's own checks at the pipeline commit, one job per part, each
+  # in the Forge CI runtime image of its toolchain, as the images' ordinary
+  # user nonroot (65532:65532).
   # check is checksum-bound: include it by the engine commit, never a version;
   # see Checksum-bound engine bootstrap in
   # https://gitlab.example.com/team/ci/forge-ci/-/blob/PIN_FORGE_CI_SHA/docs/gitlab.md.
   - component: gitlab.example.com/team/ci/forge-ci/check@PIN_FORGE_CI_SHA
     inputs:
       forge-ci-repository: team/ci/forge-ci
-      job-image: registry.example.com/team/check-tools@sha256:PIN_IMAGE_DIGEST
+      job-name: check-backend
+      job-image: ghcr.io/diggsweden/forge-ci-runtime-java-25@sha256:PIN_JAVA_IMAGE_DIGEST
+      job-user: "65532:65532"
       commands:
         - mvn --batch-mode --no-transfer-progress --file services/backend/pom.xml verify
+  - component: gitlab.example.com/team/ci/forge-ci/check@PIN_FORGE_CI_SHA
+    inputs:
+      forge-ci-repository: team/ci/forge-ci
+      job-name: check-frontend
+      job-image: ghcr.io/diggsweden/forge-ci-runtime-node-24@sha256:PIN_NODE_IMAGE_DIGEST
+      job-user: "65532:65532"
+      commands:
         - npm --prefix packages/frontend ci
         - npm --prefix packages/frontend test
 

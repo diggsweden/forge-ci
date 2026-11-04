@@ -34,26 +34,12 @@ rc_new_handoff() {
 	rc_require_absent "$1" && mkdir -- "$1"
 }
 
-# rc_job_role maps a job's displayed name to the stable role the secret policy
-# is written in, so wording a name for its reader never moves a secret. A job
-# not listed has no role and may hold no release secret.
-rc_job_role() {
-	case "$1" in
-	"Check: signing access") echo signing-preflight ;;
-	"Check: publishing access") echo publish-preflight ;;
-	"Check: registry access") echo registry-preflight ;;
-	"Prepare: release commit and tag") echo prepare ;;
-	"Sign: files and images") echo sign ;;
-	"Publish: images") echo promote ;;
-	"Publish: release") echo publish ;;
-	"Publish: tidy up") echo cleanup ;;
-	*) echo none ;;
-	esac
-}
-
+# rc_release_context holds each release secret to the roles the policy
+# gives it. The role is rc_job_role, which the job's start sets as a literal
+# of the template: a job's name, like any GitLab variable, a project can set.
+# A role not listed may hold no release secret.
 rc_release_context() {
-	local name allowed role
-	role=$(rc_job_role "${CI_JOB_NAME:?}")
+	local name allowed role=${rc_job_role:?}
 	for name in RELEASE_SSH_SIGNING_KEY RELEASE_COSIGN_PRIVATE_KEY RELEASE_COSIGN_PASSPHRASE \
 		RELEASE_GPG_PRIVATE_KEY RELEASE_GPG_PASSPHRASE RELEASE_TOKEN RELEASE_REGISTRY_TOKEN \
 		SSH_SIGNING_KEY COSIGN_KEY COSIGN_PASSWORD GPG_SIGNING_KEY GPG_SIGNING_PASSWORD GITLAB_TOKEN; do
@@ -121,25 +107,27 @@ rc_release_checkout() {
 }
 
 # rc_image_builder prepares the image job's builder before any Containerfile
-# is built. Buildah is set up as the snapshot builds set it up. kaniko runs in
-# the job's own image, builder-job-image, admitted as the snapshot builds admit
-# it: by the kaniko job image's title and the engine project it was built from.
+# is built. The job runs in builder-job-image, whichever the builder. Buildah
+# is set up as the snapshot builds set it up, from what the image carries:
+# nothing is installed at run time. kaniko's image is admitted as the
+# snapshot builds admit it: by the kaniko job image's title and the engine
+# project it was built from.
 rc_image_builder() {
 	local -a auth_args=()
 	case "${CI_IMAGE_BUILDER:-buildah}" in
-	buildah)
-		rc_engine container setup-buildah --install-packages=true --probe-build=true --print-store=false --summary=false
-		return
-		;;
-	kaniko) ;;
+	buildah | kaniko) ;;
 	*)
 		echo "ERROR: image-builder must be buildah or kaniko, got '${CI_IMAGE_BUILDER}'" >&2
 		return 1
 		;;
 	esac
 	if [[ ! "${CI_IMAGE_BUILDER_JOB_IMAGE:-}" =~ ^[^[:space:]]+@sha256:[0-9a-f]{64}$ ]]; then
-		echo "ERROR: image-builder kaniko needs builder-job-image, the kaniko job image pinned by digest; got '${CI_IMAGE_BUILDER_JOB_IMAGE:-}'" >&2
+		echo "ERROR: image-builder ${CI_IMAGE_BUILDER:-buildah} needs builder-job-image, its job image pinned by digest; got '${CI_IMAGE_BUILDER_JOB_IMAGE:-}'" >&2
 		return 1
+	fi
+	if [ "${CI_IMAGE_BUILDER:-buildah}" = buildah ]; then
+		rc_engine container setup-buildah --install-packages=false --probe-build=true --print-store=false --summary=false
+		return
 	fi
 	# The job token reads what the runner pulled the job's image with.
 	if [ -n "${CI_REGISTRY:-}" ]; then
@@ -285,15 +273,6 @@ rc_plan_release_images() {
 		--registry-username gitlab-ci-token --runner-archs "${archs}" --output "${output}"
 }
 
-# rc_builder_needs_job_image succeeds for an image builder that runs in
-# builder-job-image.
-rc_builder_needs_job_image() {
-	case $1 in
-	kaniko) return 0 ;;
-	*) return 1 ;;
-	esac
-}
-
 # rc_check_release_images refuses, at the release request and before Prepare
 # pushes the release commit and tag, a policy whose image stage would stop
 # after it: a builder without its job image, a publication project that is
@@ -310,8 +289,9 @@ rc_check_release_images() {
 		return 1
 		;;
 	esac
-	if rc_builder_needs_job_image "${builder}" && [ -z "${job_image}" ]; then
-		echo "ERROR: image-builder ${builder} builds in builder-job-image; set it to the job image pinned by digest" >&2
+	# Either builder's image jobs run in builder-job-image.
+	if [ -z "${job_image}" ]; then
+		echo "ERROR: release-images builds in builder-job-image; set it to the ${builder} job image pinned by digest" >&2
 		return 1
 	fi
 	rc_publication_scope || return

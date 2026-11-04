@@ -929,7 +929,10 @@ test-live-forgejo-consumer checkout event *settings:
 #
 #   forgejo  version=<X.Y.Z>, CI_JOB_IMAGE= and other repository variables
 #   gitlab   job-archive=, build-archive=, signer-archive= (the image archives;
-#            lint-archive= too when the merge-request gate lints),
+#            lint-archive= too when the merge-request gate lints,
+#            job-archive-<name>= for each $CI_JOB_IMAGE_<NAME> it checks in,
+#            buildah-archive= when the release builds images),
+#            job-user=<uid[:gid]> for the release's job-image jobs,
 #            version=<X.Y.Z>, version-bump=maven and KEY=value variables for
 #            the release build
 #   github   org=<numeric organization ID>, run inside Forge Lab's
@@ -944,7 +947,7 @@ test-live-forgejo-consumer checkout event *settings:
 # docs/testing.md, Showing a consumer, lists the images each forge needs.
 [arg('name', help='Demo name: a directory of test/live/demos, or the name for checkout=')]
 [arg('forge', help='forgejo, gitlab or github')]
-[arg('settings', help='checkout=/abs for another consumer; release-trial key=value settings; gitlab: job-archive=, build-archive=, signer-archive=, lint-archive=; github: org=<id>')]
+[arg('settings', help='checkout=/abs for another consumer; release-trial key=value settings; gitlab: job-archive=, build-archive=, signer-archive=, lint-archive=, job-archive-<name>=, buildah-archive=; github: org=<id>')]
 [doc('Live; show a consumer and keep it')]
 [group('live')]
 demo forge name *settings:
@@ -970,6 +973,16 @@ demo forge name *settings:
         gitlab:build-archive=*) export FORGE_CI_LIVE_BUILD_IMAGE_ARCHIVE="${word#*=}" ;;
         gitlab:signer-archive=*) export FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE="${word#*=}" ;;
         gitlab:lint-archive=*) export FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE="${word#*=}" ;;
+        gitlab:buildah-archive=*) export FORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE="${word#*=}" ;;
+        gitlab:job-archive-*=*)
+            key=${word%%=*}
+            key=${key#job-archive-}
+            if [[ ! "$key" =~ ^[a-z][a-z0-9]*$ ]]; then
+                printf 'want job-archive-<name>=, name lowercase letters and digits, got %q\n' "$word" >&2
+                exit 2
+            fi
+            export "FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_${key^^}=${word#*=}"
+            ;;
         github:org=*) export FORGE_CI_LIVE_GITHUB_ORG_ID="${word#*=}" ;;
         *) settings+=("$word") ;;
         esac
@@ -1000,7 +1013,7 @@ demo forge name *settings:
 
 # Build one runtime image of this tree for this machine's architecture and
 # save it as <directory>/forge-ci-runtime-<target>.tar, the archive a GitLab
-# trial takes as job-archive= or build-archive=. Its engine is the build this
+# trial takes as job-archive=, job-archive-<name>= or build-archive=. Its engine is the build this
 # tree records, checked against .engine/bin/forge-ci-linux-<arch>.sha256 as
 # the published images are, so GitLab's build components run the candidate's
 # engine, as Forgejo's do, and not whatever a published image carries.
@@ -1048,39 +1061,31 @@ runtime-image-archive target directory:
     podman save --quiet --format docker-archive --output "$archive" "$image"
     printf '%s\n' "$archive"
 
-# Build a demo's job image from test/live/demos/<name>/job.Containerfile and
-# save it as <directory>/<name>-job.tar, the archive `just demo gitlab` takes
-# as job-archive=. A demo whose GitLab release build needs more than its job
-# image, such as Buildah for an image, also has build.Containerfile, saved as
-# <name>-build.tar for build-archive=; otherwise the job archive serves both.
-# Prints each archive's path.
-[arg('name', help='Demo name: a directory of test/live/demos with a job.Containerfile')]
+# Build the Buildah job image of this tree, containers/buildah-job, for this
+# machine's architecture and save it as <directory>/forge-ci-buildah-job.tar:
+# the archive a GitLab trial takes as buildah-archive=, the release's
+# builder-job-image, and as build-archive= for a build that runs only
+# `forge-ci container build`. Prints the archive's path.
 [arg('directory', help='Absolute directory to write the archive to')]
-[doc('Build a demo job image archive; network')]
+[doc('Build the Buildah job image archive; network')]
 [group('live')]
-demo-image name directory:
+buildah-job-image-archive directory:
     #!/usr/bin/env bash
     set -euo pipefail
-    name=$1 directory=$2
-    demo={{ quote(justfile_directory() / "test" / "live" / "demos") }}/"$name"
-    if [[ ! "$name" =~ ^[a-z0-9][a-z0-9-]*$ || ! -f "$demo/job.Containerfile" ]]; then
-        printf 'no job image for demo %q: test/live/demos/<name>/job.Containerfile\n' "$name" >&2
-        exit 2
-    fi
+    directory=$1
     if [[ "$directory" != /* ]]; then
         printf 'the archive directory must be an absolute path, got %q\n' "$directory" >&2
         exit 2
     fi
+    image=localhost/forge-ci-buildah-job:candidate
+    podman build --file containers/buildah-job/Containerfile \
+        --label "org.opencontainers.image.revision=$(git rev-parse --verify HEAD)" \
+        --tag "$image" containers/buildah-job >&2
     mkdir -p -- "$directory"
-    for role in job build; do
-        [[ -f "$demo/$role.Containerfile" ]] || continue
-        image="localhost/forge-ci-demo-$name-$role:latest"
-        podman build --file "$demo/$role.Containerfile" --tag "$image" "$demo" >&2
-        archive="$directory/$name-$role.tar"
-        rm -f -- "$archive"
-        podman save --quiet --format docker-archive --output "$archive" "$image"
-        printf '%s\n' "$archive"
-    done
+    archive="$directory/forge-ci-buildah-job.tar"
+    rm -f -- "$archive"
+    podman save --quiet --format docker-archive --output "$archive" "$image"
+    printf '%s\n' "$archive"
 
 # List the demos `just demo` made: each demo with its repositories, IDs and
 # links. On the lab it reads lab account demo's contract; on GitHub it runs
@@ -1217,23 +1222,27 @@ test-live-gitlab-base-images job_image_archive build_image_archive signer_image_
 # Prepare a live campaign: everything its lanes take, built from HEAD once.
 #
 # Publishes the kaniko job and signer images and each named nanolinter job
-# image (package nanolinter-<flavor>) with Forge Lab, saves the signer image and
-# the go and java runtime images as archives, exports every demo of
+# image (package nanolinter-<flavor>) with Forge Lab, saves the signer image,
+# the Buildah job image and each runtime image the named lanes' cases and
+# the GitLab gates of their demos take as archives, exports every demo of
 # test/live/demos as a one-commit checkout under <dir>/demos, and writes
 # <dir>/campaign.env: image references, archive paths and CAMPAIGN_COMMIT, no
-# secrets. A dirty checkout or a stale engine checksum is refused.
+# secrets. A dirty checkout or a stale engine checksum is refused. A relative
+# cases file is the caller's.
 #
 #   just campaign-prepare ~/src/forge-lab ~/campaigns/k3s \
+#     forgejo=test/live/campaigns/k3s-private-forgejo.cases \
+#     gitlab=test/live/campaigns/k3s-private-gitlab.cases \
 #     job-image=go:localhost/nanolinter-go:dev job-image=java:localhost/nanolinter-java:dev
 #
 # docs/live-campaigns.md, Run a campaign, has the whole run.
 [arg('dir', help='Absolute campaign directory: new, empty, or an earlier campaign to replace')]
 [arg('forge_lab', help='Absolute path to the Forge Lab checkout used to publish the images')]
-[arg('job_images', help='Optional job-image=<flavor>:<local image>, published as nanolinter-<flavor>')]
+[arg('lanes', help='<forgejo|gitlab>=<cases file> per lane the campaign runs, and optional job-image=<flavor>:<local image>, published as nanolinter-<flavor>')]
 [doc('Live; build and publish a campaign of this commit; network')]
 [group('live')]
-campaign-prepare forge_lab dir *job_images:
-    @exec bash scripts/ci/campaign.sh prepare "$@"
+campaign-prepare forge_lab dir +lanes:
+    @cd {{ quote(invocation_directory()) }} && exec bash {{ quote(justfile_directory() / "scripts" / "ci" / "campaign.sh") }} prepare "$@"
 
 # Run one provider's lane of a prepared campaign: the cases of a cases file,
 # in order, past failures, each appending a line to <dir>/<provider>.results.

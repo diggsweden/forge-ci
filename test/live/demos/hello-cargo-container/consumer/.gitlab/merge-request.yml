@@ -5,8 +5,8 @@
 # Merge-request gate through Forge CI's GitLab components: the nanolinter lint
 # gate and the project's own checks. The release policy includes this file for
 # merge-request pipelines only. Lint runs in a digest-pinned nanolinter image
-# of the rust flavour, the checks in the release's non-root job image; neither
-# job holds a release credential.
+# of the rust flavour, the checks in the release's job image, a Forge CI
+# runtime image, as its nonroot user; neither job holds a release credential.
 workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
@@ -25,5 +25,6 @@ include:
       forge-ci-repository: itiquette/forge-ci
       job-name: "Check: build and test"
       job-image: $CI_JOB_IMAGE
+      job-user: "65532:65532"
       commands:
         - bash .gitlab/check-release.sh

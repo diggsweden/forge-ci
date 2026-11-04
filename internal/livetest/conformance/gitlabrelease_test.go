@@ -310,7 +310,7 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 		requestTag, finalTag = "release-request/v"+settings.Version, "v"+settings.Version
 	}
 
-	archives := gitlabReleaseArchiveInputs(t, consumerRoot != "" || bases, kaniko && releaseImages)
+	archives := gitlabReleaseArchiveInputs(t, consumerRoot != "" || bases, releaseImages, kaniko)
 	if !livetest.Requires(t, provider.ForgeGitLab, livetest.NeedsInRunner) {
 		livetest.NotCoveredf(t, "signed GitLab release requires a deployed runner")
 	}
@@ -419,7 +419,9 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 		buildRunnerTags = append(buildRunnerTags, label)
 	}
 
-	imageBuilder, builderJobImage := livetest.ImageBuilderBuildah, ""
+	// The image jobs run in the builder's job image, the Buildah one unless
+	// the run selects kaniko.
+	imageBuilder, builderJobImage := livetest.ImageBuilderBuildah, images.buildah
 	if images.kaniko != "" {
 		imageBuilder, builderJobImage = livetest.ImageBuilderKaniko, images.kaniko
 	}
@@ -438,7 +440,7 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 		"component": strings.TrimPrefix(target.BaseURL(), "https://") + "/" + layer.Repository + "/release@" + layer.Commit,
 		"inputs": withGitChglog(map[string]any{
 			"forge-ci-repository": layer.Repository, "consumer-project": project,
-			"job-image": jobImage, "build-image": buildImage, "signer-image": signerImage,
+			"job-image": jobImage, "job-user": settings.JobUser, "build-image": buildImage, "signer-image": signerImage,
 			"publication-project":          livetest.RepoSlug(target, publication),
 			"publication-image-repository": registry + "/" + livetest.RepoSlug(target, publication),
 			"cosign-public-key-sha256":     keys.cosignPublicSHA256,
@@ -506,7 +508,10 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 	livetest.RestrictGitLabReleaseBranch(t, target, repo, deploy.ID)
 
 	if consumer != nil {
-		request = consumer.PushGitLabRelease(t, repo, layer, livetest.GitLabGateImages{Job: jobImage, Lint: images.lint})
+		extra := livetest.PushGitLabGateExtraJobImages(t, target, *consumer, func(name string) string {
+			return gitlabReleaseRepo(t, target, "release-job-image-"+strings.ToLower(name))
+		})
+		request = consumer.PushGitLabRelease(t, repo, layer, livetest.GitLabGateImages{Job: jobImage, Lint: images.lint, ExtraJobs: extra})
 	} else {
 		request = seedGitLabReleaseCanary(t, ctx, client, project, files)
 	}
@@ -638,7 +643,7 @@ func requireGitLabPolicyMergeRequest(t *testing.T, client *gitlabapi.Client, pro
 // gitlabReleaseArchives are the prepared image archives of a release's jobs;
 // build is empty when the release builds with the job image, lint when the
 // consumer's merge-request gate has no nanolinter component.
-type gitlabReleaseArchives struct{ job, build, kaniko, signer, lint string }
+type gitlabReleaseArchives struct{ job, build, buildah, kaniko, signer, lint string }
 
 // gitlabReleaseImagesConfig is where a consumer declares the images its GitLab
 // release builds, as its Forgejo release's artifacts-config.
@@ -675,8 +680,9 @@ func gitlabConsumerBuildRunsBuildah(t *testing.T, consumerRoot string) bool {
 }
 
 // gitlabReleaseArchiveInputs reads the archives the recipe names, and reports
-// the scenario not covered when one it needs is missing.
-func gitlabReleaseArchiveInputs(t *testing.T, needBuild, needKaniko bool) gitlabReleaseArchives {
+// the scenario not covered when one it needs is missing: with release images,
+// the job image of the selected builder.
+func gitlabReleaseArchiveInputs(t *testing.T, needBuild, releaseImages, kaniko bool) gitlabReleaseArchives {
 	t.Helper()
 
 	archives := gitlabReleaseArchives{
@@ -694,10 +700,16 @@ func gitlabReleaseArchiveInputs(t *testing.T, needBuild, needKaniko bool) gitlab
 		}
 	}
 
-	if needKaniko {
+	switch {
+	case releaseImages && kaniko:
 		archives.kaniko = os.Getenv("FORGE_CI_LIVE_KANIKO_JOB_IMAGE_ARCHIVE")
 		if archives.kaniko == "" {
 			livetest.NotCoveredf(t, "kaniko release images require FORGE_CI_LIVE_KANIKO_JOB_IMAGE_ARCHIVE, a saved kaniko job image")
+		}
+	case releaseImages:
+		archives.buildah = os.Getenv("FORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE")
+		if archives.buildah == "" {
+			livetest.NotCoveredf(t, "Buildah release images require FORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE, a saved Buildah job image")
 		}
 	}
 
@@ -705,7 +717,7 @@ func gitlabReleaseArchiveInputs(t *testing.T, needBuild, needKaniko bool) gitlab
 }
 
 // gitlabReleaseImages are the image references of a release's jobs.
-type gitlabReleaseImages struct{ job, build, kaniko, signer, lint string }
+type gitlabReleaseImages struct{ job, build, buildah, kaniko, signer, lint string }
 
 // pushGitLabReleaseImages pushes each archive to a project of its own and
 // returns the image references.
@@ -720,6 +732,10 @@ func pushGitLabReleaseImages(t *testing.T, target livetest.Target, archives gitl
 
 	if archives.build != "" {
 		images.build = livetest.PushJobImage(t, target, gitlabReleaseRepo(t, target, "release-build-image"), archives.build)
+	}
+
+	if archives.buildah != "" {
+		images.buildah = livetest.PushJobImage(t, target, gitlabReleaseRepo(t, target, "release-buildah-job-image"), archives.buildah)
 	}
 
 	if archives.kaniko != "" {

@@ -20,8 +20,8 @@ import (
 )
 
 // The image stage's settings are the policy's inputs, forwarded unchanged.
-// Buildah stays the default; kaniko's job image is an input of its own, empty
-// by default, and no image job exists unless release-images is set.
+// Buildah stays the default; the builder's job image is an input of its own,
+// empty by default, and no image job exists unless release-images is set.
 func TestReleaseImageStageTakesItsSettingsFromThePolicy(t *testing.T) {
 	t.Parallel()
 
@@ -53,7 +53,7 @@ func TestReleaseImageStageTakesItsSettingsFromThePolicy(t *testing.T) {
 	root := releaseDocumentBody(t, "templates/release.yml")
 	forwarded := root["release"].(map[string]any)["trigger"].(map[string]any)["include"].([]any)[0].(map[string]any)["inputs"].(map[string]any)
 
-	for _, name := range []string{"release-images", "artifacts-config", "release-platforms", "image-builder", "builder-job-image", "build-runner-tags-arm64"} {
+	for _, name := range []string{"job-user", "release-images", "artifacts-config", "release-platforms", "image-builder", "builder-job-image", "build-runner-tags-arm64"} {
 		if forwarded[name] != "$[[ inputs."+name+" ]]" {
 			t.Fatalf("root component does not forward %s", name)
 		}
@@ -90,10 +90,26 @@ func TestReleaseImageStageTakesItsSettingsFromThePolicy(t *testing.T) {
 		}
 	}
 
-	for builder, image := range map[string]string{"buildah": "$[[ inputs.build-image ]]", "kaniko": "$[[ inputs.builder-job-image ]]"} {
+	// Either builder runs in builder-job-image, never in the consumer's
+	// build-image, and as that image's own user. Without release images,
+	// when they never run, they name job-image, so that an empty
+	// builder-job-image leaves GitLab a job image name to validate.
+	withImages := releaseJobsBodyFor(t, "buildah")
+	builderJob := resolveGitLabExtends(withImages, withImages[".forge-ci-release-image-builder"].(map[string]any))
+
+	if builderJob["image"].(map[string]any)["name"] != "$[[ inputs.builder-job-image ]]" ||
+		builderJob["variables"].(map[string]any)["RC_JOB_USER"] != "" {
+		t.Fatalf("image builds must run in builder-job-image as its own user: %+v", builderJob)
+	}
+
+	if body[".forge-ci-release-image-job-false"].(map[string]any)["image"].(map[string]any)["name"] != "$[[ inputs.job-image ]]" {
+		t.Fatal("without release images the image jobs must name job-image")
+	}
+
+	for _, builder := range []string{"buildah", "kaniko"} {
 		template := body[".forge-ci-release-image-builder-"+builder].(map[string]any)
-		if template["image"].(map[string]any)["name"] != image {
-			t.Fatalf("%s image builds run in %v, want %s", builder, template["image"], image)
+		if template["extends"] != ".forge-ci-release-image-builder" || template["image"] != nil {
+			t.Fatalf("%s image builds must run in the builder's job image: %+v", builder, template)
 		}
 	}
 
@@ -113,13 +129,16 @@ func TestReleaseImageStageTakesItsSettingsFromThePolicy(t *testing.T) {
 }
 
 // The release image builder is admitted before any Containerfile is built:
-// Buildah is set up, kaniko admitted only as the kaniko job image of this
-// engine project, read with the job token.
+// Buildah is set up from what its job image carries, installing nothing,
+// kaniko admitted only as the kaniko job image of this engine project, read
+// with the job token. Either needs its job image pinned by digest.
 func TestReleaseImageBuilderAdmitsOnlyTheKanikoJobImage(t *testing.T) {
 	t.Parallel()
 
 	kanikoImage := "registry.invalid/team/kaniko-job@sha256:" + strings.Repeat("a", 64)
 	kaniko := []string{"CI_IMAGE_BUILDER=kaniko", "CI_IMAGE_BUILDER_JOB_IMAGE=" + kanikoImage}
+	buildahImage := "CI_IMAGE_BUILDER_JOB_IMAGE=registry.invalid/team/buildah-job@sha256:" + strings.Repeat("b", 64)
+	setupBuildah := []string{"container setup-buildah --install-packages=false "}
 
 	for name, tc := range map[string]struct {
 		env       []string
@@ -128,8 +147,9 @@ func TestReleaseImageBuilderAdmitsOnlyTheKanikoJobImage(t *testing.T) {
 		calls     []string
 		wantError string
 	}{
-		"buildah by default":        {admitted: true, calls: []string{"container setup-buildah"}},
-		"buildah named":             {env: []string{"CI_IMAGE_BUILDER=buildah"}, admitted: true, calls: []string{"container setup-buildah"}},
+		"buildah by default":        {env: []string{buildahImage}, admitted: true, calls: setupBuildah},
+		"buildah named":             {env: []string{"CI_IMAGE_BUILDER=buildah", buildahImage}, admitted: true, calls: setupBuildah},
+		"buildah without its image": {env: []string{"CI_IMAGE_BUILDER=buildah"}, wantError: "buildah needs builder-job-image"},
 		"another builder":           {env: []string{"CI_IMAGE_BUILDER=docker"}, wantError: "image-builder must be buildah or kaniko"},
 		"kaniko without its image":  {env: []string{"CI_IMAGE_BUILDER=kaniko"}, wantError: "needs builder-job-image"},
 		"kaniko by tag":             {env: []string{"CI_IMAGE_BUILDER=kaniko", "CI_IMAGE_BUILDER_JOB_IMAGE=registry.invalid/team/kaniko-job:latest"}, wantError: "needs builder-job-image"},
@@ -178,13 +198,14 @@ const releaseImagesCheck = "rc_check_release_images '$[[ inputs.release-images ]
 	"'$[[ inputs.builder-job-image ]]' '$[[ inputs.artifacts-config ]]' '$[[ inputs.release-platforms ]]' '$[[ inputs.build-runner-tags-arm64 ]]'"
 
 // The release request check, which runs before Prepare pushes anything,
-// refuses an image stage that would stop later: a builder without the job
-// image it runs in, a publication project that is not separate, or a plan
+// refuses an image stage that would stop later: either builder without the
+// job image it runs in, a publication project that is not separate, or a plan
 // no image job carries out. Without release images it checks nothing.
 func TestReleaseRequestCheckRefusesAnImageStageThatWouldStop(t *testing.T) {
 	t.Parallel()
 
 	kanikoImage := "registry.invalid/team/kaniko-job@sha256:" + strings.Repeat("a", 64)
+	buildahImage := "registry.invalid/team/buildah-job@sha256:" + strings.Repeat("b", 64)
 	separate := []string{"RC_PUBLICATION_PROJECT=team/publication", "RC_PUBLICATION_IMAGE_REPOSITORY=registry.invalid/team/publication"}
 
 	for name, tc := range map[string]struct {
@@ -193,11 +214,12 @@ func TestReleaseRequestCheckRefusesAnImageStageThatWouldStop(t *testing.T) {
 		wantError string
 		planned   bool
 	}{
-		"no release images":        {args: "false kaniko ''"},
-		"kaniko without its image": {args: "true kaniko ''", env: separate, wantError: "image-builder kaniko builds in builder-job-image"},
-		"kaniko with its image":    {args: "true kaniko " + kanikoImage, env: separate, planned: true},
-		"buildah":                  {args: "true buildah ''", env: separate, planned: true},
-		"publication not separate": {args: "true buildah ''", env: []string{"RC_PUBLICATION_PROJECT=team/app", "RC_PUBLICATION_IMAGE_REPOSITORY=registry.invalid/team/app"}, wantError: "publication-project must be a separate project"},
+		"no release images":         {args: "false buildah ''"},
+		"kaniko without its image":  {args: "true kaniko ''", env: separate, wantError: "set it to the kaniko job image"},
+		"kaniko with its image":     {args: "true kaniko " + kanikoImage, env: separate, planned: true},
+		"buildah without its image": {args: "true buildah ''", env: separate, wantError: "set it to the buildah job image"},
+		"buildah with its image":    {args: "true buildah " + buildahImage, env: separate, planned: true},
+		"publication not separate":  {args: "true buildah " + buildahImage, env: []string{"RC_PUBLICATION_PROJECT=team/app", "RC_PUBLICATION_IMAGE_REPOSITORY=registry.invalid/team/app"}, wantError: "publication-project must be a separate project"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -341,7 +363,7 @@ func TestReleaseImageBuildHandsOffReadableLayouts(t *testing.T) {
 // Signing reads the hand-off the policy names and holds it to it: with
 // release images the publishing job's, which must carry the ledger; without,
 // the build's, which must not.
-func TestReleaseSigningReadsThePolicysHandoff(t *testing.T) {
+func TestReleaseSigningReadsTheHandoffThePolicyNames(t *testing.T) {
 	t.Parallel()
 
 	for name, tc := range map[string]struct {
@@ -494,4 +516,60 @@ func linkLayout(name string) func(t *testing.T, handoff string) {
 			t.Fatal(err)
 		}
 	}
+}
+
+// job-user reaches the jobs of job-image alone, as the check component's
+// does. The build and image-builder jobs run their own images as those
+// images' users, root for Buildah and kaniko, and the signer jobs name their
+// image as a string, which replaces the image options entirely; all of them
+// clear RC_JOB_USER.
+func TestReleaseJobUserRunsOnlyTheJobImageJobs(t *testing.T) {
+	t.Parallel()
+
+	requireImageUserVariable(t, releaseDocumentBody(t, "templates/release-jobs.yml")[".forge-ci-release"].(map[string]any),
+		"RC_JOB_USER", "$[[ inputs.job-user ]]")
+
+	for _, builder := range []string{"buildah", "kaniko"} {
+		body := releaseJobsBodyFor(t, builder)
+		for name, raw := range body {
+			job, isJob := raw.(map[string]any)
+			if !isJob || strings.HasPrefix(name, ".") {
+				continue
+			}
+
+			fields := resolveGitLabExtends(body, job)
+			variables, _ := fields["variables"].(map[string]any)
+			user := variables["RC_JOB_USER"]
+
+			image, isMap := fields["image"].(map[string]any)
+			if !isMap {
+				if user != "" {
+					t.Errorf("%s names its image alone with RC_JOB_USER %q: it takes no user", name, user)
+				}
+
+				continue
+			}
+
+			if inJobImage := image["name"] == "$[[ inputs.job-image ]]"; inJobImage != (user == "$[[ inputs.job-user ]]") || !inJobImage && user != "" {
+				t.Errorf("%s with %s runs %v with RC_JOB_USER %q: only job-image jobs take job-user", name, builder, image["name"], user)
+			}
+		}
+	}
+}
+
+// releaseJobsBodyFor decodes the release jobs document with the builder
+// chosen and release images on, so the extends names resolve as GitLab
+// interpolates them.
+func releaseJobsBodyFor(t *testing.T, builder string) map[string]any {
+	t.Helper()
+
+	text := strings.NewReplacer("$[[ inputs.image-builder ]]", builder, "$[[ inputs.release-images ]]", "true").
+		Replace(string(reporoot.ReadFile(t, "templates/release-jobs.yml")))
+
+	var body map[string]any
+	if err := yaml.Unmarshal([]byte(text[strings.Index(text, "\n---\n")+5:]), &body); err != nil {
+		t.Fatal(err)
+	}
+
+	return body
 }

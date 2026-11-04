@@ -240,7 +240,7 @@ func TestCampaignLane_RunsNothingThePreflightRefuses(t *testing.T) {
 	}
 }
 
-func TestCampaignPrepare_RefusesAJobImageItCannotName(t *testing.T) {
+func TestCampaignPrepare_RefusesAnArgumentItCannotName(t *testing.T) {
 	t.Parallel()
 
 	forgeLab := t.TempDir()
@@ -257,11 +257,19 @@ func TestCampaignPrepare_RefusesAJobImageItCannotName(t *testing.T) {
 		{"job-image=go:localhost/a b"},
 		{"image=go:localhost/a"},
 		{"job-image=go:localhost/a", "job-image=go:localhost/b"},
+		{"github=lane.cases"},
+		{"gitlab="},
 	} {
-		stderr, status := runScript(t, lane.workDir, lane.env, "campaign.sh", append([]string{"prepare", forgeLab, filepath.Join(t.TempDir(), "c")}, images...)...)
+		stderr, status := runScript(t, lane.workDir, lane.env, "campaign.sh", append([]string{"prepare", forgeLab, filepath.Join(t.TempDir(), "c"), "gitlab=lane.cases"}, images...)...)
 		if status != 2 || !strings.Contains(stderr, "campaign: ") {
 			t.Errorf("%q: status %d, want a refusal (2)\n%s", images, status, stderr)
 		}
+	}
+
+	// A campaign prepares for the lanes it names, so it names one.
+	if stderr, status := runScript(t, lane.workDir, lane.env, "campaign.sh", "prepare", forgeLab, filepath.Join(t.TempDir(), "c"), "job-image=go:localhost/a"); status != 2 ||
+		!strings.Contains(stderr, "campaign: name the lanes") {
+		t.Errorf("status %d, want the lanes asked for (2)\n%s", status, stderr)
 	}
 
 	if calls := readLines(t, lane.argvFile); calls != nil {

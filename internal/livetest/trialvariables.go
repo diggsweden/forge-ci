@@ -6,6 +6,7 @@ package livetest
 import (
 	"fmt"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -51,16 +52,26 @@ type GitLabReleaseSettings struct {
 	Version string
 	// NextVersion requests a second release from the signed main left by the first.
 	NextVersion string
-	Variables   map[string]string
+	// JobUser is the release component's job-user input, a UID or UID:GID the
+	// job-image jobs run as, or "" for the image's own user.
+	JobUser   string
+	Variables map[string]string
 }
 
 // settingVersionBump is a lowercase setting of a GitLab release trial, as
 // version is; every uppercase KEY=value is a consumer variable.
 const settingVersionBump = "version-bump"
 
-// ParseGitLabReleaseSettings reads one setting per line: version-bump=maven|npm|cargo,
-// which the trial writes into the release policy, version=X.Y.Z, the release
-// it requests, or a literal KEY=value consumer variable (ParseTrialVariables).
+// settingJobUser is the GitLab release trial's job-user, the release policy's
+// input of that name.
+const settingJobUser = "job-user"
+
+var jobUserValue = regexp.MustCompile(`^[0-9]+(:[0-9]+)?$`)
+
+// ParseGitLabReleaseSettings reads one setting per line: version-bump=maven|npm|cargo
+// and job-user=UID[:GID], which the trial writes into the release policy,
+// version=X.Y.Z, the release it requests, or a literal KEY=value consumer
+// variable (ParseTrialVariables).
 func ParseGitLabReleaseSettings(input string) (GitLabReleaseSettings, error) {
 	var settings GitLabReleaseSettings
 
@@ -76,6 +87,10 @@ func ParseGitLabReleaseSettings(input string) (GitLabReleaseSettings, error) {
 			}
 
 			settings.VersionBump = value
+		case settingJobUser:
+			if err := setTrialJobUser(&settings.JobUser, value); err != nil {
+				return GitLabReleaseSettings{}, err
+			}
 		case settingVersion:
 			if err := setTrialVersion(&settings.Version, key, value); err != nil {
 				return GitLabReleaseSettings{}, err
@@ -94,13 +109,8 @@ func ParseGitLabReleaseSettings(input string) (GitLabReleaseSettings, error) {
 		return GitLabReleaseSettings{}, err
 	}
 
-	// The release policy's image-builder input selects the builder; a build
-	// variable would override it inside the build alone.
-	for _, name := range []string{"CI_IMAGE_BUILDER", "CI_IMAGE_BUILDER_JOB_IMAGE"} {
-		if _, set := parsed[name]; set {
-			return GitLabReleaseSettings{}, fmt.Errorf("%s is the GitLab release policy's to set, not a build variable; select kaniko with %s=kaniko: %w",
-				name, GitLabImageBuilderEnv, errs.ErrValidation)
-		}
+	if err := refusePolicyBuilderVariables(parsed); err != nil {
+		return GitLabReleaseSettings{}, err
 	}
 
 	settings.Variables = parsed
@@ -109,6 +119,34 @@ func ParseGitLabReleaseSettings(input string) (GitLabReleaseSettings, error) {
 	}
 
 	return settings, nil
+}
+
+// refusePolicyBuilderVariables refuses build variables that name what the
+// release policy's inputs set: the image builder, which a build variable
+// would override inside the build alone, and the job user, which the jobs
+// refuse when a variable differs from job-user.
+func refusePolicyBuilderVariables(variables map[string]string) error {
+	for name, instead := range map[string]string{
+		"CI_IMAGE_BUILDER":           "select kaniko with " + GitLabImageBuilderEnv + "=kaniko",
+		"CI_IMAGE_BUILDER_JOB_IMAGE": "select kaniko with " + GitLabImageBuilderEnv + "=kaniko",
+		"RC_JOB_USER":                "give " + settingJobUser + "=UID[:GID]",
+	} {
+		if _, set := variables[name]; set {
+			return fmt.Errorf("%s is the GitLab release policy's to set, not a build variable; %s: %w", name, instead, errs.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
+func setTrialJobUser(destination *string, value string) error {
+	if *destination != "" || !jobUserValue.MatchString(value) {
+		return fmt.Errorf("%s must be given once, as UID or UID:GID: %w", settingJobUser, errs.ErrValidation)
+	}
+
+	*destination = value
+
+	return nil
 }
 
 func setTrialVersion(destination *string, key, value string) error {

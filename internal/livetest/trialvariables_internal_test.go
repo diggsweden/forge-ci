@@ -67,11 +67,12 @@ func TestGitLabConsumerBuildVariablesStayLiteralAndLocal(t *testing.T) {
 	}
 }
 
-// version-bump is the trial's own setting, written into the policy; every
+// version-bump and job-user are the trial's own settings, written into the policy; every
 // other word stays a consumer variable for the build.
 func TestParseGitLabReleaseSettings_SeparatesTheBumpFromVariables(t *testing.T) {
-	got, err := ParseGitLabReleaseSettings("version-bump=maven\nversion=0.2.0\nRELEASE_PLATFORMS=linux/amd64")
-	if err != nil || got.VersionBump != "maven" || got.Version != "0.2.0" || got.Variables["RELEASE_PLATFORMS"] != "linux/amd64" || len(got.Variables) != 1 {
+	got, err := ParseGitLabReleaseSettings("version-bump=maven\nversion=0.2.0\njob-user=65532:65532\nRELEASE_PLATFORMS=linux/amd64")
+	if err != nil || got.VersionBump != "maven" || got.Version != "0.2.0" || got.JobUser != "65532:65532" ||
+		got.Variables["RELEASE_PLATFORMS"] != "linux/amd64" || len(got.Variables) != 1 {
 		t.Fatalf("ParseGitLabReleaseSettings() = %+v, %v", got, err)
 	}
 
@@ -82,8 +83,11 @@ func TestParseGitLabReleaseSettings_SeparatesTheBumpFromVariables(t *testing.T) 
 	for _, input := range []string{
 		"version-bump=gradle", "version-bump=maven\nversion-bump=maven", "version-bump=",
 		"version=vv0.2.0", "version=0.2", "version=1.0.0\nversion=1.0.1",
-		// The policy selects the builder on GitLab, not the build's environment.
+		"job-user=", "job-user=nonroot", "job-user=65532\njob-user=65532", "job-user=65532:",
+		// The policy selects the builder and the job user on GitLab, not the
+		// build's environment.
 		"CI_IMAGE_BUILDER=kaniko", "CI_IMAGE_BUILDER_JOB_IMAGE=registry.invalid/kaniko@sha256:" + strings.Repeat("a", 64),
+		"RC_JOB_USER=0",
 	} {
 		if _, err := ParseGitLabReleaseSettings(input); err == nil {
 			t.Errorf("ParseGitLabReleaseSettings(%q) accepted it", input)

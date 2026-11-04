@@ -17,6 +17,9 @@ spec:
       regex: '^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)+$'
     job-image:
       regex: '^[^[:space:]]+@sha256:[0-9a-f]{64}$'
+    job-user:
+      regex: '^$|^[0-9]+(:[0-9]+)?$'
+      default: ''
     build-image:
       regex: '^[^[:space:]]+@sha256:[0-9a-f]{64}$'
     signer-image:
@@ -95,15 +98,22 @@ stages: [check, prepare, build, images, sign, publish]
 .forge-ci-release:
   # As in the check component: a consumer's image runs the job's shell, not
   # its own entrypoint, on every executor.
+  # job-user, as in the check component: a variable the runner expands, since
+  # GitLab refuses an empty image user. Jobs in another image clear it.
   image:
     name: $[[ inputs.job-image ]]
     entrypoint: [""]
+    docker:
+      user: $RC_JOB_USER
+    kubernetes:
+      user: $RC_JOB_USER
   cache: []
   interruptible: false
   variables:
     GIT_STRATEGY: empty
     GIT_SUBMODULE_STRATEGY: none
     RC_FORGE_CI_REPOSITORY: $[[ inputs.forge-ci-repository ]]
+    RC_JOB_USER: '$[[ inputs.job-user ]]'
     RC_CONSUMER_PROJECT: $[[ inputs.consumer-project ]]
     RC_SIGNER_IMAGE: $[[ inputs.signer-image ]]
     RC_PUBLICATION_PROJECT: $[[ inputs.publication-project ]]
@@ -123,101 +133,125 @@ stages: [check, prepare, build, images, sign, publish]
     FORGE_CI_COSIGN_TRANSPARENCY: $[[ inputs.transparency-log ]]
     RC_RELEASE_BRANCH_INPUT: $[[ inputs.release-branch ]]
     RC_VERSION_BUMP: '$[[ inputs.version-bump ]]'
-  before_script:
-    - |
-      set -euo pipefail
-      umask 077
-      export RC_RELEASE_POLICY='$[[ inputs.release-policy ]]'
-      readonly RC_RELEASE_POLICY
-      expected='$[[ inputs.engine-sha ]]'
-      reference='$[[ inputs.engine-reference ]]'
-      test "${reference}" = "${expected}"
-      test "${CI_PROJECT_PATH:?}" = "${RC_CONSUMER_PROJECT:?}"
-      test "${CI_COMMIT_REF_PROTECTED:?}" = true
-      test "${CI_PIPELINE_SOURCE:?}" = parent_pipeline
-      case "${CI_COMMIT_TAG:?}" in release-request/v*) ;; *) exit 1 ;; esac
-      unset BASH_ENV ENV
-      # kaniko replaces an image job's root filesystem with the image's and
-      # deletes it after each build; only mounts and /kaniko survive, where
-      # the kaniko job image keeps TMPDIR. Its build jobs keep their work, the
-      # engine included, in the workspace; every other job in private /tmp.
-      work_parent=/tmp
-      case "${CI_JOB_NAME}" in
-        "Images: build amd64" | "Images: build arm64")
-          if [ '$[[ inputs.image-builder ]]' = kaniko ]; then work_parent=${CI_PROJECT_DIR:?}; fi
-          ;;
-      esac
-      RC_WORK=$(mktemp -d "${work_parent}/forge-ci-release.XXXXXXXX")
-      readonly RC_WORK
-      trap 'rm -rf -- "${RC_WORK}"' EXIT
-      case "${CI_JOB_NAME}" in
-        "Check: release request" | "Check: consumer checks" | "Prepare: changelog" | "Prepare: version" | "Build: release files") ;;
-        *)
-          export HOME="${RC_WORK}/home"
-          mkdir -m 0700 "${HOME}"
-          export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
-          ;;
-      esac
-      export RC_HELPERS_DIR="${RC_WORK}/helpers"
-      export CI_OUTPUT="${RC_WORK}/outputs.env"
-      export FORGE_CI_PLAN="${RC_WORK}/plan.json"
-      export SIGN_AND_PUBLISH_STATE_DIR="${RC_WORK}/state"
-      mkdir -m 0700 "${SIGN_AND_PUBLISH_STATE_DIR}"
-      export FORGE_CI_PACKAGE_PROVIDER=gitlab
-      export FORGE_CI_REPOSITORY_URL="${CI_SERVER_URL:?}/${RC_FORGE_CI_REPOSITORY:?}.git"
-      git_options=(-c core.hooksPath=/dev/null -c credential.helper=)
-      if [ -n "${CI_SERVER_TLS_CA_FILE:-}" ]; then
-        for bundle in /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt; do
-          if [ -f "${bundle}" ]; then break; fi
-        done
-        test -f "${bundle}"
-        cat -- "${bundle}" "${CI_SERVER_TLS_CA_FILE}" > "${RC_WORK}/ca-bundle.crt"
-        export CURL_CA_BUNDLE="${RC_WORK}/ca-bundle.crt"
-        export GIT_SSL_CAINFO="${CURL_CA_BUNDLE}" SSL_CERT_FILE="${CURL_CA_BUNDLE}"
-        git_options+=(-c "http.sslCAInfo=${GIT_SSL_CAINFO}")
-      fi
-      object_format=sha1
-      if [ "${#expected}" -eq 64 ]; then object_format=sha256; fi
-      git init --quiet --object-format="${object_format}" "${RC_HELPERS_DIR}"
-      git -C "${RC_HELPERS_DIR}" remote add origin "${FORGE_CI_REPOSITORY_URL}"
-      GIT_TERMINAL_PROMPT=0 git "${git_options[@]}" -C "${RC_HELPERS_DIR}" fetch --quiet --depth=1 --no-tags origin "${expected}"
-      git "${git_options[@]}" -C "${RC_HELPERS_DIR}" checkout --quiet --detach "${expected}"
-      test "$(git -C "${RC_HELPERS_DIR}" rev-parse HEAD)" = "${expected}"
-      source "${RC_HELPERS_DIR}/.engine/bin/lib-forge-ci.sh"
-      fetch_forge_ci
-      SIGNER_STRICT=1 verify_forge_ci
-      export FORGE_CI_BIN="${HELPERS_ENGINE_VERIFIED}"
-      export PATH="${HELPERS_ROOT}/bin:${PATH}"
-      export FORGE_CI_PROVIDER=gitlab
-      source "${RC_HELPERS_DIR}/.gitlab/bin/release.sh"
-      rc_release_context
-  after_script:
-    - |
-      set -eu
-      cd -- "${CI_PROJECT_DIR:?}"
-      # The uploader and the next job can run as different users. Publish
-      # readable data only; never follow links into the private workspace.
-      # Each producer's hand-off directory keeps its own stable name.
-      case "${CI_JOB_NAME:?}" in
-        "Prepare: changelog") handoff=_release-render ;;
-        "Prepare: version") handoff=_release-bump ;;
-        "Build: release files") handoff=_release-build ;;
-        "Images: plan") handoff=_release-images-plan ;;
-        "Images: build amd64") handoff=_release-images-amd64 ;;
-        "Images: build arm64") handoff=_release-images-arm64 ;;
-        "Images: publish") handoff=_release-images ;;
-        "Sign: files and images") handoff=_release-sign ;;
-        "Publish: images") handoff=_release-promote ;;
-        *) handoff= ;;
-      esac
-      if [ -n "${handoff}" ] && [ -d "${handoff}" ] && [ ! -L "${handoff}" ]; then
-        find "${handoff}" \( -type d -o -type f \) -exec chmod u=rwX,go=rX -- {} +
-      fi
-"Check: signing access":
+# The signer jobs name their image alone, which takes no user; job-user is
+# job-image's, so they clear it.
+.forge-ci-release-signer:
   extends: .forge-ci-release
-  stage: check
   image: $[[ inputs.signer-image ]]
+  variables:
+    RC_JOB_USER: ''
+# Each job's start, its before_script, is its role, then this. A project,
+# group or instance variable outranks every other, the job's predefined
+# name included, so what the job may do follows from the role, a literal of
+# this file, and never from a variable.
+.forge-ci-release-start:
+  - &forge-ci-release-start |
+    set -euo pipefail
+    umask 077
+    # job-user reaches the runner as RC_JOB_USER, which a project variable
+    # outranks; hold that to the literal input, and the job's user to it.
+    # The jobs in their own images hold it to empty, their images' users.
+    # kaniko replaces an image job's root filesystem with the image's and
+    # deletes it after each build; only mounts and /kaniko survive, where
+    # the kaniko job image keeps TMPDIR. Its build jobs keep their work, the
+    # engine included, in the workspace; every other job in private /tmp.
+    # The jobs that run consumer code, and the request check, keep their
+    # image's home; every other job gets a private one.
+    want_user='$[[ inputs.job-user ]]' work_parent=/tmp own_home=false
+    case "${rc_job_role:?}" in
+      request | checks | changelog | version) own_home=true ;;
+      build) want_user= own_home=true ;;
+      image-build)
+        want_user=
+        if [ '$[[ inputs.image-builder ]]' = kaniko ]; then work_parent=${CI_PROJECT_DIR:?}; fi
+        ;;
+      signing-preflight | publish-preflight | registry-preflight | sign | promote | publish | cleanup) want_user= ;;
+      prepare | images-plan | images-publish | summary) ;;
+      *)
+        echo "ERROR: the release job role '${rc_job_role}' is unknown." >&2
+        exit 1
+        ;;
+    esac
+    job_uid=$(id -u) job_gid=$(id -g)
+    if [ "${RC_JOB_USER-}" != "${want_user}" ]; then
+      echo "ERROR: RC_JOB_USER is '${RC_JOB_USER-}', not '${want_user}'; remove the variable that sets it." >&2
+      exit 1
+    fi
+    case "${want_user}" in
+      *:*) actual_user="${job_uid}:${job_gid}" ;;
+      *) actual_user=${want_user:+${job_uid}} ;;
+    esac
+    if [ "${actual_user}" != "${want_user}" ]; then
+      echo "ERROR: the job runs as uid=${job_uid} gid=${job_gid}, not job-user ${want_user}." >&2
+      exit 1
+    fi
+    echo "job user: uid=${job_uid} gid=${job_gid}"
+    export RC_RELEASE_POLICY='$[[ inputs.release-policy ]]'
+    readonly RC_RELEASE_POLICY
+    expected='$[[ inputs.engine-sha ]]'
+    reference='$[[ inputs.engine-reference ]]'
+    test "${reference}" = "${expected}"
+    test "${CI_PROJECT_PATH:?}" = "${RC_CONSUMER_PROJECT:?}"
+    test "${CI_COMMIT_REF_PROTECTED:?}" = true
+    test "${CI_PIPELINE_SOURCE:?}" = parent_pipeline
+    case "${CI_COMMIT_TAG:?}" in release-request/v*) ;; *) exit 1 ;; esac
+    unset BASH_ENV ENV
+    RC_WORK=$(mktemp -d "${work_parent}/forge-ci-release.XXXXXXXX")
+    readonly RC_WORK
+    trap 'rm -rf -- "${RC_WORK}"' EXIT
+    if [ "${own_home}" = false ]; then
+      export HOME="${RC_WORK}/home"
+      mkdir -m 0700 "${HOME}"
+      export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
+    fi
+    export RC_HELPERS_DIR="${RC_WORK}/helpers"
+    export CI_OUTPUT="${RC_WORK}/outputs.env"
+    export FORGE_CI_PLAN="${RC_WORK}/plan.json"
+    export SIGN_AND_PUBLISH_STATE_DIR="${RC_WORK}/state"
+    mkdir -m 0700 "${SIGN_AND_PUBLISH_STATE_DIR}"
+    export FORGE_CI_PACKAGE_PROVIDER=gitlab
+    export FORGE_CI_REPOSITORY_URL="${CI_SERVER_URL:?}/${RC_FORGE_CI_REPOSITORY:?}.git"
+    git_options=(-c core.hooksPath=/dev/null -c credential.helper=)
+    if [ -n "${CI_SERVER_TLS_CA_FILE:-}" ]; then
+      for bundle in /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt; do
+        if [ -f "${bundle}" ]; then break; fi
+      done
+      test -f "${bundle}"
+      cat -- "${bundle}" "${CI_SERVER_TLS_CA_FILE}" > "${RC_WORK}/ca-bundle.crt"
+      export CURL_CA_BUNDLE="${RC_WORK}/ca-bundle.crt"
+      export GIT_SSL_CAINFO="${CURL_CA_BUNDLE}" SSL_CERT_FILE="${CURL_CA_BUNDLE}"
+      git_options+=(-c "http.sslCAInfo=${GIT_SSL_CAINFO}")
+    fi
+    object_format=sha1
+    if [ "${#expected}" -eq 64 ]; then object_format=sha256; fi
+    git init --quiet --object-format="${object_format}" "${RC_HELPERS_DIR}"
+    git -C "${RC_HELPERS_DIR}" remote add origin "${FORGE_CI_REPOSITORY_URL}"
+    GIT_TERMINAL_PROMPT=0 git "${git_options[@]}" -C "${RC_HELPERS_DIR}" fetch --quiet --depth=1 --no-tags origin "${expected}"
+    git "${git_options[@]}" -C "${RC_HELPERS_DIR}" checkout --quiet --detach "${expected}"
+    test "$(git -C "${RC_HELPERS_DIR}" rev-parse HEAD)" = "${expected}"
+    source "${RC_HELPERS_DIR}/.engine/bin/lib-forge-ci.sh"
+    fetch_forge_ci
+    SIGNER_STRICT=1 verify_forge_ci
+    export FORGE_CI_BIN="${HELPERS_ENGINE_VERIFIED}"
+    export PATH="${HELPERS_ROOT}/bin:${PATH}"
+    export FORGE_CI_PROVIDER=gitlab
+    source "${RC_HELPERS_DIR}/.gitlab/bin/release.sh"
+    rc_release_context
+# A producer's after_script is its hand-off directory, then this. The
+# uploader and the next job can run as different users. Publish readable
+# data only; never follow links into the private workspace.
+.forge-ci-release-handoff:
+  - &forge-ci-release-handoff |
+    set -eu
+    cd -- "${CI_PROJECT_DIR:?}"
+    if [ -d "${rc_handoff:?}" ] && [ ! -L "${rc_handoff}" ]; then
+      find "${rc_handoff}" \( -type d -o -type f \) -exec chmod u=rwX,go=rX -- {} +
+    fi
+"Check: signing access":
+  extends: .forge-ci-release-signer
+  stage: check
+  before_script: [readonly rc_job_role=signing-preflight, *forge-ci-release-start]
   needs: []
   environment:
     name: release/registry/signing
@@ -225,9 +259,9 @@ stages: [check, prepare, build, images, sign, publish]
   script:
     - rc_signing_preflight
 "Check: publishing access":
-  extends: .forge-ci-release
+  extends: .forge-ci-release-signer
   stage: check
-  image: $[[ inputs.signer-image ]]
+  before_script: [readonly rc_job_role=publish-preflight, *forge-ci-release-start]
   needs: []
   environment:
     name: release/publish
@@ -235,9 +269,9 @@ stages: [check, prepare, build, images, sign, publish]
   script:
     - printf '%s' "${RELEASE_TOKEN:?}" | rc_engine validate auth token --repository "${CI_PROJECT_PATH}" --token-file -
 "Check: registry access":
-  extends: .forge-ci-release
+  extends: .forge-ci-release-signer
   stage: check
-  image: $[[ inputs.signer-image ]]
+  before_script: [readonly rc_job_role=registry-preflight, *forge-ci-release-start]
   needs: []
   environment:
     name: release/registry/preflight
@@ -247,6 +281,7 @@ stages: [check, prepare, build, images, sign, publish]
 "Check: release request":
   extends: .forge-ci-release
   stage: check
+  before_script: [readonly rc_job_role=request, *forge-ci-release-start]
   needs: ["Check: signing access", "Check: publishing access", "Check: registry access"]
   script:
     - rc_request_checkout
@@ -254,6 +289,7 @@ stages: [check, prepare, build, images, sign, publish]
 "Check: consumer checks":
   extends: .forge-ci-release
   stage: check
+  before_script: [readonly rc_job_role=checks, *forge-ci-release-start]
   tags: $[[ inputs.checks-runner-tags ]]
   needs:
     - job: "Check: release request"
@@ -266,6 +302,8 @@ stages: [check, prepare, build, images, sign, publish]
 "Prepare: changelog":
   extends: .forge-ci-release
   stage: prepare
+  before_script: [readonly rc_job_role=changelog, *forge-ci-release-start]
+  after_script: [rc_handoff=_release-render, *forge-ci-release-handoff]
   needs: ["Check: consumer checks"]
   script:
     - rc_render_changelog
@@ -278,6 +316,8 @@ stages: [check, prepare, build, images, sign, publish]
 "Prepare: version":
   extends: .forge-ci-release
   stage: prepare
+  before_script: [readonly rc_job_role=version, *forge-ci-release-start]
+  after_script: [rc_handoff=_release-bump, *forge-ci-release-handoff]
   needs: ["Check: consumer checks"]
   rules:
     - if: '"$[[ inputs.version-bump ]]" != ""'
@@ -289,6 +329,7 @@ stages: [check, prepare, build, images, sign, publish]
 "Prepare: release commit and tag":
   extends: .forge-ci-release
   stage: prepare
+  before_script: [readonly rc_job_role=prepare, *forge-ci-release-start]
   resource_group: release-prepare
   environment:
     name: release/prepare
@@ -304,10 +345,14 @@ stages: [check, prepare, build, images, sign, publish]
 "Build: release files":
   extends: .forge-ci-release
   stage: build
+  before_script: [readonly rc_job_role=build, *forge-ci-release-start]
+  after_script: [rc_handoff=_release-build, *forge-ci-release-handoff]
   tags: $[[ inputs.build-runner-tags ]]
   image:
     name: $[[ inputs.build-image ]]
     entrypoint: [""]
+  variables:
+    RC_JOB_USER: ''
   needs:
     - job: "Prepare: release commit and tag"
       artifacts: false
@@ -328,19 +373,32 @@ stages: [check, prepare, build, images, sign, publish]
   stage: images
   rules:
     - if: '"$[[ inputs.release-images ]]" == "true"'
-# The builder is a setting: Buildah in build-image on the build runner, or
-# kaniko in the admitted builder-job-image on an ordinary one.
-.forge-ci-release-image-builder-buildah:
-  image:
-    name: $[[ inputs.build-image ]]
-    entrypoint: [""]
-  tags: $[[ inputs.build-runner-tags ]]
-.forge-ci-release-image-builder-kaniko:
+# The builder is a setting, and builder-job-image its job image, as root:
+# Buildah on the build runner, or kaniko, admitted, on an ordinary one.
+# GitLab refuses a job with an empty image name before it reads the job's
+# rules, so without release images, when builder-job-image may be empty and
+# the image jobs never run, they name job-image instead.
+.forge-ci-release-image-job-true:
   image:
     name: $[[ inputs.builder-job-image ]]
+.forge-ci-release-image-job-false:
+  image:
+    name: $[[ inputs.job-image ]]
+.forge-ci-release-image-builder:
+  extends: ".forge-ci-release-image-job-$[[ inputs.release-images ]]"
+  image:
     entrypoint: [""]
+  variables:
+    RC_JOB_USER: ''
+.forge-ci-release-image-builder-buildah:
+  extends: .forge-ci-release-image-builder
+  tags: $[[ inputs.build-runner-tags ]]
+.forge-ci-release-image-builder-kaniko:
+  extends: .forge-ci-release-image-builder
 "Images: plan":
   extends: .forge-ci-release-images
+  before_script: [readonly rc_job_role=images-plan, *forge-ci-release-start]
+  after_script: [rc_handoff=_release-images-plan, *forge-ci-release-handoff]
   needs:
     - job: "Prepare: release commit and tag"
       artifacts: false
@@ -351,6 +409,8 @@ stages: [check, prepare, build, images, sign, publish]
     paths: [_release-images-plan/]
 "Images: build amd64":
   extends: [.forge-ci-release-images, ".forge-ci-release-image-builder-$[[ inputs.image-builder ]]"]
+  before_script: [readonly rc_job_role=image-build, *forge-ci-release-start]
+  after_script: [rc_handoff=_release-images-amd64, *forge-ci-release-handoff]
   needs:
     - job: "Images: plan"
       artifacts: true
@@ -363,6 +423,8 @@ stages: [check, prepare, build, images, sign, publish]
     paths: [_release-images-amd64/]
 "Images: build arm64":
   extends: [.forge-ci-release-images, ".forge-ci-release-image-builder-$[[ inputs.image-builder ]]"]
+  before_script: [readonly rc_job_role=image-build, *forge-ci-release-start]
+  after_script: [rc_handoff=_release-images-arm64, *forge-ci-release-handoff]
   tags: $[[ inputs.build-runner-tags-arm64 ]]
   rules:
     - if: >-
@@ -379,6 +441,8 @@ stages: [check, prepare, build, images, sign, publish]
     paths: [_release-images-arm64/]
 "Images: publish":
   extends: .forge-ci-release-images
+  before_script: [readonly rc_job_role=images-publish, *forge-ci-release-start]
+  after_script: [rc_handoff=_release-images, *forge-ci-release-handoff]
   needs:
     - job: "Images: plan"
       artifacts: true
@@ -406,9 +470,10 @@ stages: [check, prepare, build, images, sign, publish]
     - job: "Images: publish"
       artifacts: true
 "Sign: files and images":
-  extends: [.forge-ci-release, ".forge-ci-release-sign-$[[ inputs.release-images ]]"]
+  extends: [.forge-ci-release-signer, ".forge-ci-release-sign-$[[ inputs.release-images ]]"]
   stage: sign
-  image: $[[ inputs.signer-image ]]
+  before_script: [readonly rc_job_role=sign, *forge-ci-release-start]
+  after_script: [rc_handoff=_release-sign, *forge-ci-release-handoff]
   environment:
     name: release/registry/signing
     action: prepare
@@ -418,9 +483,10 @@ stages: [check, prepare, build, images, sign, publish]
     expire_in: 1 day
     paths: [_release-sign/]
 "Publish: images":
-  extends: .forge-ci-release
+  extends: .forge-ci-release-signer
   stage: publish
-  image: $[[ inputs.signer-image ]]
+  before_script: [readonly rc_job_role=promote, *forge-ci-release-start]
+  after_script: [rc_handoff=_release-promote, *forge-ci-release-handoff]
   environment:
     name: release/registry/promote
     action: prepare
@@ -434,9 +500,9 @@ stages: [check, prepare, build, images, sign, publish]
     expire_in: 7 days
     paths: [_release-promote/]
 "Publish: release":
-  extends: .forge-ci-release
+  extends: .forge-ci-release-signer
   stage: publish
-  image: $[[ inputs.signer-image ]]
+  before_script: [readonly rc_job_role=publish, *forge-ci-release-start]
   environment:
     name: release/publish
     action: prepare
@@ -448,9 +514,9 @@ stages: [check, prepare, build, images, sign, publish]
   script:
     - rc_publish_release
 "Publish: tidy up":
-  extends: .forge-ci-release
+  extends: .forge-ci-release-signer
   stage: publish
-  image: $[[ inputs.signer-image ]]
+  before_script: [readonly rc_job_role=cleanup, *forge-ci-release-start]
   environment:
     name: release/registry/cleanup
     action: prepare
@@ -468,6 +534,7 @@ stages: [check, prepare, build, images, sign, publish]
 "Summary: release":
   extends: .forge-ci-release
   stage: .post
+  before_script: [readonly rc_job_role=summary, *forge-ci-release-start]
   needs:
     - job: "Publish: tidy up"
       artifacts: false

@@ -35,8 +35,7 @@ func TestReleaseJobRejectsCredentialsOutsideItsRole(t *testing.T) {
 		{"Publish: images", "RELEASE_COSIGN_PRIVATE_KEY"},
 		{"Publish: release", "RELEASE_GPG_PRIVATE_KEY"},
 		{"Publish: tidy up", "RELEASE_SSH_SIGNING_KEY"},
-		// A job's former name has no role, so it holds no secret.
-		{"release-sign", "RELEASE_COSIGN_PRIVATE_KEY"},
+		{"Summary: release", "RELEASE_TOKEN"},
 	} {
 		t.Run(pair[0]+"/"+pair[1], func(t *testing.T) {
 			t.Parallel()
@@ -47,7 +46,9 @@ func TestReleaseJobRejectsCredentialsOutsideItsRole(t *testing.T) {
 			script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
 			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", `source "$1"; rc_engine() { echo engine-called; }; rc_release_context`, "release-guard", script)
 			command.Dir = t.TempDir()
-			command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + command.Dir, "CI_JOB_NAME=" + pair[0], pair[1] + "=inert-canary-value"}
+			// Named by a project variable as the job that holds the secret.
+			command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + command.Dir, "rc_job_role=" + releaseJobRoles[pair[0]],
+				"CI_JOB_NAME=" + releaseSecretHolders[pair[1]], pair[1] + "=inert-canary-value"}
 
 			output, err := command.CombinedOutput()
 			if err == nil || !strings.Contains(string(output), pair[1]+" is available to the wrong release job") ||
@@ -242,7 +243,7 @@ func TestReleaseBranchInputMustBeABranchName(t *testing.T) {
 	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c",
 		`set -eu; source "$1"; rc_engine() { printf 'engine %s\n' "$*"; }; rc_release_context`, "branch-name", script)
 	command.Env = []string{
-		"PATH=/usr/bin:/bin", "HOME=" + t.TempDir(), "CI_JOB_NAME=Prepare: release commit and tag",
+		"PATH=/usr/bin:/bin", "HOME=" + t.TempDir(), "rc_job_role=prepare",
 		"CI_COMMIT_TAG=release-request/v1.2.3", "CI_COMMIT_SHA=" + strings.Repeat("a", 40),
 		"CI_DEFAULT_BRANCH=main", "RC_RELEASE_BRANCH_INPUT=bad..name",
 	}
@@ -282,7 +283,7 @@ func runReleasePrepareIn(t *testing.T, dir, script, input string, extraEnv ...st
 		"branch-guard", script)
 	command.Dir = dir
 	command.Env = []string{
-		"PATH=" + componentTools(t), "HOME=" + dir, "CI_JOB_NAME=Prepare: release commit and tag", "CI_PROJECT_DIR=" + dir,
+		"PATH=" + componentTools(t), "HOME=" + dir, "rc_job_role=prepare", "CI_PROJECT_DIR=" + dir,
 		"CI_COMMIT_TAG=release-request/v1.2.3", "CI_COMMIT_SHA=" + strings.Repeat("a", 40), "CI_PROJECT_PATH=team/app",
 		"RELEASE_SSH_SIGNING_KEY=inert", "RC_GIT_URL=ssh://git@gitlab.invalid/team/app.git", "RC_GIT_HOST_KEY=SHA256:x",
 		"RC_BOT_NAME=bot", "RC_BOT_EMAIL=bot@invalid.example", "CI_DEFAULT_BRANCH=main", "RC_RELEASE_BRANCH_INPUT=" + input,
@@ -419,14 +420,24 @@ func TestReleasePathGuardsStopTheJob(t *testing.T) {
 	}
 }
 
+// releaseSecretHolders is a job each release secret belongs to.
+var releaseSecretHolders = map[string]string{
+	"RELEASE_SSH_SIGNING_KEY":    "Prepare: release commit and tag",
+	"RELEASE_COSIGN_PRIVATE_KEY": "Sign: files and images",
+	"RELEASE_GPG_PRIVATE_KEY":    "Sign: files and images",
+	"RELEASE_REGISTRY_TOKEN":     "Sign: files and images",
+	"RELEASE_TOKEN":              "Publish: release",
+}
+
 // Every job keeps the secrets its role needs: the policy is written in roles,
-// and each displayed job name maps to its role.
+// and each job's start gives it its role.
 func TestReleaseJobKeepsTheCredentialsOfItsRole(t *testing.T) {
 	t.Parallel()
 
 	for _, pair := range [][2]string{
 		{"Prepare: release commit and tag", "RELEASE_SSH_SIGNING_KEY"},
 		{"Sign: files and images", "RELEASE_COSIGN_PRIVATE_KEY"},
+		{"Sign: files and images", "RELEASE_GPG_PRIVATE_KEY"},
 		{"Sign: files and images", "RELEASE_GPG_PASSPHRASE"},
 		{"Sign: files and images", "RELEASE_REGISTRY_TOKEN"},
 		{"Publish: release", "RELEASE_TOKEN"},
@@ -446,7 +457,7 @@ func TestReleaseJobKeepsTheCredentialsOfItsRole(t *testing.T) {
 			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c",
 				`source "$1"; rc_engine() { :; }; rc_release_context`, "release-guard", script)
 			command.Dir = t.TempDir()
-			command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + command.Dir, "CI_JOB_NAME=" + pair[0], pair[1] + "=inert-canary-value",
+			command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + command.Dir, "rc_job_role=" + releaseJobRoles[pair[0]], pair[1] + "=inert-canary-value",
 				"CI_COMMIT_TAG=release-request/v1.2.3", "CI_COMMIT_SHA=" + strings.Repeat("a", 40), "CI_DEFAULT_BRANCH=main"}
 
 			output, err := command.CombinedOutput()

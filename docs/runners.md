@@ -229,6 +229,9 @@ On GitLab the trusted policy selects the builder, not a project variable: the
 `release` and `snapshot-images` components take `image-builder: kaniko` and
 `builder-job-image`, the kaniko job image. The release's image jobs run in it
 on untagged runners; the snapshot components take it as their `build-image`.
+With Buildah the release's image jobs run in `builder-job-image` too: the
+Buildah job image of
+[containers/buildah-job/Containerfile](../containers/buildah-job/Containerfile).
 See [Release images](gitlab.md#release-images).
 
 #### Pinning the job image

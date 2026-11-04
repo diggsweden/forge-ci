@@ -60,7 +60,7 @@ fan-out.
 | Engine project | **Readable without credentials**, and its generic package downloadable anonymously. Downloads send no credential. |
 | Runner architecture | **linux/amd64 or linux/arm64** for checksum-bound jobs: the engine is recorded for both, and each job runs the one of its runner's architecture. Catalog runtime images are linux/amd64 and linux/arm64, except Android (amd64 only). |
 | Executor | Docker or Kubernetes. The components clear the entrypoint of `job-image`, `build-image`, `nanolinter-image` and `megalinter-image`, so an image that starts a tool of its own still runs the job's shell. |
-| Job images | For `check`: Bash, Git, curl, `sha256sum` and the consumer's check tools, pinned by digest. For the lint components' SAST conversion: Bash, Git, curl and `sha256sum` in the lint image; Nanolinter's flavours and MegaLinter have them. For `release`: a non-root `job-image`, a `build-image`, and the organization's `signer-image`; see [Images and the engine binary](#images-and-the-engine-binary). |
+| Job images | For `check`: Bash, Git, curl, `sha256sum` and the consumer's check tools, pinned by digest. For the lint components' SAST conversion: Bash, Git, curl and `sha256sum` in the lint image; Nanolinter's flavours and MegaLinter have them. For `release`: a `job-image` run as an ordinary user, a `build-image`, with `release-images` a `builder-job-image`, and the organization's `signer-image`; see [Images and the engine binary](#images-and-the-engine-binary). |
 | Artifact size | Enough native artifact capacity for the release handoff; the GitLab default of 100 MB can be too small. See [Releases and promotion](#releases-and-promotion). |
 | Release branch | The project's default branch unless `release` is given another `release-branch`: the request must be its head. |
 | macOS runner | With Xcode and a reviewed `forge-ci` on it, for `publish-apple-appstore` only. |
@@ -180,9 +180,11 @@ images and pins, a validating regex. The inputs that are not obvious:
 |---|---|---|
 | `check` | `forge-ci-repository` | The project serving the component and its engine package, including subgroups. |
 | | `job-image` | Digest-pinned image for the check job. |
+| | `job-user` | UID or `UID:GID` the job runs as, for example `65532:65532` for the runtime images' `nonroot`. Empty, the default, keeps the image's user. See [The job's user](#the-jobs-user). |
 | | `commands` | The consumer's check commands; a failure fails the job. `job-name` (default `check`) and `stage` (default `test`) name the job. |
 | `release` | `forge-ci-repository`, `consumer-project` | The engine project, and the only project allowed to run this policy. |
 | | `job-image`, `build-image`, `signer-image` | Digest-pinned images for key-free jobs, the build job, and the signing jobs. |
+| | `job-user` | UID or `UID:GID` the `job-image` jobs run as, for example `65532:65532` with a runtime image. Empty, the default, keeps the image's user. |
 | | `publication-project`, `publication-image-repository` | The separate project that owns final images, and the exact registry repository in it. |
 | | `cosign-public-key-sha256` | SHA-256 of your Cosign public key, written out. |
 | | `release-git-url`, `release-git-host-key-fingerprint` | The SSH write URL for the release commit and tag, and its independently supplied host key fingerprint, `SHA256:<base64>` alone. An empty URL is this project on the GitLab web host, port 22. |
@@ -191,7 +193,7 @@ images and pins, a validating regex. The inputs that are not obvious:
 | | `checks`, `build` | Consumer commands: checks on the request commit, and the build that writes `dist/release-files.json` and `release-notes.md`. |
 | | `build-runner-tags` | Runner tags for the build job and, with Buildah, the amd64 image job, for example `[privileged]`. Empty, the default, leaves them untagged. |
 | | `release-images`, `artifacts-config`, `release-platforms` | `true` builds the `containers:` of `artifacts-config` (default `.forge-ci/artifacts.yml`; without it the root `Containerfile`) in the release's image jobs, narrowed to `release-platforms`. Default `false`: no image jobs. See [Release images](#release-images). |
-| | `image-builder`, `builder-job-image` | The image jobs' builder: `buildah` (default) in `build-image`, or `kaniko` in the digest-pinned kaniko job image `builder-job-image`. |
+| | `image-builder`, `builder-job-image` | The image jobs' builder, `buildah` (default) or `kaniko`, and the digest-pinned job image they run in: the Buildah job image or the kaniko job image. |
 | | `build-runner-tags-arm64` | Tags of a native arm64 runner. The arm64 image job exists only when they are set. |
 | | `checks-runner-tags` | Runner tags for consumer checks after restricted signed-request authorization. Empty, the default, leaves checks untagged. Authorization and signing stay untagged. |
 | | `changelog-creator`, `changelog-config`, `commit-body-config` | `git-cliff` (default) or `git-chglog`, and the consumer's configuration files, by default `.forge-ci/gitcliff/keepachangelog.toml` and `.forge-ci/gitcliff/minimal.toml`, copies of this repository's [`templates/gitcliff/`](../templates/gitcliff/) that `forge-ci init` writes. git-cliff renders offline, without remote metadata, and reads stable `vX.Y.Z` tags only, overriding any `tag_pattern` in the configuration. A SHA-256 repository needs `git-chglog`, since git-cliff cannot read one. |
@@ -277,14 +279,54 @@ Images](runtime-images.md) has the roster and pinning conventions.
 `build-cargo` defaults to
 `ghcr.io/diggsweden/forge-ci-runtime-rust-stable:v0.90.0`.
 
+### The job's user
+
+The runtime images run as root and carry the ordinary user `nonroot`,
+65532:65532, whose caches live in its home. A check that needs ordinary-user
+filesystem semantics runs a runtime image with `job-user: "65532:65532"`.
+Give the group too: on Kubernetes a UID alone can run the job with GID 0. The
+component sets both `image:docker:user` and `image:kubernetes:user`, since
+the Kubernetes executor reads only the latter, and names a job variable there
+rather than the input: GitLab refuses an empty image user, and the runner
+reads an empty value after expansion as the image's own user on either
+executor. The Kubernetes executor admits any UID but 0 unless its
+`allowed_users` narrows that; the Docker executor admits any user unless the
+runner configures `user` or `allowed_users`, which must then list it. Runner
+settings that fix `runAsUser` take precedence. The Kubernetes executor sets
+`umask 0000` while it fetches into the build volume, so the workspace is
+writable for the job's UID; with `FF_DISABLE_UMASK_FOR_KUBERNETES_EXECUTOR` it
+changes the files' owner to that UID instead. The image user needs GitLab
+18.0 and GitLab Runner 17.11 or later on Kubernetes.
+
+A project, group or instance variable outranks the job's own, so the job
+does not trust the variable alone. At its start it refuses an `RC_JOB_USER`
+that is not `job-user` as written, then a process whose UID, or `UID:GID`
+when the input gives both, differs from it, before any checkout. Either way
+it prints one line, `job user: uid=65532 gid=65532`, the user it runs as;
+the job's log shows which user each executor gave it. In `release` only
+the `job-image` jobs take `job-user`: the build, image build and signer jobs
+hold the same variable to empty and run as their images' own users. Which
+of these a job is follows from its role, a literal of the template, never
+from its name, which a project variable can set too.
+The images need `id`, as coreutils and BusyBox provide.
+
 ### Images of the release policy
 
 The policy selects separate digest-pinned `job-image`, `build-image` and
-`signer-image` inputs. Use a non-root `job-image` for checks and rendering;
-permission tests must run with ordinary-user filesystem semantics. Only the
-build job, and with Buildah the image jobs, select `build-image`, which can
-supply a root Buildah environment. Pass the same image for both inputs when
-the build needs no separate environment. Buildah needs user namespaces. Where
+`signer-image` inputs. Run checks and rendering as an ordinary user;
+permission tests must run with ordinary-user filesystem semantics. A runtime
+image with `job-user: "65532:65532"` does that, as [The job's user](#the-jobs-user)
+describes; the jobs in the other images keep those images' users. Only the
+build job selects `build-image`, the consumer's build tools. Pass the same
+image for both inputs when the build needs no separate environment, and the
+Buildah job image when the build runs `forge-ci container build` and nothing
+else.
+
+With `release-images`, the image build jobs run in `builder-job-image`, as
+root, whichever the builder. For Buildah, the default, it is the image of
+[containers/buildah-job/Containerfile](../containers/buildah-job/Containerfile),
+built and pinned by digest like the signer image; it carries Buildah and its
+helpers, and the job installs nothing. Buildah needs user namespaces. Where
 only some runners allow them, tag those runners and name the tags in
 `build-runner-tags`: the build job and the amd64 image job move there, and the
 signing jobs stay on the untagged runners.
@@ -293,7 +335,7 @@ Where no runner allows them, set `image-builder: kaniko` and
 `builder-job-image` to the kaniko job image of
 [containers/kaniko-job/Containerfile](../containers/kaniko-job/Containerfile),
 pinned by digest. The image build jobs then run in it, as root, on untagged
-runners; the consumer's build keeps `build-image`. Before a Containerfile is
+runners. Before a Containerfile is
 built, the job admits the image as the snapshot builds do: its title must be
 `forge-ci kaniko job image` and its `org.opencontainers.image.source` label
 the engine project, `${CI_SERVER_URL}/<forge-ci-repository>`, read with the
@@ -460,7 +502,11 @@ include:
 Replace both pins with reviewed immutable values. `forge-ci-repository` is the
 project serving the component, including subgroups. The image must contain
 Bash, Git, curl, sha256sum and the consumer's check tools. Optional input
-`job-name` defaults to `check`; `stage` defaults to `test`.
+`job-name` defaults to `check`; `stage` defaults to `test`; `job-user`, empty
+by default, runs the job as another user. Include the component once per
+toolchain to check a monorepo's parts in their own images, and give each
+include its own `job-name`: GitLab merges two jobs of one name into one, so
+two includes left at `check` run only one of the checks, silently.
 
 The job starts with an empty workspace and no cache or artifact dependencies.
 It uses the runner's custom CA when provided, keeps the helpers outside the
@@ -591,7 +637,8 @@ include:
     inputs:
       forge-ci-repository: team/ci/forge-ci
       consumer-project: team/app
-      job-image: registry.example.com/team/check-tools@sha256:PIN_DIGEST
+      job-image: ghcr.io/diggsweden/forge-ci-runtime-go-1.27@sha256:PIN_DIGEST
+      job-user: "65532:65532"
       build-image: registry.example.com/team/build-tools@sha256:PIN_DIGEST
       signer-image: registry.example.com/team/forge-ci-signer@sha256:PIN_DIGEST
       publication-project: team/app-releases
@@ -622,12 +669,14 @@ the build and signing, as the Forgejo
    so a stage that would stop later stops the release before `Prepare`
    pushes the release commit and tag: a container that builds linux/arm64
    without `build-runner-tags-arm64` (narrow `release-platforms` or name the
-   runner), `image-builder: kaniko` without `builder-job-image`, or a
-   `publication-project` that is not a separate project.
+   runner), an empty `builder-job-image`, whichever the builder, or a
+   `publication-project` that is not a separate project. An empty
+   `builder-job-image` GitLab already refuses as it creates the pipeline,
+   since the image jobs then name no image.
 2. `Images: build amd64` and, with `build-runner-tags-arm64`, `Images: build
    arm64` build every planned image of their architecture natively to OCI
-   layouts, with no registry write. The engine passes the build no
-   credential of the job, but this is the trust `Build: release files` gives
+   layouts in `builder-job-image`, with no registry write. The engine passes
+   the build no credential of the job, but this is the trust `Build: release files` gives
    the consumer, not a boundary: under kaniko the Containerfile's `RUN` steps
    run in the job's own container and can read its job token. The build
    therefore pulls its `FROM` images anonymously: a base image in this
@@ -747,7 +796,11 @@ The child runs these jobs, in five stages that read the same on every forge
 | `Summary: release` | job | After a successful release, prints the release overview as a "Summary" section of its log; holds no release secret. |
 
 Which job may hold which release secret is written in roles, in
-`.gitlab/bin/release.sh` (`rc_job_role`); a job's name maps to its role there.
+`.gitlab/bin/release.sh` (`rc_release_context`). Each job's `before_script`
+opens with its role, `readonly rc_job_role=…`, a literal of the template; the
+role also decides the job's user, home and work directory. Nothing the policy
+relies on reads `CI_JOB_NAME` or another variable, since a project, group or
+instance variable outranks every other, the predefined ones included.
 
 **The request is the head of the release branch.** As on Forgejo, the release
 commit is pushed on top of the request commit without force, so a request that
@@ -774,7 +827,8 @@ keeps its ordinary permissions.
 Each producer uses its own top-level artifact directory (`_release-render`,
 `_release-build`, `_release-sign` or `_release-promote`). This avoids writing
 inside a directory restored under another container's UID. The job's native
-`after_script` makes only its outgoing regular files and directories readable
+`after_script`, which names that directory as a literal, makes only its
+outgoing regular files and directories readable
 by the artifact helper, including a failed promotion's journal. It follows no
 symlinks and leaves private workspaces outside that operation. Dist handoffs
 use content digests rooted at `.` so different runner paths remain compatible.

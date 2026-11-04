@@ -13,10 +13,14 @@ and then reviewed in a pull or merge request, and kept for people to look at.
 ```text
 <name>/
   consumer/            the project, committed as it is into the demo repository
-  job.Containerfile    optional: its GitLab job image, built by `just demo-image`
-  build.Containerfile  optional: its GitLab release build image, when the job
-                       image cannot build the release (Buildah for an image)
 ```
+
+On GitLab every demo runs in Forge CI's own images, built from this tree:
+its checks and release jobs in the runtime image of its toolchain (`just
+runtime-image-archive java|node|rust|go <directory>`), as the image's
+`nonroot` user (`job-user: "65532"` in the gate, `job-user=65532:65532` for
+the release), and its release image builds in the Buildah job image (`just
+buildah-job-image-archive <directory>`). No demo carries an image of its own.
 
 The consumer names Forge CI as a published project does; the live tier puts
 the layer under test in its place, as it does for any consumer. Its Forgejo
@@ -36,10 +40,11 @@ filled in by `internal/livetest/exampledemos_internal_test.go`, which fails when
 one drifts. After changing an example, rewrite them with
 `go test ./internal/livetest -run TestExampleDemosAreTheirExamples -args -update-demos`.
 A GitLab gate that builds with a component runs the engine of its job image,
-so the Go and Gradle demos take the candidate's own runtime image:
-`just runtime-image-archive go <directory>` (or `java`) builds it, and
-`just demo gitlab <name> job-archive=<archive>` takes it. `hello-monorepo`
-builds only on a release tag; its gate runs in its own `job.Containerfile`.
+so the Go and Gradle demos take the candidate's own runtime image, which
+`just demo gitlab <name> job-archive=<archive>` takes. `hello-monorepo`
+builds only on a release tag; its gate checks the backend in the Java runtime
+image, `job-archive=`, and the frontend in the Node one, `$CI_JOB_IMAGE_NODE`
+in the gate and `job-archive-node=` for the demo.
 A demo for another ecosystem or feature is one more directory in the same shape;
 `internal/livetest/demos_internal_test.go` renders every consumer here for
 each forge it declares and parses its artifact configuration, so malformed

@@ -2,8 +2,9 @@
 # SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 # SPDX-License-Identifier: CC0-1.0
 
-# Release build, called by the pinned release policy in a key-free job. The
-# Containerfile is the build: its builder stage compiles the service. It
+# Release build, called by the pinned release policy in a key-free job, in
+# the Buildah job image; the tests ran in the checks. The Containerfile is
+# the build: its builder stage compiles the service. It
 # leaves the unsigned hand-off in dist/: the binary extracted from the
 # Containerfile's export-binary stage, release notes, checksums and the
 # manifest. The runtime image is the release policy's: its image jobs build
@@ -15,7 +16,6 @@ umask 077
 test "$(git rev-parse HEAD)" = "${RELEASE_SHA}"
 
 name=hello-cargo-container
-cargo test --locked
 
 mkdir -p dist
 if ! forge-ci release notes --changelog-file CHANGELOG.md \

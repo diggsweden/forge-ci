@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
 const campaignHead = "1111111111111111111111111111111111111111"
@@ -80,19 +81,29 @@ scenario TestThird
 func TestPlanCampaignLane_MapsAGitLabConsumerToItsRecipes(t *testing.T) {
 	t.Parallel()
 
-	dir, cases := newCampaign(t, "CAMPAIGN_COMMIT="+campaignHead+"\nFORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE=/c/signer.tar\nJAVA_JOB_IMAGE_ARCHIVE=/c/java.tar\n",
-		"consumer hello-maven pull-request job-archive=@JAVA_JOB_IMAGE_ARCHIVE\n"+
-			"consumer hello-maven release job-archive=@JAVA_JOB_IMAGE_ARCHIVE build-archive=/b.tar signer-archive=@FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE version-bump=maven\n")
+	dir, cases := newCampaign(t, "CAMPAIGN_COMMIT="+campaignHead+"\nFORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE=/c/signer.tar\n"+
+		"FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA=/c/java.tar\nFORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_NODE=/c/node.tar\nFORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE=/c/buildah.tar\n",
+		"consumer hello-maven pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA\n"+
+			"consumer hello-maven release job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA build-archive=/b.tar signer-archive=@FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE version-bump=maven job-user=65532:65532\n")
 
 	plan, err := PlanCampaignLane(dir, "gitlab", cases, campaignHead)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	// Every runtime archive reaches every case, for a gate's further job
+	// images, and so does the Buildah job image.
+	if want := []string{
+		"FORGE_CI_LIVE_PROVIDER=gitlab", "FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE=/c/signer.tar", "FORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE=/c/buildah.tar",
+		"FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA=/c/java.tar", "FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_NODE=/c/node.tar",
+	}; !slices.Equal(plan.Env, want) {
+		t.Errorf("env %q, want %q", plan.Env, want)
+	}
+
 	checkout := filepath.Join(dir, "demos", "hello-maven")
 	if len(plan.Cases) != 2 ||
 		!slices.Equal(plan.Cases[0].Args, []string{"test-live-gitlab-consumer", checkout, "/c/java.tar"}) ||
-		!slices.Equal(plan.Cases[1].Args, []string{"test-live-gitlab-consumer-release", checkout, "/c/java.tar", "/b.tar", "/c/signer.tar", "version-bump=maven"}) {
+		!slices.Equal(plan.Cases[1].Args, []string{"test-live-gitlab-consumer-release", checkout, "/c/java.tar", "/b.tar", "/c/signer.tar", "version-bump=maven", "job-user=65532:65532"}) {
 		t.Fatalf("cases %q", plan.Cases)
 	}
 }
@@ -169,5 +180,105 @@ func TestWriteCampaignPlan_IsNULTerminatedFields(t *testing.T) {
 
 	if want := "env\x00FORGE_CI_LIVE_PROVIDER=gitlab\x00case\x00scenario TestA\x002\x00test-live\x00^TestA$\x00"; out.String() != want {
 		t.Fatalf("plan %q, want %q", out.String(), want)
+	}
+}
+
+// A campaign prepares the runtime images the cases of its lanes name, and on
+// GitLab the scenarios' go image and the further job images of the named
+// demos' gates; a name images.json does not build is refused.
+func TestCampaignRuntimeTargets_ComeFromTheLanesCasesAndTheirDemosGates(t *testing.T) {
+	t.Parallel()
+
+	write := func(path, body string) string {
+		t.Helper()
+
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		return path
+	}
+
+	gate := "include:\n  - component: $CI_SERVER_FQDN/team/engine/check@" + strings.Repeat("a", 40) + "\n    inputs:\n      job-image: $CI_JOB_IMAGE_NODE\n"
+	root := t.TempDir()
+	write(filepath.Join(root, "containers", "runtime", "images.json"), `[{"target":"go"},{"target":"java"},{"target":"node"},{"target":"rust"}]`)
+	write(filepath.Join(root, "test", "live", "demos", "hello-monorepo", "consumer", ".gitlab", "merge-request.yml"), gate)
+
+	cases := t.TempDir()
+	java := write(filepath.Join(cases, "java.cases"), "# a lane\nconsumer hello-maven pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA\n")
+	monorepo := write(filepath.Join(cases, "monorepo.cases"), "consumer hello-monorepo pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_RUST\n")
+	scenarios := write(filepath.Join(cases, "scenarios.cases"), "scenario TestGitLabRelease_MinimalSignedArtifacts\n")
+	cobol := write(filepath.Join(cases, "cobol.cases"), "consumer hello-maven pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_COBOL\n")
+
+	for _, tc := range []struct {
+		lanes []string
+		want  []string
+	}{
+		{[]string{"gitlab=" + java}, []string{"java"}},
+		{[]string{"gitlab=" + monorepo}, []string{"node", "rust"}},
+		// A Forgejo lane runs no GitLab gate and no GitLab scenario.
+		{[]string{"forgejo=" + monorepo, "forgejo=" + scenarios}, []string{"rust"}},
+		{[]string{"gitlab=" + scenarios, "gitlab=" + java}, []string{"go", "java"}},
+	} {
+		if targets, err := CampaignRuntimeTargets(root, tc.lanes); err != nil || !slices.Equal(targets, tc.want) {
+			t.Errorf("%q: targets %q, %v; want %q", tc.lanes, targets, err, tc.want)
+		}
+	}
+
+	if _, err := CampaignRuntimeTargets(root, []string{"gitlab=" + cobol}); !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), `"cobol"`) {
+		t.Errorf("an unknown target was not refused: %v", err)
+	}
+
+	for _, lanes := range [][]string{nil, {java}, {"github=" + java}, {"gitlab="}} {
+		if _, err := CampaignRuntimeTargets(root, lanes); !errors.Is(err, errs.ErrValidation) {
+			t.Errorf("%q: not refused: %v", lanes, err)
+		}
+	}
+
+	// The repository's own campaign names only targets it builds.
+	repo := reporoot.Path(t)
+	if _, err := CampaignRuntimeTargets(repo, []string{
+		"forgejo=" + filepath.Join(repo, "test", "live", "campaigns", "k3s-private-forgejo.cases"),
+		"gitlab=" + filepath.Join(repo, "test", "live", "campaigns", "k3s-private-gitlab.cases"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A GitLab lane refuses a demo whose gate checks in a further job image the
+// campaign was not prepared with, before any case runs.
+func TestPlanCampaignLane_RefusesAGateImageTheCampaignLacks(t *testing.T) {
+	t.Parallel()
+
+	dir, cases := newCampaign(t, "CAMPAIGN_COMMIT="+campaignHead+"\nFORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA=/c/java.tar\n",
+		"consumer hello-maven pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA\n")
+
+	gate := filepath.Join(dir, "demos", "hello-maven", filepath.FromSlash(GitLabGateFile))
+	if err := os.MkdirAll(filepath.Dir(gate), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	body := "include:\n  - component: $CI_SERVER_FQDN/team/engine/check@" + strings.Repeat("a", 40) + "\n    inputs:\n      job-image: $CI_JOB_IMAGE_NODE\n"
+	if err := os.WriteFile(gate, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := PlanCampaignLane(dir, "gitlab", cases, campaignHead); !errors.Is(err, errs.ErrValidation) ||
+		!strings.Contains(err.Error(), "FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_NODE") {
+		t.Fatalf("a missing gate image was not refused: %v", err)
+	}
+
+	// The Forgejo lane runs the demo's workflows, not its GitLab gate.
+	forgejo := filepath.Join(t.TempDir(), "forgejo.cases")
+	if err := os.WriteFile(forgejo, []byte("consumer hello-maven pull-request\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := PlanCampaignLane(dir, "forgejo", forgejo, campaignHead); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -15,7 +15,9 @@
 #   2f4e845cee96973d1082bf00a5a18689c1482148                          the engine commit you authenticated:
 #                                             `check` is checksum-bound and must be
 #                                             included by full commit SHA
-#   PIN_DIGEST, PIN_IMAGE_DIGEST              digests of the reviewed images
+#   PIN_DIGEST                                digest of the reviewed lint image
+#   PIN_JAVA_IMAGE_DIGEST                     digests of the reviewed Forge CI
+#   PIN_NODE_IMAGE_DIGEST                     runtime images, or of your mirror
 #
 # GitHub expands the per-artifact build matrix natively, with a matrix over
 # the plan. GitLab cannot expand a matrix from a value computed at run time,
@@ -54,17 +56,27 @@ include:
       forge-ci-repository: itiquette/forge-ci
       nanolinter-image: $CI_LINT_IMAGE
 
-  # The consumer's own checks at the pipeline commit, in an image that carries
-  # Bash, Git, curl, sha256sum, a JDK with Maven, and Node.
+  # The consumer's own checks at the pipeline commit, one job per part, each
+  # in the Forge CI runtime image of its toolchain, as the images' ordinary
+  # user nonroot (65532:65532).
   # check is checksum-bound: include it by the engine commit, never a version;
   # see Checksum-bound engine bootstrap in
   # https://$CI_SERVER_FQDN/itiquette/forge-ci/-/blob/2f4e845cee96973d1082bf00a5a18689c1482148/docs/gitlab.md.
   - component: $CI_SERVER_FQDN/itiquette/forge-ci/check@2f4e845cee96973d1082bf00a5a18689c1482148
     inputs:
       forge-ci-repository: itiquette/forge-ci
+      job-name: check-backend
       job-image: $CI_JOB_IMAGE
+      job-user: "65532:65532"
       commands:
         - mvn --batch-mode --no-transfer-progress --file services/backend/pom.xml verify
+  - component: $CI_SERVER_FQDN/itiquette/forge-ci/check@2f4e845cee96973d1082bf00a5a18689c1482148
+    inputs:
+      forge-ci-repository: itiquette/forge-ci
+      job-name: check-frontend
+      job-image: $CI_JOB_IMAGE_NODE
+      job-user: "65532:65532"
+      commands:
         - npm --prefix packages/frontend ci
         - npm --prefix packages/frontend test
 

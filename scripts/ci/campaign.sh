@@ -6,13 +6,15 @@
 # A live campaign: the inputs of one commit, prepared once, and lanes of cases
 # that run against them. docs/live-campaigns.md, Run a campaign, shows the use.
 #
-#   campaign.sh prepare <forge-lab checkout> <dir> [job-image=<flavor>:<local image> ...]
+#   campaign.sh prepare <forge-lab checkout> <dir> <forgejo|gitlab>=<cases file> ... [job-image=<flavor>:<local image> ...]
 #   campaign.sh lane <dir> <forgejo|gitlab> <cases file>
 #
 # prepare builds and publishes the images of this checkout's HEAD with the
-# live recipes, exports every demo as a one-commit checkout under
-# <dir>/demos/<name>, and writes <dir>/campaign.env: KEY=value lines of image
-# references and archive paths, no secrets.
+# live recipes: the signer and kaniko job images, the Buildah job image
+# archive, and the archive of each runtime image the named lanes' cases need
+# (preflight campaign-runtime-targets). It exports every demo as a one-commit
+# checkout under <dir>/demos/<name>, and writes <dir>/campaign.env: KEY=value
+# lines of image references and archive paths, no secrets.
 #
 # lane runs the plan the preflight makes of a cases file (internal/livetest,
 # campaign.go, says what a case is and refuses what it is not), in order,
@@ -29,7 +31,7 @@ plan=
 case_output=
 
 usage() {
-	printf 'usage: %s prepare <forge-lab checkout> <dir> [job-image=<flavor>:<local image> ...]\n       %s lane <dir> <forgejo|gitlab> <cases file>\n' "$0" "$0" >&2
+	printf 'usage: %s prepare <forge-lab checkout> <dir> <forgejo|gitlab>=<cases file> ... [job-image=<flavor>:<local image> ...]\n       %s lane <dir> <forgejo|gitlab> <cases file>\n' "$0" "$0" >&2
 	exit 2
 }
 
@@ -47,12 +49,20 @@ prepare() {
 	[[ $# -ge 2 && "$forge_lab" == /* && -f "$forge_lab/justfile" && "$dir" == /* ]] || usage
 	shift 2
 
-	# The flavor and image reach command lines, so they are checked first.
+	# The flavor and image reach command lines, so they are checked first. The
+	# preflight runs in the repository; a relative cases file is the caller's.
 	local argument flavor image key
-	local -a flavors=()
+	local -a flavors=() lanes=()
 	local -A job_images=()
 	for argument in "$@"; do
-		[[ "$argument" == job-image=*:* ]] || fail "want job-image=<flavor>:<local image>, got $(printf '%q' "$argument")"
+		case "$argument" in
+		forgejo=?* | gitlab=?*)
+			[[ "${argument#*=}" == /* ]] || argument=${argument%%=*}=$PWD/${argument#*=}
+			lanes+=("$argument")
+			continue
+			;;
+		esac
+		[[ "$argument" == job-image=*:* ]] || fail "want <forgejo|gitlab>=<cases file> or job-image=<flavor>:<local image>, got $(printf '%q' "$argument")"
 		argument=${argument#job-image=}
 		flavor=${argument%%:*} image=${argument#*:}
 		[[ "$flavor" =~ ^[a-z][a-z0-9-]*$ ]] || fail "a job image flavor is lowercase letters, digits and hyphens, got $(printf '%q' "$flavor")"
@@ -61,6 +71,7 @@ prepare() {
 		flavors+=("$flavor")
 		job_images[$flavor]=$image
 	done
+	((${#lanes[@]} > 0)) || fail 'name the lanes the campaign runs, <forgejo|gitlab>=<cases file>'
 
 	# What is prepared is HEAD's, so a difference from it would be published
 	# under HEAD's name and tested by nobody.
@@ -70,6 +81,10 @@ prepare() {
 		exit 2
 	fi
 	bash "$repo_root/scripts/ci/engine-binary.sh" check
+	# A runtime image archive per target the lanes' cases need, read before
+	# anything is built so a cases file the preflight refuses costs no build.
+	local targets
+	targets=$(preflight campaign-runtime-targets "$repo_root" "${lanes[@]}") || exit 2
 	local commit
 	commit=$(git -C "$repo_root" rev-parse --verify HEAD)
 
@@ -96,10 +111,17 @@ prepare() {
 	entries+=("KANIKO_JOB_IMAGE=$value")
 	value=$(bash "$repo_root/scripts/ci/publish-live-image.sh" signer "$forge_lab" "$signer_archive")
 	entries+=("FORGE_CI_LIVE_SIGNER_IMAGE=$value" "FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE=$signer_archive")
-	value=$(just --justfile "$repo_root/justfile" runtime-image-archive go "$dir/images")
-	entries+=("FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE=$value")
-	value=$(just --justfile "$repo_root/justfile" runtime-image-archive java "$dir/images")
-	entries+=("JAVA_JOB_IMAGE_ARCHIVE=$value")
+	value=$(just --justfile "$repo_root/justfile" buildah-job-image-archive "$dir/images")
+	entries+=("FORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE=$value")
+	# Each as FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_<TARGET>; the scenarios' go image
+	# is also FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE.
+	local target
+	for target in $targets; do
+		[[ "$target" =~ ^[a-z][a-z0-9]*$ ]] || fail "not a runtime target: $(printf '%q' "$target")"
+		value=$(just --justfile "$repo_root/justfile" runtime-image-archive "$target" "$dir/images")
+		entries+=("FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_${target^^}=$value")
+		[[ "$target" != go ]] || entries+=("FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE=$value")
+	done
 	for flavor in "${flavors[@]}"; do
 		value=$(just --justfile "$forge_lab/justfile" --working-directory "$forge_lab" \
 			publish-image --account forgeci "nanolinter-$flavor" "${job_images[$flavor]}")

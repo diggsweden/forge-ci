@@ -56,7 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `build-runner-tags-arm64`), scans and stages them with the job token and
   hands the ledger to signing, as Forgejo's `release-images.yml` does, except
   that no SBOM is pinned before publication: signing generates each image's
-  SBOM from the pushed image. The builder is `image-builder: buildah|kaniko`, kaniko in `builder-job-image`.
+  SBOM from the pushed image. The builder is `image-builder: buildah|kaniko`,
+  either in `builder-job-image`.
   Migration: drop the `build-push-oci-image` and `ledger add` steps from the
   build script, declare the image under `containers:`, leave the files its
   Containerfile copies in `image-context/`, and set `release-images: true`.
@@ -67,6 +68,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `snapshot-images.yml` takes a `registry` input, the registry host of the
   default image repository (default `ghcr.io`), which the snapshot
   orchestrator passes on.
+- GitLab `check` component input `job-user`: the UID or `UID:GID` the job
+  runs as, on the Docker and Kubernetes executors; empty, the default, keeps
+  the image's user. `job-user: "65532:65532"` runs a runtime image as `nonroot`.
+- GitLab `release` component input `job-user`: the UID or `UID:GID` the
+  `job-image` jobs run as, such as a runtime image's `nonroot`; empty, the
+  default, keeps the image's user. In either component a job stops at its
+  start when a variable sets its user to another value than `job-user`, or
+  when it runs as another user, and logs `job user: uid=… gid=…`. The
+  release jobs in their own images, the build, image build and signer jobs,
+  hold that variable to empty; a job's role in the template, not its name,
+  says which it is.
 - `containers/buildah-job/Containerfile`: a Buildah job image built from the
   digest-pinned Debian base with Buildah, netavark, aardvark-dns and
   fuse-overlayfs from Debian's packages, so image jobs install nothing at run
@@ -206,6 +218,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A GitLab `release` job's release secrets, home and hand-off no longer
+  follow its name. The job start read `CI_JOB_NAME`, which a project, group
+  or instance variable can set like any other: one could give a key-free
+  job a signer's secrets, or a signer the consumer jobs' home. Each job now
+  opens its `before_script` with its role, and a producer its `after_script`
+  with its hand-off directory, literals of the template.
 - Container scans no longer take settings from the job or the checkout. Trivy
   read every `TRIVY_*` variable, and a forge injects project and group
   variables into each job, so one such variable could skip directories, swap
@@ -443,6 +461,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   own base, not from the previous image's files. `/tmp` goes with it, so the
   kaniko job image now sets `TMPDIR=/kaniko/tmp`; rebuild and re-pin it from
   `containers/kaniko-job/Containerfile`. `docs/runners.md`.
+- The GitLab demos check in Forge CI's runtime images as `nonroot`
+  (`job-user: "65532:65532"`) and build their images in the Buildah job
+  image; their `job.Containerfile` and `build.Containerfile` are gone, and
+  the monorepo example includes `check` once for Java and once for Node.
+  `just demo-image` is replaced by `just buildah-job-image-archive`. Campaign
+  prepare takes the lanes it prepares for, `<forgejo|gitlab>=<cases file>`,
+  and builds the runtime archives their cases and those demos' gates name; a
+  gate's further check image is `$CI_JOB_IMAGE_<NAME>`, given as
+  `gitlab:job-archive-<name>=`.
 - **BREAKING:** The runtime images carry the ordinary user `nonroot`
   (65532:65532, home `/home/nonroot`) beside their root default, and keep
   every toolchain cache in the job user's home: `CARGO_HOME` and `GOPATH` are
@@ -453,6 +480,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   workflow `runtime-image` override older than this release misses the Go and
   Cargo caches; select the matching runtime image. `docs/runtime-images.md`,
   Users and caches.
+- **BREAKING:** The GitLab `release` component's Buildah image jobs run in
+  `builder-job-image`, the Buildah job image, instead of `build-image`, and
+  install nothing: setup-buildah runs with `--install-packages=false`.
+  `build-image` is the consumer's build tools alone. Without
+  `release-images` no `builder-job-image` is needed: GitLab checks every
+  job's image name before its rules, so the image jobs, which never run
+  then, name `job-image`. Migration: build
+  `containers/buildah-job/Containerfile`, pin it as `builder-job-image`.
 - **BREAKING:** Every published image is scanned, and the administrator
   policy (`enforce-vulnerabilities`) alone decides whether findings block.
   A container can no longer skip the scan of release images (Forgejo

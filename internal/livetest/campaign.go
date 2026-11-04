@@ -5,8 +5,12 @@ package livetest
 
 import (
 	"bufio"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -28,10 +32,33 @@ const CampaignEnvFile = "campaign.env"
 // campaignCommitKey names the commit a campaign was prepared from.
 const campaignCommitKey = "CAMPAIGN_COMMIT"
 
+// The providers a campaign has lanes on.
+const (
+	campaignForgejo = "forgejo"
+	campaignGitLab  = "gitlab"
+)
+
+func isCampaignProvider(provider string) bool {
+	return provider == campaignForgejo || provider == campaignGitLab
+}
+
 // campaignExported are the campaign.env keys a case's run reads from its
-// environment, under the names the live tier reads; every other key is only
-// an @NAME value.
-var campaignExported = []string{"FORGE_CI_LIVE_SIGNER_IMAGE", "FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE", "FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE"}
+// environment, under the names the live tier reads, with every runtime image
+// archive, GitLabJobImageArchiveEnv<TARGET>, which a gate's further job image
+// takes by name; every other key is only an @NAME value.
+var campaignExported = []string{
+	"FORGE_CI_LIVE_SIGNER_IMAGE", "FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE", "FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE",
+	"FORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE",
+}
+
+// campaignScenarioTarget is the runtime target of FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE,
+// the job image of the GitLab scenarios.
+const campaignScenarioTarget = "go"
+
+// campaignRuntimeArchive is a cases file's reference to a runtime image
+// archive of campaign.env: @FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE, the scenarios'
+// go image, or @GitLabJobImageArchiveEnv<TARGET>.
+var campaignRuntimeArchive = regexp.MustCompile(`@` + strings.TrimSuffix(GitLabJobImageArchiveEnv, "_") + `(?:_([A-Z][A-Z0-9]*))?\b`)
 
 var (
 	campaignKey     = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
@@ -100,7 +127,7 @@ func PlanCampaignLane(dir, provider, casesPath, head string) (CampaignPlan, erro
 		return CampaignPlan{}, fmt.Errorf("the campaign directory must be absolute, got %q: %w", dir, errs.ErrValidation)
 	}
 
-	if provider != "forgejo" && provider != "gitlab" {
+	if !isCampaignProvider(provider) {
 		return CampaignPlan{}, fmt.Errorf("the provider is forgejo or gitlab, got %q: %w", provider, errs.ErrValidation)
 	}
 
@@ -119,6 +146,12 @@ func PlanCampaignLane(dir, provider, casesPath, head string) (CampaignPlan, erro
 	for _, key := range campaignExported {
 		if value, found := env[key]; found {
 			plan.Env = append(plan.Env, key+"="+value)
+		}
+	}
+
+	for _, key := range slices.Sorted(maps.Keys(env)) {
+		if strings.HasPrefix(key, GitLabJobImageArchiveEnv) {
+			plan.Env = append(plan.Env, key+"="+env[key])
 		}
 	}
 
@@ -170,6 +203,12 @@ func campaignCaseArgs(dir, provider string, env map[string]string, words []strin
 		return nil, fmt.Errorf("no such demo in %s: %w", filepath.Join(dir, "demos"), errs.ErrValidation)
 	}
 
+	if provider == campaignGitLab {
+		if err := campaignHasGateImages(env, filepath.Join(dir, "demos", words[1], filepath.FromSlash(GitLabGateFile))); err != nil {
+			return nil, err
+		}
+	}
+
 	if words[2] != "pull-request" && words[2] != "release" {
 		return nil, fmt.Errorf("a consumer event is pull-request or release: %w", errs.ErrValidation)
 	}
@@ -180,6 +219,24 @@ func campaignCaseArgs(dir, provider string, env map[string]string, words []strin
 	}
 
 	return consumerRecipe(provider, words[2], filepath.Join(dir, "demos", words[1]), archives, settings)
+}
+
+// campaignHasGateImages refuses a demo whose GitLab gate at path checks in a
+// further job image campaign.env has no archive of.
+func campaignHasGateImages(env map[string]string, path string) error {
+	names, err := demoGateExtraJobImages(path)
+	if err != nil {
+		return err
+	}
+
+	for _, name := range names {
+		if env[GitLabJobImageArchiveEnv+name] == "" {
+			return fmt.Errorf("the demo's gate checks in $CI_JOB_IMAGE_%s and campaign.env has no %s%s; prepare the campaign with this cases file: %w",
+				name, GitLabJobImageArchiveEnv, name, errs.ErrValidation)
+		}
+	}
+
+	return nil
 }
 
 // campaignSettings validates and expands a consumer's settings. On GitLab the
@@ -195,7 +252,7 @@ func campaignSettings(provider string, env map[string]string, words []string) (m
 			return nil, nil, err
 		}
 
-		if provider != "gitlab" || !slices.Contains([]string{"job-archive", "build-archive", "signer-archive"}, key) {
+		if provider != campaignGitLab || !slices.Contains([]string{"job-archive", "build-archive", "signer-archive"}, key) {
 			settings = append(settings, key+"="+value)
 
 			continue
@@ -214,7 +271,7 @@ func campaignSettings(provider string, env map[string]string, words []string) (m
 // consumerRecipe is the consumer recipe of provider and event, with its arguments.
 func consumerRecipe(provider, event, checkout string, archives map[string]string, settings []string) ([]string, error) {
 	switch {
-	case provider == "forgejo":
+	case provider == campaignForgejo:
 		return append([]string{"test-live-forgejo-consumer", checkout, event}, settings...), nil
 	case event == "pull-request":
 		if len(archives) != 1 || archives["job-archive"] == "" || len(settings) != 0 {
@@ -252,6 +309,118 @@ func campaignSettingValue(env map[string]string, word string) (string, string, e
 	}
 
 	return key, expanded, nil
+}
+
+// CampaignRuntimeTargets lists the runtime targets a campaign prepares image
+// archives of, from the repository at root, for the lanes it will run, each
+// <forgejo|gitlab>=<cases file>: every archive a case names as
+// @FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE (go) or @GitLabJobImageArchiveEnv<TARGET>,
+// and on GitLab the scenarios' go image and every $CI_JOB_IMAGE_<TARGET> the
+// gate of a named demo checks in. Each must be a target of
+// containers/runtime/images.json.
+func CampaignRuntimeTargets(root string, lanes []string) ([]string, error) {
+	if len(lanes) == 0 {
+		return nil, fmt.Errorf("name the lanes the campaign runs, <forgejo|gitlab>=<cases file>: %w", errs.ErrValidation)
+	}
+
+	body, err := os.ReadFile(filepath.Join(root, "containers", "runtime", "images.json")) //nolint:gosec // This repository's roster, read as data.
+	if err != nil {
+		return nil, err
+	}
+
+	var roster []struct {
+		Target string `json:"target"`
+	}
+	if err = json.Unmarshal(body, &roster); err != nil {
+		return nil, fmt.Errorf("containers/runtime/images.json: %w", err)
+	}
+
+	targets := map[string]bool{}
+
+	for _, lane := range lanes {
+		provider, cases, _ := strings.Cut(lane, "=")
+		if !isCampaignProvider(provider) || cases == "" {
+			return nil, fmt.Errorf("want <forgejo|gitlab>=<cases file>, got %q: %w", lane, errs.ErrValidation)
+		}
+
+		err = eachLine(cases, func(number int, line string) error {
+			return campaignCaseTargets(root, provider, strings.Fields(line), targets)
+		})
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", cases, err)
+		}
+	}
+
+	built := map[string]bool{}
+	for _, image := range roster {
+		built[image.Target] = true
+	}
+
+	for target := range targets {
+		if !built[target] {
+			return nil, fmt.Errorf("the campaign names the runtime target %q, which containers/runtime/images.json does not build: %w", target, errs.ErrValidation)
+		}
+	}
+
+	return slices.Sorted(maps.Keys(targets)), nil
+}
+
+// campaignCaseTargets adds the runtime targets one case of provider needs.
+func campaignCaseTargets(root, provider string, words []string, targets map[string]bool) error {
+	if len(words) == 0 || strings.HasPrefix(words[0], "#") {
+		return nil
+	}
+
+	for _, word := range words[1:] {
+		for _, match := range campaignRuntimeArchive.FindAllStringSubmatch(word, -1) {
+			if match[1] == "" {
+				targets[campaignScenarioTarget] = true
+			} else {
+				targets[strings.ToLower(match[1])] = true
+			}
+		}
+	}
+
+	switch {
+	case provider != campaignGitLab:
+	case words[0] == "scenario":
+		targets[campaignScenarioTarget] = true
+	case words[0] == "consumer" && len(words) > 1:
+		if !campaignDemo.MatchString(words[1]) {
+			return fmt.Errorf("not a demo name: %q: %w", words[1], errs.ErrValidation)
+		}
+
+		names, err := demoGateExtraJobImages(filepath.Join(root, "test", "live", "demos", words[1], "consumer", filepath.FromSlash(GitLabGateFile)))
+		if err != nil {
+			return err
+		}
+
+		for _, name := range names {
+			targets[strings.ToLower(name)] = true
+		}
+	}
+
+	return nil
+}
+
+// demoGateExtraJobImages lists the names in the $CI_JOB_IMAGE_<NAME> a demo's
+// GitLab gate at path checks in; a demo without a gate checks in none.
+func demoGateExtraJobImages(path string) ([]string, error) {
+	gate, err := os.ReadFile(path) //nolint:gosec // A demo of this repository, read as data.
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	names, err := gitlabGateExtraJobImages(gate)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+
+	return names, nil
 }
 
 // WriteCampaignPlan writes plan for the lane script, which reads it without

@@ -48,6 +48,10 @@ var exampleDemoValues = strings.NewReplacer(
 	`"ghcr.io/itiquette/nanolinter:kotlin@sha256:PIN_DIGEST"`, "$CI_LINT_IMAGE",
 	`"ghcr.io/itiquette/nanolinter:core@sha256:PIN_DIGEST"`, "$CI_LINT_IMAGE",
 	"registry.example.com/team/check-tools@sha256:PIN_IMAGE_DIGEST", gitlabJobPlaceholder,
+	// The monorepo checks each part in its runtime image: Java in the trial's
+	// job image, Node in a further one.
+	"ghcr.io/diggsweden/forge-ci-runtime-java-25@sha256:PIN_JAVA_IMAGE_DIGEST", gitlabJobPlaceholder,
+	"ghcr.io/diggsweden/forge-ci-runtime-node-24@sha256:PIN_NODE_IMAGE_DIGEST", gitlabJobPlaceholder+"_NODE",
 	"gitlab.example.com/team/ci/forge-ci", "$CI_SERVER_FQDN/itiquette/forge-ci",
 	"team/ci/forge-ci", "itiquette/forge-ci",
 	"/build-go@0.90.0\n    inputs:\n", "/build-go@0.90.0\n    inputs:\n      "+gitlabRuntimeInput+": "+gitlabJobPlaceholder+"\n",

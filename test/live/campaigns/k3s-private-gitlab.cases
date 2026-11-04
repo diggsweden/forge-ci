@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: CC0-1.0
 
 # The GitLab lane of a k3s private campaign: scenarios that need nothing
-# beyond the forgeci contract and the go job and signer image archives
-# campaign.env names.
+# beyond the forgeci contract and the go runtime and signer image archives
+# of a campaign prepared with gitlab=<this file>.
 #
 #   just campaign-lane <dir> gitlab test/live/campaigns/k3s-private-gitlab.cases
 

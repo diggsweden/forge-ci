@@ -1178,11 +1178,13 @@ NANOLINTER_CONTAINER_FLAVOR=java just build-image-local          # in Nanolinter
 just publish-image --account demo nanolinter-java localhost/nanolinter:latest  # in Forge Lab
 podman save --format docker-archive -o /absolute/images/lint.tar localhost/nanolinter:latest
 
-# The GitLab job image, from the demo's job.Containerfile. A demo that builds
-# an image in its GitLab release, such as hello-maven-service, also has a
-# build.Containerfile with Buildah and Trivy: pass its archive as build-archive=.
-just demo-image hello-maven /absolute/images                     # writes hello-maven-job.tar
-just demo-image hello-maven-service /absolute/images             # and hello-maven-service-build.tar
+# The GitLab job image: the runtime image of the demo's toolchain, built from
+# this tree, run as its nonroot user. A demo that builds an image in its
+# GitLab release, such as hello-maven-service, also takes the Buildah job
+# image as buildah-archive=; hello-cargo-container, whose build is a
+# Containerfile, takes it as build-archive= too.
+just runtime-image-archive java /absolute/images                 # writes forge-ci-runtime-java.tar
+just buildah-job-image-archive /absolute/images                  # writes forge-ci-buildah-job.tar
 
 # The signer image of this commit (Forgejo takes the reference it prints,
 # GitLab an archive of it).
@@ -1199,8 +1201,8 @@ just lab --account demo --runners gitlab forgejo
 
 # 2. Here: make a demo, the release, then a pull or merge request on the released main.
 just demo forgejo hello-maven version=0.2.0 CI_JOB_IMAGE=<lint image reference>
-just demo gitlab hello-maven version=0.2.0 version-bump=maven \
-  job-archive=/absolute/images/hello-maven-job.tar build-archive=/absolute/images/hello-maven-job.tar \
+just demo gitlab hello-maven version=0.2.0 version-bump=maven job-user=65532:65532 \
+  job-archive=/absolute/images/forge-ci-runtime-java.tar build-archive=/absolute/images/forge-ci-runtime-java.tar \
   signer-archive=/absolute/images/signer.tar lint-archive=/absolute/images/lint.tar
 just github run --org <org> --ack-org <org> --token-file <pat> --prefix fc- --fixtures none \
   -- just --justfile /absolute/forge-ci/justfile demo github hello-maven org=<id> version=0.2.0 \
@@ -1221,6 +1223,12 @@ runs the release's own jobs, and those verify the signed release request with
 `ssh-keygen`, which a nanolinter image does not carry. On Forgejo the lint and
 build jobs can share `CI_JOB_IMAGE`: a nanolinter java image carries a JDK and
 Maven. GitHub runners pull the lint image themselves, so it must be public.
+
+A gate that checks its parts in images of their own names each further one
+`$CI_JOB_IMAGE_<NAME>` as a check's `job-image`, `NAME` in capitals, beside
+`$CI_JOB_IMAGE`: a demo takes its archive as `job-archive-<name>=`, a trial as
+`FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_<NAME>`. `hello-monorepo` checks its
+frontend in `$CI_JOB_IMAGE_NODE`, the Node runtime image.
 
 On GitHub, `demo-list` and `demo-delete` run inside the same hosted session as
 `demo`, with `org=<id>`. Every demo repository is named `demo-<name>` on every
@@ -1689,10 +1697,15 @@ variable: `CI_IMAGE_BUILDER=` among the consumer settings is refused.
 A consumer releases images on GitLab when it declares them in
 `.forge-ci/release-images.yml`, the file its Forgejo release names as
 `artifacts-config`: the harness then sets `release-images: true`, that file,
-and the lab's one platform as `release-platforms`. Under kaniko the release's
-image jobs run in the kaniko job image of this commit, a saved archive named
-by `FORGE_CI_LIVE_KANIKO_JOB_IMAGE_ARCHIVE`; the build archive stays the
-consumer's build tools. `just test-live-kaniko-job-image` builds
+and the lab's one platform as `release-platforms`. The release's image jobs
+run in the builder's job image of this commit, a saved archive: under Buildah,
+the default, the Buildah job image named by
+`FORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE`
+(`bash scripts/ci/publish-live-image.sh buildah-job <forge-lab> <archive>`
+builds and saves it); under kaniko the kaniko job image named by
+`FORGE_CI_LIVE_KANIKO_JOB_IMAGE_ARCHIVE`. The build archive stays the
+consumer's build tools. A `job-user=65532:65532` setting runs the release's
+`job-image` jobs as the runtime images' `nonroot`. `just test-live-kaniko-job-image` builds
 `localhost/forge-ci-live-kaniko-job:<commit>`. A run admits a kaniko job image
 only when its source label names the engine project the layer runs from, a
 scratch project of each scenario's own, so the harness labels the image with

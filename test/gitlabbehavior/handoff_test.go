@@ -4,18 +4,12 @@
 package gitlabbehavior
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
-
-	"gopkg.in/yaml.v3"
-
-	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
 func TestReleaseArtifactsAreReadableWithoutOpeningPrivateFiles(t *testing.T) {
@@ -95,32 +89,14 @@ func TestReleaseArtifactsNeverFollowASymlinkedOutputRoot(t *testing.T) {
 	requireMode(t, filepath.Join(private, "key"), 0o600)
 }
 
+// runReleaseAfterScript runs a job's after_script as GitLab runs it, named
+// another job by a project variable, which must not move its hand-off.
 func runReleaseAfterScript(t *testing.T, workspace, job string) {
 	t.Helper()
 
-	body := reporoot.ReadFile(t, "templates/release-jobs.yml")
-	decoder := yaml.NewDecoder(bytes.NewReader(body))
+	body := releaseJobsBodyFor(t, "buildah")
 
-	var header any
-	if err := decoder.Decode(&header); err != nil {
-		t.Fatal(err)
-	}
-
-	var jobs map[string]yaml.Node
-	if err := decoder.Decode(&jobs); err != nil {
-		t.Fatal(err)
-	}
-
-	var jobConfig struct {
-		After []string `yaml:"after_script"`
-	}
-
-	node := jobs[".forge-ci-release"]
-	if err := node.Decode(&jobConfig); err != nil {
-		t.Fatal(err)
-	}
-
-	script := strings.Join(jobConfig.After, "\n")
+	script := joinedScript(resolveGitLabExtends(body, body[job].(map[string]any))["after_script"])
 	if script == "" {
 		t.Fatal("release artifact publication hook is missing")
 	}
@@ -130,7 +106,8 @@ func runReleaseAfterScript(t *testing.T, workspace, job string) {
 
 	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", script)
 	command.Dir = workspace
-	command.Env = []string{"PATH=" + componentTools(t), "HOME=" + workspace, "CI_PROJECT_DIR=" + workspace, "CI_JOB_NAME=" + job, "CI_JOB_STATUS=failed"}
+	command.Env = []string{"PATH=" + componentTools(t), "HOME=" + workspace, "CI_PROJECT_DIR=" + workspace,
+		"CI_JOB_NAME=Publish: release", "rc_handoff=private", "CI_JOB_STATUS=failed"}
 
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("artifact hook failed: %v\n%s", err, output)

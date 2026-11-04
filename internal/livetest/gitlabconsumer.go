@@ -276,12 +276,16 @@ func addGitLabTrialVariables(root *yaml.Node, name string, variables map[string]
 	return nil
 }
 
-// bindGitLabGateComponents binds every included component. check and
-// nanolinter appear once; a build component may run as several jobs, and must
+// bindGitLabGateComponents binds every included component. nanolinter
+// appears once; check may run as several jobs, one per job image, all from
+// one engine project; a build component may run as several jobs, and must
 // come from the project the check component names, having no
-// forge-ci-repository input of its own.
+// forge-ci-repository input of its own. GitLab merges two jobs of one name
+// into one, so each include names its own job: job-name, which defaults to
+// the component's name.
 func bindGitLabGateComponents(entries []*yaml.Node, layer Layer, images GitLabGateImages) error {
 	seen := map[string]bool{}
+	jobs := map[string]bool{}
 
 	var checkProject string
 
@@ -293,14 +297,23 @@ func bindGitLabGateComponents(entries []*yaml.Node, layer Layer, images GitLabGa
 			return bindErr
 		}
 
-		// A build component may run as several jobs; check and nanolinter once.
-		if seen[name] && !gitlabGateImageInputs[name].build {
+		// check and a build component may run as several jobs; nanolinter once.
+		if seen[name] && name != gitlabCheckComponent && !gitlabGateImageInputs[name].build {
 			return fmt.Errorf("the gate includes the %s component twice: %w", name, errs.ErrValidation)
 		}
 
 		seen[name] = true
 
+		job := gitlabGateJobName(entry, name)
+		if jobs[job] {
+			return fmt.Errorf("two includes name the job %s, which GitLab merges into one; give each its own job-name: %w", job, errs.ErrValidation)
+		}
+
+		jobs[job] = true
+
 		switch {
+		case name == gitlabCheckComponent && checkProject != "" && project != checkProject:
+			return fmt.Errorf("the check components come from %s and %s: %w", checkProject, project, errs.ErrValidation)
 		case name == gitlabCheckComponent:
 			checkProject = project
 		case gitlabGateImageInputs[name].build:
@@ -321,6 +334,16 @@ func bindGitLabGateComponents(entries []*yaml.Node, layer Layer, images GitLabGa
 	return nil
 }
 
+// gitlabGateJobName is the name of the job an include of the component name
+// makes: its job-name input, which defaults to the component's name.
+func gitlabGateJobName(entry *yaml.Node, name string) string {
+	if value := gitlabMappingValue(gitlabMappingValue(entry, "inputs"), "job-name"); value != nil {
+		return value.Value
+	}
+
+	return name
+}
+
 // GitLabGateImages are the images a trial gives the consumer's gate: Job for
 // the check component, Lint for the nanolinter component. They differ because
 // the job image also runs the release's own jobs, which need tools a lint
@@ -332,6 +355,68 @@ type GitLabGateImages struct {
 	// JobVariables adds variables to the named image-building trial job alone,
 	// the image builder it selects for example.
 	JobVariables map[string]map[string]string
+	// ExtraJobs are the further job images of a gate that checks its parts in
+	// images of their own, keyed by NAME: a check component whose job-image is
+	// $CI_JOB_IMAGE_NODE takes ExtraJobs["NODE"].
+	ExtraJobs map[string]string
+}
+
+// gitlabExtraJobPlaceholder is a check component's job-image placeholder for
+// a job image other than the trial's own, $CI_JOB_IMAGE_<NAME>.
+var gitlabExtraJobPlaceholder = regexp.MustCompile(`^\$CI_JOB_IMAGE_([A-Z][A-Z0-9]*)$`)
+
+// GitLabGateExtraJobImages lists the names in the $CI_JOB_IMAGE_<NAME>
+// placeholders the consumer's gate gives its check components, once each and
+// sorted, so a trial knows which further images to push.
+func (consumer Consumer) GitLabGateExtraJobImages(tb TB) []string {
+	tb.Helper()
+
+	if !consumer.HasGitLabGate(tb) {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(Context(tb), timeoutLayerPush)
+	defer cancel()
+
+	body, err := consumer.git.output(ctx, consumer.stage, nil, "cat-file", "blob", consumer.Commit+":"+GitLabGateFile)
+	if err != nil {
+		tb.Fatalf("livetest: read the consumer's merge-request gate: %v", err)
+	}
+
+	names, err := gitlabGateExtraJobImages(body)
+	if err != nil {
+		tb.Fatalf("livetest: read the consumer's merge-request gate: %v", err)
+	}
+
+	return names
+}
+
+func gitlabGateExtraJobImages(body []byte) ([]string, error) {
+	_, entries, err := gitlabGateComponents(body)
+	if err != nil {
+		return nil, err
+	}
+
+	var names []string
+
+	for _, entry := range entries {
+		if _, name, _, known := gitlabGateComponent(gitlabMappingValue(entry, "component")); !known || name != gitlabCheckComponent {
+			continue
+		}
+
+		image := gitlabMappingValue(gitlabMappingValue(entry, "inputs"), "job-image")
+		if image == nil {
+			continue
+		}
+
+		if match := gitlabExtraJobPlaceholder.FindStringSubmatch(image.Value); match != nil && !slices.Contains(names, match[1]) {
+			names = append(names, match[1])
+		}
+	}
+
+	slices.Sort(names)
+
+	return names, nil
 }
 
 // gitlabGateImage is, for each component a gate may include, the input that
@@ -403,15 +488,16 @@ func bindGitLabGateComponent(entry *yaml.Node, layer Layer, images GitLabGateIma
 		}
 	}
 
+	image, placeholder, missing := gitlabGateBoundImage(name, jobImage.Value, use, images)
+
 	pinned := fixtureObjectID(pin) || (name != gitlabCheckComponent && releaseVersionPin.MatchString(pin))
-	if !pinned || (forgeCIRepository != nil && project != forgeCIRepository.Value) || jobImage.Value != use.placeholder {
+	if !pinned || (forgeCIRepository != nil && project != forgeCIRepository.Value) || !placeholder {
 		return "", "", fmt.Errorf("pin the %s component (check by full SHA), match forge-ci-repository and use %s: %s: %w",
 			name, use.input, use.placeholder, errs.ErrValidation)
 	}
 
-	image := use.image(images)
 	if image == "" {
-		return "", "", fmt.Errorf("the gate includes the %s component; give the trial its image (lint-archive=): %w", name, errs.ErrValidation)
+		return "", "", fmt.Errorf("the gate's %s runs in %s; give the trial its image (%s): %w", name, jobImage.Value, missing, errs.ErrValidation)
 	}
 
 	component.Value = strings.TrimPrefix(layer.ServerURL, "https://") + "/" + layer.Repository + "/" + name + "@" + layer.Commit
@@ -422,6 +508,23 @@ func bindGitLabGateComponent(entry *yaml.Node, layer Layer, images GitLabGateIma
 	}
 
 	return name, project, nil
+}
+
+// gitlabGateBoundImage is the trial's image for a component's image input
+// value, whether that value is a placeholder the trial binds, and the setting
+// that gives the image when the trial has none. A check may run in a further
+// job image of the trial's, by NAME.
+func gitlabGateBoundImage(name, value string, use gitlabGateImage, images GitLabGateImages) (string, bool, string) {
+	if extra := gitlabExtraJobPlaceholder.FindStringSubmatch(value); name == gitlabCheckComponent && extra != nil {
+		return images.ExtraJobs[extra[1]], true, "job-archive-" + strings.ToLower(extra[1]) + "="
+	}
+
+	missing := "job-archive="
+	if name == "nanolinter" {
+		missing = "lint-archive="
+	}
+
+	return use.image(images), value == use.placeholder, missing
 }
 
 // gitlabGateComponent splits an include's component reference,

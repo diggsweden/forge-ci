@@ -23,7 +23,10 @@ import (
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
-const parityKanikoImage = "registry.invalid/team/kaniko-job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+const (
+	parityKanikoImage  = "registry.invalid/team/kaniko-job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	parityBuildahImage = "registry.invalid/team/buildah-job@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+)
 
 const parityBuildImage = "registry.invalid/team/build@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
@@ -101,7 +104,8 @@ func TestReleaseImageStageMatchesTheForgejoWorkflow(t *testing.T) {
 			// run, in the image it runs in, on a native runner of the arch.
 			forgejoBuilder, forgejoContainer := forgejoBuilderSelection(t, builder)
 
-			wantImage, wantAMD64Tags := parityBuildImage, []string{"privileged"}
+			// GitLab runs every job in an image: the builder's job image.
+			wantImage, wantAMD64Tags := parityBuildahImage, []string{"privileged"}
 			if builder == "kaniko" {
 				wantImage, wantAMD64Tags = parityKanikoImage, nil
 			}
@@ -258,8 +262,10 @@ func renderGitLabImageStage(t *testing.T, releaseImages, builder, arm64Tags stri
 	text := string(reporoot.ReadFile(t, "templates/release-jobs.yml"))
 	text = text[strings.Index(text, "\n---\n")+5:]
 
+	builderImage := map[string]string{"buildah": parityBuildahImage, "kaniko": parityKanikoImage}[builder]
+
 	for name, value := range map[string]string{
-		"release-images": releaseImages, "image-builder": builder, "builder-job-image": parityKanikoImage,
+		"release-images": releaseImages, "image-builder": builder, "builder-job-image": builderImage,
 		"build-image": parityBuildImage, "build-runner-tags": `["privileged"]`, "build-runner-tags-arm64": arm64Tags,
 	} {
 		text = strings.ReplaceAll(text, "$[[ inputs."+name+" ]]", value)
@@ -278,7 +284,7 @@ func renderGitLabImageStage(t *testing.T, releaseImages, builder, arm64Tags stri
 		}
 
 		fields := resolveGitLabExtends(body, raw.(map[string]any))
-		if !gitlabRulesAdmit(t, fields["rules"]) {
+		if !gitlabRulesAdmit(fields["rules"]) {
 			continue
 		}
 
@@ -362,9 +368,7 @@ func mergeGitLabHash(into, from map[string]any) {
 
 // gitlabRulesAdmit evaluates the literal comparisons the image stage's rules
 // are made of, after interpolation.
-func gitlabRulesAdmit(t *testing.T, rules any) bool {
-	t.Helper()
-
+func gitlabRulesAdmit(rules any) bool {
 	list, _ := rules.([]any)
 	if len(list) == 0 {
 		return true

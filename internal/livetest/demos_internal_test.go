@@ -131,6 +131,17 @@ func renderDemo(t *testing.T, consumer string) int {
 		layer := Layer{ServerURL: "https://gitlab.example", Repository: "forgeci/fci-engine", Commit: strings.Repeat("b", 40)}
 		images := GitLabGateImages{Job: "registry.example/job@sha256:" + strings.Repeat("c", 64), Lint: "registry.example/lint@sha256:" + strings.Repeat("d", 64)}
 
+		// Each further job image the gate names, as a trial gives them.
+		names, err := gitlabGateExtraJobImages(gate)
+		if err != nil {
+			t.Errorf("gitlab: %v", err)
+		}
+
+		images.ExtraJobs = map[string]string{}
+		for _, name := range names {
+			images.ExtraJobs[name] = "registry.example/" + strings.ToLower(name) + "@sha256:" + strings.Repeat("e", 64)
+		}
+
 		if _, err := renderGitLabConsumer(gate, layer, images); err != nil {
 			t.Errorf("gitlab: %v", err)
 		}

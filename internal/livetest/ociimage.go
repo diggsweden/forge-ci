@@ -80,6 +80,33 @@ func PushJobImage(tb TB, target Target, repo, archive string) string {
 	return pushJobImage(tb, target, repo, readJobImage(tb, archive))
 }
 
+// GitLabJobImageArchiveEnv prefixes the variable that names the archive of a
+// gate's further job image: FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_NODE for the
+// $CI_JOB_IMAGE_NODE of a check component.
+const GitLabJobImageArchiveEnv = "FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_"
+
+// PushGitLabGateExtraJobImages publishes, as PushJobImage does, every further
+// job image the consumer's gate names, each to a project repoFor names, and
+// returns them for GitLabGateImages.ExtraJobs. A run that was not given one
+// does not cover the gate.
+func PushGitLabGateExtraJobImages(tb TB, target Target, consumer Consumer, repoFor func(name string) string) map[string]string {
+	tb.Helper()
+
+	images := map[string]string{}
+
+	for _, name := range consumer.GitLabGateExtraJobImages(tb) {
+		archive := os.Getenv(GitLabJobImageArchiveEnv + name)
+		if archive == "" {
+			NotCoveredf(tb, "the gate checks in $CI_JOB_IMAGE_%s; set %s%s to its image archive (job-archive-%s= for a demo)",
+				name, GitLabJobImageArchiveEnv, name, strings.ToLower(name))
+		}
+
+		images[name] = PushJobImage(tb, target, repoFor(name), archive)
+	}
+
+	return images
+}
+
 // PushKanikoJobImage publishes, as PushJobImage does, an archive of the kaniko
 // job image of containers/kaniko-job or of a build image made FROM it, which
 // inherits its labels. A run admits a kaniko job image only when its source

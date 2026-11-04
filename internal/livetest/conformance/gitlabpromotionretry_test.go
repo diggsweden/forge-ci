@@ -383,17 +383,9 @@ func gitlabPromotionRetryWorkflow(t *testing.T, prelude, ledger string) string {
 		t.Fatal(err)
 	}
 
-	var shared struct {
-		AfterScript []string `yaml:"after_script"`
-	}
-
-	sharedNode := jobs[".forge-ci-release"]
-	if err := sharedNode.Decode(&shared); err != nil {
-		t.Fatal(err)
-	}
-
 	var promotion struct {
-		Artifacts map[string]any `yaml:"artifacts"`
+		AfterScript []string       `yaml:"after_script"`
+		Artifacts   map[string]any `yaml:"artifacts"`
 	}
 
 	promotionNode := jobs["Publish: images"]
@@ -407,7 +399,7 @@ func gitlabPromotionRetryWorkflow(t *testing.T, prelude, ledger string) string {
 		"variables": map[string]string{"GIT_STRATEGY": "empty", "LEDGER_JSON": ledger},
 		"Publish: images": map[string]any{
 			"stage": "promote", "script": []string{prelude, gitlabPromotionRetryScript},
-			"after_script": shared.AfterScript,
+			"after_script": promotion.AfterScript,
 			"artifacts":    promotion.Artifacts,
 		},
 		"Publish: release": map[string]any{"stage": "publish", "needs": []string{"Publish: images"}, "script": "test -s _release-promote/image-promotions.jsonl"},

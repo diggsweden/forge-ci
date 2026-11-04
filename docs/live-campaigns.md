@@ -44,14 +44,24 @@ independent consumers.
 
 ## Run a campaign
 
-Prepare once, from a clean checkout whose engine checksum is fresh. It
-publishes the kaniko job, signer and named nanolinter job images with Forge
-Lab, saves the signer and go/java runtime image archives, exports every demo
-as a one-commit checkout and writes `<dir>/campaign.env` (references and
-paths, no secrets, and `CAMPAIGN_COMMIT`):
+Prepare once, from a clean checkout whose engine checksum is fresh, naming
+each lane the campaign will run as `<provider>=<cases file>`. It publishes the
+kaniko job, signer and named nanolinter job images with Forge Lab, saves the
+signer image, the Buildah job image (`FORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE`)
+and the runtime images as archives, exports every demo as a one-commit
+checkout and writes `<dir>/campaign.env` (references and paths, no secrets,
+and `CAMPAIGN_COMMIT`). The runtime images are those the named cases need,
+each as `FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_<TARGET>`: every one a case names as
+`@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_<TARGET>`, and on GitLab the scenarios' go
+image, also `FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE`, and every
+`$CI_JOB_IMAGE_<TARGET>` the gate of a named demo checks in
+(`go run ./internal/livetest/preflight campaign-runtime-targets . gitlab=<cases file>`
+lists them):
 
 ```bash
 just campaign-prepare ~/src/forge-lab ~/campaigns/k3s \
+  forgejo=test/live/campaigns/k3s-private-forgejo.cases \
+  gitlab=test/live/campaigns/k3s-private-gitlab.cases \
   job-image=go:<local image> job-image=java:<local image> \
   job-image=javascript-typescript:<local image> job-image=rust:<local image>
 ```
@@ -70,10 +80,16 @@ wait
 A cases file holds one case a line: `consumer <demo> <pull-request|release>
 [key=value ...]` or `scenario <TestName>`. A value `@NAME` is campaign.env's
 `NAME`; a GitLab consumer names its archives with `job-archive=` (and for a
-release `build-archive=` and `signer-archive=`). The live preflight reads both
+release `build-archive=` and `signer-archive=`), for example
+`job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA`, which a campaign prepared
+with that cases file has, and a release runs its `job-image` jobs as the
+runtime images' `nonroot` with `job-user=65532:65532`. Every runtime image
+archive and the Buildah job image reach every case, so a gate's further job
+images and a release's image jobs find theirs. The live preflight reads both
 files as data and plans the lane (`internal/livetest/campaign.go`); it refuses
 a checkout other than `CAMPAIGN_COMMIT` and any case it cannot read before the
-first runs. The lane then runs past failures and fails when any case did. Read the outcome from
+first runs, among them a case whose archive, or a further job image of its
+demo's gate, the campaign was not prepared with. The lane then runs past failures and fails when any case did. Read the outcome from
 `<dir>/<provider>.results`, one tab-separated line a case: interval, case,
 exit status and the `verdict.json` to read, as above.
 

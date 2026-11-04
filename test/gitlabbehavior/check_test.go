@@ -60,6 +60,7 @@ func TestCheckRefusesSigningMaterialAndMutablePinsBeforeCheckout(t *testing.T) {
 			}
 
 			script := strings.NewReplacer(
+				"$[[ inputs.job-user ]]", "",
 				"$[[ component.sha ]]", strings.Repeat("a", 40),
 				"$[[ component.reference ]]", tc.reference,
 				"/tmp/forge-ci-helpers.XXXXXXXX", filepath.Join(dir, "helpers.XXXXXXXX"),
@@ -176,5 +177,61 @@ func TestCheckPreservesPublicRootsAndExportsPrivateRegistryTrust(t *testing.T) {
 				t.Fatalf("combined trust=%q: %v", body, err)
 			}
 		})
+	}
+}
+
+// GitLab refuses an empty image user (its executor_opts schema sets
+// minLength 1), so a component that lets the consumer leave the user unset
+// names a job variable there instead. The runner expands it as the job
+// starts, and both executors read an empty result as the image's own user:
+// the Docker executor leaves the container's User empty, the Kubernetes
+// executor sets no runAsUser. Only the Kubernetes executor reads
+// image:kubernetes:user, so both are set.
+func TestCheckJobUserIsAVariableBothExecutorsRead(t *testing.T) {
+	t.Parallel()
+
+	decoder := yaml.NewDecoder(bytes.NewReader(reporoot.ReadFile(t, "templates/check.yml")))
+
+	var header struct {
+		Spec struct {
+			Inputs map[string]struct {
+				Default *string `yaml:"default"`
+				Regex   string  `yaml:"regex"`
+			} `yaml:"inputs"`
+		} `yaml:"spec"`
+	}
+	if err := decoder.Decode(&header); err != nil {
+		t.Fatal(err)
+	}
+
+	input := header.Spec.Inputs["job-user"]
+	if input.Default == nil || *input.Default != "" || input.Regex != `^$|^[0-9]+(:[0-9]+)?$` {
+		t.Fatalf("job-user must default to empty and take a numeric UID or UID:GID, got %+v", input)
+	}
+
+	var jobs map[string]map[string]any
+	if err := decoder.Decode(&jobs); err != nil {
+		t.Fatal(err)
+	}
+
+	requireImageUserVariable(t, jobs["$[[ inputs.job-name ]]"], "RC_JOB_USER", "$[[ inputs.job-user ]]")
+}
+
+// requireImageUserVariable checks that a job's image user is the variable
+// name on both executors, and that the job sets that variable to value.
+func requireImageUserVariable(t *testing.T, job map[string]any, name, value string) {
+	t.Helper()
+
+	image, _ := job["image"].(map[string]any)
+	for _, executor := range []string{"docker", "kubernetes"} {
+		options, _ := image[executor].(map[string]any)
+		if got, _ := options["user"].(string); got != "$"+name {
+			t.Errorf("image:%s:user is %q, want $%s", executor, got, name)
+		}
+	}
+
+	variables, _ := job["variables"].(map[string]any)
+	if got, _ := variables[name].(string); got != value {
+		t.Errorf("variable %s is %q, want %q", name, got, value)
 	}
 }

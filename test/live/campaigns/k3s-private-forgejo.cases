@@ -3,8 +3,8 @@
 
 # The Forgejo lane of a k3s private campaign: each demo's pull request, then
 # its release with kaniko image builds. Needs a campaign prepared with
-# job-image= for go, java, javascript-typescript and rust, and
-# FORGE_CI_LIVE_CONSUMER_VISIBILITY=private from the caller.
+# forgejo=<this file> and job-image= for go, java, javascript-typescript and
+# rust, and FORGE_CI_LIVE_CONSUMER_VISIBILITY=private from the caller.
 #
 #   just campaign-lane <dir> forgejo test/live/campaigns/k3s-private-forgejo.cases
 

@@ -5,10 +5,14 @@
 package livetest
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
 func TestGitLabConsumerPreservesChecksAndChangesOnlyTrialCoordinates(t *testing.T) {
@@ -286,6 +290,107 @@ include:
 	} {
 		if _, err := renderGitLabConsumer([]byte(bad), layer, images); err == nil {
 			t.Fatalf("an unbindable gate was accepted:\n%s", bad)
+		}
+	}
+}
+
+// A gate may check its parts in images of their own: each check component is
+// a job of its own, and $CI_JOB_IMAGE_<NAME> takes the trial's further image
+// of that name. One it was not given is named in the refusal.
+func TestGitLabConsumerBindsAFurtherJobImagePerCheck(t *testing.T) {
+	t.Parallel()
+
+	check := func(name, image, project string) string {
+		return `  - component: $CI_SERVER_FQDN/` + project + `/check@` + strings.Repeat("a", 40) + `
+    inputs:
+      forge-ci-repository: ` + project + `
+      job-name: ` + name + `
+      job-image: ` + image + `
+      job-user: "65532:65532"
+      commands:
+        - make ` + name + `
+`
+	}
+	pipeline := "workflow:\n  rules:\n    - if: '$CI_PIPELINE_SOURCE == \"merge_request_event\"'\ninclude:\n" +
+		check("check-backend", "$CI_JOB_IMAGE", "team/engine") + check("check-frontend", "$CI_JOB_IMAGE_NODE", "team/engine")
+	layer := Layer{ServerURL: "https://gitlab.k3s.forgelab", Repository: "forgeci/fci-engine", Commit: strings.Repeat("b", 40)}
+	java, node := "registry.invalid/java@sha256:"+strings.Repeat("c", 64), "registry.invalid/node@sha256:"+strings.Repeat("d", 64)
+
+	if names, err := gitlabGateExtraJobImages([]byte(pipeline)); err != nil || len(names) != 1 || names[0] != "NODE" {
+		t.Fatalf("further job images = %v, %v; want [NODE]", names, err)
+	}
+
+	rendered, err := renderGitLabConsumer([]byte(pipeline), layer, GitLabGateImages{Job: java, ExtraJobs: map[string]string{"NODE": node}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var parsed struct {
+		Include []struct {
+			Inputs map[string]any `yaml:"inputs"`
+		} `yaml:"include"`
+	}
+	if err := yaml.Unmarshal([]byte(rendered), &parsed); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(parsed.Include) != 2 || parsed.Include[0].Inputs["job-image"] != java || parsed.Include[1].Inputs["job-image"] != node ||
+		parsed.Include[1].Inputs["job-user"] != "65532:65532" {
+		t.Fatalf("the checks did not each get their image: %+v", parsed.Include)
+	}
+
+	if _, err := renderGitLabConsumer([]byte(pipeline), layer, GitLabGateImages{Job: java}); err == nil || !strings.Contains(err.Error(), "job-archive-node=") {
+		t.Fatalf("a missing further image was not refused by name: %v", err)
+	}
+
+	other := strings.Replace(pipeline, check("check-frontend", "$CI_JOB_IMAGE_NODE", "team/engine"), check("check-frontend", "$CI_JOB_IMAGE_NODE", "team/other"), 1)
+	if _, err := renderGitLabConsumer([]byte(other), layer, GitLabGateImages{Job: java, ExtraJobs: map[string]string{"NODE": node}}); err == nil {
+		t.Fatal("check components of two engine projects were bound")
+	}
+
+	// GitLab would merge two jobs of one name, the default check among them,
+	// and run only one of the checks.
+	for _, twice := range []string{
+		strings.Replace(pipeline, "job-name: check-frontend", "job-name: check-backend", 1),
+		strings.ReplaceAll(strings.ReplaceAll(pipeline, "      job-name: check-backend\n", ""), "      job-name: check-frontend\n", ""),
+		strings.Replace(pipeline, "job-name: check-frontend", "job-name: nanolinter", 1) + `  - component: $CI_SERVER_FQDN/team/engine/nanolinter@` + strings.Repeat("a", 40) + `
+    inputs:
+      forge-ci-repository: team/engine
+      nanolinter-image: $CI_LINT_IMAGE
+`,
+	} {
+		_, err := renderGitLabConsumer([]byte(twice), layer, GitLabGateImages{Job: java, Lint: node, ExtraJobs: map[string]string{"NODE": node}})
+		if !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "own job-name") {
+			t.Errorf("two jobs of one name were bound: %v\n%s", err, twice)
+		}
+	}
+}
+
+// The binder takes a component's job name, when the include names none, to
+// be the component's name: each gate component's job-name input defaults to it.
+func TestGitLabGateComponentsDefaultTheirJobNameToTheirName(t *testing.T) {
+	t.Parallel()
+
+	for name := range gitlabGateImageInputs {
+		var template struct {
+			Spec struct {
+				Inputs struct {
+					JobName struct {
+						Default string `yaml:"default"`
+					} `yaml:"job-name"`
+				} `yaml:"inputs"`
+			} `yaml:"spec"`
+		}
+
+		body := reporoot.ReadFile(t, "templates/"+name+".yml")
+
+		header, _, _ := strings.Cut(string(body), "\n---")
+		if err := yaml.Unmarshal([]byte(header), &template); err != nil {
+			t.Fatalf("templates/%s.yml: %v", name, err)
+		}
+
+		if got := template.Spec.Inputs.JobName.Default; got != name {
+			t.Errorf("templates/%s.yml: job-name defaults to %q, want %q", name, got, name)
 		}
 	}
 }

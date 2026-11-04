@@ -13,6 +13,10 @@ spec:
     job-image:
       description: Digest-pinned image containing Bash, Git, curl, sha256sum and the consumer's pinned check tools.
       regex: '^[^[:space:]]+@sha256:[0-9a-f]{64}$'
+    job-user:
+      default: ''
+      description: UID or UID:GID the job runs as, such as 65532:65532 for the runtime images' nonroot user; empty keeps the image's own user.
+      regex: '^$|^[0-9]+(:[0-9]+)?$'
     job-name:
       default: check
       description: Name of the generated check job.
@@ -27,18 +31,42 @@ spec:
   stage: $[[ inputs.stage ]]
   # A consumer's image may start a tool of its own. The Docker executor would
   # run the job's shell through that entrypoint; the Kubernetes one ignores it.
+  # GitLab refuses an empty image user, so the user is a variable the runner
+  # expands as the job starts: empty, both executors keep the image's own.
   image:
     name: $[[ inputs.job-image ]]
     entrypoint: [""]
+    docker:
+      user: $RC_JOB_USER
+    kubernetes:
+      user: $RC_JOB_USER
   needs: []
   cache: []
   variables:
     GIT_STRATEGY: empty
     GIT_SUBMODULE_STRATEGY: none
     RC_FORGE_CI_REPOSITORY: "$[[ inputs.forge-ci-repository ]]"
+    RC_JOB_USER: "$[[ inputs.job-user ]]"
   before_script:
     - |
       set -euo pipefail
+      # job-user reaches the runner as RC_JOB_USER, which a project variable
+      # outranks; hold that to the literal input, and the job's user to it.
+      want_user='$[[ inputs.job-user ]]'
+      if [ "${RC_JOB_USER-}" != "${want_user}" ]; then
+        echo "ERROR: RC_JOB_USER is '${RC_JOB_USER-}', not job-user '${want_user}'; remove the variable that sets it." >&2
+        exit 1
+      fi
+      job_uid=$(id -u) job_gid=$(id -g)
+      case "${want_user}" in
+        *:*) actual_user="${job_uid}:${job_gid}" ;;
+        *) actual_user=${want_user:+${job_uid}} ;;
+      esac
+      if [ "${actual_user}" != "${want_user}" ]; then
+        echo "ERROR: the job runs as uid=${job_uid} gid=${job_gid}, not job-user ${want_user}." >&2
+        exit 1
+      fi
+      echo "job user: uid=${job_uid} gid=${job_gid}"
       # Check before any checkout or consumer command, not after unsetting a
       # misplaced key. GitLab protected variables also need environment scopes.
       for name in RELEASE_SSH_SIGNING_KEY RELEASE_COSIGN_PRIVATE_KEY \
