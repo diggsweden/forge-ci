@@ -34,7 +34,7 @@ build_inputs=(cmd internal go.mod go.sum)
 architectures=(amd64 arm64)
 # What `forge-ci --version` of the layer's binary answers. The sha256 is
 # its identity; setup-forge-ci prints both.
-version=engine-layer
+version='engine-layer'
 
 usage() {
 	printf 'usage: %s build <amd64|arm64> <output>\n       %s check\n       %s refresh\n       %s publish <amd64|arm64> <binary>\n       %s inputs\n' "$0" "$0" "$0" "$0" "$0" >&2
