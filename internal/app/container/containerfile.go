@@ -14,6 +14,7 @@ import (
 
 	"github.com/diggsweden/forge-ci/internal/domain/ci"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/pathsafe"
 )
 
 // ValidateContainerfileInput drives ValidateContainerfile.
@@ -22,6 +23,9 @@ type ValidateContainerfileInput struct {
 	// it's used verbatim; otherwise the directory containing it is
 	// searched for Dockerfile* / Containerfile* candidates.
 	Path string
+	// Context opts into source-relative, confined build paths in the current
+	// directory. Nil preserves the standalone path resolver's behavior.
+	Context *string
 }
 
 // ValidateContainerfile resolves a Containerfile path. When Path is an
@@ -39,10 +43,25 @@ func ValidateContainerfile(ctx context.Context, sink ci.OutputSink, out io.Write
 		return fmt.Errorf("containerfile path is required: pass --path <file> or set $CONTAINERFILE: %w", errs.ErrUsage)
 	}
 
-	if info, err := os.Stat(in.Path); err == nil && !info.IsDir() {
-		_, _ = fmt.Fprintf(out, "Using containerfile: %s\n", in.Path)
+	emit := func(path string) error {
+		if in.Context != nil {
+			source, err := os.Getwd()
+			if err != nil {
+				return err
+			}
 
-		return sink.Set(ctx, "containerfile", in.Path)
+			if err = ValidateSourceBuildPaths(source, *in.Context, path); err != nil {
+				return err
+			}
+		}
+
+		_, _ = fmt.Fprintf(out, "Using containerfile: %s\n", path)
+
+		return sink.Set(ctx, "containerfile", path)
+	}
+
+	if info, err := os.Stat(in.Path); err == nil && !info.IsDir() {
+		return emit(in.Path)
 	}
 
 	dir := filepath.Dir(in.Path)
@@ -52,13 +71,38 @@ func ValidateContainerfile(ctx context.Context, sink ci.OutputSink, out io.Write
 	case 0:
 		return fmt.Errorf("containerfile %q not found and no Dockerfile*/Containerfile* match found in %q: %w", in.Path, dir, errs.ErrMissingInput)
 	case 1:
-		_, _ = fmt.Fprintf(out, "Using containerfile: %s\n", matches[0])
-
-		return sink.Set(ctx, "containerfile", matches[0])
+		return emit(matches[0])
 	default:
 		return fmt.Errorf("multiple containerfiles found in %q, please specify an exact path:\n  %s: %w",
 			dir, strings.Join(matches, "\n  "), errs.ErrValidation)
 	}
+}
+
+// ValidateSourceBuildPaths keeps a build context and Containerfile inside the
+// source checkout, separate from the delivery layer's control files.
+func ValidateSourceBuildPaths(source, contextPath, file string) error {
+	if !pathsafe.Relative(contextPath) || (file != "" && !pathsafe.Relative(file)) {
+		return fmt.Errorf("build context and Containerfile must be source-relative paths: %w", errs.ErrValidation)
+	}
+
+	root, err := os.OpenRoot(source)
+	if err != nil {
+		return err
+	}
+
+	defer func() { _ = root.Close() }()
+
+	if info, statErr := root.Stat(contextPath); statErr != nil || !info.IsDir() {
+		return fmt.Errorf("build context must be a directory inside the source checkout: %w", errs.ErrValidation)
+	}
+
+	if file != "" {
+		if info, statErr := root.Stat(file); statErr != nil || !info.Mode().IsRegular() {
+			return fmt.Errorf("containerfile must be a regular file inside the source checkout: %w", errs.ErrValidation)
+		}
+	}
+
+	return nil
 }
 
 // findContainerfileCandidates scans dir (non-recursive) and returns

@@ -8,14 +8,54 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/testutil/fakeoutputsink"
 	"github.com/diggsweden/forge-ci/internal/testutil/testfs"
 )
+
+func TestValidateContainerfileConfinesWorkflowSourcePaths(t *testing.T) {
+	source, control := t.TempDir(), t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(source, "Containerfile"), []byte("FROM scratch\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(control, "Containerfile"), []byte("control payload"), 0o600))
+	require.NoError(t, os.Symlink(control, filepath.Join(source, "escape")))
+	t.Chdir(source)
+
+	for _, tc := range []struct {
+		name, context, file string
+		valid               bool
+	}{
+		{"relative source", ".", "Containerfile", true},
+		{"empty context", "", "Containerfile", false},
+		{"resolved fallback", ".", "missing", true},
+		{"absolute workspace", control, "Containerfile", false},
+		{"parent context", "..", "Containerfile", false},
+		{"symlink context", "escape", "Containerfile", false},
+		{"absolute Containerfile", ".", filepath.Join(control, "Containerfile"), false},
+		{"symlink Containerfile", ".", "escape/Containerfile", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sink := fakeoutputsink.New(t)
+			contextPath := tc.context
+
+			err := appcontainer.ValidateContainerfile(t.Context(), sink, io.Discard, appcontainer.ValidateContainerfileInput{Path: tc.file, Context: &contextPath})
+			if tc.valid {
+				require.NoError(t, err)
+				require.Equal(t, "Containerfile", sink.Single("containerfile"))
+			} else {
+				require.ErrorIs(t, err, errs.ErrValidation)
+				require.Empty(t, sink.Keys(), "a refused context must not release a build path")
+			}
+		})
+	}
+}
 
 func TestValidateContainerfile_ExactPathExists(t *testing.T) {
 	fsys := testfs.NewReal(t)

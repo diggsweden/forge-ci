@@ -77,6 +77,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- GitHub container and snapshot image workflows select Buildah (default) or
+  Kaniko through `image-builder` and an approved digest-pinned job image. Kaniko
+  runs in a disposable Docker action; native setup, artifact transfers and
+  publication checks stay in the existing hosted workflow.
+- Forgejo development image scenarios use the shared builder selector, admit
+  compatible native recipes before creating resources, and reject conflicting
+  consumer/runtime bindings consistently.
 - The GitLab release takes a `labels` input, as the Forgejo release-images
   workflow does: newline-separated `key=value` labels every release image
   carries after the standard ones. A label that would replace one of the
@@ -598,6 +605,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING:** GitHub container image workflows keep the checkout in `source/`
+  and require context and Containerfile paths relative to that checkout. Use
+  `.` or `services/api` for the context. Absolute workspace-root paths and paths
+  escaping the checkout are refused before artifact downloads or image builds,
+  keeping engine control payloads outside the application context.
 - **BREAKING:** `PACKAGE_NAME` is split in two. `--name` of `publish npm
   deploy` and `publish npm validate-version` reads `NPM_PACKAGE_NAME`, and
   `report publish google-play --package-name` reads `ANDROID_PACKAGE_NAME`.

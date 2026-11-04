@@ -6,8 +6,10 @@ package workflowguard_test
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -40,16 +42,12 @@ var buildahAllowed = map[string]string{
 	".forgejo/actions/setup-image-builder/action.yml":             "the Forgejo builder selection: prepares Buildah when CI_IMAGE_BUILDER selects it",
 	".forgejo/bin/snapshot-images.sh":                             "snapshot_build, the Forgejo snapshot builder selection",
 	".gitlab/bin/release.sh":                                      "rc_image_builder, the GitLab release's builder selection",
-	".github/workflows/publish-container.yml":                     "GitHub, Buildah only: its prep job refuses another CI_IMAGE_BUILDER",
-	".github/workflows/snapshot-images.yml":                       "GitHub, Buildah only: its plan job refuses another CI_IMAGE_BUILDER",
+	".github/workflows/publish-container.yml":                     "the GitHub builder selection prepares Buildah only for its host branch",
+	".github/workflows/snapshot-images.yml":                       "the GitHub builder selection prepares Buildah only for its host branch",
 	".github/workflows/self-release.yml":                          "forge-ci's own release on GitHub's runners, no consumer workflow",
 	".github/workflows/self-runtime-container.yml":                "forge-ci's own runtime images on GitHub's runners, no consumer workflow",
 	"test/live/consumer-fixtures/generic-cli/forgejo-release.yml": "the Go lane's checks are Buildah's own integration tests",
 }
-
-// githubBuildahOnly are the allowed GitHub workflows that consumers call: each
-// refuses another selected builder early rather than ignore it.
-var githubBuildahOnly = []string{".github/workflows/publish-container.yml", ".github/workflows/snapshot-images.yml"}
 
 // hardCodedArch is a container step's literal platform or architecture: a
 // demo follows the release's selected platforms instead.
@@ -82,14 +80,169 @@ func TestContainerBuildsUseTheSelectedImageBuilder(t *testing.T) {
 			t.Errorf("%s is allowed to name Buildah (%s) but no longer does; drop it from the allowlist", path, reason)
 		}
 	}
+}
 
-	for _, path := range githubBuildahOnly {
-		body, err := os.ReadFile(filepath.Join(root, path))
-		require.NoError(t, err)
+type githubBuilderStep struct {
+	ID   string            `yaml:"id"`
+	Run  string            `yaml:"run"`
+	Uses string            `yaml:"uses"`
+	If   string            `yaml:"if"`
+	Env  map[string]string `yaml:"env"`
+	With map[string]string `yaml:"with"`
+}
 
-		if !strings.Contains(string(body), "name: Require the Buildah image builder") || !strings.Contains(string(body), "CI_IMAGE_BUILDER: ${{ vars.CI_IMAGE_BUILDER }}") {
-			t.Errorf("%s builds with Buildah only and must refuse another CI_IMAGE_BUILDER before it builds", path)
-		}
+func TestGitHubImageBuildersKeepHostArtifactsAndIsolateKaniko(t *testing.T) {
+	t.Parallel()
+
+	for _, config := range []struct{ file, prepare, build string }{
+		{"publish-container.yml", "prep", "build-arch"},
+		{"snapshot-images.yml", "plan", "build"},
+	} {
+		t.Run(config.file, func(t *testing.T) {
+			t.Parallel()
+
+			var workflow struct {
+				Jobs map[string]struct {
+					Container any                 `yaml:"container"`
+					Steps     []githubBuilderStep `yaml:"steps"`
+				} `yaml:"jobs"`
+			}
+			require.NoError(t, yaml.Unmarshal(reporoot.ReadFile(t, ".github/workflows/"+config.file), &workflow))
+			build := workflow.Jobs[config.build]
+			require.Nil(t, build.Container, "host setup and artifact actions must survive Kaniko cleanup")
+
+			prepared, isolated, hostUpload, source := false, false, false, false
+			ownershipRestored := false
+			sourcePathsValidated := false
+
+			for _, step := range build.Steps {
+				if config.file == "publish-container.yml" && strings.Contains(step.Run, "container validate containerfile") {
+					require.Empty(t, step.If, "both builders must use the same source boundary")
+					require.Contains(t, step.Run, `--context "$BUILD_CONTEXT"`)
+
+					sourcePathsValidated = true
+				}
+
+				if config.file == "publish-container.yml" && strings.Contains(step.Run, "artifact download") {
+					require.True(t, sourcePathsValidated, "reject control-directory contexts before downloading into them")
+				}
+
+				if strings.HasPrefix(step.Uses, "actions/checkout@") && step.With["path"] == "source" {
+					source = true
+				}
+
+				if buildahHardWired.MatchString(step.Run) || strings.Contains(step.Run, "forge-ci container build --enforce") || strings.Contains(step.Run, "forge-ci container snapshot-images build ") {
+					require.Contains(t, step.If, "needs."+config.prepare+".outputs.builder == 'buildah'")
+				}
+
+				if strings.Contains(step.Run, "container prepare-kaniko-action") {
+					require.Contains(t, step.If, "needs."+config.prepare+".outputs.builder == 'kaniko'")
+					require.True(t, source, "source must be separated from the generated action payload")
+					require.Contains(t, step.Run, "container image usable-digest")
+					require.Contains(t, step.Run, "org.opencontainers.image.source=")
+					require.Contains(t, step.Run, "org.opencontainers.image.title=forge-ci kaniko job image")
+
+					prepared = true
+				}
+
+				if step.Uses == "./.forge-ci-kaniko-action" {
+					if config.file == "publish-container.yml" {
+						require.True(t, sourcePathsValidated)
+					}
+
+					require.True(t, prepared, "only the trusted CLI may generate the local Docker action")
+					require.Contains(t, step.If, "needs."+config.prepare+".outputs.builder == 'kaniko'")
+
+					if config.file == "publish-container.yml" {
+						require.Equal(t, "${{ inputs['enforce-vulnerabilities'] }}", step.Env["ADMIN_VULNERABILITIES"])
+					} else {
+						require.Equal(t, "snapshot", step.With["operation"])
+						require.NotContains(t, fmt.Sprint(step.Env), "secrets.")
+					}
+
+					isolated = true
+					ownershipRestored = false
+				}
+
+				if strings.Contains(step.Run, "sudo chown") {
+					require.True(t, isolated)
+					require.Contains(t, step.If, "always()")
+					require.Contains(t, step.If, "needs."+config.prepare+".outputs.builder == 'kaniko'")
+					require.Contains(t, step.Run, "chown -hRP --", "permission repair must not traverse artifact symlinks")
+
+					ownershipRestored = true
+				}
+
+				if isolated && (strings.HasPrefix(step.Uses, "actions/upload-artifact@") || strings.Contains(step.Run, "mv -T")) {
+					require.True(t, ownershipRestored, "the host must be able to retain container-owned results, including failed scan evidence")
+				}
+
+				hostUpload = hostUpload || strings.HasPrefix(step.Uses, "actions/upload-artifact@")
+				require.NotContains(t, step.Run, "forge-ci artifact upload", "GitHub runtime upload credentials belong to actions, not ordinary run steps")
+			}
+
+			require.True(t, prepared && isolated && hostUpload)
+
+			selectorTested := false
+
+			for _, step := range workflow.Jobs[config.prepare].Steps {
+				if step.ID == "builder" {
+					require.Equal(t, "${{ inputs['image-builder'] || vars.CI_IMAGE_BUILDER || 'buildah' }}", step.Env["BUILDER"])
+					testGitHubBuilderAdmission(t, step.Run, config.file == "publish-container.yml")
+
+					selectorTested = true
+				}
+			}
+
+			require.True(t, selectorTested, "the workflow must admit its selected builder before scheduling builds")
+		})
+	}
+}
+
+func testGitHubBuilderAdmission(t *testing.T, script string, buildSecrets bool) {
+	t.Helper()
+
+	image := "registry.invalid/engine/kaniko@sha256:" + strings.Repeat("a", 64)
+	for _, tc := range []struct {
+		name, builder, image, secrets string
+		valid                         bool
+	}{
+		{name: "Buildah default", builder: "buildah", valid: true},
+		{name: "Buildah clears stale image", builder: "buildah", image: image, valid: true},
+		{name: "Kaniko", builder: "kaniko", image: image, valid: true},
+		{name: "unknown builder", builder: "other"},
+		{name: "missing image", builder: "kaniko"},
+		{name: "mutable image", builder: "kaniko", image: "registry.invalid/kaniko:latest"},
+		{name: "output injection", builder: "kaniko", image: image + "\nbuilder=buildah"},
+		{name: "unsupported build secrets", builder: "kaniko", image: image, secrets: "private", valid: !buildSecrets},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			output := filepath.Join(t.TempDir(), "output")
+			require.NoError(t, os.WriteFile(output, nil, 0o600))
+			command := exec.CommandContext(t.Context(), "bash", "-e", "-c", script)
+			command.Env = []string{"PATH=" + os.Getenv("PATH"), "BUILDER=" + tc.builder, "JOB_IMAGE=" + tc.image, "BUILD_SECRETS=" + tc.secrets, "GITHUB_OUTPUT=" + output}
+
+			log, err := command.CombinedOutput()
+			if !tc.valid {
+				require.Error(t, err, "%s", log)
+
+				body, readErr := os.ReadFile(output)
+				require.NoError(t, readErr)
+				require.Empty(t, body, "invalid selection must not release a build")
+
+				return
+			}
+
+			require.NoError(t, err, "%s", log)
+
+			body, readErr := os.ReadFile(output)
+			require.NoError(t, readErr)
+			require.Contains(t, string(body), "builder="+tc.builder+"\n")
+
+			if tc.builder == "buildah" {
+				require.Contains(t, string(body), "builder-job-image=\n")
+			}
+		})
 	}
 }
 

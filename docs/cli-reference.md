@@ -1712,6 +1712,17 @@ EXAMPLE:
 | `--platform` | single build platform; falls back to the first entry of --platforms | string | `""` | `$PLATFORM` |
 | `--release-platforms` | comma-separated subset of --platforms to build; empty builds them all | string | `""` | `$RELEASE_PLATFORMS` |
 
+### `forge-ci container prepare-kaniko-action`
+
+prepare the GitHub workflows' isolated native Kaniko Docker action; no build or publication
+
+| Flag | Description | Type | Default | Env vars |
+|------|-------------|------|---------|----------|
+| `--job-image` | approved digest-pinned Kaniko job image (required) | string | `""` | n/a |
+| `--workspace` | GitHub workspace containing source/ (required) | string | `""` | `$CI_WORKSPACE`, `$FORGEJO_WORKSPACE`, `$GITHUB_WORKSPACE` |
+| `--plan` | frozen container-build or snapshot plan (required) | string | `""` | n/a |
+| `--snapshot` | prepare a snapshot plan instead of a container-build plan | bool | `false` | n/a |
+
 ### `forge-ci container ref`
 
 image-reference helpers: canonicalize, strip to name, resolve per-platform digests, compose from repo context
@@ -2325,6 +2336,7 @@ EXAMPLE:
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
 | `--path` | Containerfile path or glob (e.g. Containerfile, src/*Containerfile) (required) | string | `""` | `$CONTAINERFILE` |
+| `--context` | also require this context and the resolved Containerfile to stay inside the current source directory | string | `""` | n/a |
 
 #### `forge-ci container validate namespace`
 

@@ -81,12 +81,17 @@ func validateContainerfileCmd() *cli.Command {
 				Sources:  cli.EnvVars("CONTAINERFILE"),
 				Usage:    "Containerfile path or glob (e.g. Containerfile, src/*Containerfile)",
 			},
+			&cli.StringFlag{Name: "context", Usage: "also require this context and the resolved Containerfile to stay inside the current source directory"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error {
-				return appcontainer.ValidateContainerfile(ctx, d.OutputSink, os.Stderr, appcontainer.ValidateContainerfileInput{
-					Path: cmd.String("path"),
-				})
+				in := appcontainer.ValidateContainerfileInput{Path: cmd.String("path")}
+				if cmd.IsSet("context") {
+					value := cmd.String("context")
+					in.Context = &value
+				}
+
+				return appcontainer.ValidateContainerfile(ctx, d.OutputSink, os.Stderr, in)
 			})
 		},
 	}

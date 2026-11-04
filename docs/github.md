@@ -171,6 +171,8 @@ repository; each falls back to the default below. A consumer sets none.
 | `FORGE_CI_REPOSITORY` | the repository serving the called workflow (`job.workflow_repository`). GitHub Enterprise Server has no such context: there the variable is required, and a job refuses to start without it | bootstrap checkouts and script downloads, binary installs, release URLs, trusted signing identities, and the repository allowed to publish the rolling pre-release CLI |
 | `FORGE_CI_PRERELEASE_BRANCH` | `main` | the branch whose pushes publish runtime images and the pre-release CLI, and the branch the installer trusts for pre-release signatures |
 | `RELEASE_PLATFORMS` | `linux/amd64,linux/arm64` | the runtime images' platforms in Self Runtime Container; unset selects both declared architectures, and an explicit value may narrow the selection. An undeclared, duplicated or malformed entry fails before anything is built. Consumers read the same variable for their images with the same meaning, unset building what their configuration declares |
+| `CI_IMAGE_BUILDER` | `buildah` | Linux container and snapshot image builder: `buildah` or `kaniko`. The image leaves' explicit `image-builder` input takes precedence. |
+| `CI_IMAGE_BUILDER_JOB_IMAGE` | unset | Approved digest-pinned Kaniko job image; required when Kaniko is selected. The image leaves' explicit `image-builder-job-image` input takes precedence. |
 | `RUNTIME_IMAGE_RETENTION` | unset: nothing is deleted | how many of the newest commit images (`sha-*`) of each runtime image Self Runtime Container keeps after it publishes; older versions are deleted through the GitHub Packages API with the job token, except release and pre-release tags and every platform manifest, signature and attestation a kept image needs. `forge-ci container package-retention --dry-run` shows what a value would delete |
 | `FORGE_CI_IMAGE_NAMESPACE` | `ghcr.io/<repository owner>`, lowercased | Trusted repository variable selecting the runtime publication namespace and the images used by Self Pull Request and Self Release. Use a lowercase, tag-free GHCR path under the owner, e.g. `ghcr.io/owner/scratch-repo`, to isolate a scratch engine's packages. Source labels still identify the source repository; the layer cache remains repository-scoped. |
 | `FORGE_CI_TESTSUITE_REPOSITORY` | `diggsweden/forge-ci-blackbox-tests` | the companion black-box suite checked out by the PR and release gates |
@@ -247,6 +249,39 @@ Self Release supplies the exact commit named by its release-request tag and
 that commit's runtime images, even while the new stable release does not exist.
 Standalone container-only leaf workflows retain their documented explicit
 runtime defaults; orchestrators pass their resolved image overrides to them.
+
+### Linux image builders
+
+`publish-container.yml` and `snapshot-images.yml` accept `image-builder` and
+`image-builder-job-image`. Empty inputs use the repository/organization variables
+above, with Buildah as the final default. Orchestrated builds use those same
+variables; no separate builder preset is needed. All four administrator
+enforcement controls keep their existing forwarding and defaults.
+
+Buildah runs on the native hosted runner. Kaniko runs in an isolated Docker
+container action, leaving setup, evidence handling and artifact uploads on that
+runner. This follows the [builder-neutral execution principle](flows.md#builder-neutral-execution).
+The selected image must be readable by the runner, built from
+`containers/kaniko-job`, pinned by SHA-256 digest, and carry these labels:
+
+- `org.opencontainers.image.source`: the trusted engine's GitHub repository URL.
+- `org.opencontainers.image.title`: `forge-ci kaniko job image`.
+
+The workflow checks the labels and native architecture before building. The
+trusted CLI generates the local Docker action; consumer source stays in
+`source/`, separate from the action payload. The temporary action image adds
+the already-installed native CLI and, for container builds, the verified Trivy
+binary. It contains no registry auth file or build-secret files. Registry
+authentication is job-local, and artifact uploads use GitHub's normal actions;
+runtime artifact credentials are not exported into ordinary shell steps.
+
+Both builders retain the same scan, layout verification, publication and signing
+boundaries. Kaniko has no load mode or build-secret support: validation builds
+retain and scan an OCI layout without publishing, and a nonempty `build-secrets`
+input is refused early. Both builders require image-workflow context and
+Containerfile paths to be relative to the checked-out source and resolve inside
+it; absolute workspace-root paths are refused rather than including control
+files. The architecture matrix stays native; neither path introduces QEMU.
 
 ## Pull-request gates and lint
 

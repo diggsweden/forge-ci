@@ -36,7 +36,7 @@ func TestContainerPublicationWaitsForCompleteBuildMatrix(t *testing.T) {
 
 	for _, step := range build.Steps {
 		if strings.Contains(step.Run, "plan write") {
-			require.Equal(t, "${{ inputs['push-image'] && 'oci' || 'load' }}", step.Env["BUILD_MODE"])
+			require.Equal(t, "${{ (inputs['push-image'] || needs.prep.outputs.builder == 'kaniko') && 'oci' || 'load' }}", step.Env["BUILD_MODE"])
 			require.Equal(t, "false", step.Env["BUILD_CACHE_PUSH"])
 			require.Contains(t, step.Run, `--set "output-dir=${RUNNER_TEMP}/image-layout"`)
 

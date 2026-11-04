@@ -73,7 +73,7 @@ func New() *cli.Command {
 			cmdmeta.WithCategory("Image metadata & manifests", builderIdentityCmd(), refGroup(), metadataCmd(), containerfileArgDefaultCmd(), releaseLabelsCmd(), releaseIdentityMatchesCmd(), imageLabelsJSONCmd(), imageEvidenceCmd(), platformPlanCmd(), manifestGroup(), writeDigestMarkerCmd()),
 			cmdmeta.WithCategory("Release promotion", ledgerGroup(), releaseImagesGroup(), snapshotImagesGroup(), baseImagesGroup(), packageRetentionCmd()),
 			cmdmeta.WithCategory("Validation", validateGroup()),
-			cmdmeta.WithCategory("Workflow plumbing", materializeBuildSecretsCmd(), extractNPMTarballCmd(), suffixBinariesCmd()),
+			cmdmeta.WithCategory("Workflow plumbing", prepareKanikoActionCmd(), materializeBuildSecretsCmd(), extractNPMTarballCmd(), suffixBinariesCmd()),
 		),
 	}
 }

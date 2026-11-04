@@ -4,6 +4,14 @@ name: Publish Snapshot Images
 on:
   workflow_call:
     inputs:
+      image-builder:
+        description: "buildah (default) or kaniko. Empty uses CI_IMAGE_BUILDER, then buildah."
+        type: string
+        default: ''
+      image-builder-job-image:
+        description: "Approved digest-pinned containers/kaniko-job image; empty uses CI_IMAGE_BUILDER_JOB_IMAGE."
+        type: string
+        default: ''
       enforce-application-tests:
         description: "Enforcement setting: false reports recognized test assertion failures without failing; the tests still run. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md."
         type: boolean
@@ -100,21 +108,27 @@ jobs:
       bootstrap-sha: ${{ steps.forge-ci-bootstrap.outputs.commit }}
       artifact-transfers: ${{ steps.plan.outputs.artifact-transfer-plan-json }}
       artifacts: ${{ steps.plan.outputs.artifacts }}
+      builder: ${{ steps.builder.outputs.builder }}
+      builder-job-image: ${{ steps.builder.outputs.builder-job-image }}
     steps:
-      # GitHub's runners give Buildah its user namespaces, and this workflow
-      # builds with Buildah only: an organization that selects another
-      # image builder is refused here, never built with Buildah regardless.
-      - name: Require the Buildah image builder
+      - name: Resolve image builder
+        id: builder
         env:
-          CI_IMAGE_BUILDER: ${{ vars.CI_IMAGE_BUILDER }}
+          BUILDER: ${{ inputs['image-builder'] || vars.CI_IMAGE_BUILDER || 'buildah' }}
+          JOB_IMAGE: ${{ inputs['image-builder-job-image'] || vars.CI_IMAGE_BUILDER_JOB_IMAGE }}
         run: |
-          case "${CI_IMAGE_BUILDER:-buildah}" in
-            buildah) ;;
-            *)
-              echo "ERROR: CI_IMAGE_BUILDER is '${CI_IMAGE_BUILDER}', but the GitHub image workflows build with Buildah only; unset it here, or build where the workflows select kaniko (Forgejo, GitLab)" >&2
-              exit 1
+          set -euo pipefail
+          case "$BUILDER" in
+            buildah) JOB_IMAGE= ;;
+            kaniko)
+              if [[ ! "$JOB_IMAGE" =~ ^[^[:space:]]+@sha256:[0-9a-f]{64}$ ]]; then
+                echo 'ERROR: kaniko requires a digest-pinned image-builder-job-image' >&2
+                exit 1
+              fi
               ;;
+            *) echo 'ERROR: image-builder must be buildah or kaniko' >&2; exit 1 ;;
           esac
+          printf 'builder=%s\nbuilder-job-image=%s\n' "$BUILDER" "$JOB_IMAGE" >> "$GITHUB_OUTPUT"
       - name: Checkout forge-ci bootstrap installers
         id: forge-ci-bootstrap
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -359,8 +373,23 @@ jobs:
             --plan "${RUNNER_TEMP}/snapshot-inputs/snapshot-plan.json" \
             --input "${RUNNER_TEMP}/snapshot-context"
       - name: Prepare native image builder
+        if: ${{ needs.plan.outputs.builder == 'buildah' }}
         run: forge-ci container setup-buildah --install-packages=true --probe-build=true --print-store=false --summary=false
+      - name: Admit and prepare isolated native Kaniko action
+        id: kaniko-action
+        if: ${{ needs.plan.outputs.builder == 'kaniko' }}
+        env:
+          JOB_IMAGE: ${{ needs.plan.outputs.builder-job-image }}
+          ENGINE_REPOSITORY: ${{ needs.plan.outputs.engine-repository }}
+          IMAGE_ARCH: ${{ matrix.build.arch }}
+        run: |
+          forge-ci container image usable-digest --ref "$JOB_IMAGE" --arch "$IMAGE_ARCH" \
+            --require-label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$ENGINE_REPOSITORY" \
+            --require-label 'org.opencontainers.image.title=forge-ci kaniko job image'
+          forge-ci container prepare-kaniko-action --snapshot --job-image "$JOB_IMAGE" \
+            --plan "$RUNNER_TEMP/snapshot-inputs/snapshot-plan.json"
       - name: Stage native snapshot layout without publication credentials
+        if: ${{ needs.plan.outputs.builder == 'buildah' }}
         working-directory: source
         env:
           IMAGE_NAME: ${{ matrix.build.name }}
@@ -372,6 +401,22 @@ jobs:
               --dependencies-file snapshot-dependencies.json \
               --name "$IMAGE_NAME" --arch "$IMAGE_ARCH" --metadata-dir snapshot-layouts \
               --server-url "$GITHUB_SERVER_URL" --repository "$GITHUB_REPOSITORY"
+      - name: Stage native snapshot layout with Kaniko
+        if: ${{ needs.plan.outputs.builder == 'kaniko' }}
+        uses: ./.forge-ci-kaniko-action
+        with:
+          operation: snapshot
+        env:
+          IMAGE_NAME: ${{ matrix.build.name }}
+          IMAGE_ARCH: ${{ matrix.build.arch }}
+      - name: Restore host ownership of Kaniko layout
+        if: ${{ always() && needs.plan.outputs.builder == 'kaniko' }}
+        env:
+          STAGED_OUTPUT: ${{ steps.kaniko-action.outputs.output-dir }}
+        run: |
+          if [[ -e "$STAGED_OUTPUT" || -L "$STAGED_OUTPUT" ]]; then
+            sudo chown -hRP -- "$(id -u):$(id -g)" "$STAGED_OUTPUT"
+          fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ inputs['artifact-name'] }}-layout-${{ matrix.build.name }}-${{ matrix.build.arch }}
