@@ -80,7 +80,10 @@ fi
 # scenario runs and cannot know the values: forge token prefixes, credential
 # headers, URL userinfo, credential flags, and credential-named keys.
 sanitize_live_log() {
-	LC_ALL=C sed -u -E \
+	# Bash resets SIGINT when it forks pipeline commands. Install the ignore
+	# in this child and exec the reader so cancellation cannot close the log.
+	trap '' INT TERM
+	LC_ALL=C exec sed -u -E \
 		-e 's/\x1b\[[0-?]*[ -/]*[@-~]//g' \
 		-e 's/(gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,})/[REDACTED]/g' \
 		-e 's/((Authorization|Proxy-Authorization|PRIVATE-TOKEN|JOB-TOKEN|X-Registry-Auth):[[:space:]]*((Basic|Bearer|token)[[:space:]]*)?)[^[:space:]"]+/\1[REDACTED]/Ig' \
@@ -173,7 +176,7 @@ exec 8> >(
 	exec 7>&-
 	exec 9>&-
 	trap '' INT TERM
-	sanitize_live_log | tee -a "$log"
+	sanitize_live_log | (trap '' INT TERM; exec tee -a "$log")
 )
 logger_pid=$!
 suite_pid=

@@ -24,7 +24,7 @@ import (
 // Exercise the actual launcher with inert build/preflight collaborators and
 // the signal fixture in this test executable. No provider or container is used.
 func TestLiveLauncherWaitsForCleanupAndReleasesLock(t *testing.T) {
-	for _, mode := range []string{"launcher signal", "process-group signal", "just recipe signal", "just release recipe signal", "provider-scoped signal"} {
+	for _, mode := range []string{"launcher signal", "process-group signal", "just recipe signal", "just release recipe signal", "provider-scoped signal", "just interruption recipe group interrupt"} {
 		t.Run(mode, func(t *testing.T) {
 			root := t.TempDir()
 			script, packageDir := newLauncherFixture(t, root)
@@ -74,11 +74,15 @@ func TestLiveLauncherWaitsForCleanupAndReleasesLock(t *testing.T) {
 				requireLiveLock(t, ctx, providerLock, true)
 			}
 
-			if mode == "process-group signal" {
-				if err := syscall.Kill(-command.Process.Pid, syscall.SIGTERM); err != nil {
+			signal := syscall.SIGTERM
+			if mode == "just interruption recipe group interrupt" {
+				signal = syscall.SIGINT
+			}
+			if mode == "process-group signal" || mode == "just interruption recipe group interrupt" {
+				if err := syscall.Kill(-command.Process.Pid, signal); err != nil {
 					t.Fatal(err)
 				}
-			} else if err := command.Process.Signal(syscall.SIGTERM); err != nil {
+			} else if err := command.Process.Signal(signal); err != nil {
 				t.Fatal(err)
 			}
 
@@ -104,7 +108,7 @@ func TestLiveLauncherWaitsForCleanupAndReleasesLock(t *testing.T) {
 				t.Fatalf("launcher returned before test cleanup: %v\n%s", err, output.Text(command.Env))
 			}
 
-			if !strings.Contains(output.Text(command.Env), "Live log:") || !strings.Contains(output.Text(command.Env), "fixture interrupted") {
+			if !strings.Contains(output.Text(command.Env), "Live log:") || !strings.Contains(output.Text(command.Env), "fixture interrupted") || !strings.Contains(output.Text(command.Env), "Live result: interrupted") {
 				t.Fatalf("interruption lost the log: %s", output.Text(command.Env))
 			}
 
@@ -147,7 +151,9 @@ func liveLauncherCommand(t *testing.T, ctx context.Context, root, script, mode, 
 	}
 
 	args := []string{"--justfile", filepath.Join(root, "repo/justfile"), "--working-directory", filepath.Join(root, "repo")}
-	if mode == "just release recipe signal" {
+	if mode == "just interruption recipe group interrupt" {
+		args = append(args, "test-live-gitlab-interrupted-job")
+	} else if mode == "just release recipe signal" {
 		args = append(args, "test-live-gitlab-release", filepath.Join(root, "job.tar"), filepath.Join(root, "signer.tar"))
 	} else {
 		args = append(args, "test-live", "^TestLiveLauncherLifecycleFixture$")
