@@ -51,11 +51,19 @@ printf '%s\n' "$preflight_report"
 
 missing=()
 for tool in base64 cosign flock jq syft buildah git sha256sum; do
-	command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
+	path=$(command -v "$tool" 2>/dev/null) || {
+		missing+=("$tool")
+		continue
+	}
+	# A mise shim is on PATH even when the version it should run is not
+	# installed; the scenarios would then fail as if the product had.
+	if [[ $path == */mise/shims/* ]] && ! (cd -- "$repo_root" && mise which "$tool" >/dev/null 2>&1); then
+		missing+=("$tool")
+	fi
 done
 ((${#missing[@]} == 0)) || {
 	printf 'live: required tools are not on PATH: %s\n' "${missing[*]}" >&2
-	printf 'They are pinned in .mise.toml; install them with: mise install\n' >&2
+	printf 'They are pinned in .mise.toml; install them with: mise install && mise reshim\n' >&2
 	exit 2
 }
 
