@@ -1,5 +1,11 @@
 # Development Guide
 
+`internal/pathsafe` uses search-only ancestor handles on Linux, so opening a
+workspace does not require directory-read access to `/` or unrelated parents.
+Only the destination requires read access for `os.Root` operations. User-placed
+symlinks remain refused; root-owned operating-system layout links retain their
+existing ownership and parent-permission checks.
+
 ## Source checkout
 
 Use a reviewed checkout of the revision you want to build. [`go.mod`](../go.mod)
