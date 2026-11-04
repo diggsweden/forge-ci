@@ -10,11 +10,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/diggsweden/forge-ci/internal/livetest"
@@ -34,6 +37,15 @@ func main() {
 		}
 
 		fmt.Printf("%d %s\n", result.ExitCode, result.Verdict)
+
+		return
+	}
+
+	if len(os.Args) >= 3 && strings.HasPrefix(os.Args[1], "campaign-") {
+		if err := campaign(os.Args[1], os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "campaign: %v\n", err)
+			os.Exit(2)
+		}
 
 		return
 	}
@@ -130,6 +142,35 @@ func relativePackages(verdict *livetest.LiveRunVerdict) {
 	}
 }
 
+// campaign runs a campaign mode. `campaign-env-check <file>` validates a
+// campaign.env before campaign-prepare puts it in place; `campaign-plan <dir>
+// <forgejo|gitlab> <cases-file>` prints the lane the script runs, for the
+// commit checked out in the working directory.
+func campaign(mode string, args []string) error {
+	switch {
+	case mode == "campaign-env-check" && len(args) == 1:
+		_, err := livetest.ReadCampaignEnv(args[0])
+
+		return err
+	case mode == "campaign-plan" && len(args) == 3:
+		head, err := exec.CommandContext(context.Background(), "git", "rev-parse", "--verify", "HEAD").Output()
+		if err != nil {
+			return fmt.Errorf("read HEAD: %w", err)
+		}
+
+		plan, err := livetest.PlanCampaignLane(args[0], args[1], args[2], strings.TrimSpace(string(head)))
+		if err != nil {
+			return err
+		}
+
+		return livetest.WriteCampaignPlan(os.Stdout, plan)
+	default:
+		usage()
+
+		return nil
+	}
+}
+
 // preflightFact returns the single fact one preflight mode prints.
 func preflightFact(mode string) (string, error) {
 	switch mode {
@@ -150,6 +191,8 @@ func preflightFact(mode string) (string, error) {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, "       preflight classify-run <exit-code> <retained-log>")
+	fmt.Fprintln(os.Stderr, "       preflight campaign-env-check <campaign.env>")
+	fmt.Fprintln(os.Stderr, "       preflight campaign-plan <dir> <forgejo|gitlab> <cases-file>")
 	fmt.Fprintln(os.Stderr, "usage: preflight [signing-inputs | runner-arch | consumer-trial-layer] (signing-inputs checks only FORGE_CI_LIVE_SIGNING_KEY_DIR; other modes read the forgeci lab contract)")
 	os.Exit(2)
 }

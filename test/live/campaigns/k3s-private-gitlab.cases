@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+# SPDX-License-Identifier: CC0-1.0
+
+# The GitLab lane of a k3s private campaign: scenarios that need nothing
+# beyond the forgeci contract and the go job and signer image archives
+# campaign.env names.
+#
+#   just campaign-lane <dir> gitlab test/live/campaigns/k3s-private-gitlab.cases
+
+scenario TestGitLabRelease_MinimalSignedArtifacts
+scenario TestGitLabCheck_ChecksOutPrivateConsumerWithJobToken
+scenario TestGitLabCheck_ChecksOutTheConsumerPipelineCommit
+scenario TestGitLabPolicy_ConsumerCannotReplaceTheSigningPipeline
+scenario TestGitLabPolicy_JobTokenCannotWriteThePublicationRegistry
+scenario TestGitLabRelease_MinimalBranchProtection
+scenario TestGitLabRelease_ResourceGroupSpansTheChild
+scenario TestGitLabRelease_PromotionRetryAfterRegistryWrite
+scenario TestGitLabBootstrap_PublishesAndDownloadsTheRecordedBinary

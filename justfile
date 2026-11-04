@@ -972,18 +972,13 @@ demo forge name *settings:
     # A built-in demo becomes a repository of one commit, which the trial
     # reads like any consumer checkout and the run removes when it ends.
     if [[ -z "$checkout" ]]; then
-        builtin={{ quote(justfile_directory() / "test" / "live" / "demos") }}/"$name"/consumer
-        if [[ ! -d "$builtin" ]]; then
+        if [[ ! -d test/live/demos/"$name"/consumer ]]; then
             printf 'no demo %q in test/live/demos; name another consumer with checkout=/absolute/path\n' "$name" >&2
             exit 2
         fi
         checkout=$(mktemp -d "${TMPDIR:-/tmp}/forge-ci-demo.XXXXXXXX")
         trap 'rm -rf -- "$checkout"' EXIT
-        cp -R -- "$builtin/." "$checkout/"
-        git -C "$checkout" init --quiet --object-format=sha1 --initial-branch=main
-        git -C "$checkout" add --all
-        git -C "$checkout" -c user.name='Forge CI demo' -c user.email=demo@forge-ci.invalid \
-            -c commit.gpgsign=false -c core.hooksPath=/dev/null commit --quiet -m "feat: add the $name demo"
+        bash scripts/ci/demo-checkout.sh "$name" "$checkout"
     fi
     export FORGE_CI_LIVE_DEMO="$name" FORGE_CI_LIVE_CONSUMER="$checkout" FORGE_CI_LIVE_CONSUMER_EVENT=release
     FORGE_CI_LIVE_CONSUMER_SETTINGS="$(printf '%s\n' "${settings[@]}")"
@@ -1213,6 +1208,41 @@ test-live-gitlab-consumer-release checkout job_image_archive build_image_archive
 test-live-gitlab-base-images job_image_archive build_image_archive signer_image_archive:
     @FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE="$1" FORGE_CI_LIVE_BUILD_IMAGE_ARCHIVE="$2" FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE="$3" \
         exec bash scripts/ci/run-live-tests.sh focused '^TestGitLabRelease_BaseImagesColdAndWarm$'
+
+# Prepare a live campaign: everything its lanes take, built from HEAD once.
+#
+# Publishes the kaniko job and signer images and each named nanolinter job
+# image (package nanolinter-<flavor>) with Forge Lab, saves the signer image and
+# the go and java runtime images as archives, exports every demo of
+# test/live/demos as a one-commit checkout under <dir>/demos, and writes
+# <dir>/campaign.env: image references, archive paths and CAMPAIGN_COMMIT, no
+# secrets. A dirty checkout or a stale engine checksum is refused.
+#
+#   just campaign-prepare ~/src/forge-lab ~/campaigns/k3s \
+#     job-image=go:localhost/nanolinter-go:dev job-image=java:localhost/nanolinter-java:dev
+#
+# docs/live-campaigns.md, Run a campaign, has the whole run.
+[arg('dir', help='Absolute campaign directory: new, empty, or an earlier campaign to replace')]
+[arg('forge_lab', help='Absolute path to the Forge Lab checkout used to publish the images')]
+[arg('job_images', help='Optional job-image=<flavor>:<local image>, published as nanolinter-<flavor>')]
+[doc('Live; build and publish a campaign of this commit; network')]
+[group('live')]
+campaign-prepare forge_lab dir *job_images:
+    @exec bash scripts/ci/campaign.sh prepare "$@"
+
+# Run one provider's lane of a prepared campaign: the cases of a cases file,
+# in order, past failures, each appending a line to <dir>/<provider>.results.
+# Fails when a case failed. Refused unless HEAD is the campaign's commit. A
+# relative cases file is the caller's; test/live/campaigns holds examples.
+#
+#   just campaign-lane ~/campaigns/k3s forgejo test/live/campaigns/k3s-private-forgejo.cases
+[arg('dir', help='Absolute campaign directory from just campaign-prepare')]
+[arg('cases', help='Cases file: consumer <demo> <pull-request|release> [key=value ...] or scenario <TestName>, one a line')]
+[arg('provider', help='forgejo or gitlab; scopes the lane and its lock')]
+[doc('Live; run a campaign lane; network, destructive')]
+[group('live')]
+campaign-lane dir provider cases:
+    @cd {{ quote(invocation_directory()) }} && exec bash {{ quote(justfile_directory() / "scripts" / "ci" / "campaign.sh") }} lane "$@"
 
 # ==================================================================================== #
 # INTERNAL

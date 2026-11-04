@@ -38,23 +38,44 @@ launchers take `live.lock` exclusively, so mixed old/new runs still conflict
 safely. Locks remain held through test cleanup and are not inherited by suites
 or loggers. Never unlink a lock file or split HOME/XDG to create concurrency.
 
-For example, from a frozen controller:
+For GitHub, use the guarded Forge Lab hosted session recipe and its own
+organization lock; shared SDK preparation precedes parallel read-only reuse by
+independent consumers.
+
+## Run a campaign
+
+Prepare once, from a clean checkout whose engine checksum is fresh. It
+publishes the kaniko job, signer and named nanolinter job images with Forge
+Lab, saves the signer and go/java runtime image archives, exports every demo
+as a one-commit checkout and writes `<dir>/campaign.env` (references and
+paths, no secrets, and `CAMPAIGN_COMMIT`):
 
 ```bash
-FORGE_CI_LIVE_PROVIDER=forgejo just test-live '^TestForgejoNPMLibrary_RegistryConsumer$' &
-forgejo_pid=$!
-FORGE_CI_LIVE_PROVIDER=gitlab just test-live '^TestGitLabRelease_ResourceGroupSpansTheChild$' &
-gitlab_pid=$!
-status=0
-wait "$forgejo_pid" || status=1
-wait "$gitlab_pid" || status=1
-exit "$status"
+just campaign-prepare ~/src/forge-lab ~/campaigns/k3s \
+  job-image=go:<local image> job-image=java:<local image> \
+  job-image=javascript-typescript:<local image> job-image=rust:<local image>
 ```
 
-Supply each case's normal inputs and a separate evidence destination. Collect
-every lane's result individually. For GitHub, use the guarded Forge Lab hosted
-session recipe and its own organization lock; shared SDK preparation precedes
-parallel read-only reuse by independent consumers.
+Then run one lane a provider, side by side, against fresh forgeci targets
+(minted with `LAB_ROAD=k3s` in Forge Lab for that road). `LAB_TARGETS_FILE` and
+`FORGE_CI_LIVE_CONSUMER_VISIBILITY` stay the caller's:
+
+```bash
+export FORGE_CI_LIVE_CONSUMER_VISIBILITY=private
+just campaign-lane ~/campaigns/k3s forgejo test/live/campaigns/k3s-private-forgejo.cases &
+just campaign-lane ~/campaigns/k3s gitlab test/live/campaigns/k3s-private-gitlab.cases &
+wait
+```
+
+A cases file holds one case a line: `consumer <demo> <pull-request|release>
+[key=value ...]` or `scenario <TestName>`. A value `@NAME` is campaign.env's
+`NAME`; a GitLab consumer names its archives with `job-archive=` (and for a
+release `build-archive=` and `signer-archive=`). The live preflight reads both
+files as data and plans the lane (`internal/livetest/campaign.go`); it refuses
+a checkout other than `CAMPAIGN_COMMIT` and any case it cannot read before the
+first runs. The lane then runs past failures and fails when any case did. Read the outcome from
+`<dir>/<provider>.results`, one tab-separated line a case: interval, case,
+exit status and the `verdict.json` to read, as above.
 
 ## Shared dependencies
 

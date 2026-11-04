@@ -14,7 +14,10 @@
 #                label names the repository the layer runs from, so it is
 #                labelled with the Forgejo consumer trial's scratch layer.
 #
-#   publish-live-image.sh <signer|kaniko-job> <forge-lab checkout>
+#   publish-live-image.sh <signer|kaniko-job> <forge-lab checkout> [<archive>]
+#
+# With an archive path, the image published is also saved there as a
+# docker-archive, for a GitLab trial that takes the image by archive.
 set -euo pipefail
 umask 077
 
@@ -23,8 +26,10 @@ repo_root=$(CDPATH='' cd -- "$script_dir/../.." && pwd -P)
 
 kind=${1:-}
 forge_lab=${2:-}
-if [[ $# -ne 2 || ! "$kind" =~ ^(signer|kaniko-job)$ || "$forge_lab" != /* || ! -f "$forge_lab/justfile" ]]; then
-	printf 'usage: %s <signer|kaniko-job> <absolute path of a Forge Lab checkout>\n' "$0" >&2
+archive=${3:-}
+if [[ $# -lt 2 || $# -gt 3 || ! "$kind" =~ ^(signer|kaniko-job)$ || "$forge_lab" != /* || ! -f "$forge_lab/justfile" ||
+	($# -eq 3 && "$archive" != /*) ]]; then
+	printf 'usage: %s <signer|kaniko-job> <absolute path of a Forge Lab checkout> [<absolute archive path>]\n' "$0" >&2
 	exit 2
 fi
 
@@ -97,3 +102,7 @@ fi
 # the fci- prefix, so a prefix reset on the lab does not delete the image.
 just --justfile "$forge_lab/justfile" --working-directory "$forge_lab" \
 	publish-image --account forgeci "forge-ci-live-$kind" "$image"
+if [[ -n "$archive" ]]; then
+	rm -f -- "$archive"
+	podman save --quiet --format docker-archive --output "$archive" "$image"
+fi
