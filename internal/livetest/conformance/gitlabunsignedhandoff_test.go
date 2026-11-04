@@ -40,12 +40,7 @@ func requireGitLabPreseededProvenanceRejection(t *testing.T, ctx context.Context
 		t.Fatalf("preseeded provenance pipeline ended %s, want failed", run.Status)
 	}
 
-	bridges, _, err := client.Jobs.ListPipelineBridges(project, run.ID, nil, gitlabapi.WithContext(ctx))
-	if err != nil || len(bridges) != 1 || bridges[0].DownstreamPipeline == nil {
-		t.Fatalf("release child pipeline was not created: %v", err)
-	}
-
-	child := bridges[0].DownstreamPipeline.ID
+	child := requireGitLabChildPipeline(t, ctx, client, project, run)
 
 	jobs, _, err := client.Jobs.ListPipelineJobs(project, child, &gitlabapi.ListJobsOptions{PerPage: 100}, gitlabapi.WithContext(ctx))
 	if err != nil {

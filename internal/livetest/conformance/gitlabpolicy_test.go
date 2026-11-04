@@ -238,6 +238,10 @@ func waitGitLabPushPipeline(t *testing.T, ctx context.Context, client *gitlabapi
 
 			switch run.Status {
 			case "success", "failed", "canceled", "skipped", "manual":
+				// Before any judgement: cleanup deletes the project and
+				// with it GitLab's own account of the failure.
+				livetest.LogGitLabPipelineFailure(t, ctx, client, project, run)
+
 				return run
 			}
 		}

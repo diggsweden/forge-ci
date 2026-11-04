@@ -661,7 +661,10 @@ func TestRunLiveTests_ProviderLanesOverlapAndConflictingScopesRefuse(t *testing.
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	// The held lane lives while the other lanes run, however long a loaded
+	// machine takes for them; only a hang ends it, as in exec. A deadline
+	// over the whole test raced the load and killed the held lane.
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	command := exec.CommandContext(ctx, "bash", script, "focused", "TestFake")
@@ -674,25 +677,38 @@ func TestRunLiveTests_ProviderLanesOverlapAndConflictingScopesRefuse(t *testing.
 		t.Fatal(err)
 	}
 
-	done := make(chan error, 1)
-	go func() { done <- command.Wait() }()
+	exited := make(chan struct{})
+
+	var waitErr error
+
+	go func() {
+		waitErr = command.Wait()
+
+		close(exited)
+	}()
 
 	defer func() {
 		if err := os.WriteFile(release, nil, 0o600); err != nil {
 			t.Error(err)
 		}
 
-		if err := <-done; err != nil {
-			t.Errorf("held provider lane: %v\n%s\n%s", err, out.String(), errOut.String())
+		select {
+		case <-exited:
+		case <-time.After(liveCommandBound):
+			cancel()
+			<-exited
+			t.Errorf("held provider lane hung after its release\n%s\n%s", out.String(), errOut.String())
+
+			return
+		}
+
+		if waitErr != nil {
+			t.Errorf("held provider lane: %v\n%s\n%s", waitErr, out.String(), errOut.String())
 		}
 	}()
 
-	if err := retry.Run(ctx, nil, 2000, 10*time.Millisecond, func() error {
-		_, err := os.Stat(ready)
-
-		return err
-	}, retry.WithBackoff(retry.Constant)); err != nil {
-		t.Fatalf("first provider lane did not reach its held scenario: %v", err)
+	if err := awaitHeldLane(ctx, exited, ready); err != nil {
+		t.Fatalf("first provider lane did not reach its held scenario: %v\n%s\n%s", err, out.String(), errOut.String())
 	}
 
 	for _, scope := range []string{"gitlab", "forgejo", "all"} {
@@ -709,6 +725,34 @@ func TestRunLiveTests_ProviderLanesOverlapAndConflictingScopesRefuse(t *testing.
 			t.Fatalf("scope %s while Forgejo is active: status=%d, want=%d\n%s\n%s", scope, status, want, stdout, stderr)
 		}
 	}
+}
+
+// heldLanePoll is how often a test looks for the held lane's ready mark.
+const heldLanePoll = 10 * time.Millisecond
+
+// awaitHeldLane waits until the held lane marks ready, and fails at once when
+// it exits first; liveCommandBound only catches a hang.
+func awaitHeldLane(ctx context.Context, exited <-chan struct{}, ready string) error {
+	ctx, cancel := context.WithTimeout(ctx, liveCommandBound)
+	defer cancel()
+
+	return retry.Run(ctx, nil, int(liveCommandBound/heldLanePoll), heldLanePoll, func() error {
+		_, err := os.Stat(ready)
+		if err == nil {
+			return nil
+		}
+
+		select {
+		case <-exited:
+			if _, err := os.Stat(ready); err == nil {
+				return nil
+			}
+
+			return retry.Permanent(errors.New("it exited first"))
+		default:
+			return err
+		}
+	}, retry.WithBackoff(retry.Constant))
 }
 
 func TestRunLiveTests_ScopedLaneRespectsLegacyExclusiveLock(t *testing.T) {

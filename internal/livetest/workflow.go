@@ -199,6 +199,12 @@ func logWorkflowFailure(ctx context.Context, tb TB, target Target, repo, name st
 	tb.Helper()
 
 	// Log before scratch cleanup, rather than making every caller remember.
+	// A pipeline GitLab refused as it created it has no job to read: its
+	// configuration errors are the only account there is.
+	if refused := gitlabLatestPipelineErrors(ctx, target, repo); refused != "" {
+		tb.Logf("livetest: GitLab refused the configuration of %q: %s", name, boundedReason(redactTargetSecrets(target, refused)))
+	}
+
 	endpoint, judge, ok := failedRunLog(ctx, target, repo)
 	if !ok {
 		return
@@ -212,6 +218,32 @@ func logWorkflowFailure(ctx context.Context, tb TB, target Target, repo, name st
 
 	// A job the runner never started cannot establish a product failure.
 	StopOnInfrastructure(tb, judge(log))
+}
+
+// gitlabLatestPipelineErrors is the configuration errors of the latest
+// pipeline on a GitLab target, or "" elsewhere, without any, or unreadable.
+func gitlabLatestPipelineErrors(ctx context.Context, target Target, repo string) string {
+	if target.Forge != provider.ForgeGitLab {
+		return ""
+	}
+
+	base := target.BaseURL() + "/api/v4/projects/" + url.PathEscape(target.Owner+"/"+repo) + "/pipelines"
+
+	var pipelines []struct {
+		ID int64 `json:"id"`
+	}
+	if _, err := decodeQuiet(ctx, target, base+"?per_page=1", &pipelines); err != nil || len(pipelines) == 0 {
+		return ""
+	}
+
+	var detail struct {
+		YamlErrors string `json:"yaml_errors"`
+	}
+	if _, err := decodeQuiet(ctx, target, fmt.Sprintf("%s/%d", base, pipelines[0].ID), &detail); err != nil {
+		return ""
+	}
+
+	return detail.YamlErrors
 }
 
 // latestRunStatus reads the most recent run's raw status, or "" while none is

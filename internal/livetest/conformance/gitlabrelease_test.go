@@ -1129,20 +1129,8 @@ func requireGitLabReleaseBundles(t *testing.T, target livetest.Target, repo stri
 func requireGitLabReleaseChild(t *testing.T, ctx context.Context, client *gitlabapi.Client, project string, run *gitlabapi.Pipeline) int64 {
 	t.Helper()
 
-	bridges, _, err := client.Jobs.ListPipelineBridges(project, run.ID, nil, gitlabapi.WithContext(ctx))
-	if err != nil || len(bridges) != 1 || bridges[0].DownstreamPipeline == nil {
-		t.Fatalf("release child pipeline was not created: %v", err)
-	}
-
-	child := bridges[0].DownstreamPipeline.ID
+	child := requireGitLabChildPipeline(t, ctx, client, project, run)
 	if run.Status != "success" {
-		detail, _, detailErr := client.Pipelines.GetPipeline(project, child, gitlabapi.WithContext(ctx))
-		if detailErr != nil {
-			t.Logf("read child pipeline configuration: %v", detailErr)
-		} else if detail.YamlErrors != "" {
-			t.Logf("child pipeline configuration: %s", detail.YamlErrors)
-		}
-
 		// Missing handoffs can originate in a successful producer whose artifact
 		// upload only warned. Keep those traces with the downstream failure.
 		logGitLabTrace(t, gitlabTrialTrace(t, ctx, client, project, child, "Prepare: changelog", "Build: release files", "Sign: files and images"))
@@ -1150,6 +1138,26 @@ func requireGitLabReleaseChild(t *testing.T, ctx context.Context, client *gitlab
 	}
 
 	return child
+}
+
+// requireGitLabChildPipeline is the one child pipeline the release parent's
+// trigger job created. The pipeline's wait logged GitLab's account of a
+// parent that failed, so a missing child names where to read why.
+func requireGitLabChildPipeline(t *testing.T, ctx context.Context, client *gitlabapi.Client, project string, run *gitlabapi.Pipeline) int64 {
+	t.Helper()
+
+	bridges, _, err := client.Jobs.ListPipelineBridges(project, run.ID, nil, gitlabapi.WithContext(ctx))
+	if err != nil {
+		t.Fatalf("read the release parent's trigger job: %v", err)
+	}
+
+	if len(bridges) != 1 || bridges[0].DownstreamPipeline == nil {
+		livetest.LogGitLabPipelineFailure(t, ctx, client, project, run)
+		t.Fatalf("release child pipeline was not created: the parent pipeline %d ended %s with %d trigger jobs; GitLab's account is logged above",
+			run.ID, run.Status, len(bridges))
+	}
+
+	return bridges[0].DownstreamPipeline.ID
 }
 
 const gitlabMinimalBuild = `GOBIN="${RC_WORK}/tools" GOTOOLCHAIN=local go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.12.0

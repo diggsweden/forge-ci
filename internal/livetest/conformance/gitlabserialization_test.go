@@ -156,6 +156,14 @@ func waitGitLabReleaseBridge(t *testing.T, ctx context.Context, client *gitlabap
 		}
 
 		if len(bridges) == 0 {
+			// A parent GitLab failed before its trigger job, as for a
+			// refused configuration, never gets one: say why now.
+			switch runs[0].Status {
+			case "failed", "canceled", "skipped":
+				livetest.LogGitLabPipelineFailure(t, ctx, client, project, &gitlabapi.Pipeline{ID: runs[0].ID, Status: runs[0].Status})
+				t.Fatalf("request pipeline %d ended %s before its release trigger job; GitLab's account is logged above", runs[0].ID, runs[0].Status)
+			}
+
 			return false
 		}
 
@@ -212,6 +220,7 @@ func waitGitLabParentSuccess(t *testing.T, ctx context.Context, client *gitlabap
 		}
 
 		if run.Status == "failed" || run.Status == "canceled" {
+			livetest.LogGitLabPipelineFailure(t, ctx, client, project, run)
 			logGitLabTrace(t, gitlabTrialTrace(t, ctx, client, project, pipeline))
 			t.Fatalf("release parent %d ended %s", pipeline, run.Status)
 		}

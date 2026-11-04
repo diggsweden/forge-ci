@@ -181,6 +181,7 @@ func (trial *GitHubTrial) ReuseEngine(root string) GitHubEngine {
 
 	run := trial.WaitRun(name, githubEngineWorkflow, "push", commit, githubEngineTimeout)
 	if run.GetConclusion() != runSuccess {
+		trial.ReportRun(name, run)
 		trial.tb.Fatalf("livetest: prepared engine build at %s ended %s", commit, run.GetConclusion())
 	}
 

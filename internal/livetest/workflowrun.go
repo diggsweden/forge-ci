@@ -124,8 +124,9 @@ const eventPush = "push"
 // it would report the first job's success as the run's. So this reads the
 // run, whose status is over only when every job is.
 //
-// Nothing is logged here on failure: the caller has the run and asks for the
-// jobs it wants named.
+// A run that did not succeed has the forge's own account of it logged, the
+// status of each job and whether a runner ever took it, before the caller
+// judges it; the caller asks for the job logs it wants named.
 func WaitForLayerRun(tb TB, target Target, repo, name, event string) WorkflowRun {
 	tb.Helper()
 
@@ -196,6 +197,8 @@ func waitForRunOf(tb TB, target Target, repo, file, event string, timeout time.D
 				for _, other := range passedOver {
 					tb.Logf("livetest: run %d of %s was started by a %s, not a %s, and is not judged", other.ID, other.WorkflowID, other.Event, event)
 				}
+
+				logForgejoRunAccount(ctx, tb, target, repo, run)
 
 				return run
 			}
@@ -334,6 +337,50 @@ const (
 	runCancelled = "cancelled"
 	runSkipped   = "skipped"
 )
+
+// logForgejoRunAccount logs Forgejo's own account of a run that did not
+// succeed: each job's status and, for a job no runner took, that the forge
+// decided it before dispatch. It is read before the caller judges the run,
+// whose cleanup deletes the scratch repository and with it the account.
+func logForgejoRunAccount(ctx context.Context, tb TB, target Target, repo string, run WorkflowRun) {
+	tb.Helper()
+
+	if run.Status == runSuccess {
+		return
+	}
+
+	var jobs []RunJob
+	if _, err := decodeQuiet(ctx, target, actionsURL(target, repo, "/actions/runs/"+strconv.FormatInt(run.ID, 10)+"/jobs"), &jobs); err != nil {
+		tb.Logf("livetest: %s run %d of %s ended %s; its jobs are unreadable: %v", target.Forge, run.ID, run.WorkflowID, run.Status, err)
+
+		return
+	}
+
+	for _, line := range forgejoRunAccount(run, jobs) {
+		tb.Logf("livetest: %s: %s", target.Forge, line)
+	}
+}
+
+// forgejoRunAccount is one line for the run and one for each job that did
+// not succeed.
+func forgejoRunAccount(run WorkflowRun, jobs []RunJob) []string {
+	lines := []string{fmt.Sprintf("run %d of %s: %s, %d jobs", run.ID, run.WorkflowID, run.Status, len(jobs))}
+
+	for _, job := range jobs {
+		if job.Status == runSuccess {
+			continue
+		}
+
+		line := fmt.Sprintf("  job %q: %s", job.Name, job.Status)
+		if job.TaskID != nil && *job.TaskID == 0 {
+			line += "; " + job.NoLogReason()
+		}
+
+		lines = append(lines, line)
+	}
+
+	return lines
+}
 
 // runIsOver reports whether Forgejo will not change a run's status again.
 func runIsOver(status string) bool {

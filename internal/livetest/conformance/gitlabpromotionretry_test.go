@@ -85,6 +85,14 @@ func recoverGitLabConsumerAfterCandidate(t *testing.T, ctx context.Context, clie
 			}
 
 			if len(bridges) == 0 || bridges[0].DownstreamPipeline == nil {
+				// A parent GitLab failed before its child, as for a refused
+				// configuration, never gets one: say why now.
+				current, _, readErr := client.Pipelines.GetPipeline(project, parent.ID, gitlabapi.WithContext(ctx))
+				if readErr == nil && (current.Status == "failed" || current.Status == "canceled") {
+					livetest.LogGitLabPipelineFailure(t, ctx, client, project, current)
+					t.Fatalf("recovery parent %d ended %s before its child; GitLab's account is logged above", current.ID, current.Status)
+				}
+
 				return false
 			}
 
@@ -185,6 +193,7 @@ func recoverGitLabConsumerAfterCandidate(t *testing.T, ctx context.Context, clie
 		}
 
 		if run.Status == "failed" {
+			livetest.LogGitLabPipelineFailure(t, ctx, client, project, run)
 			t.Log(gitlabTrialTrace(t, ctx, client, project, child))
 			t.Fatal("consumer retry failed")
 		}

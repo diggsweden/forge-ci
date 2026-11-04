@@ -237,6 +237,10 @@ func waitGitLabMRPipeline(t *testing.T, ctx context.Context, client *gitlabapi.C
 
 			switch pipeline.Status {
 			case "success", "failed", "canceled", "skipped", "manual":
+				// Before any judgement: cleanup deletes the project and
+				// with it GitLab's own account of the failure.
+				livetest.LogGitLabPipelineFailure(t, ctx, client, project, pipeline)
+
 				return pipeline
 			}
 		}
