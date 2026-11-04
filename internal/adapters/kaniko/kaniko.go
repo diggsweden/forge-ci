@@ -73,9 +73,6 @@ type LayoutFilesystem interface {
 	ExportLayoutFilesystem(ctx context.Context, directory string) (io.ReadCloser, error)
 }
 
-// New returns an Adapter using the executor at its default path.
-func New() *Adapter { return &Adapter{} }
-
 // build is what one kaniko run needs, from either entry point.
 type build struct {
 	AuthFile      string

@@ -21,7 +21,7 @@ import (
 )
 
 // GradleOps is the slice of gradle-adapter methods the build use cases
-// need. Tests inject a fake; production passes adapter/gradle.New().
+// need. Tests inject a fake; production passes an adapters/gradle.Adapter.
 type GradleOps interface {
 	RunInherit(ctx context.Context, w, stderr io.Writer, args ...string) error
 	RunInDirInherit(ctx context.Context, dir string, w, stderr io.Writer, args ...string) error

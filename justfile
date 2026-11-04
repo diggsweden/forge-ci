@@ -371,6 +371,20 @@ _lint-linux-platform:
         GOOS=linux nanolinter lint go-golangci; \
     fi
 
+# Functions no build of the tree reaches, tests and every build tag included.
+# Not a nanolinter check: the pinned deadcode, built with the pinned Go.
+[doc('Find unreachable Go functions')]
+[group('lint')]
+lint-go-deadcode: (_require-tool "deadcode" "Install: just install-dev-tools")
+    #!/usr/bin/env bash
+    set -euo pipefail
+    found="$(deadcode -test -tags live,integration,smoke ./...)"
+    if [[ -n "${found}" ]]; then
+        printf '%s\n' "${found}" >&2
+        printf 'Unreachable functions: delete them, or reach them from a test that means it.\n' >&2
+        exit 1
+    fi
+
 # Check Go whitespace
 [arg('args', help=tool_args_help)]
 [group('lint')]

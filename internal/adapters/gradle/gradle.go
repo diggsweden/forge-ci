@@ -22,9 +22,6 @@ type Adapter struct {
 	NoDaemon bool     // do not retain dependency credentials in a reusable daemon
 }
 
-// New returns an Adapter using the project-local ./gradlew.
-func New() *Adapter { return &Adapter{} }
-
 // RunInherit invokes ./gradlew with the given arguments and streams
 // stdout and stderr to the provided writers. The build / SBOM phases
 // want this so the user sees gradle's own progress in CI.

@@ -60,6 +60,9 @@ go = "1.27.3"
 "aqua:crate-ci/typos" = "1.51.1"
 "aqua:ossf/scorecard" = "5.6.0"                # security-scorecard
 "go:golang.org/x/vuln/cmd/govulncheck" = "1.9.0"  # go-vulncheck
+# Built with the pinned Go above: a deadcode built with an older Go cannot
+# load this module. Not a nanolinter check; see `just lint-go-deadcode`.
+"go:golang.org/x/tools/cmd/deadcode" = "0.52.0"
 "aqua:golangci/golangci-lint" = "2.15.0"         # go-golangci
 jq = "1.8.2"                                      # workflow/live-tier JSON utilities
 

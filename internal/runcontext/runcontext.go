@@ -478,9 +478,6 @@ type CredentialVar struct{ v Var }
 // Keys lists the variable names in precedence order, for flag binding and docs.
 func (c CredentialVar) Keys() []string { return c.v.Keys() }
 
-// String renders the chain for help text and error messages.
-func (c CredentialVar) String() string { return c.v.String() }
-
 // Resolve finds the first non-empty name in the chain and binds it to the
 // audience it may be sent to.
 //
