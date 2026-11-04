@@ -175,7 +175,7 @@ workflow-contract, smoke/fuzz and companion strict gates; see
 `just lint-fix` formats the justfile and runs nanolinter's supported fixers.
 `just lint-go-deadcode` lists the Go functions no build of the tree reaches,
 tests and every build tag included, with the pinned deadcode; it is not part
-of `just lint`.
+of `just lint`, and the pull-request gate runs it as a step of its own.
 
 `just release-snapshot` validates the GoReleaser configuration and produces
 unsigned local archives, SBOMs and checksums. Snapshot mode disables publication;

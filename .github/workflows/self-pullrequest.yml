@@ -83,6 +83,10 @@ jobs:
         run: nanolinter doctor
       - name: nanolinter verify (full plan from nanolinter.toml)
         run: just lint
+      # Not part of `just lint`: deadcode is a Go-only check with no
+      # nanolinter category, pinned in .mise.toml and installed above.
+      - name: Unreachable Go functions (deadcode)
+        run: just lint-go-deadcode
   test:
     # Fail fast on stale engine binary checksums before spending minutes
     # on the full integration suite. The engine-binary job runs the
