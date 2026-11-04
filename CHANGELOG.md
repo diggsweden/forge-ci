@@ -187,6 +187,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   built from a downloaded context copied those files unreadable to its
   non-root user: Nanolinter's release images could not read their own
   linter defaults.
+- Kaniko image builds read the ignore file a Buildah build reads: the
+  Containerfile's own `<Containerfile>.containerignore`, else its
+  `.dockerignore`, else the context's `.containerignore`, else its
+  `.dockerignore`. Kaniko reads only `.dockerignore` names: a root
+  `.containerignore` was not applied, and a release Containerfile's own
+  `.containerignore` lost to a root `.dockerignore`, under which kaniko's
+  `COPY` of the prebuilt binary only the release allowlist admits silently
+  copied nothing. A `.containerignore` is now handed to kaniko beside a staged
+  copy of the Containerfile.
 - Buildah image builds name a Containerfile's own ignore file
   (`<Containerfile>.containerignore`, else `.dockerignore`) with
   `--ignorefile`. Buildah 1.40 and later already prefer it over the context's,

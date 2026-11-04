@@ -3,12 +3,11 @@
 
 package buildah
 
-import "os"
+import "github.com/diggsweden/forge-ci/internal/domain/container"
 
-// ignoreFileArgs names the ignore file of containerfile to buildah explicitly:
-// <containerfile>.containerignore, else <containerfile>.dockerignore, when it
-// is a regular file. It returns nil when there is none, and the build context's
-// own .containerignore or .dockerignore applies as before.
+// ignoreFileArgs names the ignore file of containerfile to buildah explicitly,
+// container.OwnIgnoreFile's choice. It returns nil when there is none, and the
+// build context's own .containerignore or .dockerignore applies as before.
 //
 // Buildah 1.40 and later prefer a Containerfile's own ignore file over the
 // context's, as BuildKit does for a Dockerfile's; Buildah 1.39 (Debian 13)
@@ -21,15 +20,8 @@ import "os"
 // The path is resolved as buildah resolves --file: as given, relative to the
 // process working directory.
 func ignoreFileArgs(containerfile string) []string {
-	if containerfile == "" {
-		return nil
-	}
-
-	for _, suffix := range []string{".containerignore", ".dockerignore"} {
-		candidate := containerfile + suffix
-		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
-			return []string{"--ignorefile", candidate}
-		}
+	if own := container.OwnIgnoreFile(containerfile); own != "" {
+		return []string{"--ignorefile", own}
 	}
 
 	return nil

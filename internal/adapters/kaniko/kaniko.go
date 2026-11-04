@@ -196,10 +196,11 @@ func (a *Adapter) run(ctx context.Context, spec build, layoutDir string, out io.
 	}
 
 	args, cleanup, env, err := a.arguments(spec, layoutDir)
+	defer cleanup()
+
 	if err != nil {
 		return err
 	}
-	defer cleanup()
 
 	// The push after this build runs in this process, after kaniko has
 	// replaced /etc/ssl. Go loads the system roots once; load them now.
@@ -221,14 +222,34 @@ func (a *Adapter) run(ctx context.Context, spec build, layoutDir string, out io.
 }
 
 // arguments assembles the executor's argv for one layout build, with the
-// registry credentials staged where kaniko reads them. Every path kaniko must
-// not destroy is named absolutely and ignored.
+// registry credentials and a .containerignore staged where kaniko reads them.
+// Every path kaniko must not destroy is named absolutely and ignored. The
+// cleanup removes what was staged, also when an error is returned.
 func (a *Adapter) arguments(spec build, layoutDir string) ([]string, func(), []string, error) {
-	cleanup := func() {}
+	var staged []string
 
-	args, err := layoutArguments(spec, layoutDir)
+	cleanup := func() {
+		for _, dir := range staged {
+			_ = os.RemoveAll(dir)
+		}
+	}
+
+	containerfile, stageDir, err := stageIgnoreFile(spec)
 	if err != nil {
 		return nil, cleanup, nil, err
+	}
+
+	if stageDir != "" {
+		staged = append(staged, stageDir)
+	}
+
+	args, err := layoutArguments(spec, containerfile, layoutDir)
+	if err != nil {
+		return nil, cleanup, nil, err
+	}
+
+	if stageDir != "" {
+		args = append(args, "--ignore-path", stageDir)
 	}
 
 	args = append(args, imageArguments(spec)...)
@@ -242,8 +263,7 @@ func (a *Adapter) arguments(spec build, layoutDir string) ([]string, func(), []s
 		return nil, cleanup, nil, err
 	}
 
-	cleanup = func() { _ = os.RemoveAll(configDir) }
-
+	staged = append(staged, configDir)
 	args = append(args, "--ignore-path", configDir)
 
 	return args, cleanup, []string{"DOCKER_CONFIG=" + configDir}, nil
@@ -251,7 +271,7 @@ func (a *Adapter) arguments(spec build, layoutDir string) ([]string, func(), []s
 
 // layoutArguments names where the build reads and writes, absolutely, and
 // keeps those paths out of kaniko's way.
-func layoutArguments(spec build, layoutDir string) ([]string, error) {
+func layoutArguments(spec build, containerfile, layoutDir string) ([]string, error) {
 	contextDir, err := filepath.Abs(spec.Context)
 	if err != nil {
 		return nil, fmt.Errorf("resolve build context: %w", err)
@@ -270,8 +290,8 @@ func layoutArguments(spec build, layoutDir string) ([]string, error) {
 		"--ignore-path", contextDir,
 	}
 
-	if spec.Containerfile != "" {
-		containerfile, err := filepath.Abs(spec.Containerfile)
+	if containerfile != "" {
+		containerfile, err := filepath.Abs(containerfile)
 		if err != nil {
 			return nil, fmt.Errorf("resolve containerfile: %w", err)
 		}
@@ -280,6 +300,55 @@ func layoutArguments(spec build, layoutDir string) ([]string, error) {
 	}
 
 	return args, nil
+}
+
+// stageIgnoreFile returns the Containerfile to give kaniko so that it reads the
+// ignore file container.IgnoreFile selects, and the directory it staged, if
+// any, for removal after the build.
+//
+// Kaniko reads <dockerfile>.dockerignore, else the context's .dockerignore,
+// and has no flag naming another file (DockerignorePath in kaniko's
+// pkg/util/fs_util.go; --ignore-path is about snapshots). It knows no
+// .containerignore. That covers the .dockerignore half of the order unaided;
+// for a .containerignore, the Containerfile is copied into a directory of this
+// process's own beside that file under the <dockerfile>.dockerignore name
+// kaniko reads first. The checkout is left as it is.
+func stageIgnoreFile(spec build) (string, string, error) {
+	containerfile := spec.Containerfile
+	if containerfile == "" {
+		// Kaniko's own default, which then becomes explicit.
+		containerfile = filepath.Join(spec.Context, "Dockerfile")
+	}
+
+	ignoreFile := container.IgnoreFile(containerfile, spec.Context)
+	if !strings.HasSuffix(ignoreFile, ".containerignore") {
+		return spec.Containerfile, "", nil
+	}
+
+	dir, err := os.MkdirTemp("", "forge-ci-kaniko-containerfile-*")
+	if err != nil {
+		return "", "", fmt.Errorf("stage the containerfile for kaniko: %w", err)
+	}
+
+	staged := filepath.Join(dir, filepath.Base(containerfile))
+	for src, dst := range map[string]string{containerfile: staged, ignoreFile: staged + ".dockerignore"} {
+		if err := copyFile(src, dst); err != nil {
+			_ = os.RemoveAll(dir)
+
+			return "", "", fmt.Errorf("stage the containerfile for kaniko: %w", err)
+		}
+	}
+
+	return staged, dir, nil
+}
+
+func copyFile(src, dst string) error {
+	body, err := os.ReadFile(src) //nolint:gosec // the build's own Containerfile and ignore file.
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(dst, body, 0o600) //nolint:gosec // dst is in this process's own temp directory.
 }
 
 // imageArguments shapes the image: platform, stage, arguments, labels,

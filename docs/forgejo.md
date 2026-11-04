@@ -566,11 +566,14 @@ buildah build --file containers/signer/Containerfile \
 ```
 
 The build context is the repository root, cut down to the one file the image
-copies by `containers/signer/Containerfile.containerignore`. forge-ci's
-Buildah builds name a Containerfile's own `<Containerfile>.containerignore`
-(or `.dockerignore`) with `--ignorefile`, ahead of the context's own ignore
-file, on every Buildah version; Buildah 1.39 would otherwise read only the
-context's. A builder that reads neither sends the whole checkout, Git history
+copies by `containers/signer/Containerfile.containerignore`. forge-ci builds
+with a Containerfile's own `<Containerfile>.containerignore` (or
+`.dockerignore`) ahead of the context's own `.containerignore` (or
+`.dockerignore`), with either builder. Buildah is given the file with
+`--ignorefile`, as Buildah 1.39 would otherwise read only the context's.
+Kaniko reads only `.dockerignore` names, so a `.containerignore` that applies
+is handed to it beside a staged copy of the Containerfile, outside the
+checkout. A builder that reads neither sends the whole checkout, Git history
 and a downloaded binary included, which costs time and changes nothing in the
 image.
 

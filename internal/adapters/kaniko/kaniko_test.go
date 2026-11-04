@@ -218,3 +218,104 @@ func TestStageDockerConfig_RequiresTheAuthsDocument(t *testing.T) {
 		t.Fatalf("err=%v, want ErrInvalidConfig for a bare token", err)
 	}
 }
+
+// A Containerfile's own ignore file, else the context's, is what kaniko reads,
+// .containerignore ahead of .dockerignore, as Buildah reads them. Kaniko knows
+// only .dockerignore names. The executor here reads as kaniko does,
+// <dockerfile>.dockerignore else <context>/.dockerignore, and prints what it
+// found. The context mirrors Nanolinter's release images: the root allowlist
+// leaves out the prebuilt binary, the release Containerfile's admits it.
+func TestBuildToLayout_KanikoReadsTheIgnoreFileThatApplies(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct {
+		files map[string]string
+		want  string
+	}{
+		"own .containerignore": {
+			files: map[string]string{
+				".containerignore": "root", ".dockerignore": "root docker",
+				"packaging/Containerfile.release.containerignore": "own", "packaging/Containerfile.release.dockerignore": "own docker",
+			},
+			want: "own",
+		},
+		"own .dockerignore": {
+			files: map[string]string{".containerignore": "root", "packaging/Containerfile.release.dockerignore": "own docker"},
+			want:  "own docker",
+		},
+		"root .containerignore only": {
+			files: map[string]string{".containerignore": "root", ".dockerignore": "root docker"},
+			want:  "root",
+		},
+		"none": {want: "<none>"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			contextDir := t.TempDir()
+			containerfile := filepath.Join(contextDir, "packaging", "Containerfile.release")
+
+			if tc.files == nil {
+				tc.files = map[string]string{}
+			}
+
+			tc.files["packaging/Containerfile.release"] = "FROM scratch\n"
+
+			for path, body := range tc.files {
+				if err := os.MkdirAll(filepath.Dir(filepath.Join(contextDir, path)), 0o750); err != nil {
+					t.Fatal(err)
+				}
+
+				if err := os.WriteFile(filepath.Join(contextDir, path), []byte(body), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			bins := mockbinary.New(t)
+			bins.Add("executor", `printf 'ARGV %s\n' "$*"; df=Dockerfile ctx=.
+while [ $# -gt 0 ]; do case $1 in --dockerfile) df=$2; shift ;; --context) ctx=${2#dir://}; shift ;; esac; shift; done
+printf 'DOCKERFILE %s\n' "$df"; printf 'FROM %s\n' "$(cat "$df")"
+if [ -f "$df.dockerignore" ]; then printf 'READS %s\n' "$(cat "$df.dockerignore")"
+elif [ -f "$ctx/.dockerignore" ]; then printf 'READS %s\n' "$(cat "$ctx/.dockerignore")"
+else echo 'READS <none>'; fi`)
+			adapter := &Adapter{Executor: bins.Path("executor"), euid: func() int { return 0 }}
+
+			var log strings.Builder
+
+			err := adapter.BuildToLayout(t.Context(), container.BuildRequest{
+				Context: contextDir, Containerfile: containerfile, Mode: container.BuildModeOCI, OutputDir: t.TempDir(),
+			}, t.TempDir(), &log)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if !strings.Contains(log.String(), "READS "+tc.want+"\n") {
+				t.Fatalf("kaniko must read %q:\n%s", tc.want, log.String())
+			}
+
+			if !strings.Contains(log.String(), "FROM FROM scratch\n") {
+				t.Fatalf("kaniko must build the Containerfile itself:\n%s", log.String())
+			}
+
+			_, dockerfile, _ := strings.Cut(log.String(), "DOCKERFILE ")
+			dockerfile, _, _ = strings.Cut(dockerfile, "\n")
+
+			staged := dockerfile != containerfile
+			if wantStaged := strings.HasPrefix(name, "own .containerignore") || strings.HasPrefix(name, "root .containerignore"); staged != wantStaged {
+				t.Fatalf("staged=%t, want %t: kaniko reads a .dockerignore unaided and needs a .containerignore staged:\n%s", staged, wantStaged, log.String())
+			}
+
+			if !staged {
+				return
+			}
+
+			if _, err := os.Stat(filepath.Dir(dockerfile)); !errors.Is(err, os.ErrNotExist) {
+				t.Errorf("the staged containerfile must be removed after the build: %v", err)
+			}
+
+			if !strings.Contains(log.String(), "--ignore-path "+filepath.Dir(dockerfile)) {
+				t.Errorf("the staged containerfile must be kept out of kaniko's way:\n%s", log.String())
+			}
+		})
+	}
+}

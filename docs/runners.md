@@ -182,6 +182,11 @@ around:
   setting `SOURCE_DATE_EPOCH`; a kaniko build matches another kaniko build of
   the same tree, not a Buildah build of it.
 
+Kaniko itself reads only `.dockerignore` names. The engine gives it the same
+ignore file Buildah builds with: the Containerfile's own
+`<Containerfile>.containerignore` or `.dockerignore`, else the context's
+`.containerignore` or `.dockerignore`.
+
 ### The kaniko job image
 
 kaniko replaces the job container's root filesystem with the image's, so a
