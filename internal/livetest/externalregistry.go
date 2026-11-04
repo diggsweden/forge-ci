@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -79,9 +80,19 @@ func readTokenFile(path string) (string, error) {
 		return "", fmt.Errorf("%s must be a regular file readable by its owner only (0600), not %s: %w", path, info.Mode(), errs.ErrUsage)
 	}
 
-	raw, err := os.ReadFile(path) //nolint:gosec // the caller's own token file, checked above.
+	file, err := os.Open(path) //nolint:gosec // the caller's own token file, checked above.
 	if err != nil {
 		return "", fmt.Errorf("read the token file: %w", err)
+	}
+	defer file.Close()
+
+	const maxTokenBytes = 4096
+	raw, err := io.ReadAll(io.LimitReader(file, maxTokenBytes+1))
+	if err != nil {
+		return "", fmt.Errorf("read the token file: %w", err)
+	}
+	if len(raw) > maxTokenBytes {
+		return "", fmt.Errorf("token file exceeds size limit: %w", errs.ErrUsage)
 	}
 
 	token := strings.TrimSpace(string(raw))

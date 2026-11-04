@@ -42,6 +42,18 @@ For GitHub, use the guarded Forge Lab hosted session recipe and its own
 organization lock; shared SDK preparation precedes parallel read-only reuse by
 independent consumers.
 
+Hosted GitHub consumer **release** trials require
+`FORGE_CI_LIVE_GITHUB_RELEASE_TOKEN_FILE` to name an owner-private regular file
+containing a fine-grained PAT. Only its path enters the environment; the token
+is read natively with a 4096-byte bound and uploaded only as the consumer's
+`RELEASE_TOKEN`. There is deliberately no fallback to the hosted session's
+management/Packages token. Missing or invalid input refuses before hosted
+resources are created. Pull-request, development-release and engine-only
+`FORGE_CI_LIVE_ENGINE_MODE=prepare` runs do not require this file. The guarded
+session and SDK/GHCR publication keep their existing credential unchanged.
+Token kind admission does not prove repository selection or write permissions;
+the ordinary release workflow and its content-write assertions remain authoritative.
+
 ## Run a campaign
 
 Prepare once, from a clean checkout whose engine checksum is fresh, naming

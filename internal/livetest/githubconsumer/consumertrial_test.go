@@ -81,6 +81,14 @@ func TestGitHubLayer_ConsumerTrial(t *testing.T) {
 		t.Fatal("a demo runs the release and then a pull request; start it with the release event")
 	}
 
+	var releaseToken string
+	if settings.Event == livetest.TrialRelease && os.Getenv("FORGE_CI_LIVE_ENGINE_MODE") != "prepare" {
+		releaseToken, err = livetest.GitHubReleaseToken(os.Getenv(livetest.GitHubReleaseTokenFileEnv))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	trial := livetest.OpenGitHubTrial(t, organizationID)
 
 	engineRoot := os.Getenv("FORGE_CI_LIVE_ENGINE_CHECKOUT")
@@ -114,12 +122,12 @@ func TestGitHubLayer_ConsumerTrial(t *testing.T) {
 
 	for _, visibility := range visibilities {
 		t.Run(visibility.Name, func(t *testing.T) {
-			runTrial(t, livetest.OpenGitHubTrial(t, organizationID), engine, root, fixtures, settings, visibility)
+			runTrial(t, livetest.OpenGitHubTrial(t, organizationID), engine, root, fixtures, settings, visibility, releaseToken)
 		})
 	}
 }
 
-func runTrial(t *testing.T, trial *livetest.GitHubTrial, engine livetest.GitHubEngine, root, fixtures string, settings livetest.GitHubTrialSettings, visibility livetest.ConsumerVisibility) {
+func runTrial(t *testing.T, trial *livetest.GitHubTrial, engine livetest.GitHubEngine, root, fixtures string, settings livetest.GitHubTrialSettings, visibility livetest.ConsumerVisibility, releaseToken string) {
 	t.Helper()
 
 	demo := livetest.DemoName()
@@ -191,7 +199,7 @@ func runTrial(t *testing.T, trial *livetest.GitHubTrial, engine livetest.GitHubE
 		"RELEASE_GPG_PRIVATE_KEY": key.Private,
 		"RELEASE_GPG_PASSPHRASE":  key.Passphrase,
 		"RELEASE_GPG_PUBLIC_KEY":  key.Public,
-		"RELEASE_TOKEN":           trial.Token(),
+		"RELEASE_TOKEN":           releaseToken,
 	}
 
 	if sshSigningKey != "" {

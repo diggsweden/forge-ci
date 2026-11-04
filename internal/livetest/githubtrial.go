@@ -470,11 +470,11 @@ func (trial *GitHubTrial) SetSecret(repo, name, value string) {
 
 	_, err = trial.api.Actions.CreateOrUpdateRepoSecret(ctx, trial.org, repo, name, github.SecretRequest{KeyID: key.GetKeyID(), EncryptedValue: sealed})
 	if err != nil {
-		trial.tb.Fatalf("livetest: set secret %s on %s: %v", name, repo, err)
+		trial.tb.Fatalf("livetest: set secret %s on %s: %s", name, repo, strings.ReplaceAll(err.Error(), value, "[redacted]"))
 	}
 }
 
-// Token is the context's token, for a consumer's RELEASE_TOKEN.
+// Token is the context's management/Packages token, not a release credential.
 func (trial *GitHubTrial) Token() string { return trial.token }
 
 // WaitRun waits for the newest run of workflow for event at headSHA to finish
