@@ -73,8 +73,7 @@ read-only for that user, and every cache lives in the home of the user a job
 runs as, at each tool's default: `~/.cargo` (no `CARGO_HOME` is set),
 `~/go` (no `GOPATH`), `~/.cache/go-build`, `~/.m2`, `~/.gradle` and `~/.npm`.
 The images set no `HOME`; the container runtime takes it from `/etc/passwd`,
-and GitHub's `container:` jobs set `/github/home`. A workflow that caches these
-directories names them under `~`.
+and GitHub's `container:` jobs set `/github/home`.
 
 What a job installs itself goes to `/opt/job-tools/bin`, on `PATH` ahead of
 `/usr/local/bin` and writable for root and `nonroot`: `go install` through
@@ -85,10 +84,24 @@ cannot write it. With `GOBIN` set, `go install` refuses to cross-compile; use
 `go build -o`. The smoke test of each image builds and installs with its
 toolchain as `nonroot`.
 
-Workflows of this source cache `~/go` and `~/.cargo`, while images up to
-`v0.90.0` keep modules in `/go` and crates in `/usr/local/cargo`. A
-`runtime-image` older than the workflow misses the cache without failing;
-select the runtime image of the workflow's release.
+Two toolchains install more of themselves on demand, so their homes belong to
+`nonroot` as well: rustup's `/usr/local/rustup` (`RUSTUP_HOME`) and the
+Android SDK's `/opt/android-sdk` (`ANDROID_HOME`). The toolchain, components
+and targets a `rust-toolchain.toml` pins, `rustup component add`, `rustup
+target add`, `sdkmanager --install` and the Android Gradle Plugin's download
+of a missing platform or build-tools work for root and `nonroot`; other UIDs
+cannot write them. Corepack is enabled in the Node image, with its `yarn` and
+`pnpm` shims in the read-only `/usr/local/bin`, so a job need not run
+`corepack enable`; one that wants shims of its own runs `corepack enable
+--install-directory /opt/job-tools/bin`. The package managers Corepack fetches
+go to the job's home.
+
+The Go, Cargo and Gradle workflows ask the image where its caches are (`go env
+GOMODCACHE GOCACHE`, `CARGO_HOME`, `GRADLE_USER_HOME`, each defaulting under
+`HOME`) before caching them, so a `runtime-image` older or newer than the
+workflow still restores its caches; images up to `v0.90.0` keep modules in
+`/go` and crates in `/usr/local/cargo`. Maven's `~/.m2/repository` is Maven's
+fixed default.
 
 No workflow or component names a runtime image release, so a release cut has
 none to move. GitHub workflows take the images of the release that

@@ -112,13 +112,18 @@ jobs:
           CHECKOUT_REF: ${{ inputs.branch }}
           CHECKOUT_FETCH_ALL_REFS: "true"
         run: forge-ci platform checkout
+      # The image decides where cargo keeps crates; an image older or newer
+      # than this workflow then still restores them.
+      - name: Locate the cargo home
+        id: cargo-home
+        run: printf 'path=%s\n' "${CARGO_HOME:-$HOME/.cargo}" >>"$GITHUB_OUTPUT"
       - name: Cache cargo registry and target dir
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
+            ${{ steps.cargo-home.outputs.path }}/registry/index
+            ${{ steps.cargo-home.outputs.path }}/registry/cache
+            ${{ steps.cargo-home.outputs.path }}/git/db
             ${{ inputs['working-directory'] }}/target
           key: cargo-build-${{ runner.os }}-${{ hashFiles(format('{0}/Cargo.lock', inputs['working-directory'])) }}
           restore-keys: |

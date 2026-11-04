@@ -20,8 +20,6 @@ import (
 // build stage. GitLab cannot expand a runtime matrix, so the build fan-out is
 // generated from the same plan JSON GitHub feeds to `strategy: matrix`: one
 // `include:` of the matching `build-<eco>` component per running plan item.
-//
-//nolint:dupl // parallel to gitlabPublishPipelineCmd by design — each reads its own stage plan + component set.
 func gitlabBuildPipelineCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "gitlab-build-pipeline",
@@ -86,8 +84,6 @@ EXAMPLE:
 // gitlabPublishPipelineCmd is the publish-stage sibling of
 // gitlabBuildPipelineCmd: it fans the release publish stage out into one
 // `include:` of the matching `publish-<target>` component per running item.
-//
-//nolint:dupl // parallel to gitlabBuildPipelineCmd by design — each reads its own stage plan + component set.
 func gitlabPublishPipelineCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "gitlab-publish-pipeline",

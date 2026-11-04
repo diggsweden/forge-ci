@@ -32,8 +32,9 @@
 # Every image runs as root unless the job says otherwise: GitHub's
 # `container:` jobs and kaniko need it. Each also has the user nonroot,
 # UID and GID 65532, home /home/nonroot, for a job that runs its checks as
-# an ordinary user (GitLab's image user). The toolchains are read-only for it
-# and keep their caches and downloads in the home of whoever runs them:
+# an ordinary user (GitLab's image user). The toolchains are read-only for it,
+# but for the homes rustup and sdkmanager install into, which it owns, and they
+# keep their caches and downloads in the home of whoever runs them:
 # ~/.cargo, ~/go, ~/.m2, ~/.gradle, ~/.npm. No image sets HOME; the runtime
 # takes it from /etc/passwd. What a job installs itself (go install, cargo
 # install, npm install -g) goes to /opt/job-tools, first on PATH.
@@ -193,7 +194,8 @@ RUN bash -c 'set -euo pipefail \
 RUN git config --system --add safe.directory '*'
 
 # The ordinary user a job may run as instead of root, at the UID distroless
-# images use. Nothing in the image is its own but its home and /opt/job-tools.
+# images use. Nothing in the image is its own but its home, /opt/job-tools and,
+# in the rust and android images, the toolchain homes that install on demand.
 #
 # A job's own tools go to /opt/job-tools/bin: GOBIN, CARGO_INSTALL_ROOT and
 # NPM_CONFIG_PREFIX name it in the toolchain stages. An install under ~ would
@@ -227,10 +229,13 @@ RUN bash -c 'set -euo pipefail \
 FROM base AS rust
 
 # The toolchain and cargo-cyclonedx are installed under /usr/local/cargo and
-# /usr/local/rustup, read-only for any user but root. CARGO_HOME is that
-# directory only while the image builds: a job's crates, registry index and
-# git checkouts go to its own ~/.cargo, cargo's default, and what it installs
-# to /opt/job-tools (CARGO_INSTALL_ROOT, set below).
+# /usr/local/rustup. CARGO_HOME is that directory only while the image builds,
+# and read-only for any user but root: a job's crates, registry index and git
+# checkouts go to its own ~/.cargo, cargo's default, and what it installs to
+# /opt/job-tools (CARGO_INSTALL_ROOT, set below). RUSTUP_HOME belongs to
+# nonroot, as a rustup home belongs to its user: rustup installs the toolchain,
+# components and targets a project's rust-toolchain.toml pins there, and
+# `rustup component add` and `rustup target add` write there.
 ARG CARGO_HOME=/usr/local/cargo
 ENV RUSTUP_HOME=/usr/local/rustup \
     PATH=/usr/local/cargo/bin:$PATH
@@ -264,6 +269,7 @@ RUN apt-get update \
   && rustup target add aarch64-unknown-linux-gnu \
   && cargo install --locked cargo-cyclonedx --version "${CARGO_CYCLONEDX_VERSION}" \
   && rm -rf "${CARGO_HOME}/registry" "${CARGO_HOME}/git" \
+  && chown -R 65532:65532 "${RUSTUP_HOME}" \
   && rustc --version \
   && cargo --version \
   && cargo cyclonedx --version
@@ -421,6 +427,8 @@ ENV ANDROID_HOME=/opt/android-sdk \
     ANDROID_SDK_ROOT=/opt/android-sdk \
     PATH=/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:$PATH
 
+# The SDK belongs to nonroot, so `sdkmanager --install` and the Android Gradle
+# Plugin's download of a missing platform or build-tools work for either user.
 # The licence pipe needs no pipefail: `yes` always dies of SIGPIPE, and
 # sdkmanager's status is the one that counts.
 # hadolint ignore=DL3008,DL4006
@@ -437,5 +445,6 @@ RUN mkdir -p "$ANDROID_HOME/cmdline-tools" \
        "platforms;${ANDROID_PLATFORM}" \
        "build-tools;${ANDROID_BUILD_TOOLS_VERSION}" \
   && rm -rf "$ANDROID_HOME/.android" \
+  && chown -R 65532:65532 "$ANDROID_HOME" \
   && sdkmanager --version \
   && adb --version

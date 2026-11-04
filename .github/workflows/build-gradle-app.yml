@@ -142,13 +142,18 @@ jobs:
           VERSION: ${{ inputs.version }}
           SNAPSHOT_PUBLICATION: ${{ inputs['snapshot-publication'] }}
         run: forge-ci build gradle export-publications --output .forge-ci/maven-publication --validate-only --snapshot="$SNAPSHOT_PUBLICATION"
+      # The image decides where Gradle keeps its caches; an image older or
+      # newer than this workflow then still restores them.
+      - name: Locate the Gradle home
+        id: gradle-home
+        run: printf 'path=%s\n' "${GRADLE_USER_HOME:-$HOME/.gradle}" >>"$GITHUB_OUTPUT"
       - name: Cache Gradle
         if: ${{ !inputs['private-dependencies'] }}
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
+            ${{ steps.gradle-home.outputs.path }}/caches
+            ${{ steps.gradle-home.outputs.path }}/wrapper
           key: gradle-${{ hashFiles(format('{0}/gradle/wrapper/gradle-wrapper.properties', inputs['working-directory']), format('{0}/**/*.gradle*', inputs['working-directory']), format('{0}/**/gradle.properties', inputs['working-directory'])) }}
           restore-keys: gradle-
       - name: Build Gradle project

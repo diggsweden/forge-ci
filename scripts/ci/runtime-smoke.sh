@@ -75,7 +75,8 @@ esac
 # The same toolchain for the image's ordinary user, as a GitLab job with an
 # image user runs it: HOME from /etc/passwd, every cache below it, and nothing
 # outside it written but what the job installs, which lands on PATH in
-# /opt/job-tools. Root is the image's default, so the check drops to it.
+# /opt/job-tools, and the rustup and Android SDK homes that install on demand.
+# Root is the image's default, so the check drops to it.
 nonroot_smoke() {
 	local target=$1 work
 	installed() {
@@ -107,6 +108,7 @@ nonroot_smoke() {
 		cargo install --quiet --offline --path smoke
 		installed smoke && smoke
 		cargo cyclonedx --version
+		test -w "$RUSTUP_HOME" && test -w "$RUSTUP_HOME/toolchains"
 		;;
 	node)
 		npm cache verify >/dev/null
@@ -124,6 +126,7 @@ nonroot_smoke() {
 		# Maven's local repository is ~/.m2, which only a plugin run creates.
 		mvn --batch-mode -version >/dev/null
 		mkdir -p -- "$HOME/.m2/repository"
+		[[ $target != android ]] || { test -w "$ANDROID_HOME/platforms" && test -w "$ANDROID_HOME/build-tools"; }
 		;;
 	esac
 	cd -- "$HOME"

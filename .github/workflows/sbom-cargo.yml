@@ -96,17 +96,22 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           CHECKOUT_REF: ${{ inputs.branch }}
         run: forge-ci platform checkout
+      # The image decides where cargo keeps crates; an image older or newer
+      # than this workflow then still restores them.
+      - name: Locate the cargo home
+        id: cargo-home
+        run: printf 'path=%s\n' "${CARGO_HOME:-$HOME/.cargo}" >>"$GITHUB_OUTPUT"
       # Cache only what cargo-cyclonedx actually consults: the crates.io
       # registry index/cache and the git db (for git-source dependencies).
       # No target/ — this workflow doesn't compile. Cargo keeps them in the
-      # job user's ~/.cargo; the runtime image's toolchain is read-only.
+      # cargo home located above; the image's toolchain is read-only.
       - name: Cache cargo registry
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
+            ${{ steps.cargo-home.outputs.path }}/registry/index
+            ${{ steps.cargo-home.outputs.path }}/registry/cache
+            ${{ steps.cargo-home.outputs.path }}/git/db
           key: cargo-sbom-${{ runner.os }}-${{ hashFiles(format('{0}/Cargo.lock', inputs['working-directory'])) }}
           restore-keys: |
             cargo-sbom-${{ runner.os }}-

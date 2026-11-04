@@ -129,6 +129,7 @@ printf 'ok\n' >&2
 		},
 	} {
 		var stderr bytes.Buffer
+
 		err := run(&stderr)
 		require.NoError(t, err, "%s: %s", name, stderr.String())
 		assert.Equal(t, "ok", strings.TrimSpace(stderr.String()), name)

@@ -236,6 +236,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `GIT_SUBMODULE_STRATEGY`, are refused when they differ from their
   literals. The generated snapshot jobs pass their image, architecture and
   context job as arguments.
+- The Go, Cargo and Gradle workflows cached `~/go`, `~/.cargo` and
+  `~/.gradle`, so a `runtime-image` keeping them elsewhere missed every
+  cache without failing. They now ask the image (`go env GOMODCACHE
+  GOCACHE`, `CARGO_HOME`, `GRADLE_USER_HOME`) where the caches are.
+- A job running as the runtime images' `nonroot` user could not install the
+  Rust toolchain, components or targets its `rust-toolchain.toml` pins, nor
+  an Android platform or build-tools the image lacks: rustup's and the
+  Android SDK's homes were root's. `nonroot` now owns both, as a rustup home
+  belongs to its user. Corepack is already enabled; `corepack enable` needs
+  `--install-directory /opt/job-tools/bin` as `nonroot`.
 - The build, publish, SBOM, changelog, version-bump and prerequisite
   workflows defaulted `runtime-image` to a fixed upstream image and release,
   so a fork or a later release ran upstream's older image. Each now resolves
