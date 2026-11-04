@@ -304,3 +304,42 @@ snapshot_checkout refs/heads/development
 		})
 	}
 }
+
+// A snapshot build job hands off its layouts readable without after_script,
+// which a kaniko job may have no shell left for, and refuses a hand-off name
+// the build left in the workspace instead of moving into it.
+func TestSnapshotBuildHandsOffItsOwnReadableLayouts(t *testing.T) {
+	for name, planted := range map[string]bool{"fresh": false, "planted": true} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			if planted {
+				if err := os.Mkdir(filepath.Join(dir, "snapshot-layouts"), 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			body := `snapshot_gitlab_checkout() { :; }; snapshot_apply_context() { :; }; ` +
+				`snapshot_build() { mkdir -p snapshot-source/snapshot-layouts/api-arch-amd64; touch snapshot-source/snapshot-layouts/api-arch-amd64/api-amd64.json; }; ` +
+				`umask 077; snapshot_gitlab_build`
+			cmd := exec.CommandContext(t.Context(), "bash", "--noprofile", "--norc", "-c", `set -euo pipefail; source "$1"; `+body, "snapshot", filepath.Join(reporoot.Path(t), ".gitlab/bin/snapshot-images.sh"))
+			cmd.Dir = dir
+			cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + dir, "SNAPSHOT_NAME=api", "SNAPSHOT_ARCH=amd64"}
+
+			out, err := cmd.CombinedOutput()
+			if planted {
+				if err == nil || !strings.Contains(string(out), "reserved for this job's hand-off") {
+					t.Fatalf("a planted hand-off was moved into: %v\n%s", err, out)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("build hand-off failed: %v\n%s", err, out)
+			}
+
+			requireMode(t, filepath.Join(dir, "snapshot-layouts/api-arch-amd64"), 0o755)
+			requireMode(t, filepath.Join(dir, "snapshot-layouts/api-arch-amd64/api-amd64.json"), 0o644)
+		})
+	}
+}

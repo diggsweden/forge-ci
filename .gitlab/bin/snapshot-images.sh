@@ -10,6 +10,17 @@ snapshot_gitlab_checkout() {
 	snapshot_checkout "${sha}"
 }
 
+# snapshot_gitlab_handoff moves a job's output to its top-level hand-off
+# name. A build step may have left that name in the workspace; it is refused,
+# never moved into.
+snapshot_gitlab_handoff() {
+	if [ -e "$2" ] || [ -L "$2" ]; then
+		echo "ERROR: $2 must not exist yet; it is reserved for this job's hand-off." >&2
+		return 1
+	fi
+	mv -- "$1" "$2"
+}
+
 snapshot_gitlab_build() {
 	snapshot_gitlab_checkout
 	if [ -n "${SNAPSHOT_CONTEXT_JOB:-}" ]; then
@@ -18,7 +29,7 @@ snapshot_gitlab_build() {
 		snapshot_apply_context snapshot-context snapshot-plan.json
 	fi
 	snapshot_build "${SNAPSHOT_NAME:?}" "${SNAPSHOT_ARCH:?}"
-	mv snapshot-source/snapshot-layouts snapshot-layouts
+	snapshot_gitlab_handoff snapshot-source/snapshot-layouts snapshot-layouts || return
 	# A kaniko build leaves no shell at the paths after_script is run with;
 	# make the hand-off readable for the uploader here.
 	find snapshot-layouts \( -type d -o -type f \) -exec chmod u=rwX,go=rX -- {} +
@@ -29,14 +40,14 @@ snapshot_gitlab_produce() {
 	_forge_ci_arch
 	test "${HELPERS_ENGINE_ARCH}" = amd64
 	snapshot_build_artifact "${SNAPSHOT_NAME:?}"
-	mv snapshot-source/_snapshot-artifacts _snapshot-artifacts
+	snapshot_gitlab_handoff snapshot-source/_snapshot-artifacts _snapshot-artifacts || return
 }
 
 snapshot_gitlab_gather() {
 	snapshot_gitlab_checkout
 	mkdir -p _snapshot-artifacts
 	snapshot_gather_context "$(realpath -e _snapshot-artifacts)"
-	mv snapshot-source/snapshot-context snapshot-context
+	snapshot_gitlab_handoff snapshot-source/snapshot-context snapshot-context || return
 }
 
 snapshot_gitlab_publish() {
