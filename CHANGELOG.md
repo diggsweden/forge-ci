@@ -301,6 +301,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- GitLab source-only gate components explicitly replace scheduling, artifact
+  dependency, cache and checkout controls from an earlier same-named job. Policy
+  inclusion selects when gates apply, including merge-request pipelines;
+  arbitrary job mappings still merge, so
+  administrator-controlled policy injection remains the authority boundary.
 - The GitLab guide requires *Minimum role to use pipeline variables* set to
   *No one allowed*. A pipeline variable outranks GitLab's predefined
   variables, so whoever could set one could point `CI_SERVER_URL`,

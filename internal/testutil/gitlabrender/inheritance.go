@@ -68,21 +68,24 @@ func resolveExtends(body, job map[string]any, visiting map[string]bool) (map[str
 			return nil, err
 		}
 
-		mergeGitLabHash(resolved, fields)
+		Merge(resolved, fields)
 	}
 
-	mergeGitLabHash(resolved, job)
+	Merge(resolved, job)
 	delete(resolved, "extends")
 
 	return resolved, nil
 }
 
-func mergeGitLabHash(into, from map[string]any) {
+// Merge applies GitLab's include/extends hash merge: maps merge recursively;
+// arrays and scalar values from the later document replace earlier values.
+// It mutates into and does not interpret scripts or arbitrary rule expressions.
+func Merge(into, from map[string]any) {
 	for key, value := range from {
 		inherited, isHash := into[key].(map[string]any)
 		if override, ok := value.(map[string]any); ok && isHash {
 			merged := maps.Clone(inherited)
-			mergeGitLabHash(merged, override)
+			Merge(merged, override)
 			into[key] = merged
 
 			continue

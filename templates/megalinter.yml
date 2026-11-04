@@ -47,6 +47,10 @@ spec:
 ---
 "$[[ inputs.job-name ]]":
   stage: $[[ inputs.stage ]]
+  rules:
+    - when: on_success
+  needs: []
+  cache: []
   # The image starts its tool as its entrypoint; the script runs the tool
   # itself. The Docker executor would run the job's shell through that
   # entrypoint; the Kubernetes one ignores it.
@@ -54,6 +58,8 @@ spec:
     name: $[[ inputs.megalinter-image ]]
     entrypoint: [""]
   variables:
+    GIT_STRATEGY: fetch
+    GIT_CHECKOUT: "true"
     # MegaLinter lints the checked-out project and writes its reports here.
     DEFAULT_WORKSPACE: $CI_PROJECT_DIR
     # The whole history, for the comparison with the merge request's target.
@@ -63,9 +69,8 @@ spec:
     RC_FORGE_CI_REPOSITORY: "$[[ inputs.forge-ci-repository ]]"
     SARIF_FILE: megalinter-reports/megalinter-report.sarif
     GL_SAST_FILE: gl-sast-report.json
-  # A job of the same name from a file included earlier is merged under
-  # this one. The keys that decide the outcome are stated, so such a file
-  # cannot make the gate optional or replace what it runs.
+  # Explicit gate fields replace earlier same-named values. Other keys still
+  # merge; policy injection, not include ordering, is the authority boundary.
   allow_failure: false
   before_script: []
   after_script: []

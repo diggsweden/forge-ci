@@ -154,14 +154,14 @@ func expandPipeline(t *testing.T, body map[string]any, problems []string) (map[s
 		if template := repositoryTemplate(include); template != "" {
 			inputs, _ := include["inputs"].(map[string]any)
 			included, grandchildren, includedProblems := pipeline(t, template, inputs, false)
-			mergeGitLabHash(merged, included)
+			Merge(merged, included)
 
 			children = append(children, grandchildren...)
 			problems = append(problems, includedProblems...)
 		}
 	}
 
-	mergeGitLabHash(merged, body)
+	Merge(merged, body)
 	delete(merged, "include")
 
 	for _, value := range body {

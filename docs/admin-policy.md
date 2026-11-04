@@ -96,10 +96,26 @@ An external CI configuration path that names the policy project's file is
 weaker. The project's own `.gitlab-ci.yml` does not run, but a project
 maintainer can change the path back, and a consumer file the policy includes
 is merged into the same configuration: a job it defines with a gate's name is
-merged under the gate's. The gate components state `allow_failure: false`,
-`before_script`, `script` and `after_script`, so include the consumer's file
-**before** them, and keep the gates the policy's own includes, not the
-consumer file's.
+merged under the gate's. Include the consumer's file **before** the gate
+components, and keep the gates the policy's own includes, not the consumer
+file's. The source-only `check`, lint and `build-*` gates explicitly replace
+earlier `rules`, `needs`, `cache`, `allow_failure`, `before_script`, `script`
+and `after_script` values. They run on success whenever included and explicitly
+declare `needs: []` and `cache: []`. Native source jobs explicitly
+request a checkout; `check` keeps its own verified checkout instead.
+
+Select pipeline events in the administrator's `workflow: rules` or
+`include: rules`, rather than relying on an earlier same-named job to select or
+disable a gate. Included gates also participate in merge-request pipelines;
+signing-enabled builds belong only in the policy's authorized event includes.
+Any required build dependencies or caches must be declared in the
+administrator-owned job configuration, not inherited from the consumer.
+Mapping keys still deep-merge: unrelated job variables and
+other omitted keys survive, and higher-precedence project/pipeline variables
+are not sealed by these declarations. Conflicting remaining keys may also make
+a merged pipeline invalid. This hardens the declared gate fields; it does not
+turn include-mode merging into configuration isolation or make the external CI
+configuration path immutable. Use policy injection for that authority boundary.
 
 The release component already has this shape: the policy includes it, every
 `enforce-*` input is required, and each job assigns them to read-only values
