@@ -126,6 +126,10 @@ func Run(in Input) ([]Check, error) {
 	}
 
 	checks = append(checks, checkWorkflowVersionRefs(root, repoSlug))
+	if c, ok := checkGitLabComponentJobNames(root, repoSlug); ok {
+		checks = append(checks, c)
+	}
+
 	if !parsed {
 		return checks, nil
 	}

@@ -1184,6 +1184,12 @@ includes, evaluate the merged pipeline, inspect token values, or verify job
 execution or audience suitability. Malformed local YAML, a header without its
 pipeline, or unexpected extra documents are failures.
 
+Doctor also fails when two forge-ci component includes in `.gitlab-ci.yml`
+define the same job: GitLab merges jobs of one name without a warning, so the
+second include rewrites the first. A component's job is its `job-name` input,
+or the component's name by default; give each include of the same component
+its own `job-name`. A `job-name` given as an expression is not checked.
+
 Outside CI, doctor recognizes an unambiguous GitLab-only layout. For a repository
 with multiple forge layouts, select GitLab explicitly with
 `forge-ci --provider gitlab doctor`.
