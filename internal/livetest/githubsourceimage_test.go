@@ -45,6 +45,7 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("source image phase admitted: phase=%s flavor=%s", phase, flavor)
 
 	if os.Getenv(GitHubContextEnv) == "" {
 		t.Skip("hosted SDK context required")
@@ -67,16 +68,6 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 		t.Fatal("explicit image archive/source/config required")
 	}
 
-	trial := OpenGitHubTrial(t, id)
-	if trial.org != os.Getenv("FORGE_CI_LIVE_GITHUB_ORG_LOGIN") || !strings.HasPrefix(repo, trial.prefix) {
-		t.Fatal("runtime organization/repository mismatch")
-	}
-
-	repository, _, err := trial.api.Repositories.Get(t.Context(), trial.org, repo)
-	if err != nil || repository.GetID() != repoID || repository.GetPrivate() {
-		t.Fatal("public retained engine identity mismatch")
-	}
-
 	image, err := tarball.ImageFromPath(archive, nil)
 	if err != nil {
 		t.Fatal("image archive unavailable")
@@ -93,32 +84,21 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 	}
 
 	packageName := repo + "/nanolinter-ci-" + flavor + "-" + source[:12]
-	if phase != "resume" && phase != "cleanup" {
-		if _, err := trial.ReadContainerPackageIdentity(t.Context(), packageName, repoID); !errors.Is(err, os.ErrNotExist) {
-			t.Fatal("publication destination already exists or is not safely readable")
-		}
-	}
+	organization := os.Getenv("FORGE_CI_LIVE_GITHUB_ORG_LOGIN")
 	// Only mirror metadata changes: preserve the actual upstream source in a
 	// separate label, retaining revision/version and every executable layer.
 	config.Config.Labels["org.nanolinter.upstream-source"] = config.Config.Labels["org.opencontainers.image.source"]
-	config.Config.Labels["org.opencontainers.image.source"] = "https://github.com/" + trial.org + "/" + repo
+	config.Config.Labels["org.opencontainers.image.source"] = "https://github.com/" + organization + "/" + repo
 
 	mirrored, err := mutate.ConfigFile(image, config)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	reference, err := name.NewTag("ghcr.io/" + strings.ToLower(trial.org) + "/" + packageName + ":source")
+	reference, err := name.NewTag("ghcr.io/" + strings.ToLower(organization) + "/" + packageName + ":source")
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	actor, _, err := trial.api.Users.Get(t.Context(), "")
-	if err != nil {
-		t.Fatal("actor metadata unavailable")
-	}
-
-	options := []remote.Option{remote.WithContext(t.Context()), remote.WithAuth(authn.FromConfig(authn.AuthConfig{Username: actor.GetLogin(), Password: trial.token}))}
 
 	expected, err := mirrored.Digest()
 	if err != nil {
@@ -133,6 +113,7 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 		identity GitHubPackageIdentity
 		versions []sourceImageVersion
 	)
+	uploadAcknowledged := false
 
 	if phase == "resume" || phase == "cleanup" {
 		path := os.Getenv("FORGE_CI_LIVE_IMAGE_RESUME_RECEIPT")
@@ -159,21 +140,41 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 			t.Fatal("invalid retained receipt")
 		}
 
-		acknowledged := sourceImageReceipt{Package: GitHubPackageIdentity{Organization: trial.org, Name: packageName, ID: ackID, RepositoryID: repoID}, Digest: expected.String(), Reference: digestReference.String(), Config: configHash.String(), Source: source}
+		acknowledged := sourceImageReceipt{Package: GitHubPackageIdentity{Organization: organization, Name: packageName, ID: ackID, RepositoryID: repoID}, Digest: expected.String(), Reference: digestReference.String(), Config: configHash.String(), Source: source}
 		if !sourceImageReceiptMatches(receipt, acknowledged) {
 			t.Fatal("retained receipt does not match exact source/package/digest acknowledgement")
 		}
 
 		identity, versions = receipt.Package, receipt.Versions
+		retained = true
+	}
+
+	// Local phase/archive/receipt admission must finish before provider reads.
+	trial := OpenGitHubTrial(t, id)
+	if trial.org != organization || !strings.HasPrefix(repo, trial.prefix) {
+		t.Fatal("runtime organization/repository mismatch")
+	}
+	repository, _, err := trial.api.Repositories.Get(t.Context(), trial.org, repo)
+	if err != nil || repository.GetID() != repoID || repository.GetPrivate() {
+		t.Fatal("public retained engine identity mismatch")
+	}
+	actor, _, err := trial.api.Users.Get(t.Context(), "")
+	if err != nil {
+		t.Fatal("actor metadata unavailable")
+	}
+	options := []remote.Option{remote.WithContext(t.Context()), remote.WithAuth(authn.FromConfig(authn.AuthConfig{Username: actor.GetLogin(), Password: trial.token}))}
+	if phase == "resume" || phase == "cleanup" {
 		if err := trial.checkSourceImageVersions(t.Context(), identity, versions); err != nil {
 			t.Fatal(err)
 		}
-
-		retained = true
 	} else {
+		if _, err := trial.ReadContainerPackageIdentity(t.Context(), packageName, repoID); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("publication destination already exists or is not safely readable")
+		}
 		t.Logf("source image publication starting: package=%s source=%s original_config=%s", packageName, source, configHash)
 
 		writeErr = remote.Write(reference, mirrored, options...)
+		uploadAcknowledged = writeErr == nil
 
 		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 		defer cancel()
@@ -232,12 +233,12 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 		servedDigest = authenticated.Digest.String()
 	}
 
-	uploadObservation := mustSourceImageJSON(t, map[string]any{"package": identity, "visibility": visibility, "expected_manifest_digest": expected.String(), "authenticated_served_digest": servedDigest, "reference": digestReference.String(), "original_image_config": configHash.String(), "source": source, "version": config.Config.Labels["org.opencontainers.image.version"]})
+	uploadObservation := mustSourceImageJSON(t, map[string]any{"phase": phase, "upload_acknowledged": uploadAcknowledged, "package": identity, "visibility": visibility, "expected_manifest_digest": expected.String(), "authenticated_served_digest": servedDigest, "reference": digestReference.String(), "original_image_config": configHash.String(), "source": source, "version": config.Config.Labels["org.opencontainers.image.version"]})
 	if err := writeSnapshotEvidence(snapshotEvidenceRoot(), "source-image-upload-observation.json", uploadObservation); err != nil {
 		t.Fatal(err)
 	}
 
-	t.Logf("source image uploaded: id=%d repository=%d visibility=%s served_digest=%s", identity.ID, identity.RepositoryID, visibility, servedDigest)
+	t.Logf("source image authenticated observation: phase=%s upload_acknowledged=%t id=%d repository=%d visibility=%s served_digest=%s", phase, uploadAcknowledged, identity.ID, identity.RepositoryID, visibility, servedDigest)
 
 	if authenticatedErr != nil || servedDigest != expected.String() {
 		t.Fatal("authenticated served manifest digest not proven")
