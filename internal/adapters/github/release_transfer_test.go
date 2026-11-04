@@ -19,8 +19,8 @@ import (
 	"github.com/diggsweden/forge-ci/internal/adapters/httpretry"
 )
 
-// releaseCap stands in for the 30s API client cap; FORGE_CI_HTTP_TIMEOUT
-// sets the same value as the transfer's idle window.
+// releaseCap stands in for the 30s API client cap. The progressing upload's
+// idle budget is independent, so parallel compiler load is not a fake stall.
 const releaseCap = 150 * time.Millisecond
 
 // slowUpload takes POST bodies 32 bytes per gap before handing the request
@@ -79,13 +79,13 @@ func uploadReleaseAsset(t *testing.T, handler http.Handler, transport func(http.
 	p := providerForFake(srv)
 	p.HTTPClient = httpretry.NewClient(releaseCap, transport(srv.Client().Transport))
 
-	return p.UploadReleaseAsset(context.Background(), "v1.0.0", asset)
+	return p.UploadReleaseAsset(t.Context(), "v1.0.0", asset)
 }
 
 // A release asset larger than the link moves within the API client's cap
 // must still arrive whole while it keeps moving.
 func TestUploadReleaseAsset_AnAssetThatKeepsMovingOutlivesTheClientCap(t *testing.T) {
-	t.Setenv("FORGE_CI_HTTP_TIMEOUT", releaseCap.String())
+	t.Setenv("FORGE_CI_HTTP_TIMEOUT", (2 * time.Second).String())
 
 	fake := newFake()
 	fake.preloadRelease(false, false)
