@@ -18,7 +18,6 @@ import (
 	"github.com/diggsweden/forge-ci/internal/cliio"
 	"github.com/diggsweden/forge-ci/internal/domain/imageledger"
 	domainrelease "github.com/diggsweden/forge-ci/internal/domain/release"
-	"github.com/diggsweden/forge-ci/internal/secretenv"
 )
 
 func ledgerSignCmd() *cli.Command {
@@ -100,23 +99,9 @@ ledger promote operation.`,
 func runLedgerSign(ctx context.Context, signer *cosign.Adapter, resolver *ociregistry.Adapter, in appcontainer.SignLedgerImagesInput) error {
 	return appcontainer.SignLedgerImages(ctx,
 		signer,
-		signerSyft(in.KeyRef),
+		syft.New(),
 		resolver,
 		os.Stderr,
 		os.Stderr,
 		in)
-}
-
-// signerSyft is the syft the signer boundary scans with: it runs without the
-// credentials in signerSecretEnv, the signing key of this run among them.
-func signerSyft(keyRef string) *syft.Adapter {
-	return &syft.Adapter{UnsetEnv: signerSecretEnv(keyRef)}
-}
-
-// signerSecretEnv is the credential list every tool at the signer boundary
-// runs without; secretenv keeps the one copy the changelog renderers share.
-// An env:// signing key names its own variable, which no fixed list can hold,
-// so it is added here. keyRef is empty for a command that takes no key.
-func signerSecretEnv(keyRef string) []string {
-	return secretenv.Names(cosign.KeyEnvName(keyRef))
 }

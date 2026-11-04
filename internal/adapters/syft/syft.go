@@ -10,7 +10,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/safeexec"
@@ -19,14 +21,13 @@ import (
 // Adapter wraps the syft binary. Bin is overridable for tests.
 type Adapter struct {
 	Bin string // empty → "syft"
-	// UnsetEnv removes sensitive variables from the syft subprocess environment.
-	// Most callers leave this nil; signer-boundary callers use it so SBOM
-	// generation cannot inherit signing or registry tokens.
-	UnsetEnv []string
 }
 
 // New returns an Adapter using the system syft.
 func New() *Adapter { return &Adapter{} }
+
+// fileSchemes are the syft source schemes whose rest is a filesystem path.
+var fileSchemes = []string{"dir:", "file:", "oci-dir:", "oci-archive:", "docker-archive:", "singularity:"}
 
 // Generate scans target once and writes one SBOM file per (format,
 // outputFile) entry in outputs (e.g. "spdx-json" → "/tmp/x.spdx.json").
@@ -40,6 +41,10 @@ func New() *Adapter { return &Adapter{} }
 //
 // Map iteration order is non-deterministic; argv is built by walking
 // sorted keys so test assertions and logs stay stable.
+//
+// syft runs away from the caller's directory, so relative output files and a
+// relative path target, bare or behind a file scheme such as oci-dir:, are
+// made absolute against it first.
 func (a *Adapter) Generate(ctx context.Context, target string, outputs map[string]string, errOut io.Writer) error {
 	if len(outputs) == 0 {
 		return fmt.Errorf("syft: no outputs requested: %w", errs.ErrUsage)
@@ -52,17 +57,56 @@ func (a *Adapter) Generate(ctx context.Context, target string, outputs map[strin
 
 	slices.Sort(formats)
 
-	args := []string{target}
+	source, err := absoluteSource(target)
+	if err != nil {
+		return err
+	}
+
+	args := []string{source}
+
 	for _, f := range formats {
-		args = append(args, "-o", f+"="+outputs[f])
+		file, err := filepath.Abs(outputs[f])
+		if err != nil {
+			return fmt.Errorf("syft output %s: %w", outputs[f], err)
+		}
+
+		args = append(args, "-o", f+"="+file)
 	}
 
-	cmd := safeexec.Command(ctx, a.bin(), args...)
-	if len(a.UnsetEnv) > 0 {
-		cmd.Env = safeexec.EnvWithout(os.Environ(), a.UnsetEnv...)
+	return a.run(ctx, io.Discard, errOut, args)
+}
+
+// RunInherit invokes `syft` with args, streaming stdout/stderr to the
+// provided writers. Used by callers that need the raw stdout (e.g.
+// `syft --version`). Path arguments must be absolute.
+func (a *Adapter) RunInherit(ctx context.Context, stdout, stderr io.Writer, args ...string) error {
+	return a.run(ctx, stdout, stderr, args)
+}
+
+// run starts syft isolated the way the trivy adapter is: SYFT_* variables
+// and the .syft.yaml of the caller's directory (the checkout) could exclude
+// paths or catalogers from an SBOM the engine signs, so syft gets only
+// safeexec.GateToolEnv, an explicit empty configuration file instead of the
+// discovered ones, and a private empty working directory.
+func (a *Adapter) run(ctx context.Context, stdout, stderr io.Writer, args []string) error {
+	dir, err := os.MkdirTemp("", "forge-ci-syft-*")
+	if err != nil {
+		return fmt.Errorf("create syft working directory: %w", err)
 	}
 
-	cmd.Stderr = errOut
+	defer func() { _ = os.RemoveAll(dir) }()
+
+	config := filepath.Join(dir, "syft.yaml")
+	if err := os.WriteFile(config, []byte("{}\n"), 0o600); err != nil {
+		return fmt.Errorf("write syft configuration: %w", err)
+	}
+
+	cmd := safeexec.Command(ctx, a.bin(), slices.Concat(args, []string{"--config", config})...)
+	cmd.Env = safeexec.GateToolEnv(os.Environ())
+	cmd.Dir = dir
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+
 	if err := cmd.Run(); err != nil {
 		// A non-exit failure (most commonly syft missing from PATH) is an
 		// external-dependency problem, not an internal bug — classify it as
@@ -73,23 +117,31 @@ func (a *Adapter) Generate(ctx context.Context, target string, outputs map[strin
 	return nil
 }
 
-// RunInherit invokes `syft` with args, streaming stdout/stderr to the
-// provided writers. Used by callers that need the raw stdout (e.g.
-// `syft --version`).
-func (a *Adapter) RunInherit(ctx context.Context, stdout, stderr io.Writer, args ...string) error {
-	cmd := safeexec.Command(ctx, a.bin(), args...)
-	if len(a.UnsetEnv) > 0 {
-		cmd.Env = safeexec.EnvWithout(os.Environ(), a.UnsetEnv...)
+// absoluteSource makes a path source absolute: the rest of a file scheme, or a
+// bare target that exists on disk, which syft would read as a path. Anything
+// else is an image reference and is returned as given.
+func absoluteSource(target string) (string, error) {
+	for _, scheme := range fileSchemes {
+		if rest, ok := strings.CutPrefix(target, scheme); ok {
+			path, err := filepath.Abs(rest)
+			if err != nil {
+				return "", fmt.Errorf("syft source %s: %w", target, err)
+			}
+
+			return scheme + path, nil
+		}
 	}
 
-	cmd.Stdout = stdout
-
-	cmd.Stderr = stderr
-	if err := cmd.Run(); err != nil {
-		return safeexec.WrapError(err, a.bin(), safeexec.FirstArg(args))
+	if _, err := os.Lstat(target); err != nil {
+		return target, nil //nolint:nilerr // not on disk: an image reference.
 	}
 
-	return nil
+	path, err := filepath.Abs(target)
+	if err != nil {
+		return "", fmt.Errorf("syft source %s: %w", target, err)
+	}
+
+	return path, nil
 }
 
 func (a *Adapter) bin() string {

@@ -45,17 +45,16 @@ func TestAdapter_RunInheritPassesArgs(t *testing.T) {
 	}
 }
 
-// The gate's settings are the engine's flags. Forge-injected TRIVY_*
-// variables and configuration in the caller's directory (the checkout) must
+// The gate's settings are the engine's flags, the platform among them.
+// Forge-injected TRIVY_* variables and configuration in the caller's directory (the checkout) must
 // not reach trivy, and neither may GITHUB_TOKEN, which trivy sends to ghcr.io
 // and which holds the forge token on a Forgejo job.
 func TestAdapter_RunInheritIsolatesEnvironmentAndDirectory(t *testing.T) {
 	mock := mockbinary.New(t)
 	mock.Add("trivy", `
-for name in TRIVY_IGNORE_POLICY TRIVY_SKIP_DIRS TRIVY_DB_REPOSITORY TRIVY_CONFIG GITHUB_TOKEN UNRELATED; do
+for name in TRIVY_IGNORE_POLICY TRIVY_SKIP_DIRS TRIVY_DB_REPOSITORY TRIVY_CONFIG TRIVY_PLATFORM GITHUB_TOKEN UNRELATED; do
   if printenv "$name" >/dev/null; then echo "leaked $name"; exit 42; fi
 done
-[ "${TRIVY_PLATFORM:-}" = linux/arm64 ] || exit 43
 [ "${HTTPS_PROXY:-}" = http://proxy.example:3128 ] || exit 44
 [ -z "$(ls -A .)" ] || exit 45
 `)

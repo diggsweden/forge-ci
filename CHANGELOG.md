@@ -256,10 +256,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the vulnerability database, add an ignore policy or VEX statements, and pass
   the gate. It also loaded `trivy.yaml` and `.trivyignore` from the checkout,
   around the rule that approvals carry a reason and expiry. Trivy now gets only
-  the path, home, cache, registry-credential, proxy and CA variables, plus
-  `TRIVY_PLATFORM`, which the multi-arch build sets per leg; it runs in an
-  empty directory with configuration loading disabled, and the ignore file
-  reaches it by absolute path.
+  the path, home, cache, registry-credential, proxy and CA variables; the
+  multi-arch build passes each leg's platform as `--platform` instead of
+  `TRIVY_PLATFORM`. It runs in an empty directory with configuration loading
+  disabled, and the ignore file reaches it by absolute path.
+- SBOM scans no longer take settings from the job or the checkout either.
+  Syft read every `SYFT_*` variable and `.syft.yaml` from the checkout, so a
+  project variable or a committed file could exclude paths or catalogers from
+  an SBOM the engine signs. Syft now gets the same variables as Trivy, an
+  explicit empty configuration and an empty working directory; relative
+  targets and outputs resolve against the caller's directory first.
 - Image paths derived from the repository owner or name are lowercased, as
   an OCI repository path requires: the snapshot image default for a
   non-GHCR registry, the publish build cache, the bootstrap runtime-image

@@ -32,6 +32,9 @@ type ScanContainerInput struct {
 	ImageRef string
 	// OCILayout selects a local image as scan input; ImageRef remains report identity.
 	OCILayout string
+	// Platform is the os/arch of a multi-platform input to scan, such as
+	// linux/arm64. Empty leaves the choice to Trivy.
+	Platform string
 	// JSONFile is the destination for the raw trivy JSON output.
 	// Default: trivy-results.json.
 	JSONFile string
@@ -105,10 +108,6 @@ func resolveIgnoreFile(named string) (string, error) {
 // where adopters look for vulnerability detail.
 // Configured output files represent this invocation: previous files are retired
 // after preflight; fresh validated reports are installed individually.
-//
-// TRIVY_PLATFORM (when set in the env) is the one trivy setting the trivy
-// adapter passes on; the multi-arch container build pins per-leg platforms
-// that way.
 func ScanContainer(
 	ctx context.Context,
 	trivy TrivyOps,
@@ -155,7 +154,7 @@ func ScanContainer(
 	_, _ = fmt.Fprintf(out, "   Blocking: %s or above with a fixed package, and unfixed CRITICAL\n", threshold)
 	_, _ = fmt.Fprintf(out, "   Approved findings: %s\n\n", cmp.Or(ignoreFile, "none (no .trivyignore.yaml)"))
 
-	if scanErr := runTrivyContainerScan(ctx, trivy, out, stderr, rawReport, severity, ignoreFile, in.ImageRef, in.OCILayout); scanErr != nil {
+	if scanErr := runTrivyContainerScan(ctx, trivy, out, stderr, rawReport, severity, ignoreFile, in); scanErr != nil {
 		return scanErr
 	}
 
@@ -307,13 +306,13 @@ func plural(count int, one, many string) string {
 // the image ref and writes the JSON output to jsonPath.
 // `--exit-code 0` keeps the scan-gate decision inside the Go code. Trivy
 // runs outside the caller's directory, so every path is made absolute.
-func runTrivyContainerScan(ctx context.Context, trivy TrivyOps, out, stderr io.Writer, jsonPath, severity, ignoreFile, imageRef, ociLayout string) error {
-	paths, err := absPaths(jsonPath, ignoreFile, ociLayout)
+func runTrivyContainerScan(ctx context.Context, trivy TrivyOps, out, stderr io.Writer, jsonPath, severity, ignoreFile string, in ScanContainerInput) error {
+	paths, err := absPaths(jsonPath, ignoreFile, in.OCILayout)
 	if err != nil {
 		return err
 	}
 
-	jsonPath, ignoreFile, ociLayout = paths[0], paths[1], paths[2]
+	jsonPath, ignoreFile, ociLayout := paths[0], paths[1], paths[2]
 
 	args := []string{
 		"image",
@@ -327,10 +326,14 @@ func runTrivyContainerScan(ctx context.Context, trivy TrivyOps, out, stderr io.W
 		args = append(args, "--ignorefile", ignoreFile)
 	}
 
+	if in.Platform != "" {
+		args = append(args, "--platform", in.Platform)
+	}
+
 	if ociLayout != "" {
 		args = append(args, "--input", ociLayout)
 	} else {
-		args = append(args, imageRef)
+		args = append(args, in.ImageRef)
 	}
 
 	code, err := trivy.RunInherit(ctx, out, stderr, args...)

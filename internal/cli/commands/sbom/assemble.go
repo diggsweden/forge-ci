@@ -21,7 +21,6 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/projecttype"
 	domainrelease "github.com/diggsweden/forge-ci/internal/domain/release"
-	"github.com/diggsweden/forge-ci/internal/secretenv"
 )
 
 // assembleCmd wires `forge-ci sbom assemble` — assemble a project's CISA
@@ -110,9 +109,9 @@ EXAMPLES:
 // precedence order: --plan → per-artifact matrix; --image-name/-digest →
 // multi-artifact container; otherwise → single-project assembly.
 func runAssembleMode(ctx context.Context, cmd *cli.Command) error {
-	// The scan has no use for a credential, and this verb can hold a signing
-	// key for --sign: syft runs without the key's variable and the rest.
-	scanner := &syft.Adapter{UnsetEnv: secretenv.Names(cosign.KeyEnvName(cmd.String("key")))}
+	// This verb can hold a signing key for --sign; syft runs with only the
+	// gate tool environment, so neither it nor any other credential reaches it.
+	scanner := syft.New()
 
 	switch {
 	case cmd.String("plan") != "":

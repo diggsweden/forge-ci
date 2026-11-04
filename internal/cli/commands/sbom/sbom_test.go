@@ -149,20 +149,27 @@ done
 
 	// The whole argv: the digest-pinned image and one sorted output per format,
 	// named from the GitHub repository and the v-stripped ref, written in the
-	// working directory. The digest used to be the non-canonical
-	// "sha256:deadbeef0123", which the command now refuses, so this test had
-	// been failing before it reached syft.
-	wantArgs := []string{
-		"registry.example.com/team/app@sha256:" + strings.Repeat("d", 64),
-		"-o", "cyclonedx-json=my-service-2.5.3-analyzed-container-sbom.cyclonedx.json",
-		"-o", "spdx-json=my-service-2.5.3-analyzed-container-sbom.spdx.json",
-	}
-	if !slices.Equal(calls[0].Args, wantArgs) {
-		t.Errorf("syft argv = %q, want %q", calls[0].Args, wantArgs)
+	// working directory, then the private configuration. The digest used to be
+	// the non-canonical "sha256:deadbeef0123", which the command now refuses,
+	// so this test had been failing before it reached syft.
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	if wantCwd, _ := filepath.EvalSymlinks(dir); calls[0].Cwd != wantCwd && calls[0].Cwd != dir {
-		t.Errorf("syft ran in %q, want %q", calls[0].Cwd, dir)
+	wantArgs := []string{
+		"registry.example.com/team/app@sha256:" + strings.Repeat("d", 64),
+		"-o", "cyclonedx-json=" + filepath.Join(cwd, "my-service-2.5.3-analyzed-container-sbom.cyclonedx.json"),
+		"-o", "spdx-json=" + filepath.Join(cwd, "my-service-2.5.3-analyzed-container-sbom.spdx.json"),
+		"--config",
+	}
+	if args := calls[0].Args; len(args) != len(wantArgs)+1 || !slices.Equal(args[:len(wantArgs)], wantArgs) {
+		t.Errorf("syft argv = %q, want %q and the configuration file", args, wantArgs)
+	}
+
+	// syft runs away from the checkout, so its configuration is not found.
+	if wantCwd, _ := filepath.EvalSymlinks(dir); calls[0].Cwd == wantCwd || calls[0].Cwd == dir {
+		t.Errorf("syft ran in the working directory %q", calls[0].Cwd)
 	}
 
 	entries, err := os.ReadDir(dir)
@@ -184,7 +191,7 @@ for name in MY_SIGNING_KEY COSIGN_PASSWORD FORGEJO_TOKEN; do
     exit 4
   fi
 done
-[[ "${KEPT_FOR_SYFT:-}" == kept ]] || { echo 'syft lost an unrelated variable' >&2; exit 5; }
+[[ "${REGISTRY_AUTH_FILE:-}" == /run/auth.json ]] || { echo 'syft lost its registry configuration' >&2; exit 5; }
 for ((i=1; i<=$#; i++)); do
   if [[ "${!i}" == "-o" ]]; then
     next=$((i+1))
@@ -205,7 +212,7 @@ done
 	env.Setenv("MY_SIGNING_KEY", "fixture-signing-key")
 	env.Setenv("COSIGN_PASSWORD", "fixture-passphrase")
 	env.Setenv("FORGEJO_TOKEN", "fixture-token")
-	env.Setenv("KEPT_FOR_SYFT", "kept")
+	env.Setenv("REGISTRY_AUTH_FILE", "/run/auth.json")
 
 	if err := sbomcmd.New().Run(t.Context(), []string{"sbom", "assemble", "--key", "env://MY_SIGNING_KEY"}); err != nil {
 		t.Fatal(err)

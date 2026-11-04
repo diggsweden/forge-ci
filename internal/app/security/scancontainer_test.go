@@ -479,6 +479,31 @@ func TestScanContainer_PassesPathsAbsolute(t *testing.T) {
 	}
 }
 
+// The platform of a multi-platform input is a flag of the scan, so it
+// reaches Trivy although no TRIVY_* variable does; without one, Trivy is
+// given none.
+func TestScanContainer_PassesThePlatformAsAFlag(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	for platform, want := range map[string]bool{"linux/arm64": true, "": false} {
+		trivy := &recordingTrivy{writeJSON: []byte(`{"Results":[]}`)}
+		if err := appsecurity.ScanContainer(t.Context(), trivy, io.Discard, io.Discard, output.Annotator{}, appsecurity.ScanContainerInput{
+			ImageRef: "img", OCILayout: "layout", Platform: platform,
+			JSONFile: "trivy.json", SARIFFile: "trivy.sarif", GitLabReportFile: "gl.json",
+		}); err != nil {
+			t.Fatal(err)
+		}
+
+		if got := slices.Contains(trivy.runs[0], "--platform"); got != want {
+			t.Errorf("platform %q: args %q", platform, trivy.runs[0])
+		}
+
+		if want && reportFlag(trivy.runs[0], "--platform") != platform {
+			t.Errorf("--platform %q, want %q", reportFlag(trivy.runs[0], "--platform"), platform)
+		}
+	}
+}
+
 // A plain .trivyignore records no reason or expiry; without the YAML file
 // the scan refuses to run rather than block on what it meant to approve.
 func TestScanContainer_RefusesAPlainTrivyignore(t *testing.T) {

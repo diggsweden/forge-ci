@@ -12,6 +12,7 @@ import (
 
 	"github.com/diggsweden/forge-ci/internal/adapters/buildah"
 	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
+	"github.com/diggsweden/forge-ci/internal/adapters/syft"
 	"github.com/diggsweden/forge-ci/internal/adapters/trivy"
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
 	"github.com/diggsweden/forge-ci/internal/cli/cienv"
@@ -64,7 +65,7 @@ does not validate are not retried.`,
 				buildah.New(),
 				ociregistry.WithAuthFile(cmd.String(flagAuthFile)),
 				trivy.New(),
-				signerSyft(""),
+				syft.New(),
 				os.Stderr,
 				os.Stderr,
 				appcontainer.ImageEvidenceInput{

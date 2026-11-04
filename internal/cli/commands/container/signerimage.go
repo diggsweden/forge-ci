@@ -15,6 +15,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
+	"github.com/diggsweden/forge-ci/internal/adapters/syft"
 	"github.com/diggsweden/forge-ci/internal/adapters/trivy"
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
 	"github.com/diggsweden/forge-ci/internal/cli/cienv"
@@ -194,7 +195,7 @@ outputs.`,
 					scanner := trivy.New()
 					input.Evidence = &appcontainer.StagedLayoutEvidence{
 						Trivy:               scanner,
-						Syft:                signerSyft(""),
+						Syft:                syft.New(),
 						Stderr:              os.Stderr,
 						TrivyOutputTemplate: scanTemplate,
 						SBOMOutputTemplate:  sbomTemplate,

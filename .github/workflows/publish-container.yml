@@ -734,11 +734,6 @@ jobs:
             --set "scan-severity=${SCAN_SEVERITY}"
       - name: Build and scan retained layout
         id: build
-        env:
-          # NOT a `container build` flag (so not in the plan): the in-process
-          # trivy scan inherits TRIVY_PLATFORM from the env and reads the local
-          # exported layout for this architecture; it performs no image pull.
-          TRIVY_PLATFORM: ${{ matrix.platform }}
         # All build/scan flags come from the plan written above. buildah emits
         # no BuildKit in-index attestations (which are unsigned and
         # proprietary). Every piece of evidence is instead a SIGNED cosign in-toto

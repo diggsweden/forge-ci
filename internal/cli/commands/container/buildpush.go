@@ -161,6 +161,7 @@ func publicationGate(scanner appsecurity.TrivyOps, annot output.Annotator) func(
 		return appsecurity.ScanContainer(ctx, scanner, os.Stderr, os.Stderr, annot, appsecurity.ScanContainerInput{
 			ImageRef:         "image layout (" + platform + ")",
 			OCILayout:        layout,
+			Platform:         platform,
 			JSONFile:         filepath.Join(reports, "trivy.json"),
 			SARIFFile:        filepath.Join(reports, "trivy.sarif"),
 			GitLabReportFile: filepath.Join(reports, "gitlab.json"),

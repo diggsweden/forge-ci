@@ -15,6 +15,7 @@ import (
 
 	gitadapter "github.com/diggsweden/forge-ci/internal/adapters/git"
 	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
+	"github.com/diggsweden/forge-ci/internal/adapters/syft"
 	"github.com/diggsweden/forge-ci/internal/adapters/trivy"
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
 	appsnapshot "github.com/diggsweden/forge-ci/internal/app/snapshotimage"
@@ -217,7 +218,7 @@ func snapshotImagesPublishCmd() *cli.Command {
 
 		return snapshotImageAuth(cmd, im, func(authFile string) error {
 			return deps.FromCmd(ctx, cmd, func(dep *deps.Deps) error {
-				r, err := appsnapshot.Publish(ctx, ociregistry.WithAuthFile(authFile), trivy.New(), signerSyft(""), dep.OutputSink, dep.SummarySink, os.Stderr, deps.Annotator(cmd), p, appsnapshot.PublishInput{Name: im.Name, MetadataDir: cmd.String(flagMetadataDir), AuthFile: authFile, ServerURL: cmd.String(flagServerURL), Repository: cmd.String(flagRepository), EvidenceDir: cmd.String("evidence-dir")})
+				r, err := appsnapshot.Publish(ctx, ociregistry.WithAuthFile(authFile), trivy.New(), syft.New(), dep.OutputSink, dep.SummarySink, os.Stderr, deps.Annotator(cmd), p, appsnapshot.PublishInput{Name: im.Name, MetadataDir: cmd.String(flagMetadataDir), AuthFile: authFile, ServerURL: cmd.String(flagServerURL), Repository: cmd.String(flagRepository), EvidenceDir: cmd.String("evidence-dir")})
 				if err != nil {
 					return err
 				}

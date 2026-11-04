@@ -67,7 +67,7 @@ func BuildAndScan(
 
 	check := func(scanContext context.Context, directory string) error {
 		return appsecurity.ScanContainer(scanContext, trivy, out, stderr, annot, appsecurity.ScanContainerInput{
-			ImageRef: in.Build.ImageRef, OCILayout: directory, Severity: in.ScanSeverity, TrivyVersion: in.TrivyVersion,
+			ImageRef: in.Build.ImageRef, OCILayout: directory, Platform: in.Build.Platform, Severity: in.ScanSeverity, TrivyVersion: in.TrivyVersion,
 		})
 	}
 

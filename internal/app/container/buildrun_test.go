@@ -89,6 +89,11 @@ func TestBuildAndScan_ScansTheLayoutBeforePublishingIt(t *testing.T) {
 		t.Errorf("scan/push used different content: %v", scanner.runs)
 	}
 
+	// The leg's platform reaches the scan as a flag, not through TRIVY_PLATFORM.
+	if platform, ok := argValue(scanner.runs, "--platform"); !ok || platform != "linux/amd64" {
+		t.Errorf("scan platform = %q, want linux/amd64: %v", platform, scanner.runs)
+	}
+
 	assertPublicationLayoutRemoved(t, builder.layout)
 }
 

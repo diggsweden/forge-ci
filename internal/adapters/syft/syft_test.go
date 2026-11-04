@@ -8,18 +8,38 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/diggsweden/forge-ci/internal/adapters/syft"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/testutil/mockbinary"
 )
 
-func TestAdapter_GenerateUsesSortedOutputArgs(t *testing.T) {
-	t.Parallel()
+// configArgs is the tail every invocation carries: the private empty
+// configuration file that replaces the discovered ones.
+func configArgs(t *testing.T, args []string) []string {
+	t.Helper()
+
+	require.GreaterOrEqual(t, len(args), 2)
+	tail := args[len(args)-2:]
+	require.Equal(t, "--config", tail[0])
+	require.Equal(t, "syft.yaml", filepath.Base(tail[1]))
+
+	return args[:len(args)-2]
+}
+
+// Relative output files and a relative path source resolve against the
+// caller's directory, since syft runs in another one; format order is sorted.
+func TestAdapter_GenerateUsesSortedAbsoluteArgs(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "target"), 0o700))
+	t.Chdir(dir)
 
 	mock := mockbinary.New(t)
 	mock.Add("syft", `printf 'ok\n' >&2`)
@@ -31,46 +51,74 @@ func TestAdapter_GenerateUsesSortedOutputArgs(t *testing.T) {
 		"spdx-json":      "out.spdx.json",
 		"cyclonedx-json": "out.cyclonedx.json",
 	}, &stderr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	wantArgs := []string{"./target", "-o", "cyclonedx-json=out.cyclonedx.json", "-o", "spdx-json=out.spdx.json"}
-	if got := mock.Invocations("syft")[0].Args; !slices.Equal(got, wantArgs) {
-		t.Errorf("args = %v, want %v", got, wantArgs)
-	}
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
 
-	if strings.TrimSpace(stderr.String()) != "ok" {
-		t.Errorf("stderr = %q", stderr.String())
+	want := []string{
+		filepath.Join(cwd, "target"),
+		"-o", "cyclonedx-json=" + filepath.Join(cwd, "out.cyclonedx.json"),
+		"-o", "spdx-json=" + filepath.Join(cwd, "out.spdx.json"),
+	}
+	assert.Equal(t, want, configArgs(t, mock.Invocations("syft")[0].Args))
+	assert.Equal(t, "ok", strings.TrimSpace(stderr.String()))
+}
+
+// A file scheme's path is made absolute; an image reference, with or without
+// a scheme, is passed as given.
+func TestAdapter_GenerateResolvesOnlyPathSources(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+
+	for target, want := range map[string]string{
+		"oci-dir:layout":                    "oci-dir:" + filepath.Join(cwd, "layout"),
+		"docker-archive:image.tar":          "docker-archive:" + filepath.Join(cwd, "image.tar"),
+		"oci-dir:/abs/layout":               "oci-dir:/abs/layout",
+		"registry:ghcr.io/example/app:1":    "registry:ghcr.io/example/app:1",
+		"ghcr.io/example/app@sha256:abc123": "ghcr.io/example/app@sha256:abc123",
+	} {
+		mock := mockbinary.New(t)
+		mock.Add("syft", `true`)
+
+		require.NoError(t, (&syft.Adapter{Bin: mock.Path("syft")}).Generate(t.Context(), target,
+			map[string]string{"cyclonedx-json": "/out/sbom.json"}, io.Discard))
+		assert.Equal(t, want, configArgs(t, mock.Invocations("syft")[0].Args)[0], target)
 	}
 }
 
-func TestAdapter_GenerateRequiresOutputs(t *testing.T) {
-	a := &syft.Adapter{Bin: "syft"}
-
-	err := a.Generate(context.Background(), "./target", nil, &bytes.Buffer{})
-	if !errors.Is(err, errs.ErrUsage) || !strings.Contains(err.Error(), "no outputs requested") {
-		t.Fatalf("err = %v, want ErrUsage naming the missing outputs", err)
-	}
-}
-
-// UnsetEnv covers every way the adapter starts syft, and removes only what it
-// names: an adapter that emptied the environment would pass a leak-only check.
-func TestAdapter_UnsetsSensitiveEnvOnEveryEntryPoint(t *testing.T) {
+// The SBOM's contents are the engine's flags. Forge-injected SYFT_* variables
+// and a .syft.yaml in the caller's directory (the checkout) could exclude
+// paths or catalogers from an SBOM the engine signs; neither may reach syft,
+// on either entry point.
+func TestAdapter_IsolatesEnvironmentAndDirectory(t *testing.T) {
 	mock := mockbinary.New(t)
 	mock.Add("syft", `
-if [ -n "${COSIGN_KEY:-}" ] || [ -n "${REGISTRY_TOKEN:-}" ]; then
-  printf 'secret env leaked to syft\n' >&2
-  exit 42
-fi
-[ "${KEEP_ME:-}" = kept ] || exit 43
+for name in SYFT_EXCLUDE SYFT_CONFIG SYFT_CATALOGERS COSIGN_KEY GITHUB_TOKEN UNRELATED; do
+  if printenv "$name" >/dev/null; then echo "leaked $name" >&2; exit 42; fi
+done
+[ "${HTTPS_PROXY:-}" = http://proxy.example:3128 ] || exit 43
+[ "${DOCKER_CONFIG:-}" = /run/docker ] || exit 44
+[ "$(ls -A)" = syft.yaml ] || { echo "found $(ls -A)" >&2; exit 45; }
+[ "$(cat syft.yaml)" = '{}' ] || exit 46
 printf 'ok\n' >&2
 `)
-	t.Setenv("COSIGN_KEY", "secret")
-	t.Setenv("REGISTRY_TOKEN", "token")
-	t.Setenv("KEEP_ME", "kept")
 
-	adapter := &syft.Adapter{Bin: mock.Path("syft"), UnsetEnv: []string{"COSIGN_KEY", "REGISTRY_TOKEN"}}
+	checkout := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(checkout, ".syft.yaml"), []byte("exclude:\n  - ./**\n"), 0o600))
+	t.Chdir(checkout)
+	t.Setenv("SYFT_EXCLUDE", "./vendor/**")
+	t.Setenv("SYFT_CONFIG", ".syft.yaml")
+	t.Setenv("SYFT_CATALOGERS", "none")
+	t.Setenv("COSIGN_KEY", "secret")
+	t.Setenv("GITHUB_TOKEN", "forge-job-token")
+	t.Setenv("UNRELATED", "value")
+	t.Setenv("HTTPS_PROXY", "http://proxy.example:3128")
+	t.Setenv("DOCKER_CONFIG", "/run/docker")
+
+	adapter := &syft.Adapter{Bin: mock.Path("syft")}
 
 	for name, run := range map[string]func(stderr io.Writer) error{
 		"Generate": func(stderr io.Writer) error {
@@ -81,13 +129,22 @@ printf 'ok\n' >&2
 		},
 	} {
 		var stderr bytes.Buffer
-		if err := run(&stderr); err != nil {
-			t.Fatalf("%s: %v", name, err)
-		}
+		err := run(&stderr)
+		require.NoError(t, err, "%s: %s", name, stderr.String())
+		assert.Equal(t, "ok", strings.TrimSpace(stderr.String()), name)
+	}
 
-		if strings.TrimSpace(stderr.String()) != "ok" {
-			t.Errorf("%s: stderr = %q", name, stderr.String())
-		}
+	for _, invocation := range mock.Invocations("syft") {
+		assert.NotEqual(t, checkout, invocation.Cwd)
+	}
+}
+
+func TestAdapter_GenerateRequiresOutputs(t *testing.T) {
+	a := &syft.Adapter{Bin: "syft"}
+
+	err := a.Generate(context.Background(), "./target", nil, &bytes.Buffer{})
+	if !errors.Is(err, errs.ErrUsage) || !strings.Contains(err.Error(), "no outputs requested") {
+		t.Fatalf("err = %v, want ErrUsage naming the missing outputs", err)
 	}
 }
 
@@ -103,7 +160,7 @@ func TestAdapter_RunInherit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(stdout.String(), "syft --version") {
+	if !strings.Contains(stdout.String(), "syft --version --config ") {
 		t.Errorf("stdout = %q", stdout.String())
 	}
 }

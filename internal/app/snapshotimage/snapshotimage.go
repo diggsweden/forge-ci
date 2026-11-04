@@ -358,7 +358,7 @@ func Publish(ctx context.Context, registry appcontainer.StagedSignerRegistry, sc
 			return err
 		}
 
-		if err := appsecurity.ScanContainer(ctx, scanner, out, out, annot, appsecurity.ScanContainerInput{ImageRef: im.ImageRepository + ":" + im.Tag, OCILayout: layout, Severity: im.Severity, JSONFile: filepath.Join(dir, "trivy.json"), SARIFFile: filepath.Join(dir, "trivy.sarif"), GitLabReportFile: filepath.Join(dir, "gitlab.json")}); err != nil {
+		if err := appsecurity.ScanContainer(ctx, scanner, out, out, annot, appsecurity.ScanContainerInput{ImageRef: im.ImageRepository + ":" + im.Tag, OCILayout: layout, Platform: platform, Severity: im.Severity, JSONFile: filepath.Join(dir, "trivy.json"), SARIFFile: filepath.Join(dir, "trivy.sarif"), GitLabReportFile: filepath.Join(dir, "gitlab.json")}); err != nil {
 			return err
 		}
 
