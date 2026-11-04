@@ -142,6 +142,16 @@ linters:
         # otherwise agree with itself and the scenario would pass while the
         # forge held something else. Keeping the import out makes that
         # independence a build failure rather than a habit.
+        # golang.org/x/crypto/openpgp is frozen and unsafe by design
+        # (GO-2026-5932, which no x/crypto release fixes), yet stays in the
+        # module this tree needs for other packages. OpenPGP goes through
+        # ProtonMail's maintained fork, in internal/pgp and the adapters.
+        no-frozen-openpgp:
+          files:
+            - $all
+          deny:
+            - pkg: golang.org/x/crypto/openpgp
+              desc: frozen and unsafe by design (GO-2026-5932); use github.com/ProtonMail/go-crypto/openpgp
         rawref-stays-independent:
           files:
             - "**/internal/livetest/rawref/**"
