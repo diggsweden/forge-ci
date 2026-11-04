@@ -349,6 +349,8 @@ func layoutArguments(spec build, containerfile, layoutDir string) ([]string, err
 		// The next build of this job must not start on this one's root
 		// filesystem: delete it once the layout is written.
 		"--cleanup",
+		// Content changes with unchanged mtime/size must still reach the image.
+		"--snapshot-mode=full",
 		"--oci-layout-path", layout,
 		"--ignore-path", layout,
 		"--ignore-path", contextDir,

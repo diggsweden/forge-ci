@@ -98,6 +98,7 @@ func TestBuildToLayout_ArgvShape(t *testing.T) {
 		"--build-arg VERSION=1.2.3",
 		"--label org.opencontainers.image.revision=abc",
 		"--reproducible",
+		"--snapshot-mode=full",
 		"--cache=true --cache-repo ghcr.io/org/cache --no-push-cache",
 		`CONFIG {"auths":{"ghcr.io":{"auth":"Y2FuYXJ5"}}}`,
 	} {
