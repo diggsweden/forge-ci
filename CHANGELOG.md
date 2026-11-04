@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING:** Remove the `cron-schedule` input of
   `security-openssf-scorecard.yml`, which had no effect. Schedule the caller
   with `on.schedule`.
+- **BREAKING:** Remove the `runtime-image-java`, `runtime-image-node` and
+  `runtime-image-rust` inputs of `release-prepare-stage.yml`, which had no
+  effect: version files are prepared on the runner, where a repository can mix
+  ecosystems. Remove the `enable-scan` input of `publish-container.yml`, which
+  had no effect either: every published layout is scanned. A test now refuses
+  any workflow, action or component input that nothing reads.
 - **BREAKING:** Replace `release-type` and `derive-release --require-stable`
   with `release-policy: stable|stable-prerelease`, without compatibility aliases.
   Keep workflow, binary and runtime-image versions aligned; select prerelease

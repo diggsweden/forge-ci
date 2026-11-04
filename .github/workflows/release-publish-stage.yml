@@ -283,17 +283,14 @@ jobs:
       container-file: ${{ matrix.container.container_file }}
       context: ${{ matrix.container.context || '.' }}
       platforms: ${{ matrix.container.platforms || 'linux/amd64' }}
-      # All three per-container gates default true in the planner
-      # (`Container.EnableSLSAEffective`, `Container.EnableScanEffective`).
-      # Explicit `enable-slsa: false` / `enable-scan: false` in artifacts.yml
-      # surface here so adopters can opt out per-container — e.g. a
-      # debug image that intentionally ships with known CVEs.
+      # SLSA defaults true in the planner (`Container.EnableSLSAEffective`);
+      # an explicit `enable-slsa: false` in artifacts.yml surfaces here. The
+      # scan is not optional: every published layout is scanned.
       enable-slsa: ${{ matrix.container.enable_slsa }}
       # `enable-analyzed-container-sbom` is derived by `forge-ci config parse-artifacts`
       # from each source artefact's effective-sboms — true if any source includes
       # 'analyzed-container'. Replaces the v2.x user-facing `enable-sbom` flag.
       enable-analyzed-container-sbom: ${{ matrix.container.enable_analyzed_container_sbom }}
-      enable-scan: ${{ matrix.container.enable_scan }}
       # Per-container blocking threshold; empty → the default ("CRITICAL")
       # applies and HIGH is reported without blocking. "CRITICAL,HIGH"
       # also blocks on HIGH.

@@ -34,21 +34,6 @@ on:
         required: false
         default: ""
         type: string
-      runtime-image-java:
-        description: "forge-ci runtime image for Maven/Gradle version bump jobs"
-        required: false
-        default: ""
-        type: string
-      runtime-image-node:
-        description: "forge-ci runtime image for NPM version bump jobs"
-        required: false
-        default: ""
-        type: string
-      runtime-image-rust:
-        description: "forge-ci runtime image for Cargo version bump jobs"
-        required: false
-        default: ""
-        type: string
       git-signing-method:
         description: "How to sign the release commit + tag: gpg (default) or ssh. Orchestrator passes fromJSON(config-plan-json).git_signing.method."
         required: false

@@ -62,9 +62,9 @@ func (engine GitHubEngine) KeylessIdentityRegexp() string {
 }
 
 var (
-	githubWorkflowUse = regexp.MustCompile(`(uses:[ \t]*['"]?)diggsweden/forge-ci(/\.github/workflows/[^@\s'"]+)@[^\s'"#]+`)
+	githubWorkflowUse = regexp.MustCompile(`(uses:[ \t]*['"]?)[A-Za-z0-9_.-]+/forge-ci(/\.github/workflows/[^@\s'"]+)@[^\s'"#]+`)
 	githubBinaryRef   = regexp.MustCompile(`(?m)^([ \t]*forge-ci-binary-ref:[ \t]*).*$`)
-	githubRuntimeRef  = regexp.MustCompile(`ghcr\.io/diggsweden/(forge-ci-runtime[a-z0-9.-]*):[A-Za-z0-9._-]+`)
+	githubRuntimeRef  = regexp.MustCompile(`ghcr\.io/[A-Za-z0-9_.-]+/(forge-ci-runtime[a-z0-9.-]*):[A-Za-z0-9._-]+`)
 	githubLeftover    = regexp.MustCompile(`uses:[ \t]*['"]?([^\s'"#]+/\.github/workflows/[^\s'"#]+)`)
 )
 
@@ -133,7 +133,7 @@ func requireOrchestratorImages(name, text string) error {
 var (
 	// githubOrchestratorUse is a call of one of the engine's orchestrators,
 	// whose runtime-image inputs default to released images.
-	githubOrchestratorUse = regexp.MustCompile(`uses:[ \t]*['"]?diggsweden/forge-ci/\.github/workflows/[a-z-]+-orchestrator\.yml@`)
+	githubOrchestratorUse = regexp.MustCompile(`uses:[ \t]*['"]?[A-Za-z0-9_.-]+/forge-ci/\.github/workflows/[a-z-]+-orchestrator\.yml@`)
 	// githubRuntimeImageInput is the base runtime image passed as an input.
 	githubRuntimeImageInput = regexp.MustCompile(`(?m)^[ \t]+runtime-image:[ \t]*\S`)
 )

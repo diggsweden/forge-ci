@@ -154,17 +154,12 @@ on:
         default: true
         type: boolean
       enable-analyzed-container-sbom:
-        description: "Run syft on the pushed image and produce the analyzed-container SBOM. Sibling of enable-slsa/enable-scan. When called from release-publish-stage this is derived from source artefacts' sboms; direct callers default to true."
-        required: false
-        default: true
-        type: boolean
-      enable-scan:
-        description: "Legacy scan input; published layouts are always scanned. Admin policy controls whether findings block."
+        description: "Run syft on the pushed image and produce the analyzed-container SBOM. Sibling of enable-slsa. When called from release-publish-stage this is derived from source artefacts' sboms; direct callers default to true."
         required: false
         default: true
         type: boolean
       scan-severity:
-        description: "Blocking threshold for fixable findings, default CRITICAL (a comma-list blocks at its lowest entry, e.g. CRITICAL,HIGH). HIGH is always reported. Admin policy controls enforcement; enable-scan=false cannot skip scan execution."
+        description: "Blocking threshold for fixable findings, default CRITICAL (a comma-list blocks at its lowest entry, e.g. CRITICAL,HIGH). HIGH is always reported. Admin policy controls enforcement."
         required: false
         default: "CRITICAL"
         type: string
@@ -675,7 +670,7 @@ jobs:
       # push-image=false remains a load-only validation, without a digest.
       # Installed BEFORE the build so `container build` (plan key `scan`) can scan
       # the exported layout before it is published. Admin policy always runs
-      # scans on exported layouts, including legacy enable-scan=false callers.
+      # scans on exported layouts.
       - name: Install trivy
         if: ${{ inputs['push-image'] }}
         run: |

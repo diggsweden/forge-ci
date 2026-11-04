@@ -495,9 +495,6 @@ jobs:
       bot-name: ${{ inputs['bot-name'] }}
       bot-email: ${{ inputs['bot-email'] }}
       runtime-image: ${{ inputs['runtime-image'] || needs.resolve-bootstrap.outputs['runtime-image'] }}
-      runtime-image-java: ${{ inputs['runtime-image-java'] || needs.resolve-bootstrap.outputs['runtime-image-java'] }}
-      runtime-image-node: ${{ inputs['runtime-image-node'] || needs.resolve-bootstrap.outputs['runtime-image-node'] }}
-      runtime-image-rust: ${{ inputs['runtime-image-rust'] || needs.resolve-bootstrap.outputs['runtime-image-rust'] }}
   validate-release-tag:
     name: "Prepare: check the release tag"
     needs: [resolve-bootstrap, parse-config, execute-prepare-stage]

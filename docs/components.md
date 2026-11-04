@@ -342,7 +342,6 @@ with:
   platforms: "linux/amd64,linux/arm64"
   enable-slsa: true
   enable-analyzed-container-sbom: true   # CycloneDX SBOM of the built image
-  enable-scan: true
   registry: "ghcr.io"
 ```
 

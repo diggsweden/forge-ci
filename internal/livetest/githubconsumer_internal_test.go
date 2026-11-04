@@ -583,3 +583,28 @@ func TestRenderGitHubConsumer_RequiresTheRuntimeImageOfAnOrchestratorCall(t *tes
 		t.Fatalf("RenderGitHubConsumer() = %v:\n%s", err, rendered)
 	}
 }
+
+// A fixture may name the published engine by any owner, a placeholder such as
+// OWNER included; rendering replaces the owner and repository alike.
+func TestRenderGitHubConsumer_AcceptsAnyFixtureOwner(t *testing.T) {
+	t.Parallel()
+
+	fixture := strings.NewReplacer("diggsweden/forge-ci", "OWNER/forge-ci", "ghcr.io/diggsweden/", "ghcr.io/OWNER/").Replace(fixturePullRequest)
+	got, _, err := RenderGitHubConsumer("pullrequest.yml", fixture, trialEngine, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{
+		"uses: Example-Org/fc-forge-ci/.github/workflows/pullrequest-orchestrator.yml@" + trialEngine.Commit,
+		"runtime-image: ghcr.io/example-org/forge-ci-runtime-base:sha-aaaaaaa",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rendered fixture lacks %q:\n%s", want, got)
+		}
+	}
+
+	if strings.Contains(got, "OWNER") {
+		t.Errorf("rendered fixture still carries the placeholder:\n%s", got)
+	}
+}
