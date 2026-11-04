@@ -39,8 +39,12 @@ on:
         default: ""
         type: string
       image-repository:
-        description: "Base OCI repository; empty uses ghcr.io/<owner>/<repository>"
+        description: "Base OCI repository; empty uses <registry>/<owner>/<repository>, lowercased"
         default: ""
+        type: string
+      registry:
+        description: "Registry host of the default image repository"
+        default: "ghcr.io"
         type: string
       registry-user:
         default: ""
@@ -132,11 +136,12 @@ jobs:
           SOURCE_SHA: ${{ steps.source.outputs.sha }}
           CONFIG_FILE: ${{ inputs['artifacts-config'] }}
           IMAGE_REPOSITORY: ${{ inputs['image-repository'] }}
+          REGISTRY: ${{ inputs.registry }}
           PUBLISH_CONTAINERS: ${{ inputs['publish-containers'] }}
         run: |
           set -euo pipefail
           mkdir -p "${RUNNER_TEMP}/snapshot-inputs"
-          if [[ -z "$IMAGE_REPOSITORY" ]]; then IMAGE_REPOSITORY="ghcr.io/${GITHUB_REPOSITORY,,}"; fi
+          if [[ -z "$IMAGE_REPOSITORY" ]]; then IMAGE_REPOSITORY="${REGISTRY}/${GITHUB_REPOSITORY,,}"; fi
           forge-ci container snapshot-images plan --file "$CONFIG_FILE" \
             --branch "$SOURCE_BRANCH" --source-sha "$SOURCE_SHA" \
             --image-repository "$IMAGE_REPOSITORY" --publish="$PUBLISH_CONTAINERS" \

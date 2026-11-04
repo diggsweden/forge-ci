@@ -372,7 +372,8 @@ jobs:
       source-sha: ${{ fromJson(needs.setup-snapshot.outputs.snapshot-release-plan-json).context.release_sha }}
       artifacts-config: ${{ inputs['artifacts-config'] }}
       publish-containers: ${{ inputs['publish-containers'] }}
-      image-repository: ${{ inputs['container-image-repository'] || (inputs.registry != 'ghcr.io' && format('{0}/{1}', inputs.registry, github.repository)) || '' }}
+      image-repository: ${{ inputs['container-image-repository'] }}
+      registry: ${{ inputs.registry }}
       registry-user: ${{ inputs['container-registry-user'] }}
       forge-ci-binary-ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
       use-build-artifacts: true

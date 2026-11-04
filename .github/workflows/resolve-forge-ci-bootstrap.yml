@@ -86,7 +86,8 @@ jobs:
           fi
           image_tag="$ref"
           if [[ "$ref" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]]; then image_tag="sha-${ref:0:7}"; fi
-          namespace="${IMAGE_NAMESPACE:-ghcr.io/${REPOSITORY%%/*}}"
+          owner="${REPOSITORY%%/*}"
+          namespace="${IMAGE_NAMESPACE:-ghcr.io/${owner,,}}"
           {
             printf 'ref=%s\n' "$ref"
             printf 'runtime-image=%s/forge-ci-runtime-base:%s\n' "$namespace" "$image_tag"

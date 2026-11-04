@@ -709,6 +709,7 @@ jobs:
           # tag). Gated on build-cache AND push-image — that path
           # logs in (read-write creds) and is a trusted, non-fork context; a
           # push-image=false PR build (or build-cache=false) builds from scratch.
+          # Lowercased below: an OCI repository path cannot hold the owner's capitals.
           BUILD_CACHE_REPO: ${{ inputs['push-image'] && inputs['build-cache'] && format('{0}/{1}/buildcache', inputs.registry, github.repository_owner) || '' }}
           BUILD_CACHE_PUSH: "false"
           # The internal scan gates retention of the local layout;
@@ -735,7 +736,7 @@ jobs:
             --set "build-args=${BUILD_ARGS}" \
             --set "secrets=${BUILD_SECRETS}" \
             --set "auth-file=${BUILD_AUTH_FILE}" \
-            --set "cache-repo=${BUILD_CACHE_REPO}" \
+            --set "cache-repo=${BUILD_CACHE_REPO,,}" \
             --set "cache-push=${BUILD_CACHE_PUSH}" \
             --set "scan=${ENABLE_SCAN}" \
             --set "scan-severity=${SCAN_SEVERITY}"
