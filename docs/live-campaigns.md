@@ -174,6 +174,14 @@ or starting it; the base campaign's headroom estimate does not include Android.
 
 ## Shared dependencies
 
+`TestRunnerLending_LocalLifecycle` uses the accepted Forgejo endpoint on either
+road. Its lent worker is a local rootless Podman container, so the host needs
+rootless Podman and the cached pinned runner image even when Forgejo runs on k3s.
+The worker shares the host network, maps the accepted lab hostname to loopback,
+and verifies TLS with that endpoint's captured CA. Unaccepted, foreign-account
+and non-lab targets refuse before provisioning. The job, idle and cancellation
+cases keep their exact runner/container cleanup receipts on both roads.
+
 Provider separation alone does not prove independence. Target rotation, runner
 reconciliation, package coordinates, local image builds and backing services can
 be shared. In particular, the Compose runner's shared network and a `docker`

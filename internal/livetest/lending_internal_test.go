@@ -6,6 +6,7 @@ package livetest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,8 @@ import (
 )
 
 func TestLocalLendingRefusesUnacceptedForeignAndUnknownCasesBeforeEffects(t *testing.T) {
+	t.Setenv(liveProfileEnv, profileFocused)
+
 	for _, tc := range []struct {
 		name     string
 		target   Target
@@ -23,9 +26,11 @@ func TestLocalLendingRefusesUnacceptedForeignAndUnknownCasesBeforeEffects(t *tes
 		want     string
 	}{
 		{"unaccepted", Target{}, "job", "never accepted"},
-		{"production", Target{accepted: true, Forge: provider.ForgeForgejo, Owner: labAccount, Host: "codefloe.com"}, "job", "Compose Forgejo"},
-		{"foreign account", Target{accepted: true, Forge: provider.ForgeForgejo, Owner: "another", Host: "forgejo.compose.forgelab:8443"}, "job", "Compose Forgejo"},
+		{"production", Target{accepted: true, Forge: provider.ForgeForgejo, Owner: labAccount, Host: "codefloe.com"}, "job", "lab Forgejo"},
+		{"foreign account", Target{accepted: true, Forge: provider.ForgeForgejo, Owner: "another", Host: "forgejo.compose.forgelab:8443"}, "job", "lab Forgejo"},
+		{"foreign k3s account", Target{accepted: true, Forge: provider.ForgeForgejo, Owner: "another", Host: "forgejo.k3s.forgelab"}, "job", "lab Forgejo"},
 		{"unknown case", Target{accepted: true, Forge: provider.ForgeForgejo, Owner: labAccount, Host: "forgejo.compose.forgelab:8443"}, "execute-anything", "unknown lending case"},
+		{"k3s unknown case", Target{accepted: true, Forge: provider.ForgeForgejo, Owner: labAccount, Host: "forgejo.k3s.forgelab"}, "execute-anything", "unknown lending case"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			defer func() {
@@ -37,6 +42,43 @@ func TestLocalLendingRefusesUnacceptedForeignAndUnknownCasesBeforeEffects(t *tes
 
 			CheckLocalLending(stopOnFatalTB{TB: t}, tc.target, tc.scenario)
 			t.Error("guard returned")
+		})
+	}
+}
+
+func TestLendingWorkerUsesTheAcceptedEndpointOnEitherRoad(t *testing.T) {
+	for _, host := range []string{"forgejo.compose.forgelab:8443", "forgejo.k3s.forgelab", "forgejo.k3s.forgelab:8443"} {
+		t.Run(host, func(t *testing.T) {
+			dir := t.TempDir()
+			tool, recorded := filepath.Join(dir, "inert-podman"), filepath.Join(dir, "created-args")
+			id := strings.Repeat("a", 64)
+
+			script := fmt.Sprintf(`#!/bin/sh
+test "$1" = --remote=false || exit 1
+shift
+case "$1" in
+  create) printf '%%s\n' "$@" > %q; printf '%%s\n' %q ;;
+  start) test "$2" = %q ;;
+  exec) test "$2" = %q; printf 'forgejo-runner one-job\n' ;;
+  *) exit 2 ;;
+esac
+`, recorded, id, id, id)
+			if err := os.WriteFile(tool, []byte(script), 0o700); err != nil {
+				t.Fatal(err)
+			}
+
+			worker := lendingWorker{target: Target{Host: host}, name: "owned-worker", podman: tool}
+			worker.start(t, t.Context())
+
+			args, err := os.ReadFile(recorded)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			hostname, _, _ := strings.Cut(host, ":")
+			if worker.container != id || !strings.Contains(string(args), "--network\nhost\n--add-host\n"+hostname+":127.0.0.1\n") {
+				t.Fatalf("worker lost its accepted endpoint: container=%s args=%s", worker.container, args)
+			}
 		})
 	}
 }

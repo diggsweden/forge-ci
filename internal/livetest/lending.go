@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"codefloe.com/itiquette/forge-lab-contract/labcontract"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
 )
 
@@ -61,12 +62,16 @@ func CheckLocalLending(tb TB, target Target, scenario string) {
 	tb.Helper()
 	requireAccepted(tb, target)
 
-	if target.Forge != provider.ForgeForgejo || target.Owner != labAccount || !strings.HasPrefix(target.Host, "forgejo.compose.forgelab:") {
-		tb.Fatalf("local lending requires the forgeci Compose Forgejo target")
+	if target.Forge != provider.ForgeForgejo || target.Owner != labAccount || labcontract.Disposable(target.Host) != nil {
+		tb.Fatalf("local lending requires the accepted forgeci lab Forgejo target")
+
+		return
 	}
 
 	if scenario != lendingJob && scenario != lendingIdle && scenario != "cancel" {
 		tb.Fatalf("unknown lending case")
+
+		return
 	}
 
 	ctx := Context(tb)
@@ -207,9 +212,10 @@ func (worker *lendingWorker) register(tb TB, ctx context.Context, scenario strin
 }
 
 func (worker *lendingWorker) start(tb TB, ctx context.Context) {
+	host, _, _ := strings.Cut(worker.target.Host, ":")
 	container, err := worker.run(ctx, nil, "create", "--pull=never", "--name", worker.name,
 		"--label", "forge-ci.live=lending", "--label", "forge-ci.repository="+worker.target.Owner+"/"+worker.repo,
-		"--network", "host", "--add-host", "forgejo.compose.forgelab:127.0.0.1",
+		"--network", "host", "--add-host", host+":127.0.0.1",
 		"--user", lendingWorkerUser, "--cap-drop=all", "--security-opt", "no-new-privileges",
 		"--memory", "512m", "--cpus", "1", "--pids-limit", "128", "--workdir", "/tmp",
 		"--env", "HOME=/tmp/worker", "--env", "SSL_CERT_FILE=/tmp/worker/ca.crt",
