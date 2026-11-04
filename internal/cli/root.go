@@ -291,7 +291,7 @@ func newRoot(info BuildInfo, versionString string) *cli.Command {
 		// concise "Error: ..." line printed by main.go is enough; the
 		// user already knows where help lives.
 		OnUsageError: onUsageError,
-		Flags: []cli.Flag{
+		Flags: append([]cli.Flag{
 			&cli.BoolFlag{
 				Name:    "quiet",
 				Aliases: []string{"q"},
@@ -362,7 +362,7 @@ func newRoot(info BuildInfo, versionString string) *cli.Command {
 				Value:   flagAuto,
 				Sources: cli.EnvVars("FORGE_CI_RUNNER"),
 			},
-		},
+		}, adminPolicyFlags()...),
 		// Action handles the two things that reach the root itself: no command
 		// at all, and a first argument that is not a command. See rootAction.
 		// It gets the bare version (info.Version), not cmd.Version, which is
@@ -403,7 +403,7 @@ func newRoot(info BuildInfo, versionString string) *cli.Command {
 				}
 			}
 
-			return ctx, nil
+			return withAdminPolicy(ctx, cmd), nil
 		},
 		// The root help groups the tree by audience. A person setting up or
 		// troubleshooting a repository works in the first category; the second

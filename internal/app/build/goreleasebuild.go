@@ -42,7 +42,7 @@ type GoReleaseBuildInput struct {
 // in-process, so — unlike the granular subcommands — no scalar-output round
 // trip (and thus no $CI_OUTPUT) is needed.
 func GoReleaseBuild(ctx context.Context, summarySink ci.SummarySink, goTool GoTool, sbomTool CycloneDXGoModTool, out, stderr io.Writer, in GoReleaseBuildInput) error {
-	if err := appenforcement.RequireTests(in.SkipTests); err != nil {
+	if err := appenforcement.RequireTests(ctx, in.SkipTests); err != nil {
 		return err
 	}
 

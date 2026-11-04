@@ -8,6 +8,7 @@ import (
 	"os"
 
 	gitadapter "github.com/diggsweden/forge-ci/internal/adapters/git"
+	appenforcement "github.com/diggsweden/forge-ci/internal/app/enforcement"
 	appsnapshot "github.com/diggsweden/forge-ci/internal/app/snapshotimage"
 	"github.com/diggsweden/forge-ci/internal/domain/snapshotimage"
 	"github.com/diggsweden/forge-ci/internal/safeexec"
@@ -22,13 +23,20 @@ func (snapshotSelfBuild) Run(ctx context.Context, in appsnapshot.ArtifactBuildRe
 		return err
 	}
 
-	cmd := safeexec.Command(ctx, executable, in.Args...)
+	cmd := safeexec.Command(ctx, executable, selfBuildArgs(ctx, in)...)
 	cmd.Dir = in.Dir
 	cmd.Env = in.Env
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 
 	return safeexec.WrapError(cmd.Run(), "forge-ci", "artifact build")
+}
+
+// selfBuildArgs gives the child build this invocation's administrator
+// settings, not the embedded defaults: the settings are flags, which a child
+// does not inherit.
+func selfBuildArgs(ctx context.Context, in appsnapshot.ArtifactBuildRequest) []string {
+	return append(appenforcement.AdminArgs(ctx), in.Args...)
 }
 
 func snapshotBuildArtifactCmd() *cli.Command {

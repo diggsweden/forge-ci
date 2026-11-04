@@ -115,7 +115,7 @@ func ScanContainer(
 	annot output.Annotator,
 	in ScanContainerInput,
 ) error {
-	if _, err := enforcement.Current(); err != nil {
+	if _, err := appenforcement.Resolve(ctx); err != nil {
 		return err
 	}
 
@@ -170,7 +170,7 @@ func ScanContainer(
 	if len(findings.Fixable)+len(findings.Unfixed) == 0 {
 		_, _ = fmt.Fprintf(out, "%s No vulnerabilities found at severity %s\n", clicolor.Check(out), severity)
 
-		return appenforcement.Findings(out, enforcement.Vulnerabilities, 0)
+		return appenforcement.Findings(ctx, out, enforcement.Vulnerabilities, 0)
 	}
 
 	// Always derive SARIF + GitLab reports — even when the gate fails,
@@ -194,7 +194,7 @@ func ScanContainer(
 	if len(blocking) == 0 {
 		_, _ = fmt.Fprintf(out, "%s No blocking vulnerabilities (threshold %s)\n", clicolor.Check(out), threshold)
 
-		return appenforcement.Findings(out, enforcement.Vulnerabilities, 0)
+		return appenforcement.Findings(ctx, out, enforcement.Vulnerabilities, 0)
 	}
 
 	msg := fmt.Sprintf("Found %d blocking container %s (threshold %s)", len(blocking),
@@ -203,7 +203,7 @@ func ScanContainer(
 	_, _ = fmt.Fprintln(out, "Next: update the affected dependency or pinned base image, rebuild, and rerun the scan before publishing or promoting.")
 	_, _ = fmt.Fprintf(out, "If a fix cannot be deployed, request a reviewed CVE-specific exception in %s with a reason and expiry; the admin policy decides whether these findings block.\n", cmp.Or(ignoreFile, defaultIgnoreFile))
 
-	if err := appenforcement.Findings(out, enforcement.Vulnerabilities, len(blocking)); err != nil {
+	if err := appenforcement.Findings(ctx, out, enforcement.Vulnerabilities, len(blocking)); err != nil {
 		annot.Errorf("%s", msg)
 
 		return fmt.Errorf("%s: %w", msg, err)

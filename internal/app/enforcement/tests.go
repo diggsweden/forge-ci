@@ -17,7 +17,7 @@ import (
 // summary, an ordinary tool failure, and non-enforcing admin policy allow a
 // continuation. An absent/truncated/malformed summary never grants a waiver.
 func TestRun(ctx context.Context, out, stderr io.Writer, protocol enforcement.TestProtocol, run func(io.Writer, io.Writer) error) (bool, error) {
-	policy, err := enforcement.Current()
+	policy, err := Resolve(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -82,12 +82,12 @@ func testRun(ctx context.Context, policy enforcement.Policy, out, stderr io.Writ
 
 // RequireTests rejects the old consumer opt-out independently of enforcement:
 // report-only still means running tests, never skipping them.
-func RequireTests(skip bool) error {
+func RequireTests(ctx context.Context, skip bool) error {
 	if skip {
 		return fmt.Errorf("skip-tests cannot disable administrator-required test execution: %w", errs.ErrUsage)
 	}
 
-	_, err := enforcement.Current()
+	_, err := Resolve(ctx)
 
 	return err
 }
@@ -101,6 +101,6 @@ func notWaivable(out io.Writer, policy enforcement.Policy, reason string) {
 		return
 	}
 
-	_, _ = fmt.Fprintf(out, "Admin policy sha256:%s: %s result=not-waivable enforcement=%t reason=%q\n",
-		decision.PolicySHA256, decision.Check, decision.Enforced, reason)
+	_, _ = fmt.Fprintf(out, "Admin policy sha256:%s: %s result=not-waivable enforcement=%t source=%s reason=%q\n",
+		decision.PolicySHA256, decision.Check, decision.Enforced, decision.Source, reason)
 }

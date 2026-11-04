@@ -21,8 +21,10 @@ import (
 //     internal *cli.exitError that implements ExitCode() int
 //   - "flag provided but not defined: -<x>"    — stdlib flag.Parse error,
 //     propagated unwrapped
+//   - "invalid value \"<v>\" for flag -<x>: …" — a value the flag's parser
+//     or validator refused, its cause flattened to text
 //
-// Without classification all three fall through to ExitCodeSoftware (70),
+// Without classification all four fall through to ExitCodeSoftware (70),
 // which is wrong — they're usage errors. We detect them by message
 // prefix and wrap with errs.ErrUsage so they exit 2.
 //
@@ -108,7 +110,8 @@ func IsAlreadyPrintedByCLI(err error) bool {
 	msg := err.Error()
 
 	return strings.HasPrefix(msg, "flag provided but not defined") ||
-		strings.HasPrefix(msg, "Required flag")
+		strings.HasPrefix(msg, "Required flag") ||
+		strings.HasPrefix(msg, "invalid value ")
 }
 
 // isUsageMessage returns true for the small set of framework-level
@@ -119,6 +122,12 @@ func isUsageMessage(msg string) bool {
 	case strings.HasPrefix(msg, "Required flag"):
 		return true
 	case strings.HasPrefix(msg, "flag provided but not defined"):
+		return true
+	case strings.HasPrefix(msg, "invalid value "):
+		// A flag value its parser or validator refused, such as
+		// --enforce-lint=yes or a flag given twice that may be given once.
+		// The framework flattens the cause with %v, so the message is all
+		// there is to classify.
 		return true
 	case strings.HasPrefix(msg, "unknown subcommand"):
 		// The framework's own wording is "No help topic for '<arg>'", and it

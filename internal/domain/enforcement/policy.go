@@ -1,9 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 // SPDX-License-Identifier: EUPL-1.2 OR GPL-3.0-or-later
 
-// Package enforcement defines the administrator's build-time check policy.
-// policy.json belongs to the independently controlled engine distribution. There
-// is deliberately no runtime policy path, environment override, or mutable setter.
+// Package enforcement defines the administrator's check policy.
+//
+// policy.json, embedded when the engine is built, is the enforcing default.
+// The administrator's protected caller may replace any of the four settings
+// at run time, and only as an explicit command-line value (see Admin). There
+// is deliberately no policy path, environment binding or mutable setter, and
+// an environment variable named like a setting is refused (see
+// RefuseEnvironment) rather than ignored.
 package enforcement
 
 import (
@@ -14,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
@@ -35,6 +41,24 @@ const (
 	ReproducibleBuilds Check = "reproducible-builds"
 )
 
+// Checks lists every check class in the order the settings are documented.
+var Checks = []Check{Lint, Vulnerabilities, ApplicationTests, ReproducibleBuilds}
+
+// Setting is the administrator setting name controlling check, for example
+// enforce-lint. It is also the engine's command-line flag name.
+func Setting(check Check) string { return "enforce-" + string(check) }
+
+// Source says where an effective setting came from.
+type Source string
+
+// The two sources a setting can have.
+const (
+	// EmbeddedDefault is the policy.json built into the engine.
+	EmbeddedDefault Source = "embedded-default"
+	// AdminInput is a value the caller gave the engine on its command line.
+	AdminInput Source = "admin-input"
+)
+
 // Policy is returned by value. Changing a copy cannot change the engine policy.
 type Policy struct {
 	EnforceLint             bool `json:"enforce-lint"`
@@ -43,12 +67,102 @@ type Policy struct {
 	// EnforceReproducibleBuilds is strict reproducible builds: missing
 	// reproducible-build settings block the release.
 	EnforceReproducibleBuilds bool `json:"enforce-reproducible-builds"`
+
+	// admin marks the settings an administrator input replaced, one bit per
+	// entry of Checks.
+	admin uint8
 }
 
-// Current reads only bytes embedded when the administrator built this engine.
+// Admin holds the administrator's explicit settings, by check. An absent
+// check keeps the embedded default. Values are admitted exactly: "true" or
+// "false", nothing else.
+type Admin map[Check]string
+
+// WithAdmin returns the policy with the administrator's settings applied.
+// Unknown checks and any value other than "true" or "false" are refused.
+func (policy Policy) WithAdmin(admin Admin) (Policy, error) {
+	for check, raw := range admin {
+		index, known := checkIndex(check)
+		if !known {
+			return Policy{}, fmt.Errorf("unknown admin setting %q: %w", Setting(check), errs.ErrUsage)
+		}
+
+		value, err := ParseAdminValue(Setting(check), raw)
+		if err != nil {
+			return Policy{}, err
+		}
+
+		policy = withSetting(policy, check, value)
+		policy.admin |= 1 << index
+	}
+
+	return policy, nil
+}
+
+// ParseAdminValue admits exactly "true" or "false" for setting. Spellings
+// such as "1", "TRUE", "yes" or an empty value are refused, so a value that
+// reached the engine is the value the administrator wrote.
+func ParseAdminValue(setting, raw string) (bool, error) {
+	switch raw {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	default:
+		return false, fmt.Errorf("%s must be exactly true or false, not %q: %w", setting, raw, errs.ErrUsage)
+	}
+}
+
+// Source reports whether check's effective setting is the embedded default
+// or the administrator's input.
+func (policy Policy) Source(check Check) Source {
+	if index, known := checkIndex(check); known && policy.admin&(1<<index) != 0 {
+		return AdminInput
+	}
+
+	return EmbeddedDefault
+}
+
+func checkIndex(check Check) (int, bool) {
+	for index, known := range Checks {
+		if known == check {
+			return index, true
+		}
+	}
+
+	return 0, false
+}
+
+// RefuseEnvironment refuses an environment that carries a variable named like
+// a setting: ENFORCE_LINT, or any name ending in _ENFORCE_LINT such as
+// FORGE_CI_ENFORCE_LINT, in any letter case, and likewise for the other
+// checks. The engine never reads such a variable. On GitLab every project,
+// group and instance variable reaches the job's environment, so one set there
+// stops the gate instead of leaving the reader to wonder whether it applied.
+// Forge-rendered action inputs (INPUT_ENFORCE-LINT) keep their hyphen and do
+// not match.
+func RefuseEnvironment(environ []string) error {
+	for _, entry := range environ {
+		name, _, _ := strings.Cut(entry, "=")
+		upper := strings.ToUpper(name)
+
+		for _, check := range Checks {
+			setting := strings.ToUpper(strings.ReplaceAll(Setting(check), "-", "_"))
+			if upper == setting || strings.HasSuffix(upper, "_"+setting) {
+				return fmt.Errorf("environment variable %s looks like the admin setting %s, which only the administrator's caller sets, as --%s on the command line; remove the variable: %w",
+					name, Setting(check), Setting(check), errs.ErrUsage)
+			}
+		}
+	}
+
+	return nil
+}
+
+// Current reads only the bytes embedded when this engine was built: the
+// default, before any administrator setting.
 func Current() (Policy, error) { return decode(embeddedPolicy) }
 
-// Digest identifies the exact policy bytes carried by the immutable engine.
+// Digest identifies the exact default policy bytes carried by the engine.
 func Digest() string {
 	digest := sha256.Sum256(embeddedPolicy)
 
@@ -76,20 +190,12 @@ type Decision struct {
 	Check        Check  `json:"check"`
 	Findings     int    `json:"findings"`
 	Enforced     bool   `json:"enforced"`
+	Source       Source `json:"source"`
 	PolicySHA256 string `json:"policy-sha256"`
 }
 
-// Evaluate accepts classified findings, never execution or verification errors.
-func Evaluate(check Check, count int) (Decision, error) {
-	policy, err := Current()
-	if err != nil {
-		return Decision{}, err
-	}
-
-	return policy.Decide(check, count)
-}
-
-// Decide evaluates a policy value; production gates obtain it only from Current.
+// Decide evaluates a policy value. Production gates obtain it from Current
+// with the administrator's settings applied, never from consumer state.
 func (policy Policy) Decide(check Check, count int) (Decision, error) {
 	enforced, err := policy.Enforces(check)
 	if err != nil {
@@ -100,7 +206,23 @@ func (policy Policy) Decide(check Check, count int) (Decision, error) {
 		return Decision{}, fmt.Errorf("findings count must not be negative: %w", errs.ErrUsage)
 	}
 
-	return Decision{Check: check, Findings: count, Enforced: enforced, PolicySHA256: Digest()}, nil
+	return Decision{Check: check, Findings: count, Enforced: enforced, Source: policy.Source(check), PolicySHA256: Digest()}, nil
+}
+
+// withSetting returns policy with one setting replaced.
+func withSetting(policy Policy, check Check, value bool) Policy {
+	switch check {
+	case Lint:
+		policy.EnforceLint = value
+	case Vulnerabilities:
+		policy.EnforceVulnerabilities = value
+	case ApplicationTests:
+		policy.EnforceApplicationTests = value
+	case ReproducibleBuilds:
+		policy.EnforceReproducibleBuilds = value
+	}
+
+	return policy
 }
 
 func decode(body []byte) (Policy, error) {

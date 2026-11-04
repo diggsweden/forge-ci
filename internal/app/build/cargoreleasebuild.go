@@ -47,7 +47,7 @@ func CargoBuildSBOM(ctx context.Context, tool CargoTool, w, stderr io.Writer, di
 // enabled Build SBOM generation is mandatory: failures are summarized and
 // returned so the release fails closed.
 func CargoReleaseBuild(ctx context.Context, summarySink ci.SummarySink, tool CargoTool, out, stderr io.Writer, in CargoReleaseBuildInput) error {
-	if err := appenforcement.RequireTests(in.SkipTests); err != nil {
+	if err := appenforcement.RequireTests(ctx, in.SkipTests); err != nil {
 		return err
 	}
 

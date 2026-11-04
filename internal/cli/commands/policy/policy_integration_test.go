@@ -18,9 +18,12 @@ import (
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
-// Build overlays exercise real compiled administrator distributions without
-// modifying the checkout's policy, injecting a runtime override, or contacting
-// a provider. Child exit statuses and reports travel through the real CLI.
+// Build overlays exercise real compiled default policies without modifying
+// the checkout's policy or contacting a provider. Child exit statuses and
+// reports travel through the real CLI. A policy file in the checkout or a
+// policy path in the environment has no effect; an environment variable named
+// like a setting is refused; only the command-line admin input replaces a
+// default.
 func TestCompiledAdminPolicyCannotBeOverriddenByConsumers(t *testing.T) {
 	goTool, err := exec.LookPath("go")
 	if err != nil {
@@ -51,9 +54,6 @@ func TestCompiledAdminPolicyCannotBeOverriddenByConsumers(t *testing.T) {
 	write(filepath.Join(consumer, "main.go"), "package main\nfunc main() {}\n", 0o600)
 	write(filepath.Join(consumer, "failure_test.go"), "package main\nimport \"testing\"\nfunc TestAssertion(t *testing.T) { t.Error(\"real native assertion failure\") }\n", 0o600)
 	t.Setenv("FORGE_CI_POLICY", filepath.Join(consumer, "policy.json"))
-	t.Setenv("ENFORCE_LINT", "false")
-	t.Setenv("ENFORCE_VULNERABILITIES", "false")
-	t.Setenv("ENFORCE_APPLICATION_TESTS", "false")
 	for _, variant := range []struct {
 		name                                string
 		lint, vulnerabilities, tests, repro bool
@@ -173,9 +173,26 @@ func TestCompiledAdminPolicyCannotBeOverriddenByConsumers(t *testing.T) {
 			}
 			write(trivy, "#!/bin/sh\nexit 125\n", 0o700)
 			run(false, "security", "scan", "container", "--image-ref", "registry.example/app:fixture")
-			run(false, "policy", "show", "--enforce-lint=false")
+			run(false, "policy", "show", "--enforce-lint=maybe")
 			run(false, "policy", "show", "--policy-file", filepath.Join(consumer, "policy.json"))
 			run(false, "policy", "set", "enforce-lint=false")
+			// The admin input replaces the compiled default, both ways.
+			flipped := strconv.FormatBool(!variant.lint)
+			if body := run(true, "policy", "show", "--enforce-lint="+flipped); !strings.Contains(body, `"enforce-lint":`+flipped) || !strings.Contains(body, `"enforce-lint":"admin-input"`) {
+				t.Fatalf("admin input did not apply: %s", body)
+			}
+			formatScript := filepath.Join(dir, "format.sh")
+			if body := run(variant.lint, "policy", "nanolinter", "--enforce-lint="+flipped, "--", "/bin/sh", formatScript, "1"); !strings.Contains(body, "enforcement="+flipped+" source=admin-input") {
+				t.Fatalf("admin input missing from the receipt:\n%s", body)
+			}
+			for _, name := range []string{"ENFORCE_LINT", "FORGE_CI_ENFORCE_VULNERABILITIES", "RC_ENFORCE_APPLICATION_TESTS"} {
+				t.Setenv(name, "false")
+				run(false, "policy", "show")
+				run(false, "policy", "nanolinter", "--", "/bin/sh", formatScript, "0")
+				if err := os.Unsetenv(name); err != nil {
+					t.Fatal(err)
+				}
+			}
 		})
 	}
 }

@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"io"
 
+	appenforcement "github.com/diggsweden/forge-ci/internal/app/enforcement"
 	appsecurity "github.com/diggsweden/forge-ci/internal/app/security"
 	"github.com/diggsweden/forge-ci/internal/domain/ci"
 	domaincontainer "github.com/diggsweden/forge-ci/internal/domain/container"
-	"github.com/diggsweden/forge-ci/internal/domain/enforcement"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/output"
 )
@@ -47,7 +47,7 @@ func BuildAndScan(
 	annot output.Annotator,
 	in BuildAndScanInput,
 ) (string, error) {
-	if _, err := enforcement.Current(); err != nil {
+	if _, err := appenforcement.Resolve(ctx); err != nil {
 		return "", err
 	}
 

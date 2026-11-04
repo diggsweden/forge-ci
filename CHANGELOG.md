@@ -94,6 +94,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `RELEASE_PLATFORMS` selects (`linux/amd64` when unset), with the selected
   image builder, and builds its two runtime images as the tag variants
   `<tag>-worker` and `<tag>-keytool`.
+
+- The administrator sets the four enforcement settings at run time, without
+  rebuilding the engine: `--enforce-lint`, `--enforce-vulnerabilities`,
+  `--enforce-application-tests` and `--enforce-reproducible-builds`, global
+  flags taking exactly `true` or `false`, each given at most once. They have
+  no environment variable; the embedded `policy.json` stays the enforcing
+  default for every setting not given. `policy show` adds each setting's
+  `sources` (`embedded-default` or `admin-input`), and every decision line
+  ends in `source=`. See `docs/admin-policy.md`.
+
 - The GitLab `release` component takes `export-files` and `export`: commands
   that export files from a Containerfile stage, run once per selected
   architecture in `Build: export amd64` and `Build: export arm64`, natively,
@@ -572,6 +582,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runs. It took any text, though its description asked for a digest, and the
   job container receives the checkout and the job token. Pin the image by
   its digest. The components' Consume headers now show the input.
+
+- **BREAKING:** A gate refuses to run when its environment has a variable
+  named like an administrator setting: `ENFORCE_LINT`, or any name ending in
+  `_ENFORCE_LINT` such as a GitLab project variable `FORGE_CI_ENFORCE_LINT`,
+  and likewise for the other three. Such a variable was ignored before; it
+  never set the policy. Remove it, and have the administrator's caller pass
+  the flag.
+
 - **BREAKING:** The GitLab `release` and `snapshot-images` free-text inputs
   now have regexes, because the jobs quote them in their scripts. None may
   contain a single quote. `publication-project` is a project path,

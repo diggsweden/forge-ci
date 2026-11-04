@@ -81,7 +81,7 @@ type GradleApplicationInput struct {
 // GradleApplication runs engine-owned test tasks before requested packaging.
 // Packaging arguments cannot suppress the separate test invocation.
 func GradleApplication(ctx context.Context, ops GradleOps, out, stderr io.Writer, in GradleApplicationInput) error {
-	if err := appenforcement.RequireTests(in.SkipTests); err != nil {
+	if err := appenforcement.RequireTests(ctx, in.SkipTests); err != nil {
 		return err
 	}
 

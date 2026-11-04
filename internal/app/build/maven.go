@@ -203,7 +203,7 @@ type MavenApplicationInput struct {
 // [-DskipTests]`. Subsumes the SKIP_TESTS branching in build-maven.yml so
 // the decision lives in Go, not shell.
 func MavenApplication(ctx context.Context, ops MavenOps, out, stderr io.Writer, in MavenApplicationInput) error {
-	if err := appenforcement.RequireTests(in.SkipTests); err != nil {
+	if err := appenforcement.RequireTests(ctx, in.SkipTests); err != nil {
 		return err
 	}
 
@@ -236,7 +236,7 @@ func MavenApplication(ctx context.Context, ops MavenOps, out, stderr io.Writer, 
 // deliberately does not invoke unpinned plugin goals. w receives the status
 // banner and mvn's output streams via ops.RunInherit.
 func MavenLibrary(ctx context.Context, ops MavenOps, writer, stderr io.Writer, in MavenLibraryInput) error {
-	if err := appenforcement.RequireTests(in.SkipTests); err != nil {
+	if err := appenforcement.RequireTests(ctx, in.SkipTests); err != nil {
 		return err
 	}
 

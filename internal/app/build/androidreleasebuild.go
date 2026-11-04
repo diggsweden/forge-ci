@@ -75,7 +75,7 @@ type AndroidReleaseBuildInput struct {
 // resolved artifact names + version are emitted on the sink as the job outputs
 // downstream upload/publish jobs consume.
 func AndroidReleaseBuild(ctx context.Context, sink ci.OutputSink, summarySink ci.SummarySink, ops AndroidGradleOps, annot output.Annotator, out, stderr io.Writer, in AndroidReleaseBuildInput) (err error) {
-	if err := appenforcement.RequireTests(in.SkipTests); err != nil {
+	if err := appenforcement.RequireTests(ctx, in.SkipTests); err != nil {
 		return err
 	}
 

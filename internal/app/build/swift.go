@@ -73,7 +73,7 @@ func SwiftFormatLint(
 	annot output.Annotator,
 	in SwiftFormatLintInput,
 ) error {
-	if _, err := enforcement.Current(); err != nil {
+	if _, err := appenforcement.Resolve(ctx); err != nil {
 		return err
 	}
 
@@ -124,7 +124,7 @@ func SwiftFormatLint(
 			return err
 		}
 
-		return appenforcement.Findings(out, enforcement.Lint, 1)
+		return appenforcement.Findings(ctx, out, enforcement.Lint, 1)
 	}
 
 	_, _ = fmt.Fprintf(out, "%s swift-format passed\n", clicolor.Check(out))
@@ -153,7 +153,7 @@ func SwiftLintLint(
 	annot output.Annotator,
 	in SwiftLintLintInput,
 ) error {
-	if _, err := enforcement.Current(); err != nil {
+	if _, err := appenforcement.Resolve(ctx); err != nil {
 		return err
 	}
 
@@ -204,7 +204,7 @@ func SwiftLintLint(
 		return err
 	}
 
-	if err := appenforcement.Findings(out, enforcement.Lint, 1); err != nil {
+	if err := appenforcement.Findings(ctx, out, enforcement.Lint, 1); err != nil {
 		annot.Errorf("SwiftLint found issues")
 
 		return err

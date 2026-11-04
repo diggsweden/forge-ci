@@ -15,7 +15,7 @@ import (
 
 func TestPolicySettingsAreIndependent(t *testing.T) {
 	for bits := range 16 {
-		policy := Policy{bits&1 != 0, bits&2 != 0, bits&4 != 0, bits&8 != 0}
+		policy := Policy{EnforceLint: bits&1 != 0, EnforceVulnerabilities: bits&2 != 0, EnforceApplicationTests: bits&4 != 0, EnforceReproducibleBuilds: bits&8 != 0}
 		for index, check := range []Check{Lint, Vulnerabilities, ApplicationTests, ReproducibleBuilds} {
 			decision, err := policy.Decide(check, 2)
 			if err != nil || decision.Findings != 2 || decision.Enforced != (bits&(1<<index) != 0) {
@@ -149,5 +149,64 @@ func TestNativeTestFailureClassification(t *testing.T) {
 				t.Fatalf("count=%d want %d", got, test.count)
 			}
 		})
+	}
+}
+
+func TestAdminSettingsReplaceOnlyTheDefaultsTheyName(t *testing.T) {
+	defaults := Policy{EnforceLint: true, EnforceVulnerabilities: true, EnforceApplicationTests: true, EnforceReproducibleBuilds: true}
+
+	policy, err := defaults.WithAdmin(Admin{Lint: "false", ReproducibleBuilds: "true"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if policy.EnforceLint || !policy.EnforceVulnerabilities || !policy.EnforceApplicationTests || !policy.EnforceReproducibleBuilds {
+		t.Fatalf("admin settings applied wrongly: %+v", policy)
+	}
+
+	for check, want := range map[Check]Source{Lint: AdminInput, ReproducibleBuilds: AdminInput, Vulnerabilities: EmbeddedDefault, ApplicationTests: EmbeddedDefault} {
+		if got := policy.Source(check); got != want {
+			t.Errorf("%s source %q, want %q", check, got, want)
+		}
+
+		decision, err := policy.Decide(check, 1)
+		if err != nil || decision.Source != want {
+			t.Errorf("%s decision %+v %v, want source %q", check, decision, err, want)
+		}
+	}
+
+	if unchanged, err := defaults.WithAdmin(nil); err != nil || unchanged != defaults {
+		t.Fatalf("no admin input changed the defaults: %+v %v", unchanged, err)
+	}
+}
+
+func TestAdminSettingsAreAdmittedExactly(t *testing.T) {
+	for _, raw := range []string{"", "TRUE", "False", "1", "0", "t", "f", "yes", "no", " true", "true\n", "on"} {
+		if _, err := (Policy{}).WithAdmin(Admin{Lint: raw}); !errors.Is(err, errs.ErrUsage) {
+			t.Errorf("admitted %q: %v", raw, err)
+		}
+	}
+
+	if _, err := (Policy{}).WithAdmin(Admin{"typo": "false"}); !errors.Is(err, errs.ErrUsage) {
+		t.Fatalf("admitted an unknown setting: %v", err)
+	}
+}
+
+func TestEnvironmentNamedLikeASettingIsRefused(t *testing.T) {
+	for _, name := range []string{
+		"ENFORCE_LINT", "enforce_lint", "FORGE_CI_ENFORCE_VULNERABILITIES", "RC_ENFORCE_APPLICATION_TESTS",
+		"ENFORCE_REPRODUCIBLE_BUILDS", "CI_ENFORCE_REPRODUCIBLE_BUILDS",
+	} {
+		if err := RefuseEnvironment([]string{"PATH=/bin", name + "=true"}); !errors.Is(err, errs.ErrUsage) || !strings.Contains(err.Error(), name) {
+			t.Errorf("%s was not refused: %v", name, err)
+		}
+	}
+
+	// Names that only resemble a setting, and the forge's rendering of an
+	// action input, which keeps its hyphen, are not settings.
+	for _, name := range []string{"ENFORCE_NAMESPACE_ON", "ENFORCE_LINTER", "RC_ADMIN_LINT", "ADMIN_VULNERABILITIES", "INPUT_ENFORCE-LINT", "NOENFORCE_LINT"} {
+		if err := RefuseEnvironment([]string{name + "=false"}); err != nil {
+			t.Errorf("%s was refused: %v", name, err)
+		}
 	}
 }

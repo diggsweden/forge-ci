@@ -119,7 +119,7 @@ type mavenDeps struct {
 // working-directory), matching MavenOps. When enabled, the Build SBOM is a
 // mandatory release deliverable and generation failure fails the build.
 func MavenReleaseBuild(ctx context.Context, summarySink ci.SummarySink, ops MavenOps, out, stderr io.Writer, in MavenReleaseBuildInput) error {
-	if err := validateMavenReleaseBuildInput(in); err != nil {
+	if err := validateMavenReleaseBuildInput(ctx, in); err != nil {
 		return err
 	}
 
@@ -178,8 +178,8 @@ func MavenReleaseBuild(ctx context.Context, summarySink ci.SummarySink, ops Mave
 // validateMavenReleaseBuildInput refuses a release build request before any
 // Maven invocation: tests must run, the build type must be known, the CLI
 // options must keep the test gate, and an enabled SBOM needs a tool version.
-func validateMavenReleaseBuildInput(in MavenReleaseBuildInput) error {
-	if err := appenforcement.RequireTests(in.SkipTests); err != nil {
+func validateMavenReleaseBuildInput(ctx context.Context, in MavenReleaseBuildInput) error {
+	if err := appenforcement.RequireTests(ctx, in.SkipTests); err != nil {
 		return err
 	}
 

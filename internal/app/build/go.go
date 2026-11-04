@@ -79,7 +79,7 @@ func GoDownload(ctx context.Context, tool GoTool, w, stderr io.Writer, dir strin
 func GoTest(ctx context.Context, tool GoTool, out, stderr io.Writer, in GoTestInput) error {
 	args := []string{testCommand}
 
-	policy, err := enforcement.Current()
+	policy, err := appenforcement.Resolve(ctx)
 	if err != nil {
 		return err
 	}

@@ -24,6 +24,10 @@ then the environment variables listed per flag, then the flag default.
 | `--no-color` | disable colored ✓/✗ output (also: $NO_COLOR, non-terminal output) | bool | `false` | `$FORGE_CI_NO_COLOR` |
 | `--provider` | forge API override: auto, github, gitlab, forgejo, local | string | `"auto"` | `$FORGE_CI_PROVIDER` |
 | `--runner` | runner conventions override: auto, github, forgejo, gitlab, local | string | `"auto"` | `$FORGE_CI_RUNNER` |
+| `--enforce-lint` | administrator setting, true or false (default: the engine's embedded policy); false reports lint findings without blocking. Only the administrator's protected caller sets it, on the command line; never read from the environment | string | `""` | n/a |
+| `--enforce-vulnerabilities` | administrator setting, true or false (default: the engine's embedded policy); false reports vulnerabilities findings without blocking. Only the administrator's protected caller sets it, on the command line; never read from the environment | string | `""` | n/a |
+| `--enforce-application-tests` | administrator setting, true or false (default: the engine's embedded policy); false reports application-tests findings without blocking. Only the administrator's protected caller sets it, on the command line; never read from the environment | string | `""` | n/a |
+| `--enforce-reproducible-builds` | administrator setting, true or false (default: the engine's embedded policy); false reports reproducible-builds findings without blocking. Only the administrator's protected caller sets it, on the command line; never read from the environment | string | `""` | n/a |
 
 ## Commands to run directly
 
@@ -46,7 +50,7 @@ then the environment variables listed per flag, then the flag default.
 - [`lint`](#forge-ci-lint) — code-style lint wrappers (swift-format, swiftlint)
 - [`plan`](#forge-ci-plan) — typed release, snapshot-release, and pull-request plan composition
 - [`platform`](#forge-ci-platform) — CI-runtime git + workspace operations (check out a repo, resolve a ref, inspect the workspace)
-- [`policy`](#forge-ci-policy) — immutable administrator check policy
+- [`policy`](#forge-ci-policy) — administrator check policy: inspect it and run gates under it
 - [`publish`](#forge-ci-publish) — publish-side validators, output helpers, and registry uploads
 - [`release`](#forge-ci-release) — release-flow helpers (GPG lifecycle, signing, checksums, notes, create, attachments, …)
 - [`report`](#forge-ci-report) — write step-summary blocks (build, publish, status, lifecycle)
@@ -2750,7 +2754,7 @@ EXAMPLE:
 
 ## `forge-ci policy`
 
-immutable administrator check policy
+administrator check policy: inspect it and run gates under it
 
 ### `forge-ci policy nanolinter`
 
@@ -2764,7 +2768,7 @@ run full Nanolinter SARIF and independently gate lint and vulnerability findings
 
 ### `forge-ci policy show`
 
-print the admin settings and policy SHA-256 embedded in this engine
+print the effective admin settings, the source of each (embedded-default or admin-input) and the embedded default's SHA-256
 
 ### `forge-ci policy tests`
 

@@ -59,7 +59,7 @@ type gradleDeps struct {
 // Enabled Build SBOM generation is mandatory: a
 // failure is summarized and returned so the release fails closed.
 func GradleReleaseBuild(ctx context.Context, summarySink ci.SummarySink, ops GradleOps, out, stderr io.Writer, in GradleReleaseBuildInput) error {
-	if err := appenforcement.RequireTests(in.SkipTests); err != nil {
+	if err := appenforcement.RequireTests(ctx, in.SkipTests); err != nil {
 		return err
 	}
 

@@ -62,7 +62,7 @@ type JVMReproducibilityInput struct {
 //     without "= ", inside an AbstractArchiveTask block or applied
 //     directly).
 func JVMReproducibility(ctx context.Context, out io.Writer, annot output.Annotator, in JVMReproducibilityInput) error {
-	policy, err := enforcement.Current()
+	policy, err := appenforcement.Resolve(ctx)
 	if err != nil {
 		return err
 	}

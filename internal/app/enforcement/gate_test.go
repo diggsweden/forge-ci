@@ -110,7 +110,7 @@ func TestOnlyFreshRecognizedTestFailuresMayContinue(t *testing.T) {
 			}
 
 			// Report-only must say why it did not continue past a failed run.
-			explained := strings.Contains(out.String(), "application-tests result=not-waivable enforcement=false reason=")
+			explained := strings.Contains(out.String(), "application-tests result=not-waivable enforcement=false source=embedded-default reason=")
 			if want := !test.continued; explained != want {
 				t.Fatalf("not-waivable line present=%t, want %t:\n%s", explained, want, out.String())
 			}
@@ -119,11 +119,11 @@ func TestOnlyFreshRecognizedTestFailuresMayContinue(t *testing.T) {
 }
 
 func TestTestOptOutCannotBecomeReportOnly(t *testing.T) {
-	if err := RequireTests(true); !errors.Is(err, errs.ErrUsage) {
+	if err := RequireTests(t.Context(), true); !errors.Is(err, errs.ErrUsage) {
 		t.Fatalf("skip accepted: %v", err)
 	}
 
-	if err := RequireTests(false); err != nil {
+	if err := RequireTests(t.Context(), false); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -212,7 +212,7 @@ func TestReportOnlyGoTestsStream(t *testing.T) {
 				t.Fatalf("assertion finding lost: %s", &out)
 			}
 
-			if !test.continued && !strings.Contains(out.String(), "result=not-waivable enforcement=false reason=\""+test.reason) {
+			if !test.continued && !strings.Contains(out.String(), "result=not-waivable enforcement=false source=embedded-default reason=\""+test.reason) {
 				t.Fatalf("reason lost: %s", &out)
 			}
 		})
@@ -223,5 +223,74 @@ func TestReportOnlyGoTestsStream(t *testing.T) {
 func write(writer io.Writer, body string) {
 	for chunk := range slices.Chunk([]byte(body), 4096-7) {
 		_, _ = writer.Write(chunk)
+	}
+}
+
+func TestAdminInputReachesTheGateAndItsReceipt(t *testing.T) {
+	ctx := WithAdmin(t.Context(), enforcement.Admin{enforcement.Lint: "false"})
+
+	var out bytes.Buffer
+	if err := Findings(ctx, &out, enforcement.Lint, 3); err != nil {
+		t.Fatalf("admin report-only lint still blocked: %v", err)
+	}
+
+	if !strings.Contains(out.String(), "lint result=findings count=3 enforcement=false source=admin-input\n") {
+		t.Fatalf("receipt does not show the admin input:\n%s", out.String())
+	}
+
+	out.Reset()
+
+	if err := Findings(ctx, &out, enforcement.Vulnerabilities, 1); !errors.Is(err, errs.ErrValidation) {
+		t.Fatalf("an unset setting lost its enforcing default: %v", err)
+	}
+
+	if !strings.Contains(out.String(), "vulnerabilities result=findings count=1 enforcement=true source=embedded-default\n") {
+		t.Fatalf("receipt does not show the default:\n%s", out.String())
+	}
+
+	if got := AdminArgs(ctx); !slices.Equal(got, []string{"--enforce-lint=false"}) {
+		t.Fatalf("a child invocation would not get the admin input: %v", got)
+	}
+
+	if got := AdminArgs(t.Context()); len(got) != 0 {
+		t.Fatalf("no admin input rendered as %v", got)
+	}
+}
+
+func TestShowPrintsEachSettingWithItsSource(t *testing.T) {
+	var out bytes.Buffer
+	if err := Show(WithAdmin(t.Context(), enforcement.Admin{enforcement.ApplicationTests: "false"}), &out); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{`"enforce-application-tests":false`, `"enforce-application-tests":"admin-input"`, `"enforce-lint":"embedded-default"`, `"sha256":"` + enforcement.Digest() + `"`} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("policy show lacks %s:\n%s", want, out.String())
+		}
+	}
+}
+
+// No gate takes a setting from the environment: one named like a setting is
+// refused, whatever its value, with or without an admin input.
+func TestGatesRefuseASettingFromTheEnvironment(t *testing.T) {
+	t.Setenv("RC_ENFORCE_LINT", "false")
+
+	for _, ctx := range []context.Context{t.Context(), WithAdmin(t.Context(), enforcement.Admin{enforcement.Lint: "true"})} {
+		var out bytes.Buffer
+		if err := Findings(ctx, &out, enforcement.Lint, 0); !errors.Is(err, errs.ErrUsage) || out.Len() != 0 {
+			t.Fatalf("an environment setting was not refused: %v\n%s", err, out.String())
+		}
+
+		if err := Show(ctx, &out); !errors.Is(err, errs.ErrUsage) {
+			t.Fatalf("policy show accepted an environment setting: %v", err)
+		}
+
+		if _, err := TestRun(ctx, &out, io.Discard, enforcement.GoJSON, func(io.Writer, io.Writer) error {
+			t.Fatal("tests ran under a refused environment")
+
+			return nil
+		}); !errors.Is(err, errs.ErrUsage) {
+			t.Fatalf("the test gate accepted an environment setting: %v", err)
+		}
 	}
 }

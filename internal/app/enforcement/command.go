@@ -29,7 +29,7 @@ func Nanolinter(ctx context.Context, runner LintRunner, out, stderr io.Writer, a
 		return fmt.Errorf("a nanolinter command is required: %w", errs.ErrUsage)
 	}
 
-	policy, err := enforcement.Current()
+	policy, err := Resolve(ctx)
 	if err != nil {
 		return err
 	}
@@ -124,17 +124,25 @@ func retireSARIF(path string) error {
 	return nil
 }
 
-// Show exposes immutable policy identity for administrators and run receipts.
-func Show(out io.Writer) error {
-	policy, err := enforcement.Current()
+// Show prints the effective policy of this invocation for administrators and
+// run receipts: each setting, where it came from, and the SHA-256 of the
+// embedded default it started from.
+func Show(ctx context.Context, out io.Writer) error {
+	policy, err := Resolve(ctx)
 	if err != nil {
 		return err
 	}
 
+	sources := make(map[string]enforcement.Source, len(enforcement.Checks))
+	for _, check := range enforcement.Checks {
+		sources[enforcement.Setting(check)] = policy.Source(check)
+	}
+
 	return json.NewEncoder(out).Encode(struct {
-		Policy enforcement.Policy `json:"settings"`
-		SHA256 string             `json:"sha256"`
-	}{policy, enforcement.Digest()})
+		Policy  enforcement.Policy            `json:"settings"`
+		Sources map[string]enforcement.Source `json:"sources"`
+		SHA256  string                        `json:"sha256"`
+	}{policy, sources, enforcement.Digest()})
 }
 
 // Tests supports native test commands in custom provider workflows. The workflow

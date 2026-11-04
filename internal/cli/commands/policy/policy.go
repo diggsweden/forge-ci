@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 // SPDX-License-Identifier: EUPL-1.2 OR GPL-3.0-or-later
 
-// Package policy wires immutable admin policy inspection and owned check gates.
+// Package policy wires admin policy inspection and owned check gates.
 package policy
 
 import (
@@ -14,10 +14,10 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-// New returns the immutable admin policy command group.
+// New returns the admin policy command group.
 func New() *cli.Command {
-	return &cli.Command{Name: "policy", Usage: "immutable administrator check policy", Commands: []*cli.Command{
-		{Name: "show", Usage: "print the admin settings and policy SHA-256 embedded in this engine", Action: func(_ context.Context, _ *cli.Command) error { return appenforcement.Show(os.Stdout) }},
+	return &cli.Command{Name: "policy", Usage: "administrator check policy: inspect it and run gates under it", Commands: []*cli.Command{
+		{Name: "show", Usage: "print the effective admin settings, the source of each (embedded-default or admin-input) and the embedded default's SHA-256", Action: func(ctx context.Context, _ *cli.Command) error { return appenforcement.Show(ctx, os.Stdout) }},
 		{Name: "nanolinter", Usage: "run full Nanolinter SARIF and independently gate lint and vulnerability findings", ArgsUsage: "-- <nanolinter verify --report sarif --out - command>", Flags: []cli.Flag{
 			&cli.StringFlag{Name: "sarif-file", Usage: "write the invocation's security-only SARIF for provider upload"},
 		}, Action: func(ctx context.Context, command *cli.Command) error {

@@ -78,7 +78,7 @@ type npmSBOMDeps struct {
 // <name>-<version>.tgz path for the forge job to upload by glob, so no scalar
 // output (and no $CI_OUTPUT) is needed.
 func NPMReleaseBuild(ctx context.Context, summarySink ci.SummarySink, npmRunner, npxRunner NPMRunner, annot output.Annotator, out, stderr io.Writer, in NPMReleaseBuildInput) error { //nolint:cyclop // metadata, tool steps and evidence each have distinct failure boundaries.
-	if err := appenforcement.RequireTests(in.SkipTests); err != nil {
+	if err := appenforcement.RequireTests(ctx, in.SkipTests); err != nil {
 		return err
 	}
 
