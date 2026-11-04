@@ -9,17 +9,19 @@
 package githubconsumer_test
 
 import (
+	"fmt"
 	"maps"
+	"net/mail"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
 
 	githubapi "github.com/google/go-github/v91/github"
+	"gopkg.in/yaml.v3"
 
 	"github.com/diggsweden/forge-ci/internal/livetest"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
@@ -130,6 +132,11 @@ func TestGitHubLayer_ConsumerTrial(t *testing.T) {
 func runTrial(t *testing.T, trial *livetest.GitHubTrial, engine livetest.GitHubEngine, root, fixtures string, settings livetest.GitHubTrialSettings, visibility livetest.ConsumerVisibility, releaseToken string) {
 	t.Helper()
 
+	keySigned, sshPrincipal, err := releaseSigning(root, fixtures, settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	demo := livetest.DemoName()
 
 	var repo string
@@ -146,7 +153,7 @@ func runTrial(t *testing.T, trial *livetest.GitHubTrial, engine livetest.GitHubE
 
 	var cosignKey *livetest.TrialCosignKey
 
-	if settings.Event == livetest.TrialRelease && keySigned(t, root, fixtures) {
+	if keySigned {
 		key := trial.NewTrialCosignKey()
 		cosignKey, trust = &key, key.Trust()
 
@@ -161,10 +168,10 @@ func runTrial(t *testing.T, trial *livetest.GitHubTrial, engine livetest.GitHubE
 	// allowed-signers line that names it for the workflow's bot-email.
 	var sshSigningKey string
 
-	if principal, signs := sshSigned(t, root, fixtures); signs && settings.Event == livetest.TrialRelease {
+	if sshPrincipal != "" {
 		private, public := livetest.SSHKey(t, t.TempDir())
 		sshSigningKey = private
-		trial = trial.WithFile(".forge-ci/allowed_signers", principal+" "+public+"\n")
+		trial = trial.WithFile(".forge-ci/allowed_signers", sshPrincipal+" "+public+"\n")
 	}
 
 	tree := trial.PushConsumer(repo, root, fixtures, engine, overrides)
@@ -285,44 +292,62 @@ func TestConsumerRepositoryNamesSeparateConcurrentEvents(t *testing.T) {
 	}
 }
 
-// keySigned reports whether the fixture's release workflow signs with a Cosign
-// key: it then pins the key's digest beside the variable it reads the key from.
-func keySigned(t *testing.T, root, fixtures string) bool {
-	t.Helper()
+// releaseSigning inspects only a stable release's selected workflow. PR and
+// development fixtures need not declare a stable release workflow at all.
+// An SSH signer must name its principal, which binds allowed_signers to the key.
+func releaseSigning(root, fixtures string, settings livetest.GitHubTrialSettings) (bool, string, error) {
+	if settings.Event != livetest.TrialRelease {
+		return false, "", nil
+	}
 
-	release, err := os.ReadFile(filepath.Join(root, fixtures, "workflows", "release.yml"))
+	release, err := os.ReadFile(filepath.Join(root, fixtures, "workflows", settings.Workflow))
 	if err != nil {
-		t.Fatalf("read the fixture's release workflow: %v", err)
+		return false, "", fmt.Errorf("read the fixture's release workflow: %w", err)
 	}
 
-	return strings.Contains(string(release), "cosign-public-key-sha256:")
-}
-
-// botEmail is the bot-email a release workflow passes the orchestrator.
-var botEmail = regexp.MustCompile(`(?m)^\s*bot-email:\s*["']?([^"'\s#]+)`)
-
-// sshSigned reports whether the fixture's release workflow signs Git with SSH
-// (it hands the orchestrator RELEASE_SSH_SIGNING_KEY) and the principal that
-// key signs as. Such a workflow must name the principal: SSH keys carry no
-// identity, and the release tag is checked against allowed_signers by it.
-func sshSigned(t *testing.T, root, fixtures string) (string, bool) {
-	t.Helper()
-
-	release, err := os.ReadFile(filepath.Join(root, fixtures, "workflows", "release.yml"))
-	if err != nil {
-		t.Fatalf("read the fixture's release workflow: %v", err)
+	var workflow struct {
+		Jobs map[string]struct {
+			With    map[string]any `yaml:"with"`
+			Secrets yaml.Node      `yaml:"secrets"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal(release, &workflow); err != nil {
+		return false, "", fmt.Errorf("parse the fixture's release workflow: %w", err)
 	}
 
-	if !strings.Contains(string(release), "secrets.RELEASE_SSH_SIGNING_KEY") {
-		return "", false
+	var keySigned bool
+	var principal string
+	for name, job := range workflow.Jobs {
+		if _, pinsKey := job.With["cosign-public-key-sha256"]; pinsKey {
+			keySigned = true
+		}
+		var inherited string
+		if err := job.Secrets.Decode(&inherited); err == nil && inherited == "inherit" {
+			continue
+		}
+		// Decode, rather than inspecting raw nodes, resolves native YAML aliases
+		// in both the secrets mapping and its individual values, with library limits.
+		var secrets map[string]string
+		if err := job.Secrets.Decode(&secrets); err != nil {
+			return false, "", fmt.Errorf("decode release job %s secrets: %w", name, err)
+		}
+		for _, secret := range secrets {
+			if !strings.Contains(secret, "secrets.RELEASE_SSH_SIGNING_KEY") {
+				continue
+			}
+			email, literal := job.With["bot-email"].(string)
+			address, err := mail.ParseAddress(email)
+			if !literal || err != nil || address.Name != "" || address.Address != email ||
+				strings.ContainsAny(email, "*?![],\\") || strings.Contains(email, "${{") {
+				return false, "", fmt.Errorf("release job %s requires a literal bot-email signing principal without SSH patterns", name)
+			}
+			if principal != "" && principal != email {
+				return false, "", fmt.Errorf("release jobs require different SSH signing principals")
+			}
+			principal = email
+		}
 	}
-
-	match := botEmail.FindStringSubmatch(string(release))
-	if match == nil {
-		t.Fatal("the fixture's release workflow signs Git with SSH but passes no bot-email, the principal its key signs as")
-	}
-
-	return match[1], true
+	return keySigned, principal, nil
 }
 
 // judge waits for the run, prints its jobs, and fails the trial unless it
