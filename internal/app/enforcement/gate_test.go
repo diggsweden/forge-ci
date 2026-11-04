@@ -226,7 +226,7 @@ func write(writer io.Writer, body string) {
 	}
 }
 
-func TestAdminInputReachesTheGateAndItsReceipt(t *testing.T) {
+func TestFlagReachesTheGateAndItsReceipt(t *testing.T) {
 	ctx := WithAdmin(t.Context(), enforcement.Admin{enforcement.Lint: "false"})
 
 	var out bytes.Buffer
@@ -234,7 +234,7 @@ func TestAdminInputReachesTheGateAndItsReceipt(t *testing.T) {
 		t.Fatalf("admin report-only lint still blocked: %v", err)
 	}
 
-	if !strings.Contains(out.String(), "lint result=findings count=3 enforcement=false source=admin-input\n") {
+	if !strings.Contains(out.String(), "lint result=findings count=3 enforcement=false source=flag\n") {
 		t.Fatalf("receipt does not show the admin input:\n%s", out.String())
 	}
 
@@ -263,7 +263,7 @@ func TestShowPrintsEachSettingWithItsSource(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, want := range []string{`"enforce-application-tests":false`, `"enforce-application-tests":"admin-input"`, `"enforce-lint":"embedded-default"`, `"sha256":"` + enforcement.Digest() + `"`} {
+	for _, want := range []string{`"enforce-application-tests":false`, `"enforce-application-tests":"flag"`, `"enforce-lint":"embedded-default"`, `"default-sha256":"` + enforcement.Digest() + `"`} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("policy show lacks %s:\n%s", want, out.String())
 		}

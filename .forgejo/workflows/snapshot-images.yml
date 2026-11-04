@@ -62,11 +62,11 @@ on:
         type: string
         default: snapshot-images
       enforce-application-tests:
-        description: Administrator setting; false lets the artifact builds report recognized test assertion failures without failing. Tests still run. Only the administrator's protected caller sets it; see docs/admin-policy.md.
+        description: Enforcement setting; false lets the artifact builds report recognized test assertion failures without failing. Tests still run. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md.
         type: boolean
         default: true
       enforce-vulnerabilities:
-        description: Administrator setting; false lets publication report image vulnerability findings without failing. Every image is still scanned. Only the administrator's protected caller sets it.
+        description: Enforcement setting; false lets publication report image vulnerability findings without failing. Every image is still scanned. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md.
         type: boolean
         default: true
     outputs:
@@ -80,9 +80,6 @@ env:
   SNAPSHOT_REPOSITORY: ${{ forgejo.repository }}
   SNAPSHOT_ENGINE_SHA: ${{ inputs['forge-ci-sha'] }}
   SNAPSHOT_NAMESPACE: ${{ inputs['artifact-name'] }}
-  # The administrator's settings, which every engine call passes as flags.
-  SNAPSHOT_ADMIN_APPLICATION_TESTS: ${{ inputs['enforce-application-tests'] }}
-  SNAPSHOT_ADMIN_VULNERABILITIES: ${{ inputs['enforce-vulnerabilities'] }}
 jobs:
   coordinates:
     name: "Check: layer and builder coordinates"
@@ -197,6 +194,9 @@ jobs:
         id: plan
         shell: bash
         env:
+          # The settings snapshot_engine passes to every engine call.
+          SNAPSHOT_ADMIN_APPLICATION_TESTS: ${{ inputs['enforce-application-tests'] }}
+          SNAPSHOT_ADMIN_VULNERABILITIES: ${{ inputs['enforce-vulnerabilities'] }}
           FORGEJO_TOKEN: ${{ forgejo.token }}
           SNAPSHOT_BRANCH: ${{ inputs.branch }}
           SNAPSHOT_CONFIG: ${{ inputs['artifacts-config'] }}
@@ -262,6 +262,9 @@ jobs:
         if: ${{ matrix.artifact.name != '' }}
         shell: bash
         env:
+          # The settings snapshot_engine passes to every engine call.
+          SNAPSHOT_ADMIN_APPLICATION_TESTS: ${{ inputs['enforce-application-tests'] }}
+          SNAPSHOT_ADMIN_VULNERABILITIES: ${{ inputs['enforce-vulnerabilities'] }}
           FORGEJO_TOKEN: ${{ forgejo.token }}
           SOURCE_SHA: ${{ needs.plan.outputs.source-sha }}
         run: |
@@ -274,6 +277,9 @@ jobs:
         if: ${{ matrix.artifact.name != '' }}
         shell: bash
         env:
+          # The settings snapshot_engine passes to every engine call.
+          SNAPSHOT_ADMIN_APPLICATION_TESTS: ${{ inputs['enforce-application-tests'] }}
+          SNAPSHOT_ADMIN_VULNERABILITIES: ${{ inputs['enforce-vulnerabilities'] }}
           ARTIFACT_NAME: ${{ matrix.artifact.name }}
         run: |
           set -euo pipefail
@@ -319,6 +325,9 @@ jobs:
       - name: Gather the complete same-run producer set without source execution
         shell: bash
         env:
+          # The settings snapshot_engine passes to every engine call.
+          SNAPSHOT_ADMIN_APPLICATION_TESTS: ${{ inputs['enforce-application-tests'] }}
+          SNAPSHOT_ADMIN_VULNERABILITIES: ${{ inputs['enforce-vulnerabilities'] }}
           FORGEJO_TOKEN: ${{ forgejo.token }}
           SOURCE_SHA: ${{ needs.plan.outputs.source-sha }}
         run: |
@@ -368,6 +377,9 @@ jobs:
       - name: Fetch frozen source and same-run inputs
         shell: bash
         env:
+          # The settings snapshot_engine passes to every engine call.
+          SNAPSHOT_ADMIN_APPLICATION_TESTS: ${{ inputs['enforce-application-tests'] }}
+          SNAPSHOT_ADMIN_VULNERABILITIES: ${{ inputs['enforce-vulnerabilities'] }}
           FORGEJO_TOKEN: ${{ forgejo.token }}
           SOURCE_SHA: ${{ needs.plan.outputs.source-sha }}
           CONTEXT_ARTIFACT: ${{ inputs['context-artifact'] }}
@@ -387,6 +399,9 @@ jobs:
       - name: Stage native image without publication credentials
         shell: bash
         env:
+          # The settings snapshot_engine passes to every engine call.
+          SNAPSHOT_ADMIN_APPLICATION_TESTS: ${{ inputs['enforce-application-tests'] }}
+          SNAPSHOT_ADMIN_VULNERABILITIES: ${{ inputs['enforce-vulnerabilities'] }}
           IMAGE_NAME: ${{ matrix.build.name }}
           IMAGE_ARCH: ${{ matrix.build.arch }}
           CI_IMAGE_BUILDER: ${{ needs.coordinates.outputs.builder }}
@@ -439,6 +454,9 @@ jobs:
       - name: Fetch exact source policy and complete layout set
         shell: bash
         env:
+          # The settings snapshot_engine passes to every engine call.
+          SNAPSHOT_ADMIN_APPLICATION_TESTS: ${{ inputs['enforce-application-tests'] }}
+          SNAPSHOT_ADMIN_VULNERABILITIES: ${{ inputs['enforce-vulnerabilities'] }}
           FORGEJO_TOKEN: ${{ forgejo.token }}
           SOURCE_SHA: ${{ needs.plan.outputs.source-sha }}
           IMAGE_NAME: ${{ matrix.image.name }}
@@ -459,6 +477,9 @@ jobs:
       - name: Publish verified snapshot and receipt
         shell: bash
         env:
+          # The settings snapshot_engine passes to every engine call.
+          SNAPSHOT_ADMIN_APPLICATION_TESTS: ${{ inputs['enforce-application-tests'] }}
+          SNAPSHOT_ADMIN_VULNERABILITIES: ${{ inputs['enforce-vulnerabilities'] }}
           IMAGE_NAME: ${{ matrix.image.name }}
           SNAPSHOT_REGISTRY_USER: ${{ inputs['registry-user'] }}
           SNAPSHOT_REGISTRY_PASSWORD: ${{ secrets.SNAPSHOT_REGISTRY_PASSWORD }}
@@ -505,6 +526,10 @@ jobs:
       - name: Require every expected image receipt
         id: collect
         shell: bash
+        env:
+          # The settings snapshot_engine passes to every engine call.
+          SNAPSHOT_ADMIN_APPLICATION_TESTS: ${{ inputs['enforce-application-tests'] }}
+          SNAPSHOT_ADMIN_VULNERABILITIES: ${{ inputs['enforce-vulnerabilities'] }}
         run: |
           set -euo pipefail
           source "${SNAPSHOT_HELPERS}/.engine/bin/lib-forge-ci.sh"

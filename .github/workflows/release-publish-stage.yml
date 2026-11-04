@@ -6,7 +6,7 @@ on:
   workflow_call: # yamllint disable-line rule:truthy
     inputs:
       enforce-vulnerabilities:
-        description: "Administrator setting: false reports vulnerability findings without failing; the scans still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        description: "Enforcement setting: false reports vulnerability findings without failing; the scans still run. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md."
         type: boolean
         required: false
         default: true

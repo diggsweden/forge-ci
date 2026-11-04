@@ -1074,8 +1074,9 @@ who owns them, and migration from legacy consumer opt-outs.
 A passing pipeline must be read alongside its selected checks, native execution
 reports and administrator-policy decisions. A report-only pass can retain real
 findings; a Gradle cache or `NO-SOURCE` outcome is not physical test execution.
-Adopters who need non-default enforcement set the administrator inputs in the
-protected caller; the decision lines name each setting's source.
+Adopters who need non-default enforcement set the inputs in the
+administrator's entry point; the decision lines name each setting's source,
+`flag` or `embedded-default`.
 
 ## Reproducible Builds
 

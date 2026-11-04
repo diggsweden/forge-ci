@@ -321,7 +321,7 @@ description. The inputs they share:
 | `release-policy` | no, in prepare and sign/publish | `stable` (default) or `stable-prerelease`; pass the same value to both workflows. See [release policy](workflows.md#stable-and-prerelease-policy). |
 | `transparency-log` | no, in the four signer workflows | `none` (the default) or `public`: whether signatures are also written to the public Sigstore transparency log. One value for every workflow of an organization; see [The transparency log](#the-transparency-log). |
 | `release-asset-retention` | no, in `sign-and-publish-release.yml` | How many of the newest releases keep every file; older ones keep their checksums and signatures. Empty, the default, deletes nothing. See [Old releases' files](#old-releases-files). |
-| `enforce-vulnerabilities`, `enforce-application-tests` | no, in `release-images.yml` (vulnerabilities) and `snapshot-images.yml` (both) | The administrator's [check enforcement](admin-policy.md), default `true`. Only the administrator's protected workflow sets them; no workflow reads them from a variable. |
+| `enforce-vulnerabilities`, `enforce-application-tests` | no, in `release-images.yml` (vulnerabilities) and `snapshot-images.yml` (both) | The administrator's [check enforcement](admin-policy.md), default `true`, written out as literals in a protected, code-owner-reviewed workflow; no workflow reads them from a variable. |
 
 A secret-free `coordinates` job validates the repository and the image
 coordinate before any container starts: no credentials, query or fragment in
@@ -351,8 +351,10 @@ alone. Each `action.yml` documents its own inputs and outputs.
 The `lint-nanolinter` action takes `enforce-lint` and `enforce-vulnerabilities`,
 and `build-go`, `build-cargo` and `build-maven` take `enforce-application-tests`:
 the administrator's [check enforcement](admin-policy.md), default `'true'`,
-passed to the engine as flags. Set them only in the administrator's protected
-workflow; the actions never read them from a variable or the environment.
+passed to the engine as flags. They are the administrator's only in a
+protected, code-owner-reviewed workflow file, written out as literals, which
+`check-l3-isolation` requires; the actions never read them from a variable or
+the environment.
 
 `registry-login` and `release-images.yml` name the registry user by one rule:
 the user given (`username`, `registry-user` or the `RELEASE_REGISTRY_USER`
@@ -750,8 +752,17 @@ for them; every `pullrequest.yml` in the examples, such as
 - **`check-l3-isolation`**: the release-isolation gate over the consumer's
   workflows: no signing secret in the build job, enumerated signer secrets,
   the digest hand-off, one commit across every reference, and the signer
-  image, key digest and transparency-log setting written out as literals.
+  image, key digest, transparency-log setting and every `enforce-*` setting
+  written out as literals.
   [Signing boundary](#signing-boundary) says what it does not check.
+
+The pull-request jobs being the consumer's own, the `enforce-*` inputs of
+`lint-nanolinter` and the `build-*` actions are the administrator's only
+where `.forgejo/workflows/` is on a protected branch and a change to it needs
+the review of the administrator's code owners. Forgejo has no required
+workflows: a consumer maintainer who may change the branch protection or the
+code owners can relax a gate, as they could remove it. See
+[Administrator check enforcement](admin-policy.md#forgejo).
 
 nanolinter is the only lint engine: the layer has no MegaLinter action. Tests
 run in the consumer's own job, for example through `build-go`, which runs

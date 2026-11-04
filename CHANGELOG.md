@@ -94,26 +94,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `RELEASE_PLATFORMS` selects (`linux/amd64` when unset), with the selected
   image builder, and builds its two runtime images as the tag variants
   `<tag>-worker` and `<tag>-keytool`.
-
-- The administrator sets the four enforcement settings at run time, without
-  rebuilding the engine: `--enforce-lint`, `--enforce-vulnerabilities`,
+- The four enforcement settings can be set at run time, without rebuilding
+  the engine: `--enforce-lint`, `--enforce-vulnerabilities`,
   `--enforce-application-tests` and `--enforce-reproducible-builds`, global
   flags taking exactly `true` or `false`, each given at most once. They have
   no environment variable; the embedded `policy.json` stays the enforcing
   default for every setting not given. `policy show` adds each setting's
-  `sources` (`embedded-default` or `admin-input`), and every decision line
-  ends in `source=`. See `docs/admin-policy.md`.
-- Every forge takes the four settings as inputs of what runs the gate, set
-  only in the administrator's protected caller and passed to the engine as
-  flags. GitLab: `release`, `check`, `nanolinter`, `snapshot-images` and the
-  `build-*` components, which assign them as read-only literals of the job's
-  script; the `check` job and the release's checks and build jobs put a
-  `forge-ci` first on `PATH` that carries them and print `policy show`.
-  GitHub: the pull-request, release and snapshot orchestrators, forwarded to
-  `lint-nanolinter`, `lint-swift`, `build-*`, `validate-release-prerequisites`,
-  `publish-container` and `snapshot-images`. Forgejo: the `lint-nanolinter`
-  and `build-*` actions, `release-images.yml` and `snapshot-images.yml`. No
-  workflow reads them from `vars` or the environment.
+  `sources` (`embedded-default` or `flag`), and every decision line ends in
+  `source=`. A flag is administrator policy only where the administrator's
+  entry point writes it; see `docs/admin-policy.md`.
+- Every forge takes the four settings as inputs of what runs the gate,
+  passed to the engine as flags. Whoever writes the call can pass them, so
+  they belong in the administrator's entry point: a GitLab pipeline execution
+  policy (or, weaker, an external CI configuration path) whose own YAML
+  includes the gates with the settings as literals; a GitHub organization
+  ruleset's required workflow; on Forgejo, protected, code-owner-reviewed
+  workflow files. GitLab: `release`, `check`, `nanolinter`, `snapshot-images`
+  and the `build-*` components, which assign them as read-only literals of
+  the job's script; the `check` job and the release's checks and build jobs
+  point both `forge-ci` on `PATH` and `FORGE_CI_BIN` at a wrapper that carries
+  them, and print `policy show`. GitHub: the pull-request, release and
+  snapshot orchestrators, forwarded to `lint-nanolinter`, `lint-swift`,
+  `build-*`, `validate-release-prerequisites`, `publish-container` and
+  `snapshot-images`. Forgejo: the `lint-nanolinter` and `build-*` actions,
+  `release-images.yml` and `snapshot-images.yml`, and `check-l3-isolation`
+  requires each value a job or step passes to be written out. No workflow
+  reads them from `vars` or the environment.
 - The GitLab `release` component takes `export-files` and `export`: commands
   that export files from a Containerfile stage, run once per selected
   architecture in `Build: export amd64` and `Build: export arm64`, natively,
@@ -592,13 +598,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runs. It took any text, though its description asked for a digest, and the
   job container receives the checkout and the job token. Pin the image by
   its digest. The components' Consume headers now show the input.
-
 - **BREAKING:** A gate refuses to run when its environment has a variable
   named like an administrator setting: `ENFORCE_LINT`, or any name ending in
   `_ENFORCE_LINT` such as a GitLab project variable `FORGE_CI_ENFORCE_LINT`,
   and likewise for the other three. Such a variable was ignored before; it
   never set the policy. Remove it, and have the administrator's caller pass
   the flag.
+- The GitLab gate components, `nanolinter`, `megalinter`, `check` and the
+  `build-*` components, state `allow_failure: false`, `before_script`,
+  `script` and `after_script` on their job. A job of the same name in a
+  file included before the component, such as a consumer's merge-request
+  file in the policy, is merged under it and can no longer make the gate
+  optional or replace what it runs. Include the consumer's file first.
+- **BREAKING:** The decision line of every gate starts with
+  `Enforcement policy default-sha256:<digest>:` instead of
+  `Admin policy sha256:<digest>:`, and `policy show` names the digest
+  `default-sha256` instead of `sha256`: it identifies the embedded default
+  only, not the effective policy. A reader of the old line should accept
+  both; the live-run reader does.
 - **BREAKING:** The GitLab `build-*` components pass
   `--enforce-application-tests` to the engine in their `runtime-image`, so an
   image whose engine predates this release refuses the flag. Select a runtime

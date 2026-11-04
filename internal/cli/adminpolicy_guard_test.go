@@ -17,8 +17,8 @@ import (
 	"github.com/diggsweden/forge-ci/internal/testutil/cliflags"
 )
 
-// The administrator settings have one source: the command line of the
-// administrator's protected caller. Each is declared once, on the root, so
+// The enforcement settings have one source: the command line that runs the
+// engine. Each is declared once, on the root, so
 // every command honours it, with no value source at all, so no environment
 // variable or plan file supplies one, and may be given once, so a second
 // spelling cannot replace the first. No other flag reads an environment
@@ -93,7 +93,7 @@ func TestAdminSettingReachesThePolicyOfItsInvocation(t *testing.T) {
 		}
 
 		want := map[string]string{
-			"enforce-lint": "admin-input", "enforce-reproducible-builds": "admin-input",
+			"enforce-lint": "flag", "enforce-reproducible-builds": "flag",
 			"enforce-vulnerabilities": "embedded-default", "enforce-application-tests": "embedded-default",
 		}
 		for name, source := range want {

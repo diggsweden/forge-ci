@@ -47,7 +47,7 @@ inputs:
     required: false
     default: 'false'
   enforce-application-tests:
-    description: "Administrator setting, true or false: false reports recognized test assertion failures without failing; the tests still run. Only the administrator's protected workflow sets it. See docs/admin-policy.md."
+    description: "Enforcement setting, true or false: false reports recognized test assertion failures without failing; the tests still run. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md."
     required: false
     default: 'true'
   enable-build-sbom:

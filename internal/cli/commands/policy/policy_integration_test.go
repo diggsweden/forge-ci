@@ -178,11 +178,11 @@ func TestCompiledAdminPolicyCannotBeOverriddenByConsumers(t *testing.T) {
 			run(false, "policy", "set", "enforce-lint=false")
 			// The admin input replaces the compiled default, both ways.
 			flipped := strconv.FormatBool(!variant.lint)
-			if body := run(true, "policy", "show", "--enforce-lint="+flipped); !strings.Contains(body, `"enforce-lint":`+flipped) || !strings.Contains(body, `"enforce-lint":"admin-input"`) {
+			if body := run(true, "policy", "show", "--enforce-lint="+flipped); !strings.Contains(body, `"enforce-lint":`+flipped) || !strings.Contains(body, `"enforce-lint":"flag"`) {
 				t.Fatalf("admin input did not apply: %s", body)
 			}
 			formatScript := filepath.Join(dir, "format.sh")
-			if body := run(variant.lint, "policy", "nanolinter", "--enforce-lint="+flipped, "--", "/bin/sh", formatScript, "1"); !strings.Contains(body, "enforcement="+flipped+" source=admin-input") {
+			if body := run(variant.lint, "policy", "nanolinter", "--enforce-lint="+flipped, "--", "/bin/sh", formatScript, "1"); !strings.Contains(body, "enforcement="+flipped+" source=flag") {
 				t.Fatalf("admin input missing from the receipt:\n%s", body)
 			}
 			for _, name := range []string{"ENFORCE_LINT", "FORGE_CI_ENFORCE_VULNERABILITIES", "RC_ENFORCE_APPLICATION_TESTS"} {

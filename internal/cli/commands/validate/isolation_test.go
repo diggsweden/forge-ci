@@ -289,6 +289,43 @@ func TestIsolationCmd_LiteralInput(t *testing.T) {
 	}
 }
 
+// A step that uses one of the subject's actions is held to the same
+// literals as a job that calls one of its workflows: the enforcement
+// settings of the lint and build actions are written out, or left out.
+func TestIsolationCmd_LiteralInputCoversActionSteps(t *testing.T) {
+	step := func(value string) string {
+		return `jobs:
+  build:
+    steps:
+      - uses: ` + singlePinSubject + `/.forgejo/actions/build-go@` + singlePinCommit + `
+        with:
+          enforce-application-tests: ` + value + "\n"
+	}
+	flags := []string{"--single-pin-subject", singlePinSubject, "--literal-input", "enforce-application-tests=enum:true/false"}
+
+	for value, want := range map[string]string{
+		"'true'":              "",
+		"false":               "",
+		"${{ vars.ENFORCE }}": "passes enforce-application-tests to " + singlePinSubject + " as a value that is an expression",
+		"${{ inputs['enforce-application-tests'] }}": "is an expression",
+		"no": "is not one of true, false",
+	} {
+		stderr, err := captureStderr(t, func() error { return runIsolationThroughRoot(t, step(value), flags...) })
+
+		if want == "" {
+			if err != nil {
+				t.Errorf("%s: err = %v\n%s", value, err, stderr)
+			}
+
+			continue
+		}
+
+		if !errors.Is(err, errs.ErrValidation) || !strings.Contains(stderr, want) {
+			t.Errorf("%s: err = %v, stderr lacks %q:\n%s", value, err, want, stderr)
+		}
+	}
+}
+
 // The check covers every workflow file of the directory, as the pin check
 // does: a base-image workflow beside release.yml calls the same subject.
 func TestIsolationCmd_LiteralInputCoversSiblingWorkflowFiles(t *testing.T) {

@@ -526,11 +526,15 @@ two includes left at `check` run only one of the checks, silently.
 
 The job starts with an empty workspace and no cache or artifact dependencies.
 It uses the runner's custom CA when provided, keeps the helpers outside the
-consumer checkout, and exposes the verified engine as `FORGE_CI_BIN`. The
-`forge-ci` first on PATH runs that engine with the component's four
-[enforcement inputs](admin-policy.md) as flags, and the job prints the
-effective policy with `forge-ci policy show` before the commands run; the
-release's checks and build jobs do the same. `CI_OUTPUT` points to a temporary dotenv file for engine
+consumer checkout, and checksums the engine. It then writes a `forge-ci`
+that runs that engine with the component's four
+[enforcement inputs](admin-policy.md) as flags, puts it first on PATH and
+names it in `FORGE_CI_BIN`, and prints the effective policy with
+`forge-ci policy show` before the commands run; the release's checks and
+build jobs do the same. A command that gives a setting again is refused. Code
+the commands run can still reach the bare binary; the settings are the
+administrator's only where the include is, see
+[Who sets them](admin-policy.md#gitlab). `CI_OUTPUT` points to a temporary dotenv file for engine
 commands within the job; no cross-job output artifact is published.
 
 Signing and publication credentials must be environment-scoped away from check
@@ -771,19 +775,52 @@ Empty, the default, leaves the release commit to the changelog.
 
 #### The merge-request gate under a policy
 
-Once the project's CI configuration path names the policy, GitLab runs the
-policy file for every pipeline and ignores the project's own `.gitlab-ci.yml`,
-merge requests included. The policy therefore carries the gate too: it
-includes the consumer's gate file for merge-request pipelines only, read at
-the merge request's commit, and nothing of the consumer's for release tags.
+The merge-request gate is the policy's, not the consumer's. A consumer file
+that includes `nanolinter` or `check` itself can pass `enforce-lint: false`
+and gets a green job, so those jobs are never the required gate. The policy's
+own YAML includes the gate components, with the `enforce-*` inputs written
+out, and takes from the consumer only the commands, as a script in its
+repository.
+
+Prefer a pipeline execution policy in inject mode (`inject_policy`) where the
+tier allows it: its jobs run beside the project's own pipeline, apart from
+its configuration, and a project maintainer cannot remove the policy. The
+project's CI configuration path naming the policy file is weaker: GitLab then
+runs only the policy file, merge requests included, but a project maintainer
+can change the path, and every file the policy includes is merged into one
+configuration. With that setting, the policy includes the consumer's file for
+merge-request pipelines only, read at the merge request's commit, **before**
+the gate components, and nothing of the consumer's for release tags:
 
 ```yaml
 include:
-  # The consumer's own gate, for merge requests only. It runs without the
-  # protected signing variables and never on a release-request tag.
+  # Optional jobs of the consumer's own, for merge requests only. Included
+  # first: a job it defines with a gate's name is merged under the gate's,
+  # which states allow_failure, before_script, script and after_script.
   - project: team/app
     ref: $CI_COMMIT_SHA
     file: .gitlab/merge-request.yml
+    rules:
+      - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  # The gates, with the administrator's settings written out.
+  - component: gitlab.example.com/team/ci/forge-ci/nanolinter@0.90.0
+    inputs:
+      forge-ci-repository: team/ci/forge-ci
+      nanolinter-image: "ghcr.io/itiquette/nanolinter:go@sha256:PIN_DIGEST"
+      enforce-lint: true
+      enforce-vulnerabilities: true
+    rules:
+      - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  - component: gitlab.example.com/team/ci/forge-ci/check@PIN_FORGE_CI_SHA
+    inputs:
+      forge-ci-repository: team/ci/forge-ci
+      job-image: registry.example.com/team/check-tools@sha256:PIN_DIGEST
+      commands:
+        - bash .gitlab/check-release.sh
+      enforce-lint: true
+      enforce-vulnerabilities: true
+      enforce-application-tests: true
+      enforce-reproducible-builds: true
     rules:
       - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
   - component: gitlab.example.com/team/ci/forge-ci/release@PIN_FORGE_CI_SHA
@@ -791,32 +828,19 @@ include:
       # as above
 ```
 
-Keep the gate in its own file, such as `.gitlab/merge-request.yml` with the
-`nanolinter` and `check` components from [Getting started](#getting-started),
-so the policy names exactly what it admits. The include's rule only decides
-when the file is read; GitLab still adds no job without rules to a
-merge-request pipeline, so the gate file declares the pipelines it runs in:
-
-```yaml
-# .gitlab/merge-request.yml
-workflow:
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-include:
-  # check is checksum-bound: include it by the engine commit, never a version;
-  # see Checksum-bound engine bootstrap in docs/gitlab.md.
-  - component: $CI_SERVER_FQDN/team/ci/forge-ci/check@PIN_FORGE_CI_SHA
-    inputs:
-      forge-ci-repository: team/ci/forge-ci
-      job-image: registry.example.com/team/check-tools@sha256:PIN_DIGEST
-      commands:
-        - bash .gitlab/check-release.sh
-```
+The include rules only decide when a file is read. The policy declares the
+pipelines it runs in with its own `workflow: rules`, as the consumer's gate
+file did before, admitting merge-request pipelines beside its release
+pipelines. A consumer file merged before them can still add keys the gates do
+not state, such as `rules`, `needs` or `variables`: keep the consumer file to
+jobs of its own, with names of its own, and require the gate jobs by name.
 
 Release-request tag pipelines stay policy-only. The live consumer-release trial checks both sides when the
 consumer has `.gitlab/merge-request.yml`: it adds this include to the policy,
 releases, then opens a merge request on the released main and requires the
-gate's pipeline to pass.
+gate's pipeline to pass. That trial still includes the gates from the
+consumer's file, the shape this section replaces; it proves the pipeline, not
+who set the settings.
 
 A merge request from a fork gets its pipeline in the fork by default, where
 the gate compares with the fork's copy of the target branch and the fork's job

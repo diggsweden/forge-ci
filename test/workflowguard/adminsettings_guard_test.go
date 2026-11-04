@@ -5,6 +5,9 @@ package workflowguard
 
 import (
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -51,8 +54,13 @@ var adminGates = []struct {
 	{regexp.MustCompile(`\bcontainer build-push-oci-image\b`), []string{"vulnerabilities"}},
 }
 
-// engineCall is a command line that runs the engine, the way the layers do.
-var engineCall = regexp.MustCompile(`(^|[\s|;&(])(forge-ci|run_forge_ci|rc_engine|"\$\{?FORGE_CI_BIN\}?")\s`)
+// engineCall is a command line that runs the engine, in every spelling the
+// layers have for it: by name, through a helper, or through a variable that
+// names the binary, quoted or not, with or without a :? guard.
+var engineCall = regexp.MustCompile(`(^|[\s|;&(])(forge-ci|run_forge_ci|rc_engine|"?\$\{?(FORGE_CI_BIN|HELPERS_ENGINE_VERIFIED)(:[?-][^}]*)?\}?"?)\s`)
+
+// proseGate is a gate named in a description, in backticks.
+var proseGate = regexp.MustCompile("`forge-ci [^`]+`")
 
 type adminSource struct {
 	path string
@@ -136,7 +144,18 @@ func TestEveryGateCallPassesTheAdministratorSettings(t *testing.T) {
 	for _, source := range adminSources(t) {
 		for line := range strings.SplitSeq(source.text, "\n") {
 			for _, gate := range adminGates {
-				if !gate.command.MatchString(line) || !engineCall.MatchString(line) {
+				if !gate.command.MatchString(line) {
+					continue
+				}
+
+				if !engineCall.MatchString(line) {
+					// Prose names a gate in backticks; snapshot_engine is held
+					// to the settings below. Any other line that names a gate
+					// runs it through a spelling this guard does not know.
+					if !proseGate.MatchString(line) && !strings.Contains(line, "snapshot_engine ") {
+						findings = append(findings, fmt.Sprintf("%s: %q runs a gate through an engine spelling this guard does not know; use forge-ci, run_forge_ci, rc_engine or $FORGE_CI_BIN", source.path, strings.TrimSpace(line)))
+					}
+
 					continue
 				}
 
@@ -405,4 +424,105 @@ func adminInputsOf(names []string) []string {
 	}
 
 	return settings
+}
+
+// consumerSetting is an enforcement setting written anywhere: an input, a
+// flag, or a variable named like one.
+var consumerSetting = regexp.MustCompile(`(?i)enforce[-_](lint|vulnerabilities|application[-_]tests|reproducible[-_]builds)`)
+
+// What a consumer copies or is given never sets an enforcement setting: the
+// examples, which `forge-ci init` writes into a repository, the live demos
+// and consumer fixtures, and the live tests' consumer files. A setting is
+// the administrator's, in the administrator's own entry point; a copy in a
+// consumer's file would teach the consumer to relax its own gate.
+func TestConsumerFilesNeverSetAnEnforcementSetting(t *testing.T) {
+	t.Parallel()
+
+	root := reporoot.Path(t)
+
+	var findings []string
+
+	scanned := 0
+
+	for _, dir := range []string{"examples", "test/live/demos", "test/live/consumer-fixtures", "test/live/cases", "internal/livetest/testdata"} {
+		err := filepath.WalkDir(filepath.Join(root, dir), func(path string, entry fs.DirEntry, err error) error {
+			if err != nil || entry.IsDir() {
+				return err
+			}
+
+			body, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+
+			scanned++
+
+			rel, _ := filepath.Rel(root, path)
+
+			for number, line := range strings.Split(string(body), "\n") {
+				if consumerSetting.MatchString(line) {
+					findings = append(findings, fmt.Sprintf("%s:%d: %s", rel, number+1, strings.TrimSpace(line)))
+				}
+			}
+
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("%s: %v", dir, err)
+		}
+	}
+
+	if len(findings) > 0 {
+		t.Fatalf("consumer files that set an enforcement setting; only the administrator's entry point may:\n  %s", strings.Join(findings, "\n  "))
+	}
+
+	if scanned < 50 {
+		t.Fatalf("only %d consumer files were scanned; this guard measured nothing", scanned)
+	}
+}
+
+// A policy includes a consumer's gate file and then the gate components; a
+// job of the same name from the earlier file is merged under the gate's. The
+// gate therefore states the keys that decide its outcome, so the consumer's
+// file cannot make it optional or replace what it runs.
+func TestGateComponentsStateTheirOutcomeKeys(t *testing.T) {
+	t.Parallel()
+
+	gates := []string{"nanolinter", "megalinter", "check", "build-go", "build-maven", "build-npm", "build-cargo", "build-gradle", "build-gradle-android"}
+
+	for _, gate := range gates {
+		path := "templates/" + gate + ".yml"
+
+		var job map[string]yaml.Node
+
+		_, rest, err := componentInputNames(reporoot.ReadFile(t, path))
+		if err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+
+		var jobs map[string]map[string]yaml.Node
+		if err := yaml.Unmarshal(rest, &jobs); err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+
+		for name, keys := range jobs {
+			if _, runs := keys["script"]; runs && !strings.HasPrefix(name, ".") {
+				job = keys
+			}
+		}
+
+		if job == nil {
+			t.Fatalf("%s: no gate job", path)
+		}
+
+		for _, key := range []string{"allow_failure", "before_script", "script", "after_script"} {
+			if _, stated := job[key]; !stated {
+				t.Errorf("%s: the gate job does not state %s, so a consumer's job of the same name can supply it", path, key)
+			}
+		}
+
+		if node := job["allow_failure"]; node.Value != "false" {
+			t.Errorf("%s: allow_failure is %q, want false", path, node.Value)
+		}
+	}
 }

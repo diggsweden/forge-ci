@@ -288,7 +288,7 @@ func newLiveRunScan() *liveRunScan {
 		lineRun: regexp.MustCompile(`^=== RUN[ \t]+(\S+)[ \t]*$`),
 		// As internal/app/enforcement prints it, from a job's log the
 		// scenario printed or retained; a not-waivable line has no count.
-		lineAdminPolicy: regexp.MustCompile(`Admin policy sha256:([0-9a-f]{64}): (\S+) result=(\S+)(?: count=\d+)? enforcement=(true|false)`),
+		lineAdminPolicy: regexp.MustCompile(`(?:Admin policy sha256|Enforcement policy default-sha256):([0-9a-f]{64}): (\S+) result=(\S+)(?: count=\d+)? enforcement=(true|false)`),
 		policies:        map[LiveAdminPolicyDecision]bool{},
 	}
 }

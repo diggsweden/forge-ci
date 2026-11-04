@@ -164,7 +164,7 @@ func TestAdminSettingsReplaceOnlyTheDefaultsTheyName(t *testing.T) {
 		t.Fatalf("admin settings applied wrongly: %+v", policy)
 	}
 
-	for check, want := range map[Check]Source{Lint: AdminInput, ReproducibleBuilds: AdminInput, Vulnerabilities: EmbeddedDefault, ApplicationTests: EmbeddedDefault} {
+	for check, want := range map[Check]Source{Lint: Flag, ReproducibleBuilds: Flag, Vulnerabilities: EmbeddedDefault, ApplicationTests: EmbeddedDefault} {
 		if got := policy.Source(check); got != want {
 			t.Errorf("%s source %q, want %q", check, got, want)
 		}

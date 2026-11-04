@@ -101,6 +101,6 @@ func notWaivable(out io.Writer, policy enforcement.Policy, reason string) {
 		return
 	}
 
-	_, _ = fmt.Fprintf(out, "Admin policy sha256:%s: %s result=not-waivable enforcement=%t source=%s reason=%q\n",
+	_, _ = fmt.Fprintf(out, "Enforcement policy default-sha256:%s: %s result=not-waivable enforcement=%t source=%s reason=%q\n",
 		decision.PolicySHA256, decision.Check, decision.Enforced, decision.Source, reason)
 }

@@ -131,7 +131,7 @@ func TestLintNanolinter(t *testing.T) {
 		t.Parallel()
 
 		got, argv := run(t, "LINT_REQUIRED_LINTS=secrets,sast", "LINT_DISABLE_CHECKS=", "LINT_OFFLINE=false", "FAKE_NANOLINTER_STATUS=1", "LINT_ADMIN_LINT=false")
-		if got.status != 0 || argv == nil || !strings.Contains(got.stdout, "result=findings count=1 enforcement=false source=admin-input") {
+		if got.status != 0 || argv == nil || !strings.Contains(got.stdout, "result=findings count=1 enforcement=false source=flag") {
 			t.Fatalf("status %d argv %q stdout %s stderr %s", got.status, argv, got.stdout, got.stderr)
 		}
 

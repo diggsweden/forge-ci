@@ -29,19 +29,19 @@ spec:
     enforce-lint:
       type: boolean
       default: true
-      description: Administrator setting the job's forge-ci applies; false reports lint findings without failing. See docs/admin-policy.md.
+      description: Enforcement setting the job's forge-ci and FORGE_CI_BIN apply, set only in the administrator's entry point; false reports lint findings without failing. See docs/admin-policy.md.
     enforce-vulnerabilities:
       type: boolean
       default: true
-      description: Administrator setting the job's forge-ci applies; false reports vulnerability findings without failing.
+      description: Enforcement setting the job's forge-ci and FORGE_CI_BIN apply, set only in the administrator's entry point; false reports vulnerability findings without failing.
     enforce-application-tests:
       type: boolean
       default: true
-      description: Administrator setting the job's forge-ci applies; false reports recognized test assertion failures without failing. Tests still run.
+      description: Enforcement setting the job's forge-ci and FORGE_CI_BIN apply, set only in the administrator's entry point; false reports recognized test assertion failures without failing. Tests still run.
     enforce-reproducible-builds:
       type: boolean
       default: true
-      description: Administrator setting the job's forge-ci applies; false reports missing reproducible-build settings without failing.
+      description: Enforcement setting the job's forge-ci and FORGE_CI_BIN apply, set only in the administrator's entry point; false reports missing reproducible-build settings without failing.
 ---
 "$[[ inputs.job-name ]]":
   stage: $[[ inputs.stage ]]
@@ -62,6 +62,11 @@ spec:
     GIT_STRATEGY: empty
     GIT_SUBMODULE_STRATEGY: none
     RC_JOB_USER: "$[[ inputs.job-user ]]"
+  # A job of the same name from a file included earlier is merged under
+  # this one. The keys that decide the outcome are stated, so such a file
+  # cannot make the gate optional or replace what it runs.
+  allow_failure: false
+  after_script: []
   before_script:
     - |
       set -euo pipefail

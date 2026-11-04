@@ -53,7 +53,7 @@ spec:
     enforce-application-tests:
       type: boolean
       default: true
-      description: Administrator setting; false lets recognized test assertion failures be reported without failing the build. Tests still run. Only the administrator's own include should set it; see docs/admin-policy.md.
+      description: Enforcement setting; false lets recognized test assertion failures be reported without failing the build. Tests still run. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md.
     enable-build-sbom:
       type: boolean
       default: true
@@ -84,6 +84,12 @@ spec:
     CYCLONEDX_MAVEN_VERSION: "$[[ inputs.sbom-tool-version ]]"
     JAVA_VERSION: "$[[ inputs.java-version ]]"
     CI_SUMMARY_FILE: "$CI_PROJECT_DIR/maven-build-summary.md"
+  # A job of the same name from a file included earlier is merged under
+  # this one. The keys that decide the outcome are stated, so such a file
+  # cannot make the gate optional or replace what it runs.
+  allow_failure: false
+  before_script: []
+  after_script: []
   script:
     # mvn runs in the current directory, so cd into the project before the
     # consolidated build (which reads pom.xml from ".").

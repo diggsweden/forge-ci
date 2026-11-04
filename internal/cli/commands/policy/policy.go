@@ -17,7 +17,7 @@ import (
 // New returns the admin policy command group.
 func New() *cli.Command {
 	return &cli.Command{Name: "policy", Usage: "administrator check policy: inspect it and run gates under it", Commands: []*cli.Command{
-		{Name: "show", Usage: "print the effective admin settings, the source of each (embedded-default or admin-input) and the embedded default's SHA-256", Action: func(ctx context.Context, _ *cli.Command) error { return appenforcement.Show(ctx, os.Stdout) }},
+		{Name: "show", Usage: "print the effective admin settings, the source of each (embedded-default or flag) and the embedded default's SHA-256 (default-sha256)", Action: func(ctx context.Context, _ *cli.Command) error { return appenforcement.Show(ctx, os.Stdout) }},
 		{Name: "nanolinter", Usage: "run full Nanolinter SARIF and independently gate lint and vulnerability findings", ArgsUsage: "-- <nanolinter verify --report sarif --out - command>", Flags: []cli.Flag{
 			&cli.StringFlag{Name: "sarif-file", Usage: "write the invocation's security-only SARIF for provider upload"},
 		}, Action: func(ctx context.Context, command *cli.Command) error {

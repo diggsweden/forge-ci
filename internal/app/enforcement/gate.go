@@ -42,7 +42,7 @@ func report(out io.Writer, decision enforcement.Decision) error {
 		status = "findings"
 	}
 
-	if _, err := fmt.Fprintf(out, "Admin policy sha256:%s: %s result=%s count=%d enforcement=%t source=%s\n", decision.PolicySHA256, decision.Check, status, decision.Findings, decision.Enforced, decision.Source); err != nil {
+	if _, err := fmt.Fprintf(out, "Enforcement policy default-sha256:%s: %s result=%s count=%d enforcement=%t source=%s\n", decision.PolicySHA256, decision.Check, status, decision.Findings, decision.Enforced, decision.Source); err != nil {
 		return fmt.Errorf("report admin policy decision: %w", err)
 	}
 

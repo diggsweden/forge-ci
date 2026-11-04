@@ -141,7 +141,7 @@ func Show(ctx context.Context, out io.Writer) error {
 	return json.NewEncoder(out).Encode(struct {
 		Policy  enforcement.Policy            `json:"settings"`
 		Sources map[string]enforcement.Source `json:"sources"`
-		SHA256  string                        `json:"sha256"`
+		SHA256  string                        `json:"default-sha256"`
 	}{policy, sources, enforcement.Digest()})
 }
 

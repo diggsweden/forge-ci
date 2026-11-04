@@ -23,12 +23,12 @@ inputs:
     default: 'false'
   enforce-lint:
     description: >-
-      Administrator setting, true or false: false reports lint findings without failing the step; the checks still run. Only the administrator's protected workflow sets it. See docs/admin-policy.md.
+      Enforcement setting, true or false: false reports lint findings without failing the step; the checks still run. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md.
     required: false
     default: 'true'
   enforce-vulnerabilities:
     description: >-
-      Administrator setting, true or false: false reports vulnerability findings without failing the step; the scans still run. Only the administrator's protected workflow sets it.
+      Enforcement setting, true or false: false reports vulnerability findings without failing the step; the scans still run. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md.
     required: false
     default: 'true'
 

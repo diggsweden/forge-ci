@@ -137,22 +137,22 @@ spec:
       type: boolean
       default: true
       description: >-
-        Administrator setting, applied by the forge-ci of the checks and build jobs: false reports lint findings without failing. The checks still run. See docs/admin-policy.md.
+        Enforcement setting, applied by the forge-ci of the checks and build jobs: false reports lint findings without failing. The checks still run. See docs/admin-policy.md.
     enforce-vulnerabilities:
       type: boolean
       default: true
       description: >-
-        Administrator setting, applied by the forge-ci of the checks and build jobs: false reports vulnerability findings without failing.
+        Enforcement setting, applied by the forge-ci of the checks and build jobs: false reports vulnerability findings without failing.
     enforce-application-tests:
       type: boolean
       default: true
       description: >-
-        Administrator setting, applied by the forge-ci of the checks and build jobs: false reports recognized test assertion failures without failing. Tests still run.
+        Enforcement setting, applied by the forge-ci of the checks and build jobs: false reports recognized test assertion failures without failing. Tests still run.
     enforce-reproducible-builds:
       type: boolean
       default: true
       description: >-
-        Administrator setting, applied by the forge-ci of the checks and build jobs: false reports missing reproducible-build settings without failing.
+        Enforcement setting, applied by the forge-ci of the checks and build jobs: false reports missing reproducible-build settings without failing.
 ---
 release:
   stage: deploy

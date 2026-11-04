@@ -110,7 +110,7 @@ on:
         required: false
         default: release-images
       enforce-vulnerabilities:
-        description: Administrator setting; false lets publication report image vulnerability findings without failing. Every image is still scanned. Only the administrator's protected caller sets it.
+        description: Enforcement setting; false lets publication report image vulnerability findings without failing. Every image is still scanned. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md.
         type: boolean
         default: true
     outputs:

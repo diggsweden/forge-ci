@@ -21,7 +21,8 @@ scanned. SBOM selection is separate from
 this vulnerability scan.
 
 To report recognized findings without blocking, the administrator sets the
-matching input to `false` in its protected caller. Checks still run and findings remain visible. Tool startup, invalid reports,
+matching input to `false` in its own entry point; see
+[who sets them](admin-policy.md#who-sets-them-and-how). Checks still run and findings remain visible. Tool startup, invalid reports,
 compilation, packaging, credentials, signatures and source/digest identity
 failures remain blocking; a report-only publication is not a scan-clean receipt.
 

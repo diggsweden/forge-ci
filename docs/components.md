@@ -170,8 +170,10 @@ Every build workflow takes `enforce-application-tests`, and the lint,
 container-publication and validation workflows take the
 `enforce-lint`, `enforce-vulnerabilities` or `enforce-reproducible-builds`
 their gates apply: the administrator's
-[check enforcement](admin-policy.md), default `true`. Only the
-administrator's protected caller sets them; the orchestrators forward them.
+[check enforcement](admin-policy.md), default `true`; the orchestrators
+forward them. Whoever writes the call can pass them, so set them only in the
+administrator's entry point, the ruleset-required workflow, and never in a
+consumer's own workflow.
 
 #### `build-maven.yml`
 Builds Maven projects (apps or libraries).

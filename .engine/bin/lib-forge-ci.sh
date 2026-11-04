@@ -282,13 +282,16 @@ run_forge_ci() {
 }
 
 # forge_ci_admin_path DIR LINT VULNERABILITIES APPLICATION_TESTS REPRODUCIBLE_BUILDS
-# puts a forge-ci first on PATH that runs the verified engine with the
-# administrator's four settings as its flags, so the commands a job runs
-# from its inputs (the caller's own, or the consumer scripts those name)
-# gate under the administrator's policy. Each value is exactly true or false.
-# The engine refuses the same flag given twice, so a command cannot replace
-# a setting through this forge-ci. FORGE_CI_BIN keeps naming the verified
-# binary itself, which applies the embedded defaults.
+# writes a forge-ci that runs the verified engine with the four settings as
+# its flags, puts it first on PATH and points FORGE_CI_BIN at it, so the
+# commands a job runs from its inputs (the caller's own, or the consumer
+# scripts those name) gate under these settings whichever spelling they use.
+# Each value is exactly true or false. The engine refuses the same flag given
+# twice, so a command cannot replace a setting through this forge-ci. Call it
+# after verify_forge_ci, which checksums the bare binary, and after the last
+# change to PATH. Code that runs in the job can still reach the bare binary
+# (HELPERS_ENGINE_VERIFIED names it); this narrows the ways, it is not a
+# boundary against the job's own code.
 forge_ci_admin_path() {
 	local dir=${1:-} engine=${HELPERS_ENGINE_VERIFIED:-} value
 	if [ "$#" -ne 5 ] || [ -z "${dir}" ] || [ -z "${engine}" ]; then
@@ -315,5 +318,6 @@ forge_ci_admin_path() {
 		"${engine}" "$2" "$3" "$4" "$5" >"${dir}/forge-ci" || return
 	chmod 0755 -- "${dir}/forge-ci" || return
 	PATH="${dir}:${PATH}"
-	export PATH
+	FORGE_CI_BIN="${dir}/forge-ci"
+	export PATH FORGE_CI_BIN
 }

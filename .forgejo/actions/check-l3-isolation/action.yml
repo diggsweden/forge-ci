@@ -4,7 +4,7 @@
 
 name: 'Check release isolation'
 description: >-
-  The release-integrity gate: statically asserts the release-isolation and secret-boundary invariants of a consumer's release workflow (the build job references no signing-key secret, the prepare job's signing-key refs precede checkout, the cross-repo sign job enumerates every required signing secret and is pinned, release-tag/release-sha flow from prepare to signer, and the dist-digest tamper-evidence channel is intact) plus the supporting hygiene that keeps them meaningful (one forge-ci pin across the workflow directory, and the signer image, the Cosign public key digest and the transparency-log setting written out as literals wherever a job passes them to the layer). Shared so every signing consumer enforces the same guard instead of carrying its own copy.
+  The release-integrity gate: statically asserts the release-isolation and secret-boundary invariants of a consumer's release workflow (the build job references no signing-key secret, the prepare job's signing-key refs precede checkout, the cross-repo sign job enumerates every required signing secret and is pinned, release-tag/release-sha flow from prepare to signer, and the dist-digest tamper-evidence channel is intact) plus the supporting hygiene that keeps them meaningful (one forge-ci pin across the workflow directory, and the signer image, the Cosign public key digest, the transparency-log setting and the enforce-* settings written out as literals wherever a job or step passes them to the layer). Shared so every signing consumer enforces the same guard instead of carrying its own copy.
 inputs:
   workflow:
     description: Release workflow path.
@@ -33,7 +33,7 @@ inputs:
     default: dist-digest
   single-pin-subject:
     description: >-
-      owner/repository whose commit pins must agree across the workflow directory. Empty takes the repository the runner fetched this action from, so the check follows a fork without configuration. An action referenced by a local path has no such repository and must name the subject. Every job that calls one of the subject's reusable workflows must also pass that commit, written out, as forge-ci-sha. A job that passes signer-image, cosign-public-key-sha256 or transparency-log to one of them must write the value out too: an image reference pinned by digest, 64 hex characters, and none or public, never an expression.
+      owner/repository whose commit pins must agree across the workflow directory. Empty takes the repository the runner fetched this action from, so the check follows a fork without configuration. An action referenced by a local path has no such repository and must name the subject. Every job that calls one of the subject's reusable workflows must also pass that commit, written out, as forge-ci-sha. A job that passes signer-image, cosign-public-key-sha256 or transparency-log to one of them must write the value out too: an image reference pinned by digest, 64 hex characters, and none or public, never an expression. So must a job or step that passes an enforce-* setting to one of its workflows or actions: true or false.
     required: false
     default: ''
 
@@ -67,6 +67,9 @@ runs:
         # Both are literals of the layer's own input names. So is the
         # transparency log: a value from a variable could send the next
         # release to the public log, for good, without a reviewed commit.
+        # So are the enforcement settings, wherever a job or step passes
+        # one: a value from a variable would relax a gate without a
+        # reviewed commit.
         secret_flags=()
         for secret in ${ISOLATION_SIGNING_SECRETS}; do
           secret_flags+=(--signing-secret "${secret}")
@@ -89,5 +92,9 @@ runs:
           --literal-input signer-image=image-digest \
           --literal-input cosign-public-key-sha256=sha256 \
           --literal-input transparency-log=enum:none/public \
+          --literal-input enforce-lint=enum:true/false \
+          --literal-input enforce-vulnerabilities=enum:true/false \
+          --literal-input enforce-application-tests=enum:true/false \
+          --literal-input enforce-reproducible-builds=enum:true/false \
           "${contract_flags[@]}" \
           "${secret_flags[@]}"

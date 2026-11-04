@@ -32,6 +32,10 @@ func TestCheckL3Isolation(t *testing.T) {
 		"--literal-input", "cosign-public-key-sha256=sha256",
 		// The transparency log: a public entry cannot be withdrawn.
 		"--literal-input", "transparency-log=enum:none/public",
+		"--literal-input", "enforce-lint=enum:true/false",
+		"--literal-input", "enforce-vulnerabilities=enum:true/false",
+		"--literal-input", "enforce-application-tests=enum:true/false",
+		"--literal-input", "enforce-reproducible-builds=enum:true/false",
 	}
 
 	for _, test := range []struct {

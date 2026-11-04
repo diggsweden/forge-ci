@@ -24,10 +24,10 @@ then the environment variables listed per flag, then the flag default.
 | `--no-color` | disable colored ✓/✗ output (also: $NO_COLOR, non-terminal output) | bool | `false` | `$FORGE_CI_NO_COLOR` |
 | `--provider` | forge API override: auto, github, gitlab, forgejo, local | string | `"auto"` | `$FORGE_CI_PROVIDER` |
 | `--runner` | runner conventions override: auto, github, forgejo, gitlab, local | string | `"auto"` | `$FORGE_CI_RUNNER` |
-| `--enforce-lint` | administrator setting, true or false (default: the engine's embedded policy); false reports lint findings without blocking. Only the administrator's protected caller sets it, on the command line; never read from the environment | string | `""` | n/a |
-| `--enforce-vulnerabilities` | administrator setting, true or false (default: the engine's embedded policy); false reports vulnerabilities findings without blocking. Only the administrator's protected caller sets it, on the command line; never read from the environment | string | `""` | n/a |
-| `--enforce-application-tests` | administrator setting, true or false (default: the engine's embedded policy); false reports application-tests findings without blocking. Only the administrator's protected caller sets it, on the command line; never read from the environment | string | `""` | n/a |
-| `--enforce-reproducible-builds` | administrator setting, true or false (default: the engine's embedded policy); false reports reproducible-builds findings without blocking. Only the administrator's protected caller sets it, on the command line; never read from the environment | string | `""` | n/a |
+| `--enforce-lint` | enforcement setting, true or false (default: the engine's embedded policy); false reports lint findings without blocking. Read only from the command line, never from the environment; the receipt names its source as flag | string | `""` | n/a |
+| `--enforce-vulnerabilities` | enforcement setting, true or false (default: the engine's embedded policy); false reports vulnerabilities findings without blocking. Read only from the command line, never from the environment; the receipt names its source as flag | string | `""` | n/a |
+| `--enforce-application-tests` | enforcement setting, true or false (default: the engine's embedded policy); false reports application-tests findings without blocking. Read only from the command line, never from the environment; the receipt names its source as flag | string | `""` | n/a |
+| `--enforce-reproducible-builds` | enforcement setting, true or false (default: the engine's embedded policy); false reports reproducible-builds findings without blocking. Read only from the command line, never from the environment; the receipt names its source as flag | string | `""` | n/a |
 
 ## Commands to run directly
 
@@ -2768,7 +2768,7 @@ run full Nanolinter SARIF and independently gate lint and vulnerability findings
 
 ### `forge-ci policy show`
 
-print the effective admin settings, the source of each (embedded-default or admin-input) and the embedded default's SHA-256
+print the effective admin settings, the source of each (embedded-default or flag) and the embedded default's SHA-256 (default-sha256)
 
 ### `forge-ci policy tests`
 

@@ -12,11 +12,13 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/enforcement"
 )
 
-// adminPolicyFlags are the administrator's four enforcement settings. Their
-// only source is the command line the administrator's protected caller
-// writes: they deliberately have no Sources, so no environment variable,
-// plan file or project setting can supply one, and each may be given once.
-// Unset, a setting keeps the default embedded in this engine.
+// adminPolicyFlags are the four enforcement settings. Their only source is
+// the command line that runs the engine: they deliberately have no Sources,
+// so no environment variable, plan file or project setting can supply one,
+// and each may be given once. They are administrator policy only where the
+// administrator writes that command line; the receipt therefore names the
+// mechanism, flag, not an owner. Unset, a setting keeps the default
+// embedded in this engine.
 func adminPolicyFlags() []cli.Flag {
 	flags := make([]cli.Flag, 0, len(enforcement.Checks))
 
@@ -25,8 +27,8 @@ func adminPolicyFlags() []cli.Flag {
 		flags = append(flags, &cli.StringFlag{
 			Name:     setting,
 			Category: "Administrator policy",
-			Usage: "administrator setting, true or false (default: the engine's embedded policy); false reports " + string(check) +
-				" findings without blocking. Only the administrator's protected caller sets it, on the command line; never read from the environment",
+			Usage: "enforcement setting, true or false (default: the engine's embedded policy); false reports " + string(check) +
+				" findings without blocking. Read only from the command line, never from the environment; the receipt names its source as flag",
 			OnlyOnce: true,
 			Validator: func(raw string) error {
 				_, err := enforcement.ParseAdminValue(setting, raw)

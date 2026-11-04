@@ -20,18 +20,8 @@ verification are outside these exceptions.
 ## Who sets them, and how
 
 The engine carries an embedded default, `internal/domain/enforcement/policy.json`,
-with every setting `true`. The administrator replaces a default at run time,
-without rebuilding the engine, through one channel per forge: an input of the
-workflow, action or component that runs the gate, set in the administrator's
-own protected caller.
-
-| Forge | Where the administrator sets them |
-|---|---|
-| GitLab | Inputs of the components included by the independently pinned policy project: `release`, `check`, `nanolinter`, `snapshot-images` and the `build-*` components. |
-| GitHub | Inputs of the reusable workflows the administrator's protected wrapper calls: the orchestrators forward them to `lint-nanolinter.yml`, `lint-swift.yml`, `build-*.yml`, `validate-release-prerequisites.yml`, `publish-container.yml` and `snapshot-images.yml`. |
-| Forgejo | Inputs of the `lint-nanolinter` and `build-*` actions and of `snapshot-images.yml`, in the administrator's protected workflow. |
-
-Each input reaches the engine as a flag of the gate's own command line:
+with every setting `true`. A setting is replaced at run time, without
+rebuilding the engine, by a flag on the command line that runs the gate:
 
 ```bash
 forge-ci policy nanolinter --enforce-lint=false --enforce-vulnerabilities=true -- \
@@ -53,37 +43,124 @@ the others, in any letter case), refuses to run instead of ignoring it. On
 GitLab every project, group and instance variable reaches the job's
 environment, so a variable set there to relax a gate stops it, visibly.
 
-### What a consumer can and cannot change
+### A flag is not yet administrator policy
 
-The settings belong to whoever writes the gate's command line, and the
-administrator's protection of that caller is what makes them administrator
-policy:
+The engine cannot tell who wrote its command line, and neither can the
+workflows, actions and components: each takes the settings as inputs, and
+whoever writes the call can pass them. A consumer that calls a reusable
+workflow or includes a component with `enforce-lint: false` in its own file
+gets a green job. A setting is the administrator's only when it is written in
+an **entry point the consumer cannot change** and that entry point's jobs are
+the ones the forge requires. The consumer's own files never set a setting,
+and its own jobs are never the required gate. The examples, demos and
+`forge-ci init` output set none; a guard keeps it so.
 
-- **GitLab.** The components assign each input to a read-only shell value in
-  the job's script, as they do the other policy values, and pass it as the
-  flag. A project, group or instance variable cannot supply or change it.
-  Under a pipeline policy the consumer's own `.gitlab-ci.yml` does not run;
-  a consumer's merge-request gate file, which the policy includes, is the
-  consumer's, and its includes keep the defaults unless it sets them, as it
-  could omit the gate altogether.
-- **GitHub and Forgejo.** The reusable workflows and actions read the
-  settings only from their own `inputs`, never from `vars.*`, repository
-  variables or the environment. Only the administrator's protected wrapper
-  may set them. A consumer that calls the reusable workflow directly owns
-  that call, so it gets the defaults unless it passes the inputs; branch
-  protection and required checks must name the administrator's wrapper jobs,
-  as they must for the gates themselves. Workflow-dispatch inputs the
-  consumer controls and workflow files a pull request modifies are not on the
-  protected path; see [Threat model](threat-model.md).
-- **Commands a job runs from its inputs.** GitLab's `check` job and the
-  release's checks and build jobs run commands their caller lists, often a
-  script of the consumer's repository. The job puts a `forge-ci` first on
-  `PATH` that carries the administrator's four settings as flags, so
-  `forge-ci build maven run` in such a script gates under them; given a
-  second time, a setting is refused. `FORGE_CI_BIN` names the bare engine,
-  which applies the embedded defaults. A consumer script that runs code can
-  always decide not to run a gate; these settings are not proof that it did,
-  and the gate's receipt is.
+| Forge | The administrator's entry point | Where the settings are written |
+|---|---|---|
+| GitLab | A pipeline execution policy in inject mode (`inject_policy`), from the group's security policy project. Weaker: the project's external CI configuration path naming the policy project's file. | The policy's own YAML includes `nanolinter`, `check` and the `build-*` gates, with the `enforce-*` inputs as literals. |
+| GitHub | An organization ruleset that requires a workflow from the administrator's repository. | That workflow calls the orchestrators with the `enforce-*` inputs as literals. |
+| Forgejo | The consumer's `.forgejo/workflows/`, on a protected branch, with required review by the administrator's code owners. | Literals in those workflow files; `check-l3-isolation` refuses an expression. |
+
+#### GitLab
+
+Prefer a pipeline execution policy in inject mode where the tier allows it.
+The policy's jobs run beside the project's own pipeline, are evaluated apart
+from the project's configuration, and a project maintainer cannot remove the
+policy. The policy's YAML includes the gate components itself, with the
+settings as literals, and takes from the consumer only the commands they run,
+through a script in the consumer's repository:
+
+```yaml
+include:
+  - component: gitlab.example.com/team/ci/forge-ci/nanolinter@0.90.0
+    inputs:
+      forge-ci-repository: team/ci/forge-ci
+      nanolinter-image: "ghcr.io/itiquette/nanolinter:go@sha256:PIN_DIGEST"
+      enforce-lint: true
+      enforce-vulnerabilities: true
+  - component: gitlab.example.com/team/ci/forge-ci/check@PIN_FORGE_CI_SHA
+    inputs:
+      forge-ci-repository: team/ci/forge-ci
+      job-image: registry.example.com/team/check-tools@sha256:PIN_DIGEST
+      commands:
+        - bash .gitlab/merge-request-checks.sh
+      enforce-lint: true
+      enforce-vulnerabilities: true
+      enforce-application-tests: false
+      enforce-reproducible-builds: true
+```
+
+An external CI configuration path that names the policy project's file is
+weaker. The project's own `.gitlab-ci.yml` does not run, but a project
+maintainer can change the path back, and a consumer file the policy includes
+is merged into the same configuration: a job it defines with a gate's name is
+merged under the gate's. The gate components state `allow_failure: false`,
+`before_script`, `script` and `after_script`, so include the consumer's file
+**before** them, and keep the gates the policy's own includes, not the
+consumer file's.
+
+The release component already has this shape: the policy includes it, every
+`enforce-*` input is required, and each job assigns them to read-only values
+in its script. A project, group or instance variable cannot supply or change
+one.
+
+#### GitHub
+
+The entry point is an organization ruleset that requires a workflow from the
+administrator's repository on the consumer's branches. That workflow calls the
+orchestrators with the settings written out:
+
+```yaml
+jobs:
+  quality:
+    uses: diggsweden/forge-ci/.github/workflows/pullrequest-orchestrator.yml@PIN_SHA
+    with:
+      project-type: maven
+      enforce-lint: true
+      enforce-vulnerabilities: true
+```
+
+The reusable workflows read the settings only from their own `inputs`, never
+from `vars.*`, repository variables or the environment. A consumer's own
+workflow that calls an orchestrator or a leaf with `enforce-*: false` is the
+consumer's job, not the required one; required checks must name the ruleset
+workflow's jobs. Workflow-dispatch inputs the consumer controls and workflow
+files a pull request modifies are not on the protected path; see
+[Threat model](threat-model.md).
+
+#### Forgejo
+
+Forgejo has no required workflows. The settings are the administrator's only
+where the consumer's `.forgejo/workflows/` is on a protected branch and a
+change to it needs the review of the administrator's code owners. Write each
+setting out as `true` or `false` in those files; the `check-l3-isolation`
+gate refuses an expression or a variable wherever a job or step passes one
+to the layer. Forgejo cannot separate a consumer maintainer who may change the
+branch protection or the code owners from these settings: such a maintainer
+can relax a gate, as they could remove it.
+
+An organization that records its values in a policy repository of its own
+needs there: the four values per forge and road, the entry point that writes
+them (the GitLab policy YAML, the GitHub ruleset workflow, the Forgejo code
+owners and branch protection), a check that the consumer repositories' files
+set no `enforce-*`, and the receipts it expects (`source=flag` with those
+values, see below).
+
+### Commands a job runs from its inputs
+
+GitLab's `check` job and the release's checks and build jobs run commands
+their caller lists, often a script of the consumer's repository. The job puts
+a `forge-ci` first on `PATH` that carries the four settings as flags and
+points `FORGE_CI_BIN` at it, so `forge-ci build maven run` and
+`"$FORGE_CI_BIN" build maven run` both gate under them; given a second time,
+a setting is refused. The bare binary is checksummed before the wrapper is
+written.
+
+This narrows the ways in; it is not a boundary. Code that runs in the job can
+always reach the verified binary itself, or decide not to run a gate, or
+ignore its status. That is why the receipt names the mechanism, `flag`, not
+an owner: the settings are not proof that a gate ran under them, and the
+gate's receipt in the job the forge requires is.
 
 Changing the embedded default remains possible for an organization that
 wants a different default everywhere: change `policy.json` in its
@@ -102,18 +179,20 @@ forge-ci policy show
 forge-ci policy show --enforce-lint=false
 ```
 
-The output gives each setting, its source (`embedded-default` or
-`admin-input`) and the SHA-256 of the embedded default. The GitLab jobs that
+The output gives each setting, its source (`embedded-default` or `flag`) and
+the SHA-256 of the embedded default as `default-sha256`. The GitLab jobs that
 run caller-listed commands print it at their start. Every finding decision
 prints the check class, actual findings, whether enforcement is enabled and
 where that came from:
 
 ```text
-Admin policy sha256:<digest>: lint result=findings count=3 enforcement=false source=admin-input
+Enforcement policy default-sha256:<digest>: lint result=findings count=3 enforcement=false source=flag
 ```
 
-`admin-input` records that the value was given on the engine's command line;
-which caller wrote it is the pipeline's to show.
+`flag` records that the value was given on the engine's command line, by
+whatever wrote it; that the writer was the administrator's entry point is the
+pipeline's to show. The digest identifies the embedded default only: with a
+`flag` source, the effective setting is the one printed.
 
 ## Boundaries that stay
 
@@ -199,7 +278,7 @@ When a non-enforcing engine stops anyway, the log says why, beside the test
 tool's own error:
 
 ```text
-Admin policy sha256:<digest>: application-tests result=not-waivable enforcement=false source=admin-input reason="no complete assertion-failure summary: test errors, setup and compile failures are never waived"
+Enforcement policy default-sha256:<digest>: application-tests result=not-waivable enforcement=false source=flag reason="no complete assertion-failure summary: test errors, setup and compile failures are never waived"
 ```
 
 The other reasons name an exit status that is not the tool's assertion-failure

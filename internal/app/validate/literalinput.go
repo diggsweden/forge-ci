@@ -121,8 +121,9 @@ func (l literalInput) shapeRefusal(value string) string {
 }
 
 // literalInputViolations reports every job in the workflow directory that
-// calls a reusable workflow of the subject and passes one of the named inputs
-// as anything but a literal of its shape.
+// calls a reusable workflow of the subject, and every step that uses one of
+// its actions, and passes one of the named inputs as anything but a literal
+// of its shape.
 //
 // A job that does not pass the input is not reported: whether the called
 // workflow needs it is that workflow's contract, which is not in the caller's
@@ -149,8 +150,12 @@ func literalInputViolations(in IsolationInput, inputs []literalInput) []validate
 func literalInputViolationsIn(body []byte, subject string, inputs []literalInput) []validate.IsolationViolation {
 	var doc struct {
 		Jobs map[string]struct {
-			Uses yaml.Node            `yaml:"uses"`
-			With map[string]yaml.Node `yaml:"with"`
+			Uses  yaml.Node            `yaml:"uses"`
+			With  map[string]yaml.Node `yaml:"with"`
+			Steps []struct {
+				Uses yaml.Node            `yaml:"uses"`
+				With map[string]yaml.Node `yaml:"with"`
+			} `yaml:"steps"`
 		} `yaml:"jobs"`
 	}
 
@@ -170,25 +175,39 @@ func literalInputViolationsIn(body []byte, subject string, inputs []literalInput
 	for _, name := range names {
 		job := doc.Jobs[name]
 
-		uses, ok := resolvedScalar(&job.Uses)
-		if !ok || !referencesSubject(uses, subject) {
+		violations = append(violations, literalCallViolations(name, &job.Uses, job.With, subject, inputs)...)
+
+		for _, step := range job.Steps {
+			violations = append(violations, literalCallViolations(name, &step.Uses, step.With, subject, inputs)...)
+		}
+	}
+
+	return violations
+}
+
+// literalCallViolations reports the named inputs one call of the subject, a
+// job's or a step's uses:, passes as anything but a literal of its shape.
+func literalCallViolations(job string, usesNode *yaml.Node, with map[string]yaml.Node, subject string, inputs []literalInput) []validate.IsolationViolation {
+	uses, ok := resolvedScalar(usesNode)
+	if !ok || !referencesSubject(uses, subject) {
+		return nil
+	}
+
+	var violations []validate.IsolationViolation
+
+	for _, input := range inputs {
+		node, passed := with[input.name]
+		if !passed {
 			continue
 		}
 
-		for _, input := range inputs {
-			node, passed := job.With[input.name]
-			if !passed {
-				continue
-			}
-
-			value, scalar := resolvedScalar(&node)
-			if why := input.refusal(value, scalar); why != "" {
-				violations = append(violations, validate.IsolationViolation{
-					Line: node.Line,
-					Msg: fmt.Sprintf("job %q passes %s to %s as a value that %s: write the value out in this file, so that it changes only by a reviewed commit",
-						name, input.name, subject, why),
-				})
-			}
+		value, scalar := resolvedScalar(&node)
+		if why := input.refusal(value, scalar); why != "" {
+			violations = append(violations, validate.IsolationViolation{
+				Line: node.Line,
+				Msg: fmt.Sprintf("job %q passes %s to %s as a value that %s: write the value out in this file, so that it changes only by a reviewed commit",
+					job, input.name, subject, why),
+			})
 		}
 	}
 

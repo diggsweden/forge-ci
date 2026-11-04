@@ -108,7 +108,7 @@ FORGE_CI_LIVE_SCENARIO TestTrial
 === RUN   TestTrial/private
 FORGE_CI_LIVE_INFRASTRUCTURE TestTrial/private Build: release files: stuck_or_timeout_failure
     trial_test.go:40: job "Check: lint" log (tail):
-        Admin policy sha256:` + liveVerdictPolicy + `: lint result=fail count=2 enforcement=true
+        Enforcement policy default-sha256:` + liveVerdictPolicy + `: lint result=fail count=2 enforcement=true
     --- PASS: TestTrial/public (61.25s)
     --- FAIL: TestTrial/private (12.00s)
 --- FAIL: TestTrial (73.25s)

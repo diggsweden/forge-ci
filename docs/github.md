@@ -153,7 +153,7 @@ carries a description. The orchestrator inputs most callers set:
 | `release.sboms`, `release.signartifacts`, `release.requireallowlistedsigner`, `release.draft` | release | SBOM selection, artifact signing, the signer allowlist and draft releases. |
 | `release-asset-retention` | release | How many of the newest releases keep every file; older ones keep their checksums and signatures. Empty, the default, deletes nothing. See [Old releases' files](#old-releases-files). |
 | `promote-staging-environment`, `promote-release-environment`, `promote-release-*` | release | The GitHub Environments that gate the promotion ladder, and an optional separate release registry. |
-| `enforce-lint`, `enforce-vulnerabilities`, `enforce-application-tests`, `enforce-reproducible-builds` | PR, release, snapshot | The administrator's [check enforcement](admin-policy.md), default `true`, forwarded to every gate. Only the administrator's protected wrapper sets them; no workflow reads them from `vars` or the environment. |
+| `enforce-lint`, `enforce-vulnerabilities`, `enforce-application-tests`, `enforce-reproducible-builds` | PR, release, snapshot | The administrator's [check enforcement](admin-policy.md), default `true`, forwarded to every gate. Whoever writes the call can pass them: set them only in the organization's ruleset-required workflow, never in the consumer's own. No workflow reads them from `vars` or the environment. |
 | `forge-ci-binary-ref` | all | The CLI release plain-runner jobs install. |
 | `runtime-image*` | all | The runtime image of each toolchain family. |
 
@@ -279,6 +279,14 @@ forges: `Check: plan`, `Check: lint`, `Check: status` and so on. A required
 check is matched by that name, so a rename of a job changes the check to
 require. The GitHub layer has no release-isolation gate
 like Forgejo's `check-l3-isolation`.
+
+**Who sets the enforcement settings.** The `enforce-*` inputs are only the
+administrator's when they are written in a workflow the consumer cannot
+change. Put that workflow in the administrator's repository and require it
+with an organization ruleset; it calls the orchestrators with the settings as
+literals. A consumer's own workflow that passes `enforce-lint: false` relaxes
+only its own job, which must not be the required check. See
+[Administrator check enforcement](admin-policy.md#github).
 
 ## Builds
 

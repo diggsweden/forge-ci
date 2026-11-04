@@ -608,7 +608,8 @@ the log's header shows (`started_at`, `source_commit`, `profile`, `provider`,
 script as values), then, read from the redacted log alone, each leaf test's
 `name`, repository-relative `package`, `result` (`pass`, `fail`, `skip` or
 `unfinished`) and `elapsed_seconds`, the `FORGE_CI_LIVE_INFRASTRUCTURE` lines,
-and the `Admin policy sha256:…` decisions the log shows. The test results come
+and the `Enforcement policy default-sha256:…` decisions the log shows (older
+engines print `Admin policy sha256:…`, which is read the same way). The test results come
 from the `-test.v` text the log already holds, by the same reading that decides
 the verdict, so the retained log stays the readable evidence and the two cannot
 disagree.

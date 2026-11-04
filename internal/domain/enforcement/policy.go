@@ -4,8 +4,9 @@
 // Package enforcement defines the administrator's check policy.
 //
 // policy.json, embedded when the engine is built, is the enforcing default.
-// The administrator's protected caller may replace any of the four settings
-// at run time, and only as an explicit command-line value (see Admin). There
+// Any of the four settings may be replaced at run time, and only as an
+// explicit command-line value (see Admin); it is administrator policy where
+// the administrator's entry point writes that command line. There
 // is deliberately no policy path, environment binding or mutable setter, and
 // an environment variable named like a setting is refused (see
 // RefuseEnvironment) rather than ignored.
@@ -51,12 +52,15 @@ func Setting(check Check) string { return "enforce-" + string(check) }
 // Source says where an effective setting came from.
 type Source string
 
-// The two sources a setting can have.
+// The two sources a setting can have. A source names the mechanism, not
+// who used it: a flag is whatever the command line that ran the engine
+// said. That the command line is the administrator's is a property of the
+// pipeline that wrote it, which the engine cannot see.
 const (
 	// EmbeddedDefault is the policy.json built into the engine.
 	EmbeddedDefault Source = "embedded-default"
-	// AdminInput is a value the caller gave the engine on its command line.
-	AdminInput Source = "admin-input"
+	// Flag is a value given to the engine as its --enforce-* flag.
+	Flag Source = "flag"
 )
 
 // Policy is returned by value. Changing a copy cannot change the engine policy.
@@ -114,10 +118,10 @@ func ParseAdminValue(setting, raw string) (bool, error) {
 }
 
 // Source reports whether check's effective setting is the embedded default
-// or the administrator's input.
+// or was given as a flag.
 func (policy Policy) Source(check Check) Source {
 	if index, known := checkIndex(check); known && policy.admin&(1<<index) != 0 {
-		return AdminInput
+		return Flag
 	}
 
 	return EmbeddedDefault
