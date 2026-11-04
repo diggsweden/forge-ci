@@ -340,7 +340,7 @@ func TestSnapshotBuildHandsOffItsOwnReadableLayouts(t *testing.T) {
 			}
 
 			body := `snapshot_gitlab_checkout() { :; }; snapshot_apply_context() { :; }; ` +
-				`snapshot_build() { mkdir -p snapshot-source/snapshot-layouts/api-arch-amd64; touch snapshot-source/snapshot-layouts/api-arch-amd64/api-amd64.json; }; ` +
+				`snapshot_build() { mkdir -p snapshot-source/snapshot-layouts/api-arch-amd64; touch snapshot-source/snapshot-layouts/api-arch-amd64/api-amd64.json; hash -p /removed-native-tools/mv mv; hash -p /removed-native-tools/find find; }; ` +
 				`umask 077; snapshot_gitlab_build api amd64 ''`
 			cmd := exec.CommandContext(t.Context(), "bash", "--noprofile", "--norc", "-c", `set -euo pipefail; source "$1"; `+body, "snapshot", filepath.Join(reporoot.Path(t), ".gitlab/bin/snapshot-images.sh"))
 			cmd.Dir = dir

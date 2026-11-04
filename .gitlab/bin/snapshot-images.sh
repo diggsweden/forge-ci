@@ -36,6 +36,9 @@ snapshot_gitlab_build() {
 		snapshot_apply_context snapshot-context snapshot-plan.json
 	fi
 	snapshot_build "${name}" "${arch}"
+	# Kaniko deletes the native tools. Resolve the surviving /kaniko toolset
+	# through PATH instead of Bash's cached /usr/bin command locations.
+	hash -r
 	snapshot_gitlab_handoff snapshot-source/snapshot-layouts snapshot-layouts || return
 	# A kaniko build leaves no shell at the paths after_script is run with;
 	# make the hand-off readable for the uploader here.

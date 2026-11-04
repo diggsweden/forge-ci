@@ -301,6 +301,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- GitLab snapshot jobs clear Bash's command cache after a Kaniko build so
+  layout handoff uses the surviving `/kaniko` tools instead of removed native
+  paths. The existing handoff regression covers stale `mv` and `find` entries.
 - Private GitLab snapshot checkout no longer requires a long-lived API token.
   `platform checkout` derives SHA-1 or SHA-256 from the native pipeline's full
   commit SHA when both repository and server match the current GitLab project.
