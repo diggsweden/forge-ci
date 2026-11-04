@@ -451,6 +451,34 @@ func TestScanContainer_IgnoreFile(t *testing.T) {
 	}
 }
 
+// Trivy runs in a private directory, so the repository's own ignore file
+// and a relative layout reach it as absolute paths.
+func TestScanContainer_PassesPathsAbsolute(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	if err := os.WriteFile(filepath.Join(dir, ".trivyignore.yaml"), []byte("vulnerabilities: []\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	trivy := &recordingTrivy{writeJSON: []byte(`{"Results":[]}`)}
+	if err := appsecurity.ScanContainer(t.Context(), trivy, io.Discard, io.Discard, output.Annotator{}, appsecurity.ScanContainerInput{
+		ImageRef:         "img",
+		OCILayout:        "layout",
+		JSONFile:         "trivy.json",
+		SARIFFile:        "trivy.sarif",
+		GitLabReportFile: "gl.json",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	for flag, want := range map[string]string{"--ignorefile": filepath.Join(dir, ".trivyignore.yaml"), "--input": filepath.Join(dir, "layout")} {
+		if got := reportFlag(trivy.runs[0], flag); got != want {
+			t.Errorf("%s %q, want %q", flag, got, want)
+		}
+	}
+}
+
 // A plain .trivyignore records no reason or expiry; without the YAML file
 // the scan refuses to run rather than block on what it meant to approve.
 func TestScanContainer_RefusesAPlainTrivyignore(t *testing.T) {

@@ -25,7 +25,6 @@ import (
 	"github.com/diggsweden/forge-ci/internal/cli/regflags"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/output"
-	"github.com/diggsweden/forge-ci/internal/secretenv"
 )
 
 // planScopeBuildPush is the plan-file scope of `container
@@ -97,7 +96,7 @@ scope (flag > plan > env > default).`,
 				auth := regflags.Resolve(cmd)
 				registry := ociregistry.WithAuthFileAndTLS(auth.AuthFile, auth.TLSVerify != tlsVerifyDisabled)
 
-				scanner := trivy.New(secretenv.Names()...)
+				scanner := trivy.New()
 				annot := deps.Annotator(cmd)
 				checkLayout := func(scanContext context.Context, layout string, platforms []string) error {
 					return appcontainer.ImageEvidence(scanContext, nil, registry, scanner, nil, os.Stderr, os.Stderr,

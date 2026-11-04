@@ -187,6 +187,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Container scans no longer take settings from the job or the checkout. Trivy
+  read every `TRIVY_*` variable, and a forge injects project and group
+  variables into each job, so one such variable could skip directories, swap
+  the vulnerability database, add an ignore policy or VEX statements, and pass
+  the gate. It also loaded `trivy.yaml` and `.trivyignore` from the checkout,
+  around the rule that approvals carry a reason and expiry. Trivy now gets only
+  the path, home, cache, registry-credential, proxy and CA variables, plus
+  `TRIVY_PLATFORM`, which the multi-arch build sets per leg; it runs in an
+  empty directory with configuration loading disabled, and the ignore file
+  reaches it by absolute path.
 - Bootstrap installers reuse a tool already on `PATH` only when it reports the
   pinned version; any other version is replaced by the pinned,
   checksum-verified download, so a runner's older Trivy no longer decides the

@@ -11,8 +11,6 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/diggsweden/forge-ci/internal/secretenv"
-
 	"github.com/urfave/cli/v3"
 
 	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
@@ -80,7 +78,7 @@ func runBuild(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return deps.FromCmd(ctx, cmd, func(dep *deps.Deps) error {
-		_, err := appcontainer.BuildAndScan(ctx, builder, ociregistry.WithAuthFile(buildInput.AuthFile), trivy.New(secretenv.Names()...), dep.OutputSink, os.Stderr, os.Stderr, deps.Annotator(cmd),
+		_, err := appcontainer.BuildAndScan(ctx, builder, ociregistry.WithAuthFile(buildInput.AuthFile), trivy.New(), dep.OutputSink, os.Stderr, os.Stderr, deps.Annotator(cmd),
 			appcontainer.BuildAndScanInput{
 				Build:        buildInput,
 				EnableScan:   cmd.Bool(flagScan),

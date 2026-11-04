@@ -8,9 +8,11 @@ package trivy
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"slices"
 
 	"github.com/diggsweden/forge-ci/internal/safeexec"
 )
@@ -18,30 +20,68 @@ import (
 // Adapter wraps the trivy binary. Bin is overridable for tests.
 type Adapter struct {
 	Bin string // empty → "trivy"
-	// UnsetEnv removes credentials from the trivy environment. Trivy reads
-	// registry credentials from the auth file the job logged in with, and
-	// otherwise authenticates to ghcr.io with GITHUB_TOKEN. On a Forgejo job
-	// that variable holds the job's forge token, so a vulnerability-database
-	// fallback to ghcr.io would send the forge token there and be denied.
-	UnsetEnv []string
 }
 
-// New returns an Adapter using the system trivy, removing unsetEnv from its
-// environment.
-func New(unsetEnv ...string) *Adapter { return &Adapter{UnsetEnv: unsetEnv} }
+// New returns an Adapter using the system trivy.
+func New() *Adapter { return &Adapter{} }
 
-// RunInherit invokes `trivy` with args, streaming stdout/stderr.
-// Returns the process exit code and any error from starting/waiting.
+// runtimeKeep is the whole environment trivy is given. Every scan the engine
+// runs gates or records a release, and trivy takes most of its settings from
+// TRIVY_* variables and from trivy.yaml, .trivyignore and trivy-secret.yaml
+// in its working directory. A forge injects project and group variables into
+// every job, and the checkout is the working directory, so either route could
+// skip directories, swap the vulnerability database, add an ignore policy or
+// VEX statements, and pass a gate the engine's own flags describe.
+//
+// Kept: tool lookup, home and temporary storage, the database cache
+// (XDG_CACHE_HOME; trivy's default cache lives under it or HOME), registry
+// credentials the job logged in with (DOCKER_CONFIG, REGISTRY_AUTH_FILE and
+// XDG_RUNTIME_DIR for the containers auth file), and the network route and
+// trust a proxied or private-CA runner needs. TRIVY_PLATFORM is the one trivy
+// setting kept: the multi-arch container build selects each leg's platform
+// with it. GITHUB_TOKEN is not kept: trivy would send it to ghcr.io, and on a
+// Forgejo job it holds the forge token.
+var runtimeKeep = map[string]bool{
+	"PATH":               true,
+	"HOME":               true,
+	"TMPDIR":             true,
+	"XDG_CACHE_HOME":     true,
+	"XDG_RUNTIME_DIR":    true,
+	"DOCKER_CONFIG":      true,
+	"REGISTRY_AUTH_FILE": true,
+	"SSL_CERT_FILE":      true,
+	"SSL_CERT_DIR":       true,
+	"HTTP_PROXY":         true,
+	"HTTPS_PROXY":        true,
+	"NO_PROXY":           true,
+	"http_proxy":         true,
+	"https_proxy":        true,
+	"no_proxy":           true,
+	"TRIVY_PLATFORM":     true,
+}
+
+// RunInherit invokes `trivy` with args, streaming stdout/stderr, and returns
+// the process exit code and any error from starting or waiting.
+//
+// Trivy runs with only runtimeKeep from the environment, with configuration
+// file loading disabled, in a private empty working directory, so nothing in
+// the caller's directory is discovered. Path arguments must therefore be
+// absolute.
 func (a *Adapter) RunInherit(ctx context.Context, stdout, stderr io.Writer, args ...string) (int, error) {
-	cmd := safeexec.Command(ctx, a.bin(), args...)
-	if len(a.UnsetEnv) > 0 {
-		cmd.Env = safeexec.EnvWithout(os.Environ(), a.UnsetEnv...)
+	dir, err := os.MkdirTemp("", "forge-ci-trivy-*")
+	if err != nil {
+		return -1, fmt.Errorf("create trivy working directory: %w", err)
 	}
 
+	defer func() { _ = os.RemoveAll(dir) }()
+
+	cmd := safeexec.Command(ctx, a.bin(), slices.Concat(args, []string{"--config="})...)
+	cmd.Env = safeexec.EnvKeep(os.Environ(), func(name string) bool { return runtimeKeep[name] })
+	cmd.Dir = dir
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 
-	err := cmd.Run()
+	err = cmd.Run()
 	if err == nil {
 		return 0, nil
 	}

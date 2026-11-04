@@ -8,8 +8,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/diggsweden/forge-ci/internal/secretenv"
-
 	"github.com/urfave/cli/v3"
 
 	"github.com/diggsweden/forge-ci/internal/adapters/trivy"
@@ -57,7 +55,7 @@ func scanContainerCmd() *cli.Command {
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			annot := deps.Annotator(cmd)
 
-			return appsecurity.ScanContainer(ctx, trivy.New(secretenv.Names()...), os.Stderr, os.Stderr, annot, appsecurity.ScanContainerInput{
+			return appsecurity.ScanContainer(ctx, trivy.New(), os.Stderr, os.Stderr, annot, appsecurity.ScanContainerInput{
 				ImageRef:         cmd.String(flagImageRef),
 				JSONFile:         cmd.String("json-file"),
 				SARIFFile:        cmd.String(flagSARIFFile),
@@ -89,7 +87,7 @@ severity-gated scanner.`,
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error {
-				return appsecurity.RawContainerScan(ctx, trivy.New(secretenv.Names()...), d.OutputSink, os.Stderr, os.Stderr, appsecurity.RawContainerScanInput{
+				return appsecurity.RawContainerScan(ctx, trivy.New(), d.OutputSink, os.Stderr, os.Stderr, appsecurity.RawContainerScanInput{
 					ImageRef:   cmd.String(flagImageRef),
 					Platform:   cmd.String("platform"),
 					Output:     cmd.String("output"),

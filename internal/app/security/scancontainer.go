@@ -106,9 +106,9 @@ func resolveIgnoreFile(named string) (string, error) {
 // Configured output files represent this invocation: previous files are retired
 // after preflight; fresh validated reports are installed individually.
 //
-// TRIVY_PLATFORM (when set in the env) is inherited by the trivy
-// subprocess automatically; the multi-arch container build pins per-leg
-// platforms that way.
+// TRIVY_PLATFORM (when set in the env) is the one trivy setting the trivy
+// adapter passes on; the multi-arch container build pins per-leg platforms
+// that way.
 func ScanContainer(
 	ctx context.Context,
 	trivy TrivyOps,
@@ -305,8 +305,16 @@ func plural(count int, one, many string) string {
 
 // runTrivyContainerScan invokes `trivy image --format json` against
 // the image ref and writes the JSON output to jsonPath.
-// `--exit-code 0` keeps the scan-gate decision inside the Go code.
+// `--exit-code 0` keeps the scan-gate decision inside the Go code. Trivy
+// runs outside the caller's directory, so every path is made absolute.
 func runTrivyContainerScan(ctx context.Context, trivy TrivyOps, out, stderr io.Writer, jsonPath, severity, ignoreFile, imageRef, ociLayout string) error {
+	paths, err := absPaths(jsonPath, ignoreFile, ociLayout)
+	if err != nil {
+		return err
+	}
+
+	jsonPath, ignoreFile, ociLayout = paths[0], paths[1], paths[2]
+
 	args := []string{
 		"image",
 		"--format", "json",
@@ -335,6 +343,26 @@ func runTrivyContainerScan(ctx context.Context, trivy TrivyOps, out, stderr io.W
 	}
 
 	return nil
+}
+
+// absPaths returns each non-empty path made absolute.
+func absPaths(paths ...string) ([]string, error) {
+	out := make([]string, len(paths))
+
+	for index, path := range paths {
+		if path == "" {
+			continue
+		}
+
+		absolute, err := filepath.Abs(path)
+		if err != nil {
+			return nil, fmt.Errorf("resolve %s: %w", path, err)
+		}
+
+		out[index] = absolute
+	}
+
+	return out, nil
 }
 
 // loadContainerFindings reads a fresh, bounded, regular Trivy report.

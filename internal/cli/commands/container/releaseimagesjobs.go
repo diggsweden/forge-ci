@@ -24,7 +24,6 @@ import (
 	"github.com/diggsweden/forge-ci/internal/cliio"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
-	"github.com/diggsweden/forge-ci/internal/secretenv"
 )
 
 // The release-images job verbs a forge without a build matrix runs: one job
@@ -187,7 +186,7 @@ EXAMPLE:
 			}
 
 			return deps.FromCmd(ctx, cmd, func(dep *deps.Deps) error {
-				scanner := trivy.New(secretenv.Names()...)
+				scanner := trivy.New()
 
 				return appcontainer.PublishReleaseImages(ctx, ociregistry.WithAuthFile(cmd.String(flagAuthFile)), dep.SummarySink, os.Stderr, appcontainer.PublishReleaseImagesInput{
 					Plan:          plan,

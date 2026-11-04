@@ -640,15 +640,27 @@ func retryImageEvidenceTrivy(ctx context.Context, deps imageEvidenceDeps, layout
 	}))
 }
 
+// runImageEvidenceTrivy scans layout into trivyOutput. Trivy runs outside the
+// caller's directory, so both paths are made absolute.
 func runImageEvidenceTrivy(ctx context.Context, trivy ImageEvidenceTrivy, out, stderr io.Writer, layout, trivyOutput, timeout string) error {
+	input, err := filepath.Abs(layout)
+	if err != nil {
+		return retry.Permanent(fmt.Errorf("resolve %s: %w", layout, err))
+	}
+
+	output, err := filepath.Abs(trivyOutput)
+	if err != nil {
+		return retry.Permanent(fmt.Errorf("resolve %s: %w", trivyOutput, err))
+	}
+
 	code, err := trivy.RunInherit(ctx, out, stderr,
 		"image",
-		"--input", layout,
+		"--input", input,
 		"--scanners", "vuln",
 		"--skip-version-check",
 		"--timeout", timeout,
 		"--format", "json",
-		"--output", trivyOutput,
+		"--output", output,
 	)
 	if err != nil {
 		return retry.Permanent(fmt.Errorf("trivy image --input %s: %w", layout, err))

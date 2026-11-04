@@ -7,9 +7,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/diggsweden/forge-ci/internal/adapters/trivy"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
@@ -34,34 +39,49 @@ func TestAdapter_RunInheritPassesArgs(t *testing.T) {
 		t.Errorf("stdout = %q", stdout.String())
 	}
 
-	want := []string{"image", "alpine"}
+	want := []string{"image", "alpine", "--config="}
 	if got := mock.Invocations("trivy")[0].Args; !slices.Equal(got, want) {
 		t.Errorf("args = %v, want %v", got, want)
 	}
 }
 
-// Trivy authenticates to ghcr.io with GITHUB_TOKEN, which on a Forgejo job is
-// the forge token: the adapter must not hand it, or any other credential it
-// is told to drop, to trivy.
-func TestAdapter_RunInheritUnsetsCredentials(t *testing.T) {
+// The gate's settings are the engine's flags. Forge-injected TRIVY_*
+// variables and configuration in the caller's directory (the checkout) must
+// not reach trivy, and neither may GITHUB_TOKEN, which trivy sends to ghcr.io
+// and which holds the forge token on a Forgejo job.
+func TestAdapter_RunInheritIsolatesEnvironmentAndDirectory(t *testing.T) {
 	mock := mockbinary.New(t)
 	mock.Add("trivy", `
-if [ -n "${GITHUB_TOKEN:-}" ] || [ -n "${REGISTRY_TOKEN:-}" ]; then
-  exit 42
-fi
-[ "${KEEP_ME:-}" = kept ] || exit 43
+for name in TRIVY_IGNORE_POLICY TRIVY_SKIP_DIRS TRIVY_DB_REPOSITORY TRIVY_CONFIG GITHUB_TOKEN UNRELATED; do
+  if printenv "$name" >/dev/null; then echo "leaked $name"; exit 42; fi
+done
+[ "${TRIVY_PLATFORM:-}" = linux/arm64 ] || exit 43
+[ "${HTTPS_PROXY:-}" = http://proxy.example:3128 ] || exit 44
+[ -z "$(ls -A .)" ] || exit 45
 `)
+
+	checkout := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(checkout, "trivy.yaml"), []byte("vulnerability:\n  ignore-unfixed: true\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(checkout, ".trivyignore"), []byte("CVE-2026-0001\n"), 0o600))
+	t.Chdir(checkout)
+	t.Setenv("TRIVY_IGNORE_POLICY", "/tmp/allow-all.rego")
+	t.Setenv("TRIVY_SKIP_DIRS", "/usr")
+	t.Setenv("TRIVY_DB_REPOSITORY", "registry.example/empty-db")
+	t.Setenv("TRIVY_CONFIG", "trivy.yaml")
 	t.Setenv("GITHUB_TOKEN", "forge-job-token")
-	t.Setenv("REGISTRY_TOKEN", "token")
-	t.Setenv("KEEP_ME", "kept")
+	t.Setenv("UNRELATED", "value")
+	t.Setenv("TRIVY_PLATFORM", "linux/arm64")
+	t.Setenv("HTTPS_PROXY", "http://proxy.example:3128")
 
-	a := trivy.New("GITHUB_TOKEN", "REGISTRY_TOKEN")
-	a.Bin = mock.Path("trivy")
+	var stdout bytes.Buffer
 
-	code, err := a.RunInherit(context.Background(), &bytes.Buffer{}, &bytes.Buffer{}, "image", "alpine")
-	if err != nil || code != 0 {
-		t.Fatalf("code=%d err=%v; want the credentials removed and other variables kept", code, err)
-	}
+	code, err := (&trivy.Adapter{Bin: mock.Path("trivy")}).RunInherit(context.Background(), &stdout, &bytes.Buffer{}, "image", "alpine")
+	require.NoError(t, err)
+	require.Zero(t, code, "trivy saw a planted setting: %s", stdout.String())
+
+	invocation := mock.Invocations("trivy")[0]
+	assert.Equal(t, []string{"image", "alpine", "--config="}, invocation.Args, "configuration loading must be disabled")
+	assert.NotEqual(t, checkout, invocation.Cwd)
 }
 
 func TestAdapter_RunInheritReturnsExitCode(t *testing.T) {

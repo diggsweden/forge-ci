@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -134,6 +135,11 @@ func validateRawContainerScanInput(in RawContainerScanInput) error {
 }
 
 func runRawContainerTrivy(ctx context.Context, trivy TrivyOps, out, stderr io.Writer, in RawContainerScanInput) error {
+	output, err := filepath.Abs(in.Output)
+	if err != nil {
+		return fmt.Errorf("resolve %s: %w", in.Output, err)
+	}
+
 	code, err := trivy.RunInherit(ctx, out, stderr,
 		"image",
 		"--timeout", in.Timeout,
@@ -141,7 +147,7 @@ func runRawContainerTrivy(ctx context.Context, trivy TrivyOps, out, stderr io.Wr
 		"--scanners", in.Scanners,
 		"--skip-version-check",
 		"--format", "json",
-		"--output", in.Output,
+		"--output", output,
 		in.ImageRef,
 	)
 	if err != nil {

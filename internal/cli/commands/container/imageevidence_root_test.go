@@ -16,25 +16,28 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
-// fakeTrivy fails its first $FAKE_TRIVY_FAILURES calls with status 1, as
-// Trivy does when its database download fails, and then writes an empty
-// report. It counts its calls in $FAKE_TRIVY_CALLS, using shell builtins
-// only: the test's PATH holds nothing else. It refuses to scan when the
-// signing key is in its environment, which the command must have removed.
+// fakeTrivy fails as many calls as the failures file beside its bin
+// directory names with status 1, as Trivy does when its database download
+// fails, and then writes an empty report. It counts its calls in the calls
+// file there, using shell builtins only: the test's PATH holds nothing else,
+// and the adapter passes trivy no test variables. It refuses to scan when
+// the signing key is in its environment, which the command must have removed.
 const fakeTrivy = `#!/bin/sh
-echo call >>"$FAKE_TRIVY_CALLS"
+work=${0%/bin/*}
+read -r failures <"$work/failures"
+echo call >>"$work/calls"
 if [ -n "${COSIGN_KEY:-}" ]; then
 	echo 'a signer secret reached the scanner' >&2
 	exit 3
 fi
 calls=0
-while read -r _; do calls=$((calls + 1)); done <"$FAKE_TRIVY_CALLS"
+while read -r _; do calls=$((calls + 1)); done <"$work/calls"
 output=
 while [ $# -gt 0 ]; do
 	if [ "$1" = --output ]; then output=$2; fi
 	shift
 done
-if [ "$calls" -le "$FAKE_TRIVY_FAILURES" ]; then
+if [ "$calls" -le "$failures" ]; then
 	echo 'FATAL: failed to download vulnerability DB' >&2
 	exit 1
 fi
@@ -70,8 +73,7 @@ func TestImageEvidenceRoot_RetriesTheScan(t *testing.T) {
 			report := filepath.Join(work, "trivy.json")
 
 			t.Setenv("PATH", bin)
-			t.Setenv("FAKE_TRIVY_CALLS", calls)
-			t.Setenv("FAKE_TRIVY_FAILURES", strconv.Itoa(tc.failures))
+			require.NoError(t, os.WriteFile(filepath.Join(work, "failures"), []byte(strconv.Itoa(tc.failures)+"\n"), 0o600))
 			t.Setenv("COSIGN_KEY", "signer-secret")
 
 			command := rootcli.New(rootcli.BuildInfo{Version: "dev"})

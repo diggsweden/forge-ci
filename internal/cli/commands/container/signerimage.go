@@ -21,7 +21,6 @@ import (
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
 	"github.com/diggsweden/forge-ci/internal/cli/regflags"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
-	"github.com/diggsweden/forge-ci/internal/secretenv"
 )
 
 func signerImageGroup() *cli.Command {
@@ -192,7 +191,7 @@ outputs.`,
 				}
 
 				if scanTemplate != "" {
-					scanner := trivy.New(secretenv.Names()...)
+					scanner := trivy.New()
 					input.Evidence = &appcontainer.StagedLayoutEvidence{
 						Trivy:               scanner,
 						Syft:                signerSyft(""),

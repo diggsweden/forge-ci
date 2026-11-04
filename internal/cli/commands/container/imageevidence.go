@@ -8,8 +8,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/diggsweden/forge-ci/internal/secretenv"
-
 	"github.com/urfave/cli/v3"
 
 	"github.com/diggsweden/forge-ci/internal/adapters/buildah"
@@ -65,7 +63,7 @@ does not validate are not retried.`,
 			return appcontainer.ImageEvidence(ctx,
 				buildah.New(),
 				ociregistry.WithAuthFile(cmd.String(flagAuthFile)),
-				trivy.New(secretenv.Names()...),
+				trivy.New(),
 				signerSyft(""),
 				os.Stderr,
 				os.Stderr,
