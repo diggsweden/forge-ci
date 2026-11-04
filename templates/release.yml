@@ -19,7 +19,7 @@ spec:
       regex: '^[^[:space:]]+@sha256:[0-9a-f]{64}$'
     job-user:
       description: UID or UID:GID the job-image jobs run as, such as 65532:65532 for the runtime images' nonroot user; empty keeps the image's own user.
-      regex: '^$|^[0-9]+(:[0-9]+)?$'
+      regex: '^$|^(0|[1-9][0-9]*)(:(0|[1-9][0-9]*))?$'
       default: ''
     build-image:
       description: Consumer build tools; may match job-image when no separate builder is needed.

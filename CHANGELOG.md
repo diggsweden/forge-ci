@@ -221,6 +221,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The `job-user` input of the GitLab `check` and `release` components refuses
+  a UID or GID with a leading zero, such as `065532`. It passed the input check
+  and then never equalled what `id -u` prints, so the job failed its own user
+  check after it started. Write the number without the zero.
 - A GitLab project, group or instance variable no longer changes a policy
   value. These variables outrank a job's own `variables:`, so a consumer
   project's maintainer could replace the allowed request signers, the Cosign

@@ -16,7 +16,7 @@ spec:
     job-user:
       default: ''
       description: UID or UID:GID the job runs as, such as 65532:65532 for the runtime images' nonroot user; empty keeps the image's own user.
-      regex: '^$|^[0-9]+(:[0-9]+)?$'
+      regex: '^$|^(0|[1-9][0-9]*)(:(0|[1-9][0-9]*))?$'
     job-name:
       default: check
       description: Name of the generated check job.

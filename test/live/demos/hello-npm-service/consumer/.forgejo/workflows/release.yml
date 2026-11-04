@@ -26,8 +26,9 @@ jobs:
       release-git-host-key-fingerprint: ${{ vars.RELEASE_GIT_HOST_KEY_FINGERPRINT }}
       verify-release-request-signature: 'true'
       release-request-allowed-signers: .forgejo/release-allowed-signers
-      # The default request already matches package.json; select version-bump
-      # and a pinned Node bump image explicitly for a version-increment trial.
+      # No version bump: a release requests the version package.json declares
+      # (version=0.1.0). Select version-bump and a pinned Node bump image
+      # explicitly for a version-increment trial.
       sign-distro-packages: 'false'
       publish-container-images: 'true'
     secrets:

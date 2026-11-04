@@ -25,9 +25,22 @@ import (
 // another value of the same file names it, as a run script or an expression
 // does, or when the engine's Go or a shell script does, which is where a
 // step's command picks it up. A name read only by a third-party tool would
-// be a false finding; none is today.
+// be a false finding; none is today. A GitLab component passes an input
+// into a job's variables:, which the same rule holds.
 
-var inputExpression = regexp.MustCompile(`\binputs(\.|\[)`)
+// inputEnvironment is where a file's dialect passes an input into an
+// environment variable: the mapping key and how a value reads an input.
+type inputEnvironment struct {
+	key        string
+	expression *regexp.Regexp
+}
+
+var (
+	// actionInputs is a workflow's or action's env: ${{ inputs.name }}.
+	actionInputs = inputEnvironment{"env", regexp.MustCompile(`\binputs(\.|\[)`)}
+	// componentInputs is a GitLab component's variables: $[[ inputs.name ]].
+	componentInputs = inputEnvironment{"variables", regexp.MustCompile(`\$\[\[\s*inputs\.`)}
+)
 
 func TestInputEnvironmentVariablesAreRead(t *testing.T) {
 	t.Parallel()
@@ -38,9 +51,9 @@ func TestInputEnvironmentVariablesAreRead(t *testing.T) {
 
 	checked := 0
 
-	check := func(path string) {
+	check := func(path string, form inputEnvironment) {
 		body := reporoot.ReadFile(t, path)
-		names, values := inputEnvironmentNames(t, path, body)
+		names, values := inputEnvironmentNames(t, path, body, form)
 		checked += len(names)
 		named := identifiers(values)
 
@@ -53,14 +66,18 @@ func TestInputEnvironmentVariablesAreRead(t *testing.T) {
 
 	for _, dir := range []string{".github/workflows", ".forgejo/workflows"} {
 		for _, path := range yamlFiles(t, dir) {
-			check(path)
+			check(path, actionInputs)
 		}
+	}
+
+	for _, path := range yamlFiles(t, "templates") {
+		check(path, componentInputs)
 	}
 
 	for _, dir := range []string{".github/actions", ".forgejo/actions"} {
 		for _, entry := range reporoot.ReadDir(t, dir) {
 			if entry.IsDir() {
-				check(dir + "/" + entry.Name() + "/action.yml")
+				check(dir+"/"+entry.Name()+"/action.yml", actionInputs)
 			}
 		}
 	}
@@ -92,9 +109,34 @@ func TestInputEnvironmentNames_SeesOnlyTheUnreadVariable(t *testing.T) {
           echo "$USED ${JOB_LEVEL}"
 `)
 
-	names, values := inputEnvironmentNames(t, "w.yml", body)
-	if want := []string{"IGNORED", "JOB_LEVEL", "USED"}; !slices.Equal(names, want) {
-		t.Fatalf("names %q, want %q", names, want)
+	requireUnread(t, body, actionInputs, []string{"IGNORED", "JOB_LEVEL", "USED"}, []string{"IGNORED"})
+
+	component := []byte(`spec:
+  inputs:
+    used:
+    ignored:
+---
+check:
+  variables:
+    USED: "$[[ inputs.used ]]"
+    IGNORED: '$[[inputs.ignored]]'
+    CONSTANT: fixed
+  script:
+    # echo "$IGNORED"
+    - echo "$USED"
+`)
+
+	requireUnread(t, component, componentInputs, []string{"IGNORED", "USED"}, []string{"IGNORED"})
+}
+
+// requireUnread requires body to pass inputs into wantNames, of which
+// wantUnread are what nothing else in body reads.
+func requireUnread(t *testing.T, body []byte, form inputEnvironment, wantNames, wantUnread []string) {
+	t.Helper()
+
+	names, values := inputEnvironmentNames(t, "w.yml", body, form)
+	if !slices.Equal(names, wantNames) {
+		t.Fatalf("names %q, want %q", names, wantNames)
 	}
 
 	var unread []string
@@ -106,15 +148,15 @@ func TestInputEnvironmentNames_SeesOnlyTheUnreadVariable(t *testing.T) {
 		}
 	}
 
-	if want := []string{"IGNORED"}; !slices.Equal(unread, want) {
-		t.Fatalf("unread %q, want %q", unread, want)
+	if !slices.Equal(unread, wantUnread) {
+		t.Fatalf("unread %q, want %q", unread, wantUnread)
 	}
 }
 
-// inputEnvironmentNames returns the sorted names of every env: entry whose
-// value reads an input, and the file's values without comment lines and
+// inputEnvironmentNames returns the sorted names of every form.key entry
+// whose value reads an input, and the file's values without comment lines and
 // without those entries, where a read of a name would be.
-func inputEnvironmentNames(t *testing.T, path string, body []byte) ([]string, string) {
+func inputEnvironmentNames(t *testing.T, path string, body []byte, form inputEnvironment) ([]string, string) {
 	t.Helper()
 
 	var (
@@ -133,7 +175,7 @@ func inputEnvironmentNames(t *testing.T, path string, body []byte) ([]string, st
 		case yaml.MappingNode:
 			for i := 0; i+1 < len(node.Content); i += 2 {
 				name, value := node.Content[i].Value, node.Content[i+1]
-				if key == "env" && value.Kind == yaml.ScalarNode && inputExpression.MatchString(value.Value) {
+				if key == form.key && value.Kind == yaml.ScalarNode && form.expression.MatchString(value.Value) {
 					if !slices.Contains(names, name) {
 						names = append(names, name)
 					}

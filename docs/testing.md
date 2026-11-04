@@ -913,7 +913,7 @@ report on this one.
   | `<VARIABLE>=<value>` | A repository variable, name in capitals. `@layer-commit` and `@request-commit` as the value stand for the commit of the layer under test and for the commit a release requests, which no caller can know beforehand. |
   | `token=<SECRET>` | A repository secret that receives the lab account's token, for a token the consumer reads outside a call of the layer. |
   | `workflow=<file>` | The workflow to judge. `pullrequest.yml` or `release.yml` when left out. |
-  | `version=<X.Y.Z>` | The version a release requests. `0.0.1` when left out. |
+  | `version=<X.Y.Z>` | The version a release requests. `0.0.1` when left out. A consumer whose release does not bump must already declare it, so a demo that declares `0.1.0` asks for `version=0.1.0`. |
   | `next-version=<X.Y.Z>` | Release only: request a greater second version in the same repository with the same signing authority. Cannot accompany `interrupt-after`. |
   | `image=<registry>/<repository>[:<tag>]` | Release only: an image on an external registry that must verify against the trial's Cosign key after the release: the repository's `v<version>` tag, or the tag written, such as a flavour's `v0.0.1-go`. Needs the external registry's token below. |
   | `interrupt-after=<job name>` | Release only: cancel the run once a job whose name starts with this has succeeded, as a release interrupted after that step would be, for example `interrupt-after=Build go flavor image`. The trial then checks that the run ended cancelled and that no release was published. Request the same version again to see what the rerun does with what the cancelled run left: it must replace the staging images and succeed. |
