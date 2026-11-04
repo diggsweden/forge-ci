@@ -14,9 +14,17 @@
 # against the *caller's* checkout, not forge-ci's):
 #
 #   - name: Install forge-ci
-#     uses: diggsweden/forge-ci/.github/actions/install-forge-ci@v0.90.0
+#     uses: OWNER/forge-ci/.github/actions/install-forge-ci@v0.90.0
 #     with:
 #       ref: ${{ inputs['forge-ci-binary-ref'] }}
+#
+# `repository` names the repository whose releases and signer are trusted. It
+# defaults to the repository this action comes from, so a fork's action
+# installs the fork's binary. The default is read through an input because
+# github.action_repository is empty inside a composite action's run step
+# (actions/runner#2473). Pass it explicitly where that context is empty or
+# names another action, such as on GitHub Enterprise Server or when another
+# composite action calls this one; the script refuses an empty value.
 #
 # The action version (the @ref above) pins the install *script*; `ref` selects
 # the binary. GitHub does not allow expressions in `uses:`, so reusable
@@ -36,6 +44,10 @@ inputs:
     description: "forge-ci version/ref to install (release tag, full 40/64-character commit ID, branch, or local). Defaults to the latest stable release."
     required: false
     default: ""
+  repository:
+    description: "owner/name of the forge-ci repository whose releases and signer to trust. Defaults to the repository this action comes from."
+    required: false
+    default: ${{ github.action_repository }}
 runs:
   using: composite
   steps:
@@ -48,4 +60,5 @@ runs:
       shell: bash
       env:
         FORGE_CI_BINARY_REF: ${{ inputs.ref }}
+        FORGE_CI_REPOSITORY: ${{ inputs.repository }}
       run: bash "${GITHUB_ACTION_PATH}/../../../scripts/bootstrap/install-forge-ci.sh" "$FORGE_CI_BINARY_REF"

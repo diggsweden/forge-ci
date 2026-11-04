@@ -25,6 +25,10 @@ import (
 	"github.com/diggsweden/forge-ci/internal/testutil/evidence"
 )
 
+// testForgeCIRepository is the repository the installer cases trust; the
+// installer has no default.
+const testForgeCIRepository = "diggsweden/forge-ci"
+
 func runSourcedScript(t *testing.T, script, body string, env map[string]string) (string, string, error) {
 	t.Helper()
 	root := t.TempDir()
@@ -592,6 +596,7 @@ chmod +x "$GOBIN/forge-ci"
 				"INSTALL_ROOT":            installRoot,
 				"FORGE_CI_SERVER_URL":     "file://" + root,
 				"FORGE_CI_BINARY_REF":     tc.ref,
+				"FORGE_CI_REPOSITORY":     testForgeCIRepository,
 				"FORGE_CI_INSTALL_DIR":    "./install",
 				"FORGE_CI_USE_GO_INSTALL": useSource,
 				"GITHUB_PATH":             githubPath,
@@ -638,6 +643,7 @@ func TestInstallForgeCI_RefusesInvalidBootstrapBindingBeforeBuild(t *testing.T) 
 
 				_, stderr, err := runSourcedScript(t, "install-forge-ci.sh", body, map[string]string{
 					"FORGE_CI_BINARY_REF": ref,
+					"FORGE_CI_REPOSITORY": testForgeCIRepository,
 					"FORGE_CI_SOURCE_SHA": sha,
 					"BUILD_MARKER":        filepath.Join(root, "built"),
 					"GITHUB_PATH":         filepath.Join(root, "path"),
@@ -702,6 +708,7 @@ func TestInstallForgeCI_DefaultUsesConcreteStableRelease(t *testing.T) {
 
 			_, stderr, err := runSourcedScript(t, "install-forge-ci.sh", body, map[string]string{
 				"EXPLICIT":             tc.explicit,
+				"FORGE_CI_REPOSITORY":  testForgeCIRepository,
 				"REDIRECT":             tc.redirect,
 				"QUERY_MARKER":         filepath.Join(root, "query"),
 				"SELECTED_TAG":         filepath.Join(root, "tag"),
@@ -777,6 +784,7 @@ func TestInstallForgeCI_ReleaseAssetPath(t *testing.T) {
 	env := map[string]string{
 		"PATH":                     binDir,
 		"FORGE_CI_BINARY_REF":      "v0.90.0",
+		"FORGE_CI_REPOSITORY":      testForgeCIRepository,
 		"FORGE_CI_SOURCE_SHA":      "not-used-for-signed-release-assets",
 		"FORGE_CI_INSTALL_DIR":     installDir,
 		"RELEASE_FIXTURE_ROOT":     releaseRoot,
@@ -874,7 +882,7 @@ func checkReleaseInstallState(t *testing.T, phase string) {
 	writeBootstrapFixture(t, pathFile, "existing path\n")
 	writeFakeCurl(t, binDir)
 	writeFakeCosign(t, binDir, filepath.Join(root, "cosign-args"))
-	env := map[string]string{"PATH": binDir, "TMPDIR": work, "CI_TEMP_DIR": work, "RELEASE_FIXTURE_ROOT": root, "FORGE_CI_INSTALL_DIR": installDir, "GITHUB_PATH": pathFile, "PHASE_MARKER": filepath.Join(root, "phase-reached")}
+	env := map[string]string{"PATH": binDir, "FORGE_CI_REPOSITORY": testForgeCIRepository, "TMPDIR": work, "CI_TEMP_DIR": work, "RELEASE_FIXTURE_ROOT": root, "FORGE_CI_INSTALL_DIR": installDir, "GITHUB_PATH": pathFile, "PHASE_MARKER": filepath.Join(root, "phase-reached")}
 	body := `bootstrap_forge_ci_cosign() { :; }; `
 	wantMessage, requireMarker := "", false
 
@@ -969,7 +977,7 @@ func TestInstallForgeCI_ShellVerificationCases(t *testing.T) {
 	t.Parallel()
 
 	stdout, stderr, err := runSourcedScript(t, "install-forge-ci_test.sh", "", nil)
-	if err != nil || !strings.Contains(stdout, "22 passed, 0 failed") {
+	if err != nil || !strings.Contains(stdout, "24 passed, 0 failed") {
 		t.Fatalf("shell verification: %v stdout=%s stderr=%s", err, stdout, stderr)
 	}
 }
@@ -1035,6 +1043,7 @@ func TestInstallForgeCI_ReleaseAssetTamperingDetected(t *testing.T) {
 	_, stderr, err := runSourcedScript(t, "install-forge-ci.sh", `bootstrap_forge_ci_cosign() { :; }; install_forge_ci "$FORGE_CI_BINARY_REF"`, map[string]string{
 		"PATH":                      binDir,
 		"FORGE_CI_BINARY_REF":       "v0.90.0",
+		"FORGE_CI_REPOSITORY":       testForgeCIRepository,
 		"FORGE_CI_INSTALL_DIR":      installDir,
 		"FORGE_CI_RELEASE_URL_BASE": "file://" + releaseRoot,
 	})
@@ -1085,6 +1094,7 @@ func TestInstallForgeCI_UnsignedReleaseRefused(t *testing.T) {
 	stdout, stderr, err := runSourcedScript(t, "install-forge-ci.sh", `bootstrap_forge_ci_cosign() { :; }; install_forge_ci "$FORGE_CI_BINARY_REF"`, map[string]string{
 		"PATH":                      binDir,
 		"FORGE_CI_BINARY_REF":       "v0.90.0",
+		"FORGE_CI_REPOSITORY":       testForgeCIRepository,
 		"FORGE_CI_INSTALL_DIR":      installDir,
 		"FORGE_CI_RELEASE_URL_BASE": "file://" + releaseRoot,
 	})

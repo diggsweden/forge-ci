@@ -198,6 +198,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `TRIVY_PLATFORM`, which the multi-arch build sets per leg; it runs in an
   empty directory with configuration loading disabled, and the ignore file
   reaches it by absolute path.
+- The `install-forge-ci` action installs the binary of the repository it
+  comes from, and trusts that repository's signer. It ran the installer
+  without naming a repository, so a fork's action installed upstream's
+  binary. A new `repository` input overrides the default; pass it where
+  the action's own repository is unknown, as on GitHub Enterprise Server.
 - Bootstrap installers reuse a tool already on `PATH` only when it reports the
   pinned version; any other version is replaced by the pinned,
   checksum-verified download, so a runner's older Trivy no longer decides the
@@ -388,6 +393,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING (GitHub Enterprise Server):** A GitHub workflow that cannot tell
+  which repository serves forge-ci stops in its bootstrap resolver, before
+  any checkout, and says to set `FORGE_CI_REPOSITORY`. GitHub Enterprise
+  Server has no `job.workflow_repository`, so the empty fallback used to check
+  out the consumer's own repository and derive the `ghcr.io/` namespace from
+  nothing. Jobs now take the admitted repository from the resolver.
+- **BREAKING:** `scripts/bootstrap/install-forge-ci.sh` has no default
+  repository. Except for a `local` install it refuses to run until
+  `FORGE_CI_REPOSITORY` names one, instead of silently trusting the upstream
+  releases and signer.
 - Examples, templates, verification recipes and live fixtures use neutral
   names and coordinates (`examplescope/myapp`, `forge.example`) instead of
   organisation or consumer names; the cargo-app example's services are

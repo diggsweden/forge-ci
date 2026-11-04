@@ -57,6 +57,7 @@ func TestHostInstallersBuildTheirBootstrapCheckoutCommit(t *testing.T) {
 					require.True(t, strings.HasPrefix(step.Uses, "actions/checkout@"), "%s/%s", path, jobName)
 					require.Equal(t, ".github-shared", step.With["path"])
 					require.Equal(t, "${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}", step.With["ref"])
+					require.Equal(t, resolvedForgeCIRepository, step.With["repository"], "%s/%s", path, jobName)
 
 					checkoutFound = true
 				}
@@ -70,11 +71,95 @@ func TestHostInstallersBuildTheirBootstrapCheckoutCommit(t *testing.T) {
 				require.True(t, checkoutFound, "%s/%s installs without a preceding pinned checkout", path, jobName)
 				require.Equal(t, "${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}", step.Env["FORGE_CI_BINARY_REF"], "%s/%s", path, jobName)
 				require.Equal(t, "${{ steps.forge-ci-bootstrap.outputs.commit }}", step.Env["FORGE_CI_SOURCE_SHA"], "%s/%s", path, jobName)
+				require.Equal(t, resolvedForgeCIRepository, step.Env["FORGE_CI_REPOSITORY"], "%s/%s", path, jobName)
 			}
 		}
 	}
 
 	require.Positive(t, installs)
+}
+
+// resolvedForgeCIRepository is the repository the resolver admitted. Jobs take
+// it from there rather than re-reading job.workflow_repository, which is empty
+// on GitHub Enterprise Server.
+const resolvedForgeCIRepository = "${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}"
+
+func TestBootstrapResolverRefusesAnUnknownRepository(t *testing.T) {
+	t.Parallel()
+	workflow := readBootstrapWorkflow(t, filepath.Join(reporoot.Path(t), ".github", "workflows", "resolve-forge-ci-bootstrap.yml"))
+
+	steps := workflow.Jobs["resolve"].Steps
+	require.NotEmpty(t, steps)
+	require.Equal(t, "repository", steps[0].ID, "the repository is admitted before anything reads it")
+	require.Equal(t, "${{ vars.FORGE_CI_REPOSITORY || job.workflow_repository }}", steps[0].Env["REPOSITORY"])
+
+	for _, step := range steps[1:] {
+		for _, value := range []string{step.With["repository"], step.Env["REPOSITORY"]} {
+			if value != "" {
+				require.Equal(t, "${{ steps.repository.outputs.repository }}", value)
+			}
+		}
+	}
+
+	for _, tc := range []struct{ repository, say string }{
+		{"", "Set the FORGE_CI_REPOSITORY variable"},
+		{"noslash", "must be owner/name"},
+		{"owner/../name", "must be owner/name"},
+		{"owner/name/extra", "must be owner/name"},
+		{"examplescope/forge-ci", ""},
+	} {
+		t.Run(tc.repository, func(t *testing.T) {
+			t.Parallel()
+
+			output := filepath.Join(t.TempDir(), "outputs")
+			cmd := exec.CommandContext(t.Context(), "/bin/bash", "--noprofile", "--norc", "-c", steps[0].Run)
+			cmd.Env = []string{"PATH=/usr/bin:/bin", "REPOSITORY=" + tc.repository, "GITHUB_OUTPUT=" + output}
+
+			out, err := cmd.CombinedOutput()
+			if tc.say != "" {
+				require.Error(t, err, "%s", out)
+				require.Contains(t, string(out), tc.say)
+
+				_, statErr := os.Stat(output)
+				require.True(t, os.IsNotExist(statErr))
+
+				return
+			}
+
+			require.NoError(t, err, "%s", out)
+			body, err := os.ReadFile(output)
+			require.NoError(t, err)
+			require.Equal(t, "repository="+tc.repository+"\n", string(body))
+		})
+	}
+}
+
+func TestOnlyTheResolverReadsTheWorkflowRepository(t *testing.T) {
+	t.Parallel()
+
+	root := reporoot.Path(t)
+	for _, dir := range []string{filepath.Join(root, ".github", "workflows"), filepath.Join(root, ".github", "actions")} {
+		require.NoError(t, filepath.WalkDir(dir, func(path string, entry os.DirEntry, err error) error {
+			if err != nil || entry.IsDir() || filepath.Ext(path) != ".yml" {
+				return err
+			}
+
+			body, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+
+			want := 0
+			if filepath.Base(path) == "resolve-forge-ci-bootstrap.yml" {
+				want = 1
+			}
+
+			require.Equal(t, want, strings.Count(string(body), "job.workflow_repository"),
+				"%s reads job.workflow_repository, which is empty on GitHub Enterprise Server; take needs.resolve-bootstrap.outputs.forge-ci-repository instead", path)
+
+			return nil
+		}))
+	}
 }
 
 func TestBootstrapResolverPreservesSignedAssetsAndPinsSource(t *testing.T) {

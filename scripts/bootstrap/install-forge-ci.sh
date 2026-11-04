@@ -15,25 +15,36 @@
 # any download or verification error. Set FORGE_CI_USE_GO_INSTALL=1 only
 # when explicitly choosing source installation instead.
 #
-# FORGE_CI_REPOSITORY (owner/name) and FORGE_CI_PRERELEASE_BRANCH select
-# the repository and branch whose releases and signatures are trusted, so a fork
-# installs and verifies its own binaries.
+# FORGE_CI_REPOSITORY (owner/name, required except for a local install) and
+# FORGE_CI_PRERELEASE_BRANCH select the repository and branch whose releases
+# and signatures are trusted. There is no default repository: a caller that
+# names none is refused rather than handed someone else's binary and signer.
 
 # shellcheck source=install-common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/install-common.sh"
 # shellcheck source=install-cosign.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/install-cosign.sh"
 
-# Repository owner/name, branch and release URL base are env-overridable so a
-# fork (or a test) can point at its own. Defaults match the upstream repository.
-: "${FORGE_CI_REPOSITORY:=diggsweden/forge-ci}"
+# Branch, server and release URL base are env-overridable so a test can point
+# at its own; FORGE_CI_RELEASE_URL_BASE defaults to the repository's releases.
+: "${FORGE_CI_REPOSITORY:=}"
 : "${FORGE_CI_PRERELEASE_BRANCH:=main}"
 : "${FORGE_CI_SERVER_URL:=${GITHUB_SERVER_URL:-https://github.com}}"
-: "${FORGE_CI_RELEASE_URL_BASE:=${FORGE_CI_SERVER_URL}/${FORGE_CI_REPOSITORY}/releases/download}"
 
-# check_forge_ci_source refuses repository and branch values that are not a
-# plain owner/name and branch name, before they reach a regex or a git URL.
+# forge_ci_release_url_base prints the base URL of the repository's release
+# downloads. Call it after check_forge_ci_source.
+forge_ci_release_url_base() {
+	printf '%s' "${FORGE_CI_RELEASE_URL_BASE:-${FORGE_CI_SERVER_URL}/${FORGE_CI_REPOSITORY}/releases/download}"
+}
+
+# check_forge_ci_source refuses a missing repository, and repository and branch
+# values that are not a plain owner/name and branch name, before they reach a
+# regex or a URL.
 check_forge_ci_source() {
+	if [[ -z "$FORGE_CI_REPOSITORY" ]]; then
+		printf 'ERROR: FORGE_CI_REPOSITORY is not set; name the owner/name of the forge-ci repository whose releases and signer to trust\n' >&2
+		return 1
+	fi
 	if [[ ! "$FORGE_CI_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ||
 		"/${FORGE_CI_REPOSITORY}/" == *'/./'* || "/${FORGE_CI_REPOSITORY}/" == *'/../'* ]]; then
 		printf 'ERROR: FORGE_CI_REPOSITORY must be owner/name, got %q\n' "$FORGE_CI_REPOSITORY" >&2
@@ -123,7 +134,9 @@ is_forge_ci_commit_ref() {
 # GitHub's latest-release redirect excludes drafts and prereleases. Resolve it
 # once, then use the concrete tag for archive URLs and signature identity.
 resolve_forge_ci_stable_release() {
-	local release_base="${FORGE_CI_RELEASE_URL_BASE%/download}" resolved ref
+	local release_base resolved ref
+	release_base="$(forge_ci_release_url_base)"
+	release_base="${release_base%/download}"
 	resolved="$(curl --retry 5 --retry-delay 3 --retry-connrefused -sSfL -o /dev/null -w '%{url_effective}' "$release_base/latest")" || return 1
 	ref="${resolved##*/}"
 	if [[ ! "$ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || "$resolved" != "$release_base/tag/$ref" ]]; then
@@ -244,9 +257,11 @@ install_forge_ci_release() (
 	# `--retry-connrefused` adds connection-refused. Both are old/portable flags.
 	local -a curl_retry=(--retry 5 --retry-delay 3 --retry-connrefused)
 
-	local asset_url="${FORGE_CI_RELEASE_URL_BASE}/${ref}/${dist}"
-	local sums_url="${FORGE_CI_RELEASE_URL_BASE}/${ref}/checksums.txt"
-	local bundle_url="${FORGE_CI_RELEASE_URL_BASE}/${ref}/checksums.txt.bundle"
+	local base
+	base="$(forge_ci_release_url_base)"
+	local asset_url="${base}/${ref}/${dist}"
+	local sums_url="${base}/${ref}/checksums.txt"
+	local bundle_url="${base}/${ref}/checksums.txt.bundle"
 	CI_TEMP_DIR="$tmp/bootstrap" bootstrap_forge_ci_cosign || return 1
 	printf 'Downloading forge-ci %s (%s/%s)...\n' "$ref" "$os" "$arch"
 	if ! curl "${curl_retry[@]}" -sSfL -o "$tmp/$dist" "$asset_url"; then
@@ -352,6 +367,9 @@ install_forge_ci() {
 	# Go requires an absolute GOBIN, including after entering a source checkout.
 	[[ "$install_dir" == /* ]] || install_dir="$PWD/$install_dir"
 
+	if [[ "$ref" != "local" && "$ref" != "." ]]; then
+		check_forge_ci_source || return 1
+	fi
 	if [[ -z "$ref" ]]; then
 		ref="$(resolve_forge_ci_stable_release)" || return 1
 	fi

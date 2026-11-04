@@ -25,10 +25,10 @@ func TestReleaseOrchestratorResolvesForgeCIRefFromCanonicalRemote(t *testing.T) 
 	require.True(t, canonicalResolveStep(body))
 }
 
-// canonicalForgeCIRemote is repository configuration (a variable an
-// administrator may set), never caller input, and falls back to the repository
-// serving the called workflow.
-const canonicalForgeCIRemote = "${{ github.server_url }}/${{ vars.FORGE_CI_REPOSITORY || job.workflow_repository }}"
+// canonicalForgeCIRemote is the repository the bootstrap resolver admitted:
+// repository configuration (a variable an administrator may set) or the
+// repository serving the called workflow, never caller input.
+const canonicalForgeCIRemote = "${{ github.server_url }}/${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}"
 
 func canonicalResolveStep(body []byte) bool {
 	var workflow eventWorkflow

@@ -114,7 +114,9 @@ with the action itself pinned to an immutable commit SHA:
 ```
 
 The action pin selects the reviewed installer implementation; `ref` selects the
-binary release. An omitted ref resolves the current published stable release to
+binary release, and `repository` the repository whose releases and signer are
+trusted. `repository` defaults to the repository the action comes from; pass it
+where that is unknown, as on GitHub Enterprise Server. An omitted ref resolves the current published stable release to
 a concrete tag before installation. Explicit refs take precedence; no `latest`
 binary asset or image tag is executed. For published release refs, the installer bootstraps the
 repository-pinned cosign with a SHA-256 check, then downloads the release assets
@@ -136,7 +138,9 @@ release ref; that route does not verify release assets.
 The underlying [`install-forge-ci.sh`](../scripts/bootstrap/install-forge-ci.sh)
 is for this composite action and for jobs that have already checked out or
 vendored the forge-ci repository. A consumer must not assume that
-`scripts/bootstrap/install-forge-ci.sh` exists in its own checkout.
+`scripts/bootstrap/install-forge-ci.sh` exists in its own checkout. The script
+has no default repository: except for a `local` install it refuses to run
+until `FORGE_CI_REPOSITORY` names one as `owner/name`.
 
 This bootstrap verifies GitHub-produced keyless release assets. Native Forgejo
 and GitLab delivery instead use their commit-pinned layer/component and recorded

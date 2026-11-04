@@ -9,6 +9,9 @@ on:
         required: true
         type: string
     outputs:
+      forge-ci-repository:
+        description: "owner/name of the forge-ci repository whose engine, bootstrap scripts and signer the caller trusts"
+        value: ${{ jobs.resolve.outputs.forge-ci-repository }}
       forge-ci-binary-ref:
         description: "Original release tag for verified assets, or immutable source commit"
         value: ${{ jobs.resolve.outputs.forge-ci-binary-ref }}
@@ -33,6 +36,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     outputs:
+      forge-ci-repository: ${{ steps.repository.outputs.repository }}
       forge-ci-binary-ref: ${{ steps.select.outputs.ref }}
       runtime-image: ${{ steps.select.outputs.runtime-image }}
       runtime-image-full: ${{ steps.select.outputs.runtime-image-full }}
@@ -42,13 +46,31 @@ jobs:
       runtime-image-rust: ${{ steps.select.outputs.runtime-image-rust }}
       runtime-image-android: ${{ steps.select.outputs.runtime-image-android }}
     steps:
+      - name: Resolve forge-ci repository
+        id: repository
+        env:
+          # The repository serving this workflow, unless the caller's variable
+          # names another. GitHub Enterprise Server has no job.workflow_*
+          # context, so there the variable is required.
+          REPOSITORY: ${{ vars.FORGE_CI_REPOSITORY || job.workflow_repository }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$REPOSITORY" ]]; then
+            printf 'ERROR: cannot tell which repository serves forge-ci. Set the FORGE_CI_REPOSITORY variable (owner/name) on the calling repository or its organization.\n' >&2
+            exit 1
+          fi
+          if [[ ! "$REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ || "/${REPOSITORY}/" == *'/./'* || "/${REPOSITORY}/" == *'/../'* ]]; then
+            printf 'ERROR: FORGE_CI_REPOSITORY must be owner/name, got %q\n' "$REPOSITORY" >&2
+            exit 1
+          fi
+          printf 'repository=%s\n' "$REPOSITORY" >>"$GITHUB_OUTPUT"
       - name: Select explicit ref or latest stable release
         id: requested
         env:
           REQUESTED_REF: ${{ inputs['forge-ci-binary-ref'] }}
           GH_TOKEN: ${{ github.token }}
           SERVER_URL: ${{ github.server_url }}
-          REPOSITORY: ${{ vars.FORGE_CI_REPOSITORY || job.workflow_repository }}
+          REPOSITORY: ${{ steps.repository.outputs.repository }}
         run: |
           set -euo pipefail
           ref="$REQUESTED_REF"
@@ -66,7 +88,7 @@ jobs:
         if: ${{ steps.requested.outputs.checkout == 'true' }}
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          repository: ${{ vars.FORGE_CI_REPOSITORY || job.workflow_repository }}
+          repository: ${{ steps.repository.outputs.repository }}
           ref: ${{ steps.requested.outputs.ref }}
           sparse-checkout: scripts/bootstrap
           persist-credentials: false
@@ -75,7 +97,7 @@ jobs:
         env:
           REQUESTED_REF: ${{ steps.requested.outputs.ref }}
           SOURCE_SHA: ${{ steps.bootstrap.outputs.commit }}
-          REPOSITORY: ${{ vars.FORGE_CI_REPOSITORY || job.workflow_repository }}
+          REPOSITORY: ${{ steps.repository.outputs.repository }}
           IMAGE_NAMESPACE: ${{ vars.FORGE_CI_IMAGE_NAMESPACE }}
         run: |
           set -euo pipefail

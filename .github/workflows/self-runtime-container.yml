@@ -718,7 +718,7 @@ jobs:
           SHA: ${{ github.sha }}
           # Read by publish-self-runtime-cli: the repository and branch allowed to
           # own the rolling channel, matching the installer's pre-release signer.
-          FORGE_CI_REPOSITORY: ${{ vars.FORGE_CI_REPOSITORY || job.workflow_repository }}
+          FORGE_CI_REPOSITORY: ${{ vars.FORGE_CI_REPOSITORY || github.repository }}
           FORGE_CI_PRERELEASE_BRANCH: ${{ vars.FORGE_CI_PRERELEASE_BRANCH || 'main' }}
         run: |
           set -euo pipefail

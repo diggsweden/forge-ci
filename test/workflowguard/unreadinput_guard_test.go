@@ -5,6 +5,8 @@ package workflowguard
 
 import (
 	"bytes"
+	"errors"
+	"io"
 	"regexp"
 	"slices"
 	"strings"
@@ -18,7 +20,9 @@ import (
 // setting that is silently ignored: the caller sets it, sees no error, and
 // believes it took effect. Each declared input therefore has to be read
 // somewhere in the same file. This does not prove the read is meaningful; it
-// catches the declaration that nothing reads at all.
+// catches the declaration that nothing reads at all. Only YAML values outside
+// the inputs declaration count, without comment lines: a comment or another
+// input's description that mentions an input does not read it.
 
 func TestDeclaredInputsAreRead(t *testing.T) {
 	t.Parallel()
@@ -34,7 +38,7 @@ func TestDeclaredInputsAreRead(t *testing.T) {
 	for _, dir := range []string{".github/workflows", ".forgejo/workflows"} {
 		for _, path := range yamlFiles(t, dir) {
 			body := reporoot.ReadFile(t, path)
-			check(path, workflowInputNames(t, path, body), string(body), actionsInputRead)
+			check(path, workflowInputNames(t, path, body), readableText(t, path, body, isWorkflowInputDeclaration), actionsInputRead)
 		}
 	}
 
@@ -46,13 +50,19 @@ func TestDeclaredInputsAreRead(t *testing.T) {
 
 			path := dir + "/" + entry.Name() + "/action.yml"
 			body := reporoot.ReadFile(t, path)
-			check(path, actionInputNames(t, path, body), string(body), actionsInputRead)
+			check(path, actionInputNames(t, path, body), readableText(t, path, body, isActionInputDeclaration), actionsInputRead)
 		}
 	}
 
 	for _, path := range yamlFiles(t, "templates") {
-		names, rest := componentInputNames(t, path, reporoot.ReadFile(t, path))
-		check(path, names, rest, componentInputRead)
+		names, rest, err := componentInputNames(reporoot.ReadFile(t, path))
+		if err != nil {
+			t.Errorf("%s: %v", path, err)
+
+			continue
+		}
+
+		check(path, names, readableText(t, path, rest, nil), componentInputRead)
 	}
 
 	if len(findings) > 0 {
@@ -78,6 +88,138 @@ func TestUnreadInputs_ReportsOnlyTheUnreadOne(t *testing.T) {
 	if want := []string{"c.yml: stage"}; !slices.Equal(got, want) {
 		t.Fatalf("got %q, want %q", got, want)
 	}
+}
+
+func TestUnreadInputs_MentionsAreNotReads(t *testing.T) {
+	t.Parallel()
+
+	workflow := []byte(`on:
+  workflow_call:
+    inputs:
+      used:
+        type: string
+      ignored:
+        # Replaces inputs.ignored, see inputs.used.
+        description: "Unlike ${{ inputs.ignored }}, takes effect"
+        type: string
+jobs:
+  build:
+    # ${{ inputs.ignored }} is gone
+    runs-on: ubuntu-latest # inputs.ignored
+    steps:
+      - run: |
+          # echo "${{ inputs.ignored }}"
+          echo "${{ inputs.used }}"
+`)
+
+	text := readableText(t, "w.yml", workflow, isWorkflowInputDeclaration)
+	if got, want := unreadInputs("w.yml", workflowInputNames(t, "w.yml", workflow), text, actionsInputRead), []string{"w.yml: ignored"}; !slices.Equal(got, want) {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+
+	action := []byte(`inputs:
+  used:
+    description: "Defaults to inputs.ignored"
+  ignored:
+    description: "Ignored"
+runs:
+  using: composite
+  steps:
+    - run: echo "${{ inputs.used }}"
+      shell: bash
+`)
+
+	text = readableText(t, "action.yml", action, isActionInputDeclaration)
+	if got, want := unreadInputs("action.yml", actionInputNames(t, "action.yml", action), text, actionsInputRead), []string{"action.yml: ignored"}; !slices.Equal(got, want) {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+
+	names, rest, err := componentInputNames([]byte("spec:\n  inputs:\n    used:\n    ignored:\n      description: \"not $[[ inputs.ignored ]]\"\n---\n# $[[ inputs.ignored ]]\njob:\n  script: echo \"$[[ inputs.used ]]\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got, want := unreadInputs("c.yml", names, readableText(t, "c.yml", rest, nil), componentInputRead), []string{"c.yml: ignored"}; !slices.Equal(got, want) {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestComponentInputNames_RefusesASpecWithoutSeparator(t *testing.T) {
+	t.Parallel()
+
+	if _, _, err := componentInputNames([]byte("spec:\n  inputs:\n    stage:\njob:\n  script: echo\n")); err == nil {
+		t.Fatal("a spec header without its --- separator was accepted; its inputs would go unchecked")
+	}
+
+	names, rest, err := componentInputNames([]byte("job:\n  script: echo\n"))
+	if err != nil || names != nil || len(rest) == 0 {
+		t.Fatalf("a file without a spec: names=%q rest=%q err=%v", names, rest, err)
+	}
+}
+
+// isWorkflowInputDeclaration reports the inputs mapping of a workflow trigger.
+func isWorkflowInputDeclaration(path []string) bool {
+	return len(path) == 3 && path[0] == "on" && path[2] == "inputs"
+}
+
+// isActionInputDeclaration reports an action's top-level inputs mapping.
+func isActionInputDeclaration(path []string) bool {
+	return len(path) == 1 && path[0] == "inputs"
+}
+
+// readableText returns the YAML values of every document in body where an
+// input can be read: outside the declaration skip reports, without comments.
+// YAML comments are dropped by the parser; comment lines inside a value, such
+// as a shell comment in a run script, are removed here.
+func readableText(t *testing.T, path string, body []byte, skip func([]string) bool) string {
+	t.Helper()
+
+	var text strings.Builder
+
+	var walk func(node *yaml.Node, at []string)
+
+	walk = func(node *yaml.Node, at []string) {
+		if skip != nil && skip(at) {
+			return
+		}
+
+		switch node.Kind {
+		case yaml.DocumentNode, yaml.SequenceNode:
+			for _, child := range node.Content {
+				walk(child, at)
+			}
+		case yaml.MappingNode:
+			for i := 0; i+1 < len(node.Content); i += 2 {
+				walk(node.Content[i], at)
+				walk(node.Content[i+1], append(slices.Clone(at), node.Content[i].Value))
+			}
+		case yaml.ScalarNode:
+			for line := range strings.SplitSeq(node.Value, "\n") {
+				if !strings.HasPrefix(strings.TrimSpace(line), "#") {
+					text.WriteString(line)
+					text.WriteByte('\n')
+				}
+			}
+		case yaml.AliasNode:
+			// The anchored value is walked where it is defined.
+		}
+	}
+
+	decoder := yaml.NewDecoder(bytes.NewReader(body))
+	for {
+		var doc yaml.Node
+		if err := decoder.Decode(&doc); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+
+			t.Fatalf("%s: %v", path, err)
+		}
+
+		walk(&doc, nil)
+	}
+
+	return text.String()
 }
 
 func actionsInputRead(name string) *regexp.Regexp {
@@ -171,13 +313,17 @@ func actionInputNames(t *testing.T, path string, body []byte) []string {
 }
 
 // componentInputNames returns the spec's inputs and the job document after
-// the `---` that ends the spec header, where reads have to be.
-func componentInputNames(t *testing.T, path string, body []byte) ([]string, string) {
-	t.Helper()
-
+// the `---` that ends the spec header, where reads have to be. A file without
+// a spec header is all job document. A spec without the separator is refused:
+// its inputs could not be told from the jobs that read them.
+func componentInputNames(body []byte) ([]string, []byte, error) {
 	header, rest, found := bytes.Cut(body, []byte("\n---\n"))
 	if !found {
-		return nil, ""
+		if componentSpecHeader.Match(body) {
+			return nil, nil, errors.New("declares spec: without the --- line that ends the spec header")
+		}
+
+		return nil, body, nil
 	}
 
 	var doc struct {
@@ -186,11 +332,13 @@ func componentInputNames(t *testing.T, path string, body []byte) ([]string, stri
 		} `yaml:"spec"`
 	}
 	if err := yaml.Unmarshal(header, &doc); err != nil {
-		t.Fatalf("%s: %v", path, err)
+		return nil, nil, err
 	}
 
-	return inputKeys(doc.Spec.Inputs), string(rest)
+	return inputKeys(doc.Spec.Inputs), rest, nil
 }
+
+var componentSpecHeader = regexp.MustCompile(`(?m)^spec:`)
 
 func inputKeys(m map[string]any) []string {
 	names := make([]string, 0, len(m))

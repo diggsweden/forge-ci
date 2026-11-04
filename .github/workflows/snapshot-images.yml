@@ -86,6 +86,7 @@ jobs:
       images: ${{ steps.plan.outputs.images }}
       engine-sha256: ${{ steps.engine.outputs.sha256 }}
       engine-ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
+      engine-repository: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
       bootstrap-sha: ${{ steps.forge-ci-bootstrap.outputs.commit }}
       artifact-transfers: ${{ steps.plan.outputs.artifact-transfer-plan-json }}
       artifacts: ${{ steps.plan.outputs.artifacts }}
@@ -94,7 +95,7 @@ jobs:
         id: forge-ci-bootstrap
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          repository: ${{ vars.FORGE_CI_REPOSITORY || job.workflow_repository }}
+          repository: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
           ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
           path: .github-shared
           sparse-checkout: scripts/bootstrap
@@ -109,7 +110,7 @@ jobs:
           CGO_ENABLED: "0"
           FORGE_CI_BINARY_REF: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
           FORGE_CI_SOURCE_SHA: ${{ steps.forge-ci-bootstrap.outputs.commit }}
-          FORGE_CI_REPOSITORY: ${{ vars.FORGE_CI_REPOSITORY || job.workflow_repository }}
+          FORGE_CI_REPOSITORY: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
         run: bash .github-shared/scripts/bootstrap/install-forge-ci.sh "$FORGE_CI_BINARY_REF"
       - name: Admit development publication
         env:
@@ -314,7 +315,7 @@ jobs:
           CGO_ENABLED: "0"
           FORGE_CI_BINARY_REF: ${{ needs.plan.outputs.engine-ref }}
           FORGE_CI_SOURCE_SHA: ${{ needs.plan.outputs.bootstrap-sha }}
-          FORGE_CI_REPOSITORY: ${{ vars.FORGE_CI_REPOSITORY || job.workflow_repository }}
+          FORGE_CI_REPOSITORY: ${{ needs.plan.outputs.engine-repository }}
           FORGE_CI_INSTALL_DIR: ${{ runner.temp }}/snapshot-native-bin
         run: bash "${RUNNER_TEMP}/snapshot-inputs/bootstrap/install-forge-ci.sh" "$FORGE_CI_BINARY_REF"
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3

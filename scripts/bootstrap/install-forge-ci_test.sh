@@ -35,6 +35,8 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=install-forge-ci.sh
 source "$SCRIPT_DIR/install-forge-ci.sh"
+# The installer has no default repository; the cases below trust this one.
+FORGE_CI_REPOSITORY=examplescope/forge-ci
 
 PASS=0
 FAIL=0
@@ -251,17 +253,17 @@ t_explicit_release_go_install_is_honored() (
 # _forge_ci_cosign_identity: the two trust domains must each accept their own
 # signer's SAN and reject the other's. These grep the SANs against the actual
 # returned regex, so they validate the regex, not just a substring.
-PRE_SAN_MAIN='https://github.com/diggsweden/forge-ci/.github/workflows/build-cli.yml@refs/heads/main'
+PRE_SAN_MAIN='https://github.com/examplescope/forge-ci/.github/workflows/build-cli.yml@refs/heads/main'
 # A non-selected development branch is not a trusted pre-release signer.
-PRE_SAN_OLD_MAIN='https://github.com/diggsweden/forge-ci/.github/workflows/build-cli.yml@refs/heads/other-main'
-REL_SAN='https://github.com/diggsweden/forge-ci/.github/workflows/release-binary.yml@refs/tags/release-request/v0.90.0'
+PRE_SAN_OLD_MAIN='https://github.com/examplescope/forge-ci/.github/workflows/build-cli.yml@refs/heads/other-main'
+REL_SAN='https://github.com/examplescope/forge-ci/.github/workflows/release-binary.yml@refs/tags/release-request/v0.90.0'
 # Another version's request, or a branch run, must not verify v0.90.0.
-REL_SAN_OTHER_VERSION='https://github.com/diggsweden/forge-ci/.github/workflows/release-binary.yml@refs/tags/release-request/v0.90.1'
-REL_SAN_DOTLESS='https://github.com/diggsweden/forge-ci/.github/workflows/release-binary.yml@refs/tags/release-request/v0x90x0'
-REL_SAN_BRANCH='https://github.com/diggsweden/forge-ci/.github/workflows/release-binary.yml@refs/heads/main'
+REL_SAN_OTHER_VERSION='https://github.com/examplescope/forge-ci/.github/workflows/release-binary.yml@refs/tags/release-request/v0.90.1'
+REL_SAN_DOTLESS='https://github.com/examplescope/forge-ci/.github/workflows/release-binary.yml@refs/tags/release-request/v0x90x0'
+REL_SAN_BRANCH='https://github.com/examplescope/forge-ci/.github/workflows/release-binary.yml@refs/heads/main'
 # A tag-signed build-cli SAN is not accepted by the current tagged-release
 # policy, which trusts release-binary.yml.
-REL_SAN_BUILD_CLI='https://github.com/diggsweden/forge-ci/.github/workflows/build-cli.yml@refs/tags/v0.90.0'
+REL_SAN_BUILD_CLI='https://github.com/examplescope/forge-ci/.github/workflows/build-cli.yml@refs/tags/v0.90.0'
 
 t_identity_pre_accepts_dev_branches() (
 	id="$(_forge_ci_cosign_identity v0.90.0-pre)"
@@ -333,7 +335,43 @@ t_fork_source_build_uses_the_fork() (
 	FORGE_CI_REPOSITORY=someone/forge-ci install_forge_ci_go_install 0123456789012345678901234567890123456789 "$tmp/install" >/dev/null 2>&1 || return 1
 	grep -Fq 'fetch -q --depth 1 https://github.com/someone/forge-ci.git 0123456789012345678901234567890123456789' "$tmp/git.log" &&
 		grep -Fxq 'install ./cmd/forge-ci' "$tmp/go.log" &&
-		! grep -Fq 'github.com/diggsweden/forge-ci' "$tmp/go.log"
+		! grep -Fq 'github.com/examplescope/forge-ci' "$tmp/go.log"
+)
+
+t_missing_repository_is_refused() (
+	local tmp out
+	tmp="$(mktemp -d)"
+	# shellcheck disable=SC2329 # must remain uncalled: the refusal comes first.
+	install_forge_ci_release() {
+		: >"$tmp/release-called"
+		return 0
+	}
+	# shellcheck disable=SC2329 # must remain uncalled: the refusal comes first.
+	curl() {
+		: >"$tmp/curl-called"
+		return 1
+	}
+	FORGE_CI_REPOSITORY=''
+	for ref in v0.90.0 ''; do
+		if out="$(FORGE_CI_INSTALL_DIR="$tmp/install" install_forge_ci "$ref" 2>&1)"; then
+			return 1
+		fi
+		[[ "$out" == *'FORGE_CI_REPOSITORY is not set'* ]] || return 1
+	done
+	! _forge_ci_cosign_identity v0.90.0 >/dev/null 2>&1 &&
+		[[ ! -e "$tmp/release-called" && ! -e "$tmp/curl-called" ]]
+)
+
+t_local_install_needs_no_repository() (
+	local tmp
+	tmp="$(mktemp -d)"
+	# shellcheck disable=SC2329 # invoked indirectly by install_forge_ci.
+	install_forge_ci_go_install() {
+		mkdir -p "$2"
+		printf '#!/bin/sh\nprintf "forge-ci test\\n"\n' >"$2/forge-ci"
+		chmod +x "$2/forge-ci"
+	}
+	FORGE_CI_REPOSITORY='' FORGE_CI_INSTALL_DIR="$tmp/install" install_forge_ci local
 )
 
 t_identity_override_wins() (
@@ -365,6 +403,8 @@ assert_exit "identities follow a fork's repository and branch" 0 t_identity_foll
 assert_exit "identity refuses unsafe repository or branch values" 0 t_identity_refuses_unsafe_repository
 assert_exit "fork refs build from the fork's source, not the upstream module" 0 t_fork_source_build_uses_the_fork
 assert_exit "FORGE_CI_COSIGN_IDENTITY override wins" 0 t_identity_override_wins
+assert_exit "no repository named → refuse before any download" 0 t_missing_repository_is_refused
+assert_exit "local install needs no repository" 0 t_local_install_needs_no_repository
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 

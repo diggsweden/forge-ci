@@ -41,7 +41,7 @@ func TestReusableWorkflowsDoNotPinNestedForgeCIAction(t *testing.T) {
 
 		if strings.Contains(text, ".github-shared/scripts/bootstrap/install-forge-ci.sh") {
 			for _, want := range []string{
-				"repository: ${{ vars.FORGE_CI_REPOSITORY || job.workflow_repository }}",
+				"repository: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}",
 				"ref: ${{ inputs['forge-ci-binary-ref'] }}",
 				"sparse-checkout: scripts/bootstrap",
 			} {
