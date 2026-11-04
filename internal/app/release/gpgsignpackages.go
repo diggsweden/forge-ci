@@ -14,7 +14,7 @@ import (
 	"strings"
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
-	domaingpg "github.com/diggsweden/forge-ci/internal/domain/gpg"
+	"github.com/diggsweden/forge-ci/internal/domain/keymaterial"
 	"github.com/diggsweden/forge-ci/internal/pathsafe"
 )
 
@@ -50,7 +50,7 @@ func GPGSignPackages(ctx context.Context, signer gpgPackageSigner, out io.Writer
 		return 0, err
 	}
 
-	keyData, err := domaingpg.DecodeKey(in.PrivateKey)
+	keyData, err := keymaterial.Key(in.PrivateKey)
 	if err != nil {
 		return 0, fmt.Errorf("gpg sign-packages: %w", err)
 	}

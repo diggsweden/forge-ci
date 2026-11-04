@@ -4,11 +4,15 @@
 package cosign
 
 import (
+	"encoding/pem"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
+	"github.com/diggsweden/forge-ci/internal/domain/keymaterial"
 	"github.com/diggsweden/forge-ci/internal/safeexec"
 )
 
@@ -194,6 +198,55 @@ func KeyEnvName(keyRef string) string {
 // envKeyPassword is the variable cosign reads for a signing key's
 // passphrase; always allowed alongside an env:// key.
 const envKeyPassword = "COSIGN_PASSWORD"
+
+// decodedKeyEnv unwraps standard base64 only for the explicitly selected
+// env:// PEM key. Cosign still owns PEM parsing/decryption and invalid-key
+// diagnostics. Other variables, file keys and KMS references are untouched.
+func decodedKeyEnv(environment []string, args []string) ([]string, error) {
+	name := ""
+
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "--key" {
+			name = KeyEnvName(args[i+1])
+		}
+	}
+
+	if name == "" {
+		return environment, nil
+	}
+
+	if environment == nil {
+		environment = os.Environ()
+	}
+
+	result := slices.Clone(environment)
+	for index, entry := range result {
+		key, value, found := strings.Cut(entry, "=")
+		if !found || key != name {
+			continue
+		}
+
+		decoded, err := keymaterial.Key(value)
+		if err != nil {
+			if errors.Is(err, keymaterial.ErrSizeLimit) {
+				return nil, fmt.Errorf("cosign environment key %s: %w", name, err)
+			}
+
+			continue
+		}
+
+		block, _ := pem.Decode(decoded)
+		if block != nil {
+			result[index] = name + "=" + string(decoded)
+
+			clear(block.Bytes)
+		}
+
+		clear(decoded)
+	}
+
+	return result, nil
+}
 
 // NewIsolated returns an Adapter whose subprocess environment is restricted to
 // runtime settings and explicitly allowed variables. See IsolatedEnv.

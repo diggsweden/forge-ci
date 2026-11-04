@@ -15,6 +15,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/keymaterial"
 )
 
 // SSHPrivateKey is a parsed signing key in the forms ssh and git read.
@@ -25,12 +26,18 @@ type SSHPrivateKey struct {
 	AuthorizedKey []byte
 }
 
-// ParseSSHPrivateKey parses an unencrypted private key as pasted into a forge
-// secret and re-encodes it canonically. encoding/pem tolerates the CRLF line
+// ParseSSHPrivateKey parses an unencrypted private key, armored or standard
+// base64-encoded as a forge secret, and re-encodes it canonically. encoding/pem tolerates the CRLF line
 // ends a paste can add, which OpenSSH itself refuses as "error in
 // libcrypto". Errors never quote the key.
 func ParseSSHPrivateKey(text string) (SSHPrivateKey, error) {
-	raw, err := ssh.ParseRawPrivateKey([]byte(text))
+	body, err := keymaterial.Key(text)
+	if err != nil {
+		return SSHPrivateKey{}, fmt.Errorf("SSH private key is unreadable (use whole armored or standard base64 key material): %w: %w", err, errs.ErrValidation)
+	}
+	defer clear(body)
+
+	raw, err := ssh.ParseRawPrivateKey(body)
 	if err != nil {
 		if _, ok := errors.AsType[*ssh.PassphraseMissingError](err); ok {
 			return SSHPrivateKey{}, fmt.Errorf("SSH private key is passphrase-protected; signing needs an unencrypted key: %w", errs.ErrValidation)

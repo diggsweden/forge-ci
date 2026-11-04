@@ -6,6 +6,7 @@ package git_test
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/pem"
 	"errors"
 	"strings"
@@ -55,6 +56,8 @@ func TestParseSSHPrivateKey_ReadsAPastedKey(t *testing.T) {
 		"clean":            clean,
 		"no final newline": strings.TrimSuffix(clean, "\n"),
 		"CRLF":             strings.ReplaceAll(clean, "\n", "\r\n"),
+		"base64":           base64.StdEncoding.EncodeToString([]byte(clean)),
+		"wrapped base64":   "\t" + base64.StdEncoding.EncodeToString([]byte(clean)) + "\r\n",
 	} {
 		key, err := domaingit.ParseSSHPrivateKey(pasted)
 		if err != nil {

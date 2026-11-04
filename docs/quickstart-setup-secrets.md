@@ -6,6 +6,15 @@ secret names to them. Configure only the secrets your chosen delivery layer
 and release features require. See [Secrets and permissions](reference.md) and
 the [Forgejo secret contract](forgejo.md#secrets-and-tokens).
 
+SSH and OpenPGP secret inputs accept the complete armored key or one standard
+padded Base64 encoding of those same bytes. Cosign's explicitly selected
+`env://` key secret accepts the same Base64 envelope around its PEM material;
+Cosign still parses and decrypts the key. File and KMS references keep their own
+Cosign interface. ASCII spaces, tabs and CR/LF wrapping are tolerated, and decoded
+signing material is bounded to 16 MiB. Base64 is transport encoding, not encryption.
+Keep public-key trust inputs and their pinned digests in the exact format their
+workflow declares.
+
 This guide creates keys locally. It does not grant repository permissions,
 configure a runner, publish a release, or create API/registry tokens.
 

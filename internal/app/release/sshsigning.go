@@ -23,7 +23,7 @@ type SSHKeyWriter func(key []byte) (path string, err error)
 // SSHSigningInput drives `forge-ci release ssh setup`. It is the SSH sibling
 // of GPGImportInput: same git-signing knobs, a different on-disk key shape.
 type SSHSigningInput struct {
-	PrivateKey      string // OpenSSH private key material (required)
+	PrivateKey      string // armored or standard base64 OpenSSH private key (required)
 	AuthorName      string // optional; written to user.name
 	AuthorEmail     string // optional; written to user.email
 	GitCommitSign   bool   // also write commit.gpgsign=true (signs `git commit` without -S)

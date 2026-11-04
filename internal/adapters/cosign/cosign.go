@@ -627,6 +627,11 @@ func (a *Adapter) runCaptured(ctx context.Context, out io.Writer, args ...string
 		environment = verificationEnv(environment, args)
 	}
 
+	environment, err = decodedKeyEnv(environment, args)
+	if err != nil {
+		return nil, err
+	}
+
 	if environment != nil {
 		cmd.Env = environment
 	}

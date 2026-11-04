@@ -5,9 +5,11 @@ package gpg_test
 
 import (
 	"encoding/base64"
+	"strings"
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/domain/gpg"
+	"github.com/diggsweden/forge-ci/internal/domain/keymaterial"
 )
 
 func FuzzDecodeKey(f *testing.F) {
@@ -23,12 +25,12 @@ func FuzzDecodeKey(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, input string) {
-		out, err := gpg.DecodeKey(input)
+		out, err := keymaterial.Key(input)
 		if err != nil {
 			return
 		}
 
-		if gpg.IsArmored(input) && string(out) != input {
+		if strings.HasPrefix(strings.TrimLeft(input, " \t\r\n"), "-----") && string(out) != input {
 			t.Fatalf("armored input modified: %q -> %q", input, out)
 		}
 	})

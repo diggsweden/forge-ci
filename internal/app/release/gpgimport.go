@@ -13,6 +13,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/ci"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	domaingpg "github.com/diggsweden/forge-ci/internal/domain/gpg"
+	"github.com/diggsweden/forge-ci/internal/domain/keymaterial"
 )
 
 // gpgImporter is the slice of adapter/gpg.Adapter that GPGImport uses.
@@ -120,7 +121,7 @@ func validateGPGImportInputs(gpg gpgImporter, readMetadata ReadMetadataFunc, in 
 // read in-process from the same key bytes we just imported (avoids a
 // second `gpg --list-secret-keys` + colons-parse).
 func importKeyAndReadMetadata(ctx context.Context, gpg gpgImporter, readMetadata ReadMetadataFunc, privateKey string) (domaingpg.Metadata, error) {
-	keyData, err := domaingpg.DecodeKey(privateKey)
+	keyData, err := keymaterial.Key(privateKey)
 	if err != nil {
 		return domaingpg.Metadata{}, fmt.Errorf("gpg-import: %w", err)
 	}

@@ -4,11 +4,8 @@
 package gpg
 
 import (
-	"encoding/base64"
-	"fmt"
+	"encoding/hex"
 	"strings"
-
-	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
 // AgentConfig is the gpg-agent.conf content that import-gpg-key writes
@@ -28,65 +25,10 @@ max-cache-ttl 31536000
 allow-preset-passphrase
 `
 
-// IsArmored reports whether the input is an ASCII-armored PGP key
-// (the "-----BEGIN PGP …-----" header). Same heuristic the upstream
-// action uses: anything else is treated as base64.
-//
-// All leading whitespace is trimmed, not just newlines. A secret authored on
-// Windows arrives as "\r\n-----BEGIN…", and one pasted into a YAML block
-// scalar arrives indented; with a newline-only trim both were classified as
-// base64 and then failed to decode, reporting "illegal base64 data" about a
-// key that was armored all along. Widening the trim cannot create a false
-// positive: "-" is not in the standard base64 alphabet, so a real base64 key
-// can never start with the armor header.
-func IsArmored(key string) bool {
-	trimmed := strings.TrimLeft(key, " \t\r\n")
-
-	return strings.HasPrefix(trimmed, "-----")
-}
-
-// DecodeKey returns the raw key bytes from either an armored input
-// (passed through unchanged) or a base64-encoded armored input
-// (decoded once).
-func DecodeKey(key string) ([]byte, error) {
-	if IsArmored(key) {
-		return []byte(key), nil
-	}
-	// Tolerate whitespace in the base64 (some workflow callers wrap their
-	// secrets across multiple lines).
-	cleaned := strings.Map(func(r rune) rune {
-		switch r {
-		case ' ', '\t', '\n', '\r':
-			return -1
-		}
-
-		return r
-	}, key)
-
-	out, err := base64.StdEncoding.DecodeString(cleaned)
-	if err != nil {
-		return nil, fmt.Errorf("decode base64 key: %w: %w", err, errs.ErrMalformedInput)
-	}
-
-	return out, nil
-}
-
 // HexEncodePassphrase returns the uppercase-hex byte representation of
 // the input. UTF-8-faithful: matches `od -An -tx1 | tr -d ' \n'
 // | tr 'a-f' 'A-F'` exactly. Used as the PRESET_PASSPHRASE argument to
 // gpg-connect-agent (sent via stdin so the value never appears in `ps`).
 func HexEncodePassphrase(passphrase string) string {
-	if passphrase == "" {
-		return ""
-	}
-
-	const hex = "0123456789ABCDEF"
-
-	out := make([]byte, 0, len(passphrase)*2)
-	for i := range len(passphrase) {
-		c := passphrase[i]
-		out = append(out, hex[c>>4], hex[c&0x0F])
-	}
-
-	return string(out)
+	return strings.ToUpper(hex.EncodeToString([]byte(passphrase)))
 }
