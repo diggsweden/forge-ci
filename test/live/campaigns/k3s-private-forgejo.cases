@@ -4,9 +4,13 @@
 # The Forgejo lane of a k3s private campaign: each demo's pull request, then
 # its release, selecting kaniko consistently for both. Needs a campaign prepared with
 # forgejo=<this file> and job-image= for go, java, javascript-typescript and
-# rust, and FORGE_CI_LIVE_CONSUMER_VISIBILITY=private from the caller.
+# rust, and from the caller FORGE_CI_LIVE_CONSUMER_VISIBILITY=private and
+# FORGE_CI_LIVE_FORGEJO_IMAGE_BUILDER=kaniko.
 #
 #   just campaign-lane <dir> forgejo test/live/campaigns/k3s-private-forgejo.cases
+
+setting visibility=private
+setting image-builder=kaniko
 
 consumer hello-go-cli pull-request CI_JOB_IMAGE=@JOB_IMAGE_GO CI_IMAGE_BUILDER=kaniko CI_IMAGE_BUILDER_JOB_IMAGE=@KANIKO_JOB_IMAGE
 consumer hello-go-cli release CI_JOB_IMAGE=@JOB_IMAGE_GO RELEASE_PLATFORMS=linux/amd64 CI_IMAGE_BUILDER=kaniko CI_IMAGE_BUILDER_JOB_IMAGE=@KANIKO_JOB_IMAGE

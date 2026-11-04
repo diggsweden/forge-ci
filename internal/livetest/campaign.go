@@ -154,8 +154,9 @@ func ReadCampaignEnv(path string) (map[string]string, error) {
 
 // PlanCampaignLane plans the lane of provider over the cases file: every case
 // is parsed before any runs, so a typo costs no run. A campaign prepared for
-// another commit than head is refused.
-func PlanCampaignLane(dir, provider, casesPath, head string) (CampaignPlan, error) {
+// another commit than head is refused. Declared settings must match the caller's
+// effective run facts, including per-case overrides; they never choose settings.
+func PlanCampaignLane(dir, provider, casesPath, head string, run CampaignRun) (CampaignPlan, error) {
 	if !filepath.IsAbs(dir) {
 		return CampaignPlan{}, fmt.Errorf("the campaign directory must be absolute, got %q: %w", dir, errs.ErrValidation)
 	}
@@ -174,6 +175,15 @@ func PlanCampaignLane(dir, provider, casesPath, head string) (CampaignPlan, erro
 			env[campaignCommitKey], head, errs.ErrValidation)
 	}
 
+	file, err := readCampaignCases(casesPath)
+	if err != nil {
+		return CampaignPlan{}, err
+	}
+
+	if err := file.checkSettings(run.Settings); err != nil {
+		return CampaignPlan{}, fmt.Errorf("%s: %w", casesPath, err)
+	}
+
 	plan := CampaignPlan{Unset: slices.Clone(campaignCaseNamed), Env: []string{"FORGE_CI_LIVE_PROVIDER=" + provider}}
 
 	for _, key := range campaignExported {
@@ -190,27 +200,22 @@ func PlanCampaignLane(dir, provider, casesPath, head string) (CampaignPlan, erro
 		}
 	}
 
-	err = eachLine(casesPath, func(number int, line string) error {
-		text := strings.TrimSpace(line)
-		if text == "" || strings.HasPrefix(text, "#") {
-			return nil
-		}
-
-		args, caseErr := campaignCaseArgs(dir, provider, env, strings.Fields(text))
+	for _, line := range file.cases {
+		args, caseErr := campaignCaseArgs(dir, provider, env, line.words)
 		if caseErr != nil {
-			return fmt.Errorf("%s:%d: %s: %w", casesPath, number, text, caseErr)
+			return CampaignPlan{}, fmt.Errorf("%s:%d: %s: %w", casesPath, line.number, line.text, caseErr)
 		}
 
-		plan.Cases = append(plan.Cases, CampaignCase{Text: text, Args: args})
+		facts, caseErr := run.caseSettings(args)
+		if caseErr == nil {
+			caseErr = file.checkSettings(facts)
+		}
 
-		return nil
-	})
-	if err != nil {
-		return CampaignPlan{}, err
-	}
+		if caseErr != nil {
+			return CampaignPlan{}, fmt.Errorf("%s:%d: case settings: %w", casesPath, line.number, caseErr)
+		}
 
-	if len(plan.Cases) == 0 {
-		return CampaignPlan{}, fmt.Errorf("%s names no case: %w", casesPath, errs.ErrValidation)
+		plan.Cases = append(plan.Cases, CampaignCase{Text: line.text, Args: args})
 	}
 
 	return plan, nil
@@ -435,15 +440,15 @@ func CampaignRuntimeTargets(root string, lanes, flavors []string) ([]string, err
 			return nil, fmt.Errorf("want <forgejo|gitlab>=<cases file>, got %q: %w", lane, errs.ErrValidation)
 		}
 
-		err = eachLine(cases, func(number int, line string) error {
-			if caseErr := campaignCaseTargets(root, provider, strings.Fields(line), prepared, targets); caseErr != nil {
-				return fmt.Errorf("%s:%d: %w", cases, number, caseErr)
-			}
-
-			return nil
-		})
+		file, err := readCampaignCases(cases)
 		if err != nil {
 			return nil, err
+		}
+
+		for _, line := range file.cases {
+			if caseErr := campaignCaseTargets(root, provider, line.words, prepared, targets); caseErr != nil {
+				return nil, fmt.Errorf("%s:%d: %w", cases, line.number, caseErr)
+			}
 		}
 	}
 

@@ -19,6 +19,9 @@
 # runtime image (build-archive=). Android's SDK/runtime is selected separately
 # through the optional k3s-private-android-gitlab.cases file.
 
+setting visibility=private
+setting image-builder=kaniko
+
 scenario TestGitLabRelease_MinimalSignedArtifacts
 
 consumer hello-go-cli pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_GO lint-archive=@LINT_IMAGE_ARCHIVE_GO

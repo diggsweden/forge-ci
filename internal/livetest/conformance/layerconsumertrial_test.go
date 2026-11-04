@@ -89,6 +89,11 @@ func runForgejoConsumerTrial(t *testing.T, root string, private bool) {
 		t.Fatal(err)
 	}
 
+	trialBuilder, err := livetest.ForgejoConsumerImageBuilder(settings.Variables, os.Getenv(livetest.ForgejoImageBuilderEnv))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	target := livetest.Accept(t, provider.ForgeForgejo)
 	if !livetest.Requires(t, provider.ForgeForgejo, livetest.NeedsInRunner) {
 		t.Skip("no Forgejo runner in this environment, so the consumer's workflow cannot run")
@@ -199,20 +204,10 @@ func runForgejoConsumerTrial(t *testing.T, root string, private bool) {
 	if os.Getenv("FORGE_CI_LIVE_NPM_APPLICATION_IMAGE") != "" {
 		variables["NPM_APPLICATION_REGISTRY"] = strings.TrimRight(target.BaseURL(), "/") + "/api/packages/" + target.Owner + "/npm/"
 	}
-	// The trial's CI_IMAGE_BUILDER is its builder selection; the run-wide
-	// Forgejo setting may not say otherwise.
-	trialBuilder := settings.Variables["CI_IMAGE_BUILDER"]
-	if trialBuilder == "" {
-		trialBuilder = livetest.ImageBuilderBuildah
-	}
-
-	if selected := os.Getenv(livetest.ForgejoImageBuilderEnv); selected != "" && selected != trialBuilder {
-		t.Fatalf("%s=%s, but the trial's CI_IMAGE_BUILDER selects %s; give the builder once", livetest.ForgejoImageBuilderEnv, selected, trialBuilder)
-	}
 
 	// Buildah's image builds go to the contract's runner that permits user
 	// namespaces; kaniko's stay on the ordinary runner, which may deny them.
-	if privileged := livetest.PrivilegedRunnerLabel(t, target); privileged != "" && settings.Variables["CI_IMAGE_BUILDER"] != "kaniko" {
+	if privileged := livetest.PrivilegedRunnerLabel(t, target); privileged != "" && trialBuilder != livetest.ImageBuilderKaniko {
 		variables[containerRunnerVariable] = runnerLabelsJSON(t, privileged)
 	}
 

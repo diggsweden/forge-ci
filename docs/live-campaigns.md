@@ -81,13 +81,33 @@ set.
 
 ```bash
 export FORGE_CI_LIVE_CONSUMER_VISIBILITY=private
+export FORGE_CI_LIVE_FORGEJO_IMAGE_BUILDER=kaniko
 just campaign-lane ~/campaigns/k3s forgejo test/live/campaigns/k3s-private-forgejo.cases &
 FORGE_CI_LIVE_GITLAB_IMAGE_BUILDER=kaniko \
   just campaign-lane ~/campaigns/k3s gitlab test/live/campaigns/k3s-private-gitlab.cases &
 wait
 ```
 
-A cases file holds one case a line: `consumer <demo> <pull-request|release>
+A cases file can declare expected run settings before its first case:
+
+```text
+setting visibility=private
+setting image-builder=kaniko
+```
+
+The lane checks these declarations against the caller's effective settings before
+running any case. Declarations do not override the environment. Missing visibility
+means `both`, and an unset provider-specific image-builder selector means `buildah`,
+as in the scenarios. Each Forgejo consumer case also resolves its own
+`CI_IMAGE_BUILDER` (default `buildah`); it must match a declared builder and any
+explicit Forgejo run selector. A conflicting later case refuses the entire plan,
+before earlier cases execute or the conflicting trial creates repositories.
+Unknown declarations, mismatches, duplicate declarations and
+settings after a case are refused. Preparation validates the declaration syntax
+before building images. The checked-in private k3s lanes require private visibility
+and Kaniko; set the corresponding Forgejo or GitLab image-builder selector.
+
+A cases file then holds one case a line: `consumer <demo> <pull-request|release>
 [key=value ...]` or `scenario <TestName>`. A value `@NAME` is campaign.env's
 `NAME`; a GitLab consumer names its archives with `job-archive=` (and for a
 release `build-archive=` and `signer-archive=`), for example

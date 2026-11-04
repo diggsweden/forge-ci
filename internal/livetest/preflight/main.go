@@ -179,7 +179,12 @@ func campaign(mode string, args []string) error {
 			return fmt.Errorf("read HEAD: %w", err)
 		}
 
-		plan, err := livetest.PlanCampaignLane(args[0], args[1], args[2], strings.TrimSpace(string(head)))
+		settings, err := livetest.CampaignRunSettings(args[1], os.Getenv)
+		if err != nil {
+			return err
+		}
+
+		plan, err := livetest.PlanCampaignLane(args[0], args[1], args[2], strings.TrimSpace(string(head)), settings)
 		if err != nil {
 			return err
 		}

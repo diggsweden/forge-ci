@@ -4,8 +4,10 @@
 package livetest
 
 import (
+	"fmt"
 	"os"
 
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
 )
 
@@ -55,16 +57,41 @@ func SelectedImageBuilder(tb TB, forge provider.ForgeAPI) string {
 		return ""
 	}
 
-	switch value := os.Getenv(env); value {
-	case "", ImageBuilderBuildah:
-		return ImageBuilderBuildah
-	case ImageBuilderKaniko:
-		return ImageBuilderKaniko
-	default:
-		tb.Fatalf("livetest: %s must be %s or %s, got %q", env, ImageBuilderBuildah, ImageBuilderKaniko, value)
-
-		return ""
+	value := os.Getenv(env)
+	if selected, valid := imageBuilderValue(value); valid {
+		return selected
 	}
+
+	tb.Fatalf("livetest: %s must be %s or %s, got %q", env, ImageBuilderBuildah, ImageBuilderKaniko, value)
+
+	return ""
+}
+
+func imageBuilderValue(value string) (string, bool) {
+	switch value {
+	case "", ImageBuilderBuildah:
+		return ImageBuilderBuildah, true
+	case ImageBuilderKaniko:
+		return ImageBuilderKaniko, true
+	default:
+		return "", false
+	}
+}
+
+// ForgejoConsumerImageBuilder resolves the consumer recipe's own builder,
+// refusing a conflicting explicit run selector before any resources are created.
+// An unset selector leaves consumer cases free to select either valid builder.
+func ForgejoConsumerImageBuilder(variables map[string]string, selector string) (string, error) {
+	builder, valid := imageBuilderValue(variables["CI_IMAGE_BUILDER"])
+	if !valid {
+		return "", fmt.Errorf("the trial's CI_IMAGE_BUILDER must be buildah or kaniko: %w", errs.ErrValidation)
+	}
+
+	if selector != "" && selector != builder {
+		return "", fmt.Errorf("%s conflicts with the trial's CI_IMAGE_BUILDER; give the builder once: %w", ForgejoImageBuilderEnv, errs.ErrValidation)
+	}
+
+	return builder, nil
 }
 
 // ImageBuilderEnv is the setting that selects the forge's image builder, or ""
