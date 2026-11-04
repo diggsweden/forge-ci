@@ -37,6 +37,14 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 	if phaseErr != nil {
 		t.Fatal(phaseErr)
 	}
+	flavor, err := sourceImageFlavor(os.Getenv("FORGE_CI_LIVE_IMAGE_FLAVOR"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	batchRetain, err := sourceImageBatchRetention(phase, os.Getenv("FORGE_CI_LIVE_IMAGE_BATCH_RETAIN_ACK"))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if os.Getenv(GitHubContextEnv) == "" {
 		t.Skip("hosted SDK context required")
@@ -80,12 +88,12 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 	}
 
 	configHash, err := image.ConfigName()
-	if err != nil || configHash.Hex != configID || config.OS != "linux" || config.Architecture != "amd64" || config.Config.Labels["org.opencontainers.image.revision"] != source || config.Config.Labels["org.nanolinter.flavor"] != "rust" {
-		t.Fatal("archive image/source/native Rust identity mismatch")
+	if err != nil || !sourceImageMatches(config, configHash, source, configID, flavor) {
+		t.Fatal("archive image/source/native flavor identity mismatch")
 	}
 
-	packageName := repo + "/nanolinter-ci-rust-" + source[:12]
-	if phase != "resume" {
+	packageName := repo + "/nanolinter-ci-" + flavor + "-" + source[:12]
+	if phase != "resume" && phase != "cleanup" {
 		if _, err := trial.ReadContainerPackageIdentity(t.Context(), packageName, repoID); !errors.Is(err, os.ErrNotExist) {
 			t.Fatal("publication destination already exists or is not safely readable")
 		}
@@ -123,9 +131,10 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 	var (
 		writeErr error
 		identity GitHubPackageIdentity
+		versions []sourceImageVersion
 	)
 
-	if phase == "resume" {
+	if phase == "resume" || phase == "cleanup" {
 		path := os.Getenv("FORGE_CI_LIVE_IMAGE_RESUME_RECEIPT")
 
 		ackID, err := strconv.ParseInt(os.Getenv("FORGE_CI_LIVE_IMAGE_ACK_PACKAGE_ID"), 10, 64)
@@ -145,24 +154,19 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 			t.Fatal("resume receipt unavailable or oversized")
 		}
 
-		var receipt struct {
-			Package   GitHubPackageIdentity `json:"package"`
-			Digest    string                `json:"expected_manifest_digest"`
-			Reference string                `json:"reference"`
-			Config    string                `json:"original_image_config"`
-			Source    string                `json:"source"`
-		}
+		var receipt sourceImageReceipt
 		if err := json.Unmarshal(body, &receipt); err != nil {
 			t.Fatal("invalid retained receipt")
 		}
 
-		if receipt.Package.Organization != trial.org || receipt.Package.Name != packageName || receipt.Package.ID != ackID || receipt.Package.RepositoryID != repoID || receipt.Digest != expected.String() || receipt.Reference != digestReference.String() || receipt.Config != configHash.String() || receipt.Source != source {
+		acknowledged := sourceImageReceipt{Package: GitHubPackageIdentity{Organization: trial.org, Name: packageName, ID: ackID, RepositoryID: repoID}, Digest: expected.String(), Reference: digestReference.String(), Config: configHash.String(), Source: source}
+		if !sourceImageReceiptMatches(receipt, acknowledged) {
 			t.Fatal("retained receipt does not match exact source/package/digest acknowledgement")
 		}
 
-		identity, err = trial.ReadContainerPackageIdentity(t.Context(), packageName, repoID)
-		if err != nil || identity != receipt.Package {
-			t.Fatal("retained package identity changed; refusing adoption")
+		identity, versions = receipt.Package, receipt.Versions
+		if err := trial.checkSourceImageVersions(t.Context(), identity, versions); err != nil {
+			t.Fatal(err)
 		}
 
 		retained = true
@@ -189,7 +193,7 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 
 	t.Cleanup(func() {
 		if retained {
-			t.Logf("explicit retained package pending public confirmation/cleanup: package=%s id=%d repository=%d", identity.Name, identity.ID, identity.RepositoryID)
+			t.Logf("explicit retained package pending caller confirmation/cleanup: package=%s id=%d repository=%d", identity.Name, identity.ID, identity.RepositoryID)
 
 			return
 		}
@@ -197,7 +201,7 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 2*time.Minute)
 		defer cancel()
 
-		if err := trial.DeleteContainerPackage(ctx, identity); err != nil {
+		if err := trial.deleteSourceImagePackage(ctx, identity, versions); err != nil {
 			t.Error(err)
 		} else {
 			t.Logf("source image cleanup confirmed: package=%s id=%d repository=%d", identity.Name, identity.ID, identity.RepositoryID)
@@ -206,6 +210,12 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 
 	if writeErr != nil {
 		t.Fatal("source image upload failed; exact owned package scheduled for cleanup")
+	}
+	if phase == "cleanup" {
+		// Receipt and immutable package identity were checked above. Do not
+		// republish or launch another consumer just to release a batch fixture.
+		retained = false
+		return
 	}
 
 	pkg, _, metadataErr := trial.api.Organizations.GetPackage(t.Context(), trial.org, "container", packageName)
@@ -244,29 +254,17 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 	}
 
 	servedConfig, err := served.ConfigFile()
-	if err != nil || servedConfig.Architecture != "amd64" || servedConfig.Config.Labels["org.opencontainers.image.revision"] != source {
+	if err != nil || servedConfig.OS != "linux" || servedConfig.Architecture != "amd64" || servedConfig.Config.Labels["org.opencontainers.image.revision"] != source || servedConfig.Config.Labels["org.nanolinter.flavor"] != flavor {
 		t.Fatal("served source/platform mismatch")
 	}
 
-	originalLayers, err := image.Layers()
-	if err != nil {
-		t.Fatal(err)
+	if !sourceImageLayersMatch(image, served) {
+		t.Fatal("mirror layer bytes changed")
 	}
-
-	servedLayers, err := served.Layers()
-	if err != nil || len(originalLayers) != len(servedLayers) {
-		t.Fatal("mirror changed image layers")
-	}
-
-	for index, layer := range originalLayers {
-		a, err := layer.Digest()
+	if phase != "resume" {
+		versions, err = trial.readSourceImageVersions(t.Context(), identity, expected.String())
 		if err != nil {
 			t.Fatal(err)
-		}
-
-		b, err := servedLayers[index].Digest()
-		if err != nil || a != b {
-			t.Fatal("mirror layer bytes changed")
 		}
 	}
 
@@ -296,7 +294,7 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 			}
 		}
 
-		receipt := mustSourceImageJSON(t, map[string]any{"package": identity, "visibility": visibility, "expected_manifest_digest": expected.String(), "authenticated_served_digest": servedDigest, "reference": digestReference.String(), "original_image_config": configHash.String(), "source": source, "version": servedConfig.Config.Labels["org.opencontainers.image.version"], "platform": "linux/amd64", "layer_bytes_preserved": true, "settings_url": settingsURL, "api_html_url": htmlURL, "status": "pending-public-confirmation; exact resource retained; cleanup pending"})
+		receipt := mustSourceImageJSON(t, map[string]any{"package": identity, "versions": versions, "visibility": visibility, "expected_manifest_digest": expected.String(), "authenticated_served_digest": servedDigest, "reference": digestReference.String(), "original_image_config": configHash.String(), "source": source, "version": servedConfig.Config.Labels["org.opencontainers.image.version"], "platform": "linux/amd64", "layer_bytes_preserved": true, "settings_url": settingsURL, "api_html_url": htmlURL, "status": "pending-public-confirmation; exact resource retained; cleanup pending"})
 		if err := writeSnapshotEvidence(snapshotEvidenceRoot(), "source-image-retained.json", receipt); err != nil {
 			t.Fatal(err)
 		}
@@ -312,7 +310,7 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 	}
 
 	publicConfig, err := publicImage.ConfigFile()
-	if err != nil || publicConfig.Architecture != "amd64" || publicConfig.Config.Labels["org.opencontainers.image.revision"] != source {
+	if err != nil || publicConfig.OS != "linux" || publicConfig.Architecture != "amd64" || publicConfig.Config.Labels["org.opencontainers.image.revision"] != source || publicConfig.Config.Labels["org.nanolinter.flavor"] != flavor {
 		t.Fatal("anonymous image config/source proof failed")
 	}
 
@@ -321,14 +319,19 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 		t.Fatal("package metadata does not assert public visibility")
 	}
 
-	retained = false
+	retained = batchRetain
 
-	proof := mustSourceImageJSON(t, map[string]any{"package": identity, "served_manifest_digest": expected.String(), "reference": digestReference.String(), "original_image_config": configHash.String(), "source": source, "version": servedConfig.Config.Labels["org.opencontainers.image.version"], "platform": "linux/amd64", "public_anonymous_pull": true, "layer_bytes_preserved": true})
+	proof := mustSourceImageJSON(t, map[string]any{"package": identity, "versions": versions, "served_manifest_digest": expected.String(), "reference": digestReference.String(), "original_image_config": configHash.String(), "source": source, "version": servedConfig.Config.Labels["org.opencontainers.image.version"], "platform": "linux/amd64", "public_anonymous_pull": true, "layer_bytes_preserved": true, "batch_retained": retained})
 	if err := writeSnapshotEvidence(snapshotEvidenceRoot(), "source-image-publication.json", proof); err != nil {
 		t.Fatal(err)
 	}
 
 	t.Logf("public source image verified: id=%d repo=%d ref=%s", identity.ID, repoID, digestReference)
+	if retained {
+		// The caller owns both consumer trials and exact-package cleanup after
+		// their completion. Qualification itself launches no consumer workflow.
+		return
+	}
 
 	output, consumerErr := trial.output(reporoot.Path(t), "just", "--justfile", reporoot.Path(t)+"/justfile", "test-live-github-consumer", strconv.FormatInt(id, 10), os.Getenv("FORGE_CI_LIVE_CONSUMER"), "pull-request", "fixtures=tests/live/github", "RELEASE_PLATFORMS=linux/amd64", "nanolinter-image="+digestReference.String())
 	if err := writeSnapshotEvidence(snapshotEvidenceRoot(), "source-image-consumer-pr.log", []byte(strings.ReplaceAll(output, trial.token, "[REDACTED]"))); err != nil {
