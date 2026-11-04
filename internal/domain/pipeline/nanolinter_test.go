@@ -4,46 +4,55 @@
 package pipeline_test
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
 	"github.com/diggsweden/forge-ci/internal/domain/projecttype"
 )
 
-func TestNanolinterImage_DerivesFlavourFromProjectType(t *testing.T) {
+func TestNanolinterFlavour_FollowsProjectType(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
 		projectType projecttype.Type
 		want        string
 	}{
-		{projecttype.Go, "ghcr.io/itiquette/nanolinter:go"},
-		{projecttype.Maven, "ghcr.io/itiquette/nanolinter:java"},
-		{projecttype.Gradle, "ghcr.io/itiquette/nanolinter:kotlin"},
-		{projecttype.GradleAndroid, "ghcr.io/itiquette/nanolinter:kotlin"},
-		{projecttype.NPM, "ghcr.io/itiquette/nanolinter:javascript-typescript"},
-		{projecttype.Cargo, "ghcr.io/itiquette/nanolinter:rust"},
-		{projecttype.XcodeIOS, "ghcr.io/itiquette/nanolinter:swift"},
-		{projecttype.Python, "ghcr.io/itiquette/nanolinter:core"},
-		{projecttype.Meta, "ghcr.io/itiquette/nanolinter:core"},
-		{projecttype.Unknown, "ghcr.io/itiquette/nanolinter:core"},
-		{"", "ghcr.io/itiquette/nanolinter:core"},
+		{projecttype.Go, "go"},
+		{projecttype.Maven, "java"},
+		{projecttype.Gradle, "kotlin"},
+		{projecttype.GradleAndroid, "kotlin"},
+		{projecttype.NPM, "javascript-typescript"},
+		{projecttype.Cargo, "rust"},
+		{projecttype.XcodeIOS, "swift"},
+		{projecttype.Python, "core"},
+		{projecttype.Meta, "core"},
+		{projecttype.Unknown, "core"},
+		{"", "core"},
 	} {
-		if got := pipeline.NanolinterImage("", tc.projectType); got != tc.want {
-			t.Errorf("NanolinterImage(%q) = %q, want %q", tc.projectType, got, tc.want)
+		if got := pipeline.NanolinterFlavour(tc.projectType); got != tc.want {
+			t.Errorf("NanolinterFlavour(%q) = %q, want %q", tc.projectType, got, tc.want)
 		}
 	}
 }
 
-func TestNanolinterImage_OverrideWins(t *testing.T) {
+// The lint job receives the checkout and the run context, so it runs only in
+// an image pinned by digest: a tag, the flavour's own included, is refused
+// with the flavour as the hint.
+func TestNanolinterImage_AdmitsOnlyADigestPin(t *testing.T) {
 	t.Parallel()
 
 	pinned := "mirror.example/nanolinter:java@sha256:" + "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	if got := pipeline.NanolinterImage(" "+pinned+"\n", projecttype.Go); got != pinned {
-		t.Errorf("override = %q, want %q", got, pinned)
+	if got, err := pipeline.NanolinterImage(" "+pinned+"\n", projecttype.Go); err != nil || got != pinned {
+		t.Errorf("pinned = %q, %v; want %q", got, err, pinned)
 	}
 
-	if got := pipeline.NanolinterImage("   ", projecttype.Cargo); got != "ghcr.io/itiquette/nanolinter:rust" {
-		t.Errorf("blank override = %q, want the derived rust flavour", got)
+	for _, refused := range []string{"", "   ", "ghcr.io/itiquette/nanolinter:rust", "ghcr.io/itiquette/nanolinter:rust@sha256:abc", "a b@sha256:" + strings.Repeat("0", 64)} {
+		_, err := pipeline.NanolinterImage(refused, projecttype.Cargo)
+		if !errors.Is(err, errs.ErrUsage) || !strings.Contains(err.Error(), "ghcr.io/itiquette/nanolinter:rust@sha256:<digest>") {
+			t.Errorf("NanolinterImage(%q) = %v, want a usage error naming the rust flavour", refused, err)
+		}
 	}
 }

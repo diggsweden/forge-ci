@@ -5,6 +5,7 @@ package pipeline_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/domain/config"
@@ -55,6 +56,7 @@ func TestPlanContracts_Golden(t *testing.T) {
 		BaseBranch:       "main",
 		ForgeCIBinaryRef: "v0.90.0",
 		Engine:           pipeline.LintEngineNanolinter,
+		NanolinterImage:  "ghcr.io/itiquette/nanolinter:go@sha256:" + strings.Repeat("0", 64),
 	})
 
 	for _, tc := range []struct {

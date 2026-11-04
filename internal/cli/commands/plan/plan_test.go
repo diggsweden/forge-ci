@@ -188,6 +188,7 @@ func TestPRCmd_EmitsPlanAndQualityStagePlan(t *testing.T) {
 	env := ghaenv.Setup(t)
 	env.Setenv("PROJECT_TYPE", "go")
 	env.Setenv("LINT_ENGINE", "nanolinter")
+	env.Setenv("NANOLINTER_IMAGE", prNanolinterImage)
 
 	cmd := plancmd.New()
 	if err := cmd.Run(context.Background(), []string{"plan", "pr"}); err != nil {
@@ -202,10 +203,13 @@ func TestPRCmd_EmitsPlanAndQualityStagePlan(t *testing.T) {
 		t.Errorf("quality-stage-plan-json = %s", got)
 	}
 
-	if got := env.Output("pr-plan-json"); !strings.Contains(got, `"nanolinter_image":"ghcr.io/itiquette/nanolinter:go"`) {
-		t.Errorf("pr-plan-json lacks the derived go flavour: %s", got)
+	if got := env.Output("pr-plan-json"); !strings.Contains(got, `"nanolinter_image":"`+prNanolinterImage+`"`) {
+		t.Errorf("pr-plan-json lacks the admitted image: %s", got)
 	}
 }
+
+// prNanolinterImage is a nanolinter image pinned by digest.
+var prNanolinterImage = "registry.example/nanolinter:go@sha256:" + strings.Repeat("b", 64)
 
 func TestPRCmd_DisabledEngineWarns(t *testing.T) {
 	// Serial: the workflow environment and process logger are test-owned.
@@ -234,18 +238,31 @@ func TestPRCmd_DisabledEngineWarns(t *testing.T) {
 	}
 }
 
-func TestPRCmd_NanolinterImageOverride(t *testing.T) {
-	env := ghaenv.Setup(t)
-	env.Setenv("PROJECT_TYPE", "maven")
-	env.Setenv("LINT_ENGINE", "nanolinter")
-	env.Setenv("NANOLINTER_IMAGE", "registry.example/nanolinter:java")
+// The plan job refuses a nanolinter engine without a digest-pinned image, so
+// no lint job runs a tag; another engine needs none.
+func TestPRCmd_RefusesAnUnpinnedNanolinterImage(t *testing.T) {
+	for _, image := range []string{"", "registry.example/nanolinter:java"} {
+		env := ghaenv.Setup(t)
+		env.Setenv("PROJECT_TYPE", "maven")
+		env.Setenv("LINT_ENGINE", "nanolinter")
+		env.Setenv("NANOLINTER_IMAGE", image)
 
-	if err := plancmd.New().Run(context.Background(), []string{"plan", "pr"}); err != nil {
-		t.Fatal(err)
+		err := plancmd.New().Run(context.Background(), []string{"plan", "pr"})
+		if err == nil || !strings.Contains(err.Error(), "ghcr.io/itiquette/nanolinter:java@sha256:<digest>") {
+			t.Errorf("NANOLINTER_IMAGE=%q: %v, want a refusal naming the java flavour", image, err)
+		}
+
+		if got := env.Output("pr-plan-json"); got != "" {
+			t.Errorf("NANOLINTER_IMAGE=%q emitted a plan: %s", image, got)
+		}
 	}
 
-	if got := env.Output("pr-plan-json"); !strings.Contains(got, `"nanolinter_image":"registry.example/nanolinter:java"`) {
-		t.Errorf("pr-plan-json ignores NANOLINTER_IMAGE: %s", got)
+	env := ghaenv.Setup(t)
+	env.Setenv("PROJECT_TYPE", "maven")
+	env.Setenv("LINT_ENGINE", "megalinter")
+
+	if err := plancmd.New().Run(context.Background(), []string{"plan", "pr"}); err != nil {
+		t.Fatalf("megalinter needs no nanolinter image: %v", err)
 	}
 }
 

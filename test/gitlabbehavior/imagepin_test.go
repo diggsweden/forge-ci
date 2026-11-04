@@ -21,9 +21,6 @@ var unpinnedImageInputs = map[string]string{
 	// A macOS runner image is a VM image the runner names, not an OCI
 	// reference; there is no digest to pin.
 	"publish-apple-appstore.yml macos-image": "a runner VM image name",
-	// The default is the core flavour's tag until Nanolinter publishes its
-	// images for digest pins; the description and docs ask for a digest.
-	"nanolinter.yml nanolinter-image": "defaults to the core tag",
 }
 
 // A job's container receives the checkout, the CI variables and the job

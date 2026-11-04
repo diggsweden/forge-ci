@@ -144,7 +144,7 @@ carries a description. The orchestrator inputs most callers set:
 | `project-type` | PR | `maven`, `npm`, `gradle`, `gradle-android`, `xcode-ios`, `cargo` or `go`; selects the nanolinter flavour. |
 | `lint-engine` | PR | `nanolinter` (default), `megalinter` or `none`. |
 | `required-lints` | PR | The mandated nanolinter floor, default `secrets,sast`. |
-| `nanolinter-image`, `megalinter-image` | PR | Override the derived nanolinter flavour; the MegaLinter image, required and digest-pinned. A direct call of `lint-nanolinter.yml` defaults to the `core` tag; pin your flavour by digest as the examples show. |
+| `nanolinter-image`, `megalinter-image` | PR | The lint engine's image, pinned by digest: `nanolinter-image` is required with `lint-engine: nanolinter` and `megalinter-image` with `megalinter`. Neither has a default; pin your flavour as the examples show. |
 | `branch` | release, snapshot | The branch to prepare and release from, or the snapshot branch. |
 | `release-policy` | release | `stable` (default) or `stable-prerelease`; the signed tag determines classification. Replaces `release-type`. |
 | `artifacts-config` | release, snapshot | Path to `artifacts.yml`, default `.forge-ci/artifacts.yml`. |

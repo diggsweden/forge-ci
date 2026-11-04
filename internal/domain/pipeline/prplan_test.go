@@ -4,6 +4,7 @@
 package pipeline_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
@@ -14,9 +15,10 @@ func TestNewPRPlan_BuildsQualityStagePlan(t *testing.T) {
 	t.Parallel()
 
 	plan := pipeline.NewPRPlan(pipeline.PRPlanInput{
-		ProjectType: projecttype.Go,
-		Engine:      pipeline.LintEngineNanolinter,
-		SwiftFormat: true,
+		ProjectType:     projecttype.Go,
+		Engine:          pipeline.LintEngineNanolinter,
+		NanolinterImage: "registry.example/nanolinter@sha256:" + strings.Repeat("a", 64),
+		SwiftFormat:     true,
 	})
 	if plan.Version != pipeline.PRPlanVersion || plan.Stages.Quality.Stage != "pr-quality" {
 		t.Errorf("plan = %+v", plan)
@@ -26,8 +28,8 @@ func TestNewPRPlan_BuildsQualityStagePlan(t *testing.T) {
 		t.Errorf("quality targets = %+v", plan.Stages.Quality.Targets)
 	}
 
-	if plan.Policy.NanolinterImage != "ghcr.io/itiquette/nanolinter:go" {
-		t.Errorf("nanolinter image = %q, want the go flavour", plan.Policy.NanolinterImage)
+	if plan.Policy.NanolinterImage != "registry.example/nanolinter@sha256:"+strings.Repeat("a", 64) {
+		t.Errorf("nanolinter image = %q, want the admitted image", plan.Policy.NanolinterImage)
 	}
 
 	if !plan.Policy.Swift || !plan.Stages.Quality.Targets.Swift.Runs {

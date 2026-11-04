@@ -599,6 +599,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   application id to the other, so a job that set it for one handed it to
   the other. `PACKAGE_NAME` is no longer read; rename it in your job env or
   pass the flag.
+- **BREAKING:** `nanolinter-image` is required and admits only a digest pin,
+  `<image>@sha256:<64 hex>`, on the GitLab `nanolinter` component, on
+  `lint-nanolinter.yml` and, with `lint-engine: nanolinter`, on
+  `pullrequest-orchestrator.yml`. The component and the leaf workflow
+  defaulted to the `core` tag and the orchestrator derived the flavour tag
+  from `project-type`, so the lint job, which receives the checkout and the
+  run context, ran whatever the registry served. There is no default: no
+  served digest can be reviewed for every mirror, as with `runtime-image`.
+  `plan pr` refuses a tag in the plan job and names the flavour for the
+  project type. Pin the flavour image by its digest. This repository's own
+  `.gitlab-ci.yml` no longer self-tests the component with a tag.
 - **BREAKING:** The `runtime-image` input of the GitLab `build-*`,
   `publish-forge-packages` and `publish-maven-central` components admits only
   a digest pin, `<image>@sha256:<64 hex>`, as GitLab checks it before any job

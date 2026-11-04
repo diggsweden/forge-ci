@@ -86,7 +86,7 @@ on:
         default: ""
         type: string
       nanolinter-image:
-        description: "Image the nanolinter lint job runs in. Empty (default) uses the nanolinter flavour for project-type: go, java (maven), kotlin (gradle, gradle-android), javascript-typescript (npm), rust (cargo), swift (xcode-ios), core otherwise. Set it to pin a digest or use a mirror."
+        description: "Required when lint-engine=nanolinter: the image the nanolinter lint job runs in, pinned by @sha256:<64 lowercase hex>. Pick the flavour for project-type: go, java (maven), kotlin (gradle, gradle-android), javascript-typescript (npm), rust (cargo), swift (xcode-ios), core otherwise; the plan job refuses a tag."
         required: false
         default: ""
         type: string

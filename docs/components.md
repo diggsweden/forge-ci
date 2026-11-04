@@ -399,7 +399,7 @@ with:
   base-branch: ""                  # Optional: auto-detects PR target
   lint-engine: nanolinter          # General lint engine: nanolinter (default) | megalinter | none — mutually exclusive
   required-lints: secrets,sast     # Caller-selected floor; the project's nanolinter.toml cannot remove it
-  nanolinter-image: ""              # Optional: empty derives the nanolinter flavour from project-type; set to pin a digest or mirror
+  nanolinter-image: ghcr.io/itiquette/nanolinter:java@sha256:PIN_DIGEST  # Required for nanolinter: the flavour for project-type, pinned by digest
   megalinter-image: ""             # Required for megalinter; see the digest-pinned example below
   linters.swiftformat: false       # Swift format for iOS/macOS (separate macOS job, orthogonal to the engine)
   linters.swiftlint: false         # SwiftLint for iOS/macOS
@@ -445,8 +445,7 @@ required platform, or pass an available mirror through `nanolinter-image`.
 The repository name and placeholder alone are not availability evidence.
 
 Nanolinter's image layout has one image per ecosystem; there is no
-image that carries every toolchain. Through the orchestrator, `forge-ci plan
-pr` picks the flavour from `project-type`:
+image that carries every toolchain. Pick the flavour for `project-type`:
 
 | `project-type` | Flavour |
 |---|---|
@@ -458,20 +457,23 @@ pr` picks the flavour from `project-type`:
 | `xcode-ios` | `swift` |
 | anything else | `core` (secrets, SAST, dependency scans, text and CI files) |
 
-The `nanolinter-image` input overrides the derived image verbatim, for example to
-pin `@sha256:` or use a mirror. A direct call of `lint-nanolinter.yml` knows no
-project type, so it defaults to the `core` tag, as does the GitLab
-`nanolinter` component; pass the flavour for your ecosystem, pinned by digest as
-the examples show (Renovate's docker manager then moves tag and digest
-together). The defaults become digests once the images are published. A polyglot repository runs one lint job per
-ecosystem, each in its own flavour.
+`nanolinter-image` is required, pinned by digest, on the orchestrator (with
+`lint-engine: nanolinter`), on a direct call of `lint-nanolinter.yml` and on
+the GitLab `nanolinter` component. None has a default: the image receives the
+checkout and the run context, and a component cannot tell which registry
+serves it. `forge-ci plan pr` refuses a tag in the plan job and names the
+flavour for `project-type`; `lint-nanolinter.yml` refuses one in its first
+step, and GitLab refuses one before the pipeline starts. Pin the flavour for
+your ecosystem, or a mirror of it, as the examples show (Renovate's docker
+manager then moves tag and digest together). A polyglot repository runs one
+lint job per ecosystem, each in its own flavour.
 
 **The same choice on each forge.** "Lint with nanolinter for my ecosystem" is
 said once per forge, in the place that forge has for it:
 
 | Forge | Where the flavour is chosen | What the lint job runs in |
 |---|---|---|
-| GitHub | `project-type` on the orchestrator; `nanolinter-image` overrides | the flavour image, started by the runner |
+| GitHub | `nanolinter-image` on the orchestrator, by digest | the flavour image, started by the runner |
 | GitLab | `nanolinter-image` on the `nanolinter` component, by digest | that image, as the job image |
 | Forgejo | the `CI_JOB_IMAGE` variable, a flavour image by digest | that image; the `lint-nanolinter` action runs the nanolinter it finds there and installs nothing |
 

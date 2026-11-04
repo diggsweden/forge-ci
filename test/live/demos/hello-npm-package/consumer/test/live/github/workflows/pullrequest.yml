@@ -33,5 +33,5 @@ jobs:
       forge-ci-binary-ref: v0.90.0
       project-type: npm
       lint-engine: nanolinter
-      nanolinter-image: codefloe.com/itiquette/nanolinter:javascript-typescript
+      nanolinter-image: codefloe.com/itiquette/nanolinter:javascript-typescript@sha256:0000000000000000000000000000000000000000000000000000000000000000
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base:v0.90.0

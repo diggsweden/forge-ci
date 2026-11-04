@@ -29,6 +29,8 @@ jobs:
     with:
       forge-ci-binary-ref: v0.90.0
       project-type: cargo
+      # The lint image, pinned by digest: the plan job refuses a tag.
+      nanolinter-image: ghcr.io/itiquette/nanolinter:rust@sha256:PIN_DIGEST
       lint-engine: nanolinter
 
   # Your tests. The orchestrator above never runs them; require this job and

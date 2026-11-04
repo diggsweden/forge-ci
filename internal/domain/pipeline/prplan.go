@@ -10,7 +10,8 @@ import (
 // PRPlanVersion is the current pull-request plan contract version.
 const PRPlanVersion = 1
 
-// PRPlanInput contains workflow inputs for PR quality planning.
+// PRPlanInput contains workflow inputs for PR quality planning. NanolinterImage
+// is the admitted image of the nanolinter job; see NanolinterImage.
 type PRPlanInput struct {
 	ProjectType      projecttype.Type
 	BaseBranch       string
@@ -37,9 +38,9 @@ type PRContext struct {
 }
 
 // PRPolicy is the pull-request quality gate policy. Engine selects the single
-// general lint engine; NanolinterImage is the image its nanolinter job runs in
-// (the caller's override, or the flavour matching the project type); the swift
-// flags are orthogonal language-specific checks.
+// general lint engine; NanolinterImage is the digest-pinned image its
+// nanolinter job runs in; the swift flags are orthogonal language-specific
+// checks.
 type PRPolicy struct {
 	Engine          LintEngine `json:"engine"`
 	NanolinterImage string     `json:"nanolinter_image"`
@@ -73,7 +74,7 @@ type PRQualityTargets struct {
 func NewPRPlan(in PRPlanInput) PRPlan {
 	policy := PRPolicy{
 		Engine:          in.Engine,
-		NanolinterImage: NanolinterImage(in.NanolinterImage, in.ProjectType),
+		NanolinterImage: in.NanolinterImage,
 		SwiftFormat:     in.SwiftFormat,
 		SwiftLint:       in.SwiftLint,
 		Swift:           in.SwiftFormat || in.SwiftLint,

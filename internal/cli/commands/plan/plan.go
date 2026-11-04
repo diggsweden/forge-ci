@@ -42,7 +42,7 @@ func prCmd() *cli.Command {
 			&cli.StringFlag{Name: "base-branch", Sources: cli.EnvVars("BASE_BRANCH"), Usage: "base branch the PR targets (used for diff-mode scans)"},
 			&cli.StringFlag{Name: "forge-ci-binary-ref", Sources: cli.EnvVars("FORGE_CI_BINARY_REF"), Usage: "git ref of the forge-ci binary used in the plan (pinned for reproducibility)"},
 			&cli.StringFlag{Name: "lint-engine", Sources: cli.EnvVars("LINT_ENGINE"), Usage: "general lint engine to run: nanolinter, megalinter, or none (default none; mutually exclusive)"},
-			&cli.StringFlag{Name: "nanolinter-image", Sources: cli.EnvVars("NANOLINTER_IMAGE"), Usage: "image the nanolinter job runs in (default: the nanolinter flavour matching --project-type)"},
+			&cli.StringFlag{Name: "nanolinter-image", Sources: cli.EnvVars("NANOLINTER_IMAGE"), Usage: "image the nanolinter job runs in, pinned by digest; required with --lint-engine nanolinter"},
 			&cli.BoolFlag{Name: "linter-swiftformat", Sources: cli.EnvVars("LINTER_SWIFTFORMAT"), Usage: "include the swift-format lint gate in the plan"},
 			&cli.BoolFlag{Name: "linter-swiftlint", Sources: cli.EnvVars("LINTER_SWIFTLINT"), Usage: "include the swiftlint lint gate in the plan"},
 		},

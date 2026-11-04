@@ -24,7 +24,7 @@
 # 2. It is called automatically by pullrequest-orchestrator.yml when
 #    lint-engine is nanolinter (the default), which picks the flavour image
 #    from project-type. Direct callers set `nanolinter-image` to the flavour
-#    matching their ecosystem; the default is the ecosystem-neutral core.
+#    matching their ecosystem, pinned by digest.
 name: Lint Nanolinter
 on:
   workflow_call: # yamllint disable-line rule:truthy
@@ -40,9 +40,8 @@ on:
         required: false
         default: true
       nanolinter-image:
-        description: "nanolinter flavour image to lint in (pin by @sha256): core, go, java, kotlin, javascript-typescript, rust or swift, e.g. ghcr.io/itiquette/nanolinter:java"
-        required: false
-        default: "ghcr.io/itiquette/nanolinter:core"
+        description: "Required nanolinter flavour image to lint in, pinned by @sha256:<64 lowercase hex>: core, go, java, kotlin, javascript-typescript, rust or swift, e.g. ghcr.io/itiquette/nanolinter:java@sha256:<digest>"
+        required: true
         type: string
       required-lints:
         description: "Mandated lint floor — comma-separated check ids passed to `nanolinter verify --require`. These checks are forced to run AND block regardless of the consumer's nanolinter.toml, so a project cannot silently skip them. Empty disables the floor."
@@ -87,6 +86,15 @@ jobs:
     env:
       NANOLINTER_IMAGE: ${{ inputs['nanolinter-image'] }}
     steps:
+      # The image receives the checkout and the run context: refuse a tag
+      # before anything is fetched.
+      - name: Validate nanolinter image digest
+        run: |
+          set -euo pipefail
+          if [[ ! "$NANOLINTER_IMAGE" =~ ^[^[:space:]]+@sha256:[0-9a-f]{64}$ ]]; then
+            printf '::error::nanolinter-image must be a reviewed image reference pinned by sha256 digest, got %s\n' "$NANOLINTER_IMAGE"
+            exit 64
+          fi
       - name: Checkout forge-ci bootstrap installers
         id: forge-ci-bootstrap
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3

@@ -47,6 +47,9 @@ var exampleDemoValues = strings.NewReplacer(
 	`"ghcr.io/itiquette/nanolinter:go@sha256:PIN_DIGEST"`, "$CI_LINT_IMAGE",
 	`"ghcr.io/itiquette/nanolinter:kotlin@sha256:PIN_DIGEST"`, "$CI_LINT_IMAGE",
 	`"ghcr.io/itiquette/nanolinter:core@sha256:PIN_DIGEST"`, "$CI_LINT_IMAGE",
+	// The GitHub gate's lint image, a mirror the trial replaces with its own.
+	"ghcr.io/itiquette/nanolinter:go@sha256:PIN_DIGEST", "codefloe.com/itiquette/nanolinter:go@sha256:"+unrunDigest,
+	"ghcr.io/itiquette/nanolinter:kotlin@sha256:PIN_DIGEST", "codefloe.com/itiquette/nanolinter:kotlin@sha256:"+unrunDigest,
 	"registry.example.com/team/check-tools@sha256:PIN_IMAGE_DIGEST", gitlabJobPlaceholder,
 	// The monorepo checks and builds each part in its runtime image: Java in
 	// the trial's job image, Node in a further one.

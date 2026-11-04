@@ -41,5 +41,5 @@ jobs:
       project-type: cargo
       lint-engine: nanolinter
       # The trial names a mirror of the Rust flavour here.
-      nanolinter-image: codefloe.com/itiquette/nanolinter:rust
+      nanolinter-image: codefloe.com/itiquette/nanolinter:rust@sha256:0000000000000000000000000000000000000000000000000000000000000000
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base:v0.90.0

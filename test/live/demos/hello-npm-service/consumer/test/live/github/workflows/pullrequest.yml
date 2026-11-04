@@ -41,5 +41,5 @@ jobs:
       project-type: npm
       lint-engine: nanolinter
       # The trial names a mirror of the javascript-typescript flavour here.
-      nanolinter-image: codefloe.com/itiquette/nanolinter:javascript-typescript
+      nanolinter-image: codefloe.com/itiquette/nanolinter:javascript-typescript@sha256:0000000000000000000000000000000000000000000000000000000000000000
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base:v0.90.0

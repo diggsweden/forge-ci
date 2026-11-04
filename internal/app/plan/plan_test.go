@@ -160,9 +160,10 @@ func TestPlanPR_EmitsTypedPlanOutputs(t *testing.T) {
 	sink := fakeoutputsink.New(t)
 
 	got, err := appplan.PR(context.Background(), sink, appplan.PRInput{
-		ProjectType: "go",
-		LintEngine:  "nanolinter",
-		SwiftLint:   true,
+		ProjectType:     "go",
+		LintEngine:      "nanolinter",
+		NanolinterImage: "registry.example/nanolinter:go@sha256:" + strings.Repeat("c", 64),
+		SwiftLint:       true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -195,6 +196,7 @@ func TestPlanPR_LintEngineSelectionAndWarning(t *testing.T) {
 
 			got, err := appplan.PR(t.Context(), sink, appplan.PRInput{
 				ProjectType: "go", LintEngine: engine, SwiftLint: true,
+				NanolinterImage: "registry.example/nanolinter:go@sha256:" + strings.Repeat("c", 64),
 			})
 			if err != nil {
 				t.Fatal(err)

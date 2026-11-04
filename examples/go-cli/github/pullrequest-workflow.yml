@@ -32,6 +32,8 @@ jobs:
     with:
       forge-ci-binary-ref: v0.90.0
       project-type: go
+      # The lint image, pinned by digest: the plan job refuses a tag.
+      nanolinter-image: ghcr.io/itiquette/nanolinter:go@sha256:PIN_DIGEST
       lint-engine: nanolinter
       # The runtime images of the release you call, pinned with it; left
       # out, the release resolves the same ones.

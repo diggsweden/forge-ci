@@ -18,7 +18,6 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/git"
 	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
-	"github.com/diggsweden/forge-ci/internal/domain/projecttype"
 	"github.com/diggsweden/forge-ci/internal/testutil/evidence"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 
@@ -219,18 +218,16 @@ func TestMegaLinterImageFailsClosedUnlessDigestPinned(t *testing.T) {
 	}
 }
 
-// TestNanolinterImageDefaultsFollowTheFlavourResolver keeps the nanolinter
-// image defaults on the published flavours. The PR orchestrator leaves the
-// image to `forge-ci plan pr`, which derives the flavour from project-type;
-// the direct-call leaf workflow and the GitLab component know no project type,
-// so they default to the same core image the resolver uses for an unknown one.
-// The default stays a tag until the image is published and a served digest
-// can be reviewed; callers pin by digest, as the examples show.
-func TestNanolinterImageDefaultsFollowTheFlavourResolver(t *testing.T) {
+// The nanolinter image receives the checkout and the run context, so every
+// layer admits it only pinned by digest: the direct-call leaf workflow and
+// the GitLab component require it and have no default, which would be a tag
+// until a served digest is reviewed, and the orchestrator hands plan pr its
+// input, which refuses a tag in the plan job. A component cannot tell which
+// registry serves it, as with runtime-image.
+func TestNanolinterImageIsRequiredAndDigestPinned(t *testing.T) {
 	t.Parallel()
 
 	root := reporoot.Path(t)
-	coreImage := pipeline.NanolinterImage("", projecttype.Unknown)
 	guide := string(reporoot.ReadFile(t, "docs/forgejo.md"))
 
 	if !strings.Contains(guide, "`"+pipeline.NanolinterImageRepository+"`") {
@@ -239,26 +236,33 @@ func TestNanolinterImageDefaultsFollowTheFlavourResolver(t *testing.T) {
 
 	orchestrator := parseConsumerContract(t, filepath.Join(root, ".github", "workflows", "pullrequest-orchestrator.yml"))
 	if got := orchestrator.Inputs["nanolinter-image"].Default; got != "" {
-		t.Errorf("pullrequest-orchestrator.yml nanolinter-image default = %v, want empty so plan pr derives the flavour", got)
+		t.Errorf("pullrequest-orchestrator.yml nanolinter-image default = %v, want empty: plan pr refuses it without a digest", got)
 	}
 
-	for _, relative := range []string{
-		".github/workflows/lint-nanolinter.yml",
-		"templates/nanolinter.yml",
-	} {
-		content, err := os.ReadFile(filepath.Join(root, relative))
-		require.NoError(t, err)
+	leaf := parseConsumerContract(t, filepath.Join(root, ".github", "workflows", "lint-nanolinter.yml"))
+	if input := leaf.Inputs["nanolinter-image"]; !input.Required || input.Default != nil {
+		t.Errorf("lint-nanolinter.yml nanolinter-image = %+v, want required with no default", input)
+	}
 
-		if !strings.Contains(string(content), `default: "`+coreImage+`"`) {
-			t.Errorf("%s: nanolinter-image must default to %s", relative, coreImage)
-		}
+	workflow, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "lint-nanolinter.yml"))
+	require.NoError(t, err)
+
+	if !strings.Contains(string(workflow), `[[ ! "$NANOLINTER_IMAGE" =~ ^[^[:space:]]+@sha256:[0-9a-f]{64}$ ]]`) {
+		t.Error("lint-nanolinter.yml must refuse a nanolinter-image not pinned by digest before it fetches anything")
+	}
+
+	component, err := os.ReadFile(filepath.Join(root, "templates", "nanolinter.yml"))
+	require.NoError(t, err)
+
+	if strings.Contains(string(component), `default: "`+pipeline.NanolinterImageRepository) {
+		t.Error("templates/nanolinter.yml: nanolinter-image must have no default")
 	}
 
 	quality, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "pullrequest-quality-stage.yml"))
 	require.NoError(t, err)
 
 	if !strings.Contains(string(quality), "nanolinter-image: ${{ fromJson(inputs['pr-plan-json']).policy.nanolinter_image }}") {
-		t.Error("pullrequest-quality-stage.yml must run nanolinter in the image resolved by plan pr")
+		t.Error("pullrequest-quality-stage.yml must run nanolinter in the image admitted by plan pr")
 	}
 }
 

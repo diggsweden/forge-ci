@@ -2538,7 +2538,7 @@ EXAMPLE:
 | `--base-branch` | base branch the PR targets (used for diff-mode scans) | string | `""` | `$BASE_BRANCH` |
 | `--forge-ci-binary-ref` | git ref of the forge-ci binary used in the plan (pinned for reproducibility) | string | `""` | `$FORGE_CI_BINARY_REF` |
 | `--lint-engine` | general lint engine to run: nanolinter, megalinter, or none (default none; mutually exclusive) | string | `""` | `$LINT_ENGINE` |
-| `--nanolinter-image` | image the nanolinter job runs in (default: the nanolinter flavour matching --project-type) | string | `""` | `$NANOLINTER_IMAGE` |
+| `--nanolinter-image` | image the nanolinter job runs in, pinned by digest; required with --lint-engine nanolinter | string | `""` | `$NANOLINTER_IMAGE` |
 | `--linter-swiftformat` | include the swift-format lint gate in the plan | bool | `false` | `$LINTER_SWIFTFORMAT` |
 | `--linter-swiftlint` | include the swiftlint lint gate in the plan | bool | `false` | `$LINTER_SWIFTLINT` |
 

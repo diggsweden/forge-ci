@@ -29,6 +29,8 @@ jobs:
     with:
       forge-ci-binary-ref: v0.90.0
       project-type: maven
+      # The lint image, pinned by digest: the plan job refuses a tag.
+      nanolinter-image: ghcr.io/itiquette/nanolinter:java@sha256:PIN_DIGEST
       # Default lint engine: nanolinter (runs `nanolinter verify` from your nanolinter.toml)
       lint-engine: nanolinter
 

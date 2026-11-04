@@ -148,6 +148,12 @@ func checkFilled(t *testing.T, forge provider.ForgeAPI, mirror, example string) 
 
 	for file, left := range result.Remaining {
 		for _, p := range left {
+			// A GitHub consumer calls the upstream workflows with no mirror
+			// defaults, so the lint image's digest is the person's to review.
+			if forge == provider.ForgeGitHub && p.Token == "PIN_DIGEST" {
+				continue
+			}
+
 			if !strings.HasPrefix(p.Token, "FIXME") && !slices.Contains([]string{
 				"PIN_MAVEN_IMAGE_DIGEST", "my-cli", "my-service", "my-app",
 				"com.example.myapp", "com.example.myapp.demo",

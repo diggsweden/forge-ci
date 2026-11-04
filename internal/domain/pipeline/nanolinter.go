@@ -4,8 +4,11 @@
 package pipeline
 
 import (
+	"fmt"
+	"regexp"
 	"strings"
 
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/projecttype"
 )
 
@@ -40,13 +43,25 @@ func NanolinterFlavour(pt projecttype.Type) string {
 	}
 }
 
-// NanolinterImage resolves the image the nanolinter lint job runs in. An
-// explicit override wins verbatim (so a caller can pin a digest or use a
-// mirror); otherwise the flavour matching the project type is used.
-func NanolinterImage(override string, pt projecttype.Type) string {
-	if image := strings.TrimSpace(override); image != "" {
-		return image
+// pinnedNanolinterImage is an image reference pinned by a full digest, the
+// pattern the GitLab component's nanolinter-image input admits.
+var pinnedNanolinterImage = regexp.MustCompile(`^[^[:space:]]+@sha256:[0-9a-f]{64}$`)
+
+// NanolinterImage admits the image the nanolinter lint job runs in: a
+// reference pinned by digest, which the job receives the checkout and the run
+// context in. A tag, such as the flavour tag of the project type, names
+// whatever the registry serves at the time, so it is refused, with the
+// flavour that carries the project type's toolchain as the hint.
+func NanolinterImage(image string, pt projecttype.Type) (string, error) {
+	image = strings.TrimSpace(image)
+	if pinnedNanolinterImage.MatchString(image) {
+		return image, nil
 	}
 
-	return NanolinterImageRepository + ":" + NanolinterFlavour(pt)
+	hint := NanolinterImageRepository + ":" + NanolinterFlavour(pt) + "@sha256:<digest>"
+	if image == "" {
+		return "", fmt.Errorf("lint-engine nanolinter needs nanolinter-image, a nanolinter image pinned by digest, such as %s: %w", hint, errs.ErrUsage)
+	}
+
+	return "", fmt.Errorf("nanolinter-image %q is not pinned by digest; pin the reviewed image, such as %s: %w", image, hint, errs.ErrUsage)
 }

@@ -222,6 +222,14 @@ func PR(ctx context.Context, sink ci.OutputSink, in PRInput) (*pipeline.PRPlan, 
 		return nil, err
 	}
 
+	// Refused here, in the plan job: the lint job would otherwise run a tag.
+	nanolinterImage := strings.TrimSpace(in.NanolinterImage)
+	if engine == pipeline.LintEngineNanolinter {
+		if nanolinterImage, err = pipeline.NanolinterImage(in.NanolinterImage, pt); err != nil {
+			return nil, err
+		}
+	}
+
 	if engine == pipeline.LintEngineNone {
 		slog.WarnContext(ctx, "no supported lint engine is enabled; PR general lint checks will not run (select nanolinter or megalinter with lint-engine)")
 	}
@@ -231,7 +239,7 @@ func PR(ctx context.Context, sink ci.OutputSink, in PRInput) (*pipeline.PRPlan, 
 		BaseBranch:       in.BaseBranch,
 		ForgeCIBinaryRef: in.ForgeCIBinaryRef,
 		Engine:           engine,
-		NanolinterImage:  in.NanolinterImage,
+		NanolinterImage:  nanolinterImage,
 		SwiftFormat:      in.SwiftFormat,
 		SwiftLint:        in.SwiftLint,
 	})
