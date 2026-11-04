@@ -90,7 +90,7 @@ func labContractFor(account string) (*labcontract.Contract, error) {
 	// full validation; the bytes are then read once more so the digest and
 	// the returned value describe the same document.
 	if _, loadErr := labcontract.Load(path); loadErr != nil {
-		return nil, describeMissingContract(path, account, loadErr)
+		return nil, describeContractFailure(path, account, loadErr)
 	}
 
 	body, err := os.ReadFile(path) //nolint:gosec // The located document Load just accepted.
@@ -117,17 +117,19 @@ func labContractFor(account string) (*labcontract.Contract, error) {
 	return contract, nil
 }
 
-// describeMissingContract turns an absent contract into a message that says
-// where the suite looked and how to get one there; every other Load failure
-// passes through as the module reports it.
-func describeMissingContract(path, account string, err error) error {
-	if !errors.Is(err, fs.ErrNotExist) {
-		return err
-	}
-
-	source := labcontract.PathEnv + " is unset, so the default for lab account " + strconv.Quote(account)
+// describeContractFailure names the contract path and where it came from on
+// every Load failure, so a stale default file reads as one: an unset
+// PathEnv silently falls back to the account's default, and the module's
+// own text names neither. An absent contract also says how to get one.
+func describeContractFailure(path, account string, err error) error {
+	source := labcontract.PathEnv + " is unset, so the default for lab account " + strconv.Quote(account) +
+		"; set " + labcontract.PathEnv + " to use another"
 	if os.Getenv(labcontract.PathEnv) != "" {
 		source = "named by " + labcontract.PathEnv
+	}
+
+	if !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("live-target contract at %s (%s): %w", path, source, err)
 	}
 
 	// Both sentinels stay reachable; the module's text would only repeat the path.

@@ -228,11 +228,39 @@ func TestCurrentLabContract_LocatesByAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	requireMissingContractHint(t, path, labcontract.PathEnv+` is unset, so the default for lab account "forgeci"`)
+	requireMissingContractHint(t, path, defaultContractSource)
 
 	absent := filepath.Join(t.TempDir(), "absent.json")
 	t.Setenv(labcontract.PathEnv, absent)
 	requireMissingContractHint(t, absent, "named by "+labcontract.PathEnv)
+}
+
+const defaultContractSource = labcontract.PathEnv + ` is unset, so the default for lab account "forgeci"; set ` +
+	labcontract.PathEnv + " to use another"
+
+// TestCurrentLabContract_InvalidContractNamesItsSource: a contract that fails
+// validation is reported with its path and whether that path was the default,
+// so a stale default file is not mistaken for the one the caller meant.
+func TestCurrentLabContract_InvalidContractNamesItsSource(t *testing.T) {
+	retired := replaceInFixture(t, composeFixtureBody(t), `"version": 5`, `"version": 4`)
+
+	path := installDefaultContract(t, retired)
+	forgetContract(t, path)
+
+	_, err := currentLabContract()
+	if !errors.Is(err, labcontract.ErrVersion) ||
+		!strings.Contains(err.Error(), "live-target contract at "+path+" ("+defaultContractSource+"): ") {
+		t.Fatalf("retired default contract = %v, want ErrVersion naming %s and its default source", err, path)
+	}
+
+	named := writeContract(t, retired)
+	setCurrentContract(t, named)
+
+	_, err = currentLabContract()
+	if !errors.Is(err, labcontract.ErrVersion) ||
+		!strings.Contains(err.Error(), "live-target contract at "+named+" (named by "+labcontract.PathEnv+"): ") {
+		t.Fatalf("retired named contract = %v, want ErrVersion naming %s", err, named)
+	}
 }
 
 func requireMissingContractHint(t *testing.T, path, source string) {

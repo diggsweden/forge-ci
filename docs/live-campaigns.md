@@ -74,7 +74,10 @@ Then run one lane a provider, side by side, against fresh forgeci targets
 (minted with `LAB_ROAD=k3s` in Forge Lab for that road). `LAB_TARGETS_FILE`,
 `FORGE_CI_LIVE_CONSUMER_VISIBILITY` and the GitLab image builder,
 `FORGE_CI_LIVE_GITLAB_IMAGE_BUILDER=buildah|kaniko`, stay the caller's; the
-builder is the whole GitLab lane's, kaniko for the k3s cases:
+builder is the whole GitLab lane's, kaniko for the k3s cases. The image
+archives are the campaign's or the case's own: the lane clears a caller's
+`FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE` and any image variable campaign.env does not
+set.
 
 ```bash
 export FORGE_CI_LIVE_CONSUMER_VISIBILITY=private

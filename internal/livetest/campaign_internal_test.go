@@ -83,6 +83,15 @@ scenario TestThird
 		t.Errorf("env %q, want %q", plan.Env, want)
 	}
 
+	// What a case names, and the campaign's images it was not prepared with,
+	// are never the caller's.
+	if want := []string{
+		"FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE", "FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE", "FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE",
+		"FORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE", "FORGE_CI_LIVE_KANIKO_JOB_IMAGE_ARCHIVE",
+	}; !slices.Equal(plan.Unset, want) {
+		t.Errorf("unset %q, want %q", plan.Unset, want)
+	}
+
 	want := []CampaignCase{
 		{
 			Text: "consumer hello-go-cli release CI_JOB_IMAGE=@JOB_IMAGE_GO CI_IMAGE_BUILDER_JOB_IMAGE=@KANIKO_JOB_IMAGE version=@layer-commit",
@@ -208,6 +217,7 @@ func TestWriteCampaignPlan_IsNULTerminatedFields(t *testing.T) {
 	var out strings.Builder
 
 	err := WriteCampaignPlan(&out, CampaignPlan{
+		Unset: []string{"FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE"},
 		Env:   []string{"FORGE_CI_LIVE_PROVIDER=gitlab"},
 		Cases: []CampaignCase{{Text: "scenario TestA", Args: []string{"test-live", "^TestA$"}}},
 	})
@@ -215,7 +225,7 @@ func TestWriteCampaignPlan_IsNULTerminatedFields(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if want := "env\x00FORGE_CI_LIVE_PROVIDER=gitlab\x00case\x00scenario TestA\x002\x00test-live\x00^TestA$\x00"; out.String() != want {
+	if want := "unset\x00FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE\x00env\x00FORGE_CI_LIVE_PROVIDER=gitlab\x00case\x00scenario TestA\x002\x00test-live\x00^TestA$\x00"; out.String() != want {
 		t.Fatalf("plan %q, want %q", out.String(), want)
 	}
 }

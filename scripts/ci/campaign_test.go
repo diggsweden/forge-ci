@@ -31,7 +31,7 @@ cat -- "$FAKE_PLAN"
 
 const fakeCampaignJust = `#!/usr/bin/env bash
 printf '%s\n' "$*" >>"$FAKE_JUST_ARGV"
-printf 'provider=%s signer=%s\n' "$FORGE_CI_LIVE_PROVIDER" "${FORGE_CI_LIVE_SIGNER_IMAGE:-}" >>"$FAKE_JUST_ENV"
+printf 'provider=%s signer=%s lint=%s\n' "$FORGE_CI_LIVE_PROVIDER" "${FORGE_CI_LIVE_SIGNER_IMAGE:-}" "${FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE-unset}" >>"$FAKE_JUST_ENV"
 calls=$(wc -l <"$FAKE_JUST_ARGV")
 printf 'suite output\nLive verdict: /evidence/%s/verdict.json\n' "${calls// /}"
 case "$*" in
@@ -147,9 +147,10 @@ func readLines(t *testing.T, path string) []string {
 func TestCampaignLane_RunsThePlanInOrderAndRecordsEachCase(t *testing.T) {
 	t.Parallel()
 
-	lane := newCampaignLane(t)
+	// The caller's lint archive is not a case's: the plan clears it.
+	lane := newCampaignLane(t, "FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE=/caller/lint.tar")
 
-	stderr, status := lane.run(t, "forgejo",
+	stderr, status := lane.run(t, "forgejo", "unset", "FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE",
 		"env", "FORGE_CI_LIVE_PROVIDER=forgejo", "env", "FORGE_CI_LIVE_SIGNER_IMAGE=lab/signer@sha256:aa",
 		"case", "consumer hello-go-cli release A=b c", "4", "test-live-forgejo-consumer", "/c/demos/hello-go-cli", "release", "A=b c",
 		"case", "scenario TestFails", "2", "test-live", "^TestFails$",
@@ -176,7 +177,7 @@ func TestCampaignLane_RunsThePlanInOrderAndRecordsEachCase(t *testing.T) {
 	}
 
 	for _, seen := range readLines(t, lane.envFile) {
-		if seen != "provider=forgejo signer=lab/signer@sha256:aa" {
+		if seen != "provider=forgejo signer=lab/signer@sha256:aa lint=unset" {
 			t.Errorf("a case saw %q", seen)
 		}
 	}
@@ -236,6 +237,12 @@ func TestCampaignLane_RunsNothingThePreflightRefuses(t *testing.T) {
 	// Nor a plan the script cannot read as one: an export that is no variable.
 	lane = newCampaignLane(t)
 	if stderr, status := lane.run(t, "forgejo", "env", "-f x", "case", "scenario TestA", "2", "test-live", "^TestA$"); status != 2 || readLines(t, lane.argvFile) != nil {
+		t.Fatalf("status %d, want a refusal (2) and no case run\n%s", status, stderr)
+	}
+
+	// Nor a clear that is no variable name.
+	lane = newCampaignLane(t)
+	if stderr, status := lane.run(t, "forgejo", "unset", "-f x", "case", "scenario TestA", "2", "test-live", "^TestA$"); status != 2 || readLines(t, lane.argvFile) != nil {
 		t.Fatalf("status %d, want a refusal (2) and no case run\n%s", status, stderr)
 	}
 }

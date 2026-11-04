@@ -20,7 +20,8 @@
 #
 # lane runs the plan the preflight makes of a cases file (internal/livetest,
 # campaign.go, says what a case is and refuses what it is not), in order,
-# past failures. Each case appends a line to <dir>/<provider>.results; the
+# past failures. A case sees the campaign's images and what it names: the
+# plan clears the caller's image variables first. Each case appends a line to <dir>/<provider>.results; the
 # lane fails when a case did. Neither file is ever sourced.
 set -euo pipefail
 umask 077
@@ -167,6 +168,11 @@ lane() {
 	while IFS= read -r -d '' -u 3 kind; do
 		IFS= read -r -d '' -u 3 field
 		case "$kind" in
+		unset)
+			[[ "$field" =~ ^[A-Z][A-Z0-9_]*$ ]] || fail "the plan clears $(printf '%q' "$field")"
+			unset "$field"
+			continue
+			;;
 		env)
 			[[ "$field" =~ ^[A-Z][A-Z0-9_]*= ]] || fail "the plan exports $(printf '%q' "$field")"
 			export "${field?}"

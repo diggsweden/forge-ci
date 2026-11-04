@@ -51,6 +51,11 @@ var campaignExported = []string{
 	"FORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE", "FORGE_CI_LIVE_KANIKO_JOB_IMAGE_ARCHIVE",
 }
 
+// campaignCaseNamed are the variables a case gets only from its own words: a
+// recipe falls back to the caller's value when the case names none, so the
+// lane clears the caller's first.
+var campaignCaseNamed = []string{"FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE"}
+
 // campaignScenarioTarget is the runtime target of FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE,
 // the job image of the GitLab scenarios.
 const campaignScenarioTarget = "go"
@@ -99,9 +104,12 @@ type CampaignCase struct {
 	Args []string
 }
 
-// CampaignPlan is a lane ready to run: the environment every case gets, as
-// KEY=value, and the cases in order.
+// CampaignPlan is a lane ready to run: the variables cleared from the
+// caller's environment, the environment every case gets, as KEY=value, and
+// the cases in order. A case gets the campaign's images and what it names,
+// never a caller's image left over from another run.
 type CampaignPlan struct {
+	Unset []string
 	Env   []string
 	Cases []CampaignCase
 }
@@ -166,11 +174,13 @@ func PlanCampaignLane(dir, provider, casesPath, head string) (CampaignPlan, erro
 			env[campaignCommitKey], head, errs.ErrValidation)
 	}
 
-	plan := CampaignPlan{Env: []string{"FORGE_CI_LIVE_PROVIDER=" + provider}}
+	plan := CampaignPlan{Unset: slices.Clone(campaignCaseNamed), Env: []string{"FORGE_CI_LIVE_PROVIDER=" + provider}}
 
 	for _, key := range campaignExported {
 		if value, found := env[key]; found {
 			plan.Env = append(plan.Env, key+"="+value)
+		} else {
+			plan.Unset = append(plan.Unset, key)
 		}
 	}
 
@@ -540,10 +550,15 @@ func readDemoGate(path string) (demoGate, error) {
 }
 
 // WriteCampaignPlan writes plan for the lane script, which reads it without
-// evaluating it: NUL-terminated fields, "env" and one KEY=value per variable,
-// then per case "case", its text, its argument count and its arguments.
-func WriteCampaignPlan(w io.Writer, plan CampaignPlan) error {
+// evaluating it: NUL-terminated fields, "unset" and one name per variable
+// cleared, "env" and one KEY=value per variable, then per case "case", its
+// text, its argument count and its arguments.
+func WriteCampaignPlan(out io.Writer, plan CampaignPlan) error {
 	var fields []string
+	for _, name := range plan.Unset {
+		fields = append(fields, "unset", name)
+	}
+
 	for _, assignment := range plan.Env {
 		fields = append(fields, "env", assignment)
 	}
@@ -554,7 +569,7 @@ func WriteCampaignPlan(w io.Writer, plan CampaignPlan) error {
 	}
 
 	for _, field := range fields {
-		if _, err := io.WriteString(w, field+"\x00"); err != nil {
+		if _, err := io.WriteString(out, field+"\x00"); err != nil {
 			return err
 		}
 	}
