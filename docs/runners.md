@@ -189,12 +189,15 @@ ignore file Buildah builds with: the Containerfile's own
 
 ### The kaniko job image
 
-kaniko replaces the job container's root filesystem with the image's, so a
-kaniko job runs in a job image made for that:
+kaniko replaces the job container's root filesystem with the image's, and
+forge-ci has it delete that filesystem after each build (`--cleanup`), so the
+next build of the same job starts from its own base image. A kaniko job
+therefore runs in a job image made for that:
 [containers/kaniko-job/Containerfile](../containers/kaniko-job/Containerfile).
 It keeps a static bash, a BusyBox toolset and kaniko's CA bundle under
 `/kaniko`, which kaniko never touches, last on `PATH` so that they take over
-only once Debian's tools are gone; the runner's workspace is a mount and
+only once Debian's tools are gone, and points `TMPDIR` at `/kaniko/tmp`, since
+`/tmp` goes with the filesystem; the runner's workspace is a mount and
 survives too, forge-ci with it. The steps after the build
 (metadata upload, cleanup) use those and nothing else from the original image.
 The adapter also names the layout, the context and the staged registry
@@ -221,6 +224,12 @@ the runner's own environment), its environment passes `CI_IMAGE_BUILDER` and
 `CI_IMAGE_BUILDER_JOB_IMAGE`, and one step, `setup-image-builder`, prepares
 whichever is selected before `multiarch-image build-arch`. The signer example
 is that job.
+
+On GitLab the trusted policy selects the builder, not a project variable: the
+`release` and `snapshot-images` components take `image-builder: kaniko` and
+`builder-job-image`, the kaniko job image. The release's image jobs run in it
+on untagged runners; the snapshot components take it as their `build-image`.
+See [Release images](gitlab.md#release-images).
 
 #### Pinning the job image
 

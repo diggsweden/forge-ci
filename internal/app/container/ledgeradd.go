@@ -135,6 +135,20 @@ func AddLedgerEntry(ctx context.Context, resolver imageledger.DigestResolver, st
 	return nil
 }
 
+// AppendLedgerEntry validates one entry whose digest is known and returns
+// ledger with it appended, for a caller that holds the ledger itself rather
+// than a file another job may have written.
+func AppendLedgerEntry(ledger []byte, in AddLedgerEntryInput) ([]byte, error) {
+	entry, releaseTag, err := ledgerAddEntryFromFlags(in)
+	if err != nil {
+		return nil, err
+	}
+
+	out, _, err := imageledger.Append(ledger, entry, releaseTag)
+
+	return out, err
+}
+
 // readLedgerForAppend reads the ledger an entry is appended to. Only an absent
 // ledger is an empty one: treating an unreadable ledger as empty rewrote it
 // with the new entry alone, silently dropping every image recorded before.

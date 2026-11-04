@@ -9,12 +9,14 @@
 # as the CI_IMAGE_BUILDER_JOB_IMAGE variable, with CI_IMAGE_BUILDER=kaniko.
 #
 # Kaniko runs the Containerfile's steps in this container's own root
-# filesystem and replaces it with the image's. Two things make the job
-# survive that:
+# filesystem, replaces it with the image's, and forge-ci has it delete that
+# after the build (--cleanup), so a second build starts clean. Two things
+# make the job survive that:
 #
-#   - kaniko never touches /kaniko, so the executor, its CA bundle and a
-#     static shell with a BusyBox toolset live there, last on PATH, and take
-#     over for the steps that follow the build (metadata upload, cleanup);
+#   - kaniko never touches /kaniko, so the executor, its CA bundle, TMPDIR
+#     and a static shell with a BusyBox toolset, last on PATH, live there and
+#     serve the steps that follow the build (metadata upload, cleanup) and
+#     the next build of the same job;
 #   - the runner's workspace is a mount, and forge-ci itself lives in it.
 #
 # Later steps may therefore use bash, the BusyBox utilities and forge-ci, and
@@ -52,6 +54,7 @@ RUN set -eux; \
     git \
     jq; \
   install -d -m 0755 /kaniko/tools; \
+  install -d -m 1777 /kaniko/tmp; \
   install -m 0755 /bin/busybox /kaniko/tools/busybox; \
   /kaniko/tools/busybox --install -s /kaniko/tools; \
   install -m 0755 /bin/bash-static /kaniko/tools/bash; \
@@ -65,9 +68,11 @@ COPY --from=kaniko /kaniko /kaniko
 # names resolve to the static bash and BusyBox under /kaniko/tools. SSL_CERT_FILE:
 # kaniko's bundle, which survives, for every TLS client of a later step.
 # DOCKER_CONFIG: where kaniko reads registry credentials; forge-ci stages the
-# layer's auth file there for the build.
+# layer's auth file there for the build. TMPDIR: /tmp is deleted with the
+# build's filesystem; every temporary file of the job goes where it survives.
 ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/kaniko/tools:/kaniko \
     SSL_CERT_FILE=/kaniko/ssl/certs/ca-certificates.crt \
+    TMPDIR=/kaniko/tmp \
     DOCKER_CONFIG=/kaniko/.docker \
     KANIKO_EXECUTOR=/kaniko/executor
 

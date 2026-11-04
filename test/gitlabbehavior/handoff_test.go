@@ -26,6 +26,10 @@ func TestReleaseArtifactsAreReadableWithoutOpeningPrivateFiles(t *testing.T) {
 		"Prepare: changelog":     "_release-render",
 		"Prepare: version":       "_release-bump",
 		"Build: release files":   "_release-build",
+		"Images: plan":           "_release-images-plan",
+		"Images: build amd64":    "_release-images-amd64",
+		"Images: build arm64":    "_release-images-arm64",
+		"Images: publish":        "_release-images",
 		"Sign: files and images": "_release-sign",
 		"Publish: images":        "_release-promote",
 	} {

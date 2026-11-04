@@ -82,6 +82,8 @@ func TestParseGitLabReleaseSettings_SeparatesTheBumpFromVariables(t *testing.T) 
 	for _, input := range []string{
 		"version-bump=gradle", "version-bump=maven\nversion-bump=maven", "version-bump=",
 		"version=vv0.2.0", "version=0.2", "version=1.0.0\nversion=1.0.1",
+		// The policy selects the builder on GitLab, not the build's environment.
+		"CI_IMAGE_BUILDER=kaniko", "CI_IMAGE_BUILDER_JOB_IMAGE=registry.invalid/kaniko@sha256:" + strings.Repeat("a", 64),
 	} {
 		if _, err := ParseGitLabReleaseSettings(input); err == nil {
 			t.Errorf("ParseGitLabReleaseSettings(%q) accepted it", input)

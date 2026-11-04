@@ -37,6 +37,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   registry-smoke fixture calls the existing `forge-ci container build-push-oci-image`
   command directly, preserving direct final-tag publication and image/digest
   outputs. Release consumers should use `release-images.yml`.
+- **BREAKING:** The GitLab `release` component builds the release images
+  itself and no longer takes images the consumer's `build` pushed: a
+  `dist/release-images.json` from the build stops the release. With
+  `release-images: true` it plans the `containers:` of `artifacts-config`,
+  builds each architecture natively in jobs of its own (amd64, and arm64 with
+  `build-runner-tags-arm64`), scans and stages them with the job token and
+  hands the ledger to signing, as Forgejo's `release-images.yml` does. The
+  builder is `image-builder: buildah|kaniko`, kaniko in `builder-job-image`.
+  Migration: drop the `build-push-oci-image` and `ledger add` steps from the
+  build script, declare the image under `containers:`, leave the files its
+  Containerfile copies in `image-context/`, and set `release-images: true`.
+  The Maven, npm and Cargo service demos are migrated. `docs/gitlab.md`.
 
 ### Added
 
@@ -164,6 +176,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the job image such jobs run in, and
   `examples/forgejo/kaniko-job-image.yml` its bootstrap, run by dispatch
   once the pin's engine binary is published. `docs/runners.md`.
+- `container release-images build` and `publish` run the Forgejo
+  release-images workflow's build and publish steps for a forge without a
+  build matrix, from the plan file `release-images plan --output` writes;
+  `--runner-archs` refuses a planned architecture no job builds.
+- The GitLab release and image-development live scenarios build with kaniko
+  under `FORGE_CI_LIVE_GITLAB_IMAGE_BUILDER=kaniko`, without the privileged
+  runner. The harness labels the kaniko job image archive with the layer it
+  serves, so the release admits it. `docs/testing.md`.
 
 ### Fixed
 
@@ -361,6 +381,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   names and coordinates (`examplescope/myapp`, `forge.example`) instead of
   organisation or consumer names; the cargo-app example's services are
   `api-service`, `worker` and `admin-tool`.
+- **BREAKING:** `container build-push-oci-image` builds with Buildah alone and
+  refuses a job whose `CI_IMAGE_BUILDER` selects kaniko, instead of running
+  Buildah regardless. Build each native platform with `container build --mode
+  push-by-digest`, which reads the selection.
+- **BREAKING:** kaniko builds run with `--cleanup`: each build deletes the
+  root filesystem it built on, so the next image a job builds starts from its
+  own base, not from the previous image's files. `/tmp` goes with it, so the
+  kaniko job image now sets `TMPDIR=/kaniko/tmp`; rebuild and re-pin it from
+  `containers/kaniko-job/Containerfile`. `docs/runners.md`.
 - **BREAKING:** Every published image is scanned, and the administrator
   policy (`enforce-vulnerabilities`) alone decides whether findings block.
   A container's `enable-scan: false` no longer skips the scan of release

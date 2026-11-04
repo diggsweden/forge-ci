@@ -77,6 +77,64 @@ type Image struct {
 func PushJobImage(tb TB, target Target, repo, archive string) string {
 	tb.Helper()
 
+	return pushJobImage(tb, target, repo, readJobImage(tb, archive))
+}
+
+// PushKanikoJobImage publishes, as PushJobImage does, an archive of the kaniko
+// job image of containers/kaniko-job or of a build image made FROM it, which
+// inherits its labels. A run admits a kaniko job image only when its source
+// label names the engine project it runs from. An organization labels the
+// image when it builds it from its engine project; a scenario serves the layer
+// from a scratch project of its own, so the trial labels the image it pushes.
+func PushKanikoJobImage(tb TB, target Target, repo, archive string, layer Layer) string {
+	tb.Helper()
+
+	image, err := labelKanikoJobImage(readJobImage(tb, archive), layer.ServerURL+"/"+layer.Repository)
+	if err != nil {
+		tb.Fatalf("livetest: %v", err)
+	}
+
+	return pushJobImage(tb, target, repo, image)
+}
+
+// kanikoJobImageTitle is the title containers/kaniko-job gives its image,
+// which the release and snapshot builds require of a kaniko job image.
+const kanikoJobImageTitle = "forge-ci kaniko job image"
+
+// labelKanikoJobImage sets the source label of a kaniko job image.
+func labelKanikoJobImage(image v1.Image, source string) (v1.Image, error) {
+	file, err := image.ConfigFile()
+	if err != nil {
+		return nil, fmt.Errorf("read the kaniko job image's configuration: %w", err)
+	}
+
+	config := *file.Config.DeepCopy()
+	if config.Labels["org.opencontainers.image.title"] != kanikoJobImageTitle {
+		return nil, fmt.Errorf("the image is not titled %q: it is not containers/kaniko-job, nor built from it: %w", kanikoJobImageTitle, errs.ErrValidation)
+	}
+
+	config.Labels["org.opencontainers.image.source"] = source
+
+	labelled, err := mutate.Config(image, config)
+	if err != nil {
+		return nil, fmt.Errorf("label the kaniko job image: %w", err)
+	}
+
+	return labelled, nil
+}
+
+func pushJobImage(tb TB, target Target, repo string, image v1.Image) string {
+	tb.Helper()
+
+	pushed := pushArtifact(tb, target, repo, []string{"consumer-tools"}, image, false)
+
+	return strings.TrimSuffix(pushed.Ref, ":consumer-tools") + "@" + pushed.Digest
+}
+
+// readJobImage reads a caller-prepared Docker image archive.
+func readJobImage(tb TB, archive string) v1.Image {
+	tb.Helper()
+
 	if !filepath.IsAbs(archive) {
 		tb.Fatalf("livetest: the prepared job-image archive must be an absolute path")
 	}
@@ -99,9 +157,7 @@ func PushJobImage(tb TB, target Target, repo, archive string) string {
 		tb.Fatalf("livetest: read the prepared job image: %v", err)
 	}
 
-	pushed := pushArtifact(tb, target, repo, []string{"consumer-tools"}, image, false)
-
-	return strings.TrimSuffix(pushed.Ref, ":consumer-tools") + "@" + pushed.Digest
+	return image
 }
 
 // Large fixture layers are hashed before upload. Cancel those reads as well

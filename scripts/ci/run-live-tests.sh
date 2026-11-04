@@ -157,7 +157,7 @@ source_commit=$(git -C "$repo_root" rev-parse --verify HEAD 2>/dev/null || print
 	# An external registry's token stays in its file; its path and user are logged.
 	# livetest.LiveRunInputs is this list for verdict.json; a test keeps the two equal.
 	for input in FORGE_CI_LIVE_DEMO FORGE_CI_LIVE_CONSUMER FORGE_CI_LIVE_CONSUMER_EVENT FORGE_CI_LIVE_CONSUMER_SETTINGS FORGE_CI_LIVE_CONSUMER_VISIBILITY FORGE_CI_LIVE_IMAGE_PLAN_JOB_IMAGE \
-		FORGE_CI_LIVE_EXTERNAL_REGISTRY_TOKEN_FILE FORGE_CI_LIVE_EXTERNAL_REGISTRY_USER; do
+		FORGE_CI_LIVE_EXTERNAL_REGISTRY_TOKEN_FILE FORGE_CI_LIVE_EXTERNAL_REGISTRY_USER FORGE_CI_LIVE_GITLAB_IMAGE_BUILDER; do
 		[[ -z "${!input:-}" ]] || printf '%s=%q\n' "${input,,}" "${!input}"
 	done
 	printf '%s\n' "$preflight_report"

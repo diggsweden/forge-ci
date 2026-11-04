@@ -17,7 +17,7 @@ import (
 )
 
 type releaseRoutingJob struct {
-	Extends     string
+	Extends     any
 	Stage       string
 	Tags        string
 	Needs       []any
@@ -100,9 +100,17 @@ func TestReleaseChecksRoutingAndPreparationBarrier(t *testing.T) {
 		t.Fatal("build bypasses gated release preparation")
 	}
 
+	// Only the consumer's commands and image builds are scheduled on tagged
+	// runners: the build runner, and a native arm64 runner for arm64.
+	scheduled := map[string]string{
+		"Check: consumer checks":                  "$[[ inputs.checks-runner-tags ]]",
+		"Build: release files":                    "$[[ inputs.build-runner-tags ]]",
+		".forge-ci-release-image-builder-buildah": "$[[ inputs.build-runner-tags ]]",
+		"Images: build arm64":                     "$[[ inputs.build-runner-tags-arm64 ]]",
+	}
 	for name, job := range jobs {
-		if name != "Check: consumer checks" && name != "Build: release files" && job.Tags != "" {
-			t.Errorf("unrelated job %s acquired stronger scheduling: %s", name, job.Tags)
+		if job.Tags != scheduled[name] {
+			t.Errorf("job %s has scheduling %q, want %q", name, job.Tags, scheduled[name])
 		}
 	}
 

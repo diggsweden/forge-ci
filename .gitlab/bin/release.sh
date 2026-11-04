@@ -4,7 +4,9 @@
 
 # Trusted GitLab orchestration. The project must select a pinned external CI
 # policy. Only "Check: consumer checks", "Prepare: changelog", "Prepare:
-# version" and "Build: release files" execute consumer code. Native artifacts carry data; they are never dotenv reports or sourced.
+# version" and "Build: release files" execute consumer code, and the "Images:
+# build" jobs the consumer's Containerfiles, with the job token alone. Native
+# artifacts carry data; they are never dotenv reports or sourced.
 
 rc_engine() { "${FORGE_CI_BIN:?}" "$@"; }
 
@@ -23,6 +25,13 @@ rc_require_absent() {
 		echo "ERROR: $1 must not exist yet; it is reserved for this job." >&2
 		return 1
 	fi
+}
+
+# rc_new_handoff creates a producer's hand-off directory. A job that ran
+# consumer code may have left one in the workspace; it is refused, never
+# merged into.
+rc_new_handoff() {
+	rc_require_absent "$1" && mkdir -- "$1"
 }
 
 # rc_job_role maps a job's displayed name to the stable role the secret policy
@@ -111,6 +120,43 @@ rc_release_checkout() {
 		--repo-url "${CI_SERVER_URL}/${CI_PROJECT_PATH}.git"
 }
 
+# rc_image_builder prepares the image job's builder before any Containerfile
+# is built. Buildah is set up as the snapshot builds set it up. kaniko runs in
+# the job's own image, builder-job-image, admitted as the snapshot builds admit
+# it: by the kaniko job image's title and the engine project it was built from.
+rc_image_builder() {
+	local -a auth=()
+	case "${CI_IMAGE_BUILDER:-buildah}" in
+	buildah)
+		rc_engine container setup-buildah --install-packages=true --probe-build=true --print-store=false --summary=false
+		return
+		;;
+	kaniko) ;;
+	*)
+		echo "ERROR: image-builder must be buildah or kaniko, got '${CI_IMAGE_BUILDER}'" >&2
+		return 1
+		;;
+	esac
+	if [[ ! "${CI_IMAGE_BUILDER_JOB_IMAGE:-}" =~ ^[^[:space:]]+@sha256:[0-9a-f]{64}$ ]]; then
+		echo "ERROR: image-builder kaniko needs builder-job-image, the kaniko job image pinned by digest; got '${CI_IMAGE_BUILDER_JOB_IMAGE:-}'" >&2
+		return 1
+	fi
+	# The job token reads what the runner pulled the job's image with.
+	if [ -n "${CI_REGISTRY:-}" ]; then
+		auth=(--auth-file "${RC_WORK:?}/builder-auth.json")
+		printf '%s' "${CI_JOB_TOKEN:?}" | rc_engine container login --registry "${CI_REGISTRY}" \
+			--registry-username gitlab-ci-token --registry-password-file - "${auth[@]}" || return
+	fi
+	rc_engine container image usable-digest --ref "${CI_IMAGE_BUILDER_JOB_IMAGE}" \
+		--arch "${HELPERS_ENGINE_ARCH:?}" "${auth[@]}" \
+		--require-label "org.opencontainers.image.source=${FORGE_CI_REPOSITORY_URL%.git}" \
+		--require-label 'org.opencontainers.image.title=forge-ci kaniko job image' >/dev/null || {
+		echo "ERROR: builder-job-image is not a kaniko job image built from ${FORGE_CI_REPOSITORY_URL%.git} for ${HELPERS_ENGINE_ARCH}" >&2
+		return 1
+	}
+	if [ ${#auth[@]} -ne 0 ]; then rm -f -- "${RC_WORK}/builder-auth.json"; fi
+}
+
 rc_render_changelog() {
 	rc_request_checkout
 	# The renderer and consumer configuration stay in this key-free job.
@@ -138,7 +184,7 @@ rc_render_changelog() {
 		--repository-url "${CI_PROJECT_URL:?}" --changelog-config "${RC_CHANGELOG_CONFIG}" \
 		--commit-body-config "${RC_COMMIT_BODY_CONFIG}"
 	local handoff="${CI_PROJECT_DIR}/_release-render"
-	mkdir -p -- "${handoff}"
+	rc_new_handoff "${handoff}" || return
 	local file
 	for file in CHANGELOG.md commit-msg.txt; do
 		rc_require_regular_file "${file}"
@@ -153,7 +199,7 @@ rc_bump_version() {
 	rc_engine version bump --project-type "${RC_VERSION_BUMP:?}" --version "${RELEASE_VERSION:?}" --working-dir . \
 		--maven-cli-opts '--batch-mode --no-transfer-progress --errors --fail-at-end'
 	local handoff="${CI_PROJECT_DIR}/_release-bump"
-	mkdir -p -- "${handoff}"
+	rc_new_handoff "${handoff}" || return
 	# Literal paths and plain text whatever the project's Git configuration says.
 	git -c core.quotePath=true diff --binary --no-ext-diff --no-textconv --no-color --no-renames \
 		--src-prefix=a/ --dst-prefix=b/ >"${handoff}/version-bump.patch"
@@ -195,11 +241,112 @@ rc_prepare_release() {
 
 rc_build_handoff() {
 	if [ -e dist/base-images.json ]; then test "${RC_BASE_IMAGES}" = true; fi
+	# Release images are built and recorded by the image jobs alone; a build
+	# that pushed its own has nothing the signer may import.
+	if [ -e dist/release-images.json ] || [ -L dist/release-images.json ]; then
+		echo 'ERROR: dist/release-images.json is written by the image jobs; declare the images under containers: in artifacts.yml, set release-images: true, and leave their build context in image-context/.' >&2
+		return 1
+	fi
 	rc_engine release files validate --unsigned --manifest dist/release-files.json --dist-dir dist
 	rc_engine release prepare-dist --path dist --prune-dirs false
 	local handoff="${CI_PROJECT_DIR}/_release-build"
-	mkdir -p -- "${handoff}"
+	rc_new_handoff "${handoff}" || return
 	cp -R -- dist "${handoff}/dist"
+	rc_engine release dist-digest --dist-dir "${handoff}/dist" --manifest-root . >"${handoff}/digest"
+	# Files the Containerfiles copy that are not in the repository, laid over
+	# the release checkout before each image build, as Forgejo's context-artifact.
+	if [ -e image-context ] || [ -L image-context ]; then
+		if [ ! -d image-context ] || [ -L image-context ]; then
+			echo 'ERROR: image-context must be a directory, not a link.' >&2
+			return 1
+		fi
+		cp -R -- image-context "${handoff}/image-context"
+	fi
+}
+
+# The image stage: plan, one native build job per architecture, and one
+# publishing job, as the Forgejo release-images workflow runs them. The jobs
+# hold the job token alone; their arguments are the policy's literal inputs,
+# never project variables.
+rc_images_plan() {
+	local config=$1 platforms=$2 arm64_tags=$3 archs=amd64
+	rc_release_checkout
+	if [ "${arm64_tags}" != '[]' ]; then archs=amd64,arm64; fi
+	rc_new_handoff "${CI_PROJECT_DIR}/_release-images-plan" || return
+	rc_engine container release-images plan --file "${config}" --image-plan-json '' \
+		--release-tag "${RELEASE_TAG}" --release-platforms "${platforms}" \
+		--image-repository "${CI_REGISTRY_IMAGE:?}" --server-url "${CI_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
+		--registry-username gitlab-ci-token --runner-archs "${archs}" \
+		--output "${CI_PROJECT_DIR}/_release-images-plan/plan.json"
+}
+
+rc_images_build() {
+	local arch=$1 context="${CI_PROJECT_DIR}/_release-build/image-context" created
+	local handoff="${CI_PROJECT_DIR}/_release-images-${arch}"
+	export CI_IMAGE_BUILDER=$2 CI_IMAGE_BUILDER_JOB_IMAGE=$3
+	rc_image_builder || return
+	# The engine refuses a planned build of another architecture than the
+	# runner's: each builds natively. A job with none planned has no work.
+	rc_release_checkout
+	# The release commit's own time, read before the build's files are laid
+	# over the checkout.
+	created=$(TZ=UTC0 git show -s --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd HEAD)
+	if [ -d "${context}" ] && [ ! -L "${context}" ]; then cp -R -- "${context}/." .; fi
+	(
+		cd -- "${RC_WORK}" || exit
+		# The engine and the build get no credential of the job. That is not
+		# a boundary: under kaniko the RUN steps run in this container and
+		# can read the job token from the job shell's /proc environment, the
+		# trust Build: release files already gives the consumer. The layouts
+		# are uploaded by the publishing job.
+		unset CI_JOB_TOKEN CI_REGISTRY_PASSWORD CI_DEPLOY_PASSWORD CI_DEPENDENCY_PROXY_PASSWORD
+		rc_engine container release-images build --plan "${CI_PROJECT_DIR}/_release-images-plan/plan.json" \
+			--arch "${arch}" --image-repository "${CI_REGISTRY_IMAGE:?}" --release-tag "${RELEASE_TAG}" \
+			--release-sha "${RELEASE_SHA}" --server-url "${CI_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
+			--created "${created}" --source-dir consumer --metadata-dir staged --image-builder "${CI_IMAGE_BUILDER}"
+	) || return
+	# kaniko deletes the root filesystem after its builds; take the tools from
+	# /kaniko, which it keeps.
+	if [ "${CI_IMAGE_BUILDER}" = kaniko ]; then export PATH="/kaniko/tools:/kaniko:${PATH}"; fi
+	rc_new_handoff "${handoff}" || return
+	if [ -d "${RC_WORK}/staged" ]; then cp -R -- "${RC_WORK}/staged/." "${handoff}/"; fi
+	# A kaniko build leaves no shell at the paths after_script is run with;
+	# make the hand-off readable for the uploader here.
+	find "${handoff}" \( -type d -o -type f \) -exec chmod u=rwX,go=rX -- {} +
+}
+
+# rc_images_publish scans and pushes every planned image under its staging
+# tag in this project's registry with the job token, then joins the ledger and
+# its evidence to the build's dist in a hand-off of its own, digested again.
+rc_images_publish() {
+	local arch file layouts="${RC_WORK}/layouts" images="${RC_WORK}/images" auth="${RC_WORK}/registry-auth.json"
+	rc_release_checkout
+	rc_read_handoff "${CI_PROJECT_DIR}/_release-build" || return
+	mkdir -m 0700 -- "${layouts}"
+	for arch in amd64 arm64; do
+		if [ -d "${CI_PROJECT_DIR}/_release-images-${arch}" ] && [ ! -L "${CI_PROJECT_DIR}/_release-images-${arch}" ]; then
+			cp -R -- "${CI_PROJECT_DIR}/_release-images-${arch}/." "${layouts}/"
+		fi
+	done
+	# shellcheck source=scripts/bootstrap/install-trivy.sh
+	source "${RC_HELPERS_DIR}/scripts/bootstrap/install-trivy.sh"
+	install_trivy
+	printf '%s' "${CI_JOB_TOKEN:?}" | rc_engine container login --registry "${CI_REGISTRY:?}" \
+		--registry-username gitlab-ci-token --registry-password-file - --auth-file "${auth}"
+	rc_engine container release-images publish --plan "${CI_PROJECT_DIR}/_release-images-plan/plan.json" \
+		--image-repository "${CI_REGISTRY_IMAGE:?}" --release-tag "${RELEASE_TAG}" --release-sha "${RELEASE_SHA}" \
+		--server-url "${CI_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
+		--layouts-dir "${layouts}" --output-dir "${images}" --auth-file "${auth}"
+	rm -f -- "${auth}"
+	for file in "${images}"/*; do
+		rc_require_absent "${DIST_DIR:?}/${file##*/}" || return 1
+		cp -- "${file}" "${DIST_DIR}/"
+	done
+	rc_require_regular_file "${DIST_DIR}/release-images.json" || return 1
+	rc_engine release prepare-dist --path "${DIST_DIR}" --prune-dirs false
+	local handoff="${CI_PROJECT_DIR}/_release-images"
+	rc_new_handoff "${handoff}" || return
+	cp -R -- "${DIST_DIR}" "${handoff}/dist"
 	rc_engine release dist-digest --dist-dir "${handoff}/dist" --manifest-root . >"${handoff}/digest"
 }
 
@@ -240,10 +387,26 @@ rc_signing_preflight() {
 	unset COSIGN_KEY COSIGN_PASSWORD
 }
 
+# rc_sign_release signs the hand-off its policy names: the build's, or with
+# release images the publishing job's, which alone may carry a ledger.
 rc_sign_release() {
+	local images=${1:?rc_sign_release needs the policy release-images value}
 	rc_signing_preflight
 	rc_release_checkout
-	rc_read_handoff "${CI_PROJECT_DIR}/_release-build"
+	case "${images}" in
+	true)
+		rc_read_handoff "${CI_PROJECT_DIR}/_release-images"
+		rc_require_regular_file "${DIST_DIR}/release-images.json"
+		;;
+	false)
+		rc_read_handoff "${CI_PROJECT_DIR}/_release-build"
+		rc_require_absent "${DIST_DIR}/release-images.json"
+		;;
+	*)
+		echo "ERROR: release-images must be true or false, got '${images}'" >&2
+		return 1
+		;;
+	esac
 	rc_engine release files validate --unsigned --manifest "${RELEASE_FILES_MANIFEST}" --dist-dir "${DIST_DIR}"
 	# Only this trusted job may create the publication ledger. A producer must
 	# not bypass import by pre-seeding that reserved path without a source ledger.
@@ -283,7 +446,7 @@ rc_sign_release() {
 	unset COSIGN_KEY COSIGN_PASSWORD
 	rc_engine release files manifest --manifest "${RELEASE_FILES_MANIFEST}" --dist-dir "${DIST_DIR}"
 	local handoff="${CI_PROJECT_DIR}/_release-sign"
-	mkdir -p -- "${handoff}"
+	rc_new_handoff "${handoff}" || return
 	cp -R -- "${DIST_DIR}" "${handoff}/dist"
 	rc_engine release dist-digest --dist-dir "${handoff}/dist" --manifest-root . >"${handoff}/digest"
 }
@@ -292,7 +455,7 @@ rc_promote_release() {
 	rc_release_checkout
 	rc_read_handoff "${CI_PROJECT_DIR}/_release-sign"
 	rc_promote_bases
-	mkdir -p -- "${CI_PROJECT_DIR}/_release-promote"
+	rc_new_handoff "${CI_PROJECT_DIR}/_release-promote" || return
 	if [ ! -f "${DIST_DIR}/release-images-publication.json" ]; then return; fi
 	REGISTRY_USER="${RELEASE_REGISTRY_USER:?}" REGISTRY_TOKEN="${RELEASE_REGISTRY_TOKEN:?}" \
 		rc_engine container release-images promote --ledger "${DIST_DIR}/release-images-publication.json" \
@@ -376,12 +539,15 @@ rc_cleanup_release() {
 # rc_release_summary writes the release overview. Its job runs only when every
 # release job succeeded, so each row is a success by construction.
 rc_release_summary() {
-	local name jobs=()
+	local images=${1:-false} arm64_tags=${2:-[]} name jobs=()
 	for name in "Check: signing access" "Check: publishing access" "Check: registry access" \
 		"Check: release request" "Check: consumer checks" "Prepare: changelog" "Prepare: version" \
-		"Prepare: release commit and tag" "Build: release files" "Sign: files and images" \
+		"Prepare: release commit and tag" "Build: release files" "Images: plan" "Images: build amd64" \
+		"Images: build arm64" "Images: publish" "Sign: files and images" \
 		"Publish: images" "Publish: release" "Publish: tidy up"; do
 		if [ "${name}" = "Prepare: version" ] && [ -z "${RC_VERSION_BUMP:-}" ]; then continue; fi
+		case "${name}" in "Images: "*) if [ "${images}" != true ]; then continue; fi ;; esac
+		if [ "${name}" = "Images: build arm64" ] && [ "${arm64_tags}" = '[]' ]; then continue; fi
 		jobs+=(--job "${name}=success")
 	done
 	rc_engine report release --release-version "${RELEASE_TAG:?}" --release-branch "${RC_RELEASE_BRANCH:?}" \

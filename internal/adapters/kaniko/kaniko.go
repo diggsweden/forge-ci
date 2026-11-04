@@ -13,10 +13,14 @@
 //   - It has no local image store. Every build ends in an OCI layout, which the
 //     ggcr adapter pushes by digest as it does for Buildah; `--mode load` and
 //     `--mode local` are refused.
-//   - It replaces the job container's root filesystem with the image's. The
-//     kaniko job image keeps what later steps need under /kaniko, which kaniko
-//     never touches, and this adapter protects the layout, the context and the
-//     registry credentials with --ignore-path.
+//   - It replaces the job container's root filesystem with the image's, and
+//     with --cleanup, which every run passes, deletes it after the build, so
+//     a second build in the same job starts from its own base image, not from
+//     the first one's filesystem. Only mounts and the ignored paths survive:
+//     the kaniko job image keeps what later steps need under /kaniko, which
+//     kaniko never touches, and this adapter protects the layout, the context
+//     and the registry credentials with --ignore-path. A job that builds
+//     more than once keeps TMPDIR on a mount, since /tmp does not survive.
 //   - Build secrets are refused: kaniko keeps them recoverable by later RUN
 //     steps of the same build.
 //
@@ -206,7 +210,7 @@ func (a *Adapter) run(ctx context.Context, spec build, layoutDir string, out io.
 	// replaced /etc/ssl. Go loads the system roots once; load them now.
 	_, _ = x509.SystemCertPool()
 
-	_, _ = fmt.Fprintln(out, "kaniko replaces this container's root filesystem with the image's; the layout, the context and /kaniko are kept.")
+	_, _ = fmt.Fprintln(out, "kaniko replaces this container's root filesystem with the image's and deletes it after the build; mounts, the layout, the context and /kaniko are kept.")
 
 	cmd := safeexec.Command(ctx, a.executor(), args...)
 	cmd.Stdout = out
@@ -285,6 +289,9 @@ func layoutArguments(spec build, containerfile, layoutDir string) ([]string, err
 	args := []string{
 		"--context", "dir://" + contextDir,
 		"--no-push",
+		// The next build of this job must not start on this one's root
+		// filesystem: delete it once the layout is written.
+		"--cleanup",
 		"--oci-layout-path", layout,
 		"--ignore-path", layout,
 		"--ignore-path", contextDir,

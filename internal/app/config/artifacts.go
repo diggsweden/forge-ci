@@ -137,6 +137,12 @@ func EmitReleaseImagesPlan(ctx context.Context, sink ci.OutputSink, annot output
 	return images, nil
 }
 
+// ResolveReleaseImagesPlan is the plan EmitReleaseImagesPlan emits, for a
+// caller that hands it on as a file instead of as CI outputs.
+func ResolveReleaseImagesPlan(in EmitReleaseImagesPlanInput, annot output.Annotator) (pipeline.ReleaseImagesPlan, error) {
+	return resolveReleaseImagesPlan(in, annot)
+}
+
 func resolveReleaseImagesPlan(in EmitReleaseImagesPlanInput, annot output.Annotator) (pipeline.ReleaseImagesPlan, error) {
 	plan, err := planReleaseImages(in, annot)
 	if err != nil {

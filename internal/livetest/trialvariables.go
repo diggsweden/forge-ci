@@ -94,6 +94,15 @@ func ParseGitLabReleaseSettings(input string) (GitLabReleaseSettings, error) {
 		return GitLabReleaseSettings{}, err
 	}
 
+	// The release policy's image-builder input selects the builder; a build
+	// variable would override it inside the build alone.
+	for _, name := range []string{"CI_IMAGE_BUILDER", "CI_IMAGE_BUILDER_JOB_IMAGE"} {
+		if _, set := parsed[name]; set {
+			return GitLabReleaseSettings{}, fmt.Errorf("%s is the GitLab release policy's to set, not a build variable; select kaniko with %s=kaniko: %w",
+				name, GitLabImageBuilderEnv, errs.ErrValidation)
+		}
+	}
+
 	settings.Variables = parsed
 	if !validNextTrialVersion(settings) {
 		return GitLabReleaseSettings{}, fmt.Errorf("next-version requires an increasing explicit version and isolated version-bump mode: %w", errs.ErrValidation)

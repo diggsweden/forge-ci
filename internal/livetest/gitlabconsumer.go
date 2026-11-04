@@ -10,7 +10,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"regexp"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -176,8 +178,6 @@ func (consumer Consumer) stageGitLabGate(ctx context.Context, file string, layer
 }
 
 func renderGitLabConsumer(body []byte, layer Layer, images GitLabGateImages) (string, error) {
-	const stringTag = "!!str"
-
 	document, entries, err := gitlabGateComponents(body)
 	if err != nil {
 		return "", err
@@ -192,24 +192,28 @@ func renderGitLabConsumer(body []byte, layer Layer, images GitLabGateImages) (st
 		return "", err
 	}
 
-	for name, tags := range images.JobTags {
-		job := gitlabMappingValue(document.Content[0], name)
-		if job == nil {
-			job = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-			document.Content[0].Content = append(document.Content[0].Content,
-				&yaml.Node{Kind: yaml.ScalarNode, Tag: stringTag, Value: name}, job)
+	for _, name := range slices.Sorted(maps.Keys(images.JobTags)) {
+		job, err := gitlabTrialJob(document.Content[0], name)
+		if err != nil {
+			return "", err
 		}
 
-		if job.Kind != yaml.MappingNode || gitlabMappingValue(job, "tags") != nil {
+		if gitlabMappingValue(job, "tags") != nil {
 			return "", fmt.Errorf("trial job tags conflict with consumer configuration: %w", errs.ErrValidation)
 		}
 
 		sequence := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
-		for _, tag := range tags {
-			sequence.Content = append(sequence.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: stringTag, Value: tag})
+		for _, tag := range images.JobTags[name] {
+			sequence.Content = append(sequence.Content, gitlabYAMLString(tag))
 		}
 
-		job.Content = append(job.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: stringTag, Value: "tags"}, sequence)
+		job.Content = append(job.Content, gitlabYAMLString("tags"), sequence)
+	}
+
+	for _, name := range slices.Sorted(maps.Keys(images.JobVariables)) {
+		if err := addGitLabTrialVariables(document.Content[0], name, images.JobVariables[name]); err != nil {
+			return "", err
+		}
 	}
 
 	var encoded bytes.Buffer
@@ -219,6 +223,57 @@ func renderGitLabConsumer(body []byte, layer Layer, images GitLabGateImages) (st
 	err = encoder.Encode(document)
 
 	return encoded.String(), err
+}
+
+// gitlabYAMLString is a string scalar the trial adds to a consumer's YAML.
+func gitlabYAMLString(value string) *yaml.Node {
+	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value}
+}
+
+// gitlabTrialJob returns the named job of the consumer's configuration, added
+// empty when the consumer defines none of that name.
+func gitlabTrialJob(root *yaml.Node, name string) (*yaml.Node, error) {
+	job := gitlabMappingValue(root, name)
+	if job == nil {
+		job = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		root.Content = append(root.Content, gitlabYAMLString(name), job)
+	}
+
+	if job.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("trial job %s is not a job of the consumer configuration: %w", name, errs.ErrValidation)
+	}
+
+	return job, nil
+}
+
+// addGitLabTrialVariables adds the trial's variables to the named job, beside
+// the consumer's own; a name the consumer sets there is refused.
+func addGitLabTrialVariables(root *yaml.Node, name string, variables map[string]string) error {
+	job, err := gitlabTrialJob(root, name)
+	if err != nil {
+		return err
+	}
+
+	mapping := gitlabMappingValue(job, "variables")
+	if mapping == nil {
+		mapping = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		job.Content = append(job.Content, gitlabYAMLString("variables"), mapping)
+	}
+
+	if mapping.Kind != yaml.MappingNode {
+		return fmt.Errorf("the variables of trial job %s are not a mapping: %w", name, errs.ErrValidation)
+	}
+
+	for _, key := range sortedKeys(variables) {
+		if gitlabMappingValue(mapping, key) != nil {
+			return fmt.Errorf("trial variable %s conflicts with the consumer's own in %s: %w", key, name, errs.ErrValidation)
+		}
+
+		mapping.Content = append(mapping.Content, gitlabYAMLString(key),
+			gitlabYAMLString(variables[key]))
+	}
+
+	return nil
 }
 
 // bindGitLabGateComponents binds every included component. check and
@@ -274,6 +329,9 @@ type GitLabGateImages struct {
 	Job, Lint string
 	// JobTags overrides only the named image-building trial job, not lint or signing.
 	JobTags map[string][]string
+	// JobVariables adds variables to the named image-building trial job alone,
+	// the image builder it selects for example.
+	JobVariables map[string]map[string]string
 }
 
 // gitlabGateImage is, for each component a gate may include, the input that

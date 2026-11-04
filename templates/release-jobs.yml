@@ -51,7 +51,27 @@ spec:
     build-runner-tags:
       type: array
       default: []
-      description: Runner tags of the build job alone; empty leaves it untagged.
+      description: Runner tags of the build job, and with buildah of the amd64 image job; empty leaves them untagged.
+    release-images:
+      type: boolean
+      default: false
+      description: Build, scan and stage the containers artifacts-config declares in the image jobs, for signing.
+    artifacts-config:
+      regex: '^$|^[A-Za-z0-9_][A-Za-z0-9_./-]*$'
+      default: ''
+    release-platforms:
+      regex: '^$|^linux/(amd64|arm64)(,linux/(amd64|arm64))?$'
+      default: ''
+    image-builder:
+      options: [buildah, kaniko]
+      default: buildah
+    builder-job-image:
+      regex: '^$|^[^[:space:]]+@sha256:[0-9a-f]{64}$'
+      default: ''
+    build-runner-tags-arm64:
+      type: array
+      default: []
+      description: Runner tags of a native arm64 runner; the arm64 image job exists only when they are set.
     changelog-creator:
       options: [git-chglog, git-cliff]
     changelog-config:
@@ -71,7 +91,7 @@ spec:
     version-bump:
       options: ['', maven, npm, cargo]
 ---
-stages: [check, prepare, build, sign, publish]
+stages: [check, prepare, build, images, sign, publish]
 .forge-ci-release:
   # As in the check component: a consumer's image runs the job's shell, not
   # its own entrypoint, on every executor.
@@ -117,7 +137,17 @@ stages: [check, prepare, build, sign, publish]
       test "${CI_PIPELINE_SOURCE:?}" = parent_pipeline
       case "${CI_COMMIT_TAG:?}" in release-request/v*) ;; *) exit 1 ;; esac
       unset BASH_ENV ENV
-      RC_WORK=$(mktemp -d /tmp/forge-ci-release.XXXXXXXX)
+      # kaniko replaces an image job's root filesystem with the image's and
+      # deletes it after each build; only mounts and /kaniko survive, where
+      # the kaniko job image keeps TMPDIR. Its build jobs keep their work, the
+      # engine included, in the workspace; every other job in private /tmp.
+      work_parent=/tmp
+      case "${CI_JOB_NAME}" in
+        "Images: build amd64" | "Images: build arm64")
+          if [ '$[[ inputs.image-builder ]]' = kaniko ]; then work_parent=${CI_PROJECT_DIR:?}; fi
+          ;;
+      esac
+      RC_WORK=$(mktemp -d "${work_parent}/forge-ci-release.XXXXXXXX")
       readonly RC_WORK
       trap 'rm -rf -- "${RC_WORK}"' EXIT
       case "${CI_JOB_NAME}" in
@@ -173,6 +203,10 @@ stages: [check, prepare, build, sign, publish]
         "Prepare: changelog") handoff=_release-render ;;
         "Prepare: version") handoff=_release-bump ;;
         "Build: release files") handoff=_release-build ;;
+        "Images: plan") handoff=_release-images-plan ;;
+        "Images: build amd64") handoff=_release-images-amd64 ;;
+        "Images: build arm64") handoff=_release-images-arm64 ;;
+        "Images: publish") handoff=_release-images ;;
         "Sign: files and images") handoff=_release-sign ;;
         "Publish: images") handoff=_release-promote ;;
         *) handoff= ;;
@@ -283,18 +317,102 @@ stages: [check, prepare, build, sign, publish]
   artifacts:
     expire_in: 1 day
     paths: [_release-build/]
-"Sign: files and images":
+# The image stage, the Forgejo release-images workflow's jobs: the plan at the
+# release commit, one native build per architecture to OCI layouts with no
+# registry write, and one publishing job that scans, pushes the staging images to
+# this project's registry with the job token, records the ledger and joins it
+# to the build's dist. Without release-images none of them exists.
+.forge-ci-release-images:
   extends: .forge-ci-release
+  stage: images
+  rules:
+    - if: '"$[[ inputs.release-images ]]" == "true"'
+# The builder is a setting: Buildah in build-image on the build runner, or
+# kaniko in the admitted builder-job-image on an ordinary one.
+.forge-ci-release-image-builder-buildah:
+  image:
+    name: $[[ inputs.build-image ]]
+    entrypoint: [""]
+  tags: $[[ inputs.build-runner-tags ]]
+.forge-ci-release-image-builder-kaniko:
+  image:
+    name: $[[ inputs.builder-job-image ]]
+    entrypoint: [""]
+"Images: plan":
+  extends: .forge-ci-release-images
+  needs:
+    - job: "Prepare: release commit and tag"
+      artifacts: false
+  script:
+    - rc_images_plan '$[[ inputs.artifacts-config ]]' '$[[ inputs.release-platforms ]]' '$[[ inputs.build-runner-tags-arm64 ]]'
+  artifacts:
+    expire_in: 1 day
+    paths: [_release-images-plan/]
+"Images: build amd64":
+  extends: [.forge-ci-release-images, ".forge-ci-release-image-builder-$[[ inputs.image-builder ]]"]
+  needs:
+    - job: "Images: plan"
+      artifacts: true
+    - job: "Build: release files"
+      artifacts: true
+  script:
+    - rc_images_build amd64 '$[[ inputs.image-builder ]]' '$[[ inputs.builder-job-image ]]'
+  artifacts:
+    expire_in: 1 day
+    paths: [_release-images-amd64/]
+"Images: build arm64":
+  extends: [.forge-ci-release-images, ".forge-ci-release-image-builder-$[[ inputs.image-builder ]]"]
+  tags: $[[ inputs.build-runner-tags-arm64 ]]
+  rules:
+    - if: >-
+        '$[[ inputs.release-images ]]' == 'true' && '$[[ inputs.build-runner-tags-arm64 ]]' != '[]'
+  needs:
+    - job: "Images: plan"
+      artifacts: true
+    - job: "Build: release files"
+      artifacts: true
+  script:
+    - rc_images_build arm64 '$[[ inputs.image-builder ]]' '$[[ inputs.builder-job-image ]]'
+  artifacts:
+    expire_in: 1 day
+    paths: [_release-images-arm64/]
+"Images: publish":
+  extends: .forge-ci-release-images
+  needs:
+    - job: "Images: plan"
+      artifacts: true
+    - job: "Build: release files"
+      artifacts: true
+    - job: "Images: build amd64"
+      artifacts: true
+    - job: "Images: build arm64"
+      artifacts: true
+      optional: true
+  script:
+    - rc_images_publish
+  artifacts:
+    expire_in: 1 day
+    paths: [_release-images/]
+# Signing reads one hand-off, chosen by the policy: the build's, or with
+# release images the publishing job's, which carries the build's dist with the
+# ledger joined to it and is digested again.
+.forge-ci-release-sign-false:
+  needs:
+    - job: "Build: release files"
+      artifacts: true
+.forge-ci-release-sign-true:
+  needs:
+    - job: "Images: publish"
+      artifacts: true
+"Sign: files and images":
+  extends: [.forge-ci-release, ".forge-ci-release-sign-$[[ inputs.release-images ]]"]
   stage: sign
   image: $[[ inputs.signer-image ]]
   environment:
     name: release/registry/signing
     action: prepare
-  needs:
-    - job: "Build: release files"
-      artifacts: true
   script:
-    - rc_sign_release
+    - rc_sign_release '$[[ inputs.release-images ]]'
   artifacts:
     expire_in: 1 day
     paths: [_release-sign/]
@@ -353,4 +471,4 @@ stages: [check, prepare, build, sign, publish]
     - job: "Publish: tidy up"
       artifacts: false
   script:
-    - rc_release_summary
+    - rc_release_summary '$[[ inputs.release-images ]]' '$[[ inputs.build-runner-tags-arm64 ]]'

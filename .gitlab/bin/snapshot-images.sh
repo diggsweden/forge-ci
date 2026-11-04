@@ -19,6 +19,9 @@ snapshot_gitlab_build() {
 	fi
 	snapshot_build "${SNAPSHOT_NAME:?}" "${SNAPSHOT_ARCH:?}"
 	mv snapshot-source/snapshot-layouts snapshot-layouts
+	# A kaniko build leaves no shell at the paths after_script is run with;
+	# make the hand-off readable for the uploader here.
+	find snapshot-layouts \( -type d -o -type f \) -exec chmod u=rwX,go=rX -- {} +
 }
 
 snapshot_gitlab_produce() {

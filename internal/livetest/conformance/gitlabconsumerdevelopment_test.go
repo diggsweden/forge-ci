@@ -48,8 +48,9 @@ type developmentAcceptance struct {
 	maxArchive                                          int64
 	checkArchive                                        func(*testing.T, []byte, string)
 	checkPublication                                    func(*testing.T, []byte, string, livetest.Target, string)
-	// buildsImages says the development job builds images with Buildah, so
-	// it runs on the contract's runner that permits user namespaces.
+	// buildsImages says the development job builds images: with Buildah on
+	// the contract's runner that permits user namespaces, or with kaniko
+	// (FORGE_CI_LIVE_GITLAB_IMAGE_BUILDER) on the ordinary runner.
 	buildsImages bool
 }
 
@@ -86,20 +87,33 @@ func runGitLabDevelopment(t *testing.T, root string, private bool, acceptance de
 	engine := livetest.NewScratchRepo(t, target, "gitlab-development-layer")
 	layer := livetest.PushLayer(t, target, engine)
 
-	images := livetest.GitLabGateImages{
-		Job: livetest.PushJobImage(t, target, engine, os.Getenv("FORGE_CI_LIVE_CONSUMER_IMAGE_ARCHIVE")),
-	}
-	if acceptance.buildsImages {
+	archive := os.Getenv("FORGE_CI_LIVE_CONSUMER_IMAGE_ARCHIVE")
+
+	var images livetest.GitLabGateImages
+
+	switch {
+	case acceptance.buildsImages && livetest.GitLabKaniko(t):
+		// kaniko builds on the ordinary runner, in the job's own image, which
+		// must be a kaniko job image; the job alone is told to use it.
+		images.Job = livetest.PushKanikoJobImage(t, target, engine, archive, layer)
+		images.JobVariables = map[string]map[string]string{acceptance.jobName: {
+			"CI_IMAGE_BUILDER": livetest.ImageBuilderKaniko, "CI_IMAGE_BUILDER_JOB_IMAGE": images.Job,
+		}}
+	case acceptance.buildsImages:
+		images.Job = livetest.PushJobImage(t, target, engine, archive)
+
 		label := livetest.PrivilegedRunnerLabel(t, target)
 		if label == "" {
 			livetest.NotCoveredf(t, "image development requires the contract's privileged runner tag")
 		}
 
 		images.JobTags = map[string][]string{acceptance.jobName: {label}}
+	default:
+		images.Job = livetest.PushJobImage(t, target, engine, archive)
 	}
 
-	if archive := os.Getenv("FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE"); archive != "" {
-		images.Lint = livetest.PushJobImage(t, target, livetest.NewScratchRepo(t, target, "gitlab-development-lint"), archive)
+	if lint := os.Getenv("FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE"); lint != "" {
+		images.Lint = livetest.PushJobImage(t, target, livetest.NewScratchRepo(t, target, "gitlab-development-lint"), lint)
 	}
 
 	repo := livetest.NewBareScratchRepo(t, target, "gitlab-consumer-development", consumer.ObjectFormat, private)

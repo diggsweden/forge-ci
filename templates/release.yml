@@ -18,7 +18,7 @@ spec:
       description: Non-root tools for consumer checks and changelog rendering.
       regex: '^[^[:space:]]+@sha256:[0-9a-f]{64}$'
     build-image:
-      description: Consumer build tools; may match job-image when no separate builder is needed.
+      description: Consumer build tools; may match job-image when no separate builder is needed. With buildah it also runs the image builds.
       regex: '^[^[:space:]]+@sha256:[0-9a-f]{64}$'
     signer-image:
       regex: '^[^[:space:]]+@sha256:[0-9a-f]{64}$'
@@ -49,7 +49,33 @@ spec:
       type: array
     build-runner-tags:
       description: >-
-        Runner tags for the build job alone, for example [privileged] where only a tagged runner lets an image build enter user namespaces. Request authorization and signing stay on untagged runners. Empty, the default, leaves the build job untagged.
+        Runner tags for the build job and, with buildah, the amd64 image job, for example [privileged] where only a tagged runner lets an image build enter user namespaces. Request authorization and signing stay on untagged runners. Empty, the default, leaves them untagged.
+      type: array
+      default: []
+    release-images:
+      description: >-
+        Build the containers artifacts-config declares in the release's image jobs, scan them, stage them in this project's registry and hand them to signing. The build leaves files the Containerfiles copy that are not in the repository in image-context/. Without artifacts.yml the root Containerfile is the image.
+      type: boolean
+      default: false
+    artifacts-config:
+      description: Path of the artifacts.yml declaring the containers. Empty reads .forge-ci/artifacts.yml.
+      regex: '^$|^[A-Za-z0-9_][A-Za-z0-9_./-]*$'
+      default: ''
+    release-platforms:
+      description: Comma-separated subset of each container's platforms to build, for example linux/amd64. Empty builds them all.
+      regex: '^$|^linux/(amd64|arm64)(,linux/(amd64|arm64))?$'
+      default: ''
+    image-builder:
+      description: >-
+        Image builder of the image jobs: buildah, the default, in build-image on the build-runner-tags runner, or kaniko in builder-job-image on an ordinary runner, for runners that deny the user namespaces Buildah needs.
+      options: [buildah, kaniko]
+      default: buildah
+    builder-job-image:
+      description: With kaniko, the admitted digest-pinned kaniko job image (containers/kaniko-job). Empty with buildah.
+      regex: '^$|^[^[:space:]]+@sha256:[0-9a-f]{64}$'
+      default: ''
+    build-runner-tags-arm64:
+      description: Runner tags of a native arm64 runner for the arm64 image builds. Empty, the default, builds no arm64 image; a container that declares linux/arm64 then needs release-platforms narrowed.
       type: array
       default: []
     changelog-creator:
@@ -127,6 +153,12 @@ release:
           checks-runner-tags: $[[ inputs.checks-runner-tags ]]
           build: $[[ inputs.build ]]
           build-runner-tags: $[[ inputs.build-runner-tags ]]
+          release-images: $[[ inputs.release-images ]]
+          artifacts-config: $[[ inputs.artifacts-config ]]
+          release-platforms: $[[ inputs.release-platforms ]]
+          image-builder: $[[ inputs.image-builder ]]
+          builder-job-image: $[[ inputs.builder-job-image ]]
+          build-runner-tags-arm64: $[[ inputs.build-runner-tags-arm64 ]]
           changelog-creator: $[[ inputs.changelog-creator ]]
           changelog-config: $[[ inputs.changelog-config ]]
           commit-body-config: $[[ inputs.commit-body-config ]]

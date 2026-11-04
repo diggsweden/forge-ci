@@ -952,6 +952,7 @@ scans: --scan-output-template is required, every exported platform is scanned
 before publication, and the administrator policy decides whether findings block.
 Emits image, verified digest and platforms outputs; platforms is the comma-separated
 list that was built, in plan order. Release consumers normally use release-images.yml.
+Buildah only: a job whose CI_IMAGE_BUILDER selects another builder is refused.
 Every flag may also be fed from the $FORGE_CI_PLAN plan file under the "container build-push-oci-image"
 scope (flag > plan > env > default).
 ```
@@ -1791,6 +1792,40 @@ promotion policy. Lower-level `container ledger` verbs remain
 available for custom workflows; reusable workflows should use this group.
 ```
 
+#### `forge-ci container release-images build`
+
+build every planned release image of one architecture to staged layouts, with no registry write
+
+```
+Reads the plan file release-images plan --output wrote and builds each
+build of --arch on this native runner with the selected image builder, as
+multiarch-image build-arch --stage does, into <metadata-dir>/<name>-arch-<arch>.
+Nothing is pushed: release-images publish uploads the layouts once every
+architecture is built. The images carry the source, revision, title and
+version labels, the url, documentation, ref.name (the final tag) and created
+labels, then the labels the plan declares. An architecture the plan does not
+build is no error: the job has nothing to do.
+
+EXAMPLE:
+   forge-ci container release-images build --plan plan.json --arch amd64 --image-repository registry.example.com/group/app --release-tag v1.2.3 --release-sha "$(git rev-parse HEAD)" --created 2026-01-02T03:04:05Z --source-dir consumer --metadata-dir staged
+```
+
+| Flag | Description | Type | Default | Env vars |
+|------|-------------|------|---------|----------|
+| `--plan` | plan file release-images plan --output wrote (required) | string | `""` | n/a |
+| `--image-repository` | the one repository the plan publishes to; the plan is checked against it (required) | string | `""` | n/a |
+| `--release-tag` | release tag the plan was made for, e.g. v1.2.3 (required) | string | `""` | n/a |
+| `--release-sha` | release commit the images are built from and labelled with, unless the plan names a revision (required) | string | `""` | n/a |
+| `--server-url` | forge server URL the source labels name | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
+| `--repository` | owner/repo the source labels name | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
+| `--retry-attempts` | registry attempts | int | `3` | n/a |
+| `--arch` | architecture to build, the host's own: amd64 or arm64 (required) | string | `""` | n/a |
+| `--source-dir` | release checkout the plan's Containerfile and context paths are relative to | string | `"."` | n/a |
+| `--created` | org.opencontainers.image.created value: the release commit's time, so the label names the source, not the build (required) | string | `""` | n/a |
+| `--metadata-dir` | directory the staged <name>-arch-<arch> layouts are written under; keep it outside the build context (required) | string | `""` | n/a |
+| `--image-builder` | image builder type: buildah (default; rootless, needs user namespaces) or kaniko (for a pool that denies them; runs as root in the job image CI_IMAGE_BUILDER_JOB_IMAGE names, builds to a layout only, no load/local modes, no build secrets). Set CI_IMAGE_BUILDER on the repository to select it. | string | `"buildah"` | `$CI_IMAGE_BUILDER` |
+| `--kaniko-executor` | path of the kaniko executor (default /kaniko/executor) | string | `""` | `$KANIKO_EXECUTOR` |
+
 #### `forge-ci container release-images cleanup`
 
 delete release candidate tags after verified final/moving promotion
@@ -1867,6 +1902,11 @@ secrets, binary extraction, another scan threshold than its default CRITICAL gat
 platforms other than linux/amd64 and linux/arm64) are refused here, before any
 runner starts. RELEASE_PLATFORMS narrows every container's platforms.
 
+With --output, the plan is written to that file instead, for release-images
+build and publish on a forge whose jobs take no multiline outputs, and only
+registry-user is emitted. --runner-archs then names the architectures a native
+build job exists for; a container building another is refused here.
+
 EXAMPLE:
    forge-ci container release-images plan --image-repository ghcr.io/owner/app --registry-username owner --release-tag v1.2.3
 ```
@@ -1880,6 +1920,8 @@ EXAMPLE:
 | `--repository` | owner/repo the image repositories are derived from | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
 | `--release-tag` | release tag the image tags are made of, e.g. v1.2.3 (required) | string | `""` | n/a |
 | `--release-platforms` | comma-separated subset of each container's platforms to build; empty builds them all | string | `""` | `$RELEASE_PLATFORMS` |
+| `--output` | write the builds/images plan to this file instead of the builds, images and image-names outputs | string | `""` | n/a |
+| `--runner-archs` | with --output: comma-separated architectures that have a native build job; empty admits every one | string | `""` | n/a |
 | `--registry-username` | user the registry token logs in as, written to the registry-user output; empty is the --repository owner on the forge's own registry and refused on another one | string | `""` | `$REGISTRY_USER` |
 
 #### `forge-ci container release-images promote`
@@ -1902,6 +1944,38 @@ promote signed release image candidates to their final/moving release tags
 | `--journal` | JSONL promotion rollback journal; promote writes it before tag moves, rollback restores/deletes from it | string | `""` | `$IMAGE_PROMOTIONS_JOURNAL` |
 | `--allow-missing-ledger` | accept a release without images: when the default ledger <dist-dir>/release-images.json does not exist, say so and exit 0 before any credential read or registry login. The dist directory must exist, a ledger that exists is held to every rule, and a ledger named with --ledger must exist | bool | `false` | n/a |
 | `--dry-run` | preview registry mutations (copies/deletes) without performing them | bool | `false` | n/a |
+
+#### `forge-ci container release-images publish`
+
+scan, assemble and push every planned release image from its staged layouts, and write the release-images ledger
+
+```
+Reads the plan file and admits --layouts-dir: it must hold exactly the
+planned <name>-arch-<arch> layouts, with no other entry and no link, and is
+only read. Then, for each image, it verifies and scans every staged
+architecture layout before the first upload, pushes the index under its
+staging candidate tag, as multiarch-image assemble --from-layouts does, and
+records it as ledger add does. The ledger
+release-images.json, the Trivy results and the index manifests are written to
+--output-dir, for the signer to import. Every image is scanned; the
+administrator policy decides whether findings block.
+
+EXAMPLE:
+   forge-ci container release-images publish --plan plan.json --image-repository registry.example.com/group/app --release-tag v1.2.3 --release-sha "$(git rev-parse HEAD)" --layouts-dir layouts --output-dir images --auth-file auth.json
+```
+
+| Flag | Description | Type | Default | Env vars |
+|------|-------------|------|---------|----------|
+| `--plan` | plan file release-images plan --output wrote (required) | string | `""` | n/a |
+| `--image-repository` | the one repository the plan publishes to; the plan is checked against it (required) | string | `""` | n/a |
+| `--release-tag` | release tag the plan was made for, e.g. v1.2.3 (required) | string | `""` | n/a |
+| `--release-sha` | release commit the images are built from and labelled with, unless the plan names a revision (required) | string | `""` | n/a |
+| `--server-url` | forge server URL the source labels name | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
+| `--repository` | owner/repo the source labels name | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
+| `--retry-attempts` | registry attempts | int | `3` | n/a |
+| `--auth-file` | registry auth file that may push to --image-repository | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
+| `--layouts-dir` | directory holding the <name>-arch-<arch> layouts release-images build staged, and nothing else (required) | string | `""` | n/a |
+| `--output-dir` | directory for release-images.json and the scan evidence; must not exist yet (required) | string | `""` | n/a |
 
 #### `forge-ci container release-images rollback`
 

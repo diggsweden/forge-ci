@@ -36,6 +36,24 @@ func TestNewImageBuilder_SelectsTheAdapterByName(t *testing.T) {
 	require.ErrorIs(t, err, errs.ErrUsage)
 }
 
+func TestBuildPushOCIImage_RefusesAnotherSelectedBuilder(t *testing.T) {
+	t.Parallel()
+
+	for value, refused := range map[string]bool{"": false, "buildah": false, "Buildah": false, "kaniko": true, "docker": true} {
+		err := requireBuildahSelected(func(name string) string {
+			require.Equal(t, envImageBuilder, name)
+
+			return value
+		})
+		if refused {
+			require.ErrorIs(t, err, errs.ErrUsage, value)
+			require.ErrorContains(t, err, "container build --mode push-by-digest")
+		} else {
+			require.NoError(t, err, value)
+		}
+	}
+}
+
 func TestImageBuilderIdentity_UsesTheSelectedAdapterExecutable(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()

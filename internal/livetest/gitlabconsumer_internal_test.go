@@ -81,6 +81,33 @@ include:
 		t.Fatal("privileged tags were not confined to the image-building job")
 	}
 
+	kaniko := map[string]map[string]string{"Check: Rust development": {"CI_IMAGE_BUILDER": "kaniko", "CI_IMAGE_BUILDER_JOB_IMAGE": image}}
+	own := pipeline + "\n'Check: Rust development':\n  variables:\n    CARGO_TERM_COLOR: never\n"
+
+	selected, err := renderGitLabConsumer([]byte(own), layer, GitLabGateImages{Job: image, JobVariables: kaniko})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var builder struct {
+		Job struct {
+			Variables map[string]string `yaml:"variables"`
+		} `yaml:"Check: Rust development"`
+	}
+	if err := yaml.Unmarshal([]byte(selected), &builder); err != nil {
+		t.Fatal(err)
+	}
+
+	if variables := builder.Job.Variables; len(variables) != 3 || variables["CI_IMAGE_BUILDER"] != "kaniko" ||
+		variables["CI_IMAGE_BUILDER_JOB_IMAGE"] != image || variables["CARGO_TERM_COLOR"] != "never" || strings.Count(selected, "CI_IMAGE_BUILDER:") != 1 {
+		t.Fatalf("the builder was not added to the image-building job beside its own variables: %v", variables)
+	}
+
+	if _, err := renderGitLabConsumer([]byte(pipeline+"\n'Check: Rust development':\n  variables:\n    CI_IMAGE_BUILDER: buildah\n"), layer,
+		GitLabGateImages{Job: image, JobVariables: kaniko}); err == nil {
+		t.Fatal("trial silently replaced a consumer-owned variable")
+	}
+
 	conflict := pipeline + "\n'Check: Rust development':\n  tags: [consumer-runner]\n"
 	if _, err := renderGitLabConsumer([]byte(conflict), layer, GitLabGateImages{
 		Job: image, JobTags: map[string][]string{"Check: Rust development": {"privileged"}},

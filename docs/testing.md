@@ -749,8 +749,10 @@ acknowledgement and mint the contract again. A build that fails there is a
 failure: the fixture's first job, `Check that a job can build an image`, is
 the layer's `setup-buildah` alone, so the failure names the runner and not the
 release. Forge Lab's k3s road publishes no such runner, so they skip there.
-The GitLab image scenarios have no such route: their jobs are untagged and
-run on the ordinary runner.
+The GitLab image scenarios take the same runner through the release policy's
+`build-runner-tags`, or build with kaniko on the ordinary runner under
+`FORGE_CI_LIVE_GITLAB_IMAGE_BUILDER=kaniko`; see
+[Image builds with kaniko](#image-builds-with-kaniko).
 
 #### Focused resolved-image-plan smoke
 
@@ -1626,7 +1628,9 @@ for the key-free consumer build command. Their meaning belongs
 to the consumer, except `RELEASE_PLATFORMS`: a consumer trial on Forgejo or
 GitLab sets it to `linux/<runner.arch>` when it is not given, and refuses a
 selection of another architecture before anything is pushed, because the lab's
-runners build and run what is selected and a release never emulates. Duplicate
+runners build and run what is selected and a release never emulates. On
+GitLab it is also the policy's `release-platforms` when the consumer declares
+release images in `.forge-ci/release-images.yml`. Duplicate
 or malformed names are refused;
 values are shell-quoted as data. These settings are recorded in the live log
 and do not enter the independent preparation, signing, or publication commands.
@@ -1672,6 +1676,53 @@ Before a full consumer build, validate a prepared builder with the focused
 guarded full-release wrapper. This exercises storage setup with package
 installation disabled and a real `FROM scratch` / `RUN` build in the runner;
 it does not publish the built probe image.
+
+##### Image builds with kaniko
+
+A lab with no runner that permits user namespaces, Forge Lab's k3s road for
+one, builds GitLab release and development images with kaniko on the ordinary
+runner. `FORGE_CI_LIVE_GITLAB_IMAGE_BUILDER=kaniko` selects it; `buildah`, the
+default, keeps the privileged runner. On GitLab the builder is the release
+policy's `image-builder` input, so it is this trial setting and not a consumer
+variable: `CI_IMAGE_BUILDER=` among the consumer settings is refused.
+
+A consumer releases images on GitLab when it declares them in
+`.forge-ci/release-images.yml`, the file its Forgejo release names as
+`artifacts-config`: the harness then sets `release-images: true`, that file,
+and the lab's one platform as `release-platforms`. Under kaniko the release's
+image jobs run in the kaniko job image of this commit, a saved archive named
+by `FORGE_CI_LIVE_KANIKO_JOB_IMAGE_ARCHIVE`; the build archive stays the
+consumer's build tools. `just test-live-kaniko-job-image` builds
+`localhost/forge-ci-live-kaniko-job:<commit>`. A run admits a kaniko job image
+only when its source label names the engine project the layer runs from, a
+scratch project of each scenario's own, so the harness labels the image with
+that project as it pushes it; the source label the recipe gives it for the
+Forgejo trial does not matter here.
+
+```text
+just test-live-kaniko-job-image /absolute/forge-lab >/dev/null
+podman save --format docker-archive -o /absolute/images/kaniko-job.tar \
+  "localhost/forge-ci-live-kaniko-job:$(git rev-parse HEAD)"
+
+FORGE_CI_LIVE_GITLAB_IMAGE_BUILDER=kaniko \
+FORGE_CI_LIVE_KANIKO_JOB_IMAGE_ARCHIVE=/absolute/images/kaniko-job.tar \
+  just test-live-gitlab-consumer-release /absolute/clean-consumer \
+  /absolute/check-image.tar /absolute/build-image.tar /absolute/signer-image.tar
+```
+
+The release policy then takes `image-builder: kaniko`, the pushed kaniko job
+image as `builder-job-image`, and no `build-runner-tags`. The lab's runners
+are of one architecture, so a release on an arm64 lab, whose image job needs
+tagged runners, is not covered. A development scenario that builds images
+runs its job in its consumer image archive, which must then be a kaniko job
+image, untagged, with `CI_IMAGE_BUILDER` and `CI_IMAGE_BUILDER_JOB_IMAGE`
+added to that job alone. What builds with Buildah whatever the setting stays
+as it was: the base-image fixture, whose build runs Buildah itself, and a
+consumer build that extracts a binary with `forge-ci container build`, such
+as hello-cargo-container's, are not covered under kaniko; the Go CLI
+integration fixture's checks still need `runner.privileged_label`, and are
+not covered without it; `TestGitLabRelease_BuildImageCapability` probes a
+Buildah builder. The minimal release builds no image.
 
 ##### 0.90.0 acceptance goals
 

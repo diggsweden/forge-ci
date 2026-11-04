@@ -5,73 +5,54 @@ package livetest
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/diggsweden/forge-ci/internal/adapters/gitlaboutput"
 	"github.com/diggsweden/forge-ci/internal/domain/config"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
-func TestGitLabImageDemosConsumeActualDotenvOutputs(t *testing.T) {
+// The GitLab image demos push no image of their own: the release's image jobs
+// build what .forge-ci/release-images.yml declares, the file their Forgejo
+// release names too, from image-context/ where the Containerfile needs it.
+func TestGitLabImageDemosLeaveTheirImagesToTheReleaseImageJobs(t *testing.T) {
 	t.Parallel()
 
-	for _, demo := range []string{"hello-maven-service", "hello-cargo-container", "hello-npm-service"} {
+	for demo, context := range map[string]bool{"hello-maven-service": true, "hello-cargo-container": false, "hello-npm-service": true} {
 		t.Run(demo, func(t *testing.T) {
 			t.Parallel()
 
-			body, err := os.ReadFile(filepath.Join(reporoot.Path(t), "test", "live", "demos", demo, "consumer", ".gitlab", "build-release.sh"))
+			consumer := filepath.Join(reporoot.Path(t), "test", "live", "demos", demo, "consumer")
+
+			body, err := os.ReadFile(filepath.Join(consumer, ".gitlab", "build-release.sh"))
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			_, fragment, found := strings.Cut(string(body), "image='' digest=''")
-			if !found {
-				t.Fatal("demo has no image-output consumer")
+			for _, pushed := range []string{"build-push-oci-image", "ledger add", "CI_JOB_TOKEN", "release-images.json"} {
+				if strings.Contains(string(body), pushed) {
+					t.Errorf("the GitLab build still publishes images: %s", pushed)
+				}
 			}
 
-			fragment, _, found = strings.Cut(fragment, "--default-sbom")
-			if !found {
-				t.Fatal("demo has no image-ledger hand-off")
+			if strings.Contains(string(body), "image-context") != context {
+				t.Errorf("image-context in the build is %t, want %t", !context, context)
 			}
 
-			fragment = "image='' digest=''" + fragment + "--default-sbom\n"
-			dir := t.TempDir()
-			image := "registry.example/trial/service"
-			digest := "sha256:" + strings.Repeat("a", 64)
-
-			sink := gitlaboutput.New(filepath.Join(dir, "image.env"))
-			if err = sink.Set(t.Context(), "image", image); err != nil {
-				t.Fatal(err)
-			}
-
-			if err = sink.Set(t.Context(), "digest", digest); err != nil {
-				t.Fatal(err)
-			}
-
-			if err = sink.Close(t.Context()); err != nil {
-				t.Fatal(err)
-			}
-
-			capture := filepath.Join(dir, "ledger-args")
-			command := exec.CommandContext(t.Context(), "bash", "-c", "set -euo pipefail\nforge-ci() { printf '%s\\n' \"$@\" > \"$CAPTURE\"; }\n"+fragment)
-
-			command.Env = []string{"PATH=/usr/bin:/bin", "auth_dir=" + dir, "CAPTURE=" + capture, "RELEASE_TAG=v1.2.3"}
-			if output, runErr := command.CombinedOutput(); runErr != nil {
-				t.Fatalf("demo rejected real GitLab output: %v\n%s", runErr, output)
-			}
-
-			args, err := os.ReadFile(capture)
+			declared, err := os.ReadFile(filepath.Join(consumer, ".forge-ci", "release-images.yml"))
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			want := strings.Join([]string{"container", "ledger", "add", "--role", "runtime", "--image-name", image, "--digest", digest,
-				"--final-tag-name", "v1.2.3", "--tag", "v1.2.3", "--default-sbom"}, "\n") + "\n"
-			if string(args) != want {
-				t.Fatalf("ledger arguments=%q; want %q", args, want)
+			parsed, err := config.Parse(declared)
+			if err != nil || len(parsed.Containers) != 1 {
+				t.Fatalf("release images: %v", err)
+			}
+
+			forgejo, err := os.ReadFile(filepath.Join(consumer, ".forgejo", "workflows", "release.yml"))
+			if err != nil || !strings.Contains(string(forgejo), "artifacts-config: .forge-ci/release-images.yml") {
+				t.Fatalf("the Forgejo release names another declaration: %v", err)
 			}
 		})
 	}

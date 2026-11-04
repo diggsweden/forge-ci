@@ -857,7 +857,9 @@ test-live-signer-image forge_lab:
 #     CI_IMAGE_BUILDER_JOB_IMAGE="$(just test-live-kaniko-job-image ~/src/forge-lab)"
 #
 # Needs and prints what test-live-signer-image does. A demo trial uses other
-# layer repositories, which this image does not name.
+# layer repositories, which this image does not name. A GitLab trial takes a
+# saved archive of the local build and labels it itself:
+# FORGE_CI_LIVE_GITLAB_IMAGE_BUILDER=kaniko in docs/testing.md.
 [arg('forge_lab', help='Absolute path to the Forge Lab checkout used to publish the kaniko job image')]
 [doc('Live; build and publish the lab kaniko job image')]
 [group('live')]

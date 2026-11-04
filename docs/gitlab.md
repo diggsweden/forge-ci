@@ -189,7 +189,10 @@ images and pins, a validating regex. The inputs that are not obvious:
 | | `request-allowed-signers` | OpenSSH allowed-signers text for the people who may sign a request tag. |
 | | `bot-name`, `bot-email` | The release bot identity; no default. |
 | | `checks`, `build` | Consumer commands: checks on the request commit, and the build that writes `dist/release-files.json` and `release-notes.md`. |
-| | `build-runner-tags` | Runner tags for the build job alone, for example `[privileged]`. Empty, the default, leaves it untagged. |
+| | `build-runner-tags` | Runner tags for the build job and, with Buildah, the amd64 image job, for example `[privileged]`. Empty, the default, leaves them untagged. |
+| | `release-images`, `artifacts-config`, `release-platforms` | `true` builds the `containers:` of `artifacts-config` (default `.forge-ci/artifacts.yml`; without it the root `Containerfile`) in the release's image jobs, narrowed to `release-platforms`. Default `false`: no image jobs. See [Release images](#release-images). |
+| | `image-builder`, `builder-job-image` | The image jobs' builder: `buildah` (default) in `build-image`, or `kaniko` in the digest-pinned kaniko job image `builder-job-image`. |
+| | `build-runner-tags-arm64` | Tags of a native arm64 runner. The arm64 image job exists only when they are set. |
 | | `checks-runner-tags` | Runner tags for consumer checks after restricted signed-request authorization. Empty, the default, leaves checks untagged. Authorization and signing stay untagged. |
 | | `changelog-creator`, `changelog-config`, `commit-body-config` | `git-cliff` (default) or `git-chglog`, and the consumer's configuration files, by default `.forge-ci/gitcliff/keepachangelog.toml` and `.forge-ci/gitcliff/minimal.toml`, copies of this repository's [`templates/gitcliff/`](../templates/gitcliff/) that `forge-ci init` writes. git-cliff renders offline, without remote metadata, and reads stable `vX.Y.Z` tags only, overriding any `tag_pattern` in the configuration. A SHA-256 repository needs `git-chglog`, since git-cliff cannot read one. |
 | | `release-policy` | `stable` (default) or `stable-prerelease`, selected in the trusted external policy. GitLab has no native prerelease flag; see [release policy](workflows.md#stable-and-prerelease-policy). |
@@ -279,12 +282,29 @@ Images](runtime-images.md) has the roster and pinning conventions.
 The policy selects separate digest-pinned `job-image`, `build-image` and
 `signer-image` inputs. Use a non-root `job-image` for checks and rendering;
 permission tests must run with ordinary-user filesystem semantics. Only the
-build job selects `build-image`, which can supply a root Buildah environment.
-Pass the same image for both inputs when the build needs no separate environment.
-Buildah needs user namespaces. Where only some runners allow them, tag those
-runners and name the tags in `build-runner-tags`: the build job alone moves
-there, and the signing jobs stay on the untagged runners.
-Integration checks that execute Buildah need the same capability. Set
+build job, and with Buildah the image jobs, select `build-image`, which can
+supply a root Buildah environment. Pass the same image for both inputs when
+the build needs no separate environment. Buildah needs user namespaces. Where
+only some runners allow them, tag those runners and name the tags in
+`build-runner-tags`: the build job and the amd64 image job move there, and the
+signing jobs stay on the untagged runners.
+
+Where no runner allows them, set `image-builder: kaniko` and
+`builder-job-image` to the kaniko job image of
+[containers/kaniko-job/Containerfile](../containers/kaniko-job/Containerfile),
+pinned by digest. The image build jobs then run in it, as root, on untagged
+runners; the consumer's build keeps `build-image`. Before a Containerfile is
+built, the job admits the image as the snapshot builds do: its title must be
+`forge-ci kaniko job image` and its `org.opencontainers.image.source` label
+the engine project, `${CI_SERVER_URL}/<forge-ci-repository>`, read with the
+job token. kaniko replaces the job's root filesystem with the image it
+builds and deletes it after each build, so the job keeps its work, the engine
+and the checkout in the workspace, and its temporary files in the job image's
+`/kaniko/tmp`. See
+[Building on the pool with kaniko](runners.md#building-on-the-pool-with-kaniko)
+for what kaniko does not do.
+
+Integration checks that execute Buildah need user namespaces too. Set
 `checks-runner-tags` in the trusted release policy for those checks. The
 restricted `Check: release request` must succeed before the selected runner
 starts `Check: consumer checks`; that job freshly checks out the immutable
@@ -548,8 +568,10 @@ exist. See the [monorepo example](../examples/monorepo/gitlab/.gitlab-ci.yml).
 
 In the native release, the build is the consumer's own `build` commands,
 running in `build-image` without signing keys. They must write
-`dist/release-files.json` and `release-notes.md`, and, for images, the image
-ledger. The flow checks that the hand-off is unsigned.
+`dist/release-files.json` and `release-notes.md`, and, for images, leave
+their build context in `image-context/`; the image ledger is the
+[release image jobs'](#release-images). The flow checks that the hand-off is
+unsigned.
 
 ## Releases and promotion
 
@@ -586,6 +608,40 @@ include:
       build:
         - bash .gitlab/build-release.sh
 ```
+
+#### Release images
+
+The release builds its container images itself, in jobs of its own between
+the build and signing, as the Forgejo
+[release-images workflow](forgejo.md#release-images) does. With `release-images: true`:
+
+1. `Images: plan` plans the `containers:` of `artifacts-config` at the release
+   commit, one build per container and architecture, each published to this
+   project's registry, `CI_REGISTRY_IMAGE`, under `staging-<final tag>`. A
+   container that builds linux/arm64 without `build-runner-tags-arm64` stops
+   here; narrow `release-platforms` or name the runner.
+2. `Images: build amd64` and, with `build-runner-tags-arm64`, `Images: build
+   arm64` build every planned image of their architecture natively to OCI
+   layouts, with no registry write. The engine passes the build no
+   credential of the job, but this is the trust `Build: release files` gives
+   the consumer, not a boundary: under kaniko the Containerfile's `RUN` steps
+   run in the job's own container and can read its job token. The checkout
+   is the release commit with the build's `image-context/` laid over it, for
+   the files the Containerfiles copy that are not in the repository, such as
+   the jar the build made.
+3. `Images: publish` scans every layout, then pushes each image's index with
+   the job token, records it in `release-images.json` with the scan results,
+   and joins them to the build's `dist/` in a hand-off of its own, digested
+   again.
+4. `Sign: files and images` reads that hand-off, and only it, and imports the
+   staging images into the publication project as before.
+
+The build itself pushes no image: a `dist/release-images.json` from the
+`build` commands stops its hand-off. The images carry the source, revision,
+title, version, url, documentation, ref.name and created labels; their
+SBOMs are generated when they are signed. Build secrets, binary extraction
+and base images are not carried out by the image jobs; a binary extraction
+stays in the `build` commands.
 
 #### Version bump
 

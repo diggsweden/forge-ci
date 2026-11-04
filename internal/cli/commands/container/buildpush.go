@@ -50,6 +50,7 @@ scans: --scan-output-template is required, every exported platform is scanned
 before publication, and the administrator policy decides whether findings block.
 Emits image, verified digest and platforms outputs; platforms is the comma-separated
 list that was built, in plan order. Release consumers normally use release-images.yml.
+Buildah only: a job whose CI_IMAGE_BUILDER selects another builder is refused.
 Every flag may also be fed from the $FORGE_CI_PLAN plan file under the "container build-push-oci-image"
 scope (flag > plan > env > default).`,
 		Flags: []cli.Flag{
@@ -76,6 +77,10 @@ scope (flag > plan > env > default).`,
 			&cli.IntFlag{Name: flagRetryDelaySeconds, Value: 15, Sources: planfile.Vars(planScopeBuildPush, flagRetryDelaySeconds, "MANIFEST_PUSH_RETRY_DELAY_SECONDS"), Usage: "base delay between manifest push retry attempts"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
+			if err := requireBuildahSelected(os.Getenv); err != nil {
+				return err
+			}
+
 			template := cmd.String("scan-output-template")
 			// A publish route like any other: the exported platforms are
 			// always scanned, and the administrator policy decides whether
@@ -127,6 +132,19 @@ scope (flag > plan > env > default).`,
 			})
 		},
 	}
+}
+
+// requireBuildahSelected refuses a job that selects another image builder:
+// build-push-oci-image builds every platform into Buildah's local manifest, so
+// it would ignore the selection and run Buildah where it may not run.
+func requireBuildahSelected(getenv func(string) string) error {
+	builder := strings.TrimSpace(getenv(envImageBuilder))
+	if builder == "" || strings.EqualFold(builder, imageBuilderBuildah) {
+		return nil
+	}
+
+	return fmt.Errorf("build-push-oci-image builds with Buildah only, and %s selects %q: build each native platform with `container build --mode push-by-digest`, which reads %s: %w",
+		envImageBuilder, builder, envImageBuilder, errs.ErrUsage)
 }
 
 // publicationGate is the container scan GitHub's image builds pass before

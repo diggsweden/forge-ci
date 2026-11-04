@@ -55,7 +55,7 @@ func TestBuildToLayout_ArgvShape(t *testing.T) {
 
 	for _, want := range []string{
 		"--context dir://" + cwd,
-		"--no-push",
+		"--no-push --cleanup",
 		"--oci-layout-path " + layout,
 		"--ignore-path " + layout,
 		"--ignore-path " + cwd,
@@ -203,6 +203,46 @@ func TestBuildArch_BuildsOnceAtExportWithProvenanceLabels(t *testing.T) {
 	// A second export of the same tag has nothing staged.
 	if err := adapter.ExportLocalImageToLayout(t.Context(), "localhost/signer:amd64", layout, &log); !errors.Is(err, errs.ErrUsage) {
 		t.Errorf("second export: err=%v, want a usage refusal", err)
+	}
+}
+
+// One job builds every planned image of its architecture with one adapter.
+// Each run deletes the filesystem it built on, so the next image starts from
+// its own base, not from the previous image's root filesystem.
+func TestBuildArch_EachImageOfAJobStartsClean(t *testing.T) {
+	t.Parallel()
+
+	adapter := fakeExecutor(t)
+
+	var log strings.Builder
+
+	for _, name := range []string{"app", "worker"} {
+		req := container.SignerImageBuildToolRequest{Platform: "linux/amd64", LocalImage: "localhost/" + name + ":amd64", Context: ".", Title: name}
+		if err := adapter.BuildSignerImage(t.Context(), req, &log); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := adapter.ExportLocalImageToLayout(t.Context(), req.LocalImage, filepath.Join(t.TempDir(), name), &log); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	runs := 0
+
+	for line := range strings.SplitSeq(log.String(), "\n") {
+		if !strings.HasPrefix(line, "ARGV ") {
+			continue
+		}
+
+		runs++
+
+		if !strings.Contains(line, " --cleanup ") {
+			t.Errorf("kaniko run %d keeps its filesystem for the next image: %s", runs, line)
+		}
+	}
+
+	if runs != 2 {
+		t.Fatalf("want one kaniko run per image, got %d:\n%s", runs, log.String())
 	}
 }
 

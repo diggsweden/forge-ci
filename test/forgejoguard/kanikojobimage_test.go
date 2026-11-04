@@ -127,7 +127,7 @@ func TestKanikoJobImageExampleBootstrapsNativelyPerArchitectureThenMerges(t *tes
 		t.Errorf("%s and %s must pin the same kaniko release", kanikoJobImageExample, kanikoJobContainerfile)
 	}
 
-	for _, want := range []string{`org.opencontainers.image.title="forge-ci kaniko job image"`, "bash-static", "busybox-static", "COPY --from=kaniko /kaniko /kaniko", "SSL_CERT_FILE=/kaniko/ssl/certs/ca-certificates.crt", ":/kaniko/tools:"} {
+	for _, want := range []string{`org.opencontainers.image.title="forge-ci kaniko job image"`, "bash-static", "busybox-static", "COPY --from=kaniko /kaniko /kaniko", "SSL_CERT_FILE=/kaniko/ssl/certs/ca-certificates.crt", ":/kaniko/tools:", "install -d -m 1777 /kaniko/tmp", "TMPDIR=/kaniko/tmp"} {
 		if !strings.Contains(string(body), want) {
 			t.Errorf("%s lacks %q: the steps after a kaniko build depend on it", kanikoJobContainerfile, want)
 		}

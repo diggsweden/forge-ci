@@ -70,6 +70,7 @@ const (
 // release-images, base-images, signer-image): the same verb vocabulary is
 // deliberately used in every tree.
 const (
+	subCmdBuild    = "build"
 	subCmdCleanup  = "cleanup"
 	subCmdImport   = "import"
 	subCmdName     = "name"

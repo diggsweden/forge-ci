@@ -59,6 +59,11 @@ secrets, binary extraction, another scan threshold than its default CRITICAL gat
 platforms other than linux/amd64 and linux/arm64) are refused here, before any
 runner starts. RELEASE_PLATFORMS narrows every container's platforms.
 
+With --output, the plan is written to that file instead, for release-images
+build and publish on a forge whose jobs take no multiline outputs, and only
+registry-user is emitted. --runner-archs then names the architectures a native
+build job exists for; a container building another is refused here.
+
 EXAMPLE:
    forge-ci container release-images plan --image-repository ghcr.io/owner/app --registry-username owner --release-tag v1.2.3`,
 		Flags: []cli.Flag{
@@ -71,6 +76,8 @@ EXAMPLE:
 			// falls back to, is not the release tag on a release-request push.
 			&cli.StringFlag{Name: "release-tag", Required: true, Usage: "release tag the image tags are made of, e.g. v1.2.3"},
 			&cli.StringFlag{Name: "release-platforms", Sources: cli.EnvVars("RELEASE_PLATFORMS"), Usage: "comma-separated subset of each container's platforms to build; empty builds them all"},
+			&cli.StringFlag{Name: flagOutput, Usage: "write the builds/images plan to this file instead of the builds, images and image-names outputs"},
+			&cli.StringFlag{Name: flagRunnerArchs, Usage: "with --output: comma-separated architectures that have a native build job; empty admits every one"},
 			regflags.UsernameFor("user the registry token logs in as, written to the registry-user output; empty is the --repository owner on the forge's own registry and refused on another one"),
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -95,7 +102,7 @@ EXAMPLE:
 					return err
 				}
 
-				plan, err := appconfig.EmitReleaseImagesPlan(ctx, dep.OutputSink, deps.Annotator(cmd), appconfig.EmitReleaseImagesPlanInput{
+				input := appconfig.EmitReleaseImagesPlanInput{
 					Config:            appconfig.EmitConfigPlanInput{Path: cmp.Or(file, defaultArtifactsFile)},
 					DefaultWhenAbsent: !named,
 					ResolvedPlan:      resolved,
@@ -105,7 +112,22 @@ EXAMPLE:
 						ReleaseTag:       cmd.String("release-tag"),
 						ReleasePlatforms: cmd.String("release-platforms"),
 					},
-				})
+				}
+
+				var plan pipeline.ReleaseImagesPlan
+				if output := cmd.String(flagOutput); output != "" {
+					plan, err = appconfig.ResolveReleaseImagesPlan(input, deps.Annotator(cmd))
+					if err == nil {
+						err = writeReleaseImagesPlanFile(output, plan, cmd.String(flagRunnerArchs))
+					}
+				} else {
+					if cmd.String(flagRunnerArchs) != "" {
+						return fmt.Errorf("--runner-archs needs --output: %w", errs.ErrUsage)
+					}
+
+					plan, err = appconfig.EmitReleaseImagesPlan(ctx, dep.OutputSink, deps.Annotator(cmd), input)
+				}
+
 				if err != nil {
 					return err
 				}

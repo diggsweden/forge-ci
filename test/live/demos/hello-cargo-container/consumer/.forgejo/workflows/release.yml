@@ -108,7 +108,7 @@ jobs:
       forge-ci-sha: c08b59fe61f4b926d80875ce850f6bdc695b1d9a
       release-tag: ${{ needs.prepare.outputs.release-tag }}
       release-sha: ${{ needs.prepare.outputs.release-sha }}
-      artifacts-config: .forge-ci/images-forgejo.yml
+      artifacts-config: .forge-ci/release-images.yml
       release-platforms: linux/amd64
     secrets:
       RELEASE_REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}

@@ -34,7 +34,7 @@ func TestReleaseImagesGroupExposesBoundaryCommands(t *testing.T) {
 		require.Empty(t, cmd.Aliases)
 	}
 
-	require.ElementsMatch(t, []string{"plan", "import", "sign", "validate", "promote", "rollback", "cleanup"}, found)
+	require.ElementsMatch(t, []string{"plan", "build", "publish", "import", "sign", "validate", "promote", "rollback", "cleanup"}, found)
 }
 
 // Only the verbs that act on every ledger entry can be told that a release
