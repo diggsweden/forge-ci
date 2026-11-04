@@ -163,9 +163,7 @@ jobs:
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: ci-results-pr-quality
-          ARTIFACT_DIR: .ci-results
-        run: forge-ci artifact download
+        run: forge-ci artifact download --name ci-results-pr-quality --dir .ci-results
       - name: Generate PR summary
         env:
           PROJECT_TYPE: ${{ fromJson(needs.compose-pr-plan.outputs['pr-plan-json']).context.project_type }}

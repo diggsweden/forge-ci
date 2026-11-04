@@ -225,10 +225,12 @@ Current CLI alternatives, subject to their provider and runtime contracts:
   config read by docker, podman/buildah, skopeo, and cosign).
 - `actions/download-artifact` → `artifact download` (node-less, forge-portable).
   Download uses the GitHub REST artifacts API, which a `run:` step *can* reach, so
-  the CLI verb stays. Flag mapping via `env:`: `name:`→`$ARTIFACT_NAME`; `path:`→
-  `$ARTIFACT_DIR`; `pattern:`→`$ARTIFACT_PATTERN`; `merge-multiple:`→
-  `$ARTIFACT_MERGE_MULTIPLE`. The REST call needs auth, and `$GITHUB_TOKEN` is
-  **not** auto-present in run steps, so each download step passes
+  the CLI verb stays. The `with:` inputs map to flags: `name:`→`--name`;
+  `path:`→`--dir`; `pattern:`→`--pattern`; `merge-multiple:`→`--merge-multiple`.
+  The transfer flags read no environment, so a job's project settings such as
+  `ARTIFACT_NAME` cannot reach them; pass an expression through a step-local
+  env name (`DOWNLOAD_NAME`) and quote it. The REST call needs auth, and
+  `$GITHUB_TOKEN` is **not** auto-present in run steps, so each download step passes
   `GH_TOKEN: ${{ github.token }}`.
 - GitHub workflows retain `actions/upload-artifact` for **upload**. The CLI also
   implements that transport, but it needs the Actions "results" credentials.

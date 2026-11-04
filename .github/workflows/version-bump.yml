@@ -286,9 +286,7 @@ jobs:
       - name: Download Full Changelog
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: full-changelog
-          ARTIFACT_DIR: ${{ runner.temp }}/version-full-changelog
-        run: forge-ci artifact download
+        run: forge-ci artifact download --name full-changelog --dir "$RUNNER_TEMP/version-full-changelog"
       - name: Verify Full Changelog
         working-directory: ${{ inputs['working-directory'] }}
         run: |
@@ -300,9 +298,7 @@ jobs:
       - name: Download Minimal Changelog
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: minimal-changelog
-          ARTIFACT_DIR: ${{ runner.temp }}/version-minimal-changelog
-        run: forge-ci artifact download
+        run: forge-ci artifact download --name minimal-changelog --dir "$RUNNER_TEMP/version-minimal-changelog"
       - name: Read Minimal Changelog
         id: minimal-changelog
         working-directory: ${{ inputs['working-directory'] }}

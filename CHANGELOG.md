@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **BREAKING:** `artifact upload`, `artifact download` and `artifact digest`
+  no longer read `ARTIFACT_NAME`, `ARTIFACT_DIR`, `ARTIFACT_FILES`,
+  `ARTIFACT_PATHS`, `ARTIFACT_PATTERN`, `ARTIFACT_MERGE_MULTIPLE`,
+  `ARTIFACT_RETENTION_DAYS`, `ARTIFACT_IF_NO_FILES`,
+  `ARTIFACT_INCLUDE_HIDDEN` or `ARTIFACT_BLOB_STORE`. `ARTIFACT_NAME` and
+  `ARTIFACT_DIR` are project settings for other commands, so a release job
+  that set `ARTIFACT_NAME` made `artifact download --pattern` fail with "use
+  --name or --pattern". Pass `--name`, `--dir`, `--pattern` and the rest as
+  flags. `--run-id` and `--repository` still default to the current run.
 - Remove `just bump-runtime-tags`. No workflow or component pins a runtime
   image release any more, so a release cut has nothing to move, and a guard
   refuses one written back. 0.91.x shipped with the v0.90.0 pins it missed.

@@ -593,10 +593,8 @@ jobs:
         # with the ordinary token.
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_PATTERN: digests-${{ matrix.runtime.target }}-*
-          ARTIFACT_MERGE_MULTIPLE: 'true'
-          ARTIFACT_DIR: /tmp/digests
-        run: forge-ci artifact download
+          DOWNLOAD_PATTERN: digests-${{ matrix.runtime.target }}-*
+        run: forge-ci artifact download --pattern "$DOWNLOAD_PATTERN" --merge-multiple --dir /tmp/digests
       - name: Log in to GHCR
         env:
           CONTAINER_REGISTRY: ghcr.io

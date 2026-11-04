@@ -185,9 +185,8 @@ jobs:
       - name: Download release-image ledgers
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_PATTERN: ${{ inputs['ledger-artifact-pattern'] }}
-          ARTIFACT_DIR: ledgers
-        run: forge-ci artifact download
+          DOWNLOAD_PATTERN: ${{ inputs['ledger-artifact-pattern'] }}
+        run: forge-ci artifact download --pattern "$DOWNLOAD_PATTERN" --dir ledgers
       - name: Merge ledgers
         run: forge-ci container ledger merge ledgers
       - name: Check registry authentication configuration

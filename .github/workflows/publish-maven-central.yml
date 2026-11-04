@@ -172,9 +172,9 @@ jobs:
       - name: Download build artifacts
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: ${{ inputs['artifact-source'] }}
-          ARTIFACT_DIR: ${{ inputs['project-type'] != 'maven' && '.forge-ci/gradle-publication' || format('{0}/', inputs['working-directory']) }}
-        run: forge-ci artifact download
+          DOWNLOAD_NAME: ${{ inputs['artifact-source'] }}
+          DOWNLOAD_DIR: ${{ inputs['project-type'] != 'maven' && '.forge-ci/gradle-publication' || format('{0}/', inputs['working-directory']) }}
+        run: forge-ci artifact download --name "$DOWNLOAD_NAME" --dir "$DOWNLOAD_DIR"
       - name: Verify artifacts for Maven Central
         if: ${{ inputs['project-type'] == 'maven' && !inputs.snapshot }}
         working-directory: ${{ inputs['working-directory'] }}

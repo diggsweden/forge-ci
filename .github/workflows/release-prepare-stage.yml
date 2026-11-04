@@ -167,9 +167,7 @@ jobs:
       - name: Download Full Changelog
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: full-changelog
-          ARTIFACT_DIR: .
-        run: forge-ci artifact download
+        run: forge-ci artifact download --name full-changelog --dir .
       - name: Prepare version files
         env:
           PREPARE_STAGE_PLAN_JSON: ${{ inputs['prepare-stage-plan-json'] }}
@@ -266,9 +264,7 @@ jobs:
         if: ${{ inputs['existing-release-sha'] == '' && fromJson(inputs['prepare-stage-plan-json']).targets.version_bump.runs }}
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: full-changelog
-          ARTIFACT_DIR: ${{ runner.temp }}/version-full-changelog
-        run: forge-ci artifact download
+        run: forge-ci artifact download --name full-changelog --dir "$RUNNER_TEMP/version-full-changelog"
       - name: Verify Full Changelog
         if: ${{ inputs['existing-release-sha'] == '' && fromJson(inputs['prepare-stage-plan-json']).targets.version_bump.runs }}
         run: |
@@ -300,9 +296,7 @@ jobs:
         if: ${{ inputs['existing-release-sha'] == '' && fromJson(inputs['prepare-stage-plan-json']).targets.version_bump.runs }}
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: minimal-changelog
-          ARTIFACT_DIR: ${{ runner.temp }}/version-minimal-changelog
-        run: forge-ci artifact download
+        run: forge-ci artifact download --name minimal-changelog --dir "$RUNNER_TEMP/version-minimal-changelog"
       - name: Read Minimal Changelog
         id: minimal-changelog
         if: ${{ inputs['existing-release-sha'] == '' && fromJson(inputs['prepare-stage-plan-json']).targets.version_bump.runs }}

@@ -209,9 +209,7 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: release-changelog
-          ARTIFACT_DIR: .
-        run: forge-ci artifact download
+        run: forge-ci artifact download --name release-changelog --dir .
       - name: Download planned release artifacts
         env:
           ARTIFACT_TRANSFER_PLAN_JSON: ${{ inputs['artifact-transfer-plan-json'] }}
@@ -335,9 +333,7 @@ jobs:
       - name: Download assembled release files
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: release-assembly
-          ARTIFACT_DIR: .
-        run: forge-ci artifact download
+        run: forge-ci artifact download --name release-assembly --dir .
       - name: Import GPG key
         # GPG agent setup is only needed when artifact signing uses the
         # GPG backend. Sigstore (keyless OIDC) and KMS (cosign + external
@@ -472,9 +468,8 @@ jobs:
       - name: Download signed release payload
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: ${{ needs.sign-release.outputs.artifact-name }}
-          ARTIFACT_DIR: signed-release
-        run: forge-ci artifact download
+          DOWNLOAD_NAME: ${{ needs.sign-release.outputs.artifact-name }}
+        run: forge-ci artifact download --name "$DOWNLOAD_NAME" --dir signed-release
       - name: Verify signed release payload
         env:
           EXPECTED_DIGEST: ${{ needs.sign-release.outputs.digest }}

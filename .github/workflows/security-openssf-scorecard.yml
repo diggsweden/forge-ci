@@ -126,9 +126,7 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: sarif-scorecard
-          ARTIFACT_DIR: .
-        run: forge-ci artifact download
+        run: forge-ci artifact download --name sarif-scorecard --dir .
       - name: Upload scorecard results to Code Scanning
         if: hashFiles('results.sarif') != ''
         continue-on-error: true

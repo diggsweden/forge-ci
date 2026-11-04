@@ -84,7 +84,8 @@ func TestGitHubPublisherReusesDigestBoundSignedPayload(t *testing.T) {
 	lease := find(publisher.Steps, "Revalidate release tag before publication")
 	publish := find(publisher.Steps, "Create GitHub Release")
 
-	if signer.Outputs["digest"] != "${{ steps.signed-state.outputs.digest }}" || verify.Env["EXPECTED_DIGEST"] != "${{ needs.sign-release.outputs.digest }}" || download.Env["ARTIFACT_NAME"] != "${{ needs.sign-release.outputs.artifact-name }}" {
+	if signer.Outputs["digest"] != "${{ steps.signed-state.outputs.digest }}" || verify.Env["EXPECTED_DIGEST"] != "${{ needs.sign-release.outputs.digest }}" || download.Env["DOWNLOAD_NAME"] != "${{ needs.sign-release.outputs.artifact-name }}" ||
+		!strings.Contains(download.Run, `--name "$DOWNLOAD_NAME"`) {
 		t.Fatal("handoff is not bound to signer outputs")
 	}
 

@@ -29,7 +29,7 @@ its digest is byte-compatible with the shell implementation it replaced.
 EXAMPLE (as a workflow step):
    DIGEST="$(forge-ci artifact digest --dir ./dist)"`,
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: flagDir, Required: true, Sources: cli.EnvVars("ARTIFACT_DIR"), Usage: "directory whose contents are digested"},
+			&cli.StringFlag{Name: flagDir, Required: true, Usage: "directory whose contents are digested"},
 		},
 		Action: func(_ context.Context, cmd *cli.Command) error {
 			return appartifact.Digest(os.Stdout, appartifact.DigestInput{Dir: cmd.String(flagDir)})

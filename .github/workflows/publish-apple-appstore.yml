@@ -138,9 +138,8 @@ jobs:
       - name: Download IPA artifact
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: ${{ inputs['ipa-artifact-name'] }}
-          ARTIFACT_DIR: artifacts/
-        run: forge-ci artifact download
+          DOWNLOAD_NAME: ${{ inputs['ipa-artifact-name'] }}
+        run: forge-ci artifact download --name "$DOWNLOAD_NAME" --dir artifacts/
 
       - name: Find IPA file
         id: find-ipa

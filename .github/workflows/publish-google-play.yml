@@ -146,9 +146,8 @@ jobs:
       - name: Download AAB artifact
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: ${{ inputs['aab-artifact-name'] }}
-          ARTIFACT_DIR: artifacts/
-        run: forge-ci artifact download
+          DOWNLOAD_NAME: ${{ inputs['aab-artifact-name'] }}
+        run: forge-ci artifact download --name "$DOWNLOAD_NAME" --dir artifacts/
 
       - name: Find AAB file
         id: find-aab

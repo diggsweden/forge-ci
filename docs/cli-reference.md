@@ -78,7 +78,7 @@ EXAMPLE (as a workflow step):
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--dir` | directory whose contents are digested (required) | string | `""` | `$ARTIFACT_DIR` |
+| `--dir` | directory whose contents are digested (required) | string | `""` | n/a |
 
 ### `forge-ci artifact download`
 
@@ -106,13 +106,13 @@ EXAMPLES (as a workflow step):
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--name` | exact artifact name to download (omit with --pattern) | string | `""` | `$ARTIFACT_NAME` |
-| `--pattern` | glob over artifact names; downloads every match (alternative to --name) | string | `""` | `$ARTIFACT_PATTERN` |
-| `--merge-multiple` | with --pattern: flatten all matches into --dir instead of --dir/<name>/ | bool | `false` | `$ARTIFACT_MERGE_MULTIPLE` |
-| `--dir` | destination directory | string | `"."` | `$ARTIFACT_DIR` |
+| `--name` | exact artifact name to download (omit with --pattern) | string | `""` | n/a |
+| `--pattern` | glob over artifact names; downloads every match (alternative to --name) | string | `""` | n/a |
+| `--merge-multiple` | with --pattern: flatten all matches into --dir instead of --dir/<name>/ | bool | `false` | n/a |
+| `--dir` | destination directory | string | `"."` | n/a |
 | `--run-id` | run the artifact belongs to (default: current run) | string | `""` | `$CI_RUN_ID`, `$FORGEJO_RUN_ID`, `$GITHUB_RUN_ID` |
 | `--repository` | owner/repo the run belongs to (default: current repo) | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
-| `--blob-store` | with --name, current run only: restore the blobs the artifact was uploaded without from this blob store, each verified against its sha256 digest | string | `""` | `$ARTIFACT_BLOB_STORE` |
+| `--blob-store` | with --name, current run only: restore the blobs the artifact was uploaded without from this blob store, each verified against its sha256 digest | string | `""` | n/a |
 
 ### `forge-ci artifact upload`
 
@@ -139,14 +139,14 @@ EXAMPLES (as a workflow step):
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--name` | logical artifact name (required) | string | `""` | `$ARTIFACT_NAME` |
-| `--dir` | directory whose contents are uploaded (or use --file/--path) | string | `""` | `$ARTIFACT_DIR` |
-| `--file` | explicit file to upload (repeatable, flattened to basename) | string | `""` | `$ARTIFACT_FILES` |
-| `--path` | glob pattern preserving structure (*, **, [set], !exclude; repeatable or newline-separated) — the upload-artifact path: contract | string | `""` | `$ARTIFACT_PATHS` |
-| `--retention-days` | retention in days (0 = forge default) | int | `0` | `$ARTIFACT_RETENTION_DAYS` |
-| `--if-no-files` | when nothing matches: error \| warn \| ignore | string | `"error"` | `$ARTIFACT_IF_NO_FILES` |
-| `--include-hidden` | include dotfiles/hidden files (off by default, matching upload-artifact) | bool | `false` | `$ARTIFACT_INCLUDE_HIDDEN` |
-| `--blob-store` | with --dir: upload each OCI layout blob (blobs/sha256/<digest>, 1 MiB or more) as its own artifact <prefix>-<digest>-<owner>, skipped when the run already stores that digest; download with the same prefix | string | `""` | `$ARTIFACT_BLOB_STORE` |
+| `--name` | logical artifact name (required) | string | `""` | n/a |
+| `--dir` | directory whose contents are uploaded (or use --file/--path) | string | `""` | n/a |
+| `--file` | explicit file to upload (repeatable, flattened to basename) | string | `""` | n/a |
+| `--path` | glob pattern preserving structure (*, **, [set], !exclude; repeatable or newline-separated) — the upload-artifact path: contract | string | `""` | n/a |
+| `--retention-days` | retention in days (0 = forge default) | int | `0` | n/a |
+| `--if-no-files` | when nothing matches: error \| warn \| ignore | string | `"error"` | n/a |
+| `--include-hidden` | include dotfiles/hidden files (off by default, matching upload-artifact) | bool | `false` | n/a |
+| `--blob-store` | with --dir: upload each OCI layout blob (blobs/sha256/<digest>, 1 MiB or more) as its own artifact <prefix>-<digest>-<owner>, skipped when the run already stores that digest; download with the same prefix | string | `""` | n/a |
 
 ## `forge-ci build`
 

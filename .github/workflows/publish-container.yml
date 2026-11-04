@@ -581,9 +581,8 @@ jobs:
         if: &if_has_maven_artifacts ${{ contains(fromJson(inputs['artifact-types-json']), 'maven') || contains(format(',{0},', inputs['artifact-types']), ',maven,') }}
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: ${{ inputs['maven-artifact-name'] || 'maven-build-artifacts' }}
-          ARTIFACT_DIR: ./
-        run: forge-ci artifact download
+          DOWNLOAD_NAME: ${{ inputs['maven-artifact-name'] || 'maven-build-artifacts' }}
+        run: forge-ci artifact download --name "$DOWNLOAD_NAME" --dir ./
       - name: Verify Maven artifacts
         if: *if_has_maven_artifacts
         run: forge-ci container validate artifacts --project-type maven --artifact-dir target
@@ -591,9 +590,8 @@ jobs:
         if: &if_has_npm_artifacts ${{ contains(fromJson(inputs['artifact-types-json']), 'npm') || contains(format(',{0},', inputs['artifact-types']), ',npm,') }}
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: ${{ inputs['npm-artifact-name'] || 'npm-build-artifacts' }}
-          ARTIFACT_DIR: ./
-        run: forge-ci artifact download
+          DOWNLOAD_NAME: ${{ inputs['npm-artifact-name'] || 'npm-build-artifacts' }}
+        run: forge-ci artifact download --name "$DOWNLOAD_NAME" --dir ./
       - name: Extract NPM tarball
         if: *if_has_npm_artifacts
         run: forge-ci container extract-npm-tarball
@@ -607,9 +605,8 @@ jobs:
         if: &if_has_gradle_artifacts ${{ contains(fromJson(inputs['artifact-types-json']), 'gradle') || contains(format(',{0},', inputs['artifact-types']), ',gradle,') }}
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: ${{ inputs['gradle-artifact-name'] || 'gradle-build-artifacts' }}
-          ARTIFACT_DIR: build/libs/
-        run: forge-ci artifact download
+          DOWNLOAD_NAME: ${{ inputs['gradle-artifact-name'] || 'gradle-build-artifacts' }}
+        run: forge-ci artifact download --name "$DOWNLOAD_NAME" --dir build/libs/
       - name: Verify Gradle artifacts
         if: *if_has_gradle_artifacts
         run: forge-ci container validate artifacts --project-type gradle --artifact-dir build/libs
@@ -617,9 +614,9 @@ jobs:
         if: &if_has_go_artifacts ${{ (contains(fromJson(inputs['artifact-types-json']), 'go') || contains(format(',{0},', inputs['artifact-types']), ',go,')) && inputs['go-artifact-name'] != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: ${{ format('{0}-go-build-artifacts', inputs['go-artifact-name']) }}
-          ARTIFACT_DIR: ${{ inputs.context }}/dist/
-        run: forge-ci artifact download
+          DOWNLOAD_NAME: ${{ format('{0}-go-build-artifacts', inputs['go-artifact-name']) }}
+          DOWNLOAD_DIR: ${{ inputs.context }}/dist/
+        run: forge-ci artifact download --name "$DOWNLOAD_NAME" --dir "$DOWNLOAD_DIR"
       - name: Verify Go artifacts
         if: *if_has_go_artifacts
         env:
@@ -630,9 +627,9 @@ jobs:
         if: &if_has_cargo_artifacts ${{ (contains(fromJson(inputs['artifact-types-json']), 'cargo') || contains(format(',{0},', inputs['artifact-types']), ',cargo,')) && inputs['cargo-artifact-name'] != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: ${{ format('{0}-cargo-build-artifacts', inputs['cargo-artifact-name']) }}
-          ARTIFACT_DIR: ${{ inputs.context }}/dist/
-        run: forge-ci artifact download
+          DOWNLOAD_NAME: ${{ format('{0}-cargo-build-artifacts', inputs['cargo-artifact-name']) }}
+          DOWNLOAD_DIR: ${{ inputs.context }}/dist/
+        run: forge-ci artifact download --name "$DOWNLOAD_NAME" --dir "$DOWNLOAD_DIR"
       - name: Verify Cargo artifacts
         if: *if_has_cargo_artifacts
         env:
@@ -917,10 +914,8 @@ jobs:
       - name: Download complete layout set
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_DIR: ${{ runner.temp }}/image-layouts
-          ARTIFACT_PATTERN: layouts-${{ github.run_id }}-${{ inputs.name || 'container' }}-*
-          ARTIFACT_MERGE_MULTIPLE: "false"
-        run: forge-ci artifact download
+          DOWNLOAD_PATTERN: layouts-${{ github.run_id }}-${{ inputs.name || 'container' }}-*
+        run: forge-ci artifact download --pattern "$DOWNLOAD_PATTERN" --dir "$RUNNER_TEMP/image-layouts"
       - name: Check registry authentication configuration
         env:
           USE_CI_TOKEN: ${{ inputs['use-ci-token'] }}
@@ -1116,10 +1111,8 @@ jobs:
       - name: Download digests
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_DIR: /tmp/digests
-          ARTIFACT_PATTERN: digests-${{ github.run_id }}-${{ inputs.name || 'container' }}-*
-          ARTIFACT_MERGE_MULTIPLE: "true"
-        run: forge-ci artifact download
+          DOWNLOAD_PATTERN: digests-${{ github.run_id }}-${{ inputs.name || 'container' }}-*
+        run: forge-ci artifact download --pattern "$DOWNLOAD_PATTERN" --merge-multiple --dir /tmp/digests
       - name: Check registry authentication configuration
         env:
           USE_CI_TOKEN: ${{ inputs['use-ci-token'] }}

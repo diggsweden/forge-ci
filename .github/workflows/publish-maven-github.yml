@@ -164,9 +164,9 @@ jobs:
       - name: Download build artifacts
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: ${{ inputs['artifact-source'] }}
-          ARTIFACT_DIR: ${{ (inputs['package-type'] == 'gradle' || inputs['package-type'] == 'gradle-android') && '.forge-ci/gradle-publication' || (inputs['package-type'] == 'maven' && inputs['from-build']) && '.forge-ci/maven-build' || format('{0}/', inputs['working-directory']) }}
-        run: forge-ci artifact download
+          DOWNLOAD_NAME: ${{ inputs['artifact-source'] }}
+          DOWNLOAD_DIR: ${{ (inputs['package-type'] == 'gradle' || inputs['package-type'] == 'gradle-android') && '.forge-ci/gradle-publication' || (inputs['package-type'] == 'maven' && inputs['from-build']) && '.forge-ci/maven-build' || format('{0}/', inputs['working-directory']) }}
+        run: forge-ci artifact download --name "$DOWNLOAD_NAME" --dir "$DOWNLOAD_DIR"
       # Maven publishing. Auth/settings/registry are resolved by the binary
       - name: Publish exported Gradle publications
         if: ${{ inputs['package-type'] == 'gradle' || inputs['package-type'] == 'gradle-android' }}

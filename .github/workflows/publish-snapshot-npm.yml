@@ -204,9 +204,9 @@ jobs:
       - name: Download NPM build artifacts
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: ${{ inputs['artifact-source'] }}
-          ARTIFACT_DIR: ${{ inputs.working-directory }}/
-        run: forge-ci artifact download
+          DOWNLOAD_NAME: ${{ inputs['artifact-source'] }}
+          DOWNLOAD_DIR: ${{ inputs.working-directory }}/
+        run: forge-ci artifact download --name "$DOWNLOAD_NAME" --dir "$DOWNLOAD_DIR"
       - name: Extract tarball contents
         working-directory: ${{ inputs.working-directory }}
         run: forge-ci publish npm validate-tarball

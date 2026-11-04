@@ -7,6 +7,13 @@
 // every forge; the detected provider supplies the transport, and a forge
 // that cannot perform an operation fails with a typed "not supported"
 // rather than silently doing the wrong thing.
+//
+// The transfer flags read no environment. They mirror the `with:` inputs of
+// upload-artifact and download-artifact, which a step states explicitly, while
+// the generic names they once read are project settings elsewhere: a job that
+// sets ARTIFACT_NAME as its project name handed that name to every download in
+// the job, and `--pattern` then failed with "use --name or --pattern".
+// Only the run and repository, which describe the run itself, fall back to it.
 package artifact
 
 import (
@@ -63,14 +70,14 @@ func uploadCmd() *cli.Command {
    forge-ci artifact upload --name images-layout-app-amd64 --dir ./staged/app-arch-amd64 \
      --blob-store images-blob --include-hidden`,
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "name", Required: true, Sources: cli.EnvVars("ARTIFACT_NAME"), Usage: "logical artifact name"},
-			&cli.StringFlag{Name: flagDir, Sources: cli.EnvVars("ARTIFACT_DIR"), Usage: "directory whose contents are uploaded (or use --file/--path)"},
-			&cli.StringSliceFlag{Name: "file", Sources: cli.EnvVars("ARTIFACT_FILES"), Usage: "explicit file to upload (repeatable, flattened to basename)"},
-			&cli.StringSliceFlag{Name: "path", Sources: cli.EnvVars("ARTIFACT_PATHS"), Usage: "glob pattern preserving structure (*, **, [set], !exclude; repeatable or newline-separated) — the upload-artifact path: contract"},
-			&cli.IntFlag{Name: "retention-days", Sources: cli.EnvVars("ARTIFACT_RETENTION_DAYS"), Usage: "retention in days (0 = forge default)"},
-			&cli.StringFlag{Name: "if-no-files", Value: "error", Sources: cli.EnvVars("ARTIFACT_IF_NO_FILES"), Usage: "when nothing matches: error | warn | ignore"},
-			&cli.BoolFlag{Name: "include-hidden", Sources: cli.EnvVars("ARTIFACT_INCLUDE_HIDDEN"), Usage: "include dotfiles/hidden files (off by default, matching upload-artifact)"},
-			&cli.StringFlag{Name: flagBlobStore, Sources: cli.EnvVars("ARTIFACT_BLOB_STORE"), Usage: "with --dir: upload each OCI layout blob (blobs/sha256/<digest>, 1 MiB or more) as its own artifact <prefix>-<digest>-<owner>, skipped when the run already stores that digest; download with the same prefix"},
+			&cli.StringFlag{Name: "name", Required: true, Usage: "logical artifact name"},
+			&cli.StringFlag{Name: flagDir, Usage: "directory whose contents are uploaded (or use --file/--path)"},
+			&cli.StringSliceFlag{Name: "file", Usage: "explicit file to upload (repeatable, flattened to basename)"},
+			&cli.StringSliceFlag{Name: "path", Usage: "glob pattern preserving structure (*, **, [set], !exclude; repeatable or newline-separated) — the upload-artifact path: contract"},
+			&cli.IntFlag{Name: "retention-days", Usage: "retention in days (0 = forge default)"},
+			&cli.StringFlag{Name: "if-no-files", Value: "error", Usage: "when nothing matches: error | warn | ignore"},
+			&cli.BoolFlag{Name: "include-hidden", Usage: "include dotfiles/hidden files (off by default, matching upload-artifact)"},
+			&cli.StringFlag{Name: flagBlobStore, Usage: "with --dir: upload each OCI layout blob (blobs/sha256/<digest>, 1 MiB or more) as its own artifact <prefix>-<digest>-<owner>, skipped when the run already stores that digest; download with the same prefix"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return deps.FromCmd(ctx, cmd, func(dep *deps.Deps) error {
@@ -133,13 +140,13 @@ func downloadCmd() *cli.Command {
    forge-ci artifact download --name images-layout-app-amd64 --dir ./app-arch-amd64 \
      --blob-store images-blob`,
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "name", Sources: cli.EnvVars("ARTIFACT_NAME"), Usage: "exact artifact name to download (omit with --pattern)"},
-			&cli.StringFlag{Name: "pattern", Sources: cli.EnvVars("ARTIFACT_PATTERN"), Usage: "glob over artifact names; downloads every match (alternative to --name)"},
-			&cli.BoolFlag{Name: "merge-multiple", Sources: cli.EnvVars("ARTIFACT_MERGE_MULTIPLE"), Usage: "with --pattern: flatten all matches into --dir instead of --dir/<name>/"},
-			&cli.StringFlag{Name: flagDir, Value: ".", Sources: cli.EnvVars("ARTIFACT_DIR"), Usage: "destination directory"},
+			&cli.StringFlag{Name: "name", Usage: "exact artifact name to download (omit with --pattern)"},
+			&cli.StringFlag{Name: "pattern", Usage: "glob over artifact names; downloads every match (alternative to --name)"},
+			&cli.BoolFlag{Name: "merge-multiple", Usage: "with --pattern: flatten all matches into --dir instead of --dir/<name>/"},
+			&cli.StringFlag{Name: flagDir, Value: ".", Usage: "destination directory"},
 			&cli.StringFlag{Name: "run-id", Sources: cienv.RunID(), Usage: "run the artifact belongs to (default: current run)"},
 			&cli.StringFlag{Name: "repository", Sources: cienv.Repository(), Usage: "owner/repo the run belongs to (default: current repo)"},
-			&cli.StringFlag{Name: flagBlobStore, Sources: cli.EnvVars("ARTIFACT_BLOB_STORE"), Usage: "with --name, current run only: restore the blobs the artifact was uploaded without from this blob store, each verified against its sha256 digest"},
+			&cli.StringFlag{Name: flagBlobStore, Usage: "with --name, current run only: restore the blobs the artifact was uploaded without from this blob store, each verified against its sha256 digest"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return deps.FromCmd(ctx, cmd, func(dep *deps.Deps) error {
