@@ -44,6 +44,7 @@ jobs:
       contents: read
       packages: write
     with:
+      forge-ci-binary-ref: v0.90.0
       build-module: app
       product-flavor: demo
       build-types: debug,release
