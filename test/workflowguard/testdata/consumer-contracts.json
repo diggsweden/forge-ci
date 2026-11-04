@@ -6,6 +6,16 @@
         "type": "string",
         "default": ""
       },
+      "enforce-lint": {
+        "required": false,
+        "type": "boolean",
+        "default": true
+      },
+      "enforce-vulnerabilities": {
+        "required": false,
+        "type": "boolean",
+        "default": true
+      },
       "forge-ci-binary-ref": {
         "required": false,
         "type": "string",
@@ -102,6 +112,21 @@
         "required": false,
         "type": "string",
         "default": ""
+      },
+      "enforce-application-tests": {
+        "required": false,
+        "type": "boolean",
+        "default": true
+      },
+      "enforce-reproducible-builds": {
+        "required": false,
+        "type": "boolean",
+        "default": true
+      },
+      "enforce-vulnerabilities": {
+        "required": false,
+        "type": "boolean",
+        "default": true
       },
       "file-pattern": {
         "required": false,
@@ -265,6 +290,16 @@
         "required": false,
         "type": "string",
         "default": ""
+      },
+      "enforce-application-tests": {
+        "required": false,
+        "type": "boolean",
+        "default": true
+      },
+      "enforce-vulnerabilities": {
+        "required": false,
+        "type": "boolean",
+        "default": true
       },
       "forge-ci-binary-ref": {
         "required": false,

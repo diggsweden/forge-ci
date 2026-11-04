@@ -4,6 +4,7 @@
 package workflowguard
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
@@ -32,7 +33,7 @@ func TestSnapshotNativeArtifactsForwardFrozenCommitToConsumedEnvironment(t *test
 			found := false
 
 			for _, step := range steps.Content {
-				if scalarChild(step, "run") != "forge-ci build "+kind+" run" {
+				if !strings.HasPrefix(scalarChild(step, "run"), "forge-ci build "+kind+" run") {
 					continue
 				}
 

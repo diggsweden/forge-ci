@@ -4,6 +4,16 @@ name: Publish Snapshot Images
 on:
   workflow_call:
     inputs:
+      enforce-application-tests:
+        description: "Administrator setting: false reports recognized test assertion failures without failing; the tests still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
+      enforce-vulnerabilities:
+        description: "Administrator setting: false reports vulnerability findings without failing; the scans still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
       branch:
         description: "Logical development branch selected by the caller"
         required: true
@@ -220,9 +230,10 @@ jobs:
         working-directory: source
         env:
           ARTIFACT_NAME: ${{ matrix.artifact.name }}
+          ADMIN_APPLICATION_TESTS: ${{ inputs['enforce-application-tests'] }}
         run: |
           env -u GH_TOKEN -u GITHUB_TOKEN -u REGISTRY_TOKEN -u REGISTRY_PASSWORD \
-            forge-ci container snapshot-images build-artifact \
+            forge-ci container snapshot-images build-artifact --enforce-application-tests="$ADMIN_APPLICATION_TESTS" \
               --plan "${RUNNER_TEMP}/snapshot-inputs/snapshot-plan.json" \
               --name "$ARTIFACT_NAME" --output-dir _snapshot-artifacts
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -424,9 +435,10 @@ jobs:
           IMAGE_NAME: ${{ matrix.image.name }}
           REGISTRY_USER: ${{ inputs['registry-user'] || github.actor }}
           REGISTRY_PASSWORD: ${{ secrets.registry-password || github.token }}
+          ADMIN_VULNERABILITIES: ${{ inputs['enforce-vulnerabilities'] }}
         run: |
           mkdir -p snapshot-receipts
-          printf '%s' "$REGISTRY_PASSWORD" | forge-ci container snapshot-images publish \
+          printf '%s' "$REGISTRY_PASSWORD" | forge-ci container snapshot-images publish --enforce-vulnerabilities="$ADMIN_VULNERABILITIES" \
             --plan "${RUNNER_TEMP}/snapshot-inputs/snapshot-plan.json" \
             --name "$IMAGE_NAME" --metadata-dir "${RUNNER_TEMP}/snapshot-layouts" \
             --registry-username "$REGISTRY_USER" --registry-password-file - \

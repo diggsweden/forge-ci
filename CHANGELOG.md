@@ -103,7 +103,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   default for every setting not given. `policy show` adds each setting's
   `sources` (`embedded-default` or `admin-input`), and every decision line
   ends in `source=`. See `docs/admin-policy.md`.
-
+- Every forge takes the four settings as inputs of what runs the gate, set
+  only in the administrator's protected caller and passed to the engine as
+  flags. GitLab: `release`, `check`, `nanolinter`, `snapshot-images` and the
+  `build-*` components, which assign them as read-only literals of the job's
+  script; the `check` job and the release's checks and build jobs put a
+  `forge-ci` first on `PATH` that carries them and print `policy show`.
+  GitHub: the pull-request, release and snapshot orchestrators, forwarded to
+  `lint-nanolinter`, `lint-swift`, `build-*`, `validate-release-prerequisites`,
+  `publish-container` and `snapshot-images`. Forgejo: the `lint-nanolinter`
+  and `build-*` actions, `release-images.yml` and `snapshot-images.yml`. No
+  workflow reads them from `vars` or the environment.
 - The GitLab `release` component takes `export-files` and `export`: commands
   that export files from a Containerfile stage, run once per selected
   architecture in `Build: export amd64` and `Build: export arm64`, natively,
@@ -589,7 +599,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and likewise for the other three. Such a variable was ignored before; it
   never set the policy. Remove it, and have the administrator's caller pass
   the flag.
-
+- **BREAKING:** The GitLab `build-*` components pass
+  `--enforce-application-tests` to the engine in their `runtime-image`, so an
+  image whose engine predates this release refuses the flag. Select a runtime
+  image from this release or later with the component version. A command in
+  the `check` component or the release's `checks` and `build` that passes an
+  `--enforce-*` flag itself is refused, since the job's `forge-ci` already
+  gives it; set the component's input instead.
 - **BREAKING:** The GitLab `release` and `snapshot-images` free-text inputs
   now have regexes, because the jobs quote them in their scripts. None may
   contain a single quote. `publication-project` is a project path,

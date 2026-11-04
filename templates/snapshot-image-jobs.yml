@@ -19,6 +19,12 @@ spec:
     builder-job-image:
       regex: '^$|^[^[:space:]]+@sha256:[0-9a-f]{64}$'
       default: ''
+    enforce-application-tests:
+      type: boolean
+      default: true
+    enforce-vulnerabilities:
+      type: boolean
+      default: true
 ---
 .forge-ci-snapshot:
   image:
@@ -48,6 +54,9 @@ spec:
         CI_IMAGE_BUILDER_JOB_IMAGE='$[[ inputs.builder-job-image ]]'
       readonly FORGE_CI_PROVIDER FORGE_CI_PACKAGE_PROVIDER SNAPSHOT_LAYER_PROJECT SNAPSHOT_ENGINE_SHA \
         CI_IMAGE_BUILDER CI_IMAGE_BUILDER_JOB_IMAGE
+      # The administrator's settings, which every engine call passes as flags.
+      readonly SNAPSHOT_ADMIN_APPLICATION_TESTS='$[[ inputs.enforce-application-tests ]]' \
+        SNAPSHOT_ADMIN_VULNERABILITIES='$[[ inputs.enforce-vulnerabilities ]]'
       export SNAPSHOT_SERVER=${CI_SERVER_URL:?}
       export SNAPSHOT_REPOSITORY=${CI_PROJECT_PATH:?}
       export FORGE_CI_REPOSITORY_URL="${CI_SERVER_URL}/${SNAPSHOT_LAYER_PROJECT}.git"

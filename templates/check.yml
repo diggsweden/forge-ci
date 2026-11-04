@@ -26,6 +26,22 @@ spec:
     commands:
       type: array
       description: Consumer check commands; their failures fail this job.
+    enforce-lint:
+      type: boolean
+      default: true
+      description: Administrator setting the job's forge-ci applies; false reports lint findings without failing. See docs/admin-policy.md.
+    enforce-vulnerabilities:
+      type: boolean
+      default: true
+      description: Administrator setting the job's forge-ci applies; false reports vulnerability findings without failing.
+    enforce-application-tests:
+      type: boolean
+      default: true
+      description: Administrator setting the job's forge-ci applies; false reports recognized test assertion failures without failing. Tests still run.
+    enforce-reproducible-builds:
+      type: boolean
+      default: true
+      description: Administrator setting the job's forge-ci applies; false reports missing reproducible-build settings without failing.
 ---
 "$[[ inputs.job-name ]]":
   stage: $[[ inputs.stage ]]
@@ -93,6 +109,12 @@ spec:
         echo 'ERROR: CI_COMMIT_SHA must be a full SHA-1 or SHA-256 commit.' >&2
         exit 1
       fi
+      # The administrator's settings as written. They reach the engine as the
+      # flags of the job's forge-ci, never through the environment.
+      readonly RC_ADMIN_LINT='$[[ inputs.enforce-lint ]]' \
+        RC_ADMIN_VULNERABILITIES='$[[ inputs.enforce-vulnerabilities ]]' \
+        RC_ADMIN_APPLICATION_TESTS='$[[ inputs.enforce-application-tests ]]' \
+        RC_ADMIN_REPRODUCIBLE_BUILDS='$[[ inputs.enforce-reproducible-builds ]]'
       export FORGE_CI_PACKAGE_PROVIDER=gitlab
       # The engine's project as written, never a variable a project can set.
       export FORGE_CI_REPOSITORY_URL="${CI_SERVER_URL:?}/$[[ inputs.forge-ci-repository ]].git"
@@ -129,6 +151,9 @@ spec:
       SIGNER_STRICT=1 verify_forge_ci
       export FORGE_CI_BIN="${HELPERS_ENGINE_VERIFIED}"
       export PATH="${HELPERS_ROOT}/bin:${PATH}"
+      forge_ci_admin_path "${RC_HELPERS_DIR}/admin-bin" "${RC_ADMIN_LINT}" "${RC_ADMIN_VULNERABILITIES}" \
+        "${RC_ADMIN_APPLICATION_TESTS}" "${RC_ADMIN_REPRODUCIBLE_BUILDS}"
+      forge-ci policy show
       export FORGE_CI_PROVIDER=gitlab
       export CI_OUTPUT="${RC_HELPERS_DIR}/outputs.env"
       # The combined bundle keeps both self-hosted forge and public tool access.

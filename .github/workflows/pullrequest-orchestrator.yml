@@ -37,6 +37,16 @@ name: Orchestrate Pull Request
 on:
   workflow_call:
     inputs:
+      enforce-lint:
+        description: "Administrator setting: false reports lint findings without failing; the checks still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
+      enforce-vulnerabilities:
+        description: "Administrator setting: false reports vulnerability findings without failing; the scans still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
       # Project configuration
       project-type:
         description: "Project type: maven, npm, gradle, gradle-android, xcode-ios, cargo, python, go"
@@ -140,6 +150,8 @@ jobs:
       CODE_SCANNING_TOKEN: ${{ secrets.CODE_SCANNING_TOKEN }}
     uses: ./.github/workflows/pullrequest-quality-stage.yml
     with:
+      enforce-lint: ${{ inputs['enforce-lint'] }}
+      enforce-vulnerabilities: ${{ inputs['enforce-vulnerabilities'] }}
       pr-plan-json: ${{ needs.compose-pr-plan.outputs.pr-plan-json }}
       quality-stage-plan-json: ${{ needs.compose-pr-plan.outputs.quality-stage-plan-json }}
       runtime-image: ${{ inputs['runtime-image'] || needs.resolve-bootstrap.outputs['runtime-image'] }}

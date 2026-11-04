@@ -51,6 +51,7 @@ func mavenInputs(overrides ...string) []string {
 		"BUILD_MAVEN_WORKING_DIRECTORY=.", "BUILD_MAVEN_PROFILE=profile-v",
 		"BUILD_MAVEN_SKIP_TESTS=skip-tests-v", "BUILD_MAVEN_BUILD_SBOM=build-sbom-v",
 		"BUILD_MAVEN_PRIVATE_DEPENDENCIES=false", "BUILD_MAVEN_SETTINGS_PATH=",
+		"BUILD_MAVEN_ADMIN_APPLICATION_TESTS=admin-v",
 	}
 
 	for _, override := range overrides {
@@ -82,6 +83,7 @@ func TestBuildMavenForwardsEveryInput(t *testing.T) {
 	}
 
 	bound["BUILD_MAVEN_BUILD_SBOM"] = "${{ inputs.enable-build-sbom }}"
+	bound["BUILD_MAVEN_ADMIN_APPLICATION_TESTS"] = "${{ inputs.enforce-application-tests }}"
 
 	action.requireStepEnv(t, 0, bound)
 
@@ -103,7 +105,7 @@ func TestBuildMavenForwardsEveryInput(t *testing.T) {
 		t.Fatalf("status %d stderr %s", got.status, got.stderr)
 	}
 
-	call := "build maven run --working-dir . --build-type build-type-v --profile profile-v --cli-opts " + options +
+	call := "build maven run --enforce-application-tests=admin-v --working-dir . --build-type build-type-v --profile profile-v --cli-opts " + options +
 		" --skip-tests=skip-tests-v --build-sbom=build-sbom-v --sbom-tool-version 2.9.3 --private-dependencies=false --settings-path  --expect-version "
 	if got := readSandboxFile(t, box, "argv"); got != call+"1.2.3\n" {
 		t.Fatalf("engine calls\n%s\nwant\n%s", got, call+"1.2.3")
@@ -118,7 +120,7 @@ func TestBuildMavenForwardsEveryInput(t *testing.T) {
 		t.Fatalf("engine calls without a version\n%s\nwant\n%s", got, call)
 	}
 
-	for _, required := range []string{"COMMIT", "BUILD_TYPE", "WORKING_DIRECTORY", "SKIP_TESTS", "BUILD_SBOM"} {
+	for _, required := range []string{"COMMIT", "BUILD_TYPE", "WORKING_DIRECTORY", "SKIP_TESTS", "BUILD_SBOM", "ADMIN_APPLICATION_TESTS"} {
 		refused, _ := mavenSandbox(t, false)
 
 		got := refused.run(script, mavenInputs("BUILD_MAVEN_"+required+"=")...)
@@ -177,7 +179,7 @@ func TestBuildMavenThroughTheEngine(t *testing.T) {
 			got := box.run(actionStep(t, buildMaven, "Build Maven project"), append(env, mavenInputs(
 				"FORGEJO_REF_NAME=release-request/v1.2.3", "FORGEJO_SHA="+strings.Repeat("f", 40),
 				"BUILD_MAVEN_BUILD_TYPE=app", "BUILD_MAVEN_WORKING_DIRECTORY=service", "BUILD_MAVEN_PROFILE=",
-				"BUILD_MAVEN_SKIP_TESTS=false", "BUILD_MAVEN_BUILD_SBOM=true")...)...)
+				"BUILD_MAVEN_SKIP_TESTS=false", "BUILD_MAVEN_BUILD_SBOM=true", "BUILD_MAVEN_ADMIN_APPLICATION_TESTS=true")...)...)
 
 			log := readSandboxFile(t, box, "tool-log")
 			if strings.Contains(log, "versions:set") {

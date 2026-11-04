@@ -34,6 +34,10 @@ inputs:
     description: "Legacy input; true is refused. Admin policy controls findings, and tests still run."
     required: false
     default: 'false'
+  enforce-application-tests:
+    description: "Administrator setting, true or false: false reports recognized test assertion failures without failing; the tests still run. Only the administrator's protected workflow sets it. See docs/admin-policy.md."
+    required: false
+    default: 'true'
   enable-build-sbom:
     description: "'false' skips the Build SBOM, and with it the cargo-cyclonedx install."
     required: false
@@ -65,6 +69,7 @@ runs:
         BUILD_CARGO_ARTIFACT_NAME: ${{ inputs.artifact-name }}
         BUILD_CARGO_BINARY_NAME: ${{ inputs.binary-name }}
         BUILD_CARGO_SKIP_TESTS: ${{ inputs.skip-tests }}
+        BUILD_CARGO_ADMIN_APPLICATION_TESTS: ${{ inputs.enforce-application-tests }}
         BUILD_CARGO_BUILD_SBOM: ${{ inputs.enable-build-sbom }}
       run: |
         set -euo pipefail
@@ -73,6 +78,7 @@ runs:
         if [ -z "${FORGE_CI_BIN:-}" ]; then fetch_forge_ci; fi
         SIGNER_STRICT=1 verify_forge_ci
         run_forge_ci build cargo run \
+          --enforce-application-tests="${BUILD_CARGO_ADMIN_APPLICATION_TESTS:?enforce-application-tests is required}" \
           --version "${BUILD_CARGO_VERSION:?version is required}" \
           --commit "${BUILD_CARGO_COMMIT:?commit is required}" \
           --working-dir "${BUILD_CARGO_WORKING_DIRECTORY:?working-directory is required}" \

@@ -48,9 +48,11 @@ func TestSnapshotContextCannotWriteThroughCheckoutSymlink(t *testing.T) {
 
 	command := exec.CommandContext(t.Context(), "bash", "-euo", "pipefail", "-c", `run_forge_ci() { printf '%s\n' "$PWD" "$@"; }; source "$1"; snapshot_apply_context bundle snapshot-plan.json`, "snapshot-context-test", filepath.Join(reporoot.Path(t), ".forgejo/bin/snapshot-images.sh"))
 	command.Dir = workspace
+
+	command.Env = append(os.Environ(), "SNAPSHOT_ADMIN_APPLICATION_TESTS=true", "SNAPSHOT_ADMIN_VULNERABILITIES=true")
 	output, err := command.CombinedOutput()
 	require.NoError(t, err, "%s", output)
-	require.Equal(t, fmt.Sprintf("%s\ncontainer\nsnapshot-images\nrestore-context\n--plan\n%s\n--input\n%s\n", filepath.Join(workspace, "snapshot-source"), filepath.Join(workspace, "snapshot-plan.json"), filepath.Join(workspace, "bundle")), string(output))
+	require.Equal(t, fmt.Sprintf("%s\n--enforce-application-tests=true\n--enforce-vulnerabilities=true\ncontainer\nsnapshot-images\nrestore-context\n--plan\n%s\n--input\n%s\n", filepath.Join(workspace, "snapshot-source"), filepath.Join(workspace, "snapshot-plan.json"), filepath.Join(workspace, "bundle")), string(output))
 
 	actual, readErr := os.ReadFile(victim)
 	require.NoError(t, readErr)

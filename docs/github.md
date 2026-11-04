@@ -153,6 +153,7 @@ carries a description. The orchestrator inputs most callers set:
 | `release.sboms`, `release.signartifacts`, `release.requireallowlistedsigner`, `release.draft` | release | SBOM selection, artifact signing, the signer allowlist and draft releases. |
 | `release-asset-retention` | release | How many of the newest releases keep every file; older ones keep their checksums and signatures. Empty, the default, deletes nothing. See [Old releases' files](#old-releases-files). |
 | `promote-staging-environment`, `promote-release-environment`, `promote-release-*` | release | The GitHub Environments that gate the promotion ladder, and an optional separate release registry. |
+| `enforce-lint`, `enforce-vulnerabilities`, `enforce-application-tests`, `enforce-reproducible-builds` | PR, release, snapshot | The administrator's [check enforcement](admin-policy.md), default `true`, forwarded to every gate. Only the administrator's protected wrapper sets them; no workflow reads them from `vars` or the environment. |
 | `forge-ci-binary-ref` | all | The CLI release plain-runner jobs install. |
 | `runtime-image*` | all | The runtime image of each toolchain family. |
 

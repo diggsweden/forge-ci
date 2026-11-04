@@ -48,6 +48,16 @@ name: Orchestrate Snapshot Release
 on:
   workflow_call: # yamllint disable-line rule:truthy
     inputs:
+      enforce-application-tests:
+        description: "Administrator setting: false reports recognized test assertion failures without failing; the tests still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
+      enforce-vulnerabilities:
+        description: "Administrator setting: false reports vulnerability findings without failing; the scans still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
       branch:
         description: "Explicit branch, tag, or SHA used for the snapshot build and publish"
         required: true
@@ -315,6 +325,7 @@ jobs:
       XCCONFIG_BASE64: ${{ secrets.XCCONFIG_BASE64 }}
     uses: ./.github/workflows/release-snapshot-build-stage.yml
     with:
+      enforce-application-tests: ${{ inputs['enforce-application-tests'] }}
       snapshot-release-plan-json: ${{ needs.setup-snapshot.outputs.snapshot-release-plan-json }}
       snapshot-build-stage-plan-json: ${{ needs.setup-snapshot.outputs.snapshot-build-stage-plan-json }}
       forge-ci-binary-ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
@@ -368,6 +379,8 @@ jobs:
       packages: write
     uses: ./.github/workflows/snapshot-images.yml
     with:
+      enforce-application-tests: ${{ inputs['enforce-application-tests'] }}
+      enforce-vulnerabilities: ${{ inputs['enforce-vulnerabilities'] }}
       branch: ${{ fromJson(needs.setup-snapshot.outputs.snapshot-release-plan-json).context.branch }}
       source-sha: ${{ fromJson(needs.setup-snapshot.outputs.snapshot-release-plan-json).context.release_sha }}
       artifacts-config: ${{ inputs['artifacts-config'] }}

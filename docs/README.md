@@ -33,7 +33,7 @@ Solve a specific task.
 - [Private dependencies](private-dependencies.md) - Opt into scoped dependency-read credentials for npm, Maven and Gradle.
 - [Runtime Images](runtime-images.md) - Override runtime images for reproducibility, mirroring, or branch testing.
 - [Verification](verification.md) - Verify release assets, checksums, signatures, attestations, and SBOMs.
-- [Administrator check enforcement](admin-policy.md) - Admin-owned lint, vulnerability and application-test enforcement, immutable policy pins, reporting and consumer boundaries.
+- [Administrator check enforcement](admin-policy.md) - Admin-owned lint, vulnerability, application-test and reproducible-build enforcement, set at run time per forge, reporting and consumer boundaries.
 - [SBOM](sbom.md) - Configure SBOM layers and understand release/snapshot defaults.
 - [Checked multi-architecture images](multiarch-images.md) - Assemble and verify
   exact platform sets, then compose checksum-bound index SBOMs.

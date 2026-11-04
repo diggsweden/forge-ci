@@ -41,6 +41,10 @@ spec:
       type: boolean
       default: false
       description: Legacy input; true is refused. Admin policy controls findings, and tests still run.
+    enforce-application-tests:
+      type: boolean
+      default: true
+      description: Administrator setting; false lets recognized test assertion failures be reported without failing the build. Tests still run. Only the administrator's own include should set it; see docs/admin-policy.md.
     enable-build-sbom:
       type: boolean
       default: true
@@ -62,7 +66,9 @@ spec:
     REF_NAME: "$CI_COMMIT_REF_NAME"
     CI_SUMMARY_FILE: "$CI_PROJECT_DIR/cargo-build-summary.md"
   script:
-    - forge-ci build cargo run
+    # The administrator's setting as written, a flag of the engine: no
+    # project variable can supply or change it.
+    - forge-ci build cargo run --enforce-application-tests='$[[ inputs.enforce-application-tests ]]'
   artifacts:
     paths:
       # Shown in the job log too; GitLab renders no summary file.

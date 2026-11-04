@@ -5,6 +5,16 @@ name: Pull Request Quality Stage
 on:
   workflow_call:
     inputs:
+      enforce-lint:
+        description: "Administrator setting: false reports lint findings without failing; the checks still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
+      enforce-vulnerabilities:
+        description: "Administrator setting: false reports vulnerability findings without failing; the scans still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
       pr-plan-json:
         required: true
         type: string
@@ -56,6 +66,8 @@ jobs:
       CODE_SCANNING_TOKEN: ${{ secrets.CODE_SCANNING_TOKEN }}
     uses: ./.github/workflows/lint-nanolinter.yml
     with:
+      enforce-lint: ${{ inputs['enforce-lint'] }}
+      enforce-vulnerabilities: ${{ inputs['enforce-vulnerabilities'] }}
       # Resolved by `forge-ci plan pr`: the caller's override or the
       # flavour matching the project type.
       nanolinter-image: ${{ fromJson(inputs['pr-plan-json']).policy.nanolinter_image }}
@@ -81,6 +93,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/lint-swift.yml
     with:
+      enforce-lint: ${{ inputs['enforce-lint'] }}
       forge-ci-binary-ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
       enable-swiftformat: ${{ fromJson(inputs['pr-plan-json']).policy.swift_format }}
       enable-swiftlint: ${{ fromJson(inputs['pr-plan-json']).policy.swift_lint }}

@@ -321,6 +321,7 @@ description. The inputs they share:
 | `release-policy` | no, in prepare and sign/publish | `stable` (default) or `stable-prerelease`; pass the same value to both workflows. See [release policy](workflows.md#stable-and-prerelease-policy). |
 | `transparency-log` | no, in the four signer workflows | `none` (the default) or `public`: whether signatures are also written to the public Sigstore transparency log. One value for every workflow of an organization; see [The transparency log](#the-transparency-log). |
 | `release-asset-retention` | no, in `sign-and-publish-release.yml` | How many of the newest releases keep every file; older ones keep their checksums and signatures. Empty, the default, deletes nothing. See [Old releases' files](#old-releases-files). |
+| `enforce-vulnerabilities`, `enforce-application-tests` | no, in `release-images.yml` (vulnerabilities) and `snapshot-images.yml` (both) | The administrator's [check enforcement](admin-policy.md), default `true`. Only the administrator's protected workflow sets them; no workflow reads them from a variable. |
 
 A secret-free `coordinates` job validates the repository and the image
 coordinate before any container starts: no credentials, query or fragment in
@@ -346,6 +347,12 @@ alone. Each `action.yml` documents its own inputs and outputs.
 | `setup-image-builder` | Prepares whichever image builder `CI_IMAGE_BUILDER` selects: Buildah's storage, or admission of the digest-pinned kaniko job image `CI_IMAGE_BUILDER_JOB_IMAGE`, so a workflow names no builder. The step before `multiarch-image build-arch` or `container build`; the job's `container:` is `CI_IMAGE_BUILDER_JOB_IMAGE`, empty for Buildah. |
 | `prune-base-images` | Base-image maintenance on a schedule: deletes promoted base images that no supported release image's attestation names. A dry run unless told otherwise. |
 | `verify-forgejo-token` | Checks a release token before it is needed. |
+
+The `lint-nanolinter` action takes `enforce-lint` and `enforce-vulnerabilities`,
+and `build-go`, `build-cargo` and `build-maven` take `enforce-application-tests`:
+the administrator's [check enforcement](admin-policy.md), default `'true'`,
+passed to the engine as flags. Set them only in the administrator's protected
+workflow; the actions never read them from a variable or the environment.
 
 `registry-login` and `release-images.yml` name the registry user by one rule:
 the user given (`username`, `registry-user` or the `RELEASE_REGISTRY_USER`
@@ -943,7 +950,7 @@ runners where an installation names them, as other image-building jobs do.
   does it upload
   the index under `staging-<final tag>` and record it with `ledger add`.
   Every exported or published OCI layout is scanned; there is no consumer switch
-  to skip it. An administrator-built report-only distribution still scans and
+  to skip it. With the administrator input `enforce-vulnerabilities: false` it still scans and
   reports findings; scanner/operational, credential, signature and source/digest
   identity errors stay blocking. See [Administrator check enforcement](admin-policy.md).
 - **collect** merges the ledgers into one artifact, `release-images`: a
@@ -1062,7 +1069,7 @@ Publish every referenced platform inventory with the index BOM. Consumers do
 not need a second registry pull, scan, architecture-record projection or SBOM
 composition loop. Runtime/doctor evidence remains a separate consumer gate.
 There is no consumer opt-out from the vulnerability scan of exported/published
-layouts. Report-only administrator enforcement does not
+layouts. An administrator setting at `false` does not
 change the SBOM evidence contract; base images retain the single-platform
 signing contract described above.
 

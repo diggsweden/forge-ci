@@ -106,6 +106,14 @@ spec:
       regex: '^$|^[A-Za-z0-9_][A-Za-z0-9_./-]*$'
     version-bump:
       options: ['', maven, npm, cargo]
+    enforce-lint:
+      type: boolean
+    enforce-vulnerabilities:
+      type: boolean
+    enforce-application-tests:
+      type: boolean
+    enforce-reproducible-builds:
+      type: boolean
 ---
 stages: [check, prepare, build, images, sign, publish]
 .forge-ci-release:
@@ -213,6 +221,10 @@ stages: [check, prepare, build, images, sign, publish]
       RC_BASE_IMAGES='$[[ inputs.base-images ]]' \
       RC_RELEASE_BRANCH_INPUT='$[[ inputs.release-branch ]]' \
       RC_VERSION_BUMP='$[[ inputs.version-bump ]]' \
+      RC_ADMIN_LINT='$[[ inputs.enforce-lint ]]' \
+      RC_ADMIN_VULNERABILITIES='$[[ inputs.enforce-vulnerabilities ]]' \
+      RC_ADMIN_APPLICATION_TESTS='$[[ inputs.enforce-application-tests ]]' \
+      RC_ADMIN_REPRODUCIBLE_BUILDS='$[[ inputs.enforce-reproducible-builds ]]' \
       FORGE_CI_COSIGN_TRANSPARENCY='$[[ inputs.transparency-log ]]'
     # The engine reads the transparency setting from its environment.
     export FORGE_CI_COSIGN_TRANSPARENCY
@@ -263,6 +275,15 @@ stages: [check, prepare, build, images, sign, publish]
     SIGNER_STRICT=1 verify_forge_ci
     export FORGE_CI_BIN="${HELPERS_ENGINE_VERIFIED}"
     export PATH="${HELPERS_ROOT}/bin:${PATH}"
+    # The checks and build commands run the gates; their forge-ci applies
+    # the administrator's settings as its flags, never from the environment.
+    case "${rc_job_role}" in
+      checks | build)
+        forge_ci_admin_path "${RC_WORK}/admin-bin" "${RC_ADMIN_LINT}" "${RC_ADMIN_VULNERABILITIES}" \
+          "${RC_ADMIN_APPLICATION_TESTS}" "${RC_ADMIN_REPRODUCIBLE_BUILDS}"
+        forge-ci policy show
+        ;;
+    esac
     export FORGE_CI_PROVIDER=gitlab
     source "${RC_HELPERS_DIR}/.gitlab/bin/release.sh"
     rc_release_context

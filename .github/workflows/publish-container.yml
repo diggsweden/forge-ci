@@ -80,6 +80,11 @@ name: Publish Container
 on:
   workflow_call: # yamllint disable-line rule:truthy
     inputs:
+      enforce-vulnerabilities:
+        description: "Administrator setting: false reports vulnerability findings without failing; the scans still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
       container-file:
         description: "Containerfile path"
         required: false
@@ -751,7 +756,9 @@ jobs:
         # attestation: SLSA provenance on the merged index in the `merge` job
         # (its digest pins every per-arch child), and the CycloneDX SBOM per-arch
         # below (syft) — verifiable with cosign verify-attestation on any forge.
-        run: forge-ci container build
+        env:
+          ADMIN_VULNERABILITIES: ${{ inputs['enforce-vulnerabilities'] }}
+        run: forge-ci container build --enforce-vulnerabilities="$ADMIN_VULNERABILITIES"
       - name: Check SLSA compatibility
         if: ${{ inputs['push-image'] && inputs['enable-slsa'] && inputs.registry != 'ghcr.io' }}
         env:
@@ -818,6 +825,7 @@ jobs:
       - name: Extract binaries${{ inputs.name && format(' ({0})', inputs.name) || '' }}
         if: ${{ inputs['extract-binary-target'] != '' }}
         env:
+          ADMIN_VULNERABILITIES: ${{ inputs['enforce-vulnerabilities'] }}
           # This is a DIFFERENT build than the job's plan describes (local
           # export of the extract stage: no push, no cache, no scan, no
           # labels). Blanking FORGE_CI_PLAN opts this step out of the
@@ -833,7 +841,7 @@ jobs:
           SOURCE_DATE_EPOCH: ${{ needs.prep.outputs.source-date-epoch }}
           BUILD_ARGS: ${{ inputs['build-args'] }}
           BUILD_SECRETS: ${{ steps['build-secrets'].outputs['secret-mounts'] }}
-        run: forge-ci container build
+        run: forge-ci container build --enforce-vulnerabilities="$ADMIN_VULNERABILITIES"
       - name: Extract binaries from retained image filesystem
         if: ${{ inputs['extract-binary-paths'] != '' }}
         env:

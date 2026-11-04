@@ -818,7 +818,7 @@ The `enable-sbom: bool` field on the container block is unsupported and strict p
 
 The `enable-scan: bool` field on the container block is unsupported and strict parsing rejects it. Every exported or published OCI layout is scanned with Trivy; there is no switch to turn the scan off.
 
-Under the default enforcing administrator policy, a finding at `scan-severity` or above with a fixed package fails the publish, and so does an unfixed CRITICAL unless `.trivyignore.yaml` approves it; other findings are only listed. An administrator-built report-only distribution still runs the scanner and reports findings; scanner and operational errors remain blocking. See [Administrator check enforcement](admin-policy.md).
+Under the default enforcing administrator policy, a finding at `scan-severity` or above with a fixed package fails the publish, and so does an unfixed CRITICAL unless `.trivyignore.yaml` approves it; other findings are only listed. With the administrator setting `enforce-vulnerabilities: false`, the scanner still runs and reports findings; scanner and operational errors remain blocking. See [Administrator check enforcement](admin-policy.md).
 
 Results appear in Code Scanning when the `CODE_SCANNING_TOKEN` org secret is set.
 

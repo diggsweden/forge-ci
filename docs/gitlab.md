@@ -184,6 +184,7 @@ images and pins, a validating regex. The inputs that are not obvious:
 | | `job-image` | Digest-pinned image for the check job. |
 | | `job-user` | UID or `UID:GID` the job runs as, for example `65532:65532` for the runtime images' `nonroot`. Empty, the default, keeps the image's user. See [The job's user](#the-jobs-user). |
 | | `commands` | The consumer's check commands; a failure fails the job. `job-name` (default `check`) and `stage` (default `test`) name the job. |
+| | `enforce-lint`, `enforce-vulnerabilities`, `enforce-application-tests`, `enforce-reproducible-builds` | The administrator's [check enforcement](admin-policy.md) for the gates the commands run through `forge-ci`; default `true`. |
 | `release` | `forge-ci-repository`, `consumer-project` | The engine project, and the only project allowed to run this policy. |
 | | `job-image`, `build-image`, `signer-image` | Digest-pinned images for key-free jobs, the build job, and the signing jobs. |
 | | `job-user` | UID or `UID:GID` the `job-image` jobs run as, for example `65532:65532` with a runtime image. Empty, the default, keeps the image's user. |
@@ -206,9 +207,10 @@ images and pins, a validating regex. The inputs that are not obvious:
 | | `sign-distro-packages` | Default `true`: GPG `.sig` sidecars for `.deb`, `.rpm` and `.apk`, which makes the GPG variables required. |
 | | `release-asset-retention` | How many of the newest releases keep every file; older ones keep their checksums and signatures, upload and link both deleted. Empty, the default, deletes nothing. See [Old releases' files](#old-releases-files). |
 | | `base-images` | Default `false`; see [Content-addressed base images](#content-addressed-base-images). |
-| `nanolinter` | `forge-ci-repository`, `nanolinter-image`, `required-lints`, `enable-gitlab-sast` | The project serving the component and its engine package (required), the flavour image (default the `core` tag; pin your flavour by digest as the examples show), the mandated floor (default `secrets,sast`), and the SAST report. |
+| | `enforce-lint`, `enforce-vulnerabilities`, `enforce-application-tests`, `enforce-reproducible-builds` | The administrator's [check enforcement](admin-policy.md) for the checks and build jobs and the image scans; default `true`. |
+| `nanolinter` | `forge-ci-repository`, `nanolinter-image`, `required-lints`, `enable-gitlab-sast` | The project serving the component and its engine package (required), the flavour image (default the `core` tag; pin your flavour by digest as the examples show), the mandated floor (default `secrets,sast`), and the SAST report. `enforce-lint` and `enforce-vulnerabilities`, default `true`, are the administrator's [check enforcement](admin-policy.md). |
 | `megalinter` | `forge-ci-repository`, `megalinter-image`, `enable-gitlab-sast` | Required digest-pinned image; the rest as for `nanolinter`. |
-| `build-*` | `working-directory`, `version`, `skip-tests`, `enable-build-sbom`, `runtime-image` | Common to every build component; `runtime-image` is required and pinned by `@sha256:`; `build-go` and `build-cargo` add `platforms` and `artifact-name`, `build-go` also `main-package` (relative to `working-directory`), `build-maven` `build-type` and `profile`, `build-gradle-android` the module, flavour and signing inputs. |
+| `build-*` | `working-directory`, `version`, `skip-tests`, `enable-build-sbom`, `runtime-image` | Common to every build component; `runtime-image` is required and pinned by `@sha256:`; `build-go` and `build-cargo` add `platforms` and `artifact-name`, `build-go` also `main-package` (relative to `working-directory`), `build-maven` `build-type` and `profile`, `build-gradle-android` the module, flavour and signing inputs. `enforce-application-tests`, default `true`, is the administrator's [check enforcement](admin-policy.md); the job's `runtime-image` must carry an engine from this release or later. |
 | `publish-*` | `project-type`, `working-directory`, `runtime-image` | `runtime-image` as for `build-*`. `publish-maven-central` adds `profile` and `settings-path`; `publish-apple-appstore` takes none of these, only `platform`, `skip-validation`, `runner-tags` and `macos-image`. |
 
 The standalone `publish-maven-central` component also accepts `release-policy`.
@@ -524,8 +526,11 @@ two includes left at `check` run only one of the checks, silently.
 
 The job starts with an empty workspace and no cache or artifact dependencies.
 It uses the runner's custom CA when provided, keeps the helpers outside the
-consumer checkout, and exposes the verified engine as `FORGE_CI_BIN` and
-`forge-ci` on PATH. `CI_OUTPUT` points to a temporary dotenv file for engine
+consumer checkout, and exposes the verified engine as `FORGE_CI_BIN`. The
+`forge-ci` first on PATH runs that engine with the component's four
+[enforcement inputs](admin-policy.md) as flags, and the job prints the
+effective policy with `forge-ci policy show` before the commands run; the
+release's checks and build jobs do the same. `CI_OUTPUT` points to a temporary dotenv file for engine
 commands within the job; no cross-job output artifact is published.
 
 Signing and publication credentials must be environment-scoped away from check
@@ -860,8 +865,10 @@ the engine project and its fetch URL, `consumer-project`, the publication
 project and image repository, the Cosign key digest, the release Git URL and
 host key, the request's allowed signers, the bot identity, the changelog
 settings, `sign-distro-packages`, `base-images`, `release-branch`,
-`version-bump`, `release-asset-retention` and `transparency-log`, which the
-engine reads as `FORGE_CI_COSIGN_TRANSPARENCY` and the start exports. A
+`version-bump`, `release-asset-retention`, `transparency-log`, which the
+engine reads as `FORGE_CI_COSIGN_TRANSPARENCY` and the start exports, and the
+four [check enforcement](admin-policy.md) settings, which reach the engine as
+flags. A
 variable of the same name is replaced. The image builder and its job image
 reach the image jobs as script arguments. Three runner settings must stay
 job variables, because the runner reads them before the job's shell:
@@ -872,10 +879,11 @@ their regexes refuse one before the pipeline starts.
 
 The snapshot component works the same way: the engine project and commit,
 the image builder and its job image, the branch, the image repository, the
-job images, the context job and the runner tags are literals of the job's
-script. The generated child jobs get their image, architecture and context
-job as script arguments. The check component's engine project and the lint
-components' `required-lints` and `enable-gitlab-sast` are literals too. The
+job images, the context job, the runner tags and the enforcement settings
+are literals of the job's script. The generated child jobs get their image, architecture and context
+job as script arguments. The check component's engine project and enforcement settings and the
+lint components' `required-lints`, `enable-gitlab-sast` and enforcement
+settings are literals too. The
 lint components' `forge-ci-repository` stays a variable so that it can name
 `$CI_PROJECT_PATH`: what runs is bound by the component's commit and the
 engine's recorded checksum, not by the project path.

@@ -26,6 +26,11 @@ name: Lint Swift
 on:
   workflow_call:
     inputs:
+      enforce-lint:
+        description: "Administrator setting: false reports lint findings without failing; the checks still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
       working-directory:
         description: "Working directory for linting"
         required: false
@@ -120,9 +125,10 @@ jobs:
           swift-format --version
       - name: Run swift-format lint
         env:
+          ADMIN_LINT: ${{ inputs['enforce-lint'] }}
           WORKING_DIRECTORY: ${{ inputs['working-directory'] }}
           FILE_PATTERN: ${{ inputs['file-pattern'] }}
-        run: forge-ci lint swift format-lint
+        run: forge-ci lint swift format-lint --enforce-lint="$ADMIN_LINT"
   swiftlint:
     needs: [resolve-bootstrap]
     name: SwiftLint
@@ -157,9 +163,10 @@ jobs:
           swiftlint version
       - name: Run SwiftLint
         env:
+          ADMIN_LINT: ${{ inputs['enforce-lint'] }}
           WORKING_DIRECTORY: ${{ inputs['working-directory'] }}
           SWIFTLINT_CONFIG_PATH: ${{ inputs['swiftlint-config'] }}
-        run: forge-ci lint swift swiftlint
+        run: forge-ci lint swift swiftlint --enforce-lint="$ADMIN_LINT"
   summary:
     name: Lint Summary
     runs-on: ubuntu-26.04

@@ -73,6 +73,9 @@ func TestBuildActionsForwardEveryInput(t *testing.T) {
 			}
 
 			bound[build.variable("build-sbom")] = "${{ inputs.enable-build-sbom }}"
+			// The administrator's setting, which reaches the engine as its flag.
+			bound[build.variable("admin-application-tests")] = "${{ inputs.enforce-application-tests }}"
+			env = append(env, build.variable("admin-application-tests")+"=admin-v")
 
 			if build.ecosystem == "go" {
 				bound[build.variable("source-date-epoch")] = "${{ inputs.source-date-epoch }}"
@@ -95,7 +98,7 @@ func TestBuildActionsForwardEveryInput(t *testing.T) {
 			}
 
 			want := slices.Concat([]string{
-				"build", build.ecosystem, "run", "--version", "version-v", "--commit", "commit-v",
+				"build", build.ecosystem, "run", "--enforce-application-tests=admin-v", "--version", "version-v", "--commit", "commit-v",
 				"--working-dir", "working-directory-v", "--platforms", "platforms-v",
 				"--artifact-name", "artifact-name-v", "--binary-name", "binary-name-v",
 			}, passed, []string{"--skip-tests=skip-tests-v", "--build-sbom=build-sbom-v"})
@@ -105,13 +108,19 @@ func TestBuildActionsForwardEveryInput(t *testing.T) {
 				t.Fatalf("status %d argv %q, want %q; stderr %s", got.status, box.argv(), want, got.stderr)
 			}
 
-			for _, required := range []string{"version", "commit"} {
+			for _, required := range []string{"version", "commit", "admin-application-tests"} {
 				refused := newSandbox(t, build.name)
 				cleared := slices.Clone(env)
-				cleared[slices.Index(cleared, build.variable(required)+"="+required+"-v")] = build.variable(required) + "="
+				cleared[slices.IndexFunc(cleared, func(entry string) bool { return strings.HasPrefix(entry, build.variable(required)+"=") })] = build.variable(required) + "="
 
 				got := refused.run(script, cleared...)
-				if got.status == 0 || refused.argv() != nil || !strings.Contains(got.stderr, required+" is required") {
+
+				message := required
+				if required == "admin-application-tests" {
+					message = "enforce-application-tests"
+				}
+
+				if got.status == 0 || refused.argv() != nil || !strings.Contains(got.stderr, message+" is required") {
 					t.Fatalf("an empty %s: status %d argv %q stderr %q", required, got.status, refused.argv(), got.stderr)
 				}
 			}
@@ -144,6 +153,7 @@ func TestBuildGoSourceDateEpoch(t *testing.T) {
 				build.variable("platforms")+"=linux/amd64", build.variable("artifact-name")+"=", build.variable("binary-name")+"=",
 				build.variable("main-package")+"=.", build.variable("build-tags")+"=", build.variable("ldflags")+"=",
 				build.variable("skip-tests")+"=false", build.variable("build-sbom")+"=true",
+				build.variable("admin-application-tests")+"=true",
 				build.variable("source-date-epoch")+"="+test.input)
 			if test.job != "" {
 				env = append(env, "SOURCE_DATE_EPOCH="+test.job)
@@ -216,7 +226,7 @@ func goBuildInputs(commit string) []string {
 		build.variable("version") + "=v1.2.3", build.variable("commit") + "=" + commit, build.variable("working-directory") + "=.",
 		build.variable("platforms") + "=linux/amd64,linux/arm64", build.variable("artifact-name") + "=app", build.variable("binary-name") + "=",
 		build.variable("main-package") + "=.", build.variable("build-tags") + "=", build.variable("ldflags") + "=",
-		build.variable("skip-tests") + "=false", build.variable("build-sbom") + "=true",
+		build.variable("skip-tests") + "=false", build.variable("build-sbom") + "=true", build.variable("admin-application-tests") + "=true",
 		build.variable("source-date-epoch") + "=1700000000",
 	}
 }
@@ -281,7 +291,7 @@ func TestBuildCargoThroughTheEngine(t *testing.T) {
 		"FORGEJO_REF_NAME=release-request/v1.2.3", "FORGEJO_SHA="+strings.Repeat("f", 40),
 		build.variable("version")+"=v1.2.3", build.variable("commit")+"=abc123", build.variable("working-directory")+"=.",
 		build.variable("platforms")+"=linux/amd64,linux/arm64", build.variable("artifact-name")+"=", build.variable("binary-name")+"=",
-		build.variable("skip-tests")+"=false", build.variable("build-sbom")+"=true")...)
+		build.variable("skip-tests")+"=false", build.variable("build-sbom")+"=true", build.variable("admin-application-tests")+"=true")...)
 	if got.status != 0 {
 		t.Fatalf("status %d\nstdout %s\nstderr %s", got.status, got.stdout, got.stderr)
 	}

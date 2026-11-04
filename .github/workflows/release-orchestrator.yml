@@ -47,6 +47,21 @@ name: Orchestrate Release
 on:
   workflow_call: # yamllint disable-line rule:truthy
     inputs:
+      enforce-application-tests:
+        description: "Administrator setting: false reports recognized test assertion failures without failing; the tests still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
+      enforce-vulnerabilities:
+        description: "Administrator setting: false reports vulnerability findings without failing; the scans still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
+      enforce-reproducible-builds:
+        description: "Administrator setting: false reports missing reproducible-build settings without failing; the check still runs. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
       # === artifacts.yml LOCATION ===
       artifacts-config:
         description: "Path to the artifacts config file. Defaults to .forge-ci/artifacts.yml. If the file is absent AND the repo has exactly one ecosystem manifest at root (pom.xml, package.json, Cargo.toml, go.mod), forge-ci auto-derives the equivalent plan in-memory."
@@ -451,6 +466,7 @@ jobs:
       CODE_SCANNING_TOKEN: ${{ secrets.CODE_SCANNING_TOKEN }}
     uses: ./.github/workflows/validate-release-prerequisites.yml
     with:
+      enforce-reproducible-builds: ${{ inputs['enforce-reproducible-builds'] }}
       forge-ci-binary-ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
       config-plan-json: ${{ needs.parse-config.outputs.config-plan-json }}
       has-cargo-publish-target: ${{ fromJson(needs.parse-config.outputs['publish-stage-plan-json']).targets.cargo_container_first.runs || fromJson(needs.parse-config.outputs['build-stage-plan-json']).targets.cargo.runs }}
@@ -552,6 +568,7 @@ jobs:
       XCCONFIG_BASE64: ${{ secrets.XCCONFIG_BASE64 }}
     uses: ./.github/workflows/release-build-stage.yml
     with:
+      enforce-application-tests: ${{ inputs['enforce-application-tests'] }}
       branch: ${{ needs.execute-prepare-stage.outputs.release-sha }}
       release-tag: ${{ needs.parse-config.outputs.release-tag }}
       release-sha: ${{ needs.execute-prepare-stage.outputs.release-sha }}
@@ -596,6 +613,7 @@ jobs:
       FORGE_CI_BUILD_SECRETS_JSON: ${{ secrets.FORGE_CI_BUILD_SECRETS_JSON }}
     uses: ./.github/workflows/release-publish-stage.yml
     with:
+      enforce-vulnerabilities: ${{ inputs['enforce-vulnerabilities'] }}
       release-policy: ${{ inputs['release-policy'] }}
       branch: ${{ needs.execute-prepare-stage.outputs.release-sha }}
       release-tag: ${{ needs.parse-config.outputs.release-tag }}

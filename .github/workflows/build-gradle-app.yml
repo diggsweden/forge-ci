@@ -27,6 +27,11 @@ name: Build Gradle
 on:
   workflow_call:
     inputs:
+      enforce-application-tests:
+        description: "Administrator setting: false reports recognized test assertion failures without failing; the tests still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
       working-directory:
         description: "Working directory"
         required: false
@@ -165,6 +170,7 @@ jobs:
         # cache, and upload wrap it.
         working-directory: ${{ inputs['working-directory'] }}
         env:
+          ADMIN_APPLICATION_TESTS: ${{ inputs['enforce-application-tests'] }}
           GRADLE_TASKS: ${{ inputs['gradle-tasks'] }}
           SKIP_TESTS: ${{ inputs['skip-tests'] }}
           ENABLE_BUILD_SBOM: ${{ inputs['enable-build-sbom'] }}
@@ -174,7 +180,7 @@ jobs:
           DEPENDENCY_TOKEN: ${{ inputs['private-dependencies'] && github.token || '' }}
           # renovate: datasource=maven depName=org.cyclonedx:cyclonedx-gradle-plugin registryUrl=https://plugins.gradle.org/m2/
           CYCLONEDX_GRADLE_VERSION: "3.5.1"
-        run: forge-ci build gradle run
+        run: forge-ci build gradle run --enforce-application-tests="$ADMIN_APPLICATION_TESTS"
       - name: Export Maven publications without release credentials
         if: ${{ inputs['publication-artifact-name'] != '' }}
         working-directory: ${{ inputs['working-directory'] }}

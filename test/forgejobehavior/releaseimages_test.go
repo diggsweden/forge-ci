@@ -69,7 +69,7 @@ func TestReleaseImages_StagedPathsAreRelativeAndMeet(t *testing.T) {
 		"REQUIRED_IMAGE_LABELS=org.example.base-id=expected",
 		"IMAGE_KIND=base", "IMAGE_FLAVOR=core", "BASE_INPUT_ID=" + strings.Repeat("b", 64),
 		"IMAGE_ROLE=base", `IMAGE_PROVENANCE_JSON={"build_inputs":"approved"}`,
-		"IMAGE_DIGEST=sha256:" + strings.Repeat("c", 64),
+		"IMAGE_DIGEST=sha256:" + strings.Repeat("c", 64), "RELEASE_IMAGES_ADMIN_VULNERABILITIES=false",
 	}
 	box.write("workspace/image-artifacts/base-images-ledger-app/inventory-app-amd64.cyclonedx.json", `{"bomFormat":"CycloneDX"}`, 0o600)
 
@@ -135,6 +135,10 @@ func TestReleaseImages_StagedPathsAreRelativeAndMeet(t *testing.T) {
 	}
 
 	_, assemble := engine("release-images.yml", "publish", "Scan and publish ${{ matrix.image.name }}")
+	if !slices.Contains(assemble, "--enforce-vulnerabilities=false") {
+		t.Errorf("publication dropped the administrator's vulnerability setting: %q", assemble)
+	}
+
 	if !slices.Contains(assemble, "org.example.base-id=expected") {
 		t.Errorf("publication lost the consumer's required image identity: %q", assemble)
 	}
@@ -256,7 +260,7 @@ func TestReleaseImages_AlwaysScansWhatItPublishes(t *testing.T) {
 		"IMAGE_REPOSITORY=registry.invalid/owner/app", "CANDIDATE_TAG=staging-v1.2.3", "FINAL_TAG_NAME=v1.2.3",
 		"RELEASE_SHA=" + strings.Repeat("a", 40), "RELEASE_TAG=v1.2.3", "FORGEJO_SERVER=https://forgejo.invalid", "FORGEJO_REPO=owner/app",
 		"REGISTRY_TOKEN=fixture-token", "REGISTRY_USER=owner", "IMAGE_DIGEST=sha256:" + strings.Repeat("b", 64),
-		"IMAGE_SBOM_SHA256=" + strings.Repeat("c", 64),
+		"IMAGE_SBOM_SHA256=" + strings.Repeat("c", 64), "RELEASE_IMAGES_ADMIN_VULNERABILITIES=true",
 	}
 	for step, required := range map[string][]string{
 		"Scan and publish ${{ matrix.image.name }}":     {"--scan-output-template", "--sbom-output-template", "--index-sbom-output"},
@@ -305,7 +309,7 @@ func TestReleaseImages_RetainsPinnedIndexEvidenceForEveryReleaseVariant(t *testi
 				"IMAGE_SCAN=true", "IMAGE_KIND=", "IMAGE_ROLE=" + role, "IMAGE_FLAVOR=" + flavor,
 				"RELEASE_SHA=" + strings.Repeat("a", 40), "RELEASE_TAG=v1.2.3", "FORGEJO_SERVER=https://forgejo.invalid", "FORGEJO_REPO=owner/app",
 				"REGISTRY_TOKEN=fixture-token", "REGISTRY_USER=owner", "IMAGE_DIGEST=sha256:" + strings.Repeat("b", 64),
-				"IMAGE_SBOM_SHA256=" + strings.Repeat("c", 64),
+				"IMAGE_SBOM_SHA256=" + strings.Repeat("c", 64), "RELEASE_IMAGES_ADMIN_VULNERABILITIES=true",
 			}
 
 			got := box.run(workflowStep(t, "release-images.yml", "publish", "Scan and publish ${{ matrix.image.name }}").Run, env...)

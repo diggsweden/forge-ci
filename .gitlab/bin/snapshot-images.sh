@@ -96,7 +96,9 @@ snapshot_gitlab_generate() {
 		--arg node_image "${SNAPSHOT_ARTIFACT_IMAGE_NODE:-${SNAPSHOT_JOB_IMAGE}}" \
 		--arg rust_image "${SNAPSHOT_ARTIFACT_IMAGE_RUST:-${SNAPSHOT_JOB_IMAGE}}" \
 		--argjson tags "${tags}" --argjson amd64 "${amd64}" \
-		--argjson arm64 "${arm64}" '
+		--argjson arm64 "${arm64}" \
+		--argjson tests "${SNAPSHOT_ADMIN_APPLICATION_TESTS:?}" \
+		--argjson vulnerabilities "${SNAPSHOT_ADMIN_VULNERABILITIES:?}" '
 		def buildjob: "Snapshot: build " + .name + " " + .arch;
 		def publishjob: "Snapshot: publish " + .name;
 		def parent: {pipeline: $pipeline, job: "Snapshot: plan", artifacts: true};
@@ -114,7 +116,8 @@ snapshot_gitlab_generate() {
 		  include: [{project: $project, ref: $pin, file: "/templates/snapshot-image-jobs.yml", inputs: {
 		    "engine-sha": $pin, "forge-ci-repository": $project,
 		    "job-image": $job_image, "build-image": $build_image,
-		    "runner-tags": $tags, "image-builder": $builder, "builder-job-image": $kaniko_image
+		    "runner-tags": $tags, "image-builder": $builder, "builder-job-image": $kaniko_image,
+		    "enforce-application-tests": $tests, "enforce-vulnerabilities": $vulnerabilities
 		  }}],
 		  stages: ["artifacts", "context", "build", "publish", "collect"]
 		} +

@@ -61,6 +61,14 @@ on:
         description: Unique namespace when calling this workflow more than once in a run.
         type: string
         default: snapshot-images
+      enforce-application-tests:
+        description: Administrator setting; false lets the artifact builds report recognized test assertion failures without failing. Tests still run. Only the administrator's protected caller sets it; see docs/admin-policy.md.
+        type: boolean
+        default: true
+      enforce-vulnerabilities:
+        description: Administrator setting; false lets publication report image vulnerability findings without failing. Every image is still scanned. Only the administrator's protected caller sets it.
+        type: boolean
+        default: true
     outputs:
       source-sha:
         value: ${{ jobs.plan.outputs.source-sha }}
@@ -72,6 +80,9 @@ env:
   SNAPSHOT_REPOSITORY: ${{ forgejo.repository }}
   SNAPSHOT_ENGINE_SHA: ${{ inputs['forge-ci-sha'] }}
   SNAPSHOT_NAMESPACE: ${{ inputs['artifact-name'] }}
+  # The administrator's settings, which every engine call passes as flags.
+  SNAPSHOT_ADMIN_APPLICATION_TESTS: ${{ inputs['enforce-application-tests'] }}
+  SNAPSHOT_ADMIN_VULNERABILITIES: ${{ inputs['enforce-vulnerabilities'] }}
 jobs:
   coordinates:
     name: "Check: layer and builder coordinates"

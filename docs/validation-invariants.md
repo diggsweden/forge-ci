@@ -85,8 +85,8 @@ checksum-verified by `internal/app/toolchain/changelogrenderer.go`.
 ## 4. Gate build failures and verify what was packed
 
 - Under default administrator enforcement, configured npm test failures stop
-  before build, SBOM and pack. A reviewed administrator-built report-only policy
-  may continue only for recognized assertion findings, which remain reported;
+  before build, SBOM and pack. With the administrator setting
+  `enforce-application-tests: false` a build may continue only for recognized assertion findings, which remain reported;
   operational/unknown failures still block. An absent test script is a supported
   explicit skip, not a successful test execution.
 - Count executed, ignored and no-source tests separately. Running the same suite

@@ -166,6 +166,13 @@ jobs:
 
 ### Build Workflows
 
+Every build workflow takes `enforce-application-tests`, and the lint,
+container-publication and validation workflows take the
+`enforce-lint`, `enforce-vulnerabilities` or `enforce-reproducible-builds`
+their gates apply: the administrator's
+[check enforcement](admin-policy.md), default `true`. Only the
+administrator's protected caller sets them; the orchestrators forward them.
+
 #### `build-maven.yml`
 Builds Maven projects (apps or libraries).
 ```yaml
@@ -277,6 +284,7 @@ Direct-call input defaults are maintained here rather than in each example:
 | `working-directory` | No | `"."` | Project directory |
 | `branch` | No | `""` | Empty selects the triggering ref |
 | `skip-tests` | No | `false` | Legacy compatibility input; `true` is refused. Tests run under administrator-owned enforcement; inspect native reports for actual execution. |
+| `enforce-application-tests` | No | `true` | Administrator setting; see [check enforcement](admin-policy.md) |
 | `enable-build-sbom` | No | `true` | Run Build SBOM generation |
 | `runtime-image` | No | `""` | Empty selects the Android runtime image of the resolved forge-ci version |
 | `forge-ci-binary-ref` | No | `""` | forge-ci revision whose runtime image is selected; empty resolves the current stable release |

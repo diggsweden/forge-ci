@@ -4,7 +4,16 @@
 
 # Shared native snapshot steps. Source only from the pinned layer checkout,
 # never from the consumer checkout. The engine owns planning and publication.
-snapshot_engine() { run_forge_ci "$@"; }
+#
+# Every engine call carries the administrator's settings as flags: the
+# artifact builds run the application tests and publication scans images.
+# The caller assigns SNAPSHOT_ADMIN_APPLICATION_TESTS and
+# SNAPSHOT_ADMIN_VULNERABILITIES from its inputs before any call; unset,
+# the call fails rather than fall back to another value.
+snapshot_engine() {
+	run_forge_ci --enforce-application-tests="${SNAPSHOT_ADMIN_APPLICATION_TESTS:?}" \
+		--enforce-vulnerabilities="${SNAPSHOT_ADMIN_VULNERABILITIES:?}" "$@"
+}
 
 snapshot_validate_event() {
 	case "${FORGE_CI_PROVIDER:-}" in

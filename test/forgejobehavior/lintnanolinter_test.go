@@ -39,9 +39,11 @@ func TestLintNanolinter(t *testing.T) {
 	action := loadAction(t, "lint-nanolinter")
 	action.requireSteps(t, 1)
 	action.requireStepEnv(t, 0, map[string]string{
-		"LINT_REQUIRED_LINTS": "${{ inputs.required-lints }}",
-		"LINT_DISABLE_CHECKS": "${{ inputs.disable-checks }}",
-		"LINT_OFFLINE":        "${{ inputs.offline }}",
+		"LINT_REQUIRED_LINTS":        "${{ inputs.required-lints }}",
+		"LINT_DISABLE_CHECKS":        "${{ inputs.disable-checks }}",
+		"LINT_OFFLINE":               "${{ inputs.offline }}",
+		"LINT_ADMIN_LINT":            "${{ inputs.enforce-lint }}",
+		"LINT_ADMIN_VULNERABILITIES": "${{ inputs.enforce-vulnerabilities }}",
 	})
 
 	if floor := action.Inputs["required-lints"].Default; floor != "secrets,sast" {
@@ -65,7 +67,7 @@ func TestLintNanolinter(t *testing.T) {
 
 		got := box.run(script, append([]string{
 			"PATH=" + filepath.Join(box.root, "tools") + ":" + os.Getenv("PATH"), "FAKE_NANOLINTER_LOG=" + log,
-			"FORGE_CI_BIN=" + forgeCIEngine(t),
+			"FORGE_CI_BIN=" + forgeCIEngine(t), "LINT_ADMIN_LINT=true", "LINT_ADMIN_VULNERABILITIES=true",
 		}, env...)...)
 		if box.argv() != nil {
 			t.Fatalf("the lint step ran the layer's binary: %q", box.argv())
@@ -120,6 +122,22 @@ func TestLintNanolinter(t *testing.T) {
 		got, argv := run(t, "LINT_REQUIRED_LINTS=secrets,sast", "LINT_DISABLE_CHECKS=", "LINT_OFFLINE=false", "FAKE_NANOLINTER_STATUS=1")
 		if got.status != 1 || argv == nil || !strings.Contains(got.stdout, "result=findings") {
 			t.Fatalf("status %d argv %q", got.status, argv)
+		}
+	})
+
+	// The administrator's setting reaches the engine: the same finding is
+	// reported, does not block, and the receipt names the admin input.
+	t.Run("the administrator's setting reaches the policy gate", func(t *testing.T) {
+		t.Parallel()
+
+		got, argv := run(t, "LINT_REQUIRED_LINTS=secrets,sast", "LINT_DISABLE_CHECKS=", "LINT_OFFLINE=false", "FAKE_NANOLINTER_STATUS=1", "LINT_ADMIN_LINT=false")
+		if got.status != 0 || argv == nil || !strings.Contains(got.stdout, "result=findings count=1 enforcement=false source=admin-input") {
+			t.Fatalf("status %d argv %q stdout %s stderr %s", got.status, argv, got.stdout, got.stderr)
+		}
+
+		got, _ = run(t, "LINT_REQUIRED_LINTS=secrets,sast", "LINT_DISABLE_CHECKS=", "LINT_OFFLINE=false", "LINT_ADMIN_LINT=yes")
+		if got.status != 2 || !strings.Contains(got.stderr, "enforce-lint must be exactly true or false") {
+			t.Fatalf("a non-boolean setting: status %d stderr %s", got.status, got.stderr)
 		}
 	})
 

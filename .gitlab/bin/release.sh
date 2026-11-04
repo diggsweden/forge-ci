@@ -479,7 +479,8 @@ rc_images_publish() {
 	install_trivy
 	printf '%s' "${CI_JOB_TOKEN:?}" | rc_engine container login --registry "${CI_REGISTRY:?}" \
 		--registry-username gitlab-ci-token --registry-password-file - --auth-file "${auth_file}"
-	rc_engine container release-images publish --plan "${CI_PROJECT_DIR}/_release-images-plan/plan.json" \
+	rc_engine container release-images publish --enforce-vulnerabilities="${RC_ADMIN_VULNERABILITIES:?}" \
+		--plan "${CI_PROJECT_DIR}/_release-images-plan/plan.json" \
 		--image-repository "${CI_REGISTRY_IMAGE:?}" --release-tag "${RELEASE_TAG}" --release-sha "${RELEASE_SHA}" \
 		--server-url "${CI_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
 		--layouts-dir "${layouts}" --output-dir "${images}" --auth-file "${auth_file}"

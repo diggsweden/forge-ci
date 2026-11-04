@@ -13,16 +13,15 @@ commands.
 
 ## Check enforcement before publication
 
-The [administrator's immutable engine policy](admin-policy.md) controls whether
-recognized lint, vulnerability and application-test findings block progression.
-All three settings default to enforcing. Legacy `skip-tests: true` (including
+The [administrator's check enforcement settings](admin-policy.md) control whether
+recognized lint, vulnerability, application-test and reproducible-build findings
+block progression. All four default to enforcing. Legacy `skip-tests: true` (including
 `SKIP_TESTS=true`) is refused, and exported/published OCI layouts are always
 scanned. SBOM selection is separate from
 this vulnerability scan.
 
-To report recognized findings without blocking, use a reviewed administrator-built
-report-only distribution with matching protected workflow, binary and image
-pins. Checks still run and findings remain visible. Tool startup, invalid reports,
+To report recognized findings without blocking, the administrator sets the
+matching input to `false` in its protected caller. Checks still run and findings remain visible. Tool startup, invalid reports,
 compilation, packaging, credentials, signatures and source/digest identity
 failures remain blocking; a report-only publication is not a scan-clean receipt.
 

@@ -29,10 +29,11 @@ func materializedCleanup(body []byte) (string, error) {
 		materialize, lastBuild, cleanup := -1, -1, -1
 
 		for index, step := range job.Steps {
-			switch strings.TrimSpace(step.Run) {
-			case "forge-ci container materialize-build-secrets":
+			// A build may carry flags, such as the administrator's settings.
+			switch run := strings.TrimSpace(step.Run); {
+			case run == "forge-ci container materialize-build-secrets":
 				materialize = index
-			case "forge-ci container build":
+			case run == "forge-ci container build" || strings.HasPrefix(run, "forge-ci container build "):
 				lastBuild = index
 			}
 

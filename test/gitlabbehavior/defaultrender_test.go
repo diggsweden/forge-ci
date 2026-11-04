@@ -53,6 +53,12 @@ var requiredInputFixtures = map[string]any{
 	"runtime-image":                    "registry.invalid/team/runtime@sha256:" + strings.Repeat("9", 64),
 	"branch":                           "main",
 	"image-repository":                 "registry.invalid/team/app",
+	// The administrator settings of a child component, forwarded by its
+	// parent: not the defaults, so a literal shows which value it took.
+	"enforce-lint":                false,
+	"enforce-vulnerabilities":     false,
+	"enforce-application-tests":   false,
+	"enforce-reproducible-builds": false,
 }
 
 // Every component renders, with its defaults and the inputs it requires, a

@@ -5,6 +5,11 @@ name: Snapshot Release Build Stage
 on:
   workflow_call: # yamllint disable-line rule:truthy
     inputs:
+      enforce-application-tests:
+        description: "Administrator setting: false reports recognized test assertion failures without failing; the tests still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
       snapshot-release-plan-json:
         required: true
         type: string
@@ -117,6 +122,7 @@ jobs:
     # build-maven uses only auto-provided GITHUB_TOKEN.
     uses: ./.github/workflows/build-maven.yml
     with:
+      enforce-application-tests: ${{ inputs['enforce-application-tests'] }}
       forge-ci-binary-ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
       working-directory: ${{ matrix.artifact.working_directory }}
       private-dependencies: ${{ matrix.artifact.maven.private_dependencies || false }}
@@ -141,6 +147,7 @@ jobs:
     # build-npm uses only auto-provided GITHUB_TOKEN.
     uses: ./.github/workflows/build-npm.yml
     with:
+      enforce-application-tests: ${{ inputs['enforce-application-tests'] }}
       forge-ci-binary-ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
       working-directory: ${{ matrix.artifact.working_directory }}
       private-dependencies: ${{ matrix.artifact.npm.private_dependencies || false }}
@@ -164,6 +171,7 @@ jobs:
     # build-gradle-app uses only auto-provided GITHUB_TOKEN.
     uses: ./.github/workflows/build-gradle-app.yml
     with:
+      enforce-application-tests: ${{ inputs['enforce-application-tests'] }}
       forge-ci-binary-ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
       publication-artifact-name: ${{ fromJson(inputs['snapshot-build-stage-plan-json']).export_publications && matrix.artifact.publication_artifact_name || '' }}
       snapshot-publication: true
@@ -187,6 +195,7 @@ jobs:
     # build-go uses only auto-provided GITHUB_TOKEN.
     uses: ./.github/workflows/build-go.yml
     with:
+      enforce-application-tests: ${{ inputs['enforce-application-tests'] }}
       forge-ci-binary-ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
       commit: ${{ fromJson(inputs['snapshot-release-plan-json']).context.release_sha }}
       working-directory: ${{ matrix.artifact.working_directory }}
@@ -218,6 +227,7 @@ jobs:
       SECRETS_PROPERTIES_BASE64: ${{ secrets.SECRETS_PROPERTIES_BASE64 }}
     uses: ./.github/workflows/build-gradle-android.yml
     with:
+      enforce-application-tests: ${{ inputs['enforce-application-tests'] }}
       forge-ci-binary-ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
       library: ${{ matrix.artifact.build_type == 'library' }}
       publication-artifact-name: ${{ fromJson(inputs['snapshot-build-stage-plan-json']).export_publications && matrix.artifact.publication_artifact_name || '' }}
@@ -279,6 +289,7 @@ jobs:
     # build-cargo uses only auto-provided GITHUB_TOKEN.
     uses: ./.github/workflows/build-cargo.yml
     with:
+      enforce-application-tests: ${{ inputs['enforce-application-tests'] }}
       forge-ci-binary-ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
       commit: ${{ fromJson(inputs['snapshot-release-plan-json']).context.release_sha }}
       working-directory: ${{ matrix.artifact.working_directory }}

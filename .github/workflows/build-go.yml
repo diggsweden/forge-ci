@@ -12,6 +12,11 @@ name: Build Go
 on:
   workflow_call: # yamllint disable-line rule:truthy
     inputs:
+      enforce-application-tests:
+        description: "Administrator setting: false reports recognized test assertion failures without failing; the tests still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
       working-directory:
         description: "Working directory"
         required: false
@@ -148,6 +153,7 @@ jobs:
         # so the same `build go run` runs identically on GitLab. This job keeps
         # only the platform-transport steps around it (checkout, cache, upload).
         env:
+          ADMIN_APPLICATION_TESTS: ${{ inputs['enforce-application-tests'] }}
           WORKING_DIRECTORY: ${{ inputs['working-directory'] }}
           ARTIFACT_NAME: ${{ inputs['artifact-name'] }}
           BINARY_NAME: ${{ inputs['binary-name'] }}
@@ -161,7 +167,7 @@ jobs:
           MAIN_PACKAGE: ${{ inputs['main-package'] }}
           SKIP_TESTS: ${{ inputs['skip-tests'] }}
           ENABLE_BUILD_SBOM: ${{ inputs['enable-build-sbom'] }}
-        run: forge-ci build go run
+        run: forge-ci build go run --enforce-application-tests="$ADMIN_APPLICATION_TESTS"
       - name: Upload Go artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

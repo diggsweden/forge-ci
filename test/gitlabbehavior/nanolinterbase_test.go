@@ -143,11 +143,47 @@ func TestNanolinterBootstrapCAStaysInvocationScoped(t *testing.T) {
 	}
 }
 
+// The administrator's settings reach the engine as its flags, from the inputs
+// as written: a project variable named like the shell value the component
+// assigns them to changes nothing. The engine itself refuses a variable named
+// like a setting (see internal/domain/enforcement).
+func TestNanolinterGivesTheEngineTheAdministratorSettings(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "nanolinter"), []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, settings := range [][2]string{{"false", "true"}, {"true", "false"}} {
+		inputs := map[string]string{"enforce-lint": settings[0], "enforce-vulnerabilities": settings[1]}
+
+		output, err := runNanolinterScriptWith(t, dir, dir, inputs, "RC_ADMIN_LINT=hostile", "RC_ADMIN_VULNERABILITIES=hostile")
+		if err != nil {
+			t.Fatalf("%v: %v\n%s", inputs, err, output)
+		}
+
+		flags, err := os.ReadFile(filepath.Join(dir, "admin-flags"))
+		if want := "--enforce-lint=" + settings[0] + "\n--enforce-vulnerabilities=" + settings[1] + "\n"; err != nil || string(flags) != want {
+			t.Fatalf("%v: the engine got %q, want %q (%v)", inputs, flags, want, err)
+		}
+	}
+}
+
 func runNanolinterScript(t *testing.T, dir, workspace string, env ...string) (string, error) {
+	t.Helper()
+
+	return runNanolinterScriptWith(t, dir, workspace, map[string]string{"enforce-lint": "true", "enforce-vulnerabilities": "true"}, env...)
+}
+
+func runNanolinterScriptWith(t *testing.T, dir, workspace string, inputs map[string]string, env ...string) (string, error) {
 	t.Helper()
 	// This suite checks checkout and environment transport. Policy semantics
 	// execute against real compiled engines in commands/policy integration tests.
-	const policyDriver = "#!/bin/sh\n[ \"$1\" = policy ] && [ \"$2\" = nanolinter ] || exit 98\nshift 2\nif [ \"$1\" = --sarif-file ]; then shift 2; fi\n[ \"$1\" = -- ] || exit 98\nshift\nexec \"$@\"\n"
+	// The driver records the administrator flags it was given.
+	const policyDriver = "#!/bin/sh\n[ \"$1\" = policy ] && [ \"$2\" = nanolinter ] || exit 98\nshift 2\n: > \"${0%/*}/admin-flags\"\n" +
+		"while :; do\n  case \"$1\" in\n    --enforce-*=*) printf '%s\\n' \"$1\" >> \"${0%/*}/admin-flags\"; shift ;;\n" +
+		"    --sarif-file) shift 2 ;;\n    *) break ;;\n  esac\ndone\n[ \"$1\" = -- ] || exit 98\nshift\nexec \"$@\"\n"
 	if err := os.WriteFile(filepath.Join(dir, "forge-ci"), []byte(policyDriver), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +240,8 @@ func runNanolinterScript(t *testing.T, dir, workspace string, env ...string) (st
 	defer cancel()
 
 	rendered := strings.NewReplacer("$[[ component.sha ]]", strings.TrimSpace(string(pin)),
-		"$[[ inputs.required-lints ]]", "secrets,sast", "$[[ inputs.enable-gitlab-sast ]]", "false").Replace(script[0])
+		"$[[ inputs.required-lints ]]", "secrets,sast", "$[[ inputs.enable-gitlab-sast ]]", "false",
+		"$[[ inputs.enforce-lint ]]", inputs["enforce-lint"], "$[[ inputs.enforce-vulnerabilities ]]", inputs["enforce-vulnerabilities"]).Replace(script[0])
 	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", rendered)
 	command.Dir = workspace
 

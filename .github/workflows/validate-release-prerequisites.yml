@@ -41,6 +41,11 @@ name: Validate Release Prerequisites
 on:
   workflow_call: # yamllint disable-line rule:truthy
     inputs:
+      enforce-reproducible-builds:
+        description: "Administrator setting: false reports missing reproducible-build settings without failing; the check still runs. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
       config-plan-json:
         description: "Typed config-plan-json emitted by config parse-artifacts."
         required: true
@@ -189,6 +194,7 @@ jobs:
       - name: Validate Release Prerequisites
         id: prerequisites
         env:
+          ADMIN_REPRODUCIBLE_BUILDS: ${{ inputs['enforce-reproducible-builds'] }}
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
           REF: ${{ github.ref }}
@@ -209,7 +215,7 @@ jobs:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-        run: forge-ci validate prerequisites
+        run: forge-ci validate prerequisites --enforce-reproducible-builds="$ADMIN_REPRODUCIBLE_BUILDS"
       # Secrets-presence summary stays as a separate step — it reports a
       # different shape (which secrets are configured, regardless of
       # whether they were exercised by the validators above).

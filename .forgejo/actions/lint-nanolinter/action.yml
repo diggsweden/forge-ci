@@ -21,6 +21,16 @@ inputs:
       'true' passes --offline: checks that need the network are skipped and tools use their caches. For a runner or job image without network access, which must then also provide the pinned forge-ci engine through FORGE_CI_BIN.
     required: false
     default: 'false'
+  enforce-lint:
+    description: >-
+      Administrator setting, true or false: false reports lint findings without failing the step; the checks still run. Only the administrator's protected workflow sets it. See docs/admin-policy.md.
+    required: false
+    default: 'true'
+  enforce-vulnerabilities:
+    description: >-
+      Administrator setting, true or false: false reports vulnerability findings without failing the step; the scans still run. Only the administrator's protected workflow sets it.
+    required: false
+    default: 'true'
 
 runs:
   using: composite
@@ -31,6 +41,8 @@ runs:
         LINT_REQUIRED_LINTS: ${{ inputs.required-lints }}
         LINT_DISABLE_CHECKS: ${{ inputs.disable-checks }}
         LINT_OFFLINE: ${{ inputs.offline }}
+        LINT_ADMIN_LINT: ${{ inputs.enforce-lint }}
+        LINT_ADMIN_VULNERABILITIES: ${{ inputs.enforce-vulnerabilities }}
       run: |
         set -euo pipefail
         case "${LINT_OFFLINE}" in
@@ -63,4 +75,7 @@ runs:
           exit 69
         fi
         SIGNER_STRICT=1 verify_forge_ci
-        LANG=C.UTF-8 LC_ALL=C.UTF-8 run_forge_ci policy nanolinter -- nanolinter verify "${arguments[@]}" --report sarif --out -
+        LANG=C.UTF-8 LC_ALL=C.UTF-8 run_forge_ci policy nanolinter \
+          --enforce-lint="${LINT_ADMIN_LINT:?enforce-lint is required}" \
+          --enforce-vulnerabilities="${LINT_ADMIN_VULNERABILITIES:?enforce-vulnerabilities is required}" \
+          -- nanolinter verify "${arguments[@]}" --report sarif --out -

@@ -8,7 +8,7 @@ defines the orchestrator configuration.
 Build gates use [administrator-owned check enforcement](admin-policy.md).
 Legacy `skip-tests: true` inputs (including `SKIP_TESTS=true`) are refused.
 Exported/published OCI layouts are always vulnerability-scanned; there is no
-consumer switch to skip it. An administrator-built report-only engine still runs checks
+consumer switch to skip it. With an administrator setting at `false`, the gate still runs checks
 and reports recognized findings; operational failures, credentials, signatures
 and source/digest identity errors remain blocking. A successful report-only job
 is not a findings-free result.

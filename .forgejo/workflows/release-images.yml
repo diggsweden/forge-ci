@@ -109,6 +109,10 @@ on:
         type: string
         required: false
         default: release-images
+      enforce-vulnerabilities:
+        description: Administrator setting; false lets publication report image vulnerability findings without failing. Every image is still scanned. Only the administrator's protected caller sets it.
+        type: boolean
+        default: true
     outputs:
       ledger-json:
         description: Checked published-image ledger; consumers retain their own base/release policy.
@@ -636,6 +640,7 @@ jobs:
           CACHE_TAG_PREFIX: ${{ matrix.image['cache-tag-prefix'] }}
           RELEASE_SHA: ${{ matrix.image.revision || inputs['release-sha'] }}
           RELEASE_TAG: ${{ inputs['release-tag'] }}
+          RELEASE_IMAGES_ADMIN_VULNERABILITIES: ${{ inputs['enforce-vulnerabilities'] }}
           REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
           # The plan decided the user: the owner on this forge's registry.
           REGISTRY_USER: ${{ needs.plan.outputs['registry-user'] }}
@@ -675,6 +680,7 @@ jobs:
             [ -z "${line}" ] || required+=(--require-label "${line}")
           done <<<"${REQUIRED_IMAGE_LABELS:-}"
           run_forge_ci container multiarch-image assemble \
+            --enforce-vulnerabilities="${RELEASE_IMAGES_ADMIN_VULNERABILITIES:?}" \
             --from-layouts \
             --auth-file "${auth_file}" \
             --name "${IMAGE_NAME}" \

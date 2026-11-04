@@ -224,7 +224,7 @@ To omit the analyzed-container **SBOM**, set the source artifact's `sboms` to
 exclude `analyzed-container` (e.g. `sboms: build,analyzed-artifact`). This does
 not omit the Trivy vulnerability scan required for exported/published OCI
 layouts, which always runs; an
-[administrator-built report-only policy](admin-policy.md) still runs it and
+[administrator setting `enforce-vulnerabilities: false`](admin-policy.md) still runs it and
 reports findings, while operational and identity errors remain blocking.
 
 Strict config parsing rejects `containers[].enable-sbom: bool`; use artifact

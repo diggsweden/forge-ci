@@ -29,6 +29,16 @@ name: Lint Nanolinter
 on:
   workflow_call: # yamllint disable-line rule:truthy
     inputs:
+      enforce-lint:
+        description: "Administrator setting: false reports lint findings without failing; the checks still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
+      enforce-vulnerabilities:
+        description: "Administrator setting: false reports vulnerability findings without failing; the scans still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
       nanolinter-image:
         description: "nanolinter flavour image to lint in (pin by @sha256): core, go, java, kotlin, javascript-typescript, rust or swift, e.g. ghcr.io/itiquette/nanolinter:java"
         required: false
@@ -114,6 +124,8 @@ jobs:
         # the container; the run context nanolinter reads is passed by name.
         env:
           REQUIRED_LINTS: ${{ inputs['required-lints'] }}
+          ADMIN_LINT: ${{ inputs['enforce-lint'] }}
+          ADMIN_VULNERABILITIES: ${{ inputs['enforce-vulnerabilities'] }}
           NL_OUT: ${{ runner.temp }}/nanolinter
         run: |
           set -eu
@@ -127,7 +139,8 @@ jobs:
             exit 1
           fi
           rc=0
-          forge-ci policy nanolinter --sarif-file "$NL_OUT/nanolinter-security.sarif" -- docker run --rm --pull never --user "$(id -u):$(id -g)" \
+          forge-ci policy nanolinter --enforce-lint="$ADMIN_LINT" --enforce-vulnerabilities="$ADMIN_VULNERABILITIES" \
+            --sarif-file "$NL_OUT/nanolinter-security.sarif" -- docker run --rm --pull never --user "$(id -u):$(id -g)" \
             -e LANG=C.UTF-8 -e LC_ALL=C.UTF-8 \
             --cap-drop ALL --security-opt no-new-privileges \
             --tmpfs /home/nanolinter:rw,exec,mode=1777 \

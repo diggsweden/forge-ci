@@ -5,6 +5,11 @@ name: Release Publish Stage
 on:
   workflow_call: # yamllint disable-line rule:truthy
     inputs:
+      enforce-vulnerabilities:
+        description: "Administrator setting: false reports vulnerability findings without failing; the scans still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
       release-policy:
         description: "Accepted release versions: stable or stable-prerelease"
         type: string
@@ -278,6 +283,7 @@ jobs:
       RELEASE_COSIGN_PASSPHRASE: ${{ secrets.RELEASE_COSIGN_PASSPHRASE }}
     uses: ./.github/workflows/publish-container.yml
     with:
+      enforce-vulnerabilities: ${{ inputs['enforce-vulnerabilities'] }}
       branch: ${{ inputs.branch }}
       release-tag: ${{ inputs['release-tag'] }}
       release-sha: ${{ inputs['release-sha'] }}

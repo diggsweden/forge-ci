@@ -21,6 +21,11 @@ name: Build Maven
 on:
   workflow_call:
     inputs:
+      enforce-application-tests:
+        description: "Administrator setting: false reports recognized test assertion failures without failing; the tests still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
       build-type:
         description: "Lifecycle: app (clean package) or lib (compile/test/package with optional profile; POM owns attached artifacts)"
         required: true
@@ -135,6 +140,7 @@ jobs:
         # this step's working-directory; only checkout/cache/upload wrap it.
         working-directory: ${{ inputs['working-directory'] }}
         env:
+          ADMIN_APPLICATION_TESTS: ${{ inputs['enforce-application-tests'] }}
           BUILD_TYPE: ${{ inputs['build-type'] }}
           MAVEN_PROFILE: ${{ inputs['profile'] }}
           SKIP_TESTS: ${{ inputs['skip-tests'] }}
@@ -146,7 +152,7 @@ jobs:
           DEPENDENCY_TOKEN: ${{ inputs['private-dependencies'] && github.token || '' }}
           # renovate: datasource=maven depName=org.cyclonedx:cyclonedx-maven-plugin
           CYCLONEDX_MAVEN_VERSION: "2.9.3"
-        run: forge-ci build maven run
+        run: forge-ci build maven run --enforce-application-tests="$ADMIN_APPLICATION_TESTS"
       - name: Upload Maven artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

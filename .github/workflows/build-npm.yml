@@ -26,6 +26,11 @@ name: Build NPM
 on:
   workflow_call:
     inputs:
+      enforce-application-tests:
+        description: "Administrator setting: false reports recognized test assertion failures without failing; the tests still run. Only the administrator's protected caller sets it; a direct caller keeps the default. See docs/admin-policy.md."
+        type: boolean
+        required: false
+        default: true
       working-directory:
         description: "Working directory"
         required: false
@@ -147,6 +152,7 @@ jobs:
         # WORKING_DIRECTORY itself, as on Forgejo and GitLab. A step-level
         # working-directory as well would apply the directory twice.
         env:
+          ADMIN_APPLICATION_TESTS: ${{ inputs['enforce-application-tests'] }}
           WORKING_DIRECTORY: ${{ inputs['working-directory'] }}
           SKIP_TESTS: ${{ inputs['skip-tests'] }}
           ENABLE_BUILD_SBOM: ${{ inputs['enable-build-sbom'] }}
@@ -157,7 +163,7 @@ jobs:
           DEPENDENCY_TOKEN: ${{ inputs['private-dependencies'] && github.token || '' }}
           # renovate: datasource=npm depName=@cyclonedx/cyclonedx-npm
           CYCLONEDX_VERSION: "6.0.1"
-        run: forge-ci build npm run
+        run: forge-ci build npm run --enforce-application-tests="$ADMIN_APPLICATION_TESTS"
       - name: Upload NPM artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

@@ -32,6 +32,7 @@ func generateSnapshot(t *testing.T, plan string, extra ...string) (map[string]an
 		"SNAPSHOT_JOB_IMAGE=registry.example/tools@sha256:" + strings.Repeat("b", 64),
 		"SNAPSHOT_BUILD_IMAGE=registry.example/build@sha256:" + strings.Repeat("c", 64),
 		`SNAPSHOT_ARM64_TAGS=["native-arm64"]`, `SNAPSHOT_AMD64_TAGS=["native-amd64"]`,
+		"SNAPSHOT_ADMIN_APPLICATION_TESTS=false", "SNAPSHOT_ADMIN_VULNERABILITIES=true",
 	}, extra...)
 
 	out, err := cmd.CombinedOutput()
@@ -97,6 +98,11 @@ func TestSnapshotNativeChildPipelineHasWholeBuildBarrierAndBoundContext(t *testi
 	include := jobs["include"].([]any)[0].(map[string]any)
 	if include["ref"] != strings.Repeat("a", 40) {
 		t.Fatal("child template not pinned to same engine")
+	}
+
+	// The child's jobs take the administrator's settings as typed inputs.
+	if inputs := include["inputs"].(map[string]any); inputs["enforce-application-tests"] != false || inputs["enforce-vulnerabilities"] != true {
+		t.Fatalf("the child does not get the administrator settings: %#v", inputs)
 	}
 }
 
@@ -286,6 +292,9 @@ func TestSnapshotCheckoutUsesPinnedGitLabEventPolicyBeforeTransport(t *testing.T
 			program := `set -euo pipefail
 source "$1/.forgejo/bin/snapshot-images.sh"
 run_forge_ci() {
+  # Every engine call carries the administrator settings first.
+  test "$1 $2" = '--enforce-application-tests=false --enforce-vulnerabilities=true' || return 99
+  shift 2
   if [ "$1 $2" = 'validate event-context' ]; then
     test "$#" = 6
     test "$3" = --event-name && test -z "$4"
@@ -302,7 +311,8 @@ snapshot_checkout refs/heads/development
 			cmd := exec.CommandContext(t.Context(), "bash", "--noprofile", "--norc", "-c", program, "snapshot", reporoot.Path(t))
 			cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "FORGE_CI_PROVIDER=gitlab", "REFUSE=" + refuse,
 				"ALLOWED_EVENTS=pull_request,trigger,pipeline", "GITHUB_EVENT_NAME=push",
-				"SNAPSHOT_REPOSITORY=org/app", "SNAPSHOT_SERVER=https://gitlab.example"}
+				"SNAPSHOT_REPOSITORY=org/app", "SNAPSHOT_SERVER=https://gitlab.example",
+				"SNAPSHOT_ADMIN_APPLICATION_TESTS=false", "SNAPSHOT_ADMIN_VULNERABILITIES=true"}
 
 			out, err := cmd.CombinedOutput()
 			if refuse == "true" {

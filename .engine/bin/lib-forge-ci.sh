@@ -280,3 +280,40 @@ run_forge_ci() {
 	verify_forge_ci || return
 	"${HELPERS_ENGINE_VERIFIED}" "$@"
 }
+
+# forge_ci_admin_path DIR LINT VULNERABILITIES APPLICATION_TESTS REPRODUCIBLE_BUILDS
+# puts a forge-ci first on PATH that runs the verified engine with the
+# administrator's four settings as its flags, so the commands a job runs
+# from its inputs (the caller's own, or the consumer scripts those name)
+# gate under the administrator's policy. Each value is exactly true or false.
+# The engine refuses the same flag given twice, so a command cannot replace
+# a setting through this forge-ci. FORGE_CI_BIN keeps naming the verified
+# binary itself, which applies the embedded defaults.
+forge_ci_admin_path() {
+	local dir=${1:-} engine=${HELPERS_ENGINE_VERIFIED:-} value
+	if [ "$#" -ne 5 ] || [ -z "${dir}" ] || [ -z "${engine}" ]; then
+		echo "ERROR: forge_ci_admin_path needs a verified engine, a directory and four settings" >&2
+		return 64
+	fi
+	for value in "${@:2}"; do
+		case "${value}" in
+		true | false) ;;
+		*)
+			echo "ERROR: an administrator setting is '${value}', not true or false" >&2
+			return 64
+			;;
+		esac
+	done
+	case "${dir}${engine}" in
+	*"'"*)
+		echo "ERROR: the engine path must not contain a single quote" >&2
+		return 64
+		;;
+	esac
+	mkdir -p -- "${dir}" || return
+	printf "#!/bin/sh\nexec '%s' --enforce-lint=%s --enforce-vulnerabilities=%s --enforce-application-tests=%s --enforce-reproducible-builds=%s \"\$@\"\n" \
+		"${engine}" "$2" "$3" "$4" "$5" >"${dir}/forge-ci" || return
+	chmod 0755 -- "${dir}/forge-ci" || return
+	PATH="${dir}:${PATH}"
+	export PATH
+}

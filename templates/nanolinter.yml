@@ -51,6 +51,16 @@ spec:
       default: true
       description: >-
         Convert nanolinter's SARIF to a GitLab SAST report and publish it as artifacts:reports:sast (populates the MR Security tab; display needs GitLab Ultimate). When false, the SARIF is kept as a plain artifact only.
+    enforce-lint:
+      type: boolean
+      default: true
+      description: >-
+        Administrator setting: false reports lint findings without failing the job. Set it only in the administrator's own policy include; the checks still run. See docs/admin-policy.md.
+    enforce-vulnerabilities:
+      type: boolean
+      default: true
+      description: >-
+        Administrator setting: false reports vulnerability findings (osv, trivy-fs and the like) without failing the job. Set it only in the administrator's own policy include. See docs/admin-policy.md.
     forge-ci-repository:
       description: >-
         Project serving this component and its public engine package, including any subgroups. The SARIF to GitLab-SAST conversion runs the engine binary that this component's commit records, downloaded from that project's generic packages and checked against the recorded checksum. May name $CI_PROJECT_PATH: lib-forge-ci.sh refuses an expanded path that is not a project on CI_SERVER_URL before any download.
@@ -72,9 +82,11 @@ spec:
   script:
     - |
       set -uo pipefail
-      # The floor and the report as written: a project variable outranks a
-      # job's own, so neither is one.
-      readonly REQUIRED_LINTS='$[[ inputs.required-lints ]]' ENABLE_GITLAB_SAST='$[[ inputs.enable-gitlab-sast ]]'
+      # The floor, the report and the administrator's settings as written: a
+      # project variable outranks a job's own, so none is one. The settings
+      # reach the engine as its flags, never through the environment.
+      readonly REQUIRED_LINTS='$[[ inputs.required-lints ]]' ENABLE_GITLAB_SAST='$[[ inputs.enable-gitlab-sast ]]' \
+        RC_ADMIN_LINT='$[[ inputs.enforce-lint ]]' RC_ADMIN_VULNERABILITIES='$[[ inputs.enforce-vulnerabilities ]]'
 
       # opengrep (inside nanolinter) hardcodes paths under the image's home; the
       # flavour image's /home/nanolinter is writable, so cosign's sigstore cache
@@ -157,7 +169,8 @@ spec:
           require_args=()
           if [ -n "$REQUIRED_LINTS" ]; then require_args=(--require "$REQUIRED_LINTS"); fi
           gate=0
-          LANG=C.UTF-8 LC_ALL=C.UTF-8 run_forge_ci policy nanolinter --sarif-file "$SARIF_FILE" -- \
+          LANG=C.UTF-8 LC_ALL=C.UTF-8 run_forge_ci policy nanolinter \
+            --enforce-lint="$RC_ADMIN_LINT" --enforce-vulnerabilities="$RC_ADMIN_VULNERABILITIES" --sarif-file "$SARIF_FILE" -- \
             nanolinter verify "${require_args[@]}" --report sarif --out - || gate=$?
           if [ "$gate" -ne 0 ]; then
             echo "nanolinter gate failed — see the per-check output for findings or a tool/runtime failure."

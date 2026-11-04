@@ -1056,11 +1056,11 @@ multi-tenant secret reuse, etc.), see [docs/threat-model.md](threat-model.md).
 
 Checks distinguish execution, findings and enforcement. The default
 administrator policy blocks recognized lint, vulnerability and application-test
-findings. An administrator-built report-only distribution still runs checks and
+findings. An administrator setting at `false` still runs checks and
 reports their findings; it does not waive operational failures, missing tools,
 invalid reports, credentials, signatures or source/digest identity errors.
-See [Administrator check enforcement](admin-policy.md) for immutable policy
-ownership and migration from legacy consumer opt-outs.
+See [Administrator check enforcement](admin-policy.md) for the settings,
+who owns them, and migration from legacy consumer opt-outs.
 
 | Gate | Default | Policy / supported adjustment |
 |---|---|---|
@@ -1074,8 +1074,8 @@ ownership and migration from legacy consumer opt-outs.
 A passing pipeline must be read alongside its selected checks, native execution
 reports and administrator-policy decisions. A report-only pass can retain real
 findings; a Gradle cache or `NO-SOURCE` outcome is not physical test execution.
-Adopters who need non-default enforcement use a reviewed administrator-built
-distribution and matching protected workflow/binary/image pins.
+Adopters who need non-default enforcement set the administrator inputs in the
+protected caller; the decision lines name each setting's source.
 
 ## Reproducible Builds
 

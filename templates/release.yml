@@ -133,6 +133,26 @@ spec:
         Branch a release lands on. The release request must be its head, and the release commit is pushed to it. Empty, the default, takes the project's default branch.
       default: ''
       regex: '^$|^[A-Za-z0-9_][A-Za-z0-9_./-]*$'
+    enforce-lint:
+      type: boolean
+      default: true
+      description: >-
+        Administrator setting, applied by the forge-ci of the checks and build jobs: false reports lint findings without failing. The checks still run. See docs/admin-policy.md.
+    enforce-vulnerabilities:
+      type: boolean
+      default: true
+      description: >-
+        Administrator setting, applied by the forge-ci of the checks and build jobs: false reports vulnerability findings without failing.
+    enforce-application-tests:
+      type: boolean
+      default: true
+      description: >-
+        Administrator setting, applied by the forge-ci of the checks and build jobs: false reports recognized test assertion failures without failing. Tests still run.
+    enforce-reproducible-builds:
+      type: boolean
+      default: true
+      description: >-
+        Administrator setting, applied by the forge-ci of the checks and build jobs: false reports missing reproducible-build settings without failing.
 ---
 release:
   stage: deploy
@@ -190,3 +210,7 @@ release:
           transparency-log: $[[ inputs.transparency-log ]]
           release-branch: $[[ inputs.release-branch ]]
           version-bump: $[[ inputs.version-bump ]]
+          enforce-lint: $[[ inputs.enforce-lint ]]
+          enforce-vulnerabilities: $[[ inputs.enforce-vulnerabilities ]]
+          enforce-application-tests: $[[ inputs.enforce-application-tests ]]
+          enforce-reproducible-builds: $[[ inputs.enforce-reproducible-builds ]]

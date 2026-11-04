@@ -77,6 +77,10 @@ spec:
       type: boolean
       default: false
       description: Legacy input; true is refused. Admin policy controls findings, and tests still run.
+    enforce-application-tests:
+      type: boolean
+      default: true
+      description: Administrator setting; false lets recognized test assertion failures be reported without failing the build. Tests still run. Only the administrator's own include should set it; see docs/admin-policy.md.
     enable-build-sbom:
       type: boolean
       default: true
@@ -115,7 +119,9 @@ spec:
   script:
     - cd -- "$RC_PROJECT_DIRECTORY"
     - if [ "$EXPORT_PUBLICATIONS" = "true" ]; then forge-ci build gradle export-publications --project "$BUILD_MODULE" --output .forge-ci/maven-publication --snapshot="$SNAPSHOT_PUBLICATION" --validate-only; fi
-    - forge-ci build gradle-android run
+    # The administrator's setting as written, a flag of the engine: no
+    # project variable can supply or change it.
+    - forge-ci build gradle-android run --enforce-application-tests='$[[ inputs.enforce-application-tests ]]'
     - if [ "$EXPORT_PUBLICATIONS" = "true" ]; then forge-ci build gradle export-publications --project "$BUILD_MODULE" --output .forge-ci/maven-publication --central="$CENTRAL_PUBLICATION" --snapshot="$SNAPSHOT_PUBLICATION"; fi
   artifacts:
     # Always, so failed tests still reach the merge request test report.
