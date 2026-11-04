@@ -42,6 +42,7 @@ Solve a specific task.
 - [Forgejo](forgejo.md) - The Forgejo delivery layer, in the same section order: calling it, the signer image and engine binary, the signing boundary, using it from a fork, limits; and the CLI on a Forgejo runner.
 - [Runners and runner lending](runners.md) - What each job kind needs from its runner, the runner variables, and borrowing an ephemeral runner for container builds when the pool denies user namespaces.
 - [Failed Release Recovery](failed-release-recovery.md) - Safe reruns, immutable-tag rules, cleanup, and rollback.
+- [Forge Migration](forge-migration.md) - Delivery gaps to check when moving a consumer between GitHub, Forgejo and GitLab.
 
 ## Reference
 
@@ -77,7 +78,7 @@ Current architectural decisions and the constraints future changes must retain.
 
 - [Development](DEVELOPMENT.md) - Local development, testing, branch verification, and releasing forge-ci itself.
 - [Testing](testing.md) - Go test helpers and testing conventions.
-- [Consumer Validation Lessons](consumer-validation-lessons.md) - Reusable invariants and regressions from native consumer trials.
+- [Live Campaigns](live-campaigns.md) - Plan, launch and retain evidence for resource-aware asynchronous live campaigns.
+- [Validation Invariants](validation-invariants.md) - Invariants and regressions from native consumer trials.
 - [Scripts](scripts.md) - Remaining bootstrap scripts and the workflow surface moved to the Go binary.
 - [Workflow Design Policy](workflow-design-policy.md) - Design rules for maintainers extending the workflow graph.
-- [Open Questions](open-questions.md) - Review-question status and links to the durable policy decisions.

@@ -1,4 +1,4 @@
-# Reusable lessons from native consumer validation
+# Validation invariants from native consumer trials
 
 These are engineering invariants and troubleshooting guidance, not a claim that
 every consumer/provider combination has passed. Keep native run IDs, exact
@@ -381,12 +381,3 @@ These are explicit follow-up scenarios, not passing coverage. Extend the existin
 | P1 | GitHub SARIF upload finishes processing and is queryable for the expected commit/category | Existing security-report upload scenario; optional upload success is insufficient |
 | P1 | Representative public/private PR, development, package and container-first runs share one final engine revision | Existing prepare/reuse batching; preserve revision-specific prior evidence |
 | P2 | Required legacy SBOM ZIP/GPG sidecars and Android AAB streaming-verifier compatibility | Consumer output parity and Android artifact inspectors |
-
-## 10. Preserve a reusable handoff
-
-For every issue, retain: owning project, original revision, affected paths,
-reproduction, proposed fix, changed trial revision, local checks, native run IDs,
-remaining limits and whether the change is production-relevant or lab-only.
-Keep upstream source/legal attribution. Preserve earlier failed evidence rather
-than rewriting it as success, and retain temporary proof outside ephemeral
-directories. Use the resulting matrix to drive the next run, not session memory.

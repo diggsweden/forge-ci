@@ -53,8 +53,7 @@ records the resolved engine commit for each run.
 - Exercise the selected forge's bootstrap, signing and publication paths in the
   disposable lab and retain evidence for that exact revision and binary.
 
-See [testing](testing.md), [runtime images](runtime-images.md),
-[verification](verification.md), and [open questions](open-questions.md) for
-current requirements. Historical `v0.90.0` examples do not identify the current
+See [testing](testing.md), [runtime images](runtime-images.md), and
+[verification](verification.md) for current requirements. Historical `v0.90.0` examples do not identify the current
 source revision or establish availability of its matching CLI assets and images.
 Confirm the selected coordinates before adoption.

@@ -1344,7 +1344,7 @@ container-publication, recovery or multi-platform trial.
 
 #### Trying a consumer on GitHub
 
-See [Reusable lessons from native consumer validation](consumer-validation-lessons.md)
+See [Validation invariants from native consumer trials](validation-invariants.md)
 for the invariants behind source preservation, parallel isolation, revision
 forwarding, toolchain diagnosis and artifact/package acceptance.
 
@@ -1513,6 +1513,144 @@ consumer release fixture's single binary image is also not a substitute for
 the lint flavour image with its tools. Image preparation and the three trials
 (`pull-request`, `dev-release`, `release`) are separate operator steps; success
 of one does not establish success of the others.
+
+#### Maven consumer trials on Forgejo
+
+Two opt-in Maven cases extend the Forgejo consumer scenarios. Both are native
+linux/amd64 Forgejo lanes; neither claims GitLab or GitHub parity, and neither
+proves that a deployed service works.
+
+##### Java service development
+
+Setting `FORGE_CI_LIVE_MAVEN_APPLICATION_IMAGE` selects the Java-service case
+of `TestForgejoLayer_ConsumerDevelopment`: an unsigned snapshot trial of a
+container-first service, public or private, on the existing private-index
+staging, scratch-resource cleanup and shared snapshot workflow. It does not
+exercise stable release or PR linting.
+
+| Environment variable | Value |
+| --- | --- |
+| `FORGE_CI_LIVE_CONSUMER` | Absolute path to a clean checkout at the desired source revision |
+| `FORGE_CI_LIVE_CONSUMER_VISIBILITY` | `public`, `private` or `both` (default) |
+| `FORGE_CI_LIVE_MAVEN_APPLICATION_IMAGE` | Trusted Maven/JDK **25** job image, full registry reference pinned with `@sha256:…` |
+| `FORGE_CI_LIVE_SERVICE_BRANCH` | Logical scratch source branch, e.g. `feature/service-trial`, different from `main` |
+| `FORGE_CI_LIVE_SERVICE_READINESS_URL` | Project-owned readiness endpoint, e.g. `http://127.0.0.1:8080/actuator/health/readiness` |
+| `FORGE_CI_LIVE_SERVICE_FIXTURE` | Optional absolute regular CI script path; never production credentials |
+
+Filter `^TestForgejoLayer_ConsumerDevelopment$` in
+`./internal/livetest/conformance` with `-tags=live`. The normal live driver
+supplies the contract and session; the controller needs no Java, Maven or
+application container. The runner fixture must provide:
+
+- Permission for the Buildah setup helper and apt installation. The readiness
+  job uses the helper to provision Podman, jq and nftables in its own job
+  storage; Netavark needs `nft` for the loopback port mapping.
+- Trust in the lab registry, configured in the fixture rather than by
+  bypassing TLS. For a private consumer the readiness job logs in with the
+  development registry credential into a job-local auth file, pulls the digest
+  and deletes the file before the service starts.
+- Rootless Podman port forwarding. The readiness URL names the container port;
+  Podman maps it to a random loopback host port so the probe cannot accept a
+  service that already runs on the runner.
+
+The source checkout is admitted once at HEAD. The selected scratch branch
+receives that source, the CI overlay and the standard trial canary, so policy
+`main` and the selected branch have different commits. Dispatch runs on policy
+`main`; `snapshot-images.yml` resolves the selected branch once and its exact
+SHA feeds both the image build and the checked Maven job. The source POM,
+business code, Containerfile, Maven checks and rules stay unchanged.
+
+The generated CI declaration is container-only: the original Containerfile
+builds the image, and no unused artifact-first producer is scheduled. A
+separate Maven `app` job on the shared builder keeps its normal checks and
+tests and copies the actual `target/<artifactId>-*.jar` outputs. That is a
+second checked build on purpose: **the checked JAR is not asserted to be the
+JAR inside the image**. Artifact-first projects use the shared snapshot
+producer instead of this case.
+
+The runtime fixture script runs inside the Java job and writes
+`trial-runtime/runtime.env` plus optional files. They are transferred in the
+same run, mounted read-only at `/trial` and passed to the service with
+`--env-file`; only disposable, nonsecret trial material belongs there. The
+runtime is pulled and started by immutable digest. Readiness makes at most 60
+HTTP requests, each bounded to two seconds with two-second retries, and
+cleanup uses the exact created container ID.
+
+The acceptance binds the frozen branch and SHA, the registry digest, the OCI
+revision and branch labels, the checked JARs and the HTTP readiness evidence.
+It rejects unexpected registry aliases, Git tags or releases, and movement of
+either scratch branch. Successful job traces are retained by the existing log
+protocol. The offline guard for source preservation is:
+
+```sh
+env GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go test ./internal/livetest \
+  -run '^TestMavenServiceDevelopmentPreservesSource$' -count=1
+```
+
+The bundled fixture `test/live/cases/maven-issuer-service/service-fixture.sh`
+generates a one-day EC PKCS12 key with `keytool` in the Java 25 job and
+supplies inert issuer metadata with `example.invalid` URLs. A consumer whose
+Containerfile copies only part of the tree, or whose POM skips its own checks,
+fails on its original inputs; that is a **CI integration blocker** to report
+with the exact failing job, not an application defect to fix in the trial.
+Likewise, a consumer that adds a database or Testcontainers dependency needs
+its runner fixture provisioned, not its checks disabled.
+
+##### Original Maven tests with Testcontainers
+
+A plain Maven job has no Docker API, so original tests that start services
+through Testcontainers cannot run in it. Do not skip them or present a missing
+engine as an application pass. The Forgejo Maven trial, public or private, can
+instead opt into a job-local test-engine sidecar with
+`FORGE_CI_LIVE_MAVEN_TESTCONTAINERS_IMAGE`, an operator-reviewed immutable
+digest. The controller requires the disposable native amd64 Maven application
+fixture and the acknowledged privileged runner label from the v5 contract
+before it publishes the workflow. The sidecar and the images it starts come
+from their own registries, so a private consumer needs no extra credential.
+
+Only the key-free build job gains the service and the Docker client
+environment; preparation, signing and publication keep their existing jobs and
+credentials. No host engine socket or host port is mounted or published. The
+service's unencrypted Docker API is reachable on the runner-selected network,
+and the accepted Compose runner uses the shared lab network, so this is not
+per-job isolation: use only trusted disposable workflows and serialize these
+trials. Normal runner cleanup removes the job and the service.
+
+```bash
+export FORGE_CI_LIVE_CONSUMER=/home/operator/consumers/myapp
+export FORGE_CI_LIVE_CONSUMER_VISIBILITY=private
+export FORGE_CI_LIVE_CONSUMER_EVENT=release
+export FORGE_CI_LIVE_CONSUMER_SETTINGS=version=4.0.1
+export FORGE_CI_LIVE_MAVEN_APPLICATION_IMAGE='docker.io/library/maven:3.9-eclipse-temurin-25@sha256:96f175708f766ea049ab6c794a85335d238894c75f8eb364bddd98086a5b7cfd'
+export FORGE_CI_LIVE_MAVEN_TESTCONTAINERS_IMAGE='docker.io/library/docker@sha256:2a232a42256f70d78e3cc5d2b5d6b3276710a0de0596c145f627ecfae90282ac'
+just test-live '^TestForgejoLayer_ConsumerTrial$/private$'
+```
+
+That service digest is the reviewed Docker 28 DinD image, which serves the
+Docker API that Testcontainers Java 1.21.4 uses; Docker 29 raises its minimum
+API and is not interchangeable. The application overlay requires exactly one
+`target/*.jar` and copies its unchanged bytes to the versioned release asset
+name, so a POM with an unversioned `build.finalName` still releases and a
+missing or ambiguous JAR fails the fixture. A unit fixture proves that the
+source blobs stay admitted and unchanged and that no credential-bearing job
+receives the service configuration.
+
+##### Acceptance receipts
+
+- 2026-10-30, public Forgejo run 309: the issuer-service development case
+  passed, with the image read back and started by digest and the root index
+  digest correctly distinguished from the platform digest (controller
+  `fb5183bc`). It predates administrator-owned mandatory scan enforcement, so
+  the changed test and scan contracts need revalidation under the current
+  enforcing distribution.
+- 2026-10-31, Forgejo runs 332 and 337 with release `v4.0.1` each: two
+  Testcontainers consumers ran their complete original suites with zero
+  failures (124 and 412 tests, including the PostgreSQL-backed ones), and the
+  host oracle verified seven release files and three Cosign bundles per run,
+  using runner fixture `859790be` and fixture snapshot `15502517`. A third
+  consumer reached its Valkey-backed tests (run 334, 438 tests) but its retry
+  (run 336) hit original authentication-test timeouts and the job deadline, so
+  its signed-release verdict is unresolved.
 
 #### GitLab live acceptance
 

@@ -45,5 +45,5 @@ validation, signing and publication decisions stay inside the trusted engine
 and pinned policy. Changes to this boundary are reviewed together with the
 signer tooling, workflow scopes and byte-verification mechanism.
 
-See [the threat model](../threat-model.md), [verification](../verification.md),
-and [open questions](../open-questions.md) for current guarantees and limitations.
+See [the threat model](../threat-model.md) and [verification](../verification.md)
+for current guarantees and limitations.

@@ -195,8 +195,7 @@ Start with the [Documentation Index](docs/README.md) for the full map.
   focused compatibility runs
 - **[Workflow Design Policy](docs/workflow-design-policy.md)** ·
   **[Scripts](docs/scripts.md)** ·
-  **[Architecture Decisions](docs/README.md#architecture-decisions)** ·
-  **[Open Questions](docs/open-questions.md)**
+  **[Architecture Decisions](docs/README.md#architecture-decisions)**
 - **[Security](SECURITY.md)** • How to report a vulnerability
 - **[Changelog](CHANGELOG.md)**
 
