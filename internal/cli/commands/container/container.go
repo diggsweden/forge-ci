@@ -88,9 +88,9 @@ stdin or $REGISTRY_PASSWORD — never argv — and the file is written 0600.
 
 EXAMPLES:
    echo "$TOKEN" | forge-ci container login --registry ghcr.io --registry-username "$GITHUB_ACTOR" --registry-password-file -
-   forge-ci container login --registry forgejo.example.com --registry-username bot   # password from $REGISTRY_TOKEN / $REGISTRY_PASSWORD`,
+   forge-ci container login --registry forge.example --registry-username bot   # password from $REGISTRY_TOKEN / $REGISTRY_PASSWORD`,
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: flagRegistry, Value: domaincontainer.DefaultRegistry, Sources: cli.EnvVars("CONTAINER_REGISTRY"), Usage: "registry host (e.g. ghcr.io, forgejo.example.com), or an image repository on it"},
+			&cli.StringFlag{Name: flagRegistry, Value: domaincontainer.DefaultRegistry, Sources: cli.EnvVars("CONTAINER_REGISTRY"), Usage: "registry host (e.g. ghcr.io, forge.example), or an image repository on it"},
 			&cli.StringFlag{Name: flagServerURL, Usage: "forge/server URL used to derive the registry host when --registry is empty or omitted"},
 			regflags.UsernameFor("registry username; empty is the --repository owner on the forge's own registry (--server-url's host) and refused on another one. The password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD"),
 			regflags.PasswordFile(),
@@ -331,7 +331,7 @@ EXAMPLES:
    forge-ci container logout --registry ghcr.io
    forge-ci container logout   # defaults to $CONTAINER_REGISTRY, else ` + domaincontainer.DefaultRegistry,
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: flagRegistry, Value: domaincontainer.DefaultRegistry, Sources: cli.EnvVars("CONTAINER_REGISTRY"), Usage: "registry host to log out of (e.g. ghcr.io, forgejo.example.com)"},
+			&cli.StringFlag{Name: flagRegistry, Value: domaincontainer.DefaultRegistry, Sources: cli.EnvVars("CONTAINER_REGISTRY"), Usage: "registry host to log out of (e.g. ghcr.io, forge.example)"},
 			&cli.StringFlag{Name: flagAuthFile, Usage: "override the auth config path (default: $REGISTRY_AUTH_FILE, else $DOCKER_CONFIG/config.json, else ~/.docker/config.json)"},
 		},
 		Action: func(_ context.Context, cmd *cli.Command) error {
@@ -417,7 +417,7 @@ func metadataCmd() *cli.Command {
 			"(flag > plan > env > default).\n\n" +
 			"EXAMPLES:\n" +
 			"   # Semver tags + OCI labels from a tag rule\n" +
-			"   forge-ci container metadata --image-name ghcr.io/org/app \\\n" +
+			"   forge-ci container metadata --image-name ghcr.io/owner/app \\\n" +
 			"     --tag-rules \"type=semver,pattern={{version}}\" --emit-labels",
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: flagImageName, Required: true, Sources: planfile.Vars(planScopeMetadata, flagImageName, "IMAGE_NAME"),

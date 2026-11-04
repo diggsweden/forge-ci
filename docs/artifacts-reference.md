@@ -764,8 +764,8 @@ Containers reference artifacts via the `from:` field and are built after all art
 - **Type:** `string`
 - **Description:** Container image name (becomes part of image tag)
 - **Example:** `backend-api`, `frontend-ui`
-- **Resulting image:** `ghcr.io/org/repo/backend-api:v1.0.0`
-- **Single-container collapse:** When `name` equals the repo's short name (the common single-container pattern), the redundant `<repo>/<repo>` subpath is collapsed to `ghcr.io/org/repo:<tag>`. Multi-container layouts where each `name` is distinct from the repo are unaffected.
+- **Resulting image:** `ghcr.io/owner/repo/backend-api:v1.0.0`
+- **Single-container collapse:** When `name` equals the repo's short name (the common single-container pattern), the redundant `<repo>/<repo>` subpath is collapsed to `ghcr.io/owner/repo:<tag>`. Multi-container layouts where each `name` is distinct from the repo are unaffected.
 
 ---
 
@@ -816,7 +816,11 @@ The `enable-sbom: bool` field on the container block is unsupported and strict p
 
 #### Unsupported container `enable-scan`
 
-The `enable-scan: bool` field on the container block is unsupported and strict parsing rejects it. Every exported or published OCI layout is scanned with Trivy; there is no switch to turn the scan off. Under the default enforcing administrator policy, a finding at `scan-severity` or above with a fixed package fails the publish, and so does an unfixed CRITICAL unless `.trivyignore.yaml` approves it; other findings are only listed. An administrator-built report-only distribution still runs the scanner and reports findings; scanner and operational errors remain blocking. See [Administrator check enforcement](admin-policy.md). Results appear in Code Scanning when the `CODE_SCANNING_TOKEN` org secret is set.
+The `enable-scan: bool` field on the container block is unsupported and strict parsing rejects it. Every exported or published OCI layout is scanned with Trivy; there is no switch to turn the scan off.
+
+Under the default enforcing administrator policy, a finding at `scan-severity` or above with a fixed package fails the publish, and so does an unfixed CRITICAL unless `.trivyignore.yaml` approves it; other findings are only listed. An administrator-built report-only distribution still runs the scanner and reports findings; scanner and operational errors remain blocking. See [Administrator check enforcement](admin-policy.md).
+
+Results appear in Code Scanning when the `CODE_SCANNING_TOKEN` org secret is set.
 
 #### `scan-severity`
 

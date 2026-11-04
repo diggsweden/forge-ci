@@ -609,10 +609,10 @@ attach a signed in-toto attestation (slsaprovenance1 | cyclonedx | spdx) to an O
 ```
 EXAMPLES:
    # SLSA v1.0 provenance (predicate generated from the CI environment), keyless
-   forge-ci container attest ghcr.io/org/app@sha256:abc... --type slsaprovenance1 --method sigstore
+   forge-ci container attest ghcr.io/owner/app@sha256:abc... --type slsaprovenance1 --method sigstore
 
    # Attach a CycloneDX SBOM as a signed attestation
-   forge-ci container attest ghcr.io/org/app@sha256:abc... --type cyclonedx --predicate sbom.cdx.json --method sigstore
+   forge-ci container attest ghcr.io/owner/app@sha256:abc... --type cyclonedx --predicate sbom.cdx.json --method sigstore
 ```
 
 **Usage:** `forge-ci container attest <registry/image@sha256:...>`
@@ -904,13 +904,13 @@ MODES (--mode):
 EXAMPLES:
    # Build a single platform and push by digest (the publish-container path)
    forge-ci container build --file Containerfile --platform linux/amd64 \
-     --mode push-by-digest --image-ref ghcr.io/org/app
+     --mode push-by-digest --image-ref ghcr.io/owner/app
 
    # Build into local storage for a smoke test
    forge-ci container build --mode load --image-ref app:test
 
    # Build, scan the exported layout, then push it by digest
-   forge-ci container build --mode push-by-digest --image-ref ghcr.io/org/app \
+   forge-ci container build --mode push-by-digest --image-ref ghcr.io/owner/app \
      --platform linux/amd64 --scan-severity HIGH
 ```
 
@@ -925,7 +925,7 @@ EXAMPLES:
 | `--secrets` | JSON array or newline-separated id=NAME,src=PATH secrets (the secret-mounts output of "container materialize-build-secrets") | string | `""` | `$BUILD_SECRETS` |
 | `--labels` | newline-separated key=value OCI labels (the labels output of "container metadata") | string | `""` | `$LABELS` |
 | `--source-date-epoch` | unix seconds; clamps image/layer timestamps for reproducible digests | string | `""` | `$SOURCE_DATE_EPOCH` |
-| `--cache-repo` | dedicated registry repo for the layer cache (e.g. ghcr.io/org/buildcache). Empty disables caching. Imported best-effort; --cache-push also exports. | string | `""` | `$BUILD_CACHE_REPO` |
+| `--cache-repo` | dedicated registry repo for the layer cache (e.g. ghcr.io/owner/buildcache). Empty disables caching. Imported best-effort; --cache-push also exports. | string | `""` | `$BUILD_CACHE_REPO` |
 | `--cache-push` | also export the layer cache on trusted builds; disabled in push-by-digest and oci modes, where the scan gates publication | bool | `false` | `$BUILD_CACHE_PUSH` |
 | `--mode` | output mode: push-by-digest \| load \| local \| oci (never exports registry cache) (required) | string | `""` | `$BUILD_MODE` |
 | `--image-ref` | push target (push-by-digest) or local tag (load) | string | `""` | `$IMAGE_REF` |
@@ -1183,14 +1183,14 @@ validate one image entry and append it to the ledger
 EXAMPLES:
    # Record a pushed image, capturing its digest from the registry
    forge-ci container ledger add --role distroless \
-     --candidate-tag forgejo.example.com/owner/repo:staging-v1.2.3 \
-     --final-tag forgejo.example.com/owner/repo:v1.2.3 \
+     --candidate-tag forge.example/owner/repo:staging-v1.2.3 \
+     --final-tag forge.example/owner/repo:v1.2.3 \
      --sbom dist/image-sbom.cyclonedx.json --tag v1.2.3 --capture-digest
 
    # Direct-push consumer with an explicit digest
    forge-ci container ledger add --role alpine \
-     --ref forgejo.example.com/owner/repo@sha256:… --digest sha256:… \
-     --final-tag forgejo.example.com/owner/repo:v1.2.3-alpine \
+     --ref forge.example/owner/repo@sha256:… --digest sha256:… \
+     --final-tag forge.example/owner/repo:v1.2.3-alpine \
      --sbom dist/image-sbom-alpine.cyclonedx.json --tag v1.2.3
 ```
 
@@ -1209,7 +1209,7 @@ EXAMPLES:
 | `--final-tag-name` | immutable release tag name/portion combined with --image-name; when --tag is empty, derives the release tag from vMAJOR.MINOR.PATCH[-suffix] | string | `""` | n/a |
 | `--final-tag` | immutable release tag ref (scoped to --tag); derived from --image-name when omitted | string | `""` | n/a |
 | `--moving-tag-name` | optional moving tag name/portion combined with --image-name | string | `""` | n/a |
-| `--moving-tag` | optional moving tag ref, e.g. forgejo.example.com/owner/repo:rust | string | `""` | n/a |
+| `--moving-tag` | optional moving tag ref, e.g. forge.example/owner/repo:rust | string | `""` | n/a |
 | `--flavor` | optional base-image flavour | string | `""` | n/a |
 | `--derive-candidate-tag` | derive --candidate-tag as <image>:staging-<final-tag-name>; mutually exclusive with explicit candidate tag flags | bool | `false` | `$LEDGER_DERIVE_CANDIDATE_TAG` |
 | `--default-sbom` | when --sbom is empty, use dist/image-sbom-<flavor\|role>.cyclonedx.json; base images use premade-sboms/base-sbom-<flavor>.cyclonedx.json | bool | `false` | n/a |
@@ -1271,7 +1271,7 @@ EXAMPLES:
 | `--tag` | release tag that final_tag (and candidate_tag) must be scoped to | string | `""` | `$TAG_NAME`, `$RELEASE_TAG`, `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
 | `--auth-file` | registry auth file for the promotion copies and digest verification | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
 | `--stage` | promotion stage: 'release' adds the <base>:release pointer and enforces the release scope; a named stage ('dev', 'staging') adds <base>:<stage> on the same digest and needs no --tag. The immutable :<version> tag is build-only. | string | `"release"` | `$PROMOTE_STAGE` |
-| `--stage-repo` | rehome the promotion onto a destination registry/namespace PREFIX (e.g. a sovereign Forgejo host, e.g. forgejo.example.com/owner); each image lands at <prefix>/<image-name>, so a multi-container release never collides. A different registry is a cross-registry promotion that copies the signature via cosign | string | `""` | `$PROMOTE_STAGE_REPO` |
+| `--stage-repo` | rehome the promotion onto a destination registry/namespace PREFIX (e.g. a sovereign Forgejo host, e.g. forge.example/owner); each image lands at <prefix>/<image-name>, so a multi-container release never collides. A different registry is a cross-registry promotion that copies the signature via cosign | string | `""` | `$PROMOTE_STAGE_REPO` |
 | `--release-tags-from-ledger` | for the release stage, promote to each entry's final_tag and optional moving_tag instead of the generic <base>:release pointer | bool | `false` | `$PROMOTE_RELEASE_TAGS_FROM_LEDGER` |
 | `--allow-digest-ref-fallback` | when candidate_tag is absent or no longer serves the recorded digest, copy from the ledger ref digest instead; recovers a re-run release whose candidate tag has since been cleaned up | bool | `false` | `$PROMOTE_ALLOW_DIGEST_REF_FALLBACK` |
 | `--expected-image-repository` | optional exact image repository allowed for ledger refs/tags at the signer/publisher boundary | string | `""` | `$LEDGER_EXPECTED_IMAGE_REPOSITORY` |
@@ -1368,12 +1368,12 @@ stdin or $REGISTRY_PASSWORD — never argv — and the file is written 0600.
 
 EXAMPLES:
    echo "$TOKEN" | forge-ci container login --registry ghcr.io --registry-username "$GITHUB_ACTOR" --registry-password-file -
-   forge-ci container login --registry forgejo.example.com --registry-username bot   # password from $REGISTRY_TOKEN / $REGISTRY_PASSWORD
+   forge-ci container login --registry forge.example --registry-username bot   # password from $REGISTRY_TOKEN / $REGISTRY_PASSWORD
 ```
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--registry` | registry host (e.g. ghcr.io, forgejo.example.com), or an image repository on it | string | `"ghcr.io"` | `$CONTAINER_REGISTRY` |
+| `--registry` | registry host (e.g. ghcr.io, forge.example), or an image repository on it | string | `"ghcr.io"` | `$CONTAINER_REGISTRY` |
 | `--server-url` | forge/server URL used to derive the registry host when --registry is empty or omitted | string | `""` | n/a |
 | `--registry-username` | registry username; empty is the --repository owner on the forge's own registry (--server-url's host) and refused on another one. The password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER` |
 | `--registry-password-file` | file containing the registry password/token ("-" reads stdin); defaults to $REGISTRY_TOKEN then $REGISTRY_PASSWORD. The password never appears in argv. | string | `""` | n/a |
@@ -1400,7 +1400,7 @@ EXAMPLES:
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--registry` | registry host to log out of (e.g. ghcr.io, forgejo.example.com) | string | `"ghcr.io"` | `$CONTAINER_REGISTRY` |
+| `--registry` | registry host to log out of (e.g. ghcr.io, forge.example) | string | `"ghcr.io"` | `$CONTAINER_REGISTRY` |
 | `--auth-file` | override the auth config path (default: $REGISTRY_AUTH_FILE, else $DOCKER_CONFIG/config.json, else ~/.docker/config.json) | string | `""` | n/a |
 
 ### `forge-ci container manifest`
@@ -1433,7 +1433,7 @@ inspect a pushed manifest list and emit image/digest outputs
 
 ```
 EXAMPLE:
-   forge-ci container manifest inspect --image-ref ghcr.io/org/app:v1.2.3
+   forge-ci container manifest inspect --image-ref ghcr.io/owner/app:v1.2.3
 ```
 
 | Flag | Description | Type | Default | Env vars |
@@ -1448,7 +1448,7 @@ create a manifest list from digest marker files and tags
 ```
 EXAMPLE:
    # Assemble a multi-arch index from per-arch digest markers and apply tags
-   forge-ci container manifest merge --image-name ghcr.io/org/app \
+   forge-ci container manifest merge --image-name ghcr.io/owner/app \
      --tags "v1.2.3" --digests-dir /tmp/digests
 ```
 
@@ -1508,7 +1508,7 @@ Reads TAG_RULES (newline csv lines), evaluates them against the resolved provide
 
 EXAMPLES:
    # Semver tags + OCI labels from a tag rule
-   forge-ci container metadata --image-name ghcr.io/org/app \
+   forge-ci container metadata --image-name ghcr.io/owner/app \
      --tag-rules "type=semver,pattern={{version}}" --emit-labels
 ```
 
@@ -1751,7 +1751,7 @@ compute the canonical image reference and emit name=&lt;value&gt;
 
 ```
 EXAMPLES:
-   # Canonical ghcr.io reference for a repo (emits name=ghcr.io/org/app)
+   # Canonical ghcr.io reference for a repo (emits name=ghcr.io/owner/app)
    forge-ci container ref resolve --registry ghcr.io --repository org/app --repository-owner org
 ```
 
@@ -2129,10 +2129,10 @@ sign an OCI image with cosign (sigstore or kms). Registry-attached storage; sign
 ```
 EXAMPLES:
    # Keyless signing (sigstore / OIDC), e.g. from CI
-   forge-ci container sign ghcr.io/org/app@sha256:abc... --method sigstore
+   forge-ci container sign ghcr.io/owner/app@sha256:abc... --method sigstore
 
    # KMS-backed signing
-   forge-ci container sign ghcr.io/org/app@sha256:abc... --method kms --key awskms:///alias/release
+   forge-ci container sign ghcr.io/owner/app@sha256:abc... --method kms --key awskms:///alias/release
 ```
 
 **Usage:** `forge-ci container sign <registry/image@sha256:...>`
@@ -2322,7 +2322,7 @@ verify an image lives in the allowed namespace for an enforced registry (no-op f
 
 ```
 EXAMPLE:
-   forge-ci container validate namespace --image-name ghcr.io/org/app \
+   forge-ci container validate namespace --image-name ghcr.io/owner/app \
      --repository org/app --registry ghcr.io --enforce-namespace org
 ```
 
@@ -2653,7 +2653,7 @@ EXAMPLES:
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
 | `--repository` | owner/name to check out | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
-| `--server-url` | forge base URL (e.g. https://forgejo.example.com) | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
+| `--server-url` | forge base URL (e.g. https://forge.example) | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--ref` | commit SHA, refs/tags/…, refs/heads/…, or a bare tag/branch name to check out. Set via $CHECKOUT_REF; defaults to the triggering commit. | string | `""` | `$CHECKOUT_REF`, `$CI_COMMIT`, `$CI_COMMIT_SHA`, `$FORGEJO_SHA`, `$GITHUB_SHA` |
 | `--workspace` | target directory (default: current directory) | string | `""` | `$CI_WORKSPACE`, `$FORGEJO_WORKSPACE`, `$GITHUB_WORKSPACE` |
 | `--token-file` | Token for a private checkout. Read from a file ("-" for stdin); trailing CR/LF is trimmed. Explicit input overrides environment credentials; empty content supplies no token. Omit for environment selection, with runner-issued tokens scoped to their server. | string | `""` | n/a |
@@ -4752,7 +4752,7 @@ verify a cosign signature on an OCI image (sigstore or kms). Reads from the regi
 
 ```
 EXAMPLE:
-   forge-ci validate container-signature ghcr.io/org/app@sha256:abc... --method sigstore \
+   forge-ci validate container-signature ghcr.io/owner/app@sha256:abc... --method sigstore \
      --cert-identity-regexp '^https://github\.com/org/' --cert-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
@@ -5250,7 +5250,7 @@ render CHANGELOG.md and commit-msg.txt with git-chglog or git-cliff
 ```
 EXAMPLE:
    forge-ci version render-changelog --changelog-creator git-cliff --tag v1.2.3 \
-     --repository-url https://forgejo.example/owner/repository \
+     --repository-url https://forge.example/owner/repository \
      --changelog-config .forge-ci/gitcliff/keepachangelog.toml \
      --commit-body-config .forge-ci/gitcliff/minimal.toml
 ```

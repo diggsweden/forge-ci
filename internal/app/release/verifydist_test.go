@@ -94,7 +94,7 @@ func shellDigest(t *testing.T, dir string) string {
 func shellDigestFromInside(t *testing.T, dir string) string {
 	t.Helper()
 
-	// Nanolinter's image-input hand-off historically digested artifact contents
+	// A consumer's image-input hand-off historically digested artifact contents
 	// from inside the staging directory so both producer and verifier wrote
 	// ./<file> paths even though the outer artifact directory names differed.
 	script := `cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}'`

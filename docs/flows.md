@@ -152,7 +152,7 @@ destination digest afterward; promotion never rebuilds or re-signs the image.
 - With no `--stage-repo`, the destination stays in the source repository and
   the in-process OCI adapter performs the tag copy.
 - `--stage-repo <prefix>` preserves the complete source path below the registry
-  host, so `ghcr.io/org/api` becomes `<prefix>/org/api` and cannot collide with
+  host, so `ghcr.io/owner/api` becomes `<prefix>/owner/api` and cannot collide with
   a sibling image.
 - A destination in another repository or registry must use the configured
   `SignatureCopier` (`cosign copy`) so the image and registry-attached signature

@@ -23,7 +23,7 @@ func renderChangelogCmd() *cli.Command {
 		Usage: "render CHANGELOG.md and commit-msg.txt with git-chglog or git-cliff",
 		Description: `EXAMPLE:
    forge-ci version render-changelog --changelog-creator git-cliff --tag v1.2.3 \
-     --repository-url https://forgejo.example/owner/repository \
+     --repository-url https://forge.example/owner/repository \
      --changelog-config .forge-ci/gitcliff/keepachangelog.toml \
      --commit-body-config .forge-ci/gitcliff/minimal.toml`,
 		Flags: []cli.Flag{

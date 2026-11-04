@@ -256,7 +256,7 @@ the steps are these.
 
    ```bash
    sed -i \
-     -e 's|FORGE_HOST|forgejo.example.org|g' \
+     -e 's|FORGE_HOST|forge.example|g' \
      -e 's|OWNER|myorg|g' \
      -e 's|PIN_FORGE_CI_SHA|<commit>|g' \
      -e 's|PIN_SIGNER_IMAGE_DIGEST|<digest>|g' \

@@ -39,10 +39,10 @@ func attestCmd() *cli.Command {
 		ArgsUsage: "<registry/image@sha256:...>",
 		Description: `EXAMPLES:
    # SLSA v1.0 provenance (predicate generated from the CI environment), keyless
-   forge-ci container attest ghcr.io/org/app@sha256:abc... --type slsaprovenance1 --method sigstore
+   forge-ci container attest ghcr.io/owner/app@sha256:abc... --type slsaprovenance1 --method sigstore
 
    # Attach a CycloneDX SBOM as a signed attestation
-   forge-ci container attest ghcr.io/org/app@sha256:abc... --type cyclonedx --predicate sbom.cdx.json --method sigstore`,
+   forge-ci container attest ghcr.io/owner/app@sha256:abc... --type cyclonedx --predicate sbom.cdx.json --method sigstore`,
 		Flags: append(
 			append(
 				[]cli.Flag{

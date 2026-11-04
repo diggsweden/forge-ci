@@ -97,7 +97,7 @@ func validateNamespaceCmd() *cli.Command {
 		Name:  "namespace",
 		Usage: "verify an image lives in the allowed namespace for an enforced registry (no-op for registries not in --enforce-namespace-on)",
 		Description: `EXAMPLE:
-   forge-ci container validate namespace --image-name ghcr.io/org/app \
+   forge-ci container validate namespace --image-name ghcr.io/owner/app \
      --repository org/app --registry ghcr.io --enforce-namespace org`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{

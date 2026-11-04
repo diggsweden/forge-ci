@@ -75,7 +75,7 @@ as the exportable-key fallback, not as a hardware-backed setup.
 
 ```bash
 ssh-keygen -t ed25519 -N '' \
-  -C 'Example Release Bot <release-bot@example.org>' \
+  -C 'Example Release Bot <release-bot@example.com>' \
   -f /home/operator/.local/share/release-keys/release-ssh
 ```
 
@@ -161,7 +161,7 @@ Use a dedicated keyring, not your personal GPG keyring:
 mkdir -m 700 /home/operator/.local/share/release-keys/gnupg
 gpg --homedir /home/operator/.local/share/release-keys/gnupg \
   --quick-generate-key \
-  'Example Release Bot <release-bot@example.org>' rsa4096 sign 2y
+  'Example Release Bot <release-bot@example.com>' rsa4096 sign 2y
 ```
 
 Choose a strong, non-empty passphrase when GnuPG's pinentry prompts you. This
@@ -182,12 +182,12 @@ Export the private key and the public verification key to separate files:
 gpg --homedir /home/operator/.local/share/release-keys/gnupg \
   --armor \
   --output /home/operator/.local/share/release-keys/release-gpg-private.asc \
-  --export-secret-keys 'Example Release Bot <release-bot@example.org>'
+  --export-secret-keys 'Example Release Bot <release-bot@example.com>'
 
 gpg --homedir /home/operator/.local/share/release-keys/gnupg \
   --armor \
   --output /home/operator/.local/share/release-keys/release-gpg-public.asc \
-  --export 'Example Release Bot <release-bot@example.org>'
+  --export 'Example Release Bot <release-bot@example.com>'
 ```
 
 - **`RELEASE_GPG_PRIVATE_KEY`**: complete armored private-key file.

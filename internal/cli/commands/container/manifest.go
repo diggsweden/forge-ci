@@ -126,7 +126,7 @@ func manifestMergeCmd() *cli.Command {
 		Usage: "create a manifest list from digest marker files and tags",
 		Description: `EXAMPLE:
    # Assemble a multi-arch index from per-arch digest markers and apply tags
-   forge-ci container manifest merge --image-name ghcr.io/org/app \
+   forge-ci container manifest merge --image-name ghcr.io/owner/app \
      --tags "v1.2.3" --digests-dir /tmp/digests`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: flagImageName, Sources: cli.EnvVars("IMAGE_NAME"), Usage: "base image name (without tag) the manifest list points to"},
@@ -148,7 +148,7 @@ func manifestInspectCmd() *cli.Command {
 		Name:  "inspect",
 		Usage: "inspect a pushed manifest list and emit image/digest outputs",
 		Description: `EXAMPLE:
-   forge-ci container manifest inspect --image-ref ghcr.io/org/app:v1.2.3`,
+   forge-ci container manifest inspect --image-ref ghcr.io/owner/app:v1.2.3`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: flagImageRef, Sources: cli.EnvVars("IMAGE_REF"), Usage: "fully-qualified image reference (registry/owner/name:tag) to inspect"},
 			&cli.StringFlag{Name: "tags", Sources: cli.EnvVars("TAGS"), Usage: "newline-separated tags whose digest output is emitted to the sink"},

@@ -54,13 +54,13 @@ MODES (--mode):
 EXAMPLES:
    # Build a single platform and push by digest (the publish-container path)
    forge-ci container build --file Containerfile --platform linux/amd64 \
-     --mode push-by-digest --image-ref ghcr.io/org/app
+     --mode push-by-digest --image-ref ghcr.io/owner/app
 
    # Build into local storage for a smoke test
    forge-ci container build --mode load --image-ref app:test
 
    # Build, scan the exported layout, then push it by digest
-   forge-ci container build --mode push-by-digest --image-ref ghcr.io/org/app \
+   forge-ci container build --mode push-by-digest --image-ref ghcr.io/owner/app \
      --platform linux/amd64 --scan-severity HIGH`,
 		Flags:  append(append(buildImageFlags(), scanFlags()...), imageBuilderFlags()...),
 		Action: runBuild,
@@ -112,7 +112,7 @@ func buildImageFlags() []cli.Flag {
 		&cli.StringFlag{Name: "secrets", Sources: planfile.Vars(planScopeBuild, "secrets", "BUILD_SECRETS"), Usage: "JSON array or newline-separated id=NAME,src=PATH secrets (the secret-mounts output of \"container materialize-build-secrets\")"},
 		&cli.StringFlag{Name: "labels", Sources: planfile.Vars(planScopeBuild, "labels", "LABELS"), Usage: "newline-separated key=value OCI labels (the labels output of \"container metadata\")"},
 		&cli.StringFlag{Name: "source-date-epoch", Sources: planfile.Vars(planScopeBuild, "source-date-epoch", "SOURCE_DATE_EPOCH"), Usage: "unix seconds; clamps image/layer timestamps for reproducible digests"},
-		&cli.StringFlag{Name: "cache-repo", Sources: planfile.Vars(planScopeBuild, "cache-repo", "BUILD_CACHE_REPO"), Usage: "dedicated registry repo for the layer cache (e.g. ghcr.io/org/buildcache). Empty disables caching. Imported best-effort; --cache-push also exports."},
+		&cli.StringFlag{Name: "cache-repo", Sources: planfile.Vars(planScopeBuild, "cache-repo", "BUILD_CACHE_REPO"), Usage: "dedicated registry repo for the layer cache (e.g. ghcr.io/owner/buildcache). Empty disables caching. Imported best-effort; --cache-push also exports."},
 		&cli.BoolFlag{Name: "cache-push", Sources: planfile.Vars(planScopeBuild, "cache-push", "BUILD_CACHE_PUSH"), Usage: "also export the layer cache on trusted builds; disabled in push-by-digest and oci modes, where the scan gates publication"},
 		&cli.StringFlag{Name: "mode", Required: true, Sources: planfile.Vars(planScopeBuild, "mode", "BUILD_MODE"), Usage: "output mode: push-by-digest | load | local | oci (never exports registry cache)"},
 		&cli.StringFlag{Name: flagImageRef, Sources: planfile.Vars(planScopeBuild, flagImageRef, "IMAGE_REF"), Usage: "push target (push-by-digest) or local tag (load)"},

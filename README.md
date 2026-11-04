@@ -74,7 +74,7 @@ forge-ci init https://github.com/YOUR-ORG/forge-ci --dry-run
 forge-ci init https://gitlab.example.com/team/forge-ci --dry-run
 
 # Forgejo — mirror defaults must declare forge: forgejo
-forge-ci init https://forgejo.example.com/team/forge-ci --dry-run
+forge-ci init https://forge.example/examplescope/forge-ci --dry-run
 ```
 
 The preview reports the target directory, resolved release and commit, selected

@@ -191,12 +191,12 @@ Choose an explicit image name and an independently configured publication base:
 ```bash
 forge-ci container ref resolve \
   --registry ghcr.io --repository Org/.github --repository-owner Org \
-  --image-name ghcr.io/org/github-config
+  --image-name ghcr.io/owner/github-config
 
 forge-ci container validate namespace \
   --registry ghcr.io --repository Org/.github --enforce-namespace Org \
-  --image-name ghcr.io/org/github-config \
-  --expected-image-repository ghcr.io/org/github-config
+  --image-name ghcr.io/owner/github-config \
+  --expected-image-repository ghcr.io/owner/github-config
 ```
 
 `publish-container.yml` exposes the corresponding `image-name` and

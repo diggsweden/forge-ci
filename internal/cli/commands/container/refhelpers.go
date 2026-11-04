@@ -138,7 +138,7 @@ func refResolveCmd() *cli.Command {
 		Name:  "resolve",
 		Usage: "compute the canonical image reference and emit name=<value>",
 		Description: `EXAMPLES:
-   # Canonical ghcr.io reference for a repo (emits name=ghcr.io/org/app)
+   # Canonical ghcr.io reference for a repo (emits name=ghcr.io/owner/app)
    forge-ci container ref resolve --registry ghcr.io --repository org/app --repository-owner org`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: flagRegistry, Required: true, Sources: cli.EnvVars("CONTAINER_REGISTRY"), Usage: "registry hostname (e.g. ghcr.io)"},

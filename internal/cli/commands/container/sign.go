@@ -39,10 +39,10 @@ func signCmd() *cli.Command {
 		ArgsUsage: "<registry/image@sha256:...>",
 		Description: `EXAMPLES:
    # Keyless signing (sigstore / OIDC), e.g. from CI
-   forge-ci container sign ghcr.io/org/app@sha256:abc... --method sigstore
+   forge-ci container sign ghcr.io/owner/app@sha256:abc... --method sigstore
 
    # KMS-backed signing
-   forge-ci container sign ghcr.io/org/app@sha256:abc... --method kms --key awskms:///alias/release`,
+   forge-ci container sign ghcr.io/owner/app@sha256:abc... --method kms --key awskms:///alias/release`,
 		Flags: append(
 			signflags.Cosign(signflags.CosignOpts{MethodNote: cosignMethodNoteGPG}),
 			&cli.BoolFlag{

@@ -36,7 +36,7 @@ type Label struct {
 func (l Label) String() string { return l.Key + "=" + l.Value }
 
 // BuildLabels assembles the org.opencontainers.image.* label set.
-// Title is the last segment of the image name (e.g. ghcr.io/o/repo → repo).
+// Title is the last segment of the image name (e.g. ghcr.io/owner/repo → repo).
 // CreatedAt is rendered as RFC3339 UTC.
 func BuildLabels(in LabelInputs) []Label {
 	title := in.ImageName

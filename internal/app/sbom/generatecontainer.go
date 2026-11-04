@@ -28,7 +28,7 @@ type GenerateContainerInput struct {
 	// Repo is the org/repo string (typically $CI_REPO). The trailing
 	// path component is used as the project name.
 	Repo string
-	// ImageName is the registry image name (e.g. ghcr.io/org/app).
+	// ImageName is the registry image name (e.g. ghcr.io/owner/app).
 	ImageName string
 	// ImageDigest is the @sha256:... suffix the bash joins with @.
 	ImageDigest string

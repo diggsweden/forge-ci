@@ -87,7 +87,7 @@ See [github/pullrequest-workflow.yml](github/pullrequest-workflow.yml).
 ## What Gets Built
 
 - Maven JAR artifact → `target/*.jar`
-- Container image → `ghcr.io/org/repo:v1.0.0`
+- Container image → `ghcr.io/owner/repo:v1.0.0`
 - Platforms → `linux/amd64`, `linux/arm64`
 
 ## See Also

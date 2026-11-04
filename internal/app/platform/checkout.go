@@ -61,7 +61,7 @@ const (
 // CheckoutInput drives Checkout.
 type CheckoutInput struct {
 	Repository   string                // "owner/name"
-	ServerURL    string                // e.g. https://forgejo.example.com
+	ServerURL    string                // e.g. https://forge.example
 	Ref          string                // commit SHA, refs/tags/…, refs/heads/…, or a bare tag/branch name
 	Workspace    string                // target directory (must not already contain .git)
 	Token        runcontext.Credential // optional; absent means an anonymous checkout

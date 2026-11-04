@@ -43,7 +43,7 @@ func checkoutCommand(withDeps func(context.Context, *cli.Command, appplatform.Ch
 			"   forge-ci platform checkout --repository org/app --ref main --depth 1 --path app",
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: flagRepository, Sources: cienv.Repository(), Usage: "owner/name to check out"},
-			&cli.StringFlag{Name: flagServerURL, Sources: cienv.ServerURL(), Usage: "forge base URL (e.g. https://forgejo.example.com)"},
+			&cli.StringFlag{Name: flagServerURL, Sources: cienv.ServerURL(), Usage: "forge base URL (e.g. https://forge.example)"},
 			&cli.StringFlag{Name: flagRef, Sources: cienv.CheckoutRef(), Usage: "commit SHA, refs/tags/…, refs/heads/…, or a bare tag/branch name to check out. Set via $CHECKOUT_REF; defaults to the triggering commit."},
 			&cli.StringFlag{Name: flagWorkspace, Sources: cienv.Workspace(), Usage: "target directory (default: current directory)"},
 			clitoken.FileFlag("Token for a private checkout."),

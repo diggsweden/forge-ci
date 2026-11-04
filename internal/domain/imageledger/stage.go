@@ -29,8 +29,8 @@ func validStageName(name string) bool { return container.ValidOCITagComponent(na
 // Every stage — including release (the zero value or the "release" name) —
 // promotes the digest to a single moving pointer <base>:<name>, where <base>
 // is the registry/path of the entry's final tag (e.g. final
-// "ghcr.io/o/r:v1.2.3" + stage "dev" → "ghcr.io/o/r:dev"; + "release" →
-// "ghcr.io/o/r:release"). The immutable :<version> tag is applied once at
+// "ghcr.io/owner/repo:v1.2.3" + stage "dev" → "ghcr.io/owner/repo:dev"; + "release" →
+// "ghcr.io/owner/repo:release"). The immutable :<version> tag is applied once at
 // build and is never re-written by promotion.
 //
 // Naming is deliberately registry-agnostic: the same <base>:<name> scheme
@@ -46,7 +46,7 @@ type Stage struct {
 	// a destination PREFIX — typically the registry host, optionally with a new
 	// namespace — beneath which each image's source repository path is
 	// preserved: <TargetRepo>/<source-path-after-host> (e.g. TargetRepo
-	// "forgejo.example.com" + source "ghcr.io/org/app" → "forgejo.example.com/org/app"). This
+	// "forge.example" + source "ghcr.io/owner/app" → "forge.example/owner/app"). This
 	// preserves source paths; promotion checks the complete destination set
 	// for collisions before copying. A cross-registry release also carries the
 	// immutable :<version> tag to the target. Empty keeps the entry's own

@@ -590,6 +590,7 @@ func TestRenderGitHubConsumer_AcceptsAnyFixtureOwner(t *testing.T) {
 	t.Parallel()
 
 	fixture := strings.NewReplacer("diggsweden/forge-ci", "OWNER/forge-ci", "ghcr.io/diggsweden/", "ghcr.io/OWNER/").Replace(fixturePullRequest)
+
 	got, _, err := RenderGitHubConsumer("pullrequest.yml", fixture, trialEngine, nil)
 	if err != nil {
 		t.Fatal(err)

@@ -83,7 +83,7 @@ See [github/pullrequest-workflow.yml](github/pullrequest-workflow.yml).
 - NPM package → Runs `npm run build` when a `build` script exists, then packs
   the package
 - Published to → GitHub Packages
-- Container image → `ghcr.io/org/repo:v1.0.0`
+- Container image → `ghcr.io/owner/repo:v1.0.0`
 - Platforms → `linux/amd64`, `linux/arm64`
 
 ## NPM Registry Support

@@ -206,6 +206,7 @@ func readableText(t *testing.T, path string, body []byte, skip func([]string) bo
 	}
 
 	decoder := yaml.NewDecoder(bytes.NewReader(body))
+
 	for {
 		var doc yaml.Node
 		if err := decoder.Decode(&doc); err != nil {

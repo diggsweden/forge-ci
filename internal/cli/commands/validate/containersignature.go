@@ -34,7 +34,7 @@ func containerSignatureCmd() *cli.Command {
 		Usage:     "verify a cosign signature on an OCI image (sigstore or kms). Reads from the registry — no local sidecar.",
 		ArgsUsage: "<registry/image@sha256:...>",
 		Description: `EXAMPLE:
-   forge-ci validate container-signature ghcr.io/org/app@sha256:abc... --method sigstore \
+   forge-ci validate container-signature ghcr.io/owner/app@sha256:abc... --method sigstore \
      --cert-identity-regexp '^https://github\.com/org/' --cert-oidc-issuer https://token.actions.githubusercontent.com`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{

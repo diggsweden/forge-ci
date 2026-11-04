@@ -17,8 +17,8 @@ import (
 
 // A Containerfile's own ignore file is named to buildah explicitly, so every
 // buildah version builds the context its author wrote. Buildah 1.39 reads only
-// the context's .containerignore, and a Nanolinter release image whose own
-// allowlist admitted its prebuilt binary failed at COPY under the root one.
+// the context's .containerignore, and a release image whose own allowlist
+// admitted its prebuilt binary failed at COPY under the root one.
 func TestBuild_NamesTheContainerfilesOwnIgnoreFile(t *testing.T) {
 	t.Parallel()
 

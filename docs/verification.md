@@ -1506,8 +1506,8 @@ curl -H "Authorization: token GITHUB_TOKEN" \
 gpg --verify ${ARTIFACT}.jar.asc ${ARTIFACT}.jar
 ```
 
-Digg's own releases are signed with the OSPO key published at
-<https://github.com/diggsweden/.github/raw/main/pubkey/ospo.digg.pub.asc>.
+Fetch the publisher's public key from a source they control, such as their
+organisation's published key, and check its fingerprint before trusting it.
 
 ### 3. NPM Package Verification
 

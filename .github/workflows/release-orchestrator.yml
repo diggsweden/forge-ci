@@ -181,12 +181,12 @@ on:
       # released digest (with its signature, via cosign) to a registry you own
       # (Forgejo, Harbor). Empty = release stays on the build registry.
       promote-release-repo:
-        description: "Destination PREFIX (typically the registry host, optionally + a namespace) for the release promotion. Each image's source path is preserved beneath it (<prefix>/<source-path-after-host>, e.g. forgejo.example.com + ghcr.io/org/app → forgejo.example.com/org/app), so a monorepo's containers map to distinct paths by construction. Empty = no cross-registry copy."
+        description: "Destination PREFIX (typically the registry host, optionally + a namespace) for the release promotion. Each image's source path is preserved beneath it (<prefix>/<source-path-after-host>, e.g. forge.example + ghcr.io/owner/app → forge.example/owner/app), so a monorepo's containers map to distinct paths by construction. Empty = no cross-registry copy."
         required: false
         default: ""
         type: string
       promote-release-registry:
-        description: "Destination registry host to authenticate to for promote-release-repo (e.g. forgejo.example.com). Required when promote-release-repo is on a different registry."
+        description: "Destination registry host to authenticate to for promote-release-repo (e.g. forge.example). Required when promote-release-repo is on a different registry."
         required: false
         default: ""
         type: string

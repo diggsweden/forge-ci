@@ -263,8 +263,8 @@ func TestStageDockerConfig_RequiresTheAuthsDocument(t *testing.T) {
 // .containerignore ahead of .dockerignore, as Buildah reads them. Kaniko knows
 // only .dockerignore names. The executor here reads as kaniko does,
 // <dockerfile>.dockerignore else <context>/.dockerignore, and prints what it
-// found. The context mirrors Nanolinter's release images: the root allowlist
-// leaves out the prebuilt binary, the release Containerfile's admits it.
+// found. The context mirrors a release image that ships a prebuilt binary: the
+// root allowlist leaves the binary out, the release Containerfile's admits it.
 func TestBuildToLayout_KanikoReadsTheIgnoreFileThatApplies(t *testing.T) {
 	t.Parallel()
 

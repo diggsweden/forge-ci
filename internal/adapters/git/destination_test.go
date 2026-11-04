@@ -57,8 +57,8 @@ func TestCheckoutDestinations_FinishAcceptsAnExistingWorkspaceNamedByASystemLink
 }
 
 // A checkout into a new directory is staged in an owner-only temporary
-// directory, and that mode used to survive the rename. Nanolinter's image,
-// which reads the checkout as its own user, then failed every check with
+// directory, and that mode used to survive the rename. A lint image that
+// reads the checkout as its own user then failed every check with
 // "Permission denied: '/workspace/.git'". The published tree is readable by
 // others, like a git clone.
 func TestCheckoutDestinations_PublishedCheckoutIsReadableByOthers(t *testing.T) {
