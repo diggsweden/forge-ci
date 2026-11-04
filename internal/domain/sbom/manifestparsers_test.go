@@ -43,7 +43,7 @@ func TestGoMod_V2PlusModule(t *testing.T) {
 	t.Parallel()
 	// GoModuleName currently uses the module-path basename, so a v2+
 	// module resolves to its major-version suffix.
-	mod := []byte(`module github.com/diggsweden/example/v2
+	mod := []byte(`module github.com/examplescope/example/v2
 
 go 1.24
 `)
@@ -54,7 +54,7 @@ go 1.24
 func TestGoMod_V1Module(t *testing.T) {
 	t.Parallel()
 
-	mod := []byte(`module github.com/diggsweden/example
+	mod := []byte(`module github.com/examplescope/example
 
 go 1.24
 `)

@@ -21,11 +21,11 @@ func TestGenerateProvenance_CarriesIdentifiersAndDeps(t *testing.T) {
 	body, err := apprelease.GenerateProvenance(apprelease.ProvenanceInput{
 		Checksums:     strings.NewReader(strings.Repeat("a", 64) + "  dist/app.tar.gz\n"),
 		GoSum:         strings.NewReader("github.com/foo/bar v1.0.0 h1:xyz=\n"),
-		RepositoryURL: "https://codeberg.org/itiquette/repo",
+		RepositoryURL: "https://forge.example/examplescope/repo",
 		Ref:           "v2.0.0",
 		SHA:           strings.Repeat("d", 40),
-		BuilderID:     "https://codeberg.org/itiquette/repo/release.yml@v2.0.0",
-		InvocationID:  "https://codeberg.org/itiquette/repo/actions/runs/777",
+		BuilderID:     "https://forge.example/examplescope/repo/release.yml@v2.0.0",
+		InvocationID:  "https://forge.example/examplescope/repo/actions/runs/777",
 		StartedOn:     "2026-06-01T00:00:00Z",
 	})
 	if err != nil {
@@ -34,11 +34,11 @@ func TestGenerateProvenance_CarriesIdentifiersAndDeps(t *testing.T) {
 
 	got := decodeStatement(t, body)
 
-	if id := got.Predicate.RunDetails.Builder.ID; id != "https://codeberg.org/itiquette/repo/release.yml@v2.0.0" {
+	if id := got.Predicate.RunDetails.Builder.ID; id != "https://forge.example/examplescope/repo/release.yml@v2.0.0" {
 		t.Errorf("builder id = %q", id)
 	}
 
-	if id := got.Predicate.RunDetails.Metadata.InvocationID; id != "https://codeberg.org/itiquette/repo/actions/runs/777" {
+	if id := got.Predicate.RunDetails.Metadata.InvocationID; id != "https://forge.example/examplescope/repo/actions/runs/777" {
 		t.Errorf("invocation id = %q", id)
 	}
 
@@ -47,7 +47,7 @@ func TestGenerateProvenance_CarriesIdentifiersAndDeps(t *testing.T) {
 	// in the domain. Nothing asserted it: the whole suite passed with this
 	// hardcoded to a foreign repository.
 	ext := got.Predicate.BuildDefinition.ExternalParameters
-	if src, ref := string(ext["source"]), string(ext["ref"]); src != `"git+https://codeberg.org/itiquette/repo"` || ref != `"v2.0.0"` {
+	if src, ref := string(ext["source"]), string(ext["ref"]); src != `"git+https://forge.example/examplescope/repo"` || ref != `"v2.0.0"` {
 		t.Errorf("externalParameters source = %s, ref = %s", src, ref)
 	}
 
@@ -59,7 +59,7 @@ func TestGenerateProvenance_CarriesIdentifiersAndDeps(t *testing.T) {
 		t.Fatalf("got %d resolved deps, want 2 (source + 1 module)", len(deps))
 	}
 
-	if source := decodeDependency(t, deps[0]); source.URI != "git+https://codeberg.org/itiquette/repo@v2.0.0" || source.Digest["gitCommit"] != strings.Repeat("d", 40) {
+	if source := decodeDependency(t, deps[0]); source.URI != "git+https://forge.example/examplescope/repo@v2.0.0" || source.Digest["gitCommit"] != strings.Repeat("d", 40) {
 		t.Errorf("source dep = %+v", source)
 	}
 
@@ -79,12 +79,12 @@ func TestGenerateProvenance_ForgejoProfileBuilderJoinsRepositoryAndWorkflowPath(
 	t.Parallel()
 
 	for workflow, want := range map[string]string{
-		"release.yml":                    "https://codeberg.org/o/r/.forgejo/workflows/release.yml@v1.2.3",
-		".forgejo/workflows/release.yml": "https://codeberg.org/o/r/.forgejo/workflows/release.yml@v1.2.3",
+		"release.yml":                    "https://forge.example/o/r/.forgejo/workflows/release.yml@v1.2.3",
+		".forgejo/workflows/release.yml": "https://forge.example/o/r/.forgejo/workflows/release.yml@v1.2.3",
 	} {
 		body, err := apprelease.GenerateProvenance(apprelease.ProvenanceInput{
 			Checksums:     strings.NewReader(strings.Repeat("a", 64) + "  app.tar.gz\n"),
-			RepositoryURL: "https://codeberg.org/o/r/",
+			RepositoryURL: "https://forge.example/o/r/",
 			Ref:           "v1.2.3",
 			SHA:           strings.Repeat("2", 40),
 			StartedOn:     "2026-06-01T00:00:00Z",
@@ -277,11 +277,11 @@ func TestGenerateProvenance_ForgejoProfileNamesTheWorkflowNotAGenericSource(t *t
 	body, err := apprelease.GenerateProvenance(apprelease.ProvenanceInput{
 		Checksums:     strings.NewReader(strings.Repeat("a", 64) + "  app.tar.gz\n"),
 		GoSum:         strings.NewReader("example.com/mod v0.1.0+incompatible h1:abc123=\n"),
-		RepositoryURL: "https://codeberg.org/Itiquette/example",
+		RepositoryURL: "https://forge.example/Examplescope/example",
 		Ref:           "v1.2.3",
 		SHA:           strings.Repeat("2", 40),
 		BuilderID:     "https://runner.example/the-generic-builder",
-		InvocationID:  "https://codeberg.org/Itiquette/example/actions/runs/123",
+		InvocationID:  "https://forge.example/Examplescope/example/actions/runs/123",
 		StartedOn:     "2026-06-01T00:00:00Z",
 		Profile:       apprelease.ProvenanceProfileForgejoActions,
 		Workflow:      "release.yml",
@@ -294,7 +294,7 @@ func TestGenerateProvenance_ForgejoProfileNamesTheWorkflowNotAGenericSource(t *t
 
 	// The profile names its own builder, the workflow at the source ref, and
 	// does not take the generic one it was handed.
-	if id := got.Predicate.RunDetails.Builder.ID; id != "https://codeberg.org/Itiquette/example/.forgejo/workflows/release.yml@v1.2.3" {
+	if id := got.Predicate.RunDetails.Builder.ID; id != "https://forge.example/Examplescope/example/.forgejo/workflows/release.yml@v1.2.3" {
 		t.Errorf("builder id = %q", id)
 	}
 
@@ -316,7 +316,7 @@ func TestGenerateProvenance_ForgejoProfileNamesTheWorkflowNotAGenericSource(t *t
 		t.Fatalf("externalParameters.workflow: %v", err)
 	}
 
-	if workflow.Ref != "v1.2.3" || workflow.Repository != "https://codeberg.org/Itiquette/example" || workflow.Path != ".forgejo/workflows/release.yml" {
+	if workflow.Ref != "v1.2.3" || workflow.Repository != "https://forge.example/Examplescope/example" || workflow.Path != ".forgejo/workflows/release.yml" {
 		t.Errorf("workflow external parameters = %+v", workflow)
 	}
 
@@ -375,7 +375,7 @@ func TestGenerateProvenance_ForgejoActionsProfileRequiresWorkflow(t *testing.T) 
 
 	_, err := apprelease.GenerateProvenance(apprelease.ProvenanceInput{
 		Checksums:     strings.NewReader(strings.Repeat("a", 64) + "  app.tar.gz\n"),
-		RepositoryURL: "https://codeberg.org/itiquette/example",
+		RepositoryURL: "https://forge.example/examplescope/example",
 		Ref:           "v1.2.3",
 		SHA:           strings.Repeat("2", 40),
 		BuilderID:     "builder",
@@ -397,11 +397,11 @@ func TestGenerateProvenance_ExternalParameters(t *testing.T) {
 	input := func(extras map[string]any) apprelease.ProvenanceInput {
 		return apprelease.ProvenanceInput{
 			Checksums:          strings.NewReader(strings.Repeat("a", 64) + "  app.tar.gz\n"),
-			RepositoryURL:      "https://codeberg.org/itiquette/example",
+			RepositoryURL:      "https://forge.example/examplescope/example",
 			Ref:                "v1.2.3",
 			SHA:                strings.Repeat("2", 40),
-			BuilderID:          "https://codeberg.org/itiquette/example/release.yml@v1.2.3",
-			InvocationID:       "https://codeberg.org/itiquette/example/actions/runs/1",
+			BuilderID:          "https://forge.example/examplescope/example/release.yml@v1.2.3",
+			InvocationID:       "https://forge.example/examplescope/example/actions/runs/1",
 			StartedOn:          "2026-06-01T00:00:00Z",
 			ExternalParameters: extras,
 		}
@@ -467,17 +467,17 @@ func TestGenerateProvenance_CompleteStatementForEachProfile(t *testing.T) {
 		"predicate": {
 			"buildDefinition": {
 				"buildType": "https://diggsweden.github.io/forge-ci/release-build/v1",
-				"externalParameters": {"source": "git+https://codeberg.org/itiquette/repo", "ref": "v2.0.0"},
+				"externalParameters": {"source": "git+https://forge.example/examplescope/repo", "ref": "v2.0.0"},
 				"internalParameters": {},
 				"resolvedDependencies": [
-					{"uri": "git+https://codeberg.org/itiquette/repo@v2.0.0", "digest": {"gitCommit": "dddddddddddddddddddddddddddddddddddddddd"}},
+					{"uri": "git+https://forge.example/examplescope/repo@v2.0.0", "digest": {"gitCommit": "dddddddddddddddddddddddddddddddddddddddd"}},
 					{"uri": "pkg:golang/github.com/foo/bar@v1.0.0", "digest": {"gomod_h1": "xyz"}}
 				]
 			},
 			"runDetails": {
-				"builder": {"id": "https://codeberg.org/itiquette/repo/.forgejo/workflows/release.yml@v2.0.0"},
+				"builder": {"id": "https://forge.example/examplescope/repo/.forgejo/workflows/release.yml@v2.0.0"},
 				"metadata": {
-					"invocationId": "https://codeberg.org/itiquette/repo/actions/runs/777",
+					"invocationId": "https://forge.example/examplescope/repo/actions/runs/777",
 					"startedOn": "2026-06-01T12:34:56Z",
 					"finishedOn": "2026-06-01T12:34:56Z"
 				}
@@ -497,20 +497,20 @@ func TestGenerateProvenance_CompleteStatementForEachProfile(t *testing.T) {
 				"externalParameters": {
 					"workflow": {
 						"ref": "v2.0.0",
-						"repository": "https://codeberg.org/itiquette/repo",
+						"repository": "https://forge.example/examplescope/repo",
 						"path": ".forgejo/workflows/release.yml"
 					}
 				},
 				"internalParameters": {"runner": "forgejo-actions"},
 				"resolvedDependencies": [
-					{"uri": "git+https://codeberg.org/itiquette/repo@v2.0.0", "digest": {"gitCommit": "dddddddddddddddddddddddddddddddddddddddd"}},
+					{"uri": "git+https://forge.example/examplescope/repo@v2.0.0", "digest": {"gitCommit": "dddddddddddddddddddddddddddddddddddddddd"}},
 					{"uri": "pkg:golang/github.com/foo/bar@v1.0.0", "digest": {"gomod_h1": "xyz"}}
 				]
 			},
 			"runDetails": {
-				"builder": {"id": "https://codeberg.org/itiquette/repo/.forgejo/workflows/release.yml@v2.0.0"},
+				"builder": {"id": "https://forge.example/examplescope/repo/.forgejo/workflows/release.yml@v2.0.0"},
 				"metadata": {
-					"invocationId": "https://codeberg.org/itiquette/repo/actions/runs/777",
+					"invocationId": "https://forge.example/examplescope/repo/actions/runs/777",
 					"startedOn": "2026-06-01T12:34:56Z",
 					"finishedOn": "2026-06-01T12:34:56Z"
 				}
@@ -537,11 +537,11 @@ func TestGenerateProvenance_CompleteStatementForEachProfile(t *testing.T) {
 					"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  dist/app.tar.gz\n" +
 						"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  dist/app-sboms.zip\n"),
 				GoSum:         strings.NewReader("github.com/foo/bar v1.0.0 h1:xyz=\n"),
-				RepositoryURL: "https://codeberg.org/itiquette/repo",
+				RepositoryURL: "https://forge.example/examplescope/repo",
 				Ref:           "v2.0.0",
 				SHA:           "dddddddddddddddddddddddddddddddddddddddd",
-				BuilderID:     "https://codeberg.org/itiquette/repo/.forgejo/workflows/release.yml@v2.0.0",
-				InvocationID:  "https://codeberg.org/itiquette/repo/actions/runs/777",
+				BuilderID:     "https://forge.example/examplescope/repo/.forgejo/workflows/release.yml@v2.0.0",
+				InvocationID:  "https://forge.example/examplescope/repo/actions/runs/777",
 				StartedOn:     "2026-06-01T12:34:56Z",
 				Profile:       tc.profile,
 				Workflow:      tc.workflow,
@@ -572,11 +572,11 @@ func TestGenerateProvenance_RejectsUnknownProfile(t *testing.T) {
 	body, err := apprelease.GenerateProvenance(apprelease.ProvenanceInput{
 		Checksums:     strings.NewReader("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  dist/app.tar.gz\n"),
 		GoSum:         strings.NewReader("github.com/foo/bar v1.0.0 h1:xyz=\n"),
-		RepositoryURL: "https://codeberg.org/itiquette/repo",
+		RepositoryURL: "https://forge.example/examplescope/repo",
 		Ref:           "v2.0.0",
 		SHA:           "dddddddddddddddddddddddddddddddddddddddd",
-		BuilderID:     "https://codeberg.org/itiquette/repo/.forgejo/workflows/release.yml@v2.0.0",
-		InvocationID:  "https://codeberg.org/itiquette/repo/actions/runs/777",
+		BuilderID:     "https://forge.example/examplescope/repo/.forgejo/workflows/release.yml@v2.0.0",
+		InvocationID:  "https://forge.example/examplescope/repo/actions/runs/777",
 		StartedOn:     "2026-06-01T12:34:56Z",
 		Profile:       "unsupported-runner",
 		Workflow:      "release.yml",

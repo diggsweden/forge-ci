@@ -198,7 +198,7 @@ func TestFetchBaseBoundary_AbsenceErrorsAndForwarding(t *testing.T) {
 			}
 
 			if state == "present" {
-				want := checkoutEvent{method: "fetch", args: []string{"https://codeberg.org/owner/repo.git", "0", "+refs/heads/main:refs/heads/main"}, credential: cred}
+				want := checkoutEvent{method: "fetch", args: []string{"https://forge.example/owner/repo.git", "0", "+refs/heads/main:refs/heads/main"}, credential: cred}
 				if !reflect.DeepEqual(git.events[6], want) {
 					t.Fatalf("base fetch=%+v", git.events[6])
 				}
@@ -210,7 +210,7 @@ func TestFetchBaseBoundary_AbsenceErrorsAndForwarding(t *testing.T) {
 		}
 
 		probe := git.events[5]
-		if probe.method != "probe-branch" || !reflect.DeepEqual(probe.args, []string{"origin", "main"}) || probe.credential.For("https://codeberg.org") != "owned-base-credential" {
+		if probe.method != "probe-branch" || !reflect.DeepEqual(probe.args, []string{"origin", "main"}) || probe.credential.For("https://forge.example") != "owned-base-credential" {
 			t.Fatalf("probe=%+v", probe)
 		}
 	}

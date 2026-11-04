@@ -30,11 +30,11 @@ var errSignatureMismatch = errors.New("signature mismatch")
 
 const releaseImagePublicKey = ".forgejo/keys/cosign.pub"
 
-const releaseImageDigestRef = "codeberg.org/itiquette/nanolinter:v1@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+const releaseImageDigestRef = "forge.example/examplescope/myapp:v1@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 func TestVerifyExistingReleaseImage_Verified(t *testing.T) {
 	verifier := &fakeReleaseImageVerifier{payload: releaseImagePayload(t, releaseImageFields{
-		tag: "v1", commit: "cafe1234", source: "https://codeberg.org/itiquette/nanolinter", workflow: ".forgejo/workflows/release.yml",
+		tag: "v1", commit: "cafe1234", source: "https://forge.example/examplescope/myapp", workflow: ".forgejo/workflows/release.yml",
 	})}
 
 	var out bytes.Buffer
@@ -62,13 +62,13 @@ func TestVerifyExistingReleaseImage_Verified(t *testing.T) {
 }
 
 func TestVerifyExistingReleaseImage_VerifiedWithBaseLineage(t *testing.T) {
-	baseRef := "codeberg.org/itiquette/nanolinter-base@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	baseRef := "forge.example/examplescope/myapp-base@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	baseInputID := "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 	input := releaseImageVerifyInput()
 	input.ExpectedBaseRef = baseRef
 	input.ExpectedBaseInputID = baseInputID
 	verifier := &fakeReleaseImageVerifier{payload: releaseImagePayload(t, releaseImageFields{
-		tag: "v1", commit: "cafe1234", source: "https://codeberg.org/itiquette/nanolinter", workflow: ".forgejo/workflows/release.yml", baseRef: baseRef, baseInputID: baseInputID,
+		tag: "v1", commit: "cafe1234", source: "https://forge.example/examplescope/myapp", workflow: ".forgejo/workflows/release.yml", baseRef: baseRef, baseInputID: baseInputID,
 	})}
 
 	result, err := appcontainer.VerifyExistingReleaseImage(t.Context(), verifier, nil, io.Discard, input)
@@ -83,13 +83,13 @@ func TestVerifyExistingReleaseImage_VerifiedWithBaseLineage(t *testing.T) {
 
 func TestVerifyExistingReleaseImage_ReattestableWhenProvenanceMismatches(t *testing.T) {
 	verifier := &fakeReleaseImageVerifier{payload: releaseImagePayload(t, releaseImageFields{
-		tag: "other", commit: "other", source: "https://codeberg.org/itiquette/nanolinter", workflow: ".forgejo/workflows/release.yml",
+		tag: "other", commit: "other", source: "https://forge.example/examplescope/myapp", workflow: ".forgejo/workflows/release.yml",
 	})}
 	registry := &fakeReleaseImageLabels{labels: map[string]string{
 		"org.opencontainers.image.revision": "cafe1234",
 		"org.opencontainers.image.version":  "v1",
 		"org.opencontainers.image.ref.name": "v1",
-		"org.opencontainers.image.source":   "https://CODEBERG.org/itiquette/nanolinter",
+		"org.opencontainers.image.source":   "https://FORGE.example/examplescope/myapp",
 	}}
 	input := releaseImageVerifyInput()
 	input.AllowReattest = true
@@ -103,7 +103,7 @@ func TestVerifyExistingReleaseImage_ReattestableWhenProvenanceMismatches(t *test
 		t.Fatalf("status = %q, want %q", result.Status, appcontainer.ReleaseImageStatusReattestable)
 	}
 
-	if registry.ref != "codeberg.org/itiquette/nanolinter@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+	if registry.ref != "forge.example/examplescope/myapp@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
 		t.Errorf("labels ref = %q", registry.ref)
 	}
 
@@ -124,13 +124,13 @@ func TestVerifyExistingReleaseImage_ReattestableWhenProvenanceMismatches(t *test
 
 func TestVerifyExistingReleaseImage_ReattestRejectsWrongIdentity(t *testing.T) {
 	verifier := &fakeReleaseImageVerifier{payload: releaseImagePayload(t, releaseImageFields{
-		tag: "other", commit: "other", source: "https://codeberg.org/itiquette/nanolinter", workflow: ".forgejo/workflows/release.yml",
+		tag: "other", commit: "other", source: "https://forge.example/examplescope/myapp", workflow: ".forgejo/workflows/release.yml",
 	})}
 	registry := &fakeReleaseImageLabels{labels: map[string]string{
 		"org.opencontainers.image.revision": "other",
 		"org.opencontainers.image.version":  "v1",
 		"org.opencontainers.image.ref.name": "v1",
-		"org.opencontainers.image.source":   "https://codeberg.org/itiquette/nanolinter",
+		"org.opencontainers.image.source":   "https://forge.example/examplescope/myapp",
 	}}
 	input := releaseImageVerifyInput()
 	input.AllowReattest = true
@@ -143,7 +143,7 @@ func TestVerifyExistingReleaseImage_ReattestRejectsWrongIdentity(t *testing.T) {
 
 func TestVerifyExistingReleaseImage_ReattestRequiresSignedSBOM(t *testing.T) {
 	verifier := &fakeReleaseImageVerifier{
-		payload:   releaseImagePayload(t, releaseImageFields{tag: "other", commit: "other", source: "https://codeberg.org/itiquette/nanolinter", workflow: ".forgejo/workflows/release.yml"}),
+		payload:   releaseImagePayload(t, releaseImageFields{tag: "other", commit: "other", source: "https://forge.example/examplescope/myapp", workflow: ".forgejo/workflows/release.yml"}),
 		attestErr: errMissingSBOMAttestation,
 	}
 	input := releaseImageVerifyInput()
@@ -165,7 +165,7 @@ func releaseImageVerifyInput() appcontainer.ReleaseImageVerifyExistingInput {
 		CosignPublicKey:  releaseImagePublicKey,
 		ExpectedTag:      "v1",
 		ExpectedCommit:   "cafe1234",
-		ExpectedSource:   "https://codeberg.org/itiquette/nanolinter",
+		ExpectedSource:   "https://forge.example/examplescope/myapp",
 		ExpectedWorkflow: ".forgejo/workflows/release.yml",
 	}
 }
@@ -188,7 +188,7 @@ func TestVerifyExistingReleaseImage_EachFailedCheckRefuses(t *testing.T) {
 	t.Parallel()
 
 	matching := releaseImageFields{
-		tag: "v1", commit: "cafe1234", source: "https://codeberg.org/itiquette/nanolinter", workflow: ".forgejo/workflows/release.yml",
+		tag: "v1", commit: "cafe1234", source: "https://forge.example/examplescope/myapp", workflow: ".forgejo/workflows/release.yml",
 	}
 
 	for name, tc := range map[string]struct {
@@ -229,7 +229,7 @@ func TestVerifyExistingReleaseImage_ReattestRequiresSignature(t *testing.T) {
 	t.Parallel()
 
 	verifier := &fakeReleaseImageVerifier{
-		payload:      releaseImagePayload(t, releaseImageFields{tag: "other", commit: "other", source: "https://codeberg.org/itiquette/nanolinter", workflow: ".forgejo/workflows/release.yml"}),
+		payload:      releaseImagePayload(t, releaseImageFields{tag: "other", commit: "other", source: "https://forge.example/examplescope/myapp", workflow: ".forgejo/workflows/release.yml"}),
 		verifyPasses: 1,
 		verifyErr:    errSignatureMismatch,
 	}
@@ -237,7 +237,7 @@ func TestVerifyExistingReleaseImage_ReattestRequiresSignature(t *testing.T) {
 		"org.opencontainers.image.revision": "cafe1234",
 		"org.opencontainers.image.version":  "v1",
 		"org.opencontainers.image.ref.name": "v1",
-		"org.opencontainers.image.source":   "https://codeberg.org/itiquette/nanolinter",
+		"org.opencontainers.image.source":   "https://forge.example/examplescope/myapp",
 	}}
 	input := releaseImageVerifyInput()
 	input.AllowReattest = true
@@ -289,17 +289,17 @@ func TestVerifyExistingReleaseImage_ReattestRefusesBaseLineageExpectations(t *te
 	t.Parallel()
 
 	verifier := &fakeReleaseImageVerifier{payload: releaseImagePayload(t, releaseImageFields{
-		tag: "other", commit: "other", source: "https://codeberg.org/itiquette/nanolinter", workflow: ".forgejo/workflows/release.yml",
+		tag: "other", commit: "other", source: "https://forge.example/examplescope/myapp", workflow: ".forgejo/workflows/release.yml",
 	})}
 	registry := &fakeReleaseImageLabels{labels: map[string]string{
 		"org.opencontainers.image.revision": "cafe1234",
 		"org.opencontainers.image.version":  "v1",
 		"org.opencontainers.image.ref.name": "v1",
-		"org.opencontainers.image.source":   "https://codeberg.org/itiquette/nanolinter",
+		"org.opencontainers.image.source":   "https://forge.example/examplescope/myapp",
 	}}
 	input := releaseImageVerifyInput()
 	input.AllowReattest = true
-	input.ExpectedBaseRef = "codeberg.org/itiquette/nanolinter-base@sha256:" + strings.Repeat("b", 64)
+	input.ExpectedBaseRef = "forge.example/examplescope/myapp-base@sha256:" + strings.Repeat("b", 64)
 	input.ExpectedBaseInputID = strings.Repeat("c", 64)
 
 	result, err := appcontainer.VerifyExistingReleaseImage(t.Context(), verifier, registry, io.Discard, input)
@@ -518,10 +518,10 @@ var errReleaseImageVerify = errors.New("cosign: verification failed")
 func TestVerifyExistingReleaseImage_EachIdentityFieldIsChecked(t *testing.T) {
 	t.Parallel()
 
-	baseRef := "codeberg.org/itiquette/nanolinter-base@sha256:" + strings.Repeat("b", 64)
+	baseRef := "forge.example/examplescope/myapp-base@sha256:" + strings.Repeat("b", 64)
 	baseInputID := strings.Repeat("c", 64)
 	fields := releaseImageFields{
-		tag: "v1", commit: "cafe1234", source: "https://codeberg.org/itiquette/nanolinter",
+		tag: "v1", commit: "cafe1234", source: "https://forge.example/examplescope/myapp",
 		workflow: ".forgejo/workflows/release.yml", baseRef: baseRef, baseInputID: baseInputID,
 	}
 
@@ -549,20 +549,20 @@ func TestVerifyExistingReleaseImage_EachIdentityFieldIsChecked(t *testing.T) {
 			path(s, "predicate", "buildDefinition", "externalParameters", "workflow")["ref"] = "v2"
 		},
 		"source": func(s map[string]any) {
-			path(s, "predicate", "buildDefinition", "externalParameters", "workflow")["repository"] = "https://codeberg.org/other/nanolinter"
+			path(s, "predicate", "buildDefinition", "externalParameters", "workflow")["repository"] = "https://forge.example/other/nanolinter"
 		},
 		"workflow": func(s map[string]any) {
 			path(s, "predicate", "buildDefinition", "externalParameters", "workflow")["path"] = ".forgejo/workflows/other.yml"
 		},
 		"commit": func(s map[string]any) { path(dependency(s, 0), "digest")["gitCommit"] = "beef5678" },
 		"base ref": func(s map[string]any) {
-			path(s, "predicate", "buildDefinition", "externalParameters", "base")["ref"] = "codeberg.org/other@sha256:" + strings.Repeat("d", 64)
+			path(s, "predicate", "buildDefinition", "externalParameters", "base")["ref"] = "forge.example/other@sha256:" + strings.Repeat("d", 64)
 		},
 		"base input id": func(s map[string]any) {
 			path(s, "predicate", "buildDefinition", "externalParameters", "base")["input_id"] = strings.Repeat("e", 64)
 		},
 		"base dependency uri": func(s map[string]any) {
-			dependency(s, 1)["uri"] = "oci://codeberg.org/other@sha256:" + strings.Repeat("d", 64)
+			dependency(s, 1)["uri"] = "oci://forge.example/other@sha256:" + strings.Repeat("d", 64)
 		},
 		"base dependency annotation": func(s map[string]any) {
 			path(dependency(s, 1), "annotations")["base_input_id"] = strings.Repeat("e", 64)

@@ -48,9 +48,9 @@ func TestPublishRelease_ReplacementFailureGuarantees(t *testing.T) {
 			name:       "a failed upload leaves the published asset in place",
 			failUpload: true,
 			wantCalls: []string{
-				"GET /api/v1/repos/itiquette/repo/releases/tags/v1.2.3",
-				"GET /api/v1/repos/itiquette/repo/releases/99/assets",
-				"POST /api/v1/repos/itiquette/repo/releases/99/assets",
+				"GET /api/v1/repos/examplescope/repo/releases/tags/v1.2.3",
+				"GET /api/v1/repos/examplescope/repo/releases/99/assets",
+				"POST /api/v1/repos/examplescope/repo/releases/99/assets",
 			},
 			wantErr: "upload asset",
 		},
@@ -58,10 +58,10 @@ func TestPublishRelease_ReplacementFailureGuarantees(t *testing.T) {
 			name:       "a failed replacement delete is reported, not left silent",
 			failDelete: true,
 			wantCalls: []string{
-				"GET /api/v1/repos/itiquette/repo/releases/tags/v1.2.3",
-				"GET /api/v1/repos/itiquette/repo/releases/99/assets",
-				"POST /api/v1/repos/itiquette/repo/releases/99/assets",
-				"DELETE /api/v1/repos/itiquette/repo/releases/99/assets/1",
+				"GET /api/v1/repos/examplescope/repo/releases/tags/v1.2.3",
+				"GET /api/v1/repos/examplescope/repo/releases/99/assets",
+				"POST /api/v1/repos/examplescope/repo/releases/99/assets",
+				"DELETE /api/v1/repos/examplescope/repo/releases/99/assets/1",
 			},
 			wantErr: `delete replaced release asset "asset.tgz"`,
 		},
@@ -82,13 +82,13 @@ func TestPublishRelease_ReplacementFailureGuarantees(t *testing.T) {
 				calls = append(calls, request.Method+" "+request.URL.Path)
 
 				switch {
-				case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/tags/v1.2.3":
+				case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/examplescope/repo/releases/tags/v1.2.3":
 					_, _ = response.Write([]byte(`{"id":99,"tag_name":"v1.2.3","assets":[{"id":1,"name":"asset.tgz"}]}`))
-				case request.Method == http.MethodPatch && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99":
+				case request.Method == http.MethodPatch && request.URL.Path == "/api/v1/repos/examplescope/repo/releases/99":
 					_, _ = response.Write([]byte(`{"id":99,"tag_name":"v1.2.3"}`))
-				case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets":
+				case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/examplescope/repo/releases/99/assets":
 					_, _ = response.Write([]byte(`[{"id":1,"name":"asset.tgz"}]`))
-				case request.Method == http.MethodPost && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets":
+				case request.Method == http.MethodPost && request.URL.Path == "/api/v1/repos/examplescope/repo/releases/99/assets":
 					if testCase.failUpload {
 						http.Error(response, "upload refused", http.StatusInsufficientStorage)
 
@@ -97,7 +97,7 @@ func TestPublishRelease_ReplacementFailureGuarantees(t *testing.T) {
 
 					response.WriteHeader(http.StatusCreated)
 					_, _ = response.Write([]byte(`{"id":7,"name":"asset.tgz"}`))
-				case request.Method == http.MethodDelete && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets/1":
+				case request.Method == http.MethodDelete && request.URL.Path == "/api/v1/repos/examplescope/repo/releases/99/assets/1":
 					if testCase.failDelete {
 						http.Error(response, "delete refused", http.StatusConflict)
 
@@ -110,19 +110,19 @@ func TestPublishRelease_ReplacementFailureGuarantees(t *testing.T) {
 				}
 			})
 
-			err := newProvider(handler).PublishRelease(context.Background(), "itiquette/repo", provider.ReleaseSpec{
+			err := newProvider(handler).PublishRelease(context.Background(), "examplescope/repo", provider.ReleaseSpec{
 				Tag: "v1.2.3", Name: "repo v1.2.3", NotesFile: notes, Assets: []string{asset},
 			})
 
 			require.Error(t, err, "a replacement that did not complete must not report success")
 			require.ErrorContains(t, err, testCase.wantErr)
 			require.Equal(t, testCase.wantCalls, calls, "the adapter stops at the failed call")
-			require.NotContains(t, calls, "PATCH /api/v1/repos/itiquette/repo/releases/99",
+			require.NotContains(t, calls, "PATCH /api/v1/repos/examplescope/repo/releases/99",
 				"a reconciliation that failed must leave the previous release description in place")
 
 			if testCase.failUpload {
 				require.False(t, slices.ContainsFunc(calls, func(call string) bool {
-					return call == "DELETE /api/v1/repos/itiquette/repo/releases/99/assets/1"
+					return call == "DELETE /api/v1/repos/examplescope/repo/releases/99/assets/1"
 				}), "the published asset must not be deleted when its replacement never uploaded")
 			}
 		})
@@ -145,15 +145,15 @@ type storedAttachment struct {
 	content string
 }
 
-const storeAssets = "/api/v1/repos/itiquette/repo/releases/99/assets"
+const storeAssets = "/api/v1/repos/examplescope/repo/releases/99/assets"
 
 func (store *attachmentStore) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
 	switch {
-	case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/tags/v1.2.3",
-		request.Method == http.MethodPatch && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99":
+	case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/examplescope/repo/releases/tags/v1.2.3",
+		request.Method == http.MethodPatch && request.URL.Path == "/api/v1/repos/examplescope/repo/releases/99":
 		_, _ = response.Write([]byte(`{"id":99,"tag_name":"v1.2.3"}`))
 	case request.Method == http.MethodGet && request.URL.Path == storeAssets:
 		writeJSON(response, store.stored)
@@ -269,7 +269,7 @@ func TestPublishRelease_RetryAfterAReplacementFailureConverges(t *testing.T) {
 			}
 
 			publish := func() error {
-				return newProvider(store).PublishRelease(context.Background(), "itiquette/repo", provider.ReleaseSpec{
+				return newProvider(store).PublishRelease(context.Background(), "examplescope/repo", provider.ReleaseSpec{
 					Tag: "v1.2.3", Name: "repo v1.2.3", NotesFile: notes, Assets: []string{asset},
 				})
 			}

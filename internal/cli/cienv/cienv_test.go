@@ -63,13 +63,13 @@ func TestServerURL_ForgeFallbacks(t *testing.T) {
 	testenv.New(t)
 	t.Run("forgejo-native", func(t *testing.T) {
 		t.Setenv("CI_SERVER_URL", "")
-		t.Setenv("FORGEJO_SERVER_URL", "https://codeberg.org")
+		t.Setenv("FORGEJO_SERVER_URL", "https://forge.example")
 		t.Setenv("GITHUB_SERVER_URL", "https://github.com")
 
 		chain := cienv.ServerURL()
 
 		got, ok := chain.Lookup()
-		if !ok || got != "https://codeberg.org" {
+		if !ok || got != "https://forge.example" {
 			t.Fatalf("ServerURL() = %q, ok=%v; want forgejo URL", got, ok)
 		}
 	})

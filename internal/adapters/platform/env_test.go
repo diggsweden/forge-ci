@@ -61,8 +61,8 @@ func TestDetect_Forgejo_WinsOverGitHubMasquerade(t *testing.T) {
 	cases := map[string]string{
 		"FORGEJO_ACTIONS":    "true",
 		"GITEA_ACTIONS":      "true",
-		"FORGEJO_SERVER_URL": "https://codeberg.org",
-		"FORGEJO_REPOSITORY": "itiquette/repo",
+		"FORGEJO_SERVER_URL": "https://forge.example",
+		"FORGEJO_REPOSITORY": "examplescope/repo",
 		"FORGEJO_OUTPUT":     "/tmp/out",
 	}
 	for signal, value := range cases {
@@ -212,7 +212,7 @@ func TestDetect_ForgejoTargetNeedsAGitHubStyleRunner(t *testing.T) {
 			env := testenv.New(t)
 			env.Setenv("GITHUB_ACTIONS", testCase.github)
 			env.Setenv("GITLAB_CI", testCase.gitlab)
-			env.Setenv("FORGEJO_SERVER_URL", "https://codeberg.org")
+			env.Setenv("FORGEJO_SERVER_URL", "https://forge.example")
 			env.Setenv("FORGEJO_REPOSITORY", "org/repo")
 
 			if got := platform.Detect(); got != testCase.want {

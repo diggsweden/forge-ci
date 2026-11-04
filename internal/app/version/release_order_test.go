@@ -221,10 +221,10 @@ func TestChangelogRelease_OperationsAreOrderedAndOnce(t *testing.T) {
 	writeFile(t, dir, "commit-msg.txt", "chore(release): bump to v1.2.3\n")
 	t.Chdir(dir)
 
-	const url = "ssh://git@codeberg.org:2222/itiquette/example.git"
+	const url = "ssh://git@forge.example:2222/examplescope/example.git"
 
 	in := appversion.ChangelogReleaseInput{
-		Tag: "v1.2.3", Repository: "itiquette/example", GitURL: url,
+		Tag: "v1.2.3", Repository: "examplescope/example", GitURL: url,
 		AuthorName: "Release Bot", AuthorEmail: "bot@example.invalid", SigningKeyPath: "/tmp/key", TagSigned: true,
 	}
 

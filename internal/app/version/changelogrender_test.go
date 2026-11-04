@@ -89,7 +89,7 @@ func TestChangelogRender_GitChglogRendersCommitMessage(t *testing.T) {
 	err := appversion.ChangelogRender(context.Background(), gitr, renderer, &out, appversion.ChangelogRenderInput{
 		Backend:          "git-chglog",
 		Tag:              "v1.2.3",
-		RepositoryURL:    "https://forgejo.example/forge/itiquette/consumer",
+		RepositoryURL:    "https://forgejo.example/forge/examplescope/consumer",
 		ChangelogConfig:  ".chglog/full.yml",
 		CommitBodyConfig: ".chglog/body.yml",
 		CommitTrailers:   "Release-Request: release-request/v1.2.3",
@@ -109,8 +109,8 @@ func TestChangelogRender_GitChglogRendersCommitMessage(t *testing.T) {
 		t.Errorf("rendered tags = (%q, %q), want both v1.2.3", renderer.fullTag, renderer.bodyTag)
 	}
 
-	if renderer.fullRepositoryURL != "https://forgejo.example/forge/itiquette/consumer" ||
-		renderer.bodyRepositoryURL != "https://forgejo.example/forge/itiquette/consumer" {
+	if renderer.fullRepositoryURL != "https://forgejo.example/forge/examplescope/consumer" ||
+		renderer.bodyRepositoryURL != "https://forgejo.example/forge/examplescope/consumer" {
 		t.Errorf("rendered repository URLs = (%q, %q), want the trusted repository URL", renderer.fullRepositoryURL, renderer.bodyRepositoryURL)
 	}
 
@@ -142,7 +142,7 @@ func TestChangelogRender_RejectsInvalidBackend(t *testing.T) {
 	err := appversion.ChangelogRender(context.Background(), &fakeChangelogRenderGit{}, &fakeChangelogRenderer{}, &bytes.Buffer{}, appversion.ChangelogRenderInput{
 		Backend:          "bad",
 		Tag:              "v1.2.3",
-		RepositoryURL:    "https://forgejo.example/itiquette/consumer",
+		RepositoryURL:    "https://forgejo.example/examplescope/consumer",
 		ChangelogConfig:  "full",
 		CommitBodyConfig: "body",
 	})
@@ -156,11 +156,11 @@ func TestChangelogRender_RejectsInvalidRepositoryURL(t *testing.T) {
 
 	for _, repositoryURL := range []string{
 		"",
-		"http://forgejo.example/itiquette/consumer",
-		"https://user@forgejo.example/itiquette/consumer",
-		"https://forgejo.example/itiquette/consumer/",
-		"https://forgejo.example/itiquette/consumer?view=release",
-		"https://forgejo.example/itiquette/%63onsumer",
+		"http://forgejo.example/examplescope/consumer",
+		"https://user@forgejo.example/examplescope/consumer",
+		"https://forgejo.example/examplescope/consumer/",
+		"https://forgejo.example/examplescope/consumer?view=release",
+		"https://forgejo.example/examplescope/%63onsumer",
 	} {
 		err := appversion.ChangelogRender(context.Background(), &fakeChangelogRenderGit{}, &fakeChangelogRenderer{}, &bytes.Buffer{}, appversion.ChangelogRenderInput{
 			Tag:              "v1.2.3",
@@ -181,7 +181,7 @@ func TestChangelogRender_RefusesGitCliffOnSHA256(t *testing.T) {
 
 	err := appversion.ChangelogRender(context.Background(), gitr, &fakeChangelogRenderer{}, &bytes.Buffer{}, appversion.ChangelogRenderInput{
 		Tag:              "v1.2.3",
-		RepositoryURL:    "https://forgejo.example/itiquette/consumer",
+		RepositoryURL:    "https://forgejo.example/examplescope/consumer",
 		ChangelogConfig:  "full",
 		CommitBodyConfig: "body",
 	})
@@ -205,7 +205,7 @@ func TestChangelogRender_RefusesMissingConfig(t *testing.T) {
 
 	err := appversion.ChangelogRender(context.Background(), &fakeChangelogRenderGit{}, renderer, &bytes.Buffer{}, appversion.ChangelogRenderInput{
 		Tag:              "v1.2.3",
-		RepositoryURL:    "https://forgejo.example/itiquette/consumer",
+		RepositoryURL:    "https://forgejo.example/examplescope/consumer",
 		ChangelogConfig:  "full.toml",
 		CommitBodyConfig: "body.toml",
 	})

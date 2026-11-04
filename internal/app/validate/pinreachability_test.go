@@ -47,7 +47,7 @@ func writePinnedWorkflow(t *testing.T, sha string) string {
 
 	path := filepath.Join(t.TempDir(), "release.yml")
 
-	body := "jobs:\n  sign:\n    uses: itiquette/forgejo-ci/.forgejo/workflows/sign.yml@" + sha + "\n"
+	body := "jobs:\n  sign:\n    uses: examplescope/ci-layer/.forgejo/workflows/sign.yml@" + sha + "\n"
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil { //nolint:gosec // test-owned path.
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func writeWorkflowWithPins(t *testing.T, name string, shas ...string) string {
 	body.WriteString("jobs:\n")
 
 	for i, sha := range shas {
-		fmt.Fprintf(&body, "  job%d:\n    uses: itiquette/forgejo-ci/.forgejo/workflows/sign.yml@%s\n", i, sha)
+		fmt.Fprintf(&body, "  job%d:\n    uses: examplescope/ci-layer/.forgejo/workflows/sign.yml@%s\n", i, sha)
 	}
 
 	if err := os.WriteFile(path, []byte(body.String()), 0o644); err != nil { //nolint:gosec // test-owned path.

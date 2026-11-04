@@ -85,8 +85,8 @@ func TestAcceptTarget_RefusesEachUnsafeRunForItsOwnReason(t *testing.T) {
 
 			r.body = replaceInFixture(t, r.body, "        \"artifacts\",\n        \"organizations\",", "        \"organizations\",")
 		}},
-		{name: "host_outside_disposable_list", sentinel: labcontract.ErrHost, reason: `"forgejo.codeberg.org:8443": host is not disposable`, mutate: func(_ *testing.T, r *run) {
-			r.body = strings.ReplaceAll(r.body, "forgejo.compose.forgelab", "forgejo.codeberg.org")
+		{name: "host_outside_disposable_list", sentinel: labcontract.ErrHost, reason: `"forgejo.forge.example:8443": host is not disposable`, mutate: func(_ *testing.T, r *run) {
+			r.body = strings.ReplaceAll(r.body, "forgejo.compose.forgelab", "forgejo.forge.example")
 		}},
 		{name: "registry_outside_disposable_list", sentinel: labcontract.ErrHost, reason: `OCI registry: "registry.attacker.example": host is not disposable`, mutate: func(t *testing.T, r *run) {
 			t.Helper()

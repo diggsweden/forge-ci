@@ -281,7 +281,7 @@ func TestBuildSignerImageArch_NamesTheImageByTheDigestItPushed(t *testing.T) {
 	const (
 		rawManifest = `{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}`
 		wantDigest  = "sha256:b22c7289dd3b4785a3795c90e15d16bd66bd29b444b8974fe29ed0443ce50405"
-		wantRepo    = "codeberg.org/itiquette/forgejo-ci-signer"
+		wantRepo    = "forge.example/examplescope/ci-layer-signer"
 		sourceSHA   = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 		recipeSHA   = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	)
@@ -295,8 +295,8 @@ func TestBuildSignerImageArch_NamesTheImageByTheDigestItPushed(t *testing.T) {
 		Arch:             "amd64",
 		HostArch:         "amd64",
 		SourceSHA:        sourceSHA,
-		ServerURL:        "https://codeberg.org",
-		Repository:       "Itiquette/Forgejo-CI",
+		ServerURL:        "https://forge.example",
+		Repository:       "Examplescope/CI-Layer",
 		RepositorySuffix: "-signer",
 		TagPrefix:        "signer-" + recipeSHA + "-",
 		Name:             "signer-image",
@@ -349,7 +349,7 @@ func TestBuildSignerImageArch_NamesTheImageByTheDigestItPushed(t *testing.T) {
 		t.Errorf("built platform = %q, want linux/amd64", build.Platform)
 	}
 
-	if build.SourceURL != "https://codeberg.org/Itiquette/Forgejo-CI" {
+	if build.SourceURL != "https://forge.example/Examplescope/CI-Layer" {
 		t.Errorf("source URL = %q", build.SourceURL)
 	}
 
@@ -378,7 +378,7 @@ func TestAssembleSignerImageManifest_IndexesTheArchImagesItWasGiven(t *testing.T
 	t.Chdir(t.TempDir())
 
 	const (
-		repo        = "codeberg.org/itiquette/forgejo-ci-signer"
+		repo        = "forge.example/examplescope/ci-layer-signer"
 		sourceSHA   = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 		rawManifest = `{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json"}`
 		wantDigest  = "sha256:d3e326ca75320da61d7a0abbbb4c24ac2719a2f2fea6029d645ef7a607027c58"
@@ -397,8 +397,8 @@ func TestAssembleSignerImageManifest_IndexesTheArchImagesItWasGiven(t *testing.T
 	meta, err := appcontainer.AssembleSignerImageManifest(t.Context(), tool, sink, nil, io.Discard, appcontainer.SignerImageAssembleInput{
 		AuthFile:         "auth.json",
 		SourceSHA:        sourceSHA,
-		ServerURL:        "https://codeberg.org",
-		Repository:       "itiquette/forgejo-ci",
+		ServerURL:        "https://forge.example",
+		Repository:       "examplescope/ci-layer",
 		RepositorySuffix: "-signer",
 		TagPrefix:        "signer-",
 		Name:             "signer-image",
@@ -455,19 +455,19 @@ func TestAssembleSignerImageManifest_IndexesTheArchImagesItWasGiven(t *testing.T
 func TestAssembleSignerImageManifest_RejectsWrongRepositoryRef(t *testing.T) {
 	t.Chdir(t.TempDir())
 	writeAuthFileForSignerImage(t, "auth.json")
-	writeSignerArchMetadata(t, "amd64", "evil.example/itiquette/forgejo-ci-signer", strings.Repeat("1", 64))
+	writeSignerArchMetadata(t, "amd64", "evil.example/examplescope/ci-layer-signer", strings.Repeat("1", 64))
 
 	_, err := appcontainer.AssembleSignerImageManifest(context.Background(), &fakeSignerImageTool{}, fakeoutputsink.New(t), nil, io.Discard, appcontainer.SignerImageAssembleInput{
 		AuthFile:         "auth.json",
 		SourceSHA:        strings.Repeat("b", 40),
-		ServerURL:        "https://codeberg.org",
-		Repository:       "itiquette/forgejo-ci",
+		ServerURL:        "https://forge.example",
+		Repository:       "examplescope/ci-layer",
 		RepositorySuffix: "-signer",
 		TagPrefix:        "signer-",
 		Name:             "signer-image",
 		Archs:            []string{"amd64"},
 	})
-	if !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "must be under codeberg.org/itiquette/forgejo-ci-signer") {
+	if !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "must be under forge.example/examplescope/ci-layer-signer") {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -477,7 +477,7 @@ func TestAssembleSignerImageManifest_RejectsWrongPlatformBeforePublication(t *te
 		t.Run(platform[0]+"/"+platform[1], func(t *testing.T) {
 			t.Chdir(t.TempDir())
 			writeAuthFileForSignerImage(t, "auth.json")
-			writeSignerArchMetadata(t, "amd64", "codeberg.org/itiquette/forgejo-ci-signer", strings.Repeat("1", 64))
+			writeSignerArchMetadata(t, "amd64", "forge.example/examplescope/ci-layer-signer", strings.Repeat("1", 64))
 
 			if err := os.Mkdir("metadata", 0o700); err != nil {
 				t.Fatal(err)
@@ -490,8 +490,8 @@ func TestAssembleSignerImageManifest_RejectsWrongPlatformBeforePublication(t *te
 			tool := &fakeSignerImageTool{platformOS: platform[0], platformArch: platform[1]}
 
 			_, err := appcontainer.AssembleSignerImageManifest(t.Context(), tool, nil, nil, io.Discard, appcontainer.SignerImageAssembleInput{
-				AuthFile: "auth.json", SourceSHA: strings.Repeat("b", 40), ServerURL: "https://codeberg.org",
-				Repository: "itiquette/forgejo-ci", RepositorySuffix: "-signer", TagPrefix: "signer-", Name: "signer-image",
+				AuthFile: "auth.json", SourceSHA: strings.Repeat("b", 40), ServerURL: "https://forge.example",
+				Repository: "examplescope/ci-layer", RepositorySuffix: "-signer", TagPrefix: "signer-", Name: "signer-image",
 				Archs: []string{"amd64"}, MetadataDir: "metadata",
 			})
 			if !errors.Is(err, errs.ErrValidation) || !slices.Equal(tool.events, []string{"platform"}) {
@@ -562,7 +562,7 @@ func TestBuildSignerImageArch_HandsTheBuilderTheWholeRequest(t *testing.T) {
 	tool := &fakeSignerImageTool{}
 
 	if _, err := appcontainer.BuildSignerImageArch(context.Background(), tool, io.Discard, appcontainer.SignerImageBuildArchInput{
-		AuthFile: "auth.json", Arch: "arm64", HostArch: "arm64", SourceSHA: sourceSHA, ServerURL: "https://codeberg.org/", Repository: "Itiquette/Forgejo-CI",
+		AuthFile: "auth.json", Arch: "arm64", HostArch: "arm64", SourceSHA: sourceSHA, ServerURL: "https://forge.example/", Repository: "Examplescope/CI-Layer",
 		RepositorySuffix: "-signer", TagPrefix: "signer-", Name: "signer-image", Title: "forgejo-ci signer",
 		Containerfile: "build/Signer.Containerfile", Context: "build", MetadataDir: "out/meta", RetryAttempts: 1,
 		Target: "runtime", BuildArgs: []string{"VERSION=1.2.3"}, Labels: []string{"org.example.flavor=core"},
@@ -571,7 +571,7 @@ func TestBuildSignerImageArch_HandsTheBuilderTheWholeRequest(t *testing.T) {
 	}
 
 	want := []domaincontainer.SignerImageBuildToolRequest{{
-		AuthFile: "auth.json", Platform: "linux/arm64", SourceURL: "https://codeberg.org/Itiquette/Forgejo-CI", Revision: sourceSHA,
+		AuthFile: "auth.json", Platform: "linux/arm64", SourceURL: "https://forge.example/Examplescope/CI-Layer", Revision: sourceSHA,
 		LocalImage: "localhost/signer-image:" + sourceSHA + "-arm64", Containerfile: "build/Signer.Containerfile", Context: "build",
 		Title: "forgejo-ci signer", Target: "runtime", BuildArgs: []string{"VERSION=1.2.3"}, Labels: []string{"org.example.flavor=core"},
 	}}
@@ -621,10 +621,10 @@ func TestBuildSignerImageArch_RefusesAForeignHostArchitecture(t *testing.T) {
 // one would be taken as a finished image.
 func TestSignerImage_EachFailureStopsEverythingAfterIt(t *testing.T) {
 	sourceSHA := strings.Repeat("b", 40)
-	repo := "codeberg.org/itiquette/forgejo-ci-signer"
+	repo := "forge.example/examplescope/ci-layer-signer"
 
 	archInput := appcontainer.SignerImageBuildArchInput{
-		AuthFile: "auth.json", Arch: "amd64", HostArch: "amd64", SourceSHA: sourceSHA, ServerURL: "https://codeberg.org", Repository: "itiquette/forgejo-ci",
+		AuthFile: "auth.json", Arch: "amd64", HostArch: "amd64", SourceSHA: sourceSHA, ServerURL: "https://forge.example", Repository: "examplescope/ci-layer",
 		RepositorySuffix: "-signer", TagPrefix: "signer-", Name: "signer-image", RetryAttempts: 1,
 	}
 
@@ -668,7 +668,7 @@ func TestSignerImage_EachFailureStopsEverythingAfterIt(t *testing.T) {
 	}
 
 	assembleInput := appcontainer.SignerImageAssembleInput{
-		AuthFile: "auth.json", SourceSHA: sourceSHA, ServerURL: "https://codeberg.org", Repository: "itiquette/forgejo-ci",
+		AuthFile: "auth.json", SourceSHA: sourceSHA, ServerURL: "https://forge.example", Repository: "examplescope/ci-layer",
 		RepositorySuffix: "-signer", TagPrefix: "signer-", Name: "signer-image", RetryAttempts: 1,
 	}
 	all := []string{"platform", "platform", "merge", "raw"}

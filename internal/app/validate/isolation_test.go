@@ -79,13 +79,13 @@ func runForgejoIsolation(t *testing.T, body string) (string, error) {
 	mem := testfs.NewMemory(t)
 	mem.WriteFile(".forgejo/workflows/release.yml", []byte(body))
 
-	return forgejoIsolation(t, mem, ".forgejo/workflows/release.yml", "itiquette/forgejo-ci", "")
+	return forgejoIsolation(t, mem, ".forgejo/workflows/release.yml", "examplescope/ci-layer", "")
 }
 
 func runForgejoIsolationInFS(t *testing.T, mem *testfs.Memory, workflow string) (string, error) {
 	t.Helper()
 
-	return forgejoIsolation(t, mem, workflow, "itiquette/forgejo-ci", "")
+	return forgejoIsolation(t, mem, workflow, "examplescope/ci-layer", "")
 }
 
 const forgejoIsolationCleanWorkflow = `jobs:
@@ -105,7 +105,7 @@ const forgejoIsolationCleanWorkflow = `jobs:
       dist-digest: ${{ steps.handoff.outputs.digest }}
     steps: []
   sign-and-publish:
-    uses: itiquette/forgejo-ci/.forgejo/workflows/sign-and-publish-release.yml@1111111111111111111111111111111111111111
+    uses: examplescope/ci-layer/.forgejo/workflows/sign-and-publish-release.yml@1111111111111111111111111111111111111111
     with:
       release-tag: ${{ needs.prepare.outputs.release-tag }}
       release-sha: ${{ needs.prepare.outputs.release-sha }}
@@ -282,7 +282,7 @@ func TestIsolation_CheckoutConsumerIsExempt(t *testing.T) {
 jobs:
   build:
     steps:
-      - uses: https://codeberg.org/itiquette/forgejo-ci/actions/checkout-consumer@1111111111111111111111111111111111111111
+      - uses: https://forge.example/examplescope/ci-layer/actions/checkout-consumer@1111111111111111111111111111111111111111
 `
 
 	out, err := runIsolation(t, body)
@@ -310,7 +310,7 @@ func TestIsolation_ForgejoStrictWorkflowPasses(t *testing.T) {
 func TestIsolation_CalledPrepareJobPasses(t *testing.T) {
 	body := `jobs:
   prepare:
-    uses: itiquette/forgejo-ci/.forgejo/workflows/prepare-release.yml@1111111111111111111111111111111111111111
+    uses: examplescope/ci-layer/.forgejo/workflows/prepare-release.yml@1111111111111111111111111111111111111111
     with:
       forgejo-ci-sha: 1111111111111111111111111111111111111111
     secrets:
@@ -321,7 +321,7 @@ func TestIsolation_CalledPrepareJobPasses(t *testing.T) {
       dist-digest: ${{ steps.handoff.outputs.digest }}
     steps: []
   sign-and-publish:
-    uses: itiquette/forgejo-ci/.forgejo/workflows/sign-and-publish-release.yml@1111111111111111111111111111111111111111
+    uses: examplescope/ci-layer/.forgejo/workflows/sign-and-publish-release.yml@1111111111111111111111111111111111111111
     with:
       release-tag: ${{ needs.prepare.outputs.release-tag }}
       release-sha: ${{ needs.prepare.outputs.release-sha }}
@@ -364,7 +364,7 @@ func TestIsolation_ForgejoStrictViolations(t *testing.T) {
 		"cached_toolchain": {strings.Replace(forgejoIsolationCleanWorkflow,
 			"steps: []",
 			`steps:
-      - uses: https://codeberg.org/itiquette/forgejo-ci/actions/setup-toolchain@1111111111111111111111111111111111111111`, 1), "cache: false"},
+      - uses: https://forge.example/examplescope/ci-layer/actions/setup-toolchain@1111111111111111111111111111111111111111`, 1), "cache: false"},
 	}
 
 	for name, tc := range tests {
@@ -389,7 +389,7 @@ func TestIsolation_UnmatchedSinglePinSubjectFails(t *testing.T) {
 	mem := testfs.NewMemory(t)
 	mem.WriteFile(".forgejo/workflows/release.yml", []byte(forgejoIsolationCleanWorkflow))
 
-	out, err := runIsolationForSubject(t, mem, "itiquette/nowhere-ci", "")
+	out, err := runIsolationForSubject(t, mem, "examplescope/nowhere-ci", "")
 	if !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("err = %v, want ErrValidation\n%s", err, out)
 	}
@@ -571,7 +571,7 @@ func TestIsolation_MixedPinsFail(t *testing.T) {
 	mem.WriteFile(".forgejo/workflows/other.yml", []byte(`jobs:
   probe:
     steps:
-      - uses: https://codeberg.org/itiquette/forgejo-ci/actions/setup-buildah@2222222222222222222222222222222222222222
+      - uses: https://forge.example/examplescope/ci-layer/actions/setup-buildah@2222222222222222222222222222222222222222
 `))
 
 	out, err := runForgejoIsolationInFS(t, mem, ".forgejo/workflows/release.yml")
@@ -579,7 +579,7 @@ func TestIsolation_MixedPinsFail(t *testing.T) {
 		t.Fatalf("err = %v, want ErrValidation\n%s", err, out)
 	}
 
-	if !strings.Contains(out, "mixed itiquette/forgejo-ci pins") {
+	if !strings.Contains(out, "mixed examplescope/ci-layer pins") {
 		t.Errorf("missing mixed-pin violation in:\n%s", out)
 	}
 }
@@ -587,7 +587,7 @@ func TestIsolation_MixedPinsFail(t *testing.T) {
 func TestIsolation_CommentedPinDoesNotCreateAConflict(t *testing.T) {
 	mem := testfs.NewMemory(t)
 	mem.WriteFile(".forgejo/workflows/release.yml", []byte(forgejoIsolationCleanWorkflow))
-	mem.WriteFile(".forgejo/workflows/other.yml", []byte(`# uses: https://codeberg.org/itiquette/forgejo-ci/actions/setup-buildah@2222222222222222222222222222222222222222
+	mem.WriteFile(".forgejo/workflows/other.yml", []byte(`# uses: https://forge.example/examplescope/ci-layer/actions/setup-buildah@2222222222222222222222222222222222222222
 jobs:
   probe:
     steps:
@@ -613,14 +613,14 @@ jobs:
 
 	mem := testfs.NewMemory(t)
 	mem.WriteFile(".scratch/consumer/.forgejo/workflows/release.yml", []byte(forgejoIsolationCleanWorkflow))
-	mem.WriteFile(".scratch/forgejo-ci/.forgejo/workflows/sign-and-publish-release.yml", []byte(signerWorkflow))
+	mem.WriteFile(".scratch/ci-layer/.forgejo/workflows/sign-and-publish-release.yml", []byte(signerWorkflow))
 
 	out, err := runForgejoIsolationInFS(t, mem, ".scratch/consumer/.forgejo/workflows/release.yml")
 	if err != nil {
 		t.Fatalf("clean sibling contract rejected: %v\n%s", err, out)
 	}
 
-	mem.WriteFile(".scratch/forgejo-ci/.forgejo/workflows/sign-and-publish-release.yml", []byte(strings.Replace(signerWorkflow, " GPG_SIGNING_KEY", "", 1)))
+	mem.WriteFile(".scratch/ci-layer/.forgejo/workflows/sign-and-publish-release.yml", []byte(strings.Replace(signerWorkflow, " GPG_SIGNING_KEY", "", 1)))
 
 	out, err = runForgejoIsolationInFS(t, mem, ".scratch/consumer/.forgejo/workflows/release.yml")
 	if !errors.Is(err, errs.ErrValidation) {
@@ -676,7 +676,7 @@ func TestIsolation_SiblingStaticScope(t *testing.T) {
 			mem.WriteFile(".scratch/consumer/.forgejo/workflows/release.yml", []byte(forgejoIsolationCleanWorkflow))
 
 			if tc.body != "" {
-				mem.WriteFile(".scratch/forgejo-ci/.forgejo/workflows/sign-and-publish-release.yml", []byte(tc.body))
+				mem.WriteFile(".scratch/ci-layer/.forgejo/workflows/sign-and-publish-release.yml", []byte(tc.body))
 			}
 
 			out, err := runForgejoIsolationInFS(t, mem, ".scratch/consumer/.forgejo/workflows/release.yml")

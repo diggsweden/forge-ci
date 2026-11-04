@@ -33,34 +33,34 @@ func TestOCIReleaseLabelFlags_EmitsBuildahTokensAndDefaultsDocumentation(t *test
 	t.Parallel()
 
 	got, err := appcontainer.OCIReleaseLabelFlags(appcontainer.OCIReleaseLabelsInput{
-		Title:       "nanolinter",
+		Title:       "myapp",
 		Version:     "v0.7.9",
 		Revision:    strings.Repeat("a", 40),
 		RefName:     "v0.7.9-alpine",
 		Description: "Small lint image",
 		Licenses:    "EUPL-1.2",
-		Vendor:      "Itiquette",
-		Authors:     "The Itiquette Authors",
+		Vendor:      "Example",
+		Authors:     "The Example Authors",
 		Created:     "2026-06-30T12:34:56Z",
-		Source:      "https://codeberg.org/Itiquette/nanolinter",
+		Source:      "https://forge.example/Examplescope/myapp",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	want := []string{
-		"--label", "org.opencontainers.image.title=nanolinter",
+		"--label", "org.opencontainers.image.title=myapp",
 		"--label", "org.opencontainers.image.version=v0.7.9",
 		"--label", "org.opencontainers.image.created=2026-06-30T12:34:56Z",
 		"--label", "org.opencontainers.image.revision=" + strings.Repeat("a", 40),
 		"--label", "org.opencontainers.image.ref.name=v0.7.9-alpine",
-		"--label", "org.opencontainers.image.source=https://codeberg.org/Itiquette/nanolinter",
-		"--label", "org.opencontainers.image.url=https://codeberg.org/Itiquette/nanolinter",
-		"--label", "org.opencontainers.image.documentation=https://codeberg.org/Itiquette/nanolinter#readme",
+		"--label", "org.opencontainers.image.source=https://forge.example/Examplescope/myapp",
+		"--label", "org.opencontainers.image.url=https://forge.example/Examplescope/myapp",
+		"--label", "org.opencontainers.image.documentation=https://forge.example/Examplescope/myapp#readme",
 		"--label", "org.opencontainers.image.description=Small lint image",
 		"--label", "org.opencontainers.image.licenses=EUPL-1.2",
-		"--label", "org.opencontainers.image.vendor=Itiquette",
-		"--label", "org.opencontainers.image.authors=The Itiquette Authors",
+		"--label", "org.opencontainers.image.vendor=Example",
+		"--label", "org.opencontainers.image.authors=The Example Authors",
 	}
 
 	if !slices.Equal(got, want) {
@@ -79,28 +79,28 @@ func TestOCIReleaseLabelFlags_OmitsOptionalLabelsWithNoValue(t *testing.T) {
 
 	got, err := appcontainer.OCIReleaseLabelFlags(appcontainer.OCIReleaseLabelsInput{
 		OCILabels: domaincontainer.OCILabels{
-			Title:    "nanolinter",
+			Title:    "myapp",
 			Version:  "v0.7.9",
 			Revision: strings.Repeat("a", 40),
 			RefName:  "v0.7.9-alpine",
 			// Description, Licenses, Vendor and Authors deliberately unset.
 		},
 		Created: "2026-06-30T12:34:56Z",
-		Source:  "https://codeberg.org/Itiquette/nanolinter",
+		Source:  "https://forge.example/Examplescope/myapp",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	want := []string{
-		"--label", "org.opencontainers.image.title=nanolinter",
+		"--label", "org.opencontainers.image.title=myapp",
 		"--label", "org.opencontainers.image.version=v0.7.9",
 		"--label", "org.opencontainers.image.created=2026-06-30T12:34:56Z",
 		"--label", "org.opencontainers.image.revision=" + strings.Repeat("a", 40),
 		"--label", "org.opencontainers.image.ref.name=v0.7.9-alpine",
-		"--label", "org.opencontainers.image.source=https://codeberg.org/Itiquette/nanolinter",
-		"--label", "org.opencontainers.image.url=https://codeberg.org/Itiquette/nanolinter",
-		"--label", "org.opencontainers.image.documentation=https://codeberg.org/Itiquette/nanolinter#readme",
+		"--label", "org.opencontainers.image.source=https://forge.example/Examplescope/myapp",
+		"--label", "org.opencontainers.image.url=https://forge.example/Examplescope/myapp",
+		"--label", "org.opencontainers.image.documentation=https://forge.example/Examplescope/myapp#readme",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("label flags = %#v\nwant %#v", got, want)
@@ -131,13 +131,13 @@ func TestOCIReleaseIdentityMatches_ToleratesCaseOnlyInTheSource(t *testing.T) {
 	commit := strings.Repeat("b", 40)
 	labels := `{"org.opencontainers.image.revision":"` + commit +
 		`","org.opencontainers.image.version":"v0.7.9","org.opencontainers.image.ref.name":"v0.7.9-alpine",` +
-		`"org.opencontainers.image.source":"https://codeberg.org/Itiquette/nanolinter"}`
+		`"org.opencontainers.image.source":"https://forge.example/Examplescope/myapp"}`
 
 	expected := appcontainer.OCIReleaseIdentityInput{
 		Revision: commit,
 		Version:  "v0.7.9",
 		RefName:  "v0.7.9-alpine",
-		Source:   "https://codeberg.org/Itiquette/nanolinter",
+		Source:   "https://forge.example/Examplescope/myapp",
 	}
 
 	// Each row changes one field of an otherwise matching identity.
@@ -147,13 +147,13 @@ func TestOCIReleaseIdentityMatches_ToleratesCaseOnlyInTheSource(t *testing.T) {
 	}{
 		"identical": {mutate: func(*appcontainer.OCIReleaseIdentityInput) {}, want: true},
 		"source owner case drift": {mutate: func(in *appcontainer.OCIReleaseIdentityInput) {
-			in.Source = "https://codeberg.org/itiquette/nanolinter"
+			in.Source = "https://forge.example/examplescope/myapp"
 		}, want: true},
 		"source host case drift": {mutate: func(in *appcontainer.OCIReleaseIdentityInput) {
-			in.Source = "https://CODEBERG.ORG/Itiquette/nanolinter"
+			in.Source = "https://FORGE.EXAMPLE/Examplescope/myapp"
 		}, want: true},
 
-		"different repository path": {mutate: func(in *appcontainer.OCIReleaseIdentityInput) { in.Source = "https://codeberg.org/other/nanolinter" }, want: false},
+		"different repository path": {mutate: func(in *appcontainer.OCIReleaseIdentityInput) { in.Source = "https://forge.example/other/myapp" }, want: false},
 		"different revision":        {mutate: func(in *appcontainer.OCIReleaseIdentityInput) { in.Revision = strings.Repeat("c", 40) }, want: false},
 		"different version":         {mutate: func(in *appcontainer.OCIReleaseIdentityInput) { in.Version = "v0.7.10" }, want: false},
 		"different ref name":        {mutate: func(in *appcontainer.OCIReleaseIdentityInput) { in.RefName = "v0.7.9-debian" }, want: false},
@@ -272,7 +272,7 @@ func validOCIReleaseLabelsInput() appcontainer.OCIReleaseLabelsInput {
 		Revision: strings.Repeat("a", 40),
 		RefName:  "v1.2.3",
 		Created:  "2026-01-01T00:00:00Z",
-		Source:   "https://codeberg.org/example/demo",
+		Source:   "https://forge.example/example/demo",
 	}
 }
 
@@ -331,8 +331,8 @@ func TestOCIReleaseLabels_RefusesMultilineValues(t *testing.T) {
 	t.Parallel()
 
 	for _, injected := range []string{
-		"https://codeberg.org/example/demo\n--label=injected=1",
-		"https://codeberg.org/example/demo\r--label=injected=1",
+		"https://forge.example/example/demo\n--label=injected=1",
+		"https://forge.example/example/demo\r--label=injected=1",
 	} {
 		in := validOCIReleaseLabelsInput()
 		in.Source = injected

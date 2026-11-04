@@ -80,7 +80,7 @@ func TestBuildPushOCIImage_BuildsEachPlatformThenPushesTheManifest(t *testing.T)
 	writeBuildPushFile(t, "auth.json", `{"auths":{}}`)
 
 	const (
-		image    = "codeberg.org/itiquette/forgejo-ci"
+		image    = "forge.example/examplescope/ci-layer"
 		manifest = image + ":v1.2.3-alpine"
 		revision = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	)
@@ -103,12 +103,12 @@ func TestBuildPushOCIImage_BuildsEachPlatformThenPushesTheManifest(t *testing.T)
 		Title:         "Forgejo CI",
 		Description:   "Reusable workflows",
 		Licenses:      "CC0-1.0",
-		Vendor:        "Itiquette",
-		Authors:       "The Itiquette Authors",
+		Vendor:        "Example",
+		Authors:       "The Example Authors",
 		AuthFile:      "auth.json",
 		TLSVerify:     "true",
-		ServerURL:     "https://codeberg.org",
-		Repository:    "Itiquette/Forgejo-CI",
+		ServerURL:     "https://forge.example",
+		Repository:    "Examplescope/CI-Layer",
 		RetryAttempts: 2,
 		RetryDelay:    time.Nanosecond,
 	})
@@ -236,17 +236,17 @@ func assertOCILabels(t *testing.T, builds []domaincontainer.BuildPushManifestBui
 	}
 
 	wantLabels := []string{
-		"org.opencontainers.image.authors=The Itiquette Authors",
+		"org.opencontainers.image.authors=The Example Authors",
 		"org.opencontainers.image.created=2023-11-14T22:13:20Z",
 		"org.opencontainers.image.description=Reusable workflows",
-		"org.opencontainers.image.documentation=https://codeberg.org/Itiquette/Forgejo-CI#readme",
+		"org.opencontainers.image.documentation=https://forge.example/Examplescope/CI-Layer#readme",
 		"org.opencontainers.image.licenses=CC0-1.0",
 		"org.opencontainers.image.ref.name=v1.2.3-alpine",
 		"org.opencontainers.image.revision=" + revision,
-		"org.opencontainers.image.source=https://codeberg.org/Itiquette/Forgejo-CI",
+		"org.opencontainers.image.source=https://forge.example/Examplescope/CI-Layer",
 		"org.opencontainers.image.title=Forgejo CI",
-		"org.opencontainers.image.url=https://codeberg.org/Itiquette/Forgejo-CI",
-		"org.opencontainers.image.vendor=Itiquette",
+		"org.opencontainers.image.url=https://forge.example/Examplescope/CI-Layer",
+		"org.opencontainers.image.vendor=Example",
 		"org.opencontainers.image.version=v1.2.3-alpine",
 	}
 
@@ -354,8 +354,8 @@ func validBuildPushInput() appcontainer.BuildPushOCIImageInput {
 		BuildsJSON:    `[{"platform":"linux/amd64"}]`,
 		Title:         "selftest",
 		TLSVerify:     "true",
-		ServerURL:     "https://codeberg.org",
-		Repository:    "itiquette/forgejo-ci",
+		ServerURL:     "https://forge.example",
+		Repository:    "examplescope/ci-layer",
 	}
 }
 
@@ -404,11 +404,11 @@ func TestBuildPushOCIImage_PreservesBuildArgumentOrderPerPlatform(t *testing.T) 
 		Containerfile: "Containerfile",
 		BuildsJSON:    buildsJSON,
 		Title:         "Forgejo CI", Description: "Reusable workflows",
-		Licenses: "CC0-1.0", Vendor: "Itiquette", Authors: "The Itiquette Authors",
+		Licenses: "CC0-1.0", Vendor: "Example", Authors: "The Example Authors",
 		AuthFile:      "auth.json",
 		TLSVerify:     "true",
-		ServerURL:     "https://codeberg.org",
-		Repository:    "Itiquette/Forgejo-CI",
+		ServerURL:     "https://forge.example",
+		Repository:    "Examplescope/CI-Layer",
 		RetryAttempts: 1,
 		RetryDelay:    time.Nanosecond,
 	})

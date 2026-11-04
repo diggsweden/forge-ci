@@ -60,7 +60,7 @@ EXAMPLES:
    forge-ci init https://github.com/diggsweden/forge-ci
 
    # Forgejo or GitLab, from your organization's mirror:
-   forge-ci init https://codeberg.org/examplescope/forge-ci
+   forge-ci init https://forge.example/examplescope/forge-ci
 
    # Preview without writing project files:
    forge-ci init https://github.com/diggsweden/forge-ci --example go-service --ref v0.90.0 --dry-run

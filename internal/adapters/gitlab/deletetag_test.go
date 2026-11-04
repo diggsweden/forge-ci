@@ -17,7 +17,7 @@ import (
 
 const (
 	glRegistryRepos = "/api/v4/projects/" + glProject + "/registry/repositories"
-	glImageRef      = "registry.example.com/itiquette/repo:staging-v1.2.3"
+	glImageRef      = "registry.example.com/examplescope/repo:staging-v1.2.3"
 )
 
 func newDeleteTagProvider(srv *fakegitserver.Server) *gitlab.Provider {
@@ -34,7 +34,7 @@ func TestDeleteTag_DeletesTheTagKeepingTheManifest(t *testing.T) {
 	srv := fakegitserver.NewGitLab(t)
 
 	srv.OnGet(glRegistryRepos, func(fakegitserver.Request) fakegitserver.Response {
-		return fakegitserver.Response{Status: 200, Body: `[{"id":42,"path":"itiquette/repo"}]`}
+		return fakegitserver.Response{Status: 200, Body: `[{"id":42,"path":"examplescope/repo"}]`}
 	})
 	srv.On(http.MethodDelete, glRegistryRepos+"/42/tags/staging-v1.2.3", func(fakegitserver.Request) fakegitserver.Response {
 		return fakegitserver.Response{Status: 200, Body: `{}`}
@@ -62,19 +62,19 @@ func TestDeleteTag_ResolvesARepositoryNestedBelowItsProject(t *testing.T) {
 
 	srv := fakegitserver.NewGitLab(t)
 
-	srv.OnGet("/api/v4/projects/itiquette%2Frepo%2Fapp/registry/repositories",
+	srv.OnGet("/api/v4/projects/examplescope%2Frepo%2Fapp/registry/repositories",
 		func(fakegitserver.Request) fakegitserver.Response {
 			return fakegitserver.Response{Status: 404, Body: `{"message":"404 Project Not Found"}`}
 		})
 	srv.OnGet(glRegistryRepos, func(fakegitserver.Request) fakegitserver.Response {
-		return fakegitserver.Response{Status: 200, Body: `[{"id":7,"path":"itiquette/repo/app"}]`}
+		return fakegitserver.Response{Status: 200, Body: `[{"id":7,"path":"examplescope/repo/app"}]`}
 	})
 	srv.On(http.MethodDelete, glRegistryRepos+"/7/tags/staging-v1.2.3", func(fakegitserver.Request) fakegitserver.Response {
 		return fakegitserver.Response{Status: 200, Body: `{}`}
 	})
 
 	err := newDeleteTagProvider(srv).DeleteTag(context.Background(),
-		"registry.example.com/itiquette/repo/app:staging-v1.2.3")
+		"registry.example.com/examplescope/repo/app:staging-v1.2.3")
 	if err != nil {
 		t.Fatalf("DeleteTag = %v", err)
 	}
@@ -88,7 +88,7 @@ func TestDeleteTag_RefusesToDeleteFromANeighbouringImage(t *testing.T) {
 	srv := fakegitserver.NewGitLab(t)
 
 	srv.OnGet(glRegistryRepos, func(fakegitserver.Request) fakegitserver.Response {
-		return fakegitserver.Response{Status: 200, Body: `[{"id":9,"path":"itiquette/repo/other"}]`}
+		return fakegitserver.Response{Status: 200, Body: `[{"id":9,"path":"examplescope/repo/other"}]`}
 	})
 
 	if err := newDeleteTagProvider(srv).DeleteTag(context.Background(), glImageRef); err != nil {
@@ -108,7 +108,7 @@ func TestDeleteTag_TreatsAnAbsentTagAsAlreadyDeleted(t *testing.T) {
 	srv := fakegitserver.NewGitLab(t)
 
 	srv.OnGet(glRegistryRepos, func(fakegitserver.Request) fakegitserver.Response {
-		return fakegitserver.Response{Status: 200, Body: `[{"id":42,"path":"itiquette/repo"}]`}
+		return fakegitserver.Response{Status: 200, Body: `[{"id":42,"path":"examplescope/repo"}]`}
 	})
 	srv.On(http.MethodDelete, glRegistryRepos+"/42/tags/staging-v1.2.3", func(fakegitserver.Request) fakegitserver.Response {
 		return fakegitserver.Response{Status: 404, Body: `{"message":"404 Tag Not Found"}`}
@@ -127,7 +127,7 @@ func TestDeleteTag_ReportsARefusedDelete(t *testing.T) {
 	srv := fakegitserver.NewGitLab(t)
 
 	srv.OnGet(glRegistryRepos, func(fakegitserver.Request) fakegitserver.Response {
-		return fakegitserver.Response{Status: 200, Body: `[{"id":42,"path":"itiquette/repo"}]`}
+		return fakegitserver.Response{Status: 200, Body: `[{"id":42,"path":"examplescope/repo"}]`}
 	})
 	srv.On(http.MethodDelete, glRegistryRepos+"/42/tags/staging-v1.2.3", func(fakegitserver.Request) fakegitserver.Response {
 		return fakegitserver.Response{Status: 403, Body: `{"message":"403 Forbidden"}`}
@@ -161,7 +161,7 @@ func TestDeleteTag_RefusesADigestPinnedRef(t *testing.T) {
 	srv := fakegitserver.NewGitLab(t)
 
 	err := newDeleteTagProvider(srv).DeleteTag(context.Background(),
-		"registry.example.com/itiquette/repo@sha256:"+strings.Repeat("a", 64))
+		"registry.example.com/examplescope/repo@sha256:"+strings.Repeat("a", 64))
 
 	if !errors.Is(err, errs.ErrUsage) {
 		t.Fatalf("want ErrUsage for a digest-pinned ref, got %v", err)

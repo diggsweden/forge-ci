@@ -55,13 +55,13 @@ func TestCredential_DeliberateTokenCrossesForges(t *testing.T) {
 		"GITHUB_ACTIONS":     "true", // a GitHub runner...
 		"GITHUB_TOKEN":       "ghs_github_job_token",
 		"GITHUB_SERVER_URL":  "https://github.com",
-		"FORGEJO_SERVER_URL": "https://codeberg.org",
+		"FORGEJO_SERVER_URL": "https://forge.example",
 		"FORGEJO_TOKEN":      "forgejo_pat",
 	})
 
 	// FORGEJO_TOKEN precedes GITHUB_TOKEN in the chain, so it wins and is
 	// unrestricted -- GitHub never sets it, so whoever did meant it.
-	if got := runcontext.Token().Resolve(getenv).For("https://codeberg.org/o/r"); got != "forgejo_pat" {
+	if got := runcontext.Token().Resolve(getenv).For("https://forge.example/o/r"); got != "forgejo_pat" {
 		t.Errorf("a deliberately-set token must reach its forge; got %q", got)
 	}
 }
@@ -130,10 +130,10 @@ func TestCredential_ActRunnerGitHubAliasIsItsOwn(t *testing.T) {
 		"GITHUB_ACTIONS":     "true",
 		"FORGEJO_ACTIONS":    "true",
 		"GITHUB_TOKEN":       "forgejo_job_token",
-		"FORGEJO_SERVER_URL": "https://codeberg.org",
+		"FORGEJO_SERVER_URL": "https://forge.example",
 	})
 
-	if got := runcontext.Token().Resolve(getenv).For("https://codeberg.org/o/r"); got != "forgejo_job_token" {
+	if got := runcontext.Token().Resolve(getenv).For("https://forge.example/o/r"); got != "forgejo_job_token" {
 		t.Errorf("act_runner's GitHub-aliased job token must work at its own server; got %q", got)
 	}
 }
@@ -321,10 +321,10 @@ func TestCredential_EmptyReleaseTokenFallsThrough(t *testing.T) {
 		"CI_TOKEN":           "",
 		"FORGEJO_TOKEN":      "forgejo-tok", // forge-generic fallback
 		"GITHUB_TOKEN":       "",
-		"FORGEJO_SERVER_URL": "https://codeberg.org",
+		"FORGEJO_SERVER_URL": "https://forge.example",
 	})
 
-	if got := runcontext.ReleaseToken().Resolve(getenv).For("https://codeberg.org/o/r"); got != "forgejo-tok" {
+	if got := runcontext.ReleaseToken().Resolve(getenv).For("https://forge.example/o/r"); got != "forgejo-tok" {
 		t.Errorf("empty RELEASE_TOKEN must fall through; got %q", got)
 	}
 }
@@ -368,7 +368,7 @@ func TestCredential_ActRunnerGitHubAliasIsDeniedElsewhere(t *testing.T) {
 		"GITHUB_ACTIONS":     "true",
 		"FORGEJO_ACTIONS":    "true",
 		"GITHUB_TOKEN":       "forgejo_job_token",
-		"FORGEJO_SERVER_URL": "https://codeberg.org",
+		"FORGEJO_SERVER_URL": "https://forge.example",
 	})
 
 	resolved := runcontext.Token().Resolve(getenv)
@@ -379,7 +379,7 @@ func TestCredential_ActRunnerGitHubAliasIsDeniedElsewhere(t *testing.T) {
 		// A host that merely starts with the audience: the sibling-host
 		// case, checked here too so the alias is not the one path where a
 		// prefix comparison would slip through.
-		"https://codeberg.org.evil.example/o/r",
+		"https://forge.example.evil.example/o/r",
 		"https://gitlab.com/o/r",
 	} {
 		if got := resolved.For(destination); got != "" {
@@ -389,7 +389,7 @@ func TestCredential_ActRunnerGitHubAliasIsDeniedElsewhere(t *testing.T) {
 
 	// Control: the same resolution still works where it belongs, so a
 	// blanket denial cannot satisfy the loop above.
-	if got := resolved.For("https://codeberg.org/o/r"); got != "forgejo_job_token" {
+	if got := resolved.For("https://forge.example/o/r"); got != "forgejo_job_token" {
 		t.Errorf("the token stopped working at its own server; got %q", got)
 	}
 }

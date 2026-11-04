@@ -98,7 +98,7 @@ func TestCleanup_LeavesCandidateWhenMovingTagMissing(t *testing.T) {
 	t.Parallel()
 
 	entry := candidateEntry()
-	entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+	entry.MovingTag = "forge.example/examplescope/myapp:rust"
 	reg := &fakeCleanupRegistry{digests: map[string]string{
 		entry.FinalTag:     goodDigest,
 		entry.CandidateTag: goodDigest,
@@ -144,7 +144,7 @@ func TestCleanup_FailsWhenMovingTagDigestMismatches(t *testing.T) {
 	t.Parallel()
 
 	entry := candidateEntry()
-	entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+	entry.MovingTag = "forge.example/examplescope/myapp:rust"
 	reg := &fakeCleanupRegistry{digests: map[string]string{
 		entry.FinalTag:     goodDigest,
 		entry.CandidateTag: goodDigest,
@@ -205,19 +205,19 @@ func TestCleanup_VisitsEveryEntry(t *testing.T) {
 	t.Parallel()
 
 	first := validEntry()
-	first.CandidateTag = "codeberg.org/itiquette/gommitlint:staging-v1.2.3"
+	first.CandidateTag = "forge.example/examplescope/myapp:staging-v1.2.3"
 
 	second := validEntry()
 	second.Role = "static"
-	second.Ref = "codeberg.org/itiquette/gommitlint-static@" + goodDigest
-	second.FinalTag = "codeberg.org/itiquette/gommitlint-static:v1.2.3"
-	second.CandidateTag = "codeberg.org/itiquette/gommitlint-static:staging-v1.2.3"
+	second.Ref = "forge.example/examplescope/myapp-static@" + goodDigest
+	second.FinalTag = "forge.example/examplescope/myapp-static:v1.2.3"
+	second.CandidateTag = "forge.example/examplescope/myapp-static:staging-v1.2.3"
 
 	// No candidate tag: nothing to clean up, and not an error.
 	noCandidate := validEntry()
 	noCandidate.Role = "debug"
-	noCandidate.Ref = "codeberg.org/itiquette/gommitlint-debug@" + goodDigest
-	noCandidate.FinalTag = "codeberg.org/itiquette/gommitlint-debug:v1.2.3"
+	noCandidate.Ref = "forge.example/examplescope/myapp-debug@" + goodDigest
+	noCandidate.FinalTag = "forge.example/examplescope/myapp-debug:v1.2.3"
 
 	reg := &fakeCleanupRegistry{digests: map[string]string{
 		first.CandidateTag:   goodDigest,
@@ -266,7 +266,7 @@ func TestCleanup_RerunDeletesNothingAndADisturbingDeleteIsReported(t *testing.T)
 	t.Parallel()
 
 	entry := candidateEntry()
-	entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+	entry.MovingTag = "forge.example/examplescope/myapp:rust"
 
 	rerun := &fakeCleanupRegistry{digests: map[string]string{entry.FinalTag: goodDigest, entry.MovingTag: goodDigest}}
 	if result, err := imageledger.Cleanup(context.Background(), rerun, []imageledger.Entry{entry}, "v1.2.3"); err != nil || result.Deleted != 0 || len(rerun.deleted) != 0 {

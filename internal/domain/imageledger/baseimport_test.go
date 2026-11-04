@@ -16,7 +16,7 @@ func TestBaseImportPreservesIdentityAndCopiesOnlyUnsignedDigest(t *testing.T) {
 	t.Parallel()
 
 	entry := baseEntry()
-	source := "codeberg.org/itiquette/nanolinter-base"
+	source := "forge.example/examplescope/myapp-base"
 	entry.BaseRef = "registry.example.test/trusted/parent@" + otherDigest
 	entry.Provenance = map[string]any{"build_inputs": "original"}
 	before := entry
@@ -61,8 +61,8 @@ func TestBaseImportRejectsTheWholeBatchBeforeEffects(t *testing.T) {
 		"foreign ref":           func(entry *imageledger.Entry) { entry.Ref = "registry.example.test/foreign/base@" + goodDigest },
 		"digest mismatch":       func(entry *imageledger.Entry) { entry.Digest = otherDigest },
 		"missing identity":      func(entry *imageledger.Entry) { entry.BaseInputID = "" },
-		"moving tag":            func(entry *imageledger.Entry) { entry.MovingTag = "codeberg.org/itiquette/nanolinter-base:latest" },
-		"wrong final tag":       func(entry *imageledger.Entry) { entry.FinalTag = "codeberg.org/itiquette/nanolinter-base:unrelated" },
+		"moving tag":            func(entry *imageledger.Entry) { entry.MovingTag = "forge.example/examplescope/myapp-base:latest" },
+		"wrong final tag":       func(entry *imageledger.Entry) { entry.FinalTag = "forge.example/examplescope/myapp-base:unrelated" },
 		"duplicate destination": func(entry *imageledger.Entry) {},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -72,7 +72,7 @@ func TestBaseImportRejectsTheWholeBatchBeforeEffects(t *testing.T) {
 			change(&entries[1])
 
 			registry := &fakeRegistry{digests: map[string]string{entries[0].Ref: goodDigest}}
-			if result, err := imageledger.ImportBaseImages(t.Context(), registry, entries, "codeberg.org/itiquette/nanolinter-base", importDestination); !errors.Is(err, errs.ErrValidation) || result != nil || len(registry.copies) != 0 {
+			if result, err := imageledger.ImportBaseImages(t.Context(), registry, entries, "forge.example/examplescope/myapp-base", importDestination); !errors.Is(err, errs.ErrValidation) || result != nil || len(registry.copies) != 0 {
 				t.Fatalf("invalid base import performed effects: %v, %v", err, registry.copies)
 			}
 		})
@@ -91,7 +91,7 @@ func TestBaseImportRejectsConflictingAndIncorrectCopiedBytes(t *testing.T) {
 			registry.badCopy = otherDigest
 		}
 
-		if result, err := imageledger.ImportBaseImages(t.Context(), registry, []imageledger.Entry{entry}, "codeberg.org/itiquette/nanolinter-base", importDestination); err == nil || result != nil {
+		if result, err := imageledger.ImportBaseImages(t.Context(), registry, []imageledger.Entry{entry}, "forge.example/examplescope/myapp-base", importDestination); err == nil || result != nil {
 			t.Fatal("conflicting bytes produced an admitted base ledger")
 		}
 

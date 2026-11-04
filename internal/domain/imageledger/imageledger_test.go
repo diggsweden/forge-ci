@@ -21,10 +21,10 @@ const (
 func validEntry() imageledger.Entry {
 	return imageledger.Entry{
 		Role:     "distroless",
-		Ref:      "codeberg.org/itiquette/gommitlint@" + goodDigest,
+		Ref:      "forge.example/examplescope/myapp@" + goodDigest,
 		Digest:   goodDigest,
 		SBOM:     "dist/image-sbom-amd64.cyclonedx.json",
-		FinalTag: "codeberg.org/itiquette/gommitlint:v1.2.3",
+		FinalTag: "forge.example/examplescope/myapp:v1.2.3",
 	}
 }
 
@@ -68,7 +68,7 @@ func TestValidate_Accepts(t *testing.T) {
 	// final_tag may be a suffixed scope of the release tag.
 	entry := validEntry()
 
-	entry.FinalTag = "codeberg.org/itiquette/gommitlint:v1.2.3-amd64"
+	entry.FinalTag = "forge.example/examplescope/myapp:v1.2.3-amd64"
 	if err := entry.Validate("v1.2.3"); err != nil {
 		t.Errorf("suffixed final_tag rejected: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestValidate_Accepts(t *testing.T) {
 	// candidate_tag scoped to staging-<release> is accepted.
 	entry = validEntry()
 
-	entry.CandidateTag = "codeberg.org/itiquette/gommitlint:staging-v1.2.3"
+	entry.CandidateTag = "forge.example/examplescope/myapp:staging-v1.2.3"
 	if err := entry.Validate("v1.2.3"); err != nil {
 		t.Errorf("valid candidate_tag rejected: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestValidate_Accepts(t *testing.T) {
 	// immutable release tag.
 	entry = validEntry()
 
-	entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+	entry.MovingTag = "forge.example/examplescope/myapp:rust"
 	if err := entry.Validate("v1.2.3"); err != nil {
 		t.Errorf("valid moving_tag rejected: %v", err)
 	}
@@ -93,9 +93,9 @@ func TestValidate_Accepts(t *testing.T) {
 	// The strict OCI parser accepts bracketed IPv6 registries, which the old
 	// hand-written host regex could not represent.
 	entry = validEntry()
-	entry.Ref = "[::1]:5000/itiquette/gommitlint@" + goodDigest
+	entry.Ref = "[::1]:5000/examplescope/myapp@" + goodDigest
 
-	entry.FinalTag = "[::1]:5000/itiquette/gommitlint:v1.2.3"
+	entry.FinalTag = "[::1]:5000/examplescope/myapp:v1.2.3"
 	if err := entry.Validate("v1.2.3"); err != nil {
 		t.Errorf("IPv6 registry entry rejected: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestValidate_Accepts(t *testing.T) {
 	// reference immutable.
 	entry = validEntry()
 
-	entry.Ref = "codeberg.org/itiquette/gommitlint:staging-v1.2.3@" + goodDigest
+	entry.Ref = "forge.example/examplescope/myapp:staging-v1.2.3@" + goodDigest
 	if err := entry.Validate("v1.2.3"); err != nil {
 		t.Errorf("tagged digest reference rejected: %v", err)
 	}
@@ -127,15 +127,15 @@ func TestValidate_Rejects(t *testing.T) {
 			"digest must be sha256:",
 		},
 		"ref_not_pinned": {
-			func(e *imageledger.Entry) { e.Ref = "codeberg.org/itiquette/gommitlint:v1.2.3" },
+			func(e *imageledger.Entry) { e.Ref = "forge.example/examplescope/myapp:v1.2.3" },
 			"ref must be a registry path pinned by",
 		},
 		"ref_without_registry": {
-			func(e *imageledger.Entry) { e.Ref = "itiquette/gommitlint@" + goodDigest },
+			func(e *imageledger.Entry) { e.Ref = "examplescope/myapp@" + goodDigest },
 			"ref must be a registry path pinned by",
 		},
 		"malformed_ref_path": {
-			func(e *imageledger.Entry) { e.Ref = "codeberg.org/itiquette/BadName@" + goodDigest },
+			func(e *imageledger.Entry) { e.Ref = "forge.example/examplescope/BadName@" + goodDigest },
 			"ref must be a registry path pinned by",
 		},
 		"bad_sbom_path": { // present but not *.cyclonedx.json
@@ -147,11 +147,11 @@ func TestValidate_Rejects(t *testing.T) {
 			"sbom must be a relative CycloneDX path",
 		},
 		"final_tag_no_tag": {
-			func(e *imageledger.Entry) { e.FinalTag = "codeberg.org/itiquette/gommitlint@" + goodDigest },
+			func(e *imageledger.Entry) { e.FinalTag = "forge.example/examplescope/myapp@" + goodDigest },
 			"final_tag must be a registry path with a tag",
 		},
 		"final_tag_scope": {
-			func(e *imageledger.Entry) { e.FinalTag = "codeberg.org/itiquette/gommitlint:v9.9.9" },
+			func(e *imageledger.Entry) { e.FinalTag = "forge.example/examplescope/myapp:v9.9.9" },
 			`must be scoped to release tag "v1.2.3"`,
 		},
 		"bad_candidate_ref": {
@@ -159,7 +159,7 @@ func TestValidate_Rejects(t *testing.T) {
 			"candidate_tag must be a registry path with a tag",
 		},
 		"candidate_scope": {
-			func(e *imageledger.Entry) { e.CandidateTag = "codeberg.org/itiquette/gommitlint:v1.2.3" },
+			func(e *imageledger.Entry) { e.CandidateTag = "forge.example/examplescope/myapp:v1.2.3" },
 			"staging counterpart of final_tag",
 		},
 		"bad_image_kind": {
@@ -186,15 +186,15 @@ func TestValidate_Rejects(t *testing.T) {
 			"moving_tag must be a registry path with a tag",
 		},
 		"malformed_final_path": {
-			func(e *imageledger.Entry) { e.FinalTag = "codeberg.org/itiquette/BadName:v1.2.3" },
+			func(e *imageledger.Entry) { e.FinalTag = "forge.example/examplescope/BadName:v1.2.3" },
 			"final_tag must be a registry path with a tag",
 		},
 		"moving_staging": {
-			func(e *imageledger.Entry) { e.MovingTag = "codeberg.org/itiquette/gommitlint:staging-v1.2.3" },
+			func(e *imageledger.Entry) { e.MovingTag = "forge.example/examplescope/myapp:staging-v1.2.3" },
 			"must not be a staging or immutable release tag",
 		},
 		"moving_release": {
-			func(e *imageledger.Entry) { e.MovingTag = "codeberg.org/itiquette/gommitlint:v1.2.3-rust" },
+			func(e *imageledger.Entry) { e.MovingTag = "forge.example/examplescope/myapp:v1.2.3-rust" },
 			"must not be a staging or immutable release tag",
 		},
 		"moving_foreign_repo": {
@@ -204,11 +204,11 @@ func TestValidate_Rejects(t *testing.T) {
 		// A dash separates the release tag from a suffix; a longer version is
 		// another release, not a suffixed spelling of this one.
 		"final_tag_longer_version": {
-			func(e *imageledger.Entry) { e.FinalTag = "codeberg.org/itiquette/gommitlint:v1.2.30" },
+			func(e *imageledger.Entry) { e.FinalTag = "forge.example/examplescope/myapp:v1.2.30" },
 			`must be scoped to release tag "v1.2.3"`,
 		},
 		"moving_equals_release": {
-			func(e *imageledger.Entry) { e.MovingTag = "codeberg.org/itiquette/gommitlint:v1.2.3" },
+			func(e *imageledger.Entry) { e.MovingTag = "forge.example/examplescope/myapp:v1.2.3" },
 			"must not be a staging or immutable release tag",
 		},
 	}
@@ -248,7 +248,7 @@ func TestValidate_AcceptsOptionalManifestMetadata(t *testing.T) {
 	// emits (e.g. <name>-<version>-analyzed-container-sbom.cyclonedx.json),
 	// not just the legacy dist/image-sbom* name.
 	convention := validEntry()
-	convention.SBOM = "gommitlint-1.2.3-analyzed-container-sbom.cyclonedx.json"
+	convention.SBOM = "myapp-1.2.3-analyzed-container-sbom.cyclonedx.json"
 
 	if err := convention.Validate("v1.2.3"); err != nil {
 		t.Errorf("codebase SBOM filename should be accepted, got %v", err)
@@ -291,7 +291,7 @@ func TestValidate_RequiresReleaseTag(t *testing.T) {
 // baseEntry is a schema-valid image_kind=base entry: a content-addressed
 // final tag (<base-input-id>-<flavor>) with its staging candidate.
 func baseEntry() imageledger.Entry {
-	repo := "codeberg.org/itiquette/nanolinter-base"
+	repo := "forge.example/examplescope/myapp-base"
 	baseID := strings.Repeat("b", 64)
 
 	return imageledger.Entry{
@@ -328,14 +328,14 @@ func TestValidate_BaseEntryRejections(t *testing.T) {
 	// The candidate discipline survives in base terms: the candidate must
 	// be the exact staging counterpart of the content-addressed final tag.
 	entry := baseEntry()
-	entry.CandidateTag = "codeberg.org/itiquette/nanolinter-base:staging-" + strings.Repeat("f", 64) + "-go"
+	entry.CandidateTag = "forge.example/examplescope/myapp-base:staging-" + strings.Repeat("f", 64) + "-go"
 
 	if err := entry.Validate(""); !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "staging counterpart") {
 		t.Errorf("mismatched base candidate should fail, got %v", err)
 	}
 
 	entry = baseEntry()
-	entry.MovingTag = "codeberg.org/itiquette/nanolinter-base:staging-latest"
+	entry.MovingTag = "forge.example/examplescope/myapp-base:staging-latest"
 
 	if err := entry.Validate(""); !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "moving_tag") {
 		t.Errorf("staging moving tag should fail, got %v", err)
@@ -364,15 +364,15 @@ func TestValidateEntryRepository_AcceptsTagsWithinTheRepository(t *testing.T) {
 	t.Parallel()
 
 	entry := validEntry()
-	entry.MovingTag = "codeberg.org/itiquette/gommitlint:latest"
-	entry.CandidateTag = "codeberg.org/itiquette/gommitlint:staging-v1.2.3"
+	entry.MovingTag = "forge.example/examplescope/myapp:latest"
+	entry.CandidateTag = "forge.example/examplescope/myapp:staging-v1.2.3"
 
-	if err := imageledger.ValidateEntryRepository(entry, "codeberg.org/itiquette/gommitlint"); err != nil {
+	if err := imageledger.ValidateEntryRepository(entry, "forge.example/examplescope/myapp"); err != nil {
 		t.Fatalf("expected repository accepted: %v", err)
 	}
 
-	entry.CandidateTag = "codeberg.org/evil/gommitlint:staging-v1.2.3"
-	if err := imageledger.ValidateEntryRepository(entry, "codeberg.org/itiquette/gommitlint"); !errors.Is(err, errs.ErrValidation) {
+	entry.CandidateTag = "forge.example/evil/myapp:staging-v1.2.3"
+	if err := imageledger.ValidateEntryRepository(entry, "forge.example/examplescope/myapp"); !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("unexpected repository should be validation error, got %v", err)
 	}
 }
@@ -490,13 +490,13 @@ func TestEntry_PinDigest(t *testing.T) {
 
 	// Derives the canonical <registry>/<path>@<digest> ref from the
 	// digest source, stripping the source tag (and leaving a host:port).
-	entry := imageledger.Entry{CandidateTag: "codeberg.org:443/owner/repo:staging-v1.2.3"}.PinDigest(dig)
+	entry := imageledger.Entry{CandidateTag: "forge.example:443/owner/repo:staging-v1.2.3"}.PinDigest(dig)
 
 	if entry.Digest != dig {
 		t.Errorf("Digest=%q, want %q", entry.Digest, dig)
 	}
 
-	if want := "codeberg.org:443/owner/repo@" + dig; entry.Ref != want {
+	if want := "forge.example:443/owner/repo@" + dig; entry.Ref != want {
 		t.Errorf("Ref=%q, want %q (tag stripped, host:port kept)", entry.Ref, want)
 	}
 }
@@ -507,9 +507,9 @@ func TestAppend_IdempotentOnRetry(t *testing.T) {
 	const tag = "v1.2.3"
 
 	entry := imageledger.Entry{
-		Role: "distroless", Ref: "codeberg.org/o/r@sha256:" + strings.Repeat("a", 64),
+		Role: "distroless", Ref: "forge.example/o/r@sha256:" + strings.Repeat("a", 64),
 		Digest: "sha256:" + strings.Repeat("a", 64), SBOM: "dist/image-sbom.cyclonedx.json",
-		FinalTag: "codeberg.org/o/r:v1.2.3",
+		FinalTag: "forge.example/o/r:v1.2.3",
 	}
 
 	first, added, err := imageledger.Append([]byte("[]"), entry, tag)

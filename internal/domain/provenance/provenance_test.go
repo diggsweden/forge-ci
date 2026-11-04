@@ -174,7 +174,7 @@ func TestPredicate_Golden(t *testing.T) {
 		BuilderID:    "https://github.com/diggsweden/forge-ci/.github/workflows/publish-container.yml@refs/tags/v1.2.3",
 		SourceURI:    "git+https://github.com/diggsweden/forge-ci",
 		Ref:          "refs/tags/v1.2.3",
-		ImageName:    "ghcr.io/diggsweden/app",
+		ImageName:    "ghcr.io/examplescope/app",
 		InvocationID: "https://github.com/diggsweden/forge-ci/actions/runs/4242",
 		StartedOn:    "2026-06-01T12:00:00Z",
 		FinishedOn:   "2026-06-01T12:00:00Z",

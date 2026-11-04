@@ -91,11 +91,11 @@ func TestWritePromotionJournal_ReusesMatchingOriginalState(t *testing.T) {
 	const digest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 	entry := imageledger.Entry{
-		Ref:          "codeberg.org/itiquette/repo@" + digest,
+		Ref:          "forge.example/examplescope/repo@" + digest,
 		Digest:       digest,
-		FinalTag:     "codeberg.org/itiquette/repo:v1.2.3",
-		MovingTag:    "codeberg.org/itiquette/repo:stable",
-		CandidateTag: "codeberg.org/itiquette/repo:staging-v1.2.3",
+		FinalTag:     "forge.example/examplescope/repo:v1.2.3",
+		MovingTag:    "forge.example/examplescope/repo:stable",
+		CandidateTag: "forge.example/examplescope/repo:staging-v1.2.3",
 	}
 	journal := filepath.Join(t.TempDir(), "promotion.jsonl")
 	resolver := stubResolver{entry.CandidateTag: digest}
@@ -147,10 +147,10 @@ func TestWritePromotionJournal_RefusesMismatchedExistingJournal(t *testing.T) {
 	)
 
 	entry := imageledger.Entry{
-		Ref:          "codeberg.org/itiquette/repo@" + digest,
+		Ref:          "forge.example/examplescope/repo@" + digest,
 		Digest:       digest,
-		FinalTag:     "codeberg.org/itiquette/repo:v1.2.3",
-		CandidateTag: "codeberg.org/itiquette/repo:staging-v1.2.3",
+		FinalTag:     "forge.example/examplescope/repo:v1.2.3",
+		CandidateTag: "forge.example/examplescope/repo:staging-v1.2.3",
 	}
 	journal := filepath.Join(t.TempDir(), "promotion.jsonl")
 	run := LedgerPromotion{
@@ -173,7 +173,7 @@ func TestWritePromotionJournal_RefusesMismatchedExistingJournal(t *testing.T) {
 	}
 
 	run.Entries[0].Digest = otherDigest
-	run.Entries[0].Ref = "codeberg.org/itiquette/repo@" + otherDigest
+	run.Entries[0].Ref = "forge.example/examplescope/repo@" + otherDigest
 
 	if writeErr := writePromotionJournal(context.Background(), run); !errors.Is(writeErr, errs.ErrValidation) {
 		t.Fatalf("mismatched journal must be refused, got %v", writeErr)
@@ -197,10 +197,10 @@ func TestPromoteLedger_DryRunWritesNoJournal(t *testing.T) {
 	const digest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 	entry := imageledger.Entry{
-		Ref:          "codeberg.org/itiquette/repo@" + digest,
+		Ref:          "forge.example/examplescope/repo@" + digest,
 		Digest:       digest,
-		FinalTag:     "codeberg.org/itiquette/repo:v1.2.3",
-		CandidateTag: "codeberg.org/itiquette/repo:staging-v1.2.3",
+		FinalTag:     "forge.example/examplescope/repo:v1.2.3",
+		CandidateTag: "forge.example/examplescope/repo:staging-v1.2.3",
 	}
 	journal := filepath.Join(t.TempDir(), "promotion.jsonl")
 
@@ -248,11 +248,11 @@ func TestRunLedgerPromotion_JournalsBeforeTheFirstCopy(t *testing.T) {
 	const digest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 	entry := imageledger.Entry{
-		Ref:          "codeberg.org/itiquette/repo@" + digest,
+		Ref:          "forge.example/examplescope/repo@" + digest,
 		Digest:       digest,
-		FinalTag:     "codeberg.org/itiquette/repo:v1.2.3",
-		MovingTag:    "codeberg.org/itiquette/repo:stable",
-		CandidateTag: "codeberg.org/itiquette/repo:staging-v1.2.3",
+		FinalTag:     "forge.example/examplescope/repo:v1.2.3",
+		MovingTag:    "forge.example/examplescope/repo:stable",
+		CandidateTag: "forge.example/examplescope/repo:staging-v1.2.3",
 	}
 	journal := filepath.Join(t.TempDir(), "promotion.jsonl")
 	run := LedgerPromotion{

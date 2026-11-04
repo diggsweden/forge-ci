@@ -47,7 +47,7 @@ func TestMergeAuth_PreservesOtherRegistries(t *testing.T) {
 
 	existing := []byte(`{"auths":{"ghcr.io":{"auth":"keep"}},"credsStore":"x"}`)
 
-	out, err := container.MergeAuth(existing, "codeberg.org", "bot", "tok")
+	out, err := container.MergeAuth(existing, "forge.example", "bot", "tok")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,8 +56,8 @@ func TestMergeAuth_PreservesOtherRegistries(t *testing.T) {
 		t.Errorf("existing ghcr.io entry clobbered: %q", got)
 	}
 
-	if got := authOf(t, out, "codeberg.org"); got != base64.StdEncoding.EncodeToString([]byte("bot:tok")) {
-		t.Errorf("codeberg.org not added: %q", got)
+	if got := authOf(t, out, "forge.example"); got != base64.StdEncoding.EncodeToString([]byte("bot:tok")) {
+		t.Errorf("forge.example not added: %q", got)
 	}
 
 	// Unrelated top-level fields survive.
@@ -137,7 +137,7 @@ func TestMergeAuth_RejectsMissingFields(t *testing.T) {
 func TestRemoveAuth_RemovesTargetPreservesOthers(t *testing.T) {
 	t.Parallel()
 
-	existing := []byte(`{"auths":{"ghcr.io":{"auth":"gone"},"codeberg.org":{"auth":"keep","email":"fixture@example.invalid","counter":9007199254740993}},"credsStore":"x"}`)
+	existing := []byte(`{"auths":{"ghcr.io":{"auth":"gone"},"forge.example":{"auth":"keep","email":"fixture@example.invalid","counter":9007199254740993}},"credsStore":"x"}`)
 
 	out, removed, err := container.RemoveAuth(existing, "ghcr.io")
 	if err != nil {
@@ -159,7 +159,7 @@ func TestRemoveAuth_RemovesTargetPreservesOthers(t *testing.T) {
 		t.Error("ghcr.io key is still present")
 	}
 
-	assertAuthJSON(t, out, `{"auths":{"codeberg.org":{"auth":"keep","counter":9007199254740993,"email":"fixture@example.invalid"}},"credsStore":"x"}`)
+	assertAuthJSON(t, out, `{"auths":{"forge.example":{"auth":"keep","counter":9007199254740993,"email":"fixture@example.invalid"}},"credsStore":"x"}`)
 }
 
 func TestRemoveAuth_AbsentEntryAndEmptyAreNoOps(t *testing.T) {
@@ -169,7 +169,7 @@ func TestRemoveAuth_AbsentEntryAndEmptyAreNoOps(t *testing.T) {
 		nil, {}, []byte(" \n\t"), []byte(`{}`), []byte(`{"auths":{}}`),
 		[]byte(" {\"auths\": {\"ghcr.io\": {\"auth\": \"keep\"}}, \"counter\": 9007199254740993}\n"),
 	} {
-		out, removed, err := container.RemoveAuth(existing, "codeberg.org")
+		out, removed, err := container.RemoveAuth(existing, "forge.example")
 		if !bytes.Equal(out, existing) || (out == nil) != (existing == nil) || removed || err != nil {
 			t.Errorf("no-op: out=%q removed=%v err=%v, want original %q/false/nil", out, removed, err, existing)
 		}
@@ -227,21 +227,21 @@ func TestAuth_NonObjectNestedValues(t *testing.T) {
 			}
 
 			// A present target is replaced on merge and deleted on removal, whatever its shape.
-			existing = []byte(`{"auths":{"codeberg.org":{"auth":"keep"},"ghcr.io":` + shape + `}}`)
+			existing = []byte(`{"auths":{"forge.example":{"auth":"keep"},"ghcr.io":` + shape + `}}`)
 
 			out, err = container.MergeAuth(existing, "ghcr.io", "u", "p")
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			assertAuthJSON(t, out, `{"auths":{"codeberg.org":{"auth":"keep"},"ghcr.io":{"auth":"dTpw"}}}`)
+			assertAuthJSON(t, out, `{"auths":{"forge.example":{"auth":"keep"},"ghcr.io":{"auth":"dTpw"}}}`)
 
 			out, removed, err = container.RemoveAuth(existing, "ghcr.io")
 			if err != nil || !removed {
 				t.Fatalf("non-object entry: removed=%v err=%v, want true/nil", removed, err)
 			}
 
-			assertAuthJSON(t, out, `{"auths":{"codeberg.org":{"auth":"keep"}}}`)
+			assertAuthJSON(t, out, `{"auths":{"forge.example":{"auth":"keep"}}}`)
 		})
 	}
 }
@@ -249,7 +249,7 @@ func TestAuth_NonObjectNestedValues(t *testing.T) {
 func TestAuth_PreservesExactNumbers(t *testing.T) {
 	t.Parallel()
 
-	const existing = `{"auths":{"ghcr.io":{"auth":"old","identitytoken":"stale","counter":9007199254740993},"codeberg.org":{"auth":"keep","counter":-9007199254740993}},"counter":9007199254740993,"metadata":[1e400,0.12345678901234567890123456789,null,true]}`
+	const existing = `{"auths":{"ghcr.io":{"auth":"old","identitytoken":"stale","counter":9007199254740993},"forge.example":{"auth":"keep","counter":-9007199254740993}},"counter":9007199254740993,"metadata":[1e400,0.12345678901234567890123456789,null,true]}`
 
 	t.Run("merge", func(t *testing.T) {
 		t.Parallel()
@@ -261,7 +261,7 @@ func TestAuth_PreservesExactNumbers(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		assertAuthJSON(t, out, `{"auths":{"codeberg.org":{"auth":"keep","counter":-9007199254740993},"ghcr.io":{"auth":"dTpw","counter":9007199254740993}},"counter":9007199254740993,"metadata":[1e400,0.12345678901234567890123456789,null,true]}`)
+		assertAuthJSON(t, out, `{"auths":{"forge.example":{"auth":"keep","counter":-9007199254740993},"ghcr.io":{"auth":"dTpw","counter":9007199254740993}},"counter":9007199254740993,"metadata":[1e400,0.12345678901234567890123456789,null,true]}`)
 
 		if string(body) != existing {
 			t.Fatal("merge mutated its input")
@@ -278,7 +278,7 @@ func TestAuth_PreservesExactNumbers(t *testing.T) {
 			t.Fatalf("remove: removed=%v err=%v, want true/nil", removed, err)
 		}
 
-		assertAuthJSON(t, out, `{"auths":{"codeberg.org":{"auth":"keep","counter":-9007199254740993}},"counter":9007199254740993,"metadata":[1e400,0.12345678901234567890123456789,null,true]}`)
+		assertAuthJSON(t, out, `{"auths":{"forge.example":{"auth":"keep","counter":-9007199254740993}},"counter":9007199254740993,"metadata":[1e400,0.12345678901234567890123456789,null,true]}`)
 
 		if string(body) != existing {
 			t.Fatal("remove mutated its input")

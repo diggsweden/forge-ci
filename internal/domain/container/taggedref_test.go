@@ -22,9 +22,9 @@ func TestParseTaggedRef_Accepts(t *testing.T) {
 		owner, imageName string
 	}{
 		{
-			name: "owner and name", ref: "codeberg.org/itiquette/gommitlint:staging-v1.2.3",
-			host: "codeberg.org", path: "itiquette/gommitlint", tag: "staging-v1.2.3",
-			owner: "itiquette", imageName: "gommitlint",
+			name: "owner and name", ref: "forge.example/examplescope/myapp:staging-v1.2.3",
+			host: "forge.example", path: "examplescope/myapp", tag: "staging-v1.2.3",
+			owner: "examplescope", imageName: "myapp",
 		},
 		{
 			name: "image nested below the project", ref: "registry.example.com/group/proj/app:v1.0.0",
@@ -72,26 +72,26 @@ func TestParseTaggedRef_Refuses(t *testing.T) {
 	for _, tc := range []struct{ name, ref, why string }{
 		{
 			name: "digest-pinned",
-			ref:  "codeberg.org/owner/name@sha256:" + strings.Repeat("a", 64),
+			ref:  "forge.example/owner/name@sha256:" + strings.Repeat("a", 64),
 			why:  "a digest names a manifest; deleting it destroys the promoted image",
 		},
 		{
 			name: "digest-pinned with a tag too",
-			ref:  "codeberg.org/owner/name:v1@sha256:" + strings.Repeat("a", 64),
+			ref:  "forge.example/owner/name:v1@sha256:" + strings.Repeat("a", 64),
 			why:  "the digest must win over the tag rather than the tag being parsed out",
 		},
-		{name: "no tag", ref: "codeberg.org/owner/name", why: "addresses a repository, not a tag"},
-		{name: "no path", ref: "codeberg.org:v1", why: "no owner or name"},
+		{name: "no tag", ref: "forge.example/owner/name", why: "addresses a repository, not a tag"},
+		{name: "no path", ref: "forge.example:v1", why: "no owner or name"},
 		{name: "unqualified name", ref: "owner/name:v1", why: "must not silently expand to Docker Hub"},
-		{name: "only one path segment", ref: "codeberg.org/name:v1", why: "no owner"},
+		{name: "only one path segment", ref: "forge.example/name:v1", why: "no owner"},
 		{
-			name: "traversal in the tag", ref: "codeberg.org/owner/name:../../etc",
+			name: "traversal in the tag", ref: "forge.example/owner/name:../../etc",
 			why: "the tag is spliced into a request path",
 		},
-		{name: "empty tag", ref: "codeberg.org/owner/name:", why: "nothing to address"},
-		{name: "traversal in the path", ref: "codeberg.org/owner/../other:v1", why: "escapes the owner"},
-		{name: "empty path segment", ref: "codeberg.org/owner//name:v1", why: "not a repository path"},
-		{name: "line break", ref: "codeberg.org/owner/name:v1\nGET /", why: "request splitting"},
+		{name: "empty tag", ref: "forge.example/owner/name:", why: "nothing to address"},
+		{name: "traversal in the path", ref: "forge.example/owner/../other:v1", why: "escapes the owner"},
+		{name: "empty path segment", ref: "forge.example/owner//name:v1", why: "not a repository path"},
+		{name: "line break", ref: "forge.example/owner/name:v1\nGET /", why: "request splitting"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

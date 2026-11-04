@@ -107,13 +107,13 @@ func ledgerSignEntry(t *testing.T) imageledger.Entry {
 	return imageledger.Entry{
 		Role:         "distroless",
 		Flavor:       "rust",
-		Ref:          "codeberg.org/itiquette/gommitlint@" + ledgerSignDigest,
+		Ref:          "forge.example/examplescope/myapp@" + ledgerSignDigest,
 		Digest:       ledgerSignDigest,
 		SBOM:         "dist/image-sbom-rust.cyclonedx.json",
-		FinalTag:     "codeberg.org/itiquette/gommitlint:v1.2.3-rust",
-		MovingTag:    "codeberg.org/itiquette/gommitlint:rust",
-		CandidateTag: "codeberg.org/itiquette/gommitlint:staging-v1.2.3-rust",
-		BaseRef:      "codeberg.org/itiquette/gommitlint-base@" + ledgerSignDigest,
+		FinalTag:     "forge.example/examplescope/myapp:v1.2.3-rust",
+		MovingTag:    "forge.example/examplescope/myapp:rust",
+		CandidateTag: "forge.example/examplescope/myapp:staging-v1.2.3-rust",
+		BaseRef:      "forge.example/examplescope/myapp-base@" + ledgerSignDigest,
 		BaseInputID:  strings.TrimPrefix(ledgerSignDigest, "sha256:"),
 	}
 }
@@ -125,8 +125,8 @@ func writeBasePredicate(t *testing.T) string {
 
 	body := []byte(`{
   "buildDefinition": {
-    "buildType": "https://codeberg.org/itiquette/forgejo-ci/container-build/v1",
-    "externalParameters": {"source": "git+https://codeberg.org/itiquette/gommitlint", "ref": "v1.2.3"},
+    "buildType": "https://forge.example/examplescope/ci-layer/container-build/v1",
+    "externalParameters": {"source": "git+https://forge.example/examplescope/myapp", "ref": "v1.2.3"},
     "internalParameters": {},
     "resolvedDependencies": []
   },
@@ -151,8 +151,8 @@ func writeBaseEnvelope(t *testing.T) string {
   "predicateType": "https://slsa.dev/provenance/v1",
   "predicate": {
     "buildDefinition": {
-      "buildType": "https://codeberg.org/itiquette/forgejo-ci/container-build/v1",
-      "externalParameters": {"source": "git+https://codeberg.org/itiquette/gommitlint", "ref": "v1.2.3"},
+      "buildType": "https://forge.example/examplescope/ci-layer/container-build/v1",
+      "externalParameters": {"source": "git+https://forge.example/examplescope/myapp", "ref": "v1.2.3"},
       "internalParameters": {},
       "resolvedDependencies": []
     },
@@ -226,8 +226,8 @@ func TestSignLedgerImages_AttestsAGeneratedSBOMAndTheImagesLineage(t *testing.T)
 		PredicatePath:           writeBasePredicate(t),
 		Method:                  domainrelease.SignMethodKMS,
 		KeyRef:                  "env://COSIGN_KEY",
-		ExpectedImageRepository: "codeberg.org/itiquette/gommitlint",
-		ExpectedBaseRepository:  "codeberg.org/itiquette/gommitlint-base",
+		ExpectedImageRepository: "forge.example/examplescope/myapp",
+		ExpectedBaseRepository:  "forge.example/examplescope/myapp-base",
 		SBOMPathPattern:         `^dist/image-sbom[-A-Za-z0-9_.]*\.cyclonedx\.json$`,
 	})
 	if err != nil {
@@ -351,7 +351,7 @@ func TestSignLedgerImages_ExtractsPredicateFromEnvelope(t *testing.T) {
 	// Values only the envelope could have supplied. Asserting that the SLSA
 	// fields merely exist cannot tell a predicate extracted from the envelope
 	// from one built here and the envelope ignored, which is the whole claim.
-	if got := build["buildType"]; got != "https://codeberg.org/itiquette/forgejo-ci/container-build/v1" {
+	if got := build["buildType"]; got != "https://forge.example/examplescope/ci-layer/container-build/v1" {
 		t.Errorf("buildType = %#v, want the envelope's", got)
 	}
 
@@ -400,9 +400,9 @@ func TestSignLedgerImages_RejectsEnvelopeWithoutPredicate(t *testing.T) {
 // reason.
 func TestSignLedgerImages_RejectsUnexpectedRepository(t *testing.T) {
 	const (
-		imageRepo = "codeberg.org/itiquette/gommitlint"
-		baseRepo  = "codeberg.org/itiquette/gommitlint-base"
-		evilRepo  = "codeberg.org/evil/gommitlint"
+		imageRepo = "forge.example/examplescope/myapp"
+		baseRepo  = "forge.example/examplescope/myapp-base"
+		evilRepo  = "forge.example/evil/gommitlint"
 	)
 
 	for _, tc := range []struct {
@@ -445,7 +445,7 @@ func TestSignLedgerImages_RejectsUnexpectedRepository(t *testing.T) {
 			// single shared check would not do -- the base image lives
 			// somewhere else by design.
 			name:    "base_ref",
-			mutate:  func(e *imageledger.Entry) { e.BaseRef = "codeberg.org/evil/gommitlint-base@" + ledgerSignDigest },
+			mutate:  func(e *imageledger.Entry) { e.BaseRef = "forge.example/evil/gommitlint-base@" + ledgerSignDigest },
 			wantCtx: "base_ref must be under " + baseRepo,
 		},
 	} {
@@ -545,7 +545,7 @@ func TestSignLedgerImages_RejectsRefDigestMismatch(t *testing.T) {
 	t.Chdir(t.TempDir())
 
 	entry := ledgerSignEntry(t)
-	entry.Ref = "codeberg.org/itiquette/gommitlint@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+	entry.Ref = "forge.example/examplescope/myapp@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 
 	signer := &recordingImageSigner{}
 
@@ -574,8 +574,8 @@ func signInput(t *testing.T, entry imageledger.Entry) appcontainer.SignLedgerIma
 		PredicatePath:           writeBasePredicate(t),
 		Method:                  domainrelease.SignMethodKMS,
 		KeyRef:                  "env://COSIGN_KEY",
-		ExpectedImageRepository: "codeberg.org/itiquette/gommitlint",
-		ExpectedBaseRepository:  "codeberg.org/itiquette/gommitlint-base",
+		ExpectedImageRepository: "forge.example/examplescope/myapp",
+		ExpectedBaseRepository:  "forge.example/examplescope/myapp-base",
 		SBOMPathPattern:         `^dist/image-sbom[-A-Za-z0-9_.]*\.cyclonedx\.json$`,
 	}
 }
@@ -720,7 +720,7 @@ func TestSignLedgerImages_ProvenanceExtras(t *testing.T) {
 func TestSignLedgerImages_BaseEntryRecordsItsLineageWithoutAParent(t *testing.T) {
 	t.Chdir(t.TempDir())
 
-	repo := "codeberg.org/itiquette/nanolinter-base"
+	repo := "forge.example/examplescope/myapp-base"
 	baseID := strings.Repeat("b", 64)
 	digest := "sha256:" + strings.Repeat("1", 64)
 	sbomContent := []byte(`{"bomFormat":"CycloneDX"}`)
@@ -821,7 +821,7 @@ func TestSignLedgerImages_BaseEntryRecordsItsLineageWithoutAParent(t *testing.T)
 }
 
 func TestSignLedgerImages_BaseKindRequiresExactBaseIdentity(t *testing.T) {
-	const repo = "codeberg.org/itiquette/nanolinter-base"
+	const repo = "forge.example/examplescope/myapp-base"
 
 	baseID := strings.Repeat("b", 64)
 	entry := imageledger.Entry{
@@ -921,7 +921,7 @@ func TestSignLedgerImages_RejectsMalformedBaseDigestReference(t *testing.T) {
 func TestSignLedgerImages_BaseKindRequiresBaseInputID(t *testing.T) {
 	t.Chdir(t.TempDir())
 
-	repo := "codeberg.org/itiquette/nanolinter-base"
+	repo := "forge.example/examplescope/myapp-base"
 	baseID := strings.Repeat("b", 64)
 	entry := imageledger.Entry{
 		Role:       "base",

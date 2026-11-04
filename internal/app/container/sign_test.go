@@ -41,7 +41,7 @@ func (r *recordingVerifier) VerifyImage(_ context.Context, in cosign.VerifyImage
 	return r.returnErr
 }
 
-const testImageDigest = "ghcr.io/diggsweden/app@sha256:abc123abc123abc123abc123abc123abc123abc123abc123abc123abc123abc1"
+const testImageDigest = "ghcr.io/examplescope/app@sha256:abc123abc123abc123abc123abc123abc123abc123abc123abc123abc123abc1"
 
 func TestSignImage_SigstoreDispatch(t *testing.T) {
 	rec := &recordingSigner{}

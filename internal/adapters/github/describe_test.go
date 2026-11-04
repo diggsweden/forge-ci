@@ -13,7 +13,7 @@ import (
 
 // noEnv is a fixed, empty environment. github.New() reads os.Getenv, and a
 // Forgejo runner sets GITHUB_SERVER_URL for compatibility -- measured: with
-// GITHUB_SERVER_URL=https://codeberg.org the two tests below failed, one on the
+// GITHUB_SERVER_URL=https://forge.example the two tests below failed, one on the
 // issuer and one on PublicFulcioTrusted. The suite's expectations about
 // github.com must not depend on which forge happens to run it.
 func noEnv(string) string { return "" }

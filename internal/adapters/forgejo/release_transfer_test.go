@@ -31,11 +31,11 @@ func attachmentServer(t *testing.T, upload http.HandlerFunc) *httptest.Server {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		switch {
-		case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/tags/v1.2.3":
+		case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/examplescope/repo/releases/tags/v1.2.3":
 			_, _ = response.Write([]byte(`{"id":99,"tag_name":"v1.2.3"}`))
-		case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets":
+		case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/examplescope/repo/releases/99/assets":
 			_, _ = response.Write([]byte(`[]`))
-		case request.Method == http.MethodPost && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets":
+		case request.Method == http.MethodPost && request.URL.Path == "/api/v1/repos/examplescope/repo/releases/99/assets":
 			upload(response, request)
 		default:
 			http.NotFound(response, request)
@@ -55,7 +55,7 @@ func uploadAsset(t *testing.T, srv *httptest.Server, transport http.RoundTripper
 	}
 
 	p := &forgejo.Provider{
-		Env:             envMap(map[string]string{"FORGEJO_TOKEN": "tok", "FORGEJO_REPOSITORY": "itiquette/repo"}),
+		Env:             envMap(map[string]string{"FORGEJO_TOKEN": "tok", "FORGEJO_REPOSITORY": "examplescope/repo"}),
 		HTTPClient:      httpretry.NewClient(transferCap, transport),
 		APIBaseOverride: srv.URL,
 	}

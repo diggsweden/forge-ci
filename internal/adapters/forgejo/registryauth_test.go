@@ -16,7 +16,7 @@ func TestResolveRegistryAuth_Forgejo(t *testing.T) {
 
 	provider := &forgejo.Provider{Env: func(k string) string {
 		return map[string]string{
-			"FORGEJO_SERVER_URL": "https://codeberg.org",
+			"FORGEJO_SERVER_URL": "https://forge.example",
 			"FORGEJO_TOKEN":      "ftok",
 			"FORGEJO_ACTOR":      "bot",
 		}[k]
@@ -32,7 +32,7 @@ func TestResolveRegistryAuth_Forgejo(t *testing.T) {
 	}
 
 	// Registry carries a scheme; MatchesRegistry strips it.
-	if !auth.MatchesRegistry("codeberg.org") {
+	if !auth.MatchesRegistry("forge.example") {
 		t.Errorf("MatchesRegistry should accept the forge host, Registry=%q", auth.Registry)
 	}
 }

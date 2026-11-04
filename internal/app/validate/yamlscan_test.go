@@ -88,7 +88,7 @@ func TestPinnedSubjectSHA_RequiresSubjectAsWholePathComponents(t *testing.T) {
 		"subject as a suffix of another owner":     {"myexample/ci/.github/workflows/x.yml@" + sha, ""},
 		"plain forge shorthand":                    {"example/ci/.github/workflows/x.yml@" + sha, sha},
 		"subject pinned directly":                  {"example/ci@" + sha, sha},
-		"full URL form":                            {"https://codeberg.org/example/ci/.github/workflows/x.yml@" + sha, sha},
+		"full URL form":                            {"https://forge.example/example/ci/.github/workflows/x.yml@" + sha, sha},
 		"sibling first, subject later":             {"example/ci-extras/example/ci/x.yml@" + sha, sha},
 		"branch ref is not a pin":                  {"example/ci/.github/workflows/x.yml@main", ""},
 	}

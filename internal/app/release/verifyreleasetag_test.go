@@ -237,7 +237,7 @@ const sha = "abcdef1234567890abcdef1234567890abcdef12"
 
 func runVerify(g fakeTagGit, tag string) error {
 	return apprelease.VerifyReleaseTag(context.Background(), g, io.Discard, apprelease.VerifyReleaseTagInput{
-		ReleaseSHA: sha, Tag: tag, RepoURL: "https://codeberg.org/o/r.git",
+		ReleaseSHA: sha, Tag: tag, RepoURL: "https://forge.example/o/r.git",
 	})
 }
 

@@ -115,10 +115,10 @@ func TestSignLedgerImages_PreparedEntriesPublishInOrder(t *testing.T) {
 	t.Chdir(t.TempDir())
 	first := ledgerSignEntry(t)
 	second := first
-	second.Ref = "codeberg.org/itiquette/second@" + ledgerSignDigest
-	second.FinalTag = "codeberg.org/itiquette/second:v1.2.3-rust"
-	second.MovingTag = "codeberg.org/itiquette/second:rust"
-	second.CandidateTag = "codeberg.org/itiquette/second:staging-v1.2.3-rust"
+	second.Ref = "forge.example/examplescope/second@" + ledgerSignDigest
+	second.FinalTag = "forge.example/examplescope/second:v1.2.3-rust"
+	second.MovingTag = "forge.example/examplescope/second:rust"
+	second.CandidateTag = "forge.example/examplescope/second:staging-v1.2.3-rust"
 	second.SBOM = "dist/second.cyclonedx.json"
 	syft := &fakeLedgerSyft{}
 	signer := &recordingImageSigner{beforeSign: func() { require.Len(t, syft.targets, 2, "both SBOMs must be prepared before any signature") }}

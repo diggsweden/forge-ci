@@ -21,7 +21,7 @@ import (
 // the point: a promotion that should not happen must not half-happen.
 
 const (
-	promoteRepo   = "codeberg.org/itiquette/base"
+	promoteRepo   = "forge.example/examplescope/base"
 	promoteDigest = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
 	promoteInput  = "2222222222222222222222222222222222222222222222222222222222222222"
 )
@@ -40,7 +40,7 @@ func promoteInputFor(images ...BaseImageMetadata) BaseImagePromoteInput {
 		Images:             images,
 		BaseInputID:        promoteInput,
 		ExpectedRepository: promoteRepo,
-		ExpectedSource:     "https://codeberg.org/itiquette/base",
+		ExpectedSource:     "https://forge.example/examplescope/base",
 		ExpectedWorkflow:   ".forgejo/workflows/base-images.yml",
 		CosignPublicKey:    "cosign.pub",
 	}
@@ -118,15 +118,15 @@ func TestPromoteBaseImages_RefusesUnusableMetadata(t *testing.T) {
 		// immutable release tag to whatever that tag resolves to later.
 		{name: "ref is a tag", mutate: func(m *BaseImageMetadata) { m.Ref = promoteRepo + ":rust-1.0.0" }},
 		{name: "ref carries a tag and digest", mutate: func(m *BaseImageMetadata) { m.Ref = promoteRepo + ":rust@" + promoteDigest }},
-		{name: "ref in another repository", mutate: func(m *BaseImageMetadata) { m.Ref = "codeberg.org/evil/base@" + promoteDigest }},
-		{name: "tag in another repository", mutate: func(m *BaseImageMetadata) { m.Tag = "codeberg.org/evil/base:rust-1.0.0" }},
+		{name: "ref in another repository", mutate: func(m *BaseImageMetadata) { m.Ref = "forge.example/evil/base@" + promoteDigest }},
+		{name: "tag in another repository", mutate: func(m *BaseImageMetadata) { m.Tag = "forge.example/evil/base:rust-1.0.0" }},
 		{name: "tag without a tag part", mutate: func(m *BaseImageMetadata) { m.Tag = promoteRepo }},
-		{name: "tag has a malformed repository path", mutate: func(m *BaseImageMetadata) { m.Tag = "codeberg.org/itiquette/BadName:rust" }},
+		{name: "tag has a malformed repository path", mutate: func(m *BaseImageMetadata) { m.Tag = "forge.example/examplescope/BadName:rust" }},
 
 		// The candidate pair is optional but validated when present.
 		{name: "candidate ref is a tag", mutate: func(m *BaseImageMetadata) { m.CandidateRef = promoteRepo + ":staging" }},
-		{name: "candidate ref in another repository", mutate: func(m *BaseImageMetadata) { m.CandidateRef = "codeberg.org/evil/base@" + promoteDigest }},
-		{name: "candidate tag in another repository", mutate: func(m *BaseImageMetadata) { m.CandidateTag = "codeberg.org/evil/base:staging" }},
+		{name: "candidate ref in another repository", mutate: func(m *BaseImageMetadata) { m.CandidateRef = "forge.example/evil/base@" + promoteDigest }},
+		{name: "candidate tag in another repository", mutate: func(m *BaseImageMetadata) { m.CandidateTag = "forge.example/evil/base:staging" }},
 
 		// Every promoted image has to come from the same input set; a
 		// mismatch means promoting an image built from something else.
@@ -162,7 +162,7 @@ func TestPromoteBaseImages_RefusesUnusableMetadata(t *testing.T) {
 func TestPromoteBaseImages_StopsWhenFinalLookupIsUncertain(t *testing.T) {
 	t.Parallel()
 
-	const source = "https://codeberg.org/itiquette/base"
+	const source = "https://forge.example/examplescope/base"
 
 	image := BaseImageMetadata{
 		Flavor:       "rust",

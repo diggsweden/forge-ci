@@ -81,7 +81,7 @@ func TestVerifyAttestation_RejectsMutableTag(t *testing.T) {
 	a := refusingAdapter(t)
 
 	err := a.VerifyAttestation(context.Background(), cosign.VerifyAttestationInput{
-		ImageRef:      "ghcr.io/diggsweden/app:latest",
+		ImageRef:      "ghcr.io/examplescope/app:latest",
 		PredicateType: "slsaprovenance1",
 		KeyRef:        "./k.pem",
 	}, nil)

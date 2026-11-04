@@ -18,7 +18,7 @@ func TestResolveForgeMavenRegistry_Forgejo(t *testing.T) {
 	t.Parallel()
 
 	p := &forgejo.Provider{Env: func(k string) string {
-		return map[string]string{"FORGEJO_SERVER_URL": "https://codeberg.org", "FORGEJO_REPOSITORY": "owner/repo", "FORGEJO_TOKEN": "ft"}[k]
+		return map[string]string{"FORGEJO_SERVER_URL": "https://forge.example", "FORGEJO_REPOSITORY": "owner/repo", "FORGEJO_TOKEN": "ft"}[k]
 	}}
 
 	reg, err := p.ResolveForgeMavenRegistry()
@@ -26,7 +26,7 @@ func TestResolveForgeMavenRegistry_Forgejo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if reg.URL != "https://codeberg.org/api/packages/owner/maven" || reg.AuthScheme != provider.MavenAuthTokenHeader || reg.Token != "ft" {
+	if reg.URL != "https://forge.example/api/packages/owner/maven" || reg.AuthScheme != provider.MavenAuthTokenHeader || reg.Token != "ft" {
 		t.Errorf("registry = %+v", reg)
 	}
 }
@@ -45,7 +45,7 @@ func TestResolveForgeMavenRegistry_ForgeNeutralNames(t *testing.T) {
 
 	forgejoProvider := &forgejo.Provider{Env: func(k string) string {
 		return map[string]string{
-			"CI_SERVER_URL": "https://codeberg.org",
+			"CI_SERVER_URL": "https://forge.example",
 			"CI_REPO":       "owner/repo",
 			"CI_TOKEN":      "ct",
 		}[k]
@@ -56,7 +56,7 @@ func TestResolveForgeMavenRegistry_ForgeNeutralNames(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if reg.URL != "https://codeberg.org/api/packages/owner/maven" || reg.Token != "ct" {
+	if reg.URL != "https://forge.example/api/packages/owner/maven" || reg.Token != "ct" {
 		t.Errorf("registry = %+v", reg)
 	}
 }
@@ -105,7 +105,7 @@ func TestResolveForgeMavenRegistry_ForgejoRunnerGithubTokenAlias(t *testing.T) {
 		return map[string]string{
 			"GITHUB_ACTIONS":     "true",
 			"FORGEJO_ACTIONS":    "true", // ...but a Forgejo runner
-			"FORGEJO_SERVER_URL": "https://codeberg.org",
+			"FORGEJO_SERVER_URL": "https://forge.example",
 			"FORGEJO_REPOSITORY": "owner/repo",
 			"GITHUB_TOKEN":       "forgejo-job-token-under-compat-name",
 		}[key]
@@ -130,7 +130,7 @@ func TestResolveForgeMavenRegistry_GiteaToken(t *testing.T) {
 
 	forgejoProvider := &forgejo.Provider{Env: func(k string) string {
 		return map[string]string{
-			"FORGEJO_SERVER_URL": "https://codeberg.org",
+			"FORGEJO_SERVER_URL": "https://forge.example",
 			"FORGEJO_REPOSITORY": "owner/repo",
 			"GITEA_TOKEN":        "gt",
 		}[k]
@@ -175,7 +175,7 @@ func TestResolveForgeNPMRegistry_Forgejo(t *testing.T) {
 	t.Parallel()
 
 	p := &forgejo.Provider{Env: func(k string) string {
-		return map[string]string{"FORGEJO_SERVER_URL": "https://codeberg.org", "FORGEJO_REPOSITORY": "owner/repo", "FORGEJO_TOKEN": "ft"}[k]
+		return map[string]string{"FORGEJO_SERVER_URL": "https://forge.example", "FORGEJO_REPOSITORY": "owner/repo", "FORGEJO_TOKEN": "ft"}[k]
 	}}
 
 	reg, err := p.ResolveForgeNPMRegistry()
@@ -183,7 +183,7 @@ func TestResolveForgeNPMRegistry_Forgejo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if reg.Registry != "https://codeberg.org/api/packages/owner/npm/" || reg.Scope != "@owner" {
+	if reg.Registry != "https://forge.example/api/packages/owner/npm/" || reg.Scope != "@owner" {
 		t.Errorf("npm registry = %+v", reg)
 	}
 }
@@ -222,7 +222,7 @@ func TestResolveForgeRegistries_RefuseARepositoryWithoutOwnerOrName(t *testing.T
 
 	for _, repository := range []string{"owner", "owner/", "/repo", ""} {
 		forgejoProvider := &forgejo.Provider{Env: envMap(map[string]string{
-			"FORGEJO_SERVER_URL": "https://codeberg.org", "FORGEJO_REPOSITORY": repository, "FORGEJO_TOKEN": "ft",
+			"FORGEJO_SERVER_URL": "https://forge.example", "FORGEJO_REPOSITORY": repository, "FORGEJO_TOKEN": "ft",
 		})}
 
 		if _, err := forgejoProvider.ResolveForgeMavenRegistry(); !errors.Is(err, errs.ErrUsage) {

@@ -59,7 +59,7 @@ func TestSignerMetadataBoundary_PreflightsAllArchitectureBindings(t *testing.T) 
 		t.Run(kind, func(t *testing.T) {
 			t.Chdir(t.TempDir())
 
-			const repo = "codeberg.org/itiquette/forgejo-ci-signer"
+			const repo = "forge.example/examplescope/ci-layer-signer"
 
 			writeAuthFileForSignerImage(t, "auth.json")
 			writeSignerArchMetadata(t, "amd64", repo, strings.Repeat("1", 64))
@@ -93,7 +93,7 @@ func TestSignerMetadataBoundary_PreflightsAllArchitectureBindings(t *testing.T) 
 			require.NoError(t, os.WriteFile("signer-image-dist/canary", []byte("old"), 0o600))
 			before := snapshotContainerTree(t, ".")
 			tool := &fakeSignerImageTool{}
-			_, err = appcontainer.AssembleSignerImageManifest(t.Context(), tool, nil, nil, io.Discard, appcontainer.SignerImageAssembleInput{AuthFile: "auth.json", SourceSHA: strings.Repeat("b", 40), ServerURL: "https://codeberg.org", Repository: "itiquette/forgejo-ci", RepositorySuffix: "-signer", TagPrefix: "signer-", Name: "signer-image", Archs: archs})
+			_, err = appcontainer.AssembleSignerImageManifest(t.Context(), tool, nil, nil, io.Discard, appcontainer.SignerImageAssembleInput{AuthFile: "auth.json", SourceSHA: strings.Repeat("b", 40), ServerURL: "https://forge.example", Repository: "examplescope/ci-layer", RepositorySuffix: "-signer", TagPrefix: "signer-", Name: "signer-image", Archs: archs})
 			require.ErrorIs(t, err, errs.ErrValidation)
 			require.Empty(t, tool.events)
 			require.Empty(t, tool.mergeDigests)

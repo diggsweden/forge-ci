@@ -41,21 +41,21 @@ func TestStageDestinations_ResolvesTagsPerStage(t *testing.T) {
 		},
 		{
 			"cross-registry release with ledger tags preserves final and moving names",
-			Stage{Name: "release", TargetRepo: "codeberg.org", UseEntryReleaseTags: true},
+			Stage{Name: "release", TargetRepo: "forge.example", UseEntryReleaseTags: true},
 			entry,
-			[]stageDest{{Ref: "codeberg.org/owner/repo:v1.2.3", Immutable: true}, {Ref: "codeberg.org/owner/repo:rust"}},
+			[]stageDest{{Ref: "forge.example/owner/repo:v1.2.3", Immutable: true}, {Ref: "forge.example/owner/repo:rust"}},
 		},
 		{
 			"named stage with TargetRepo → <prefix>/<source-path> pointer",
-			Stage{Name: "prod", TargetRepo: "codeberg.org/sovereign"},
+			Stage{Name: "prod", TargetRepo: "forge.example/sovereign"},
 			entry,
-			[]stageDest{{Ref: "codeberg.org/sovereign/owner/repo:prod"}},
+			[]stageDest{{Ref: "forge.example/sovereign/owner/repo:prod"}},
 		},
 		{
 			"cross-registry release → immutable :<version> + :release, source path preserved",
-			Stage{Name: "release", TargetRepo: "codeberg.org"},
+			Stage{Name: "release", TargetRepo: "forge.example"},
 			entry,
-			[]stageDest{{Ref: "codeberg.org/owner/repo:v1.2.3", Immutable: true}, {Ref: "codeberg.org/owner/repo:release"}},
+			[]stageDest{{Ref: "forge.example/owner/repo:v1.2.3", Immutable: true}, {Ref: "forge.example/owner/repo:release"}},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -74,15 +74,15 @@ func TestStageDestinations_ResolvesTagsPerStage(t *testing.T) {
 func TestStageDestinations_MultiContainerSovereigntyNoCollision(t *testing.T) {
 	t.Parallel()
 
-	stage := Stage{Name: "release", TargetRepo: "codeberg.org/sovereign"}
+	stage := Stage{Name: "release", TargetRepo: "forge.example/sovereign"}
 	apiEntry := Entry{FinalTag: "ghcr.io/org/api:v1.2.3"}
 	webEntry := Entry{FinalTag: "ghcr.io/org/web:v1.2.3"}
 
 	api := destRefs(stage.destinations(apiEntry))
 	web := destRefs(stage.destinations(webEntry))
 
-	wantAPI := []string{"codeberg.org/sovereign/org/api:v1.2.3", "codeberg.org/sovereign/org/api:release"}
-	wantWeb := []string{"codeberg.org/sovereign/org/web:v1.2.3", "codeberg.org/sovereign/org/web:release"}
+	wantAPI := []string{"forge.example/sovereign/org/api:v1.2.3", "forge.example/sovereign/org/api:release"}
+	wantWeb := []string{"forge.example/sovereign/org/web:v1.2.3", "forge.example/sovereign/org/web:release"}
 
 	if !slices.Equal(api, wantAPI) || !slices.Equal(web, wantWeb) {
 		t.Fatalf("collision-free mapping broken:\n api = %v (want %v)\n web = %v (want %v)", api, wantAPI, web, wantWeb)

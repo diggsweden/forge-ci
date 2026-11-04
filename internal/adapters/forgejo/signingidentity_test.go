@@ -24,7 +24,7 @@ func TestResolveKeylessIdentity_Forgejo(t *testing.T) {
 		return map[string]string{
 			"GITHUB_ACTIONS":     "true",
 			"FORGEJO_ACTIONS":    "true",
-			"FORGEJO_SERVER_URL": "https://codeberg.org",
+			"FORGEJO_SERVER_URL": "https://forge.example",
 			"FORGEJO_REPOSITORY": "acme/app",
 		}[key]
 	}}
@@ -46,7 +46,7 @@ func TestResolveKeylessIdentity_Forgejo(t *testing.T) {
 		t.Errorf("OIDCIssuer = %q, want empty (no auto-suppliable issuer)", id.OIDCIssuer)
 	}
 
-	if want := `^https://codeberg\.org/acme/app/`; id.SubjectRegexp != want {
+	if want := `^https://forge\.example/acme/app/`; id.SubjectRegexp != want {
 		t.Errorf("SubjectRegexp = %q, want %q", id.SubjectRegexp, want)
 	}
 }
@@ -103,7 +103,7 @@ func TestResolveKeylessIdentity_AnchorIgnoresOrchestrationValues(t *testing.T) {
 			"GITHUB_ACTIONS":  "true",
 			"FORGEJO_ACTIONS": "true",
 			// What the runner injected — the only admissible anchor.
-			"FORGEJO_SERVER_URL": "https://codeberg.org",
+			"FORGEJO_SERVER_URL": "https://forge.example",
 			"FORGEJO_REPOSITORY": "real/repo",
 			// What the orchestration layer computed. Correct for describing
 			// the run; must never anchor a trust decision.
@@ -119,7 +119,7 @@ func TestResolveKeylessIdentity_AnchorIgnoresOrchestrationValues(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if want := `^https://codeberg\.org/real/repo/`; id.SubjectRegexp != want {
+	if want := `^https://forge\.example/real/repo/`; id.SubjectRegexp != want {
 		t.Errorf("SubjectRegexp = %q, want %q\n"+
 			"the anchor must come from the runner-injected values, not the computed ones",
 			id.SubjectRegexp, want)
@@ -178,7 +178,7 @@ func TestResolveKeylessIdentity_EachMissingPrerequisiteRefusesOnItsOwn(t *testin
 	complete := map[string]string{
 		"GITHUB_ACTIONS":     "true",
 		"FORGEJO_ACTIONS":    "true",
-		"FORGEJO_SERVER_URL": "https://codeberg.org",
+		"FORGEJO_SERVER_URL": "https://forge.example",
 		"FORGEJO_REPOSITORY": "acme/app",
 	}
 
@@ -240,7 +240,7 @@ func TestResolveKeylessIdentity_PinsEveryIdentityField(t *testing.T) {
 		return map[string]string{
 			"GITHUB_ACTIONS":     "true",
 			"FORGEJO_ACTIONS":    "true",
-			"FORGEJO_SERVER_URL": "https://codeberg.org",
+			"FORGEJO_SERVER_URL": "https://forge.example",
 			"FORGEJO_REPOSITORY": "acme/app",
 		}[key]
 	}}
@@ -253,8 +253,8 @@ func TestResolveKeylessIdentity_PinsEveryIdentityField(t *testing.T) {
 	want := provider.KeylessIdentity{
 		OIDCIssuer:    "",
 		TokenAudience: provider.KeylessAudience,
-		SubjectID:     "https://codeberg.org/acme/app",
-		SubjectRegexp: `^https://codeberg\.org/acme/app/`,
+		SubjectID:     "https://forge.example/acme/app",
+		SubjectRegexp: `^https://forge\.example/acme/app/`,
 	}
 
 	if got != want {

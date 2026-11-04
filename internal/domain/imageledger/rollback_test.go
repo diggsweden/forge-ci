@@ -70,7 +70,7 @@ func TestPlanReleasePromotionRollback_RecordsPrePromotionState(t *testing.T) {
 	t.Parallel()
 
 	entry := candidateEntry()
-	entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+	entry.MovingTag = "forge.example/examplescope/myapp:rust"
 	previous := "sha256:" + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 	reg := &fakePromotionRollbackRegistry{digests: map[string]string{
 		entry.CandidateTag: goodDigest,
@@ -144,7 +144,7 @@ func TestPlanReleasePromotionRollback_StopsOnUncertainDestinationLookup(t *testi
 			t.Parallel()
 
 			entry := candidateEntry()
-			entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+			entry.MovingTag = "forge.example/examplescope/myapp:rust"
 
 			ref := entry.FinalTag
 			if field == "moving" {
@@ -168,7 +168,7 @@ func TestRollbackReleasePromotion_RestoresMovingAndDeletesNewFinal(t *testing.T)
 	t.Parallel()
 
 	entry := candidateEntry()
-	entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+	entry.MovingTag = "forge.example/examplescope/myapp:rust"
 	previous := "sha256:" + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 	record := imageledger.PromotionRecord{
 		Version:              imageledger.PromotionJournalVersion,
@@ -182,14 +182,14 @@ func TestRollbackReleasePromotion_RestoresMovingAndDeletesNewFinal(t *testing.T)
 	reg := &fakePromotionRollbackRegistry{digests: map[string]string{
 		entry.FinalTag:  goodDigest,
 		entry.MovingTag: goodDigest,
-		"codeberg.org/itiquette/gommitlint@" + previous: previous,
+		"forge.example/examplescope/myapp@" + previous: previous,
 	}}
 
 	if err := imageledger.RollbackReleasePromotion(t.Context(), reg, []imageledger.PromotionRecord{record}, "v1.2.3"); err != nil {
 		t.Fatalf("RollbackReleasePromotion: %v", err)
 	}
 
-	if !slices.Equal(reg.copied, []string{"codeberg.org/itiquette/gommitlint@" + previous + "->" + entry.MovingTag}) {
+	if !slices.Equal(reg.copied, []string{"forge.example/examplescope/myapp@" + previous + "->" + entry.MovingTag}) {
 		t.Errorf("restored moving tag copy mismatch: %v", reg.copied)
 	}
 
@@ -206,7 +206,7 @@ func TestRollbackReleasePromotion_DeletesNewMovingAndKeepsExistingFinal(t *testi
 	t.Parallel()
 
 	entry := candidateEntry()
-	entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+	entry.MovingTag = "forge.example/examplescope/myapp:rust"
 	record := imageledger.PromotionRecord{
 		Version:      imageledger.PromotionJournalVersion,
 		SourceRef:    entry.CandidateTag + "@" + goodDigest,
@@ -269,7 +269,7 @@ func TestRollbackReleasePromotion_StopsOnUncertainDestinationLookup(t *testing.T
 			t.Parallel()
 
 			entry := candidateEntry()
-			entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+			entry.MovingTag = "forge.example/examplescope/myapp:rust"
 			record := imageledger.PromotionRecord{
 				Version:      imageledger.PromotionJournalVersion,
 				SourceRef:    entry.CandidateTag + "@" + goodDigest,
@@ -355,7 +355,7 @@ func TestRollbackReleasePromotion_RefusesAMalformedPreviousDigestBeforeTheRegist
 	t.Parallel()
 
 	entry := candidateEntry()
-	entry.MovingTag = "codeberg.org/itiquette/gommitlint:stable"
+	entry.MovingTag = "forge.example/examplescope/myapp:stable"
 	record := imageledger.PromotionRecord{
 		Version:              imageledger.PromotionJournalVersion,
 		SourceRef:            entry.CandidateTag + "@" + goodDigest,
@@ -383,7 +383,7 @@ func TestRollbackReleasePromotion_LeavesAMovingTagThatServesAnotherDigest(t *tes
 	t.Parallel()
 
 	entry := candidateEntry()
-	entry.MovingTag = "codeberg.org/itiquette/gommitlint:stable"
+	entry.MovingTag = "forge.example/examplescope/myapp:stable"
 	record := imageledger.PromotionRecord{
 		Version:      imageledger.PromotionJournalVersion,
 		SourceRef:    entry.CandidateTag + "@" + goodDigest,
@@ -436,10 +436,10 @@ func TestRollbackReleasePromotion_PreflightsEveryRestoreSourceBeforeMutation(t *
 
 	first := candidateEntry()
 	second := candidateEntry()
-	second.Ref = "codeberg.org/itiquette/gommitlint-static@" + goodDigest
-	second.CandidateTag = "codeberg.org/itiquette/gommitlint-static:staging-v1.2.3"
-	second.FinalTag = "codeberg.org/itiquette/gommitlint-static:v1.2.3"
-	second.MovingTag = "codeberg.org/itiquette/gommitlint-static:stable"
+	second.Ref = "forge.example/examplescope/myapp-static@" + goodDigest
+	second.CandidateTag = "forge.example/examplescope/myapp-static:staging-v1.2.3"
+	second.FinalTag = "forge.example/examplescope/myapp-static:v1.2.3"
+	second.MovingTag = "forge.example/examplescope/myapp-static:stable"
 	previous := "sha256:" + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 
 	records := []imageledger.PromotionRecord{
@@ -479,9 +479,9 @@ func TestRollbackReleasePromotion_RechecksMovingTargetLast(t *testing.T) {
 	t.Parallel()
 
 	entry := candidateEntry()
-	entry.MovingTag = "codeberg.org/itiquette/gommitlint:stable"
+	entry.MovingTag = "forge.example/examplescope/myapp:stable"
 	previous := "sha256:" + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-	source := "codeberg.org/itiquette/gommitlint@" + previous
+	source := "forge.example/examplescope/myapp@" + previous
 	record := imageledger.PromotionRecord{
 		Version:              imageledger.PromotionJournalVersion,
 		SourceRef:            entry.CandidateTag + "@" + goodDigest,
@@ -516,11 +516,11 @@ func TestRollbackReleasePromotion_RejectsOverlappingTargetsBeforeMutation(t *tes
 	t.Parallel()
 
 	first := candidateEntry()
-	first.MovingTag = "codeberg.org/itiquette/gommitlint:stable"
+	first.MovingTag = "forge.example/examplescope/myapp:stable"
 	second := candidateEntry()
-	second.Ref = "codeberg.org/itiquette/gommitlint@" + goodDigest
-	second.CandidateTag = "codeberg.org/itiquette/gommitlint:staging-v1.2.3-static"
-	second.FinalTag = "codeberg.org/itiquette/gommitlint:v1.2.3-static"
+	second.Ref = "forge.example/examplescope/myapp@" + goodDigest
+	second.CandidateTag = "forge.example/examplescope/myapp:staging-v1.2.3-static"
+	second.FinalTag = "forge.example/examplescope/myapp:v1.2.3-static"
 	second.MovingTag = first.MovingTag
 
 	records := []imageledger.PromotionRecord{
@@ -566,11 +566,11 @@ func TestPlanReleasePromotionRollback_RejectsOverlappingTargets(t *testing.T) {
 	t.Parallel()
 
 	first := candidateEntry()
-	first.MovingTag = "codeberg.org/itiquette/gommitlint:stable"
+	first.MovingTag = "forge.example/examplescope/myapp:stable"
 	second := candidateEntry()
-	second.Ref = "codeberg.org/itiquette/gommitlint@" + goodDigest
-	second.CandidateTag = "codeberg.org/itiquette/gommitlint:staging-v1.2.3-static"
-	second.FinalTag = "codeberg.org/itiquette/gommitlint:v1.2.3-static"
+	second.Ref = "forge.example/examplescope/myapp@" + goodDigest
+	second.CandidateTag = "forge.example/examplescope/myapp:staging-v1.2.3-static"
+	second.FinalTag = "forge.example/examplescope/myapp:v1.2.3-static"
 	second.MovingTag = first.MovingTag
 	reg := &fakePromotionRollbackRegistry{digests: map[string]string{
 		first.CandidateTag:  goodDigest,
@@ -594,9 +594,9 @@ func TestPromotionJournal_RoundTripJSONL(t *testing.T) {
 
 	records := []imageledger.PromotionRecord{{
 		Version:      imageledger.PromotionJournalVersion,
-		SourceRef:    "codeberg.org/itiquette/gommitlint:staging-v1.2.3@" + goodDigest,
-		FinalTag:     "codeberg.org/itiquette/gommitlint:v1.2.3",
-		CandidateTag: "codeberg.org/itiquette/gommitlint:staging-v1.2.3",
+		SourceRef:    "forge.example/examplescope/myapp:staging-v1.2.3@" + goodDigest,
+		FinalTag:     "forge.example/examplescope/myapp:v1.2.3",
+		CandidateTag: "forge.example/examplescope/myapp:staging-v1.2.3",
 	}}
 
 	body, err := imageledger.MarshalPromotionJournal(records)
@@ -619,18 +619,18 @@ func TestValidatePromotionRecordRepository_RejectsRecordsOutsideTheRepository(t 
 
 	record := imageledger.PromotionRecord{
 		Version:      imageledger.PromotionJournalVersion,
-		SourceRef:    "codeberg.org/itiquette/gommitlint@" + goodDigest,
-		FinalTag:     "codeberg.org/itiquette/gommitlint:v1.2.3",
-		MovingTag:    "codeberg.org/itiquette/gommitlint:latest",
-		CandidateTag: "codeberg.org/itiquette/gommitlint:staging-v1.2.3",
+		SourceRef:    "forge.example/examplescope/myapp@" + goodDigest,
+		FinalTag:     "forge.example/examplescope/myapp:v1.2.3",
+		MovingTag:    "forge.example/examplescope/myapp:latest",
+		CandidateTag: "forge.example/examplescope/myapp:staging-v1.2.3",
 	}
 
-	if err := imageledger.ValidatePromotionRecordRepository(record, "codeberg.org/itiquette/gommitlint"); err != nil {
+	if err := imageledger.ValidatePromotionRecordRepository(record, "forge.example/examplescope/myapp"); err != nil {
 		t.Fatalf("expected repository accepted: %v", err)
 	}
 
-	record.MovingTag = "codeberg.org/evil/gommitlint:latest"
-	if err := imageledger.ValidatePromotionRecordRepository(record, "codeberg.org/itiquette/gommitlint"); !errors.Is(err, errs.ErrValidation) {
+	record.MovingTag = "forge.example/evil/myapp:latest"
+	if err := imageledger.ValidatePromotionRecordRepository(record, "forge.example/examplescope/myapp"); !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("unexpected repository should be validation error, got %v", err)
 	}
 }
@@ -651,15 +651,15 @@ func TestPlanReleasePromotionRollback_JournalsEveryPromotableEntry(t *testing.T)
 
 	second := candidateEntry()
 	second.Role = "static"
-	second.Ref = "codeberg.org/itiquette/gommitlint-static@" + goodDigest
-	second.CandidateTag = "codeberg.org/itiquette/gommitlint-static:staging-v1.2.3"
-	second.FinalTag = "codeberg.org/itiquette/gommitlint-static:v1.2.3"
+	second.Ref = "forge.example/examplescope/myapp-static@" + goodDigest
+	second.CandidateTag = "forge.example/examplescope/myapp-static:staging-v1.2.3"
+	second.FinalTag = "forge.example/examplescope/myapp-static:v1.2.3"
 
 	// No candidate tag, and the fallback is off, so this one is skipped.
 	skipped := validEntry()
 	skipped.Role = "debug"
-	skipped.Ref = "codeberg.org/itiquette/gommitlint-debug@" + goodDigest
-	skipped.FinalTag = "codeberg.org/itiquette/gommitlint-debug:v1.2.3"
+	skipped.Ref = "forge.example/examplescope/myapp-debug@" + goodDigest
+	skipped.FinalTag = "forge.example/examplescope/myapp-debug:v1.2.3"
 
 	reg := &fakePromotionRollbackRegistry{digests: map[string]string{
 		first.CandidateTag:  goodDigest,
@@ -706,7 +706,7 @@ func TestValidatePromotionJournalIntent_RefusesAJournalThatDoesNotDescribeThisRu
 	t.Parallel()
 
 	entry := candidateEntry()
-	entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+	entry.MovingTag = "forge.example/examplescope/myapp:rust"
 	stage := imageledger.Stage{Name: "release", UseEntryReleaseTags: true}
 	record := imageledger.PromotionRecord{
 		Version:      imageledger.PromotionJournalVersion,
@@ -727,12 +727,12 @@ func TestValidatePromotionJournalIntent_RefusesAJournalThatDoesNotDescribeThisRu
 	}{
 		"extra record":       {extra: true, want: "unexpected entr"},
 		"legacy version":     {mutate: func(r *imageledger.PromotionRecord) { r.Version = 0 }, want: "journal version must be"},
-		"moving tag differs": {mutate: func(r *imageledger.PromotionRecord) { r.MovingTag = "codeberg.org/itiquette/gommitlint:stable" }, want: "tags differ"},
+		"moving tag differs": {mutate: func(r *imageledger.PromotionRecord) { r.MovingTag = "forge.example/examplescope/myapp:stable" }, want: "tags differ"},
 		// A candidate tag is the staging counterpart of its final tag, so the
 		// two differ together; the source stays this run's.
 		"final and candidate tags differ": {mutate: func(r *imageledger.PromotionRecord) {
-			r.FinalTag = "codeberg.org/itiquette/gommitlint:v1.2.3-static"
-			r.CandidateTag = "codeberg.org/itiquette/gommitlint:staging-v1.2.3-static"
+			r.FinalTag = "forge.example/examplescope/myapp:v1.2.3-static"
+			r.CandidateTag = "forge.example/examplescope/myapp:staging-v1.2.3-static"
 		}, want: "tags differ"},
 		"digest differs": {mutate: func(r *imageledger.PromotionRecord) { r.SourceRef = entry.CandidateTag + "@" + otherDigest }, want: "source differs"},
 		"source is the digest ref without fallback": {mutate: func(r *imageledger.PromotionRecord) { r.SourceRef = entry.Ref }, want: "source differs"},
@@ -759,8 +759,8 @@ func TestValidatePromotionJournalIntent_RefusesAJournalThatDoesNotDescribeThisRu
 	// A journal that stops short of the ledger is refused too: its missing
 	// entry would be promoted with no pre-state to roll back to.
 	second := entry
-	second.CandidateTag = "codeberg.org/itiquette/gommitlint:staging-v1.2.3-static"
-	second.FinalTag = "codeberg.org/itiquette/gommitlint:v1.2.3-static"
+	second.CandidateTag = "forge.example/examplescope/myapp:staging-v1.2.3-static"
+	second.FinalTag = "forge.example/examplescope/myapp:v1.2.3-static"
 	second.MovingTag = ""
 
 	err := imageledger.ValidatePromotionJournalIntent([]imageledger.PromotionRecord{record}, []imageledger.Entry{entry, second}, "v1.2.3", stage)

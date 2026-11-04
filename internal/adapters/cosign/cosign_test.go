@@ -85,9 +85,9 @@ func TestCopyImage_ArgvShape(t *testing.T) {
 	const digest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 	for _, source := range []string{
-		"codeberg.org/o/r:staging-v1.2.3",
-		"codeberg.org/o/r:staging-v1.2.3@" + digest,
-		"codeberg.org/o/r@" + digest,
+		"forge.example/o/r:staging-v1.2.3",
+		"forge.example/o/r:staging-v1.2.3@" + digest,
+		"forge.example/o/r@" + digest,
 	} {
 		t.Run(source, func(t *testing.T) {
 			t.Parallel()
@@ -168,7 +168,7 @@ func TestCopyImage_RejectsEmptyRefs(t *testing.T) {
 		t.Error("empty source must be rejected")
 	}
 
-	if err := adapter.CopyImage(context.Background(), cosign.CopyImageInput{Source: "codeberg.org/o/r:v1"}, nil); err == nil {
+	if err := adapter.CopyImage(context.Background(), cosign.CopyImageInput{Source: "forge.example/o/r:v1"}, nil); err == nil {
 		t.Error("empty dest must be rejected")
 	}
 }
@@ -388,7 +388,7 @@ func TestVerifyBlob_KMSArgvShape(t *testing.T) {
 	}
 }
 
-const testImageDigest = "ghcr.io/diggsweden/app@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+const testImageDigest = "ghcr.io/examplescope/app@sha256:1111111111111111111111111111111111111111111111111111111111111111"
 
 func TestSignImage_KeylessArgvShape(t *testing.T) {
 	t.Parallel()
@@ -478,7 +478,7 @@ func TestSignImage_RejectsMutableTag(t *testing.T) {
 	a := refusingAdapter(t)
 
 	err := a.SignImage(context.Background(), cosign.SignImageInput{
-		ImageRef: "ghcr.io/diggsweden/app:latest", // tag, not digest
+		ImageRef: "ghcr.io/examplescope/app:latest", // tag, not digest
 		Keyless:  true,
 	}, nil)
 	if !errors.Is(err, errs.ErrUsage) {
@@ -579,7 +579,7 @@ func TestVerifyImage_RejectsMutableTag(t *testing.T) {
 	a := refusingAdapter(t)
 
 	err := a.VerifyImage(context.Background(), cosign.VerifyImageInput{
-		ImageRef: "ghcr.io/diggsweden/app:v1.0.0",
+		ImageRef: "ghcr.io/examplescope/app:v1.0.0",
 		KeyRef:   "./pubkey.pem",
 	}, nil)
 	if !errors.Is(err, errs.ErrUsage) {

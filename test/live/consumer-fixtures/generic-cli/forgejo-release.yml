@@ -14,7 +14,7 @@ jobs:
     container:
       image: ${{ vars.CI_AUTH_IMAGE }}
     steps:
-      - uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-forge-ci@ENGINE_SHA
+      - uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/setup-forge-ci@ENGINE_SHA
       - env:
           CHECKOUT_REF: ${{ forgejo.sha }}
         run: forge-ci platform checkout
@@ -30,7 +30,7 @@ jobs:
     container:
       image: ${{ vars.CI_JOB_IMAGE }}
     steps:
-      - uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-forge-ci@ENGINE_SHA
+      - uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/setup-forge-ci@ENGINE_SHA
       - env:
           CHECKOUT_REF: ${{ forgejo.sha }}
         run: forge-ci platform checkout
@@ -46,7 +46,7 @@ jobs:
           git -c gpg.ssh.allowedSignersFile=.forgejo/release-allowed-signers verify-tag "$REQUEST"
           forge-ci release validate-request --release-request "$REQUEST" --tag "${REQUEST#release-request/}" --expected-commit "$EXPECTED" --allowed-signers-file .forgejo/release-allowed-signers
       - if: IS_GO
-        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-buildah@ENGINE_SHA
+        uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/setup-buildah@ENGINE_SHA
       - name: Full original-source application checks
         run: bash .gitlab/check-release.sh
   prepare:
@@ -83,7 +83,7 @@ jobs:
     outputs:
       dist-digest: ${{ steps.dist.outputs.digest }}
     steps:
-      - uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-forge-ci@ENGINE_SHA
+      - uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/setup-forge-ci@ENGINE_SHA
       - env:
           CHECKOUT_REF: ${{ needs.prepare.outputs.release-sha }}
         run: forge-ci platform checkout
@@ -106,7 +106,7 @@ jobs:
           esac
           forge-ci release validate-tag --tag "$RELEASE_TAG" --release-sha "$RELEASE_SHA" --expected-parent "$EXPECTED" --changelog-only "${args[@]}"
       - if: IS_GO
-        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-buildah@ENGINE_SHA
+        uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/setup-buildah@ENGINE_SHA
       - name: Prepared-release tests and native binary producer
         env:
           RELEASE_TAG: ${{ needs.prepare.outputs.release-tag }}
@@ -116,7 +116,7 @@ jobs:
           export RELEASE_VERSION="${RELEASE_TAG#v}"
           bash .gitlab/build-release.sh
       - id: dist
-        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/upload-dist@ENGINE_SHA
+        uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/upload-dist@ENGINE_SHA
         with:
           artifact-name: build-dist
           path: dist/

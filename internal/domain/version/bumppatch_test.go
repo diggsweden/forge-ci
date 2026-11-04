@@ -216,7 +216,7 @@ index fca68a2..0b1c2d3 100644
 +++ b/pom.xml
 @@ -6,14 +6,14 @@
  
-   <groupId>se.itiquette.demo</groupId>
+   <groupId>com.example.demo</groupId>
    <artifactId>hello-maven</artifactId>
 -  <version>0.1.0</version>
 +  <version>0.2.0</version>

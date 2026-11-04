@@ -27,9 +27,9 @@ func TestListContainerPackageVersions_FiltersContainerPackageVersions(t *testing
 
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`[
-{"type":"container","name":"nanolinter-base","version":"staging-a-rust"},
-{"type":"container","name":"nanolinter-base","version":"1.0.0"},
-{"type":"generic","name":"nanolinter-base","version":"ignored"},
+{"type":"container","name":"myapp-base","version":"staging-a-rust"},
+{"type":"container","name":"myapp-base","version":"1.0.0"},
+{"type":"generic","name":"myapp-base","version":"ignored"},
 {"type":"container","name":"other","version":"ignored"}
 ]`))
 	})
@@ -40,7 +40,7 @@ func TestListContainerPackageVersions_FiltersContainerPackageVersions(t *testing
 		APIBaseOverride: "https://forgejo.invalid",
 	}
 
-	got, err := provider.ListContainerPackageVersions(context.Background(), "itiquette", "nanolinter-base")
+	got, err := provider.ListContainerPackageVersions(context.Background(), "examplescope", "myapp-base")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestListContainerPackageVersions_FiltersContainerPackageVersions(t *testing
 	// Owner-level listing, NOT /packages/{owner}/{type}/{name}: that route
 	// is Gitea-only and Codeberg's Forgejo answers it "404 page not found"
 	// (v0.8.6 cleanup sweep, run 336).
-	if want := "/api/v1/packages/itiquette"; gotPath != want {
+	if want := "/api/v1/packages/examplescope"; gotPath != want {
 		t.Fatalf("path = %q, want %q", gotPath, want)
 	}
 
@@ -56,7 +56,7 @@ func TestListContainerPackageVersions_FiltersContainerPackageVersions(t *testing
 		t.Fatal("query is empty, want pagination query")
 	}
 
-	for _, fragment := range []string{"type=container", "q=nanolinter-base"} {
+	for _, fragment := range []string{"type=container", "q=myapp-base"} {
 		if !strings.Contains(gotQuery, fragment) {
 			t.Fatalf("query = %q, want it to contain %q", gotQuery, fragment)
 		}

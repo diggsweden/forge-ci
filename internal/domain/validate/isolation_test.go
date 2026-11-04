@@ -253,7 +253,7 @@ func TestCheckIsolation_AliasedSetupToolchainStillMeetsTheCacheRule(t *testing.T
 jobs:
   build:
     steps:
-      - uses: itiquette/forgejo-ci/setup-toolchain@1111111111111111111111111111111111111111
+      - uses: examplescope/ci-layer/setup-toolchain@1111111111111111111111111111111111111111
         with:
           cache: true
 `
@@ -269,7 +269,7 @@ jobs:
 
 	const aliased = `
 x-step: &t
-  uses: itiquette/forgejo-ci/setup-toolchain@1111111111111111111111111111111111111111
+  uses: examplescope/ci-layer/setup-toolchain@1111111111111111111111111111111111111111
   with:
     cache: true
 jobs:
@@ -341,7 +341,7 @@ x-with: &shared
 jobs:
   build:
     steps:
-      - uses: itiquette/forgejo-ci/setup-toolchain@1111111111111111111111111111111111111111
+      - uses: examplescope/ci-layer/setup-toolchain@1111111111111111111111111111111111111111
         with:
           <<: *shared
           cache: true
@@ -363,7 +363,7 @@ x-with: &shared
 jobs:
   build:
     steps:
-      - uses: itiquette/forgejo-ci/setup-toolchain@1111111111111111111111111111111111111111
+      - uses: examplescope/ci-layer/setup-toolchain@1111111111111111111111111111111111111111
         with:
           <<: *shared
 `

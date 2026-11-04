@@ -2,7 +2,7 @@
   "buildDefinition": {
     "buildType": "https://diggsweden.github.io/forge-ci/container-build/v1",
     "externalParameters": {
-      "image": "ghcr.io/diggsweden/app",
+      "image": "ghcr.io/examplescope/app",
       "ref": "refs/tags/v1.2.3",
       "source": "git+https://github.com/diggsweden/forge-ci"
     },

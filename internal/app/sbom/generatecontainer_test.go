@@ -28,8 +28,8 @@ func TestGenerateContainer_NoArtifactTypes_SingleGeneration(t *testing.T) {
 
 	err := appsbom.GenerateContainer(context.Background(), syft, nil, &fakeGit{sha: "abc1234"}, &out, io.Discard, appsbom.GenerateContainerInput{
 		RefName:     "v1.2.3",
-		Repo:        "diggsweden/example",
-		ImageName:   "ghcr.io/diggsweden/example",
+		Repo:        "examplescope/example",
+		ImageName:   "ghcr.io/examplescope/example",
 		ImageDigest: "sha256:" + strings.Repeat("a", 64),
 	})
 	if err != nil {
@@ -44,7 +44,7 @@ func TestGenerateContainer_NoArtifactTypes_SingleGeneration(t *testing.T) {
 		t.Errorf("expected 2 output formats in the single call, got %d", got)
 	}
 
-	expectedImage := "ghcr.io/diggsweden/example@sha256:" + strings.Repeat("a", 64)
+	expectedImage := "ghcr.io/examplescope/example@sha256:" + strings.Repeat("a", 64)
 	if syft.calls[0].target != expectedImage {
 		t.Errorf("syft target = %q, want %q", syft.calls[0].target, expectedImage)
 	}

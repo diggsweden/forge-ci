@@ -156,9 +156,9 @@ func TestChangelogRelease_CommitsPushesTagsAndChecksOut(t *testing.T) {
 
 	res, err := appversion.ChangelogRelease(context.Background(), repo, fakeoutputsink.New(t), &out, appversion.ChangelogReleaseInput{
 		Tag:            "v1.2.3",
-		Repository:     "itiquette/example",
-		GitURL:         "ssh://git@codeberg.org:2222/itiquette/example.git",
-		AuthorName:     "Itiquette Release Bot",
+		Repository:     "examplescope/example",
+		GitURL:         "ssh://git@forge.example:2222/examplescope/example.git",
+		AuthorName:     "Examplescope Release Bot",
 		AuthorEmail:    "release-bot@example.invalid",
 		SigningKeyPath: "/tmp/key",
 		TagSigned:      true,
@@ -171,7 +171,7 @@ func TestChangelogRelease_CommitsPushesTagsAndChecksOut(t *testing.T) {
 		t.Fatalf("git signing config = %#v", repo.cfg)
 	}
 
-	if repo.remoteName != "origin" || repo.remoteURL != "ssh://git@codeberg.org:2222/itiquette/example.git" {
+	if repo.remoteName != "origin" || repo.remoteURL != "ssh://git@forge.example:2222/examplescope/example.git" {
 		t.Fatalf("remote = (%q,%q)", repo.remoteName, repo.remoteURL)
 	}
 
@@ -205,9 +205,9 @@ func TestChangelogRelease_UnchangedSkipsCommitButTags(t *testing.T) {
 
 	_, err := appversion.ChangelogRelease(context.Background(), repo, nil, &bytes.Buffer{}, appversion.ChangelogReleaseInput{
 		Tag:            "v1.2.3",
-		Repository:     "itiquette/example",
-		GitURL:         "ssh://git@codeberg.org/itiquette/example.git",
-		AuthorName:     "Itiquette Release Bot",
+		Repository:     "examplescope/example",
+		GitURL:         "ssh://git@forge.example/examplescope/example.git",
+		AuthorName:     "Examplescope Release Bot",
 		AuthorEmail:    "release-bot@example.invalid",
 		SigningKeyPath: "/tmp/key",
 		TagSigned:      false,
@@ -239,9 +239,9 @@ func TestChangelogRelease_DryRunSkipsGitMutationsAndNarrates(t *testing.T) {
 	// a dry-run preview may run without one.
 	res, err := appversion.ChangelogRelease(context.Background(), repo, fakeoutputsink.New(t), &out, appversion.ChangelogReleaseInput{
 		Tag:         "v1.2.3",
-		Repository:  "itiquette/example",
-		GitURL:      "ssh://git@codeberg.org/itiquette/example.git",
-		AuthorName:  "Itiquette Release Bot",
+		Repository:  "examplescope/example",
+		GitURL:      "ssh://git@forge.example/examplescope/example.git",
+		AuthorName:  "Examplescope Release Bot",
 		AuthorEmail: "release-bot@example.invalid",
 		TagSigned:   true,
 		DryRun:      true,
@@ -294,9 +294,9 @@ func TestChangelogRelease_DryRunStillRequiresCommitMessageFile(t *testing.T) {
 
 	_, err := appversion.ChangelogRelease(context.Background(), &fakeChangelogReleaseRepo{status: " M CHANGELOG.md"}, nil, &bytes.Buffer{}, appversion.ChangelogReleaseInput{
 		Tag:         "v1.2.3",
-		Repository:  "itiquette/example",
-		GitURL:      "ssh://git@codeberg.org/itiquette/example.git",
-		AuthorName:  "Itiquette Release Bot",
+		Repository:  "examplescope/example",
+		GitURL:      "ssh://git@forge.example/examplescope/example.git",
+		AuthorName:  "Examplescope Release Bot",
 		AuthorEmail: "release-bot@example.invalid",
 		DryRun:      true,
 	})
@@ -315,9 +315,9 @@ func TestChangelogRelease_DryRunStillFailsValidation(t *testing.T) {
 
 		_, err := appversion.ChangelogRelease(context.Background(), &fakeChangelogReleaseRepo{}, nil, &bytes.Buffer{}, appversion.ChangelogReleaseInput{
 			Tag:         "v1.2.3-rc1",
-			Repository:  "itiquette/example",
-			GitURL:      "ssh://git@codeberg.org/itiquette/example.git",
-			AuthorName:  "Itiquette Release Bot",
+			Repository:  "examplescope/example",
+			GitURL:      "ssh://git@forge.example/examplescope/example.git",
+			AuthorName:  "Examplescope Release Bot",
 			AuthorEmail: "release-bot@example.invalid",
 			DryRun:      true,
 		})
@@ -331,8 +331,8 @@ func TestChangelogRelease_DryRunStillFailsValidation(t *testing.T) {
 
 		_, err := appversion.ChangelogRelease(context.Background(), &fakeChangelogReleaseRepo{}, nil, &bytes.Buffer{}, appversion.ChangelogReleaseInput{
 			Tag:         "v1.2.3",
-			Repository:  "itiquette/example",
-			AuthorName:  "Itiquette Release Bot",
+			Repository:  "examplescope/example",
+			AuthorName:  "Examplescope Release Bot",
 			AuthorEmail: "release-bot@example.invalid",
 			DryRun:      true,
 		})
@@ -349,9 +349,9 @@ func TestChangelogRelease_RequiresCommitMessageWhenChangelogChanged(t *testing.T
 
 	_, err := appversion.ChangelogRelease(context.Background(), &fakeChangelogReleaseRepo{status: " M CHANGELOG.md"}, nil, &bytes.Buffer{}, appversion.ChangelogReleaseInput{
 		Tag:            "v1.2.3",
-		Repository:     "itiquette/example",
-		GitURL:         "ssh://git@codeberg.org/itiquette/example.git",
-		AuthorName:     "Itiquette Release Bot",
+		Repository:     "examplescope/example",
+		GitURL:         "ssh://git@forge.example/examplescope/example.git",
+		AuthorName:     "Examplescope Release Bot",
 		AuthorEmail:    "release-bot@example.invalid",
 		SigningKeyPath: "/tmp/key",
 	})
@@ -365,9 +365,9 @@ func TestChangelogRelease_RequiresStableTag(t *testing.T) {
 
 	_, err := appversion.ChangelogRelease(context.Background(), &fakeChangelogReleaseRepo{}, nil, &bytes.Buffer{}, appversion.ChangelogReleaseInput{
 		Tag:            "v1.2.3-rc1",
-		Repository:     "itiquette/example",
-		GitURL:         "ssh://git@codeberg.org/itiquette/example.git",
-		AuthorName:     "Itiquette Release Bot",
+		Repository:     "examplescope/example",
+		GitURL:         "ssh://git@forge.example/examplescope/example.git",
+		AuthorName:     "Examplescope Release Bot",
 		AuthorEmail:    "release-bot@example.invalid",
 		SigningKeyPath: "/tmp/key",
 	})
@@ -562,9 +562,9 @@ func TestChangelogRelease_StagesIncludedProjectFilesBesideTheChangelog(t *testin
 	repo := &fakeChangelogReleaseRepo{status: " M pom.xml"}
 	_, err := appversion.ChangelogRelease(context.Background(), repo, fakeoutputsink.New(t), &bytes.Buffer{}, appversion.ChangelogReleaseInput{
 		Tag:            "v1.2.3",
-		Repository:     "itiquette/example",
-		GitURL:         "ssh://git@codeberg.org:2222/itiquette/example.git",
-		AuthorName:     "Itiquette Release Bot",
+		Repository:     "examplescope/example",
+		GitURL:         "ssh://git@forge.example:2222/examplescope/example.git",
+		AuthorName:     "Examplescope Release Bot",
 		AuthorEmail:    "release-bot@example.invalid",
 		SigningKeyPath: "/tmp/key",
 		TagSigned:      true,
@@ -584,9 +584,9 @@ func TestChangelogRelease_RefusesIncludedPathsOutsideTheCheckoutBeforeEffects(t 
 
 			in := appversion.ChangelogReleaseInput{
 				Tag:            "v1.2.3",
-				Repository:     "itiquette/example",
-				GitURL:         "ssh://git@codeberg.org:2222/itiquette/example.git",
-				AuthorName:     "Itiquette Release Bot",
+				Repository:     "examplescope/example",
+				GitURL:         "ssh://git@forge.example:2222/examplescope/example.git",
+				AuthorName:     "Examplescope Release Bot",
 				AuthorEmail:    "release-bot@example.invalid",
 				SigningKeyPath: "/tmp/key",
 				IncludePaths:   []string{included},

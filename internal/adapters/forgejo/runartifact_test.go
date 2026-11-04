@@ -1173,7 +1173,7 @@ func TestDownloadRunArtifact_Pattern(t *testing.T) {
 	})
 }
 
-// Forgejo answers 413 when the owner's storage quota is spent; a nanolinter
+// Forgejo answers 413 when the owner's storage quota is spent; a consumer
 // release read only "HTTP 413: validation failed" and nothing to act on.
 func TestUploadRunArtifact_A413SaysWhatTheForgeRefused(t *testing.T) {
 	t.Parallel()

@@ -24,21 +24,21 @@ func TestVerifyExistingBaseImages_ReportsVerifiedAndMissing(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	repo := "codeberg.org/itiquette/nanolinter-base"
+	repo := "forge.example/examplescope/myapp-base"
 	baseID := strings.Repeat("a", 64)
 	digest := "sha256:" + strings.Repeat("1", 64)
 	registry := &fakeBaseImageRegistry{digests: map[string]string{
 		repo + ":" + baseID + "-rust": digest,
 	}}
 	verifier := &fakeBaseImageVerifier{payload: baseLineagePayload(t,
-		lineageFields{source: "https://codeberg.org/itiquette/nanolinter", workflow: "container-bases.yml", flavor: "rust", baseInputID: baseID},
+		lineageFields{source: "https://forge.example/examplescope/myapp", workflow: "container-bases.yml", flavor: "rust", baseInputID: baseID},
 	)}
 
 	result, err := VerifyExistingBaseImages(ctx, registry, verifier, io.Discard, BaseImageVerifyExistingInput{
 		Flavors:            []string{"rust", "go"},
 		BaseInputID:        baseID,
 		ExpectedRepository: repo,
-		ExpectedSource:     "https://codeberg.org/itiquette/nanolinter",
+		ExpectedSource:     "https://forge.example/examplescope/myapp",
 		ExpectedWorkflow:   "container-bases.yml",
 		CosignPublicKey:    "cosign.pub",
 	})
@@ -50,7 +50,7 @@ func TestVerifyExistingBaseImages_ReportsVerifiedAndMissing(t *testing.T) {
 		t.Fatal("AllFound = true, want false")
 	}
 
-	wantImages := `[{"flavor":"rust","tag":"codeberg.org/itiquette/nanolinter-base:` + baseID + `-rust","ref":"codeberg.org/itiquette/nanolinter-base@` + digest + `","candidate_tag":"","candidate_ref":"","base_input_id":"` + baseID + `"}]`
+	wantImages := `[{"flavor":"rust","tag":"forge.example/examplescope/myapp-base:` + baseID + `-rust","ref":"forge.example/examplescope/myapp-base@` + digest + `","candidate_tag":"","candidate_ref":"","base_input_id":"` + baseID + `"}]`
 	if result.AllImagesJSON != wantImages {
 		t.Errorf("AllImagesJSON = %s, want %s", result.AllImagesJSON, wantImages)
 	}
@@ -110,7 +110,7 @@ func TestBaseLineageSource_MatchesBothSignerGenerations(t *testing.T) {
 
 	baseID := strings.Repeat("a", 64)
 	expected := baseImageLineageExpectation{
-		Source:      "https://codeberg.org/itiquette/nanolinter",
+		Source:      "https://forge.example/examplescope/myapp",
 		Workflow:    "container-bases.yml",
 		Flavor:      "rust",
 		BaseInputID: baseID,
@@ -121,11 +121,11 @@ func TestBaseLineageSource_MatchesBothSignerGenerations(t *testing.T) {
 		source string
 		wantOK bool
 	}{
-		{"retired signer bare URL", "https://codeberg.org/itiquette/nanolinter", true},
-		{"ledger sign SLSA git+ URI", "git+https://codeberg.org/itiquette/nanolinter", true},
-		{"different repository", "https://codeberg.org/attacker/nanolinter", false},
-		{"git+ different repository", "git+https://codeberg.org/attacker/nanolinter", false},
-		{"double git+ prefix", "git+git+https://codeberg.org/itiquette/nanolinter", false},
+		{"retired signer bare URL", "https://forge.example/examplescope/myapp", true},
+		{"ledger sign SLSA git+ URI", "git+https://forge.example/examplescope/myapp", true},
+		{"different repository", "https://forge.example/attacker/nanolinter", false},
+		{"git+ different repository", "git+https://forge.example/attacker/nanolinter", false},
+		{"double git+ prefix", "git+git+https://forge.example/examplescope/myapp", false},
 		{"empty source", "", false},
 	}
 
@@ -153,7 +153,7 @@ func TestPromoteBaseImages_CopiesMissingFinalTagAndEmitsOutputs(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	repo := "codeberg.org/itiquette/nanolinter-base"
+	repo := "forge.example/examplescope/myapp-base"
 	baseID := strings.Repeat("b", 64)
 	rustDigest := "sha256:" + strings.Repeat("2", 64)
 	goDigest := "sha256:" + strings.Repeat("3", 64)
@@ -165,8 +165,8 @@ func TestPromoteBaseImages_CopiesMissingFinalTagAndEmitsOutputs(t *testing.T) {
 		goFinal:       goDigest,
 	}}
 	verifier := &fakeBaseImageVerifier{payload: baseLineagePayload(t,
-		lineageFields{source: "https://codeberg.org/itiquette/nanolinter", workflow: "container-bases.yml", flavor: "rust", baseInputID: baseID},
-		lineageFields{source: "https://codeberg.org/itiquette/nanolinter", workflow: "container-bases.yml", flavor: "go", baseInputID: baseID},
+		lineageFields{source: "https://forge.example/examplescope/myapp", workflow: "container-bases.yml", flavor: "rust", baseInputID: baseID},
+		lineageFields{source: "https://forge.example/examplescope/myapp", workflow: "container-bases.yml", flavor: "go", baseInputID: baseID},
 	)}
 
 	result, err := PromoteBaseImages(ctx, registry, verifier, io.Discard, BaseImagePromoteInput{
@@ -175,7 +175,7 @@ func TestPromoteBaseImages_CopiesMissingFinalTagAndEmitsOutputs(t *testing.T) {
 			{Flavor: "go", Tag: goFinal, Ref: repo + "@" + goDigest, BaseInputID: baseID},
 		},
 		ExpectedRepository: repo,
-		ExpectedSource:     "https://codeberg.org/itiquette/nanolinter",
+		ExpectedSource:     "https://forge.example/examplescope/myapp",
 		ExpectedWorkflow:   "container-bases.yml",
 		CosignPublicKey:    "cosign.pub",
 	})
@@ -191,7 +191,7 @@ func TestPromoteBaseImages_CopiesMissingFinalTagAndEmitsOutputs(t *testing.T) {
 		t.Errorf("BaseInputID = %q, want %q", result.BaseInputID, baseID)
 	}
 
-	wantImages := `[{"flavor":"go","ref":"codeberg.org/itiquette/nanolinter-base@` + goDigest + `","base_input_id":"` + baseID + `"},{"flavor":"rust","ref":"codeberg.org/itiquette/nanolinter-base@` + rustDigest + `","base_input_id":"` + baseID + `"}]`
+	wantImages := `[{"flavor":"go","ref":"forge.example/examplescope/myapp-base@` + goDigest + `","base_input_id":"` + baseID + `"},{"flavor":"rust","ref":"forge.example/examplescope/myapp-base@` + rustDigest + `","base_input_id":"` + baseID + `"}]`
 	if result.BaseImagesJSON != wantImages {
 		t.Errorf("BaseImagesJSON = %s, want %s", result.BaseImagesJSON, wantImages)
 	}
@@ -205,7 +205,7 @@ func TestPromoteBaseImages_CopiesMissingFinalTagAndEmitsOutputs(t *testing.T) {
 func TestCleanupStagingBaseImages_DeletesPromotedAndStaleTags(t *testing.T) {
 	t.Parallel()
 
-	repo := "codeberg.org/itiquette/nanolinter-base"
+	repo := "forge.example/examplescope/myapp-base"
 	baseID := strings.Repeat("1", 64)
 	contentID := strings.Repeat("2", 64)
 	digest := "sha256:" + strings.Repeat("6", 64)
@@ -275,7 +275,7 @@ func TestCleanupStagingBaseImages_DeletesPromotedAndStaleTags(t *testing.T) {
 		}
 	}
 
-	if cleaner.listOwner != "itiquette" || cleaner.listName != "nanolinter-base" {
+	if cleaner.listOwner != "examplescope" || cleaner.listName != "myapp-base" {
 		t.Fatalf("list package owner/name = %s/%s", cleaner.listOwner, cleaner.listName)
 	}
 
@@ -287,7 +287,7 @@ func TestCleanupStagingBaseImages_DeletesPromotedAndStaleTags(t *testing.T) {
 func TestCleanupStagingBaseImages_PreservesReusableArchUntilFinalExists(t *testing.T) {
 	t.Parallel()
 
-	repo := "codeberg.org/itiquette/nanolinter-base"
+	repo := "forge.example/examplescope/myapp-base"
 	baseID := strings.Repeat("4", 64)
 	contentID := strings.Repeat("5", 64)
 	cleaner := &fakeBaseImagePackageAPI{versions: []string{"staging-" + contentID + "-go-arm64"}}
@@ -314,7 +314,7 @@ func TestCleanupStagingBaseImages_PreservesReusableArchUntilFinalExists(t *testi
 func TestCleanupStagingBaseImages_RejectsUnexpectedStagingVersion(t *testing.T) {
 	t.Parallel()
 
-	repo := "codeberg.org/itiquette/nanolinter-base"
+	repo := "forge.example/examplescope/myapp-base"
 	cleaner := &fakeBaseImagePackageAPI{versions: []string{"staging-not-a-content-id-rust"}}
 
 	err := CleanupStagingBaseImages(context.Background(), &fakeBaseImageRegistry{digests: map[string]string{}}, cleaner, io.Discard, BaseImageCleanupStagingInput{
@@ -339,7 +339,7 @@ func TestCleanupStagingBaseImages_RejectsUnexpectedStagingVersion(t *testing.T) 
 func TestCleanupStagingBaseImages_FailsWhenFinalDigestDiffers(t *testing.T) {
 	t.Parallel()
 
-	repo := "codeberg.org/itiquette/nanolinter-base"
+	repo := "forge.example/examplescope/myapp-base"
 	baseID := strings.Repeat("9", 64)
 	digest := "sha256:" + strings.Repeat("a", 64)
 	registry := &fakeBaseImageRegistry{digests: map[string]string{repo + ":" + baseID + "-rust": "sha256:" + strings.Repeat("b", 64)}}
@@ -496,7 +496,7 @@ func baseLineagePayload(t *testing.T, fields ...lineageFields) []byte {
 func TestCleanupStagingBaseImages_AbsentFinalTagBlocksDeletion(t *testing.T) {
 	t.Parallel()
 
-	const repo = "codeberg.org/itiquette/nanolinter-base"
+	const repo = "forge.example/examplescope/myapp-base"
 
 	baseID := strings.Repeat("1", 64)
 	digest := "sha256:" + strings.Repeat("6", 64)

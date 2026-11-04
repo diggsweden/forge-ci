@@ -158,7 +158,7 @@ func baseInput(t *testing.T, ref string) appplatform.CheckoutInput {
 
 	return appplatform.CheckoutInput{
 		Repository: "owner/repo",
-		ServerURL:  "https://codeberg.org",
+		ServerURL:  "https://forge.example",
 		Ref:        ref,
 		Workspace:  t.TempDir(),
 	}

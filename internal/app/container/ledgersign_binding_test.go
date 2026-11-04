@@ -33,13 +33,13 @@ func twoLedgerEntries(t *testing.T) (imageledger.Entry, imageledger.Entry) {
 	second := imageledger.Entry{
 		Role:         "runtime",
 		Flavor:       "go",
-		Ref:          "codeberg.org/itiquette/gommitlint@" + secondDigest,
+		Ref:          "forge.example/examplescope/myapp@" + secondDigest,
 		Digest:       secondDigest,
 		SBOM:         "dist/image-sbom-go.cyclonedx.json",
-		FinalTag:     "codeberg.org/itiquette/gommitlint:v1.2.3-go",
-		MovingTag:    "codeberg.org/itiquette/gommitlint:go",
-		CandidateTag: "codeberg.org/itiquette/gommitlint:staging-v1.2.3-go",
-		BaseRef:      "codeberg.org/itiquette/gommitlint-base@sha256:" + strings.Repeat("f", 64),
+		FinalTag:     "forge.example/examplescope/myapp:v1.2.3-go",
+		MovingTag:    "forge.example/examplescope/myapp:go",
+		CandidateTag: "forge.example/examplescope/myapp:staging-v1.2.3-go",
+		BaseRef:      "forge.example/examplescope/myapp-base@sha256:" + strings.Repeat("f", 64),
 		BaseInputID:  strings.Repeat("d", 64),
 	}
 
@@ -56,8 +56,8 @@ func twoEntryInput(t *testing.T, first, second imageledger.Entry) appcontainer.S
 		Method:                  domainrelease.SignMethodSigstore,
 		Recursive:               true,
 		OIDCIssuer:              "https://issuer.example.invalid",
-		ExpectedImageRepository: "codeberg.org/itiquette/gommitlint",
-		ExpectedBaseRepository:  "codeberg.org/itiquette/gommitlint-base",
+		ExpectedImageRepository: "forge.example/examplescope/myapp",
+		ExpectedBaseRepository:  "forge.example/examplescope/myapp-base",
 	}
 }
 

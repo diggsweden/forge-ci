@@ -83,7 +83,7 @@ func (c *fakeSigCopier) CopyWithSignatures(ctx context.Context, source, dest str
 
 func candidateEntry() imageledger.Entry {
 	e := validEntry()
-	e.CandidateTag = "codeberg.org/itiquette/gommitlint:staging-v1.2.3"
+	e.CandidateTag = "forge.example/examplescope/myapp:staging-v1.2.3"
 
 	return e
 }
@@ -103,12 +103,12 @@ func TestPromoteToStage_RefusesCompetingDestinationsBeforeAnyCopy(t *testing.T) 
 			first, second := candidateEntry(), candidateEntry()
 			first.FinalTag += "-go"
 			first.CandidateTag += "-go"
-			first.MovingTag = "codeberg.org/itiquette/gommitlint:stable"
+			first.MovingTag = "forge.example/examplescope/myapp:stable"
 			second.FinalTag += "-rust"
 			second.CandidateTag += "-rust"
 			second.MovingTag = first.MovingTag
 			second.Digest = otherDigest
-			second.Ref = "codeberg.org/itiquette/gommitlint@" + otherDigest
+			second.Ref = "forge.example/examplescope/myapp@" + otherDigest
 			reg := &fakeRegistry{digests: map[string]string{first.CandidateTag: first.Digest, second.CandidateTag: second.Digest}}
 			before := maps.Clone(reg.digests)
 			signatures := &fakeSigCopier{reg: reg}
@@ -124,7 +124,7 @@ func TestPromoteToStage_RefusesCompetingDestinationsBeforeAnyCopy(t *testing.T) 
 func TestPromote_CopiesCandidateToReleasePointerAndVerifies(t *testing.T) {
 	t.Parallel()
 
-	const releasePointer = "codeberg.org/itiquette/gommitlint:release"
+	const releasePointer = "forge.example/examplescope/myapp:release"
 
 	entry := candidateEntry()
 	reg := &fakeRegistry{digests: map[string]string{entry.CandidateTag: goodDigest}}
@@ -152,7 +152,7 @@ func TestPromoteToStage_ReleaseCanUseLedgerFinalAndMovingTags(t *testing.T) {
 	t.Parallel()
 
 	entry := candidateEntry()
-	entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+	entry.MovingTag = "forge.example/examplescope/myapp:rust"
 	reg := &fakeRegistry{digests: map[string]string{entry.CandidateTag: goodDigest}}
 	stage := imageledger.Stage{Name: "release", UseEntryReleaseTags: true}
 
@@ -198,7 +198,7 @@ func TestPromoteToStage_ReleaseSkipsExistingFinalAtSameDigest(t *testing.T) {
 	t.Parallel()
 
 	entry := candidateEntry()
-	entry.MovingTag = "codeberg.org/itiquette/gommitlint:rust"
+	entry.MovingTag = "forge.example/examplescope/myapp:rust"
 	reg := &fakeRegistry{digests: map[string]string{
 		entry.CandidateTag: goodDigest,
 		entry.FinalTag:     goodDigest,
@@ -316,7 +316,7 @@ func TestPromoteToStage_DevPromotesCandidateToStageTag(t *testing.T) {
 		t.Fatalf("dev promote failed: %v", err)
 	}
 
-	if reg.digests["codeberg.org/itiquette/gommitlint:dev"] != goodDigest {
+	if reg.digests["forge.example/examplescope/myapp:dev"] != goodDigest {
 		t.Errorf("dev tag not promoted to digest: %v", reg.digests)
 	}
 
@@ -333,7 +333,7 @@ func TestPromoteToStage_DevSkipsReleaseScope(t *testing.T) {
 	// dev time); the dev promotion must still pass — release scope is only
 	// enforced at the terminal release promotion.
 	e := candidateEntry()
-	e.FinalTag = "codeberg.org/itiquette/gommitlint:main"
+	e.FinalTag = "forge.example/examplescope/myapp:main"
 	reg := &fakeRegistry{digests: map[string]string{e.CandidateTag: goodDigest}}
 
 	if _, err := imageledger.PromoteToStage(context.Background(), reg, nil, []imageledger.Entry{e}, "", imageledger.Stage{Name: "dev"}); err != nil {
@@ -350,14 +350,14 @@ func TestPromoteToStage_CrossRepoUsesSignatureCopier(t *testing.T) {
 
 	// Promote the Codeberg candidate to a ghcr release tag (cross-registry):
 	// must route through the signature copier, not CopyTag, and verify. The
-	// target is a registry prefix; the source path (itiquette/gommitlint) is
-	// preserved beneath it, so the dest is ghcr.io/itiquette/gommitlint:release-prod.
+	// target is a registry prefix; the source path (examplescope/myapp) is
+	// preserved beneath it, so the dest is ghcr.io/examplescope/myapp:release-prod.
 	stage := imageledger.Stage{Name: "release-prod", TargetRepo: "ghcr.io"}
 	if _, err := imageledger.PromoteToStage(context.Background(), reg, sig, []imageledger.Entry{entry}, "", stage); err != nil {
 		t.Fatalf("cross-repo promote failed: %v", err)
 	}
 
-	dest := "ghcr.io/itiquette/gommitlint:release-prod"
+	dest := "ghcr.io/examplescope/myapp:release-prod"
 	if reg.digests[dest] != goodDigest {
 		t.Errorf("cross-repo dest not promoted to digest: %v", reg.digests)
 	}
@@ -379,7 +379,7 @@ func TestPromoteToStage_CrossRepoRefusedWithoutCopier(t *testing.T) {
 
 	// Cross-repo destination but no signature copier → refuse, don't silently
 	// drop the signature.
-	stage := imageledger.Stage{Name: "release-prod", TargetRepo: "ghcr.io/itiquette/gommitlint"}
+	stage := imageledger.Stage{Name: "release-prod", TargetRepo: "ghcr.io/examplescope/myapp"}
 
 	_, err := imageledger.PromoteToStage(context.Background(), reg, nil, []imageledger.Entry{entry}, "", stage)
 	if !errors.Is(err, errs.ErrUsage) {
@@ -473,14 +473,14 @@ func TestPromote_PromotesEveryEntry(t *testing.T) {
 
 	second := candidateEntry()
 	second.Role = "static"
-	second.Ref = "codeberg.org/itiquette/gommitlint-static@" + goodDigest
-	second.CandidateTag = "codeberg.org/itiquette/gommitlint-static:staging-v1.2.3"
-	second.FinalTag = "codeberg.org/itiquette/gommitlint-static:v1.2.3"
+	second.Ref = "forge.example/examplescope/myapp-static@" + goodDigest
+	second.CandidateTag = "forge.example/examplescope/myapp-static:staging-v1.2.3"
+	second.FinalTag = "forge.example/examplescope/myapp-static:v1.2.3"
 
 	noCandidate := validEntry()
 	noCandidate.Role = "debug"
-	noCandidate.Ref = "codeberg.org/itiquette/gommitlint-debug@" + goodDigest
-	noCandidate.FinalTag = "codeberg.org/itiquette/gommitlint-debug:v1.2.3"
+	noCandidate.Ref = "forge.example/examplescope/myapp-debug@" + goodDigest
+	noCandidate.FinalTag = "forge.example/examplescope/myapp-debug:v1.2.3"
 
 	reg := &fakeRegistry{digests: map[string]string{
 		first.CandidateTag:  goodDigest,
@@ -494,8 +494,8 @@ func TestPromote_PromotesEveryEntry(t *testing.T) {
 	// Both promotable entries copied to their :release moving pointer, in
 	// entry order, and the entry with no candidate contributed nothing.
 	const (
-		firstPointer  = "codeberg.org/itiquette/gommitlint:release"
-		secondPointer = "codeberg.org/itiquette/gommitlint-static:release"
+		firstPointer  = "forge.example/examplescope/myapp:release"
+		secondPointer = "forge.example/examplescope/myapp-static:release"
 	)
 
 	want := []string{
@@ -515,7 +515,7 @@ func TestPromote_PromotesEveryEntry(t *testing.T) {
 	}
 
 	// The skipped entry got no pointer of its own.
-	if _, ok := reg.digests["codeberg.org/itiquette/gommitlint-debug:release"]; ok {
+	if _, ok := reg.digests["forge.example/examplescope/myapp-debug:release"]; ok {
 		t.Error("promoted an entry that has no candidate tag")
 	}
 }

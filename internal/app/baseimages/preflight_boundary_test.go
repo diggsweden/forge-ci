@@ -118,8 +118,8 @@ func TestPromotionBoundary_AllEntriesBeforeCopy(t *testing.T) {
 			second.CandidateTag = promoteRepo + ":candidate-go"
 			registry := &fakeBaseImageRegistry{digests: map[string]string{first.CandidateTag: promoteDigest, second.CandidateTag: "sha256:" + strings.Repeat("b", 64)}}
 			verifier := &boundaryVerifier{fakeBaseImageVerifier: &fakeBaseImageVerifier{payload: baseLineagePayload(t,
-				lineageFields{source: "https://codeberg.org/itiquette/base", workflow: ".forgejo/workflows/base-images.yml", flavor: "rust", baseInputID: promoteInput},
-				lineageFields{source: "https://codeberg.org/itiquette/base", workflow: ".forgejo/workflows/base-images.yml", flavor: "go", baseInputID: promoteInput})}, cancel: cancel}
+				lineageFields{source: "https://forge.example/examplescope/base", workflow: ".forgejo/workflows/base-images.yml", flavor: "rust", baseInputID: promoteInput},
+				lineageFields{source: "https://forge.example/examplescope/base", workflow: ".forgejo/workflows/base-images.yml", flavor: "go", baseInputID: promoteInput})}, cancel: cancel}
 
 			switch kind {
 			case "late metadata":

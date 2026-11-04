@@ -66,10 +66,10 @@ func TestRemoteAdd_SetsTheOriginURL(t *testing.T) {
 	if err := r.InitWithObjectFormat(ctx, "sha1"); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.RemoteAdd(ctx, "origin", "https://codeberg.org/owner/repo.git"); err != nil {
+	if err := r.RemoteAdd(ctx, "origin", "https://forge.example/owner/repo.git"); err != nil {
 		t.Fatal(err)
 	}
-	if got := gitIn(t, dir, "remote", "get-url", "origin"); got != "https://codeberg.org/owner/repo.git" {
+	if got := gitIn(t, dir, "remote", "get-url", "origin"); got != "https://forge.example/owner/repo.git" {
 		t.Errorf("origin url = %q", got)
 	}
 }
@@ -265,7 +265,7 @@ func TestFetch_AuthHeaderNotPersisted(t *testing.T) {
 	if err := r.RemoteAdd(ctx, "origin", src.Dir); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.Fetch(ctx, "https://codeberg.org/owner/repo.git", []string{"+refs/tags/v1.0.0:refs/tags/v1.0.0"}, runcontext.OperatorCredential("secret-token"), 0); err != nil {
+	if err := r.Fetch(ctx, "https://forge.example/owner/repo.git", []string{"+refs/tags/v1.0.0:refs/tags/v1.0.0"}, runcontext.OperatorCredential("secret-token"), 0); err != nil {
 		t.Fatal(err)
 	}
 

@@ -9,7 +9,7 @@ import "testing"
 // GitHub, so its API root comes from the operator or the GitHub default,
 // never from the runner's environment.
 func TestLenderAPIBase_IgnoresTheRunnersEnvironment(t *testing.T) {
-	t.Setenv("GITHUB_API_URL", "https://codefloe.com/api/v1")
+	t.Setenv("GITHUB_API_URL", "https://forgejo.example/api/v1")
 
 	for _, tc := range []struct{ override, want string }{
 		{"", defaultAPIBase},

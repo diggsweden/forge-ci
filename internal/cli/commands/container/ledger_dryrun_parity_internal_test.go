@@ -80,7 +80,7 @@ func TestLedgerDryRun_PreviewsExactlyTheOperationsTheWetRunPerforms(t *testing.T
 	const (
 		rustDigest = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
 		goDigest   = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
-		repository = "codeberg.org/itiquette/app"
+		repository = "forge.example/examplescope/app"
 	)
 
 	entries := []imageledger.Entry{

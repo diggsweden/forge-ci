@@ -31,10 +31,10 @@ func TestListReleases_ReadsEachReleasesLinks(t *testing.T) {
 		return fakegitserver.Response{Status: 200, Body: `[{"tag_name":"v1.0.0","created_at":"2026-01-02T00:00:00Z"}]`}
 	})
 	srv.OnGet(glReleasesBase+"/"+glTag+"/assets/links", func(fakegitserver.Request) fakegitserver.Response {
-		return fakegitserver.Response{Status: 200, Body: `[{"id":7,"name":"app.tar.gz","url":"https://gitlab.invalid/itiquette/repo/uploads/` + glUploadHash + `/app.tar.gz"}]`}
+		return fakegitserver.Response{Status: 200, Body: `[{"id":7,"name":"app.tar.gz","url":"https://gitlab.invalid/examplescope/repo/uploads/` + glUploadHash + `/app.tar.gz"}]`}
 	})
 
-	releases, err := retentionProvider(srv).ListReleases(t.Context(), "itiquette/repo")
+	releases, err := retentionProvider(srv).ListReleases(t.Context(), "examplescope/repo")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestDeleteReleaseAsset_DeletesTheUploadThenTheLink(t *testing.T) {
 		})
 	}
 
-	err := retentionProvider(srv).DeleteReleaseAsset(t.Context(), "itiquette/repo", provider.ListedRelease{Tag: glTag}, provider.ListedAsset{
+	err := retentionProvider(srv).DeleteReleaseAsset(t.Context(), "examplescope/repo", provider.ListedRelease{Tag: glTag}, provider.ListedAsset{
 		ID: 7, Name: "app.tar.gz", URL: "https://gitlab.invalid/-/project/42/uploads/" + glUploadHash + "/app.tar.gz",
 	})
 	if err != nil {
@@ -87,16 +87,16 @@ func TestDeleteReleaseAsset_LeavesFilesOutsideTheProjectsUploads(t *testing.T) {
 	link := glReleasesBase + "/" + glTag + "/assets/links/8"
 
 	for name, target := range map[string]string{
-		"another host":      "https://elsewhere.invalid/itiquette/repo/uploads/" + glUploadHash + "/app.tar.gz",
+		"another host":      "https://elsewhere.invalid/examplescope/repo/uploads/" + glUploadHash + "/app.tar.gz",
 		"a package":         "https://gitlab.invalid/api/v4/projects/1/packages/generic/app/1.0.0/app.tar.gz",
-		"a short upload id": "https://gitlab.invalid/itiquette/repo/uploads/abc/app.tar.gz",
+		"a short upload id": "https://gitlab.invalid/examplescope/repo/uploads/abc/app.tar.gz",
 	} {
 		srv := fakegitserver.NewGitLab(t)
 		srv.On(http.MethodDelete, link, func(fakegitserver.Request) fakegitserver.Response {
 			return fakegitserver.Response{Status: 204}
 		})
 
-		err := retentionProvider(srv).DeleteReleaseAsset(t.Context(), "itiquette/repo", provider.ListedRelease{Tag: glTag},
+		err := retentionProvider(srv).DeleteReleaseAsset(t.Context(), "examplescope/repo", provider.ListedRelease{Tag: glTag},
 			provider.ListedAsset{ID: 8, Name: "app.tar.gz", URL: target})
 		if requests := srv.Requests(); err != nil || len(requests) != 1 || requests[0].Path != link {
 			t.Errorf("%s: %v, requests %+v; want only the link deleted", name, err, requests)

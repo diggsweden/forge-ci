@@ -51,7 +51,7 @@ func TestBuildSignerImage_ArgvShape(t *testing.T) {
 
 			err := a.BuildSignerImage(context.Background(), container.SignerImageBuildToolRequest{
 				AuthFile: "/tmp/auth.json", Platform: "linux/amd64",
-				SourceURL: "https://codeberg.org/org/repo", Revision: "abc123",
+				SourceURL: "https://forge.example/org/repo", Revision: "abc123",
 				LocalImage: "localhost/signer:amd64", Containerfile: "Containerfile",
 				Context: ".", Title: tc.title,
 			}, &stderr)
@@ -69,7 +69,7 @@ func TestBuildSignerImage_ArgvShape(t *testing.T) {
 				"--platform linux/amd64",
 				// Provenance: these two labels are how a published image
 				// is traced back to its source and commit.
-				"--label org.opencontainers.image.source=https://codeberg.org/org/repo",
+				"--label org.opencontainers.image.source=https://forge.example/org/repo",
 				"--label org.opencontainers.image.revision=abc123",
 				"--tag localhost/signer:amd64",
 			} {
@@ -114,7 +114,7 @@ func TestBuildSignerImage_NoAuthFileOmitsTheFlag(t *testing.T) {
 	var stderr strings.Builder
 
 	err := a.BuildSignerImage(context.Background(), container.SignerImageBuildToolRequest{
-		Platform: "linux/amd64", SourceURL: "https://codeberg.org/org/repo", Revision: "abc123",
+		Platform: "linux/amd64", SourceURL: "https://forge.example/org/repo", Revision: "abc123",
 		LocalImage: "localhost/image:amd64", Containerfile: "Containerfile", Context: ".",
 	}, &stderr)
 	if err != nil {

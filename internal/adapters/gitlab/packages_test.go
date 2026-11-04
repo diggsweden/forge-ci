@@ -57,13 +57,13 @@ func TestListContainerPackageVersions_ReturnsEveryTag(t *testing.T) {
 	srv := fakegitserver.NewGitLab(t)
 
 	srv.OnGet(glRegistryRepos, func(fakegitserver.Request) fakegitserver.Response {
-		return fakegitserver.Response{Status: 200, Body: `[{"id":42,"path":"itiquette/repo"}]`}
+		return fakegitserver.Response{Status: 200, Body: `[{"id":42,"path":"examplescope/repo"}]`}
 	})
 	srv.OnGet(glTagsEndpoint, func(fakegitserver.Request) fakegitserver.Response {
 		return fakegitserver.Response{Status: 200, Body: tagPage("staging-v1.2.3", "v1.2.3", "latest")}
 	})
 
-	got, err := newPackagesProvider(srv).ListContainerPackageVersions(context.Background(), "itiquette", "repo")
+	got, err := newPackagesProvider(srv).ListContainerPackageVersions(context.Background(), "examplescope", "repo")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestListContainerPackageVersions_PagesUntilShort(t *testing.T) {
 	srv := fakegitserver.NewGitLab(t)
 
 	srv.OnGet(glRegistryRepos, func(fakegitserver.Request) fakegitserver.Response {
-		return fakegitserver.Response{Status: 200, Body: `[{"id":42,"path":"itiquette/repo"}]`}
+		return fakegitserver.Response{Status: 200, Body: `[{"id":42,"path":"examplescope/repo"}]`}
 	})
 
 	// A full first page (the API's cap), then a short second one.
@@ -106,7 +106,7 @@ func TestListContainerPackageVersions_PagesUntilShort(t *testing.T) {
 		}
 	})
 
-	got, err := newPackagesProvider(srv).ListContainerPackageVersions(context.Background(), "itiquette", "repo")
+	got, err := newPackagesProvider(srv).ListContainerPackageVersions(context.Background(), "examplescope", "repo")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,15 +138,15 @@ func TestListContainerPackageVersions_NoSuchImageIsEmptyNotAnError(t *testing.T)
 
 	srv.OnGet(glRegistryRepos, func(fakegitserver.Request) fakegitserver.Response {
 		// The project exists and holds two images, neither of them this
-		// one. "itiquette/re" is deliberately a PREFIX of the requested
-		// "itiquette/repo": the resolver matches paths exactly, and a
+		// one. "examplescope/re" is deliberately a PREFIX of the requested
+		// "examplescope/repo": the resolver matches paths exactly, and a
 		// prefix match here would list -- and later delete -- tags from
 		// a neighbouring image.
 		return fakegitserver.Response{Status: 200,
-			Body: `[{"id":7,"path":"itiquette/other"},{"id":8,"path":"itiquette/re"}]`}
+			Body: `[{"id":7,"path":"examplescope/other"},{"id":8,"path":"examplescope/re"}]`}
 	})
 
-	got, err := newPackagesProvider(srv).ListContainerPackageVersions(context.Background(), "itiquette", "repo")
+	got, err := newPackagesProvider(srv).ListContainerPackageVersions(context.Background(), "examplescope", "repo")
 	if err != nil {
 		t.Fatalf("an image that was never pushed was reported as an error: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestListContainerPackageVersions_Refusals(t *testing.T) {
 	// any work.
 	for _, tc := range []struct{ name, owner, image string }{
 		{name: "no owner", owner: "", image: "repo"},
-		{name: "no name", owner: "itiquette", image: ""},
+		{name: "no name", owner: "examplescope", image: ""},
 		{name: "neither", owner: "", image: ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -211,13 +211,13 @@ func TestListContainerPackageVersions_MalformedBodyIsAnError(t *testing.T) {
 	srv := fakegitserver.NewGitLab(t)
 
 	srv.OnGet(glRegistryRepos, func(fakegitserver.Request) fakegitserver.Response {
-		return fakegitserver.Response{Status: 200, Body: `[{"id":42,"path":"itiquette/repo"}]`}
+		return fakegitserver.Response{Status: 200, Body: `[{"id":42,"path":"examplescope/repo"}]`}
 	})
 	srv.OnGet(glTagsEndpoint, func(fakegitserver.Request) fakegitserver.Response {
 		return fakegitserver.Response{Status: 200, Body: `{"not":"an array"}`}
 	})
 
-	_, err := newPackagesProvider(srv).ListContainerPackageVersions(context.Background(), "itiquette", "repo")
+	_, err := newPackagesProvider(srv).ListContainerPackageVersions(context.Background(), "examplescope", "repo")
 	if !errors.Is(err, errs.ErrMalformedInput) {
 		t.Fatalf("err = %v, want ErrMalformedInput", err)
 	}

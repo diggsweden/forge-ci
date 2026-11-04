@@ -21,7 +21,7 @@ func TestAuthEnv_ScopesTheEncodedHeaderToItsAudience(t *testing.T) {
 
 	const (
 		ownRemote   = "https://github.com/owner/repo.git"
-		otherRemote = "https://codeberg.org/owner/repo.git"
+		otherRemote = "https://forge.example/owner/repo.git"
 		header      = "GIT_CONFIG_VALUE_0=Authorization: Basic eC1hY2Nlc3MtdG9rZW46Zml4dHVyZS10b2tlbg=="
 	)
 

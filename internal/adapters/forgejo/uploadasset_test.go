@@ -118,7 +118,7 @@ func TestUploadReleaseAsset_UploadsUnderTheBasenameOnly(t *testing.T) {
 	provider := &forgejo.Provider{
 		Env: envMap(map[string]string{
 			"FORGEJO_TOKEN":      "tok",
-			"FORGEJO_REPOSITORY": "itiquette/gommitlint",
+			"FORGEJO_REPOSITORY": "examplescope/myapp",
 		}),
 		HTTPClient:      client,
 		APIBaseOverride: "https://forgejo.invalid",
@@ -147,7 +147,7 @@ func TestUploadReleaseAsset_UploadsUnderTheBasenameOnly(t *testing.T) {
 
 	// The repository came from the runner environment, not from a
 	// hardcoded default.
-	if !strings.Contains(rec.releasePath, "/itiquette/gommitlint/") {
+	if !strings.Contains(rec.releasePath, "/examplescope/myapp/") {
 		t.Errorf("release lookup path = %q, want the repository from the environment", rec.releasePath)
 	}
 
@@ -155,7 +155,7 @@ func TestUploadReleaseAsset_UploadsUnderTheBasenameOnly(t *testing.T) {
 		t.Errorf("uploaded body = %q, want the file's contents", rec.body)
 	}
 
-	if rec.uploadPath != "/api/v1/repos/itiquette/gommitlint/releases/42/assets" {
+	if rec.uploadPath != "/api/v1/repos/examplescope/myapp/releases/42/assets" {
 		t.Errorf("attachment posted to %q, want the release resolved from the tag", rec.uploadPath)
 	}
 }
@@ -180,7 +180,7 @@ func TestUploadReleaseAsset_Refusals(t *testing.T) {
 	}{
 		{
 			name: "no tag",
-			env:  map[string]string{"FORGEJO_TOKEN": "tok", "FORGEJO_REPOSITORY": "itiquette/gommitlint"},
+			env:  map[string]string{"FORGEJO_TOKEN": "tok", "FORGEJO_REPOSITORY": "examplescope/myapp"},
 			tag:  "",
 			file: asset,
 		},
@@ -192,7 +192,7 @@ func TestUploadReleaseAsset_Refusals(t *testing.T) {
 		},
 		{
 			name: "a repository with no owner",
-			env:  map[string]string{"FORGEJO_TOKEN": "tok", "FORGEJO_REPOSITORY": "gommitlint"},
+			env:  map[string]string{"FORGEJO_TOKEN": "tok", "FORGEJO_REPOSITORY": "myapp"},
 			tag:  "v1.0.0",
 			file: asset,
 		},
@@ -235,7 +235,7 @@ func TestUploadReleaseAsset_MissingFileIsNotAnUpload(t *testing.T) {
 	provider := &forgejo.Provider{
 		Env: envMap(map[string]string{
 			"FORGEJO_TOKEN":      "tok",
-			"FORGEJO_REPOSITORY": "itiquette/gommitlint",
+			"FORGEJO_REPOSITORY": "examplescope/myapp",
 		}),
 		HTTPClient:      client,
 		APIBaseOverride: "https://forgejo.invalid",

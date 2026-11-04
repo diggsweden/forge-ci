@@ -18,9 +18,9 @@ import (
 	"github.com/diggsweden/forge-ci/internal/testutil/fakegitserver"
 )
 
-// escaped project path GitLab uses in REST routes (url.PathEscape("itiquette/repo")).
+// escaped project path GitLab uses in REST routes (url.PathEscape("examplescope/repo")).
 const (
-	glProject      = "itiquette%2Frepo"
+	glProject      = "examplescope%2Frepo"
 	glReleasesBase = "/api/v4/projects/" + glProject + "/releases"
 	glTag          = "v1.0.0"
 )
@@ -57,7 +57,7 @@ func TestPublishRelease_CreatesWhenMissing(t *testing.T) {
 		Env:             envFunc(map[string]string{"GITLAB_TOKEN": "t"}),
 	}
 
-	if err := gitlabProvider.PublishRelease(context.Background(), "itiquette/repo", provider.ReleaseSpec{
+	if err := gitlabProvider.PublishRelease(context.Background(), "examplescope/repo", provider.ReleaseSpec{
 		Tag:  glTag,
 		Name: "v1.0.0",
 	}); err != nil {
@@ -119,7 +119,7 @@ func TestPublishRelease_UpdatesInPlaceAndReconcilesAssets(t *testing.T) {
 		Env:             envFunc(map[string]string{"GITLAB_TOKEN": "t"}),
 	}
 
-	if err := gitlabProvider.PublishRelease(context.Background(), "itiquette/repo", provider.ReleaseSpec{
+	if err := gitlabProvider.PublishRelease(context.Background(), "examplescope/repo", provider.ReleaseSpec{
 		Tag:    glTag,
 		Name:   "renamed",
 		Assets: []string{asset},
@@ -157,7 +157,7 @@ func TestPublishRelease_EmptyTagErrors(t *testing.T) {
 
 	p := &gitlab.Provider{}
 
-	err := p.PublishRelease(context.Background(), "itiquette/repo", provider.ReleaseSpec{})
+	err := p.PublishRelease(context.Background(), "examplescope/repo", provider.ReleaseSpec{})
 	if !errors.Is(err, errs.ErrUsage) || !strings.Contains(err.Error(), "tag is empty") {
 		t.Fatalf("err = %v, want ErrUsage naming the empty tag", err)
 	}
@@ -182,7 +182,7 @@ func TestPublishRelease_AssetUploadRequiresGitLabTokenBeforeMutation(t *testing.
 		})},
 	}
 
-	err := gitlabProvider.PublishRelease(context.Background(), "itiquette/repo", provider.ReleaseSpec{
+	err := gitlabProvider.PublishRelease(context.Background(), "examplescope/repo", provider.ReleaseSpec{
 		Tag:    glTag,
 		Assets: []string{asset},
 	})
@@ -212,8 +212,8 @@ func TestPublishRelease_UnreadableNotesFileFailsBeforeAnyRequest(t *testing.T) {
 	spec := provider.ReleaseSpec{Tag: glTag, Name: "v1.0.0", NotesFile: filepath.Join(t.TempDir(), "missing-notes.md")}
 
 	for name, publish := range map[string]func() error{
-		"PublishRelease": func() error { return gitlabProvider.PublishRelease(context.Background(), "itiquette/repo", spec) },
-		"CreateRelease":  func() error { return gitlabProvider.CreateRelease(context.Background(), "itiquette/repo", spec) },
+		"PublishRelease": func() error { return gitlabProvider.PublishRelease(context.Background(), "examplescope/repo", spec) },
+		"CreateRelease":  func() error { return gitlabProvider.CreateRelease(context.Background(), "examplescope/repo", spec) },
 	} {
 		err := publish()
 		if err == nil || !strings.Contains(err.Error(), "release notes") {

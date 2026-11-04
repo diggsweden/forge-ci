@@ -128,7 +128,7 @@ func TestResolveBoundary_RefusalAndDependencyIdentity(t *testing.T) {
 func TestCheckoutBoundary_CompleteOrderCredentialsAndFailures(t *testing.T) {
 	t.Parallel()
 
-	const remote = "https://codeberg.org/owner/repo.git"
+	const remote = "https://forge.example/owner/repo.git"
 
 	cred := runcontext.OperatorCredential("owned-checkout-marker")
 
@@ -287,7 +287,7 @@ func TestCheckoutBoundary_BaseFetchAndWorkspaceLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := checkoutEvent{method: "fetch", args: []string{"https://codeberg.org/owner/repo.git", "0", "+refs/heads/main:refs/heads/main"}, credential: in.Token}
+	want := checkoutEvent{method: "fetch", args: []string{"https://forge.example/owner/repo.git", "0", "+refs/heads/main:refs/heads/main"}, credential: in.Token}
 	if len(git.events) != 7 || !reflect.DeepEqual(git.events[5], want) {
 		t.Fatal("base branch fetch lost source, credential, depth or refspec")
 	}

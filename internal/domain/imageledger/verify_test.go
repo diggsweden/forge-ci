@@ -29,7 +29,7 @@ func TestVerify_AcceptsWhenCandidateResolves(t *testing.T) {
 	t.Parallel()
 
 	e := validEntry()
-	e.CandidateTag = "codeberg.org/itiquette/gommitlint:staging-v1.2.3"
+	e.CandidateTag = "forge.example/examplescope/myapp:staging-v1.2.3"
 
 	resolver := fakeResolver{e.CandidateTag: goodDigest}
 
@@ -42,7 +42,7 @@ func TestVerify_FallsBackToFinalTagThenRef(t *testing.T) {
 	t.Parallel()
 
 	entry := validEntry()
-	entry.CandidateTag = "codeberg.org/itiquette/gommitlint:staging-v1.2.3"
+	entry.CandidateTag = "forge.example/examplescope/myapp:staging-v1.2.3"
 
 	// Candidate already cleaned up (resolver errors on it); final_tag serves it.
 	resolver := fakeResolver{entry.FinalTag: goodDigest}
@@ -81,7 +81,7 @@ func TestVerify_RevalidatesBeforeResolving(t *testing.T) {
 	t.Parallel()
 
 	bad := validEntry()
-	bad.FinalTag = "codeberg.org/itiquette/gommitlint:v9.9.9" // out of scope
+	bad.FinalTag = "forge.example/examplescope/myapp:v9.9.9" // out of scope
 
 	// Even though a resolver would match, the strict re-validation fails first.
 	resolver := fakeResolver{bad.FinalTag: goodDigest}
@@ -97,18 +97,18 @@ func TestValidate_StrictCandidateAndMovingRules(t *testing.T) {
 
 	// candidate must be the exact staging counterpart of final_tag's suffix.
 	suffixed := validEntry()
-	suffixed.FinalTag = "codeberg.org/itiquette/gommitlint:v1.2.3-amd64"
+	suffixed.FinalTag = "forge.example/examplescope/myapp:v1.2.3-amd64"
 
-	suffixed.CandidateTag = "codeberg.org/itiquette/gommitlint:staging-v1.2.3-amd64"
+	suffixed.CandidateTag = "forge.example/examplescope/myapp:staging-v1.2.3-amd64"
 	if err := suffixed.Validate("v1.2.3"); err != nil {
 		t.Errorf("matching suffixed candidate rejected: %v", err)
 	}
 
 	// wrong suffix on candidate → reject.
 	wrong := validEntry()
-	wrong.FinalTag = "codeberg.org/itiquette/gommitlint:v1.2.3-amd64"
+	wrong.FinalTag = "forge.example/examplescope/myapp:v1.2.3-amd64"
 
-	wrong.CandidateTag = "codeberg.org/itiquette/gommitlint:staging-v1.2.3-arm64"
+	wrong.CandidateTag = "forge.example/examplescope/myapp:staging-v1.2.3-arm64"
 	if err := wrong.Validate("v1.2.3"); !errors.Is(err, errs.ErrValidation) {
 		t.Errorf("mismatched candidate suffix should be rejected, got %v", err)
 	}
@@ -130,8 +130,8 @@ func TestVerify_ChecksEveryEntry(t *testing.T) {
 	// registry does not serve under any of its refs.
 	bad := validEntry()
 	bad.Role = "static"
-	bad.Ref = "codeberg.org/itiquette/gommitlint-static@" + goodDigest
-	bad.FinalTag = "codeberg.org/itiquette/gommitlint-static:v1.2.3"
+	bad.Ref = "forge.example/examplescope/myapp-static@" + goodDigest
+	bad.FinalTag = "forge.example/examplescope/myapp-static:v1.2.3"
 
 	otherDigest := "sha256:" + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 	resolver := fakeResolver{
@@ -159,7 +159,7 @@ func TestVerify_ChecksEveryEntry(t *testing.T) {
 
 			// The message names which entry failed; with several images
 			// in a release, "something did not verify" is not actionable.
-			if !strings.Contains(err.Error(), "gommitlint-static") {
+			if !strings.Contains(err.Error(), "myapp-static") {
 				t.Errorf("error should name the failing image: %v", err)
 			}
 		})

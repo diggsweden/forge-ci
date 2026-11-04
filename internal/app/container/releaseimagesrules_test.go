@@ -57,12 +57,12 @@ func TestValidateReleaseImagesPath_ConfinesTheLedgerUnderDist(t *testing.T) {
 func TestDefaultReleaseImageRepository_LowercasesTheRepo(t *testing.T) {
 	t.Parallel()
 
-	got, err := appcontainer.DefaultReleaseImageRepository("codeberg.org", "Itiquette/Nanolinter")
+	got, err := appcontainer.DefaultReleaseImageRepository("forge.example", "Examplescope/MyApp")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if want := "codeberg.org/itiquette/nanolinter"; got != want {
+	if want := "forge.example/examplescope/myapp"; got != want {
 		t.Errorf("DefaultReleaseImageRepository() = %q, want %q", got, want)
 	}
 }
@@ -71,11 +71,11 @@ func TestRegistryHost_StripsSchemeAndPath(t *testing.T) {
 	t.Parallel()
 
 	for name, tc := range map[string]struct{ raw, want string }{
-		"an https URL":             {raw: "https://codeberg.org", want: "codeberg.org"},
+		"an https URL":             {raw: "https://forge.example", want: "forge.example"},
 		"an http URL with a slash": {raw: "http://git.example.test/", want: "git.example.test"},
 		"a repository path":        {raw: "registry.example.test/org/repo", want: "registry.example.test"},
-		"surrounding whitespace":   {raw: "  codeberg.org  ", want: "codeberg.org"},
-		"an explicit port":         {raw: "codeberg.org:5000", want: "codeberg.org:5000"},
+		"surrounding whitespace":   {raw: "  forge.example  ", want: "forge.example"},
+		"an explicit port":         {raw: "forge.example:5000", want: "forge.example:5000"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -103,11 +103,11 @@ func TestRegistryHost_RefusesWithoutEchoingCredentials(t *testing.T) {
 	const canary = "s3cr3t-canary"
 
 	for name, raw := range map[string]string{
-		"a password in a URL":         "https://user:" + canary + "@codeberg.org",
-		"a token as the URL username": "https://" + canary + "@codeberg.org/org/repo",
-		"userinfo on a bare host":     "user:" + canary + "@codeberg.org",
-		"userinfo on a repository":    canary + "@codeberg.org/org/repo",
-		"another scheme":              "ftp://codeberg.org",
+		"a password in a URL":         "https://user:" + canary + "@forge.example",
+		"a token as the URL username": "https://" + canary + "@forge.example/org/repo",
+		"userinfo on a bare host":     "user:" + canary + "@forge.example",
+		"userinfo on a repository":    canary + "@forge.example/org/repo",
+		"another scheme":              "ftp://forge.example",
 		"a scheme with no host":       "https://",
 		"whitespace only":             "   ",
 	} {
@@ -147,8 +147,8 @@ func TestOptionalRegistryHost_OnlyEmptyIsOptional(t *testing.T) {
 		t.Errorf("whitespace = (%q, %v), want ErrUsage", got, err)
 	}
 
-	if got, err := appcontainer.OptionalRegistryHost("https://codeberg.org/"); got != "codeberg.org" || err != nil {
-		t.Errorf("present = (%q, %v), want codeberg.org", got, err)
+	if got, err := appcontainer.OptionalRegistryHost("https://forge.example/"); got != "forge.example" || err != nil {
+		t.Errorf("present = (%q, %v), want forge.example", got, err)
 	}
 }
 
@@ -161,8 +161,8 @@ func TestNormalizedServerURL_KeepsTheSchemeIntact(t *testing.T) {
 	t.Parallel()
 
 	for name, tc := range map[string]struct{ raw, want string }{
-		"a bare host gains https":      {raw: "codeberg.org", want: "https://codeberg.org"},
-		"trailing slashes are trimmed": {raw: "https://codeberg.org//", want: "https://codeberg.org"},
+		"a bare host gains https":      {raw: "forge.example", want: "https://forge.example"},
+		"trailing slashes are trimmed": {raw: "https://forge.example//", want: "https://forge.example"},
 		"an http scheme is kept":       {raw: " http://git.example.test/ ", want: "http://git.example.test"},
 		"empty stays empty":            {raw: "", want: ""},
 		"whitespace becomes empty":     {raw: "  ", want: ""},

@@ -116,7 +116,7 @@ func TestRegistryLogin_PathPrecedence(t *testing.T) {
 	t.Setenv("DOCKER_CONFIG", t.TempDir())
 
 	if err := appcontainer.RegistryLogin(io.Discard, appcontainer.RegistryLoginInput{
-		Registry: "codeberg.org", Username: "bot", Password: "tok",
+		Registry: "forge.example", Username: "bot", Password: "tok",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +223,7 @@ func TestRegistryLogout_RemovesOneKeepsOthersAndStays0600(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "config.json")
-	for _, reg := range []string{"ghcr.io", "codeberg.org"} {
+	for _, reg := range []string{"ghcr.io", "forge.example"} {
 		if err := appcontainer.RegistryLogin(io.Discard, appcontainer.RegistryLoginInput{
 			Registry: reg, Username: "u", Password: "p", AuthFile: path,
 		}); err != nil {
@@ -241,8 +241,8 @@ func TestRegistryLogout_RemovesOneKeepsOthersAndStays0600(t *testing.T) {
 		t.Errorf("ghcr.io credential not removed: %q", got)
 	}
 
-	if got := readAuth(t, path, "codeberg.org"); got == "" {
-		t.Error("codeberg.org credential was clobbered by logout")
+	if got := readAuth(t, path, "forge.example"); got == "" {
+		t.Error("forge.example credential was clobbered by logout")
 	}
 
 	if info, err := os.Stat(path); err != nil {

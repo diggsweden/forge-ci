@@ -113,7 +113,7 @@ func TestProvenanceSource_OnGitHubNamesGitHub(t *testing.T) {
 	for key, value := range map[string]string{
 		"GITHUB_ACTIONS":    "true",
 		"GITHUB_SERVER_URL": "https://github.com",
-		"GITHUB_REPOSITORY": "diggsweden/app",
+		"GITHUB_REPOSITORY": "examplescope/app",
 		"GITHUB_REF_NAME":   "v2.0.0",
 		"GITHUB_SHA":        "3333333333333333333333333333333333333333",
 	} {
@@ -122,7 +122,7 @@ func TestProvenanceSource_OnGitHubNamesGitHub(t *testing.T) {
 
 	repoURL, ref, commit := cienv.ProvenanceSource()
 
-	require.Equal(t, "https://github.com/diggsweden/app", repoURL)
+	require.Equal(t, "https://github.com/examplescope/app", repoURL)
 	require.Equal(t, "v2.0.0", ref)
 	require.Equal(t, "3333333333333333333333333333333333333333", commit)
 }

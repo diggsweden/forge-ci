@@ -58,12 +58,12 @@ func TestRequireRegistrySurfaceMatches(t *testing.T) {
 		{
 			name:   "forge repository without the flag is the remote topology",
 			local:  false,
-			common: baseImagesCommon{ExpectedRepository: "codefloe.com/owner/project-base", ServerURL: "https://codefloe.com"},
+			common: baseImagesCommon{ExpectedRepository: "forge.example/owner/project-base", ServerURL: "https://forge.example"},
 		},
 		{
 			name:        "forge repository with the flag would bypass the package API",
 			local:       true,
-			common:      baseImagesCommon{ExpectedRepository: "codefloe.com/owner/project-base", ServerURL: "https://codefloe.com"},
+			common:      baseImagesCommon{ExpectedRepository: "forge.example/owner/project-base", ServerURL: "https://forge.example"},
 			wantRefusal: true,
 		},
 		{
@@ -71,7 +71,7 @@ func TestRequireRegistrySurfaceMatches(t *testing.T) {
 			// runner-pool topology. The flag is the only way to reach it.
 			name:   "private non-forge registry with the flag is allowed",
 			local:  true,
-			common: baseImagesCommon{ExpectedRepository: "bases.ci.internal:5000/owner/project-base", ServerURL: "https://codefloe.com"},
+			common: baseImagesCommon{ExpectedRepository: "bases.ci.internal:5000/owner/project-base", ServerURL: "https://forge.example"},
 		},
 		{
 			name:   "no expected repository yet is not a mismatch",

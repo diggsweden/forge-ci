@@ -53,17 +53,19 @@ func TestVerifyForgejoToken(t *testing.T) {
 	t.Parallel()
 
 	const (
-		repository  = "itiquette/example"
+		repository  = "examplescope/example"
 		operational = "ERROR: forgejo API token verification could not be completed "
 	)
 
-	split := func(sep string) string { return "itiquette/" + verifyTokenSecret[:15] + sep + verifyTokenSecret[15:] }
+	split := func(sep string) string {
+		return "examplescope/" + verifyTokenSecret[:15] + sep + verifyTokenSecret[15:]
+	}
 
 	for _, test := range []verifyTokenCase{
 		{name: "success is concise and names the repository", mode: "success",
-			stdout: "Forgejo API token verified for itiquette/example\n"},
+			stdout: "Forgejo API token verified for examplescope/example\n"},
 		{name: "EX_NOPERM gets the credential message", mode: "permission",
-			stderr: "ERROR: forgejo API token was rejected or lacks read:repository scope for itiquette/example\n"},
+			stderr: "ERROR: forgejo API token was rejected or lacks read:repository scope for examplescope/example\n"},
 		{name: "network failure keeps its diagnostic", mode: "network",
 			contains: []string{operational + "(forge-ci exit 69): dial tcp: connection refused"}},
 		{name: "invocation failure keeps its diagnostic", mode: "invocation",
@@ -78,9 +80,9 @@ func TestVerifyForgejoToken(t *testing.T) {
 		{name: "token split by a control byte is redacted", mode: "split-control",
 			contains: []string{operational + "(forge-ci exit 70): server unavailable for token [REDACTED]"}},
 		{name: "repository with a CR-split token is redacted", mode: "success", repository: split("\r"),
-			stdout: "Forgejo API token verified for itiquette/[REDACTED]\n"},
+			stdout: "Forgejo API token verified for examplescope/[REDACTED]\n"},
 		{name: "repository with a control-split token is redacted", mode: "success", repository: split("\x01"),
-			stdout: "Forgejo API token verified for itiquette/[REDACTED]\n"},
+			stdout: "Forgejo API token verified for examplescope/[REDACTED]\n"},
 		{name: "silent failure has a bounded fallback", mode: "silent",
 			contains: []string{"forge-ci exit 78; no safe diagnostic was emitted"}},
 		{name: "missing binary keeps the resolver diagnostic", mode: "success", realResolver: true,

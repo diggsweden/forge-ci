@@ -39,11 +39,11 @@ func TestDeleteTag_DeletesContainerPackageVersion(t *testing.T) {
 
 	// A fully-qualified ref on the server's registry; the package API targets
 	// owner/name/version.
-	if err := provider.DeleteTag(context.Background(), "forgejo.invalid/itiquette/gommitlint:staging-v1.2.3"); err != nil {
+	if err := provider.DeleteTag(context.Background(), "forgejo.invalid/examplescope/myapp:staging-v1.2.3"); err != nil {
 		t.Fatalf("DeleteTag = %v", err)
 	}
 
-	const want = "/api/v1/packages/itiquette/container/gommitlint/staging-v1.2.3"
+	const want = "/api/v1/packages/examplescope/container/myapp/staging-v1.2.3"
 	if deletedPath != want {
 		t.Errorf("DELETE path = %q, want %q", deletedPath, want)
 	}
@@ -68,7 +68,7 @@ func TestDeleteTag_TreatsMissingPackageVersionAsAlreadyAbsent(t *testing.T) {
 		APIBaseOverride: "https://forgejo.invalid",
 	}
 
-	if err := provider.DeleteTag(context.Background(), "forgejo.invalid/itiquette/gommitlint:staging-v1.2.3"); err != nil {
+	if err := provider.DeleteTag(context.Background(), "forgejo.invalid/examplescope/myapp:staging-v1.2.3"); err != nil {
 		t.Fatalf("DeleteTag 404 should be idempotent, got %v", err)
 	}
 }
@@ -88,7 +88,7 @@ func TestDeleteTag_ReportsARefusedDelete(t *testing.T) {
 		APIBaseOverride: "https://forgejo.invalid",
 	}
 
-	err := provider.DeleteTag(t.Context(), "forgejo.invalid/itiquette/gommitlint:staging-v1.2.3")
+	err := provider.DeleteTag(t.Context(), "forgejo.invalid/examplescope/myapp:staging-v1.2.3")
 	if !errors.Is(err, errs.ErrPermissionDenied) {
 		t.Fatalf("a refused delete = %v, want ErrPermissionDenied", err)
 	}
@@ -131,7 +131,7 @@ func TestDeleteTag_RefusesARedirectThatLeavesTheServer(t *testing.T) {
 				})},
 			}
 
-			err := provider.DeleteTag(t.Context(), "forgejo.invalid/itiquette/gommitlint:staging-v1.2.3")
+			err := provider.DeleteTag(t.Context(), "forgejo.invalid/examplescope/myapp:staging-v1.2.3")
 			if !errors.Is(err, tc.want) || requests != tc.requests {
 				t.Fatalf("DeleteTag = %v after %d requests, want %v after %d", err, requests, tc.want, tc.requests)
 			}
@@ -167,7 +167,7 @@ func TestDeleteTag_RefusesAnImageOnAnotherRegistry(t *testing.T) {
 		})),
 	}
 
-	for _, ref := range []string{"ghcr.io/itiquette/gommitlint:staging-v1.2.3", "forgejo.invalid:8443/itiquette/gommitlint:staging-v1.2.3"} {
+	for _, ref := range []string{"ghcr.io/examplescope/myapp:staging-v1.2.3", "forgejo.invalid:8443/examplescope/myapp:staging-v1.2.3"} {
 		if err := provider.DeleteTag(t.Context(), ref); !errors.Is(err, errs.ErrUsage) {
 			t.Errorf("DeleteTag(%q) = %v, want ErrUsage", ref, err)
 		}
@@ -182,7 +182,7 @@ func TestDeleteTag_RejectsRefWithoutTag(t *testing.T) {
 	t.Parallel()
 
 	// A digest-pinned ref (no tag) cannot be untagged.
-	err := forgejo.New().DeleteTag(context.Background(), "codeberg.org/itiquette/gommitlint@sha256:"+
+	err := forgejo.New().DeleteTag(context.Background(), "forge.example/examplescope/myapp@sha256:"+
 		"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	if !errors.Is(err, errs.ErrUsage) {
 		t.Errorf("ref without a tag should be a usage error, got %v", err)

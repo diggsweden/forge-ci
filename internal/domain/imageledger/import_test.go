@@ -13,8 +13,8 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/imageledger"
 )
 
-const importSource = "codeberg.org/itiquette/gommitlint"
-const importDestination = "registry.example.test/publication/gommitlint"
+const importSource = "forge.example/examplescope/myapp"
+const importDestination = "registry.example.test/publication/myapp"
 
 func TestImportReleaseImagesUsesDigestAndPreservesBuildIdentity(t *testing.T) {
 	t.Parallel()

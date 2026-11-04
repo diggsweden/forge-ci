@@ -39,8 +39,8 @@ func TestResolveContext_PrefersForgejoEnvWithGitHubFallback(t *testing.T) {
 		"FORGEJO_SHA":        "0123456789abcdef",
 		"FORGEJO_REF_NAME":   "v1.2.3",
 		"FORGEJO_REF_TYPE":   "tag",
-		"FORGEJO_REPOSITORY": "itiquette/gommitlint",
-		"FORGEJO_SERVER_URL": "https://codeberg.org",
+		"FORGEJO_REPOSITORY": "examplescope/myapp",
+		"FORGEJO_SERVER_URL": "https://forge.example",
 		"FORGEJO_EVENT_NAME": "push",
 		// GITHUB_* fallback only used where FORGEJO_* is absent:
 		"GITHUB_SHA": "should-not-win",
@@ -63,7 +63,7 @@ func TestResolveContext_PrefersForgejoEnvWithGitHubFallback(t *testing.T) {
 		t.Errorf("RefType=%q RefName=%q", ctx.RefType, ctx.RefName)
 	}
 
-	if ctx.Repo != "itiquette/gommitlint" || ctx.RepoURL != "https://codeberg.org/itiquette/gommitlint" {
+	if ctx.Repo != "examplescope/myapp" || ctx.RepoURL != "https://forge.example/examplescope/myapp" {
 		t.Errorf("Repo=%q RepoURL=%q", ctx.Repo, ctx.RepoURL)
 	}
 }
@@ -130,7 +130,7 @@ func TestCapabilities_AdvertisesReleaseAssetsButNotSARIF(t *testing.T) {
 // adapter sent.
 func newProvider(handler http.Handler) *forgejo.Provider {
 	return &forgejo.Provider{
-		Env:             envMap(map[string]string{"FORGEJO_TOKEN": "tok", "FORGEJO_REPOSITORY": "itiquette/repo"}),
+		Env:             envMap(map[string]string{"FORGEJO_TOKEN": "tok", "FORGEJO_REPOSITORY": "examplescope/repo"}),
 		HTTPClient:      inMemoryClient(handler),
 		APIBaseOverride: "https://forgejo.invalid",
 	}
@@ -153,8 +153,8 @@ func TestValidateToken_OK(t *testing.T) {
 	t.Parallel()
 
 	handler := http.HandlerFunc(func(response http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/api/v1/repos/itiquette/repo" {
-			_, _ = response.Write([]byte(`{"description":"d","html_url":"https://codeberg.org/itiquette/repo"}`))
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v1/repos/examplescope/repo" {
+			_, _ = response.Write([]byte(`{"description":"d","html_url":"https://forge.example/examplescope/repo"}`))
 
 			return
 		}
@@ -162,7 +162,7 @@ func TestValidateToken_OK(t *testing.T) {
 		http.Error(response, "unexpected", http.StatusNotFound)
 	})
 
-	if err := newProvider(handler).ValidateToken(context.Background(), "tok", "itiquette/repo"); err != nil {
+	if err := newProvider(handler).ValidateToken(context.Background(), "tok", "examplescope/repo"); err != nil {
 		t.Fatalf("ValidateToken = %v", err)
 	}
 }
@@ -174,7 +174,7 @@ func TestValidateToken_Unauthorized(t *testing.T) {
 		http.Error(w, "bad token", http.StatusUnauthorized)
 	})
 
-	err := newProvider(handler).ValidateToken(context.Background(), "tok", "itiquette/repo")
+	err := newProvider(handler).ValidateToken(context.Background(), "tok", "examplescope/repo")
 	if err == nil {
 		t.Fatal("expected error on 401")
 	}
@@ -195,7 +195,7 @@ func TestValidateToken_StatusKeepsItsExitClass(t *testing.T) {
 			http.Error(w, "refused", status)
 		})
 
-		err := newProvider(handler).ValidateToken(context.Background(), "synthetic-forgejo-secret", "itiquette/repo")
+		err := newProvider(handler).ValidateToken(context.Background(), "synthetic-forgejo-secret", "examplescope/repo")
 		if got := errs.ExitCodeFromError(err); got != want {
 			t.Errorf("HTTP %d exits %d, want %d", status, got, want)
 		}
@@ -219,15 +219,15 @@ func TestFetchRepoMetadata_ReadsDescriptionURLAndObjectFormat(t *testing.T) {
 	t.Parallel()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"description":"a linter","html_url":"https://codeberg.org/itiquette/repo","object_format_name":"sha256"}`))
+		_, _ = w.Write([]byte(`{"description":"a linter","html_url":"https://forge.example/examplescope/repo","object_format_name":"sha256"}`))
 	})
 
-	md, err := newProvider(handler).FetchRepoMetadata(context.Background(), "itiquette/repo")
+	md, err := newProvider(handler).FetchRepoMetadata(context.Background(), "examplescope/repo")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if md.Description != "a linter" || md.HTMLURL != "https://codeberg.org/itiquette/repo" {
+	if md.Description != "a linter" || md.HTMLURL != "https://forge.example/examplescope/repo" {
 		t.Errorf("metadata = %+v", md)
 	}
 
@@ -271,7 +271,7 @@ func TestCreateRelease_CreatesAndUploadsAssets(t *testing.T) {
 		}
 	})
 
-	err := newProvider(handler).CreateRelease(context.Background(), "itiquette/repo", provider.ReleaseSpec{
+	err := newProvider(handler).CreateRelease(context.Background(), "examplescope/repo", provider.ReleaseSpec{
 		Tag:    "v1.0.0",
 		Name:   "v1.0.0",
 		Assets: []string{asset},
@@ -313,9 +313,9 @@ func TestPublishRelease_UpdatesExistingReleaseAndReconcilesAssets(t *testing.T) 
 		calls = append(calls, request.Method+" "+request.URL.Path)
 
 		switch {
-		case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/tags/v1.2.3":
+		case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/examplescope/repo/releases/tags/v1.2.3":
 			_, _ = response.Write([]byte(`{"id":99,"tag_name":"v1.2.3","assets":[{"id":1,"name":"asset.tgz"},{"id":2,"name":"stale.txt"}]}`))
-		case request.Method == http.MethodPatch && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99":
+		case request.Method == http.MethodPatch && request.URL.Path == "/api/v1/repos/examplescope/repo/releases/99":
 			var payload map[string]any
 			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
 				t.Fatalf("decode patch payload: %v", err)
@@ -326,13 +326,13 @@ func TestPublishRelease_UpdatesExistingReleaseAndReconcilesAssets(t *testing.T) 
 			}
 
 			_, _ = response.Write([]byte(`{"id":99,"tag_name":"v1.2.3"}`))
-		case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets":
+		case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/examplescope/repo/releases/99/assets":
 			_, _ = response.Write([]byte(`[{"id":1,"name":"asset.tgz"},{"id":2,"name":"stale.txt"}]`))
-		case request.Method == http.MethodDelete && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets/1":
+		case request.Method == http.MethodDelete && request.URL.Path == "/api/v1/repos/examplescope/repo/releases/99/assets/1":
 			response.WriteHeader(http.StatusNoContent)
-		case request.Method == http.MethodDelete && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets/2":
+		case request.Method == http.MethodDelete && request.URL.Path == "/api/v1/repos/examplescope/repo/releases/99/assets/2":
 			response.WriteHeader(http.StatusNoContent)
-		case request.Method == http.MethodPost && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/99/assets":
+		case request.Method == http.MethodPost && request.URL.Path == "/api/v1/repos/examplescope/repo/releases/99/assets":
 			response.WriteHeader(http.StatusCreated)
 			_, _ = response.Write([]byte(`{"id":7,"name":"asset.tgz"}`))
 		default:
@@ -340,7 +340,7 @@ func TestPublishRelease_UpdatesExistingReleaseAndReconcilesAssets(t *testing.T) 
 		}
 	})
 
-	err := newProvider(handler).PublishRelease(context.Background(), "itiquette/repo", provider.ReleaseSpec{
+	err := newProvider(handler).PublishRelease(context.Background(), "examplescope/repo", provider.ReleaseSpec{
 		Tag:       "v1.2.3",
 		Name:      "repo v1.2.3",
 		NotesFile: notes,
@@ -351,11 +351,11 @@ func TestPublishRelease_UpdatesExistingReleaseAndReconcilesAssets(t *testing.T) 
 		t.Fatalf("PublishRelease = %v", err)
 	}
 
-	assertCallPresent(t, calls, "PATCH /api/v1/repos/itiquette/repo/releases/99")
-	assertCallPresent(t, calls, "DELETE /api/v1/repos/itiquette/repo/releases/99/assets/1")
-	assertCallPresent(t, calls, "POST /api/v1/repos/itiquette/repo/releases/99/assets")
-	assertCallPresent(t, calls, "DELETE /api/v1/repos/itiquette/repo/releases/99/assets/2")
-	assertCallAbsent(t, calls, "DELETE /api/v1/repos/itiquette/repo/releases/99")
+	assertCallPresent(t, calls, "PATCH /api/v1/repos/examplescope/repo/releases/99")
+	assertCallPresent(t, calls, "DELETE /api/v1/repos/examplescope/repo/releases/99/assets/1")
+	assertCallPresent(t, calls, "POST /api/v1/repos/examplescope/repo/releases/99/assets")
+	assertCallPresent(t, calls, "DELETE /api/v1/repos/examplescope/repo/releases/99/assets/2")
+	assertCallAbsent(t, calls, "DELETE /api/v1/repos/examplescope/repo/releases/99")
 
 	// Replacement uploads before it deletes, for both the colliding asset and
 	// the stale one. Deleting first would mean a failed upload leaves the
@@ -363,11 +363,11 @@ func TestPublishRelease_UpdatesExistingReleaseAndReconcilesAssets(t *testing.T) 
 	// at worst leave two, and a delete that fails is reported rather than
 	// leaving that duplicate unremarked. Losing a published asset is the worse
 	// outcome of the two, so this is the order.
-	if indexCall(calls, "DELETE /api/v1/repos/itiquette/repo/releases/99/assets/1") < indexCall(calls, "POST /api/v1/repos/itiquette/repo/releases/99/assets") {
+	if indexCall(calls, "DELETE /api/v1/repos/examplescope/repo/releases/99/assets/1") < indexCall(calls, "POST /api/v1/repos/examplescope/repo/releases/99/assets") {
 		t.Fatalf("colliding asset was deleted before its replacement uploaded: %v", calls)
 	}
 
-	if indexCall(calls, "DELETE /api/v1/repos/itiquette/repo/releases/99/assets/2") < indexCall(calls, "POST /api/v1/repos/itiquette/repo/releases/99/assets") {
+	if indexCall(calls, "DELETE /api/v1/repos/examplescope/repo/releases/99/assets/2") < indexCall(calls, "POST /api/v1/repos/examplescope/repo/releases/99/assets") {
 		t.Fatalf("stale asset was deleted before desired upload succeeded: %v", calls)
 	}
 }
@@ -391,9 +391,9 @@ func TestPublishRelease_CreatesMissingRelease(t *testing.T) {
 		calls = append(calls, request.Method+" "+request.URL.Path)
 
 		switch {
-		case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/tags/v1.2.3":
+		case request.Method == http.MethodGet && request.URL.Path == "/api/v1/repos/examplescope/repo/releases/tags/v1.2.3":
 			http.Error(response, "not found", http.StatusNotFound)
-		case request.Method == http.MethodPost && request.URL.Path == "/api/v1/repos/itiquette/repo/releases":
+		case request.Method == http.MethodPost && request.URL.Path == "/api/v1/repos/examplescope/repo/releases":
 			var payload map[string]any
 			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
 				t.Fatalf("decode create payload: %v", err)
@@ -405,7 +405,7 @@ func TestPublishRelease_CreatesMissingRelease(t *testing.T) {
 
 			response.WriteHeader(http.StatusCreated)
 			_, _ = response.Write([]byte(`{"id":42,"tag_name":"v1.2.3"}`))
-		case request.Method == http.MethodPost && request.URL.Path == "/api/v1/repos/itiquette/repo/releases/42/assets":
+		case request.Method == http.MethodPost && request.URL.Path == "/api/v1/repos/examplescope/repo/releases/42/assets":
 			response.WriteHeader(http.StatusCreated)
 			_, _ = response.Write([]byte(`{"id":7,"name":"asset.tgz"}`))
 		default:
@@ -413,7 +413,7 @@ func TestPublishRelease_CreatesMissingRelease(t *testing.T) {
 		}
 	})
 
-	err := newProvider(handler).PublishRelease(context.Background(), "itiquette/repo", provider.ReleaseSpec{
+	err := newProvider(handler).PublishRelease(context.Background(), "examplescope/repo", provider.ReleaseSpec{
 		Tag:       "v1.2.3",
 		Name:      "repo v1.2.3",
 		NotesFile: notes,
@@ -424,10 +424,10 @@ func TestPublishRelease_CreatesMissingRelease(t *testing.T) {
 		t.Fatalf("PublishRelease = %v", err)
 	}
 
-	assertCallPresent(t, calls, "POST /api/v1/repos/itiquette/repo/releases")
-	assertCallPresent(t, calls, "POST /api/v1/repos/itiquette/repo/releases/42/assets")
-	assertCallAbsent(t, calls, "PATCH /api/v1/repos/itiquette/repo/releases/42")
-	assertCallAbsent(t, calls, "DELETE /api/v1/repos/itiquette/repo/releases/42")
+	assertCallPresent(t, calls, "POST /api/v1/repos/examplescope/repo/releases")
+	assertCallPresent(t, calls, "POST /api/v1/repos/examplescope/repo/releases/42/assets")
+	assertCallAbsent(t, calls, "PATCH /api/v1/repos/examplescope/repo/releases/42")
+	assertCallAbsent(t, calls, "DELETE /api/v1/repos/examplescope/repo/releases/42")
 }
 
 func TestPublishRelease_EmptyTag(t *testing.T) {
@@ -479,7 +479,7 @@ func TestCreateRelease_UnreadableNotesFileFailsBeforeAnyRequest(t *testing.T) {
 		http.Error(w, "unexpected", http.StatusInternalServerError)
 	})
 
-	err := newProvider(handler).CreateRelease(context.Background(), "itiquette/repo", provider.ReleaseSpec{
+	err := newProvider(handler).CreateRelease(context.Background(), "examplescope/repo", provider.ReleaseSpec{
 		Tag:       "v1.0.0",
 		Name:      "v1.0.0",
 		NotesFile: filepath.Join(t.TempDir(), "missing-notes.md"),
@@ -515,7 +515,7 @@ func TestCreateRelease_LookupFailureIsNotTreatedAsAbsent(t *testing.T) {
 		}
 	})
 
-	err := newProvider(handler).CreateRelease(context.Background(), "itiquette/repo", provider.ReleaseSpec{Tag: "v1.0.0", Name: "v1.0.0"})
+	err := newProvider(handler).CreateRelease(context.Background(), "examplescope/repo", provider.ReleaseSpec{Tag: "v1.0.0", Name: "v1.0.0"})
 	if !errors.Is(err, errs.ErrPermissionDenied) {
 		t.Fatalf("CreateRelease = %v, want the lookup's ErrPermissionDenied", err)
 	}

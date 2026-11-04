@@ -21,8 +21,8 @@ func TestCaptureEntryDigest_PinsTheRefToADigestOrFails(t *testing.T) {
 
 	// Staging flow: resolve from the candidate tag, rewrite Ref + Digest.
 	entry := imageledger.Entry{
-		CandidateTag: "codeberg.org/itiquette/repo:staging-v1.2.3",
-		FinalTag:     "codeberg.org/itiquette/repo:v1.2.3",
+		CandidateTag: "forge.example/examplescope/repo:staging-v1.2.3",
+		FinalTag:     "forge.example/examplescope/repo:v1.2.3",
 	}
 	if err := captureEntryDigest(context.Background(), stubResolver{entry.CandidateTag: dig}, &entry); err != nil {
 		t.Fatal(err)
@@ -32,17 +32,17 @@ func TestCaptureEntryDigest_PinsTheRefToADigestOrFails(t *testing.T) {
 		t.Errorf("Digest = %q", entry.Digest)
 	}
 
-	if entry.Ref != "codeberg.org/itiquette/repo@"+dig {
+	if entry.Ref != "forge.example/examplescope/repo@"+dig {
 		t.Errorf("Ref = %q (should be candidate's registry path + @digest)", entry.Ref)
 	}
 
 	// Direct push: no candidate → resolve from the final tag.
-	e2 := imageledger.Entry{FinalTag: "codeberg.org/itiquette/repo:v1.2.3"}
+	e2 := imageledger.Entry{FinalTag: "forge.example/examplescope/repo:v1.2.3"}
 	if err := captureEntryDigest(context.Background(), stubResolver{e2.FinalTag: dig}, &e2); err != nil {
 		t.Fatal(err)
 	}
 
-	if e2.Ref != "codeberg.org/itiquette/repo@"+dig {
+	if e2.Ref != "forge.example/examplescope/repo@"+dig {
 		t.Errorf("direct-push Ref = %q", e2.Ref)
 	}
 
@@ -62,12 +62,12 @@ func TestLedgerAddEntryFromFlags_ShapesForgejoReleaseImageRecord(t *testing.T) {
 		Role:             "flavor",
 		ImageKind:        string(imageledger.ImageKindRelease),
 		Flavor:           "rust",
-		ImageName:        "docker://codeberg.org/itiquette/nanolinter:ignored",
+		ImageName:        "docker://forge.example/examplescope/myapp:ignored",
 		Digest:           dig,
 		FinalTagName:     "v1.2.3-rust",
 		CandidateTagName: "staging-v1.2.3-rust",
 		MovingTagName:    "rust",
-		BaseRef:          "codeberg.org/itiquette/nanolinter-base@" + dig,
+		BaseRef:          "forge.example/examplescope/myapp-base@" + dig,
 		BaseInputID:      "base-input",
 		DefaultSBOM:      true,
 	})
@@ -83,13 +83,13 @@ func TestLedgerAddEntryFromFlags_ShapesForgejoReleaseImageRecord(t *testing.T) {
 		Role:         "flavor",
 		ImageKind:    imageledger.ImageKindRelease,
 		Flavor:       "rust",
-		Ref:          "codeberg.org/itiquette/nanolinter@" + dig,
+		Ref:          "forge.example/examplescope/myapp@" + dig,
 		Digest:       dig,
 		SBOM:         "dist/image-sbom-rust.cyclonedx.json",
-		FinalTag:     "codeberg.org/itiquette/nanolinter:v1.2.3-rust",
-		MovingTag:    "codeberg.org/itiquette/nanolinter:rust",
-		CandidateTag: "codeberg.org/itiquette/nanolinter:staging-v1.2.3-rust",
-		BaseRef:      "codeberg.org/itiquette/nanolinter-base@" + dig,
+		FinalTag:     "forge.example/examplescope/myapp:v1.2.3-rust",
+		MovingTag:    "forge.example/examplescope/myapp:rust",
+		CandidateTag: "forge.example/examplescope/myapp:staging-v1.2.3-rust",
+		BaseRef:      "forge.example/examplescope/myapp-base@" + dig,
 		BaseInputID:  "base-input",
 	}
 	if !reflect.DeepEqual(entry, want) {
@@ -104,7 +104,7 @@ func TestLedgerAddEntryFromFlags_DirectPushDoesNotInventCandidate(t *testing.T) 
 
 	entry, releaseTag, err := ledgerAddEntryFromFlags(AddLedgerEntryInput{
 		Role:         "distroless",
-		ImageName:    "codeberg.org/itiquette/gommitlint",
+		ImageName:    "forge.example/examplescope/myapp",
 		Digest:       dig,
 		FinalTagName: "v1.2.3",
 		SBOM:         "dist/image-sbom.cyclonedx.json",
@@ -121,7 +121,7 @@ func TestLedgerAddEntryFromFlags_DirectPushDoesNotInventCandidate(t *testing.T) 
 		t.Fatalf("CandidateTag = %q, want empty", entry.CandidateTag)
 	}
 
-	if entry.Ref != "codeberg.org/itiquette/gommitlint@"+dig {
+	if entry.Ref != "forge.example/examplescope/myapp@"+dig {
 		t.Fatalf("Ref = %q", entry.Ref)
 	}
 }
@@ -133,7 +133,7 @@ func TestLedgerAddEntryFromFlags_CanDeriveCandidateWhenRequested(t *testing.T) {
 
 	entry, _, err := ledgerAddEntryFromFlags(AddLedgerEntryInput{
 		ReleaseTag:         "v1.2.3",
-		ImageName:          "codeberg.org/itiquette/nanolinter",
+		ImageName:          "forge.example/examplescope/myapp",
 		Digest:             dig,
 		FinalTagName:       "v1.2.3-alpine",
 		DeriveCandidateTag: true,
@@ -142,7 +142,7 @@ func TestLedgerAddEntryFromFlags_CanDeriveCandidateWhenRequested(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if entry.CandidateTag != "codeberg.org/itiquette/nanolinter:staging-v1.2.3-alpine" {
+	if entry.CandidateTag != "forge.example/examplescope/myapp:staging-v1.2.3-alpine" {
 		t.Fatalf("CandidateTag = %q", entry.CandidateTag)
 	}
 }
@@ -154,7 +154,7 @@ func TestLedgerAddEntryFromFlags_KeepsLegacyImageNameMode(t *testing.T) {
 
 	entry, releaseTag, err := ledgerAddEntryFromFlags(AddLedgerEntryInput{
 		ReleaseTag:          "v1.2.3",
-		ImageName:           "codeberg.org/owner/repo",
+		ImageName:           "forge.example/owner/repo",
 		Digest:              dig,
 		LegacyImageNameMode: true,
 	})
@@ -166,11 +166,11 @@ func TestLedgerAddEntryFromFlags_KeepsLegacyImageNameMode(t *testing.T) {
 		t.Fatalf("releaseTag = %q", releaseTag)
 	}
 
-	if entry.FinalTag != "codeberg.org/owner/repo:v1.2.3" {
+	if entry.FinalTag != "forge.example/owner/repo:v1.2.3" {
 		t.Fatalf("FinalTag = %q", entry.FinalTag)
 	}
 
-	if entry.CandidateTag != "codeberg.org/owner/repo:staging-v1.2.3" {
+	if entry.CandidateTag != "forge.example/owner/repo:staging-v1.2.3" {
 		t.Fatalf("CandidateTag = %q", entry.CandidateTag)
 	}
 }
@@ -184,7 +184,7 @@ func TestLedgerAddEntryFromFlags_RecordsSBOMPinAndProvenanceExtras(t *testing.T)
 
 	entry, _, err := ledgerAddEntryFromFlags(AddLedgerEntryInput{
 		Role:           "distroless",
-		ImageName:      "codeberg.org/itiquette/gommitlint",
+		ImageName:      "forge.example/examplescope/myapp",
 		Digest:         dig,
 		FinalTagName:   "v1.2.3",
 		SBOM:           "dist/image-sbom.cyclonedx.json",
@@ -241,7 +241,7 @@ func TestLedgerAddEntryFromFlags_RejectsMalformedProvenanceJSON(t *testing.T) {
 	} {
 		_, _, err := ledgerAddEntryFromFlags(AddLedgerEntryInput{
 			Role:           "distroless",
-			ImageName:      "codeberg.org/itiquette/gommitlint",
+			ImageName:      "forge.example/examplescope/myapp",
 			Digest:         dig,
 			FinalTagName:   "v1.2.3",
 			ProvenanceJSON: raw,
@@ -257,7 +257,7 @@ func TestLedgerAddEntryFromFlags_RejectsAmbiguousCandidateInputs(t *testing.T) {
 
 	_, _, err := ledgerAddEntryFromFlags(AddLedgerEntryInput{
 		ReleaseTag:         "v1.2.3",
-		ImageName:          "codeberg.org/owner/repo",
+		ImageName:          "forge.example/owner/repo",
 		FinalTagName:       "v1.2.3",
 		DeriveCandidateTag: true,
 		CandidateTagName:   "staging-v1.2.3",

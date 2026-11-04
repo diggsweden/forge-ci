@@ -17,7 +17,7 @@ import (
 // root and the seven secret forwards must survive the scratch migration.
 const publicationCaller = `jobs:
   sign-and-publish:
-    uses: itiquette/forge-ci/.forgejo/workflows/sign-and-publish-release.yml@` + consumerPinned + `
+    uses: examplescope/forge-ci/.forgejo/workflows/sign-and-publish-release.yml@` + consumerPinned + `
     with:
       runner-label: ${{ vars.CI_RUNNER_LABEL }}
       release-tag: ${{ needs.prepare.outputs.release-tag }}
@@ -27,14 +27,14 @@ const publicationCaller = `jobs:
       artifact-name: build-dist
       artifact-path: dist/
       release-images-path: dist/release-images.json
-      base-repository: ${{ vars.BASE_IMAGE_REPOSITORY || 'ghcr.io/itiquette/nanolinter-base' }}
-      publication-image-repository: ${{ vars.IMAGE_REPOSITORY || 'ghcr.io/itiquette/nanolinter' }}
+      base-repository: ${{ vars.BASE_IMAGE_REPOSITORY || 'ghcr.io/examplescope/myapp-base' }}
+      publication-image-repository: ${{ vars.IMAGE_REPOSITORY || 'ghcr.io/examplescope/myapp' }}
       registry-user: ${{ vars.IMAGE_REGISTRY_USER }}
       caller-workflow: release.yml
       release-asset-retention: "6"
-      forge-ci-repository: itiquette/forge-ci
+      forge-ci-repository: examplescope/forge-ci
       forge-ci-sha: ` + consumerPinned + `
-      signer-image: ghcr.io/itiquette/forge-ci-signer@sha256:450d938265a1d322eb2d92def121875df607dfafc31b71241a712ce2e2c8d1b2
+      signer-image: ghcr.io/examplescope/forge-ci-signer@sha256:450d938265a1d322eb2d92def121875df607dfafc31b71241a712ce2e2c8d1b2
       cosign-public-key: ${{ vars.COSIGN_PUBLIC_KEY }}
       cosign-public-key-sha256: db37ab94d631f06c5c4a65d63d173b2e16f33a01797234bf301f0def7b09b0f9
     secrets:
