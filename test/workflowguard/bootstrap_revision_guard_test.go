@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -302,4 +303,95 @@ func TestSourceRefResolutionIsSharedAcrossPRAndSnapshotJobs(t *testing.T) {
 			}
 		}
 	}
+}
+
+type reusableWorkflow struct {
+	On struct {
+		WorkflowCall struct {
+			Inputs map[string]struct {
+				Default any `yaml:"default"`
+			} `yaml:"inputs"`
+		} `yaml:"workflow_call"`
+	} `yaml:"on"`
+	Jobs map[string]struct {
+		Uses string            `yaml:"uses"`
+		With map[string]string `yaml:"with"`
+	} `yaml:"jobs"`
+}
+
+func readReusableWorkflows(t *testing.T) map[string]reusableWorkflow {
+	t.Helper()
+
+	paths, err := filepath.Glob(filepath.Join(reporoot.Path(t), ".github", "workflows", "*.yml"))
+	require.NoError(t, err)
+
+	workflows := map[string]reusableWorkflow{}
+
+	for _, path := range paths {
+		body, err := os.ReadFile(path)
+		require.NoError(t, err)
+
+		var workflow reusableWorkflow
+		require.NoError(t, yaml.Unmarshal(body, &workflow), path)
+
+		workflows[filepath.Base(path)] = workflow
+	}
+
+	return workflows
+}
+
+// TestRuntimeImageDefaultsResolveTheServingRepository keeps every runtime
+// image a reusable workflow runs in a resolver output. A literal default names
+// one registry and one release, so a fork serving these workflows, or a caller
+// on a later release, ran upstream's older image without asking for it.
+func TestRuntimeImageDefaultsResolveTheServingRepository(t *testing.T) {
+	t.Parallel()
+
+	for name, workflow := range readReusableWorkflows(t) {
+		for input, spec := range workflow.On.WorkflowCall.Inputs {
+			if strings.HasPrefix(input, "runtime-image") {
+				require.Emptyf(t, spec.Default, "%s: input %s defaults to a fixed image; default it to empty and fall back to needs.resolve-bootstrap.outputs['%s']", name, input, input)
+			}
+		}
+	}
+}
+
+// TestLocalCallsForwardTheResolvedBinaryRef makes a workflow that resolved the
+// forge-ci revision hand it to every local reusable workflow that resolves its
+// own. Left empty, the callee asks for the latest stable release again: on a
+// branch or commit run that is another revision than the caller's, and on a
+// fork without releases it fails.
+// resolvedBinaryRef is the resolver's output, read directly or through a job
+// that relays it, as the release orchestrator's parse-config does.
+var resolvedBinaryRef = regexp.MustCompile(`^\$\{\{ needs\.[a-z0-9-]+\.outputs\.forge-ci-binary-ref \}\}$`)
+
+func TestLocalCallsForwardTheResolvedBinaryRef(t *testing.T) {
+	t.Parallel()
+
+	workflows := readReusableWorkflows(t)
+	calls := 0
+
+	for name, workflow := range workflows {
+		if _, resolves := workflow.Jobs["resolve-bootstrap"]; !resolves {
+			continue
+		}
+
+		for jobName, job := range workflow.Jobs {
+			callee, local := strings.CutPrefix(job.Uses, "./.github/workflows/")
+			if !local || callee == "resolve-forge-ci-bootstrap.yml" {
+				continue
+			}
+
+			if _, takes := workflows[callee].On.WorkflowCall.Inputs[binaryRefInput]; !takes {
+				continue
+			}
+
+			calls++
+
+			require.Regexpf(t, resolvedBinaryRef, job.With[binaryRefInput],
+				"%s/%s calls %s without the resolved %s", name, jobName, callee, binaryRefInput)
+		}
+	}
+
+	require.Positive(t, calls)
 }

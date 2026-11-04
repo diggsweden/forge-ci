@@ -103,6 +103,16 @@ func ForgeDir(forge provider.ForgeAPI) string {
 	}
 }
 
+// runtimeImagePlaceholders are the GitLab examples' build images, which a
+// mirror's runtime-images fill by toolchain family.
+var runtimeImagePlaceholders = []struct{ family, placeholder string }{
+	{"java", "ghcr.io/diggsweden/forge-ci-runtime-java-25@sha256:PIN_JAVA_IMAGE_DIGEST"},
+	{"node", "ghcr.io/diggsweden/forge-ci-runtime-node-24@sha256:PIN_NODE_IMAGE_DIGEST"},
+	{"go", "ghcr.io/diggsweden/forge-ci-runtime-go-1.27@sha256:PIN_GO_IMAGE_DIGEST"},
+	{"rust", "ghcr.io/diggsweden/forge-ci-runtime-rust-stable@sha256:PIN_RUST_IMAGE_DIGEST"},
+	{"android", "ghcr.io/diggsweden/forge-ci-runtime-android-35@sha256:PIN_ANDROID_IMAGE_DIGEST"},
+}
+
 // Replacements returns the substitutions for a forge, longest placeholder
 // first, so a composite such as the signer image is replaced before its
 // parts. A value the operator did not give is left out: its placeholder
@@ -130,6 +140,11 @@ func Replacements(forge provider.ForgeAPI, example string, src Source, defaults 
 		flavour := FlavourOf(example)
 		add("ghcr.io/itiquette/nanolinter:"+flavour+"@sha256:PIN_DIGEST", defaults.NanolinterImages[flavour])
 		add("registry.example.com/team/check-tools@sha256:PIN_IMAGE_DIGEST", defaults.CheckImage)
+
+		for _, runtime := range runtimeImagePlaceholders {
+			add(runtime.placeholder, defaults.RuntimeImages[runtime.family])
+		}
+
 		add("gitlab.example.com/team/ci/forge-ci", src.Host+"/"+src.Repository)
 		add("team/ci/forge-ci", src.Repository)
 		add("@0.90.0", "@"+strings.TrimPrefix(src.Tag, "v"))

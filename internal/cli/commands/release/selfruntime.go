@@ -27,7 +27,7 @@ func publishSelfRuntimeCLICmd() *cli.Command {
 			&cli.StringFlag{Name: "source-ref", Required: true, Usage: "refs/heads/<allowed-branch>, which must still resolve to --commit"},
 			&cli.StringFlag{Name: "commit", Required: true, Sources: cienv.Commit(), Usage: "full commit SHA the recreated tag must resolve to"},
 			&cli.StringFlag{Name: "assets-dir", Required: true, Usage: "directory containing the exact signed build-cli GoReleaser asset set"},
-			&cli.StringFlag{Name: "allowed-repository", Sources: cli.EnvVars("FORGE_CI_REPOSITORY"), Usage: "repository allowed to publish the channel (default " + domainrelease.SelfRuntimeRepository + ")"},
+			&cli.StringFlag{Name: "allowed-repository", Required: true, Sources: cli.EnvVars("FORGE_CI_REPOSITORY"), Usage: "owner/name of the repository allowed to publish the channel"},
 			&cli.StringFlag{Name: "allowed-branch", Sources: cli.EnvVars("FORGE_CI_PRERELEASE_BRANCH"), Usage: "branch allowed to publish the channel (default " + domainrelease.SelfRuntimeBranch + ")"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {

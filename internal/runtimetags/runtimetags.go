@@ -1,33 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 // SPDX-License-Identifier: EUPL-1.2 OR GPL-3.0-or-later
 
-// Package runtimetags is the single definition of how forge-ci
-// runtime-image references (`forge-ci-runtime-*:vX.Y.Z`) are
-// recognised and rewritten across the workflow files. Two consumers
-// share it so they cannot drift apart:
-//
-//   - cmd/bump-runtime-tags rewrites every pinned version on a release
-//     cut (`just bump-runtime-tags <version>`).
-//   - the TestRuntimeImageTagsShareOneVersion guard asserts all pinned
-//     versions agree, so a missed site fails the build instead of
-//     silently running a stale runtime.
-//
-// The runtime images are this repo's own release artifact — Renovate
-// never bumps them, which is why both the rewriter and the guard exist.
+// Package runtimetags recognises forge-ci runtime-image references
+// (`forge-ci-runtime-*:<tag>`) in the shipped workflows and components. The
+// workflow guards use it to keep any released runtime image from being named
+// there: GitHub workflows resolve the image, GitLab components require it.
 package runtimetags
 
 import (
 	"regexp"
 	"strings"
-
-	"github.com/diggsweden/forge-ci/internal/domain/version"
 )
 
 var refPattern = regexp.MustCompile("forge-ci-runtime(?:-[a-z0-9.]+)*:([^\\s\"'`,;(){}\\[\\]<>]+)")
-
-// ValidVersion reports whether a published runtime tag is the repository's
-// stable v-prefixed semantic-version shape.
-func ValidVersion(value string) bool { return version.IsStableSemverTag(value) }
 
 func references(content string) [][]int {
 	var found [][]int
@@ -54,32 +39,4 @@ func Tags(content string) []string {
 	}
 
 	return tags
-}
-
-// Rewrite replaces the version of every pinned runtime-image reference
-// in content with version, returning the new content and the number of
-// references rewritten. Non-version tags (":verify") are untouched.
-// The caller validates version with ValidVersion first.
-func Rewrite(content, version string) (string, int) {
-	count := 0
-
-	var rewritten strings.Builder
-
-	offset := 0
-
-	for _, match := range references(content) {
-		if !ValidVersion(content[match[2]:match[3]]) {
-			continue
-		}
-
-		rewritten.WriteString(content[offset:match[2]])
-		rewritten.WriteString(version)
-
-		offset = match[3]
-		count++
-	}
-
-	rewritten.WriteString(content[offset:])
-
-	return rewritten.String(), count
 }

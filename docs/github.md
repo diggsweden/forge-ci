@@ -222,9 +222,12 @@ names.
 
 Containerized jobs run in the runtime images, which carry the `forge-ci`
 binary and the toolchain of one family (base, full, Java, Node, Rust, Go,
-Android). Each orchestrator has one `runtime-image*` override per family. An empty
+Android). Each orchestrator has one `runtime-image*` override per family, and
+each build, publish and changelog workflow one `runtime-image`. An empty
 `forge-ci-binary-ref` resolves the current published stable release to its concrete
-tag once, such as `v0.93.0`. Empty runtime-image overrides select the same tag.
+tag once, such as `v0.93.0`. Empty runtime-image overrides select the same tag,
+under `FORGE_CI_IMAGE_NAMESPACE` or the serving repository's owner on `ghcr.io`.
+No workflow names a fixed image.
 Explicit binary refs and image overrides take precedence; source commits use
 the corresponding `sha-<short>` runtime references. No `latest` image tag is used.
 [Runtime Images](runtime-images.md) has the roster, which workflow uses

@@ -25,9 +25,12 @@ import (
 )
 
 const (
-	selfRuntimeTag       = domainrelease.SelfRuntimeChannelTag
-	selfRuntimeSourceRef = "refs/heads/" + domainrelease.SelfRuntimeBranch
+	selfRuntimeTag        = domainrelease.SelfRuntimeChannelTag
+	selfRuntimeSourceRef  = "refs/heads/" + domainrelease.SelfRuntimeBranch
+	selfRuntimeRepository = "examplescope/forge-ci"
 )
+
+var selfRuntimePolicy = domainrelease.SelfRuntimePolicy{Repository: selfRuntimeRepository}
 
 type selfRuntimeAsset struct {
 	id   int64
@@ -68,7 +71,7 @@ func (a *selfRuntimeAPI) handler(t *testing.T) http.Handler {
 	t.Helper()
 
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		const root = "/repos/" + domainrelease.SelfRuntimeRepository
+		const root = "/repos/" + selfRuntimeRepository
 
 		path := strings.TrimPrefix(request.URL.Path, root)
 		freshRead := path == "/git/ref/heads/"+domainrelease.SelfRuntimeBranch && request.Method == http.MethodGet
@@ -347,7 +350,7 @@ func TestPublishSelfRuntimeCLI_ReconcilesInPlaceChecksumLastAndTagLast(t *testin
 	})
 
 	err := selfRuntimePublisher(t, api).PublishSelfRuntimeCLI(
-		context.Background(), domainrelease.SelfRuntimePolicy{}, domainrelease.SelfRuntimeRepository, selfRuntimeSourceRef, target, "body",
+		context.Background(), selfRuntimePolicy, selfRuntimeRepository, selfRuntimeSourceRef, target, "body",
 		provider.ReleaseSpec{Tag: selfRuntimeTag, Prerelease: true, MakeLatest: provider.MakeLatestFalse, Assets: assets},
 	)
 	if err != nil {
@@ -411,7 +414,7 @@ func TestPublishSelfRuntimeCLI_StaleSourceFailsBeforeMutation(t *testing.T) {
 	api.sourceSHA = strings.Repeat("b", 40)
 
 	err := selfRuntimePublisher(t, api).PublishSelfRuntimeCLI(
-		context.Background(), domainrelease.SelfRuntimePolicy{}, domainrelease.SelfRuntimeRepository, selfRuntimeSourceRef, target, "body", validSelfRuntimeSpec(t),
+		context.Background(), selfRuntimePolicy, selfRuntimeRepository, selfRuntimeSourceRef, target, "body", validSelfRuntimeSpec(t),
 	)
 	if !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("err = %v, want stale-source validation", err)
@@ -429,7 +432,7 @@ func TestPublishSelfRuntimeCLI_RequiresProvisionedPrerelease(t *testing.T) {
 	api := newSelfRuntimeAPI(target)
 
 	err := selfRuntimePublisher(t, api).PublishSelfRuntimeCLI(
-		context.Background(), domainrelease.SelfRuntimePolicy{}, domainrelease.SelfRuntimeRepository, selfRuntimeSourceRef, target, "body", validSelfRuntimeSpec(t),
+		context.Background(), selfRuntimePolicy, selfRuntimeRepository, selfRuntimeSourceRef, target, "body", validSelfRuntimeSpec(t),
 	)
 	if !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "must be provisioned") {
 		t.Fatalf("err = %v, want provisioned-prerelease validation", err)
@@ -456,7 +459,7 @@ func TestPublishSelfRuntimeCLI_SourceAdvancedBeforeTagMove(t *testing.T) {
 	}
 
 	err := selfRuntimePublisher(t, api).PublishSelfRuntimeCLI(
-		context.Background(), domainrelease.SelfRuntimePolicy{}, domainrelease.SelfRuntimeRepository, selfRuntimeSourceRef, target, "body", validSelfRuntimeSpec(t),
+		context.Background(), selfRuntimePolicy, selfRuntimeRepository, selfRuntimeSourceRef, target, "body", validSelfRuntimeSpec(t),
 	)
 	if !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("err = %v, want stale-source validation", err)
@@ -486,7 +489,7 @@ func TestPublishSelfRuntimeCLI_TagMoveFailureRestoresPriorAssets(t *testing.T) {
 	}
 
 	err := selfRuntimePublisher(t, api).PublishSelfRuntimeCLI(
-		context.Background(), domainrelease.SelfRuntimePolicy{}, domainrelease.SelfRuntimeRepository, selfRuntimeSourceRef, target, "body", validSelfRuntimeSpec(t),
+		context.Background(), selfRuntimePolicy, selfRuntimeRepository, selfRuntimeSourceRef, target, "body", validSelfRuntimeSpec(t),
 	)
 	if !errors.Is(err, errs.ErrDependencyUnavailable) || !strings.Contains(err.Error(), "move self-runtime tag") {
 		t.Fatalf("tag move error = %v, want ErrDependencyUnavailable naming the tag move", err)
@@ -509,14 +512,14 @@ func TestPublishSelfRuntimeCLI_RefusesNonPrereleaseOrUntrustedInput(t *testing.T
 	api.release, api.tagSHA = true, target
 
 	err := selfRuntimePublisher(t, api).PublishSelfRuntimeCLI(
-		context.Background(), domainrelease.SelfRuntimePolicy{}, domainrelease.SelfRuntimeRepository, selfRuntimeSourceRef, target, "body", validSelfRuntimeSpec(t),
+		context.Background(), selfRuntimePolicy, selfRuntimeRepository, selfRuntimeSourceRef, target, "body", validSelfRuntimeSpec(t),
 	)
 	if !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "non-prerelease") {
 		t.Fatalf("err = %v, want non-prerelease refusal", err)
 	}
 
 	err = selfRuntimePublisher(t, newSelfRuntimeAPI(target)).PublishSelfRuntimeCLI(
-		context.Background(), domainrelease.SelfRuntimePolicy{}, domainrelease.SelfRuntimeRepository, "refs/heads/untrusted", target, "body", validSelfRuntimeSpec(t),
+		context.Background(), selfRuntimePolicy, selfRuntimeRepository, "refs/heads/untrusted", target, "body", validSelfRuntimeSpec(t),
 	)
 	if !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("untrusted source err = %v, want validation", err)
@@ -538,7 +541,7 @@ func TestPublishSelfRuntimeCLI_PartialFailureLeavesOldChecksumFailClosed(t *test
 	}
 
 	err := selfRuntimePublisher(t, api).PublishSelfRuntimeCLI(
-		context.Background(), domainrelease.SelfRuntimePolicy{}, domainrelease.SelfRuntimeRepository, selfRuntimeSourceRef, target, "body", validSelfRuntimeSpec(t),
+		context.Background(), selfRuntimePolicy, selfRuntimeRepository, selfRuntimeSourceRef, target, "body", validSelfRuntimeSpec(t),
 	)
 	if !errors.Is(err, errs.ErrDependencyUnavailable) {
 		t.Fatalf("bundle upload error = %v, want the forge's 500 classified as ErrDependencyUnavailable", err)
@@ -580,7 +583,7 @@ func TestPublishSelfRuntimeCLI_DigestFailureCleanupChecksFreshness(t *testing.T)
 	api.omitUploadDigest = true
 
 	err := selfRuntimePublisher(t, api).PublishSelfRuntimeCLI(
-		context.Background(), domainrelease.SelfRuntimePolicy{}, domainrelease.SelfRuntimeRepository, selfRuntimeSourceRef, target, "body", validSelfRuntimeSpec(t),
+		context.Background(), selfRuntimePolicy, selfRuntimeRepository, selfRuntimeSourceRef, target, "body", validSelfRuntimeSpec(t),
 	)
 	if !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("missing upload digest error = %v, want ErrValidation", err)
@@ -610,7 +613,7 @@ func TestPublishSelfRuntimeCLI_RequiresSignedChecksumCommitAssets(t *testing.T) 
 	}
 
 	err := selfRuntimePublisher(t, api).PublishSelfRuntimeCLI(
-		context.Background(), domainrelease.SelfRuntimePolicy{}, domainrelease.SelfRuntimeRepository, selfRuntimeSourceRef, target, "body", spec,
+		context.Background(), selfRuntimePolicy, selfRuntimeRepository, selfRuntimeSourceRef, target, "body", spec,
 	)
 	if !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "checksums.txt.bundle") {
 		t.Fatalf("missing signed checksum bundle error = %v", err)
@@ -691,7 +694,7 @@ func TestPublishSelfRuntimeCLI_RefusesHostileAssetNames(t *testing.T) {
 			})
 
 			err := selfRuntimePublisher(t, api).PublishSelfRuntimeCLI(
-				context.Background(), domainrelease.SelfRuntimePolicy{}, domainrelease.SelfRuntimeRepository, selfRuntimeSourceRef, target, "body",
+				context.Background(), selfRuntimePolicy, selfRuntimeRepository, selfRuntimeSourceRef, target, "body",
 				provider.ReleaseSpec{Tag: selfRuntimeTag, Prerelease: true, MakeLatest: provider.MakeLatestFalse, Assets: assets},
 			)
 			if !errors.Is(err, errs.ErrValidation) {
@@ -727,7 +730,7 @@ func TestPublishSelfRuntimeCLI_RefusesDuplicateAssetNames(t *testing.T) {
 	})
 
 	err := selfRuntimePublisher(t, api).PublishSelfRuntimeCLI(
-		context.Background(), domainrelease.SelfRuntimePolicy{}, domainrelease.SelfRuntimeRepository, selfRuntimeSourceRef, target, "body",
+		context.Background(), selfRuntimePolicy, selfRuntimeRepository, selfRuntimeSourceRef, target, "body",
 		provider.ReleaseSpec{Tag: selfRuntimeTag, Prerelease: true, MakeLatest: provider.MakeLatestFalse, Assets: assets},
 	)
 	if !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "duplicate asset") {

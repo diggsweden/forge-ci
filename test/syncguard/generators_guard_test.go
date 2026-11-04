@@ -177,16 +177,14 @@ func guardRefreshCommands(t *testing.T, root string) map[string]bool {
 // ordinary Go tests under test/syncguard, so they run there by
 // construction. What is worth asserting is the part that is NOT structural —
 // that the recipes which run one named guard (the convenience `check-*`
-// wrappers, and `bump-runtime-tags`, which re-checks the pins it just moved)
-// still name tests that exist.
+// wrappers) still name tests that exist.
 func TestGeneratedOutputsAreCheckedByTheOfflineSuite(t *testing.T) {
 	t.Parallel()
 
 	justfile := string(reporoot.ReadFile(t, "justfile"))
 
-	// The recipes point at tests across the guard packages, not only this
-	// one — `just bump-runtime-tags` runs a workflowguard test — so the search
-	// covers all of them rather than a hand-listed few.
+	// The recipes may point at tests across the guard packages, not only
+	// this one, so the search covers all of them rather than a hand-listed few.
 	defined := guardTestNames(t, reporoot.Path(t))
 
 	named := regexp.MustCompile(`-run '\^(Test[A-Za-z0-9_]+)\$'`).FindAllStringSubmatch(justfile, -1)

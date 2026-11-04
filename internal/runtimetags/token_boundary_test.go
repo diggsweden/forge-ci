@@ -9,19 +9,19 @@ import (
 	"testing"
 )
 
-func TestRuntimeTokenBoundary_DoesNotRewritePartialPins(t *testing.T) {
+func TestRuntimeTokenBoundary_FindsOnlyWholeReferences(t *testing.T) {
 	t.Parallel()
 
-	for _, ref := range []string{"forge-ci-runtime-base:v1.2.3+build", "forge-ci-runtime-base:v1.2.3-rc.1", "not-forge-ci-runtime-base:v1.2.3", "forge-ci-runtimeother:v1.2.3", "forge-ci-runtime-base:v1.2.3@sha256:abc"} {
-		got, count := runtimetags.Rewrite("image: \""+ref+"\"", "v4.0.0")
-		require.Equal(t, "image: \""+ref+"\"", got)
-		require.Zero(t, count)
+	for ref, want := range map[string][]string{
+		"forge-ci-runtime-base:v1.2.3+build":       {"v1.2.3+build"},
+		"forge-ci-runtime-base:v1.2.3-rc.1":        {"v1.2.3-rc.1"},
+		"forge-ci-runtime-base:v1.2.3@sha256:abc":  {"v1.2.3@sha256:abc"},
+		"not-forge-ci-runtime-base:v1.2.3":         {},
+		"forge-ci-runtimeother:v1.2.3":             {},
+		"ghcr.io/org/forge-ci-runtime-base:v1.2.3": {"v1.2.3"},
+	} {
+		require.Equal(t, want, runtimetags.Tags("image: \""+ref+"\""), ref)
 	}
 
-	require.Equal(t, []string{"v1.2.3+build"}, runtimetags.Tags("ghcr.io/org/forge-ci-runtime-base:v1.2.3+build"))
-	require.Empty(t, runtimetags.Tags("not-forge-ci-runtime-base:v1.2.3"))
-
-	got, count := runtimetags.Rewrite("(forge-ci-runtime-base:v1.2.3), forge-ci-runtime:v2.0.0", "v4.0.0")
-	require.Equal(t, "(forge-ci-runtime-base:v4.0.0), forge-ci-runtime:v4.0.0", got)
-	require.Equal(t, 2, count)
+	require.Equal(t, []string{"v1.2.3", "v2.0.0"}, runtimetags.Tags("(forge-ci-runtime-base:v1.2.3), forge-ci-runtime:v2.0.0"))
 }

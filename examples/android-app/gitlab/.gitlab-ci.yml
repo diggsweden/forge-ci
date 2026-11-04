@@ -16,6 +16,8 @@
 #                                             `check` is checksum-bound and must be
 #                                             included by full commit SHA
 #   PIN_DIGEST, PIN_IMAGE_DIGEST              digests of the reviewed images
+#   PIN_ANDROID_IMAGE_DIGEST                  digest of the reviewed Forge CI runtime
+#                                             image, or of your mirror
 #
 # The pipeline status is the gate: GitLab fails the pipeline, and the merge
 # request, when any job fails. Require successful pipelines and refuse merging
@@ -66,6 +68,7 @@ include:
   # artifacts.
   - component: gitlab.example.com/team/ci/forge-ci/build-gradle-android@0.90.0
     inputs:
+      runtime-image: ghcr.io/diggsweden/forge-ci-runtime-android-35@sha256:PIN_ANDROID_IMAGE_DIGEST
       build-module: app
       product-flavor: demo
       build-types: "debug,release"

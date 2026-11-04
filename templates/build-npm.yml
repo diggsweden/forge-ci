@@ -51,8 +51,7 @@ spec:
       default: "24"
       description: Node major version, reported in the build summary.
     runtime-image:
-      default: "ghcr.io/diggsweden/forge-ci-runtime-node-24:v0.90.0"
-      description: forge-ci runtime image carrying Node + npm (pin by @sha256).
+      description: forge-ci runtime image carrying Node + npm, pinned by @sha256.
 ---
 "$[[ inputs.job-name ]]":
   stage: $[[ inputs.stage ]]

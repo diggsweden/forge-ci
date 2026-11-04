@@ -88,9 +88,13 @@ toolchain as `nonroot`.
 Workflows of this source cache `~/go` and `~/.cargo`, while images up to
 `v0.90.0` keep modules in `/go` and crates in `/usr/local/cargo`. A
 `runtime-image` older than the workflow misses the cache without failing;
-select the runtime image of the workflow's release. At a release cut,
-`just bump-runtime-tags <version>` moves every workflow's default to that
-release's images.
+select the runtime image of the workflow's release.
+
+No workflow or component names a runtime image release, so a release cut has
+none to move. GitHub workflows take the images of the release that
+`forge-ci-binary-ref` selects, under the serving repository's namespace;
+GitLab components require `runtime-image`. A guard test refuses a
+`forge-ci-runtime-*` tag written into either.
 
 ## Workflow → image mapping
 

@@ -27,6 +27,11 @@ import (
 // the link. No successful publish child pipeline exists to compare: every
 // publish target is refused until artifact handoff can be generated.
 func TestGitlabBuildPipelineCmd_WritesTheGeneratedPipeline(t *testing.T) {
+	const (
+		javaImage = "registry.example/runtime-java@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+		goImage   = "registry.example/runtime-go@sha256:3333333333333333333333333333333333333333333333333333333333333333"
+	)
+
 	env := ghaenv.Setup(t)
 
 	plan := pipeline.ReleaseBuildStagePlan{Version: pipeline.ReleasePlanVersion, Stage: "build", Targets: pipeline.ReleaseBuildTargets{
@@ -48,6 +53,7 @@ func TestGitlabBuildPipelineCmd_WritesTheGeneratedPipeline(t *testing.T) {
 
 	child, err := gitlabpipeline.BuildStagePipeline(plan, gitlabpipeline.BuildPipelineOptions{
 		ComponentBase: "catalog.example/components", ComponentRef: "1.0.0", Version: "2.3.4", Stage: "build",
+		RuntimeImages: gitlabpipeline.RuntimeImages{Java: javaImage, Go: goImage},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -75,6 +81,8 @@ func TestGitlabBuildPipelineCmd_WritesTheGeneratedPipeline(t *testing.T) {
 		"--component-base", "catalog.example/components",
 		"--component-ref", "1.0.0",
 		"--version", "2.3.4",
+		"--runtime-image-java", javaImage,
+		"--runtime-image-go", goImage,
 		"--output", out,
 	}); runErr != nil {
 		t.Fatal(runErr)

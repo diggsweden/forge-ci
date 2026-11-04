@@ -21,7 +21,7 @@ import (
 const valuesBase = "catalog.example/components"
 
 func valuesOptions() gitlabpipeline.BuildPipelineOptions {
-	return gitlabpipeline.BuildPipelineOptions{ComponentBase: valuesBase, ComponentRef: "2.0.1", Version: "3.4.5", Stage: "compile"}
+	return gitlabpipeline.BuildPipelineOptions{ComponentBase: valuesBase, ComponentRef: "2.0.1", Version: "3.4.5", Stage: "compile", RuntimeImages: testRuntimeImages}
 }
 
 // multiItemBuildPlan has two items per ecosystem, each with settings that
@@ -80,22 +80,22 @@ func TestBuildStagePipeline_EveryItemCarriesItsOwnInputs(t *testing.T) {
 	require.NoError(t, err)
 
 	want := gitlabpipeline.ChildPipeline{Stages: []string{"compile"}, Include: []gitlabpipeline.IncludeEntry{
-		include("build-maven", map[string]any{"job-name": "build-maven-core-lib", "stage": "compile", "working-directory": "core", "enable-build-sbom": true, "build-type": "lib", "profile": "central-release"}),
-		include("build-maven", map[string]any{"job-name": "build-maven-svc", "stage": "compile", "working-directory": "svc", "enable-build-sbom": false, "build-type": "app", "java-version": "21"}),
-		include("build-maven", map[string]any{"job-name": "build-maven-api-lib", "stage": "compile", "working-directory": "api", "enable-build-sbom": false, "build-type": "lib", "profile": "ossrh", "java-version": "17"}),
-		include("build-npm", map[string]any{"job-name": "build-npm-web", "stage": "compile", "working-directory": "ui", "enable-build-sbom": false, "node-version": "22"}),
-		include("build-npm", map[string]any{"job-name": "build-npm-docs", "stage": "compile", "working-directory": ".", "enable-build-sbom": true}),
-		include("build-gradle", map[string]any{"job-name": "build-gradle-jvm", "stage": "compile", "working-directory": "jvm", "enable-build-sbom": false, "gradle-tasks": "build publish", "java-version": "21"}),
-		include("build-gradle", map[string]any{"job-name": "build-gradle-tools", "stage": "compile", "working-directory": "tools", "enable-build-sbom": false}),
+		include("build-maven", map[string]any{"runtime-image": testRuntimeImages.Java, "job-name": "build-maven-core-lib", "stage": "compile", "working-directory": "core", "enable-build-sbom": true, "build-type": "lib", "profile": "central-release"}),
+		include("build-maven", map[string]any{"runtime-image": testRuntimeImages.Java, "job-name": "build-maven-svc", "stage": "compile", "working-directory": "svc", "enable-build-sbom": false, "build-type": "app", "java-version": "21"}),
+		include("build-maven", map[string]any{"runtime-image": testRuntimeImages.Java, "job-name": "build-maven-api-lib", "stage": "compile", "working-directory": "api", "enable-build-sbom": false, "build-type": "lib", "profile": "ossrh", "java-version": "17"}),
+		include("build-npm", map[string]any{"runtime-image": testRuntimeImages.Node, "job-name": "build-npm-web", "stage": "compile", "working-directory": "ui", "enable-build-sbom": false, "node-version": "22"}),
+		include("build-npm", map[string]any{"runtime-image": testRuntimeImages.Node, "job-name": "build-npm-docs", "stage": "compile", "working-directory": ".", "enable-build-sbom": true}),
+		include("build-gradle", map[string]any{"runtime-image": testRuntimeImages.Java, "job-name": "build-gradle-jvm", "stage": "compile", "working-directory": "jvm", "enable-build-sbom": false, "gradle-tasks": "build publish", "java-version": "21"}),
+		include("build-gradle", map[string]any{"runtime-image": testRuntimeImages.Java, "job-name": "build-gradle-tools", "stage": "compile", "working-directory": "tools", "enable-build-sbom": false}),
 		include("build-gradle-android", map[string]any{
-			"job-name": "build-gradle-android-app", "stage": "compile", "working-directory": "android", "enable-build-sbom": false,
+			"runtime-image": testRuntimeImages.Android, "job-name": "build-gradle-android-app", "stage": "compile", "working-directory": "android", "enable-build-sbom": false,
 			"build-module": "mobile", "product-flavor": "prod", "build-types": "release", "include-aab": false, "enable-signing": true,
 		}),
-		include("build-gradle-android", map[string]any{"job-name": "build-gradle-android-wear", "stage": "compile", "working-directory": "wear", "enable-build-sbom": false, "include-aab": true, "enable-signing": false}),
-		include("build-go", map[string]any{"job-name": "build-go-cli", "stage": "compile", "working-directory": ".", "main-package": "./cmd/cli", "enable-build-sbom": false, "artifact-name": "cli", "version": "3.4.5", "platforms": "linux/riscv64", "skip-tests": false}),
-		include("build-go", map[string]any{"job-name": "build-go-agent", "stage": "compile", "working-directory": "agent", "enable-build-sbom": true, "artifact-name": "agent", "version": "3.4.5", "platforms": "linux/amd64,linux/arm64,darwin/amd64,darwin/arm64", "skip-tests": true}),
-		include("build-cargo", map[string]any{"job-name": "build-cargo-rs", "stage": "compile", "working-directory": "rs", "enable-build-sbom": false, "artifact-name": "rs", "version": "3.4.5", "platforms": "linux/arm64", "skip-tests": true}),
-		include("build-cargo", map[string]any{"job-name": "build-cargo-rs2", "stage": "compile", "working-directory": "rs2", "enable-build-sbom": false, "artifact-name": "rs2", "version": "3.4.5", "platforms": "linux/amd64"}),
+		include("build-gradle-android", map[string]any{"runtime-image": testRuntimeImages.Android, "job-name": "build-gradle-android-wear", "stage": "compile", "working-directory": "wear", "enable-build-sbom": false, "include-aab": true, "enable-signing": false}),
+		include("build-go", map[string]any{"runtime-image": testRuntimeImages.Go, "job-name": "build-go-cli", "stage": "compile", "working-directory": ".", "main-package": "./cmd/cli", "enable-build-sbom": false, "artifact-name": "cli", "version": "3.4.5", "platforms": "linux/riscv64", "skip-tests": false}),
+		include("build-go", map[string]any{"runtime-image": testRuntimeImages.Go, "job-name": "build-go-agent", "stage": "compile", "working-directory": "agent", "enable-build-sbom": true, "artifact-name": "agent", "version": "3.4.5", "platforms": "linux/amd64,linux/arm64,darwin/amd64,darwin/arm64", "skip-tests": true}),
+		include("build-cargo", map[string]any{"runtime-image": testRuntimeImages.Rust, "job-name": "build-cargo-rs", "stage": "compile", "working-directory": "rs", "enable-build-sbom": false, "artifact-name": "rs", "version": "3.4.5", "platforms": "linux/arm64", "skip-tests": true}),
+		include("build-cargo", map[string]any{"runtime-image": testRuntimeImages.Rust, "job-name": "build-cargo-rs2", "stage": "compile", "working-directory": "rs2", "enable-build-sbom": false, "artifact-name": "rs2", "version": "3.4.5", "platforms": "linux/amd64"}),
 	}}
 
 	require.Equal(t, want, child)
@@ -208,6 +208,9 @@ func TestPipelines_RefusalsReturnNoPipeline(t *testing.T) {
 		{"xcode build", build(func(t *pipeline.ReleaseBuildTargets) {
 			t.XcodeIOS = runningTarget(pipeline.PlannedArtifact{Name: "ios", ProjectType: projecttype.XcodeIOS})
 		}, valuesOptions()), errs.ErrUnsupported},
+		{"build without its family's runtime image", build(func(t *pipeline.ReleaseBuildTargets) {
+			t.Gradle = runningTarget(pipeline.PlannedArtifact{Name: "jvm", ProjectType: projecttype.Gradle})
+		}, gitlabpipeline.BuildPipelineOptions{ComponentBase: valuesBase, ComponentRef: "2.0.1", RuntimeImages: gitlabpipeline.RuntimeImages{Node: testRuntimeImages.Node}}), errs.ErrUsage},
 		{"padded component base", build(none, gitlabpipeline.BuildPipelineOptions{ComponentBase: " " + valuesBase, ComponentRef: "2.0.1"}), errs.ErrUsage},
 		{"component ref with a tab", build(none, gitlabpipeline.BuildPipelineOptions{ComponentBase: valuesBase, ComponentRef: "2.0.1\t"}), errs.ErrUsage},
 		{"publish runs without items", publish(pipeline.ReleasePublishTargets{MavenCentral: pipeline.TargetPlan[pipeline.PlannedArtifact]{Runs: true}}), errs.ErrInvalidConfig},

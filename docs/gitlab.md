@@ -115,6 +115,8 @@ forge: gitlab                       # required outside github.com
 check-image: <registry>/<image>@sha256:<digest>   # the check component's job image
 nanolinter-images:                                # by flavour, digest-pinned
   go: ghcr.io/itiquette/nanolinter:go@sha256:<digest>
+runtime-images:                                   # build components' runtime-image,
+  go: <registry>/forge-ci-runtime-go-1.27@sha256:<digest>   # by java, node, go, rust, android
 ```
 
 A key left out leaves its placeholder, and init lists it. Consumers then run
@@ -270,14 +272,14 @@ describes. Source-check jobs refuse `GITLAB_TOKEN`.
 
 ### Runtime images
 
-Catalog components default to `ghcr.io/diggsweden/forge-ci-runtime-*:v0.90.0`,
-the same images the GitHub workflows use; set each component's `runtime-image`
-to a digest. For an installation that must not pull from `ghcr.io`, mirror the
-images to your own registry and point `runtime-image` at the mirror. [Runtime
-Images](runtime-images.md) has the roster and pinning conventions.
-
-`build-cargo` defaults to
-`ghcr.io/diggsweden/forge-ci-runtime-rust-stable:v0.90.0`.
+The build and publish components require `runtime-image`: a component cannot
+tell which registry serves the images, so it names none. Pin it by digest to
+the runtime images the GitHub workflows use, or, for an installation that must
+not pull from `ghcr.io`, to your mirror of them. `forge-ci plan
+gitlab-build-pipeline` takes the same images as `--runtime-image-java`,
+`-node`, `-go`, `-rust` and `-android`, one per toolchain family the plan
+builds. [Runtime Images](runtime-images.md) has the roster and pinning
+conventions.
 
 ### The job's user
 
@@ -1139,8 +1141,6 @@ package, images, keys and bot.
 
 What does not follow the fork, and must be overridden:
 
-- Catalog runtime-image defaults name `ghcr.io/diggsweden`; set
-  `runtime-image`.
 - The lint components select `ghcr.io/itiquette/nanolinter`; pass a verified,
   available digest through `nanolinter-image`, including for a mirror.
 

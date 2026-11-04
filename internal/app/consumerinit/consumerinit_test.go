@@ -86,6 +86,12 @@ nanolinter-images:
   kotlin: registry.example/fixture/lint:kotlin@sha256:6666666666666666666666666666666666666666666666666666666666666666
   rust: registry.example/fixture/lint:rust@sha256:7777777777777777777777777777777777777777777777777777777777777777
   javascript-typescript: registry.example/fixture/lint:javascript-typescript@sha256:8888888888888888888888888888888888888888888888888888888888888888
+runtime-images:
+  java: registry.example/fixture/runtime-java@sha256:9999999999999999999999999999999999999999999999999999999999999999
+  node: registry.example/fixture/runtime-node@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  go: registry.example/fixture/runtime-go@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  rust: registry.example/fixture/runtime-rust@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  android: registry.example/fixture/runtime-android@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
 `
 
 // With a complete defaults file, every example of every forge is written

@@ -52,6 +52,18 @@ type BuildPipelineOptions struct {
 	Version string
 	// Stage is the child-pipeline stage (default "build").
 	Stage string
+	// RuntimeImages are the images the build components run in. The
+	// components have no default, so each running family needs one.
+	RuntimeImages RuntimeImages
+}
+
+// RuntimeImages names the forge-ci runtime image of each toolchain family.
+type RuntimeImages struct {
+	Java    string // build-maven and build-gradle
+	Node    string // build-npm
+	Go      string // build-go
+	Rust    string // build-cargo
+	Android string // build-gradle-android
 }
 
 func mavenBuildInputs(artifact pipeline.PlannedArtifact, inputs map[string]any) map[string]any {
@@ -101,36 +113,51 @@ func BuildStagePipeline(plan pipeline.ReleaseBuildStagePlan, opts BuildPipelineO
 
 	// Each running target contributes one component include per item. Go and
 	// Cargo components also take the artifact name and release version.
+	images := opts.RuntimeImages
+
+	var missingImage error
+
 	for _, include := range []struct {
 		component string
 		target    pipeline.TargetPlan[pipeline.PlannedArtifact]
 		binaries  bool
+		family    string
+		image     string
 		inputs    func(pipeline.PlannedArtifact, map[string]any) map[string]any
 	}{
-		{"build-maven", tgt.Maven, false, mavenBuildInputs},
-		{"build-npm", tgt.NPM, false, npmBuildInputs},
-		{"build-gradle", tgt.Gradle, false, func(artifact pipeline.PlannedArtifact, inputs map[string]any) map[string]any {
+		{"build-maven", tgt.Maven, false, "java", images.Java, mavenBuildInputs},
+		{"build-npm", tgt.NPM, false, "node", images.Node, npmBuildInputs},
+		{"build-gradle", tgt.Gradle, false, "java", images.Java, func(artifact pipeline.PlannedArtifact, inputs map[string]any) map[string]any {
 			return gradleBuildInputs(artifact, inputs, opts.Version)
 		}},
-		{"build-gradle-android", tgt.GradleAndroid, false, func(artifact pipeline.PlannedArtifact, inputs map[string]any) map[string]any {
+		{"build-gradle-android", tgt.GradleAndroid, false, "android", images.Android, func(artifact pipeline.PlannedArtifact, inputs map[string]any) map[string]any {
 			return gradleAndroidBuildInputs(artifact, inputs, opts.Version)
 		}},
-		{"build-go", tgt.Go, true, goBuildInputs},
-		{"build-cargo", tgt.Cargo, true, cargoBuildInputs},
+		{"build-go", tgt.Go, true, "go", images.Go, goBuildInputs},
+		{"build-cargo", tgt.Cargo, true, "rust", images.Rust, cargoBuildInputs},
 	} {
 		err := addTargetIncludes(&out, include.component, include.target, opts, artifactName, include.binaries, include.binaries, func(artifact pipeline.PlannedArtifact) map[string]any {
 			return include.inputs(artifact, map[string]any{
 				"working-directory": dirOrDot(artifact.WorkingDirectory),
 				"enable-build-sbom": hasBuildSBOM(artifact),
+				"runtime-image":     include.image,
 			})
 		})
 		if err != nil {
 			return ChildPipeline{}, err
 		}
+
+		if include.target.Runs && strings.TrimSpace(include.image) == "" && missingImage == nil {
+			missingImage = fmt.Errorf("the plan runs %s, which needs the %s runtime image: %w", include.component, include.family, errs.ErrUsage)
+		}
 	}
 
 	if err := out.validate(); err != nil {
 		return ChildPipeline{}, err
+	}
+
+	if missingImage != nil {
+		return ChildPipeline{}, missingImage
 	}
 
 	return out, nil

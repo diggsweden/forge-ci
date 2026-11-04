@@ -16,6 +16,8 @@
 #                                             `check` is checksum-bound and must be
 #                                             included by full commit SHA
 #   PIN_DIGEST, PIN_IMAGE_DIGEST              digests of the reviewed images
+#   PIN_JAVA_IMAGE_DIGEST                     digest of the reviewed Forge CI runtime
+#                                             image, or of your mirror
 #
 # The pipeline status is the gate: GitLab fails the pipeline, and the merge
 # request, when any job fails. Require successful pipelines and refuse merging
@@ -64,5 +66,6 @@ include:
   # build/libs/ and the Build SBOM, kept as job artifacts.
   - component: gitlab.example.com/team/ci/forge-ci/build-gradle@0.90.0
     inputs:
+      runtime-image: ghcr.io/diggsweden/forge-ci-runtime-java-25@sha256:PIN_JAVA_IMAGE_DIGEST
       gradle-tasks: build
       java-version: "25"

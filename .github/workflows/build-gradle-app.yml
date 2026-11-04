@@ -83,19 +83,31 @@ on:
         default: true
         type: boolean
       runtime-image:
-        description: "forge-ci runtime image carrying JDK + Gradle. Optional override; default uses the matching v0.90.0 runtime image."
+        description: "forge-ci runtime image carrying JDK + Gradle. Empty uses the image of the resolved forge-ci version."
         required: false
-        default: "ghcr.io/diggsweden/forge-ci-runtime-java-25:v0.90.0"
+        default: ""
+        type: string
+      forge-ci-binary-ref:
+        description: "forge-ci release tag or commit whose runtime image the jobs run in; empty resolves the current stable release tag"
+        required: false
+        default: ""
         type: string
 permissions:
   contents: read
 jobs:
+  resolve-bootstrap:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/resolve-forge-ci-bootstrap.yml
+    with:
+      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
   build-gradle:
+    needs: [resolve-bootstrap]
     name: Build Gradle Project
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     container:
-      image: ${{ inputs['runtime-image'] }}
+      image: ${{ inputs['runtime-image'] || needs.resolve-bootstrap.outputs['runtime-image-java'] }}
     permissions:
       contents: read
       packages: read

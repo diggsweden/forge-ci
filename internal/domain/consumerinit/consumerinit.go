@@ -33,6 +33,9 @@ type Defaults struct {
 	CosignPublicKeySHA256 string            `yaml:"cosign-public-key-sha256"`
 	CheckImage            string            `yaml:"check-image"`
 	NanolinterImages      map[string]string `yaml:"nanolinter-images"`
+	// RuntimeImages are the build components' runtime images by toolchain
+	// family: java, node, go, rust and android.
+	RuntimeImages map[string]string `yaml:"runtime-images"`
 }
 
 // ParseDefaults decodes the defaults file strictly: an unknown key is an

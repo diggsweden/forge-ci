@@ -2479,7 +2479,8 @@ Reads the typed build-stage plan and writes a GitLab child pipeline that
    natively with strategy: matrix.
 
 EXAMPLE:
-   forge-ci plan gitlab-build-pipeline --component-base "$CI_SERVER_FQDN/diggsweden/forge-ci" --component-ref 0.90.0 --output build-pipeline.yml
+   forge-ci plan gitlab-build-pipeline --component-base "$CI_SERVER_FQDN/diggsweden/forge-ci" --component-ref 0.90.0 \
+     --runtime-image-java "registry.example.com/team/forge-ci-runtime-java-25@sha256:<digest>" --output build-pipeline.yml
 ```
 
 | Flag | Description | Type | Default | Env vars |
@@ -2488,6 +2489,11 @@ EXAMPLE:
 | `--component-base` | explicit CI/CD Catalog path prefix for the build-<eco> components (required) | string | `""` | `$COMPONENT_BASE` |
 | `--component-ref` | component version to pin (e.g. 1.0.0) (required) | string | `""` | `$COMPONENT_REF` |
 | `--version` | release version forwarded to each build component | string | `""` | `$VERSION` |
+| `--runtime-image-java` | runtime image of build-maven and build-gradle; required when the plan builds them | string | `""` | n/a |
+| `--runtime-image-node` | runtime image of build-npm; required when the plan builds npm | string | `""` | n/a |
+| `--runtime-image-go` | runtime image of build-go; required when the plan builds Go | string | `""` | n/a |
+| `--runtime-image-rust` | runtime image of build-cargo; required when the plan builds Cargo | string | `""` | n/a |
+| `--runtime-image-android` | runtime image of build-gradle-android; required when the plan builds Android | string | `""` | n/a |
 | `--output` | destination path for the child pipeline (default: stdout) | string | `""` | `$OUTPUT_FILE` |
 
 ### `forge-ci plan gitlab-publish-pipeline`

@@ -88,9 +88,14 @@ on:
         required: true
         type: string
       runtime-image:
-        description: "forge-ci runtime image. Optional override; default uses the matching v0.90.0 runtime image."
+        description: "forge-ci runtime image. Empty uses the image of the resolved forge-ci version."
         required: false
-        default: "ghcr.io/diggsweden/forge-ci-runtime-base:v0.90.0"
+        default: ""
+        type: string
+      forge-ci-binary-ref:
+        description: "forge-ci release tag or commit whose runtime image the jobs run in; empty resolves the current stable release tag"
+        required: false
+        default: ""
         type: string
     # All `required: false` — `secrets: inherit` callers unchanged.
     # This is the subset of release secrets that the preflight exercises or
@@ -128,14 +133,21 @@ on:
 permissions:
   contents: read # Default permission; individual jobs declare additions.
 jobs:
+  resolve-bootstrap:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/resolve-forge-ci-bootstrap.yml
+    with:
+      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
   validate:
+    needs: [resolve-bootstrap]
     name: "Check: release request"
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     outputs:
       existing-release-sha: ${{ steps.prerequisites.outputs.existing-release-sha }}
     container:
-      image: ${{ inputs['runtime-image'] }}
+      image: ${{ inputs['runtime-image'] || needs.resolve-bootstrap.outputs['runtime-image'] }}
     # ============================================================================
     # This job runs the selected release preflight checks:
     #   1. Tag - format, signature, uniqueness, and commit availability

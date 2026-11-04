@@ -18,6 +18,12 @@ import (
 	domainrelease "github.com/diggsweden/forge-ci/internal/domain/release"
 )
 
+// selfRuntimeRepository is the repository the tests' policy trusts; the policy
+// has no built-in repository to fall back to.
+const selfRuntimeRepository = "examplescope/forge-ci"
+
+var selfRuntimePolicy = domainrelease.SelfRuntimePolicy{Repository: selfRuntimeRepository}
+
 type selfRuntimePublishCall struct {
 	repository string
 	sourceRef  string
@@ -48,7 +54,8 @@ func TestPublishSelfRuntimeCLI_SelectsExactAssetsAndForcesPrereleasePolicy(t *te
 	var out bytes.Buffer
 
 	err := apprelease.PublishSelfRuntimeCLI(context.Background(), publisher, &out, apprelease.PublishSelfRuntimeCLIInput{
-		Repository: domainrelease.SelfRuntimeRepository,
+		Policy:     selfRuntimePolicy,
+		Repository: selfRuntimeRepository,
 		SourceRef:  "refs/heads/" + domainrelease.SelfRuntimeBranch,
 		TargetSHA:  sha,
 		AssetsDir:  "cli-dist",
@@ -62,7 +69,7 @@ func TestPublishSelfRuntimeCLI_SelectsExactAssetsAndForcesPrereleasePolicy(t *te
 	}
 
 	call := publisher.calls[0]
-	if call.repository != domainrelease.SelfRuntimeRepository || call.sourceRef != "refs/heads/"+domainrelease.SelfRuntimeBranch || call.targetSHA != sha {
+	if call.repository != selfRuntimeRepository || call.sourceRef != "refs/heads/"+domainrelease.SelfRuntimeBranch || call.targetSHA != sha {
 		t.Fatalf("publication identity = %q from %q at %q", call.repository, call.sourceRef, call.targetSHA)
 	}
 
@@ -111,13 +118,16 @@ func TestPublishSelfRuntimeCLI_RejectsWrongRepositoryOrSHABeforeMutation(t *test
 	sha := strings.Repeat("a", 40)
 	tests := map[string]apprelease.PublishSelfRuntimeCLIInput{
 		"wrong repository": {
-			Repository: "other/repo", SourceRef: "refs/heads/" + domainrelease.SelfRuntimeBranch, TargetSHA: sha, AssetsDir: "cli-dist",
+			Policy: selfRuntimePolicy, Repository: "other/repo", SourceRef: "refs/heads/" + domainrelease.SelfRuntimeBranch, TargetSHA: sha, AssetsDir: "cli-dist",
 		},
 		"short SHA": {
-			Repository: domainrelease.SelfRuntimeRepository, SourceRef: "refs/heads/" + domainrelease.SelfRuntimeBranch, TargetSHA: "abc123", AssetsDir: "cli-dist",
+			Policy: selfRuntimePolicy, Repository: selfRuntimeRepository, SourceRef: "refs/heads/" + domainrelease.SelfRuntimeBranch, TargetSHA: "abc123", AssetsDir: "cli-dist",
+		},
+		"policy names no repository": {
+			Repository: selfRuntimeRepository, SourceRef: "refs/heads/" + domainrelease.SelfRuntimeBranch, TargetSHA: sha, AssetsDir: "cli-dist",
 		},
 		"untrusted source ref": {
-			Repository: domainrelease.SelfRuntimeRepository, SourceRef: "refs/heads/untrusted", TargetSHA: sha, AssetsDir: "cli-dist",
+			Policy: selfRuntimePolicy, Repository: selfRuntimeRepository, SourceRef: "refs/heads/untrusted", TargetSHA: sha, AssetsDir: "cli-dist",
 		},
 	}
 
@@ -156,8 +166,8 @@ func TestPublishSelfRuntimeCLI_HonoursAConfiguredForkPolicy(t *testing.T) {
 	// The configured policy replaces upstream: upstream's repository and branch
 	// no longer publish from this configuration.
 	for name, in := range map[string]apprelease.PublishSelfRuntimeCLIInput{
-		"upstream repository": {Policy: fork, Repository: domainrelease.SelfRuntimeRepository, SourceRef: "refs/heads/dev", TargetSHA: sha, AssetsDir: "cli-dist"},
-		"upstream branch":     {Policy: fork, Repository: "someone/forge-ci", SourceRef: "refs/heads/" + domainrelease.SelfRuntimeBranch, TargetSHA: sha, AssetsDir: "cli-dist"},
+		"another repository": {Policy: fork, Repository: selfRuntimeRepository, SourceRef: "refs/heads/dev", TargetSHA: sha, AssetsDir: "cli-dist"},
+		"default branch":     {Policy: fork, Repository: "someone/forge-ci", SourceRef: "refs/heads/" + domainrelease.SelfRuntimeBranch, TargetSHA: sha, AssetsDir: "cli-dist"},
 	} {
 		if err := apprelease.PublishSelfRuntimeCLI(context.Background(), &fakeSelfRuntimePublisher{}, &bytes.Buffer{}, in); !errors.Is(err, errs.ErrValidation) {
 			t.Errorf("%s: err = %v, want validation", name, err)
@@ -172,7 +182,8 @@ func TestPublishSelfRuntimeCLI_RequiresEveryExpectedAssetBeforeMutation(t *testi
 	publisher := &fakeSelfRuntimePublisher{}
 
 	err := apprelease.PublishSelfRuntimeCLI(context.Background(), publisher, &bytes.Buffer{}, apprelease.PublishSelfRuntimeCLIInput{
-		Repository: domainrelease.SelfRuntimeRepository,
+		Policy:     selfRuntimePolicy,
+		Repository: selfRuntimeRepository,
 		SourceRef:  "refs/heads/" + domainrelease.SelfRuntimeBranch,
 		TargetSHA:  strings.Repeat("a", 40),
 		AssetsDir:  "cli-dist",

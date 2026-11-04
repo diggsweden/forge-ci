@@ -49,8 +49,7 @@ spec:
       default: true
       description: Generate the CycloneDX Build SBOM with cyclonedx-gomod.
     runtime-image:
-      default: "ghcr.io/diggsweden/forge-ci-runtime-go-1.27:v0.90.0"
-      description: forge-ci runtime image carrying Go + cyclonedx-gomod (pin by @sha256).
+      description: forge-ci runtime image carrying Go + cyclonedx-gomod, pinned by @sha256.
 ---
 "$[[ inputs.job-name ]]":
   stage: $[[ inputs.stage ]]

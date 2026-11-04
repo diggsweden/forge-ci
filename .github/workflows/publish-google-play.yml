@@ -98,9 +98,14 @@ on:
         type: string
       # === SYSTEM ===
       runtime-image:
-        description: "forge-ci runtime image. Optional override; default uses the matching v0.90.0 runtime image. (publish-google-play only needs base — the upload action is a JS action that doesn't need Android tooling.)"
+        description: "forge-ci runtime image. Empty uses the image of the resolved forge-ci version. (publish-google-play only needs base — the upload action is a JS action that doesn't need Android tooling.)"
         required: false
-        default: "ghcr.io/diggsweden/forge-ci-runtime-base:v0.90.0"
+        default: ""
+        type: string
+      forge-ci-binary-ref:
+        description: "forge-ci release tag or commit whose runtime image the jobs run in; empty resolves the current stable release tag"
+        required: false
+        default: ""
         type: string
     # All `required: false` — `secrets: inherit` callers unchanged.
     secrets:
@@ -110,12 +115,19 @@ on:
 permissions:
   contents: read
 jobs:
+  resolve-bootstrap:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/resolve-forge-ci-bootstrap.yml
+    with:
+      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
   publish:
+    needs: [resolve-bootstrap]
     name: Publish to Google Play
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     container:
-      image: ${{ inputs['runtime-image'] }}
+      image: ${{ inputs['runtime-image'] || needs.resolve-bootstrap.outputs['runtime-image'] }}
     permissions:
       actions: read
       contents: read

@@ -33,6 +33,7 @@ func TestGeneratedInputsMatchCatalogueComponentContracts(t *testing.T) {
 		Cargo:         runningTarget(pipeline.PlannedArtifact{Name: "cargo", ProjectType: projecttype.Cargo}),
 	}}, gitlabpipeline.BuildPipelineOptions{
 		ComponentBase: "catalog.example/components",
+		RuntimeImages: testRuntimeImages,
 		ComponentRef:  "1.0.0",
 		Version:       "1.2.3",
 	})

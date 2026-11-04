@@ -61,8 +61,7 @@ spec:
       default: "25"
       description: JDK major version, reported in the build summary.
     runtime-image:
-      default: "ghcr.io/diggsweden/forge-ci-runtime-java-25:v0.90.0"
-      description: forge-ci runtime image carrying Maven (pin by @sha256).
+      description: forge-ci runtime image carrying Maven, pinned by @sha256.
 ---
 "$[[ inputs.job-name ]]":
   stage: $[[ inputs.stage ]]

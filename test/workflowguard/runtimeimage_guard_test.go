@@ -15,27 +15,23 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/diggsweden/forge-ci/internal/domain/release"
 	"github.com/diggsweden/forge-ci/internal/runtimetags"
 	"gopkg.in/yaml.v3"
 )
 
-// TestRuntimeImageTagsShareOneVersion pins every forge-ci-runtime-*
-// image reference across the workflows to a single version tag. The
-// runtime images are this repo's own release artifact — Renovate never
-// bumps them — so a version cut rewrites every workflow default, and a
-// missed site fails silently as a stale-runtime job rather than an
-// error. This guard turns that silent drift into a failing build, in
-// the same guardrail-test style as workflow-contract and docs-sync.
-//
-// The pattern definitions are shared with cmd/bump-runtime-tags (the
-// tool that moves the pins on a release cut: `just bump-runtime-tags`)
-// via internal/runtimetags, so rewriter and guard cannot drift apart.
-func TestRuntimeImageTagsShareOneVersion(t *testing.T) {
+// TestNoShippedSurfaceNamesARuntimeRelease keeps every forge-ci-runtime-*
+// image out of the workflows and components as a literal. A literal names one
+// registry and one release: forks ran upstream's images, and a release cut
+// that missed a site shipped the previous release's runtime. GitHub workflows
+// resolve the image from the serving repository and the selected release;
+// GitLab components take it as a required input.
+func TestNoShippedSurfaceNamesARuntimeRelease(t *testing.T) {
 	t.Parallel()
 
 	// self-runtime-container.yml builds the runtime images themselves
 	// and smoke-tests candidates under a local-only ":verify" tag that
-	// never leaves the job. That tag is deliberate, not drift.
+	// never leaves the job. That tag is deliberate, not a pin.
 	verifyTagAllowedFiles := map[string]bool{
 		".github/workflows/self-runtime-container.yml": true,
 	}
@@ -52,7 +48,9 @@ func TestRuntimeImageTagsShareOneVersion(t *testing.T) {
 		collectRuntimeTagSites(filepath.ToSlash(rel), string(content), verifyTagAllowedFiles, sites)
 	}
 
-	require.NotEmpty(t, sites, "no forge-ci-runtime image references found under .github/workflows — pattern or layout changed?")
+	if len(sites) == 0 {
+		return
+	}
 
 	tags := make([]string, 0, len(sites))
 	for tag := range sites {
@@ -61,19 +59,13 @@ func TestRuntimeImageTagsShareOneVersion(t *testing.T) {
 
 	slices.Sort(tags)
 
-	if len(tags) > 1 {
-		var report strings.Builder
-		for _, tag := range tags {
-			report.WriteString("\n  " + tag + ":\n    " + strings.Join(sites[tag], "\n    "))
-		}
-
-		require.Fail(t, "runtime image tags diverged",
-			"every forge-ci-runtime-* reference must carry the same version tag; a version cut must rewrite all of them together.%s", report.String())
+	var report strings.Builder
+	for _, tag := range tags {
+		report.WriteString("\n  " + tag + ":\n    " + strings.Join(sites[tag], "\n    "))
 	}
 
-	require.Truef(t, runtimetags.ValidVersion(tags[0]),
-		"the shared runtime image tag %q is not a release version (vX.Y.Z); sites:\n  %s",
-		tags[0], strings.Join(sites[tags[0]], "\n  "))
+	require.Fail(t, "a workflow or component names a runtime image release",
+		"resolve the image (needs.resolve-bootstrap.outputs) or take it as a required input:%s", report.String())
 }
 
 // collectRuntimeTagSites records every runtime-image tag in content as
@@ -105,7 +97,7 @@ func collectRuntimeTagSites(rel, content string, verifyTagAllowedFiles map[strin
 // own PR and release gates consume instead of a released version: the rolling
 // v0.90.0-pre line Self Runtime Container publishes, used by Self Pull Request, and
 // the release commit's own sha-<short> tag, which Self Release builds with an
-// expression. Neither is a default a version cut rewrites.
+// expression. Neither is a released image.
 func selfGraphImageTag(rel, tag string) bool {
 	switch rel {
 	case ".github/workflows/self-pullrequest.yml":
@@ -140,10 +132,10 @@ func TestSelfPullRequestUsesThePublishedRollingImageTag(t *testing.T) {
 	}
 }
 
-// TestRuntimeImageTagGuardCatchesDivergence proves the guard's scanner
-// actually flags a drifted tag and honours the :verify allowlist, so a
-// future regex or allowlist change cannot quietly blind the guard.
-func TestRuntimeImageTagGuardCatchesDivergence(t *testing.T) {
+// TestRuntimeImageTagGuardFindsPins proves the guard's scanner flags a pinned
+// release and honours the :verify and self-graph allowances, so a future
+// regex or allowlist change cannot quietly blind the guard.
+func TestRuntimeImageTagGuardFindsPins(t *testing.T) {
 	t.Parallel()
 
 	allowed := map[string]bool{".github/workflows/self-runtime-container.yml": true}
@@ -178,24 +170,23 @@ func TestRuntimeImageTagGuardCatchesDivergence(t *testing.T) {
 }
 
 // binaryRefInput is the workflow input that names the forge-ci revision a
-// plain-runner job installs, as opposed to the runtime images that ship it
-// pre-baked.
+// plain-runner job installs and whose runtime images the container jobs run in.
 const binaryRefInput = "forge-ci-binary-ref"
 
-// TestReleaseRevisionIsOneModeledVersion couples the two halves of a release
-// that TestRuntimeImageTagsShareOneVersion leaves independent. A job on a
-// container runner gets the CLI baked into the runtime image; a job on a plain
-// runner installs it from forge-ci-binary-ref. Nothing made those two agree,
-// so a version cut that rewrote the image pins and missed a binary-ref default
-// would run one graph on two revisions: the container jobs on the new CLI, the
-// plain-runner jobs on the old one, with the mismatch showing up as behaviour
-// differences between jobs rather than as an error.
+// TestReleaseRevisionIsOneModeledVersion keeps one graph on one revision. A
+// job on a container runner gets the CLI baked into the runtime image; a job
+// on a plain runner installs it from forge-ci-binary-ref. Both come from the
+// bootstrap resolver, so every binary-ref default must be empty: a hard-coded
+// one would run the plain-runner jobs on another revision than the images the
+// resolver selected, showing up as behaviour differences between jobs rather
+// than as an error.
 //
-// Digest-pinned runtime defaults are refused for the same reason. A digest is
-// a stronger pin than a tag, but it carries no version, so the shared-version
-// check above cannot see it and the coupling here would have nothing to compare.
-// Nothing pins one today; adding one deliberately means giving it a modeled
-// version here rather than letting it slip past both guards.
+// Digest-pinned runtime defaults are refused for the same reason: a digest
+// carries no version, so nothing could tie it to the resolved revision.
+//
+// The self graph builds and consumes the CLI of the release being cut before
+// that release exists, through one rolling pre-release tag; every literal of
+// it must be the channel the self-runtime publisher owns.
 func TestReleaseRevisionIsOneModeledVersion(t *testing.T) {
 	t.Parallel()
 
@@ -203,44 +194,27 @@ func TestReleaseRevisionIsOneModeledVersion(t *testing.T) {
 	files, err := runtimetags.Files(root)
 	require.NoError(t, err)
 
-	sites := map[string][]string{}
 	binaryRefs := map[string][]string{}
 
 	var digests []string
 
 	for _, rel := range files {
-		content := reporoot.ReadFile(t, rel)
-		slash := filepath.ToSlash(rel)
-		collectRuntimeTagSites(slash, string(content), map[string]bool{
-			".github/workflows/self-runtime-container.yml": true,
-		}, sites)
-		collectReleaseRevisions(t, slash, content, binaryRefs, &digests)
+		collectReleaseRevisions(t, filepath.ToSlash(rel), reporoot.ReadFile(t, rel), binaryRefs, &digests)
 	}
 
 	require.Empty(t, digests,
-		"a runtime image default pinned by digest carries no version, so neither the shared-tag guard nor this one can model it")
-	require.Len(t, sites, 1, "runtime image tags diverged; TestRuntimeImageTagsShareOneVersion reports the sites")
+		"a runtime image default pinned by digest carries no version, so nothing ties it to the resolved revision")
 	require.NotEmpty(t, binaryRefs, "no %s defaults found — input renamed or layout changed?", binaryRefInput)
-
-	var runtimeTag string
-	for tag := range sites {
-		runtimeTag = tag
-	}
-
-	// The self graph builds and consumes the CLI of the release being cut before
-	// that release exists, through one rolling pre-release tag. It is a second
-	// modeled revision of the same version, not a second version.
-	rolling := runtimeTag + rollingPreReleaseSuffix
 
 	// Empty defaults select one concrete stable release at runtime. The bootstrap
 	// resolver returns its matching CLI ref and all runtime image references;
 	// bootstrap_revision_guard_test.go executes that selection and checks wiring.
 	require.Len(t, binaryRefs, 1, "binary defaults must share stable-release resolution")
-	require.Contains(t, binaryRefs, "", "binary defaults must not retain an older hard-coded release")
+	require.Contains(t, binaryRefs, "", "binary defaults must not retain a hard-coded release")
 
 	for site, value := range rollingPreReleaseSites(t, files) {
-		require.Equalf(t, rolling, value,
-			"%s pins a rolling pre-release of another version; the pre-release tracks the release being cut", site)
+		require.Equalf(t, release.SelfRuntimeChannelTag, value,
+			"%s pins another rolling pre-release than the channel the self-runtime publisher owns", site)
 	}
 }
 

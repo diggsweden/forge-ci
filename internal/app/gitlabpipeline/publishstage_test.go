@@ -54,6 +54,7 @@ func TestPublishStagePipeline_RefusesUnrepresentableArtifactHandoff(t *testing.T
 
 			_, err := gitlabpipeline.PublishStagePipeline(pipeline.ReleasePublishStagePlan{Targets: tc.targets}, gitlabpipeline.BuildPipelineOptions{
 				ComponentBase: "$CI_SERVER_FQDN/diggsweden/forge-ci",
+				RuntimeImages: testRuntimeImages,
 				ComponentRef:  "1.0.0",
 			})
 			if !errors.Is(err, errs.ErrUnsupported) || !strings.Contains(err.Error(), "artifact handoff") {
@@ -68,6 +69,7 @@ func TestPublishStagePipeline_RejectsZeroJobChildPipeline(t *testing.T) {
 
 	_, err := gitlabpipeline.PublishStagePipeline(pipeline.ReleasePublishStagePlan{Stage: "publish"}, gitlabpipeline.BuildPipelineOptions{
 		ComponentBase: "$CI_SERVER_FQDN/diggsweden/forge-ci",
+		RuntimeImages: testRuntimeImages,
 		ComponentRef:  "1.0.0",
 	})
 	if !errors.Is(err, errs.ErrInvalidConfig) || !strings.Contains(err.Error(), "no generated jobs") {
@@ -103,6 +105,7 @@ func TestPublishStagePipeline_RefusesMissingComponent(t *testing.T) {
 
 			_, err := gitlabpipeline.PublishStagePipeline(tc.plan, gitlabpipeline.BuildPipelineOptions{
 				ComponentBase: "$CI_SERVER_FQDN/diggsweden/forge-ci",
+				RuntimeImages: testRuntimeImages,
 				ComponentRef:  "1.0.0",
 			})
 			if !errors.Is(err, errs.ErrUnsupported) || !strings.Contains(err.Error(), tc.want) {
@@ -117,6 +120,7 @@ func TestPublishStagePipeline_RequiresExplicitComponentRef(t *testing.T) {
 
 	_, err := gitlabpipeline.PublishStagePipeline(pipeline.ReleasePublishStagePlan{}, gitlabpipeline.BuildPipelineOptions{
 		ComponentBase: "catalog.example/components",
+		RuntimeImages: testRuntimeImages,
 	})
 	if !errors.Is(err, errs.ErrUsage) || !strings.Contains(err.Error(), "component ref") {
 		t.Fatalf("err = %v, want ErrUsage naming the missing component ref", err)
@@ -135,6 +139,7 @@ func TestPublishStagePipeline_RejectsUnsupportedForgePackageProjectType(t *testi
 
 	_, err := gitlabpipeline.PublishStagePipeline(plan, gitlabpipeline.BuildPipelineOptions{
 		ComponentBase: "$CI_SERVER_FQDN/diggsweden/forge-ci",
+		RuntimeImages: testRuntimeImages,
 		ComponentRef:  "1.0.0",
 	})
 	if !errors.Is(err, errs.ErrUnsupported) || !strings.Contains(err.Error(), `cannot represent project type "go"`) {
@@ -157,6 +162,7 @@ func TestPublishStagePipeline_RefusesGitHubSpecificMacOSVersion(t *testing.T) {
 
 	_, err := gitlabpipeline.PublishStagePipeline(plan, gitlabpipeline.BuildPipelineOptions{
 		ComponentBase: "$CI_SERVER_FQDN/diggsweden/forge-ci",
+		RuntimeImages: testRuntimeImages,
 		ComponentRef:  "1.0.0",
 	})
 	if !errors.Is(err, errs.ErrUnsupported) || !strings.Contains(err.Error(), "macos-version") {

@@ -69,9 +69,14 @@ on:
         type: string
         default: ""
       runtime-image:
-        description: "forge-ci runtime image to run inside. Caller picks based on project-type — runtime-java-25 for maven/gradle/gradle-android, runtime-node-24 for npm, runtime-rust-stable for cargo, runtime-base for xcode-ios. Default works for the sed-only bumps."
+        description: "forge-ci runtime image to run inside. Caller picks based on project-type — runtime-java-25 for maven/gradle/gradle-android, runtime-node-24 for npm, runtime-rust-stable for cargo, runtime-base for xcode-ios. Empty uses the resolved forge-ci version's base image, enough for the sed-only bumps."
         required: false
-        default: "ghcr.io/diggsweden/forge-ci-runtime-base:v0.90.0"
+        default: ""
+        type: string
+      forge-ci-binary-ref:
+        description: "forge-ci release tag or commit whose runtime image the jobs run in; empty resolves the current stable release tag"
+        required: false
+        default: ""
         type: string
       git-signing-method:
         description: "How to sign the release commit + tag: gpg (default; imports RELEASE_GPG_PRIVATE_KEY) or ssh (RELEASE_SSH_SIGNING_KEY, no OpenPGP key on the runner). Caller passes fromJSON(config-plan-json).git_signing.method."
@@ -107,15 +112,23 @@ on:
 permissions:
   contents: read # Default permission; the job uses RELEASE_TOKEN for pushes.
 jobs:
+  resolve-bootstrap:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/resolve-forge-ci-bootstrap.yml
+    with:
+      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
   # Generate full changelog for committing to repository
   generate-full-changelog:
+    needs: [resolve-bootstrap]
     name: "Prepare: changelog"
     permissions:
       contents: read
     uses: ./.github/workflows/generate-changelog.yml
     with:
       branch: ${{ github.sha }}
-      runtime-image: ${{ inputs['runtime-image'] }}
+      forge-ci-binary-ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
+      runtime-image: ${{ inputs['runtime-image'] || needs.resolve-bootstrap.outputs['runtime-image'] }}
       upload-as-artifact: true
       changelog-config: "/opt/forge-ci/templates/gitcliff/keepachangelog.toml"
       git-cliff-args: "" # Empty means full history
@@ -123,23 +136,26 @@ jobs:
       artifact-name: "full-changelog"
   # Generate minimal changelog for commit message
   generate-minimal-changelog:
+    needs: [resolve-bootstrap]
     name: "Prepare: commit message"
     permissions:
       contents: read
     uses: ./.github/workflows/generate-changelog.yml
     with:
       branch: ${{ github.sha }}
-      runtime-image: ${{ inputs['runtime-image'] }}
+      forge-ci-binary-ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
+      runtime-image: ${{ inputs['runtime-image'] || needs.resolve-bootstrap.outputs['runtime-image'] }}
       upload-as-artifact: true
       changelog-config: "/opt/forge-ci/templates/gitcliff/minimal.toml"
       git-cliff-args: "--latest --strip header"
       output-file: "minimal-changelog.txt"
       artifact-name: "minimal-changelog"
   prepare-version-files:
+    needs: [resolve-bootstrap]
     name: "Prepare: native version files without signing keys"
     runs-on: ubuntu-26.04
     container:
-      image: ${{ inputs['runtime-image'] }}
+      image: ${{ inputs['runtime-image'] || needs.resolve-bootstrap.outputs['runtime-image'] }}
     permissions:
       contents: read
     outputs:
@@ -190,10 +206,10 @@ jobs:
           if-no-files-found: error
   bump-version:
     name: "Prepare: version and release commit"
-    needs: [generate-full-changelog, generate-minimal-changelog, prepare-version-files]
+    needs: [resolve-bootstrap, generate-full-changelog, generate-minimal-changelog, prepare-version-files]
     runs-on: ubuntu-26.04
     container:
-      image: ${{ inputs['runtime-image'] }}
+      image: ${{ inputs['runtime-image'] || needs.resolve-bootstrap.outputs['runtime-image'] }}
     permissions:
       actions: read
       contents: write

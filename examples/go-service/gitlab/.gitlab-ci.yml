@@ -16,6 +16,8 @@
 #                                             `check` is checksum-bound and must be
 #                                             included by full commit SHA
 #   PIN_DIGEST, PIN_IMAGE_DIGEST              digests of the reviewed images
+#   PIN_GO_IMAGE_DIGEST                       digest of the reviewed Forge CI runtime
+#                                             image, or of your mirror
 #
 # The pipeline status is the gate: GitLab fails the pipeline, and the merge
 # request, when any job fails. Require successful pipelines and refuse merging
@@ -65,6 +67,7 @@ include:
   # as job artifacts.
   - component: gitlab.example.com/team/ci/forge-ci/build-go@0.90.0
     inputs:
+      runtime-image: ghcr.io/diggsweden/forge-ci-runtime-go-1.27@sha256:PIN_GO_IMAGE_DIGEST
       artifact-name: my-service
       main-package: ./cmd/my-service # FIXME: the service's main Go package.
       platforms: "linux/amd64,linux/arm64"

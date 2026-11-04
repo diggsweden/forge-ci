@@ -82,8 +82,7 @@ spec:
       default: "--batch-mode --no-transfer-progress --errors --fail-at-end -Dstyle.color=always"
       description: Extra args forwarded to mvn.
     runtime-image:
-      default: "ghcr.io/diggsweden/forge-ci-runtime-java-25:v0.90.0"
-      description: forge-ci runtime image carrying JDK + Maven (pin by @sha256).
+      description: forge-ci runtime image carrying JDK + Maven, pinned by @sha256.
 ---
 "$[[ inputs.job-name ]]":
   stage: $[[ inputs.stage ]]

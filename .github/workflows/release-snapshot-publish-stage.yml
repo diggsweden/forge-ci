@@ -119,6 +119,7 @@ jobs:
       MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
       MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
     with:
+      forge-ci-binary-ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
       branch: ${{ fromJson(inputs['snapshot-release-plan-json']).context.release_sha }}
       working-directory: ${{ matrix.artifact.working_directory }}
       artifact-source: ${{ matrix.artifact.publication_artifact_name || matrix.artifact.build_artifact_name }}
@@ -140,6 +141,7 @@ jobs:
       packages: write
     uses: ./.github/workflows/publish-snapshot-npm.yml
     with:
+      forge-ci-binary-ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
       working-directory: ${{ fromJson(inputs['snapshot-publish-stage-plan-json']).inputs.npm_working_directory }}
       artifact-source: ${{ fromJson(inputs['snapshot-publish-stage-plan-json']).inputs.npm_build_artifact_name || 'npm-build-artifacts' }}
       branch: ${{ fromJson(inputs['snapshot-release-plan-json']).context.release_sha }}
@@ -166,6 +168,7 @@ jobs:
     # sbom-cargo uses only auto-provided GITHUB_TOKEN.
     uses: ./.github/workflows/sbom-cargo.yml
     with:
+      forge-ci-binary-ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
       working-directory: ${{ fromJson(inputs['snapshot-publish-stage-plan-json']).inputs.cargo_working_directory }}
       branch: ${{ fromJson(inputs['snapshot-release-plan-json']).context.release_sha }}
       runtime-image: ${{ inputs['runtime-image-rust'] || needs.resolve-bootstrap.outputs['runtime-image-rust'] }}
@@ -181,6 +184,7 @@ jobs:
     # sbom-go uses only auto-provided GITHUB_TOKEN.
     uses: ./.github/workflows/sbom-go.yml
     with:
+      forge-ci-binary-ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
       working-directory: ${{ fromJson(inputs['snapshot-publish-stage-plan-json']).inputs.go_sbom_working_directory }}
       branch: ${{ fromJson(inputs['snapshot-release-plan-json']).context.release_sha }}
       artifact-name: ${{ fromJson(inputs['snapshot-publish-stage-plan-json']).inputs.go_sbom_artifact_name }}

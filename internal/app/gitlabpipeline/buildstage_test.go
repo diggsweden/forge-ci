@@ -17,6 +17,15 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/projecttype"
 )
 
+// testRuntimeImages gives every build family an image, as a caller must.
+var testRuntimeImages = gitlabpipeline.RuntimeImages{
+	Java:    "registry.example/runtime-java@sha256:" + strings.Repeat("1", 64),
+	Node:    "registry.example/runtime-node@sha256:" + strings.Repeat("2", 64),
+	Go:      "registry.example/runtime-go@sha256:" + strings.Repeat("3", 64),
+	Rust:    "registry.example/runtime-rust@sha256:" + strings.Repeat("4", 64),
+	Android: "registry.example/runtime-android@sha256:" + strings.Repeat("5", 64),
+}
+
 func runningTarget(items ...pipeline.PlannedArtifact) pipeline.TargetPlan[pipeline.PlannedArtifact] {
 	return pipeline.TargetPlan[pipeline.PlannedArtifact]{Runs: true, Items: items}
 }
@@ -41,6 +50,7 @@ func TestBuildStagePipeline_FansOutRunningTargets(t *testing.T) {
 
 	child, err := gitlabpipeline.BuildStagePipeline(plan, gitlabpipeline.BuildPipelineOptions{
 		ComponentBase: "$CI_SERVER_FQDN/diggsweden/forge-ci",
+		RuntimeImages: testRuntimeImages,
 		ComponentRef:  "1.0.0",
 		Version:       "2.3.4",
 	})
@@ -152,6 +162,7 @@ func TestBuildStagePipeline_MavenBuildTypeDefaultFromYAML(t *testing.T) {
 		},
 	}, gitlabpipeline.BuildPipelineOptions{
 		ComponentBase: "$CI_SERVER_FQDN/diggsweden/forge-ci",
+		RuntimeImages: testRuntimeImages,
 		ComponentRef:  "1.0.0",
 	})
 	require.NoError(t, err)
@@ -214,6 +225,7 @@ func TestBuildStagePipeline_RefusesUnrepresentableBuildSettings(t *testing.T) {
 				pipeline.ReleaseBuildStagePlan{Targets: tc.targets},
 				gitlabpipeline.BuildPipelineOptions{
 					ComponentBase: "$CI_SERVER_FQDN/diggsweden/forge-ci",
+					RuntimeImages: testRuntimeImages,
 					ComponentRef:  "1.0.0",
 				})
 			// ErrUnsupported, not a usage error: the config is valid, and it is
@@ -234,6 +246,7 @@ func TestBuildStagePipeline_RejectsZeroJobChildPipeline(t *testing.T) {
 
 	_, err := gitlabpipeline.BuildStagePipeline(plan, gitlabpipeline.BuildPipelineOptions{
 		ComponentBase: "$CI_SERVER_FQDN/diggsweden/forge-ci",
+		RuntimeImages: testRuntimeImages,
 		ComponentRef:  "1.0.0",
 	})
 	if !errors.Is(err, errs.ErrInvalidConfig) || !strings.Contains(err.Error(), "no generated jobs") {
@@ -251,6 +264,7 @@ func TestBuildStagePipeline_SanitisesJobNames(t *testing.T) {
 
 	child, err := gitlabpipeline.BuildStagePipeline(plan, gitlabpipeline.BuildPipelineOptions{
 		ComponentBase: "$CI_SERVER_FQDN/diggsweden/forge-ci",
+		RuntimeImages: testRuntimeImages,
 		ComponentRef:  "1.0.0",
 	})
 	if err != nil {
@@ -274,6 +288,7 @@ func TestBuildStagePipeline_RejectsSanitisedJobNameCollision(t *testing.T) {
 
 	_, err := gitlabpipeline.BuildStagePipeline(plan, gitlabpipeline.BuildPipelineOptions{
 		ComponentBase: "catalog.example/components",
+		RuntimeImages: testRuntimeImages,
 		ComponentRef:  "1.0.0",
 	})
 	if !errors.Is(err, errs.ErrInvalidConfig) || !strings.Contains(err.Error(), "duplicate job name") {
@@ -299,6 +314,7 @@ func TestBuildStagePipeline_RefusesMissingComponent(t *testing.T) {
 
 	_, err := gitlabpipeline.BuildStagePipeline(plan, gitlabpipeline.BuildPipelineOptions{
 		ComponentBase: "$CI_SERVER_FQDN/diggsweden/forge-ci",
+		RuntimeImages: testRuntimeImages,
 		ComponentRef:  "1.0.0",
 	})
 	if !errors.Is(err, errs.ErrUnsupported) || !strings.Contains(err.Error(), "build-xcode-ios") {
@@ -337,6 +353,7 @@ func TestBuildStagePipeline_RefusesWrongProjectType(t *testing.T) {
 
 	_, err := gitlabpipeline.BuildStagePipeline(plan, gitlabpipeline.BuildPipelineOptions{
 		ComponentBase: "catalog.example/components",
+		RuntimeImages: testRuntimeImages,
 		ComponentRef:  "1.0.0",
 	})
 	if !errors.Is(err, errs.ErrInvalidConfig) || !strings.Contains(err.Error(), "build-go") {
@@ -381,6 +398,7 @@ func TestBuildStagePipeline_RefusesContainerFirstItemInBuildTarget(t *testing.T)
 
 			_, err := gitlabpipeline.BuildStagePipeline(tc.plan, gitlabpipeline.BuildPipelineOptions{
 				ComponentBase: "catalog.example/components",
+				RuntimeImages: testRuntimeImages,
 				ComponentRef:  "1.0.0",
 			})
 			if !errors.Is(err, errs.ErrInvalidConfig) {

@@ -660,16 +660,6 @@ release-snapshot: (_job "release-snapshot" "steps=validate + unsigned GoReleaser
     @goreleaser check
     @goreleaser release --clean --snapshot --skip=sign
 
-# Rewrite every pinned forge-ci-runtime-*:vX.Y.Z workflow default to a new
-# version (release-cut step; the TestRuntimeImageTagsShareOneVersion guard
-# proves the pins agree afterwards).
-[arg('version', help='New runtime-image version, for example v0.90.0; rewrites workflow pins')]
-[doc('Move every runtime image pin to a version')]
-[group('release')]
-bump-runtime-tags version:
-    @go run ./cmd/bump-runtime-tags "$1"
-    @go test ./test/workflowguard -run '^TestRuntimeImageTagsShareOneVersion$' -count=1
-
 # ==================================================================================== #
 # DEPENDENCIES - Routine dependency hygiene
 # ==================================================================================== #

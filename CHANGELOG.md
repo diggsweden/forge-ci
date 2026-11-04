@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- Remove `just bump-runtime-tags`. No workflow or component pins a runtime
+  image release any more, so a release cut has nothing to move, and a guard
+  refuses one written back. 0.91.x shipped with the v0.90.0 pins it missed.
 - **BREAKING:** Remove the `fail-on-warning` input of `lint-swift.yml` and
   `lint swift swiftlint --fail-on-warning` (`FAIL_ON_WARNING`), which had
   no effect: the administrator lint policy decides whether SwiftLint
@@ -233,6 +236,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `GIT_SUBMODULE_STRATEGY`, are refused when they differ from their
   literals. The generated snapshot jobs pass their image, architecture and
   context job as arguments.
+- The build, publish, SBOM, changelog, version-bump and prerequisite
+  workflows defaulted `runtime-image` to a fixed upstream image and release,
+  so a fork or a later release ran upstream's older image. Each now resolves
+  its image like the orchestrators, from a new `forge-ci-binary-ref` input
+  (empty: the current stable release) and the serving repository's image
+  namespace, and the orchestrators hand it their resolved ref.
+- `release publish-self-runtime-cli` requires `--allowed-repository`
+  (`FORGE_CI_REPOSITORY`) instead of falling back to the upstream repository.
 - A GitLab `release` job's release secrets, home and hand-off no longer
   follow its name. The job start read `CI_JOB_NAME`, which a project, group
   or instance variable can set like any other: one could give a key-free
@@ -465,6 +476,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   match. The policy's job variables are gone: `RC_*` other than
   `RC_JOB_USER`, `SNAPSHOT_*`, `CI_IMAGE_BUILDER*`, `REQUIRED_LINTS` and
   `ENABLE_GITLAB_SAST`. A variable of one of those names has no effect.
+- **BREAKING:** The GitLab build components and `publish-forge-packages` and
+  `publish-maven-central` require `runtime-image`; they defaulted to
+  upstream's `ghcr.io` images at an old release. `plan gitlab-build-pipeline`
+  takes the images as `--runtime-image-java`, `-node`, `-go`, `-rust` and
+  `-android` and refuses a plan whose family has none, and a mirror's
+  `consumer-defaults.yml` fills the examples' images from `runtime-images`.
 - **BREAKING (GitHub Enterprise Server):** A GitHub workflow that cannot tell
   which repository serves forge-ci stops in its bootstrap resolver, before
   any checkout, and says to set `FORGE_CI_REPOSITORY`. GitHub Enterprise

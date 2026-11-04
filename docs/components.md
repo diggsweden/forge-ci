@@ -278,7 +278,8 @@ Direct-call input defaults are maintained here rather than in each example:
 | `branch` | No | `""` | Empty selects the triggering ref |
 | `skip-tests` | No | `false` | Legacy compatibility input; `true` is refused. Tests run under administrator-owned enforcement; inspect native reports for actual execution. |
 | `enable-build-sbom` | No | `true` | Run Build SBOM generation |
-| `runtime-image` | No | Matching Android runtime image | Toolchain image override |
+| `runtime-image` | No | `""` | Empty selects the Android runtime image of the resolved forge-ci version |
+| `forge-ci-binary-ref` | No | `""` | forge-ci revision whose runtime image is selected; empty resolves the current stable release |
 
 APK outputs are found under `app/build/outputs/apk/**/debug/*.apk` and
 `app/build/outputs/apk/**/release/*.apk`; AABs are under

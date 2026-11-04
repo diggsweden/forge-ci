@@ -11,23 +11,12 @@ import (
 	"testing"
 )
 
-func TestRuntimeGrammarBoundary_CompleteTagsAndStableVersions(t *testing.T) {
+func TestRuntimeGrammarBoundary_CompleteTags(t *testing.T) {
 	t.Parallel()
-
-	for _, version := range []string{"latest", "verify", "v1.2.3+build", "v1.2.3-rc.1", "v01.2.3", "v1.02.3", "v1.2.03", "v1.2", "V1.2.3", "1.2.3", "", " v1.2.3", "v1.2.3 "} {
-		require.False(t, runtimetags.ValidVersion(version), version)
-	}
-
-	for _, version := range []string{"v0.0.0", "v1.2.3", "v999.999.999"} {
-		require.True(t, runtimetags.ValidVersion(version), version)
-	}
 
 	for _, tag := range []string{"latest", "verify", "v1.2.3+build", "v1.2.3-rc.1", "v1.2", "v1.2.3suffix", "v1.2.3.4"} {
 		input := "image: 'ghcr.io/org/forge-ci-runtime-base:" + tag + "' # comment\n"
 		require.Equal(t, []string{tag}, runtimetags.Tags(input))
-		got, count := runtimetags.Rewrite(input, "v2.0.0")
-		require.Equal(t, input, got)
-		require.Zero(t, count)
 	}
 
 	require.Equal(t, []string{"v1.2.3", "verify"}, runtimetags.Tags("forge-ci-runtime:v1.2.3, (forge-ci-runtime-base:verify)"))

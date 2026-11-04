@@ -157,6 +157,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/generate-changelog.yml
     with:
+      forge-ci-binary-ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
       release-policy: ${{ inputs['release-policy'] }}
       branch: ${{ inputs['checkout-ref'] }}
       runtime-image: ${{ inputs['runtime-image'] || needs.resolve-bootstrap.outputs['runtime-image-full'] }}

@@ -16,6 +16,8 @@
 #                                             `check` is checksum-bound and must be
 #                                             included by full commit SHA
 #   PIN_DIGEST, PIN_IMAGE_DIGEST              digests of the reviewed images
+#   PIN_NODE_IMAGE_DIGEST                     digest of the reviewed Forge CI runtime
+#                                             image, or of your mirror
 #
 # The pipeline status is the gate: GitLab fails the pipeline, and the merge
 # request, when any job fails. Require successful pipelines and refuse merging
@@ -69,4 +71,5 @@ include:
   # packed *.tgz and the Build SBOM, kept as job artifacts.
   - component: gitlab.example.com/team/ci/forge-ci/build-npm@0.90.0
     inputs:
+      runtime-image: ghcr.io/diggsweden/forge-ci-runtime-node-24@sha256:PIN_NODE_IMAGE_DIGEST
       node-version: "24"

@@ -271,8 +271,8 @@ func (p *Provider) restoreSelfRuntimeAssets(
 }
 
 func validateSelfRuntimePublication(policy domainrelease.SelfRuntimePolicy, repository, sourceRef, targetSHA string, spec provider.ReleaseSpec) error {
-	if repository != policy.AllowedRepository() {
-		return fmt.Errorf("self-runtime publication requires repository %q: %w", policy.AllowedRepository(), errs.ErrValidation)
+	if !policy.RepositoryAllowed(repository) {
+		return fmt.Errorf("self-runtime publication requires repository %q: %w", policy.Repository, errs.ErrValidation)
 	}
 
 	if spec.Tag != domainrelease.SelfRuntimeChannelTag {

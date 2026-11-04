@@ -78,19 +78,31 @@ on:
         default: true
         type: boolean
       runtime-image:
-        description: "forge-ci runtime image carrying Go + cyclonedx-gomod. Optional override; default uses the matching v0.90.0 runtime image."
+        description: "forge-ci runtime image carrying Go + cyclonedx-gomod. Empty uses the image of the resolved forge-ci version."
         required: false
-        default: "ghcr.io/diggsweden/forge-ci-runtime-go-1.27:v0.90.0"
+        default: ""
+        type: string
+      forge-ci-binary-ref:
+        description: "forge-ci release tag or commit whose runtime image the jobs run in; empty resolves the current stable release tag"
+        required: false
+        default: ""
         type: string
 permissions:
   contents: read
 jobs:
+  resolve-bootstrap:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/resolve-forge-ci-bootstrap.yml
+    with:
+      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
   build-go:
+    needs: [resolve-bootstrap]
     name: Build Go Project
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     container:
-      image: ${{ inputs['runtime-image'] }}
+      image: ${{ inputs['runtime-image'] || needs.resolve-bootstrap.outputs['runtime-image-go'] }}
     permissions:
       contents: read
     steps:

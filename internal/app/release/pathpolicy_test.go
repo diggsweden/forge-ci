@@ -98,7 +98,7 @@ func TestPublishSelfRuntimeCLI_RejectsLinkedAncestorBeforeProvider(t *testing.T)
 	publisher := &fakeSelfRuntimePublisher{}
 
 	err := apprelease.PublishSelfRuntimeCLI(t.Context(), publisher, io.Discard, apprelease.PublishSelfRuntimeCLIInput{
-		Repository: domainrelease.SelfRuntimeRepository, SourceRef: "refs/heads/" + domainrelease.SelfRuntimeBranch, TargetSHA: strings.Repeat("a", 40), AssetsDir: "linked/dist",
+		Policy: selfRuntimePolicy, Repository: selfRuntimeRepository, SourceRef: "refs/heads/" + domainrelease.SelfRuntimeBranch, TargetSHA: strings.Repeat("a", 40), AssetsDir: "linked/dist",
 	})
 	if !errors.Is(err, errs.ErrMissingInput) {
 		t.Errorf("err=%v, want ErrMissingInput", err)

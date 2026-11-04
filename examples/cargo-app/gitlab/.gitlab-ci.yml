@@ -16,6 +16,8 @@
 #                                             `check` is checksum-bound and must be
 #                                             included by full commit SHA
 #   PIN_DIGEST, PIN_IMAGE_DIGEST              digests of the reviewed images
+#   PIN_RUST_IMAGE_DIGEST                     digest of the reviewed Forge CI runtime
+#                                             image, or of your mirror
 #
 # The pipeline status is the gate: GitLab fails the pipeline, and the merge
 # request, when any job fails. Require successful pipelines and refuse merging
@@ -70,12 +72,14 @@ include:
   # example targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"].
   - component: gitlab.example.com/team/ci/forge-ci/build-cargo@0.90.0
     inputs:
+      runtime-image: ghcr.io/diggsweden/forge-ci-runtime-rust-stable@sha256:PIN_RUST_IMAGE_DIGEST
       job-name: build-worker
       working-directory: worker
       artifact-name: worker
       platforms: "linux/amd64,linux/arm64"
   - component: gitlab.example.com/team/ci/forge-ci/build-cargo@0.90.0
     inputs:
+      runtime-image: ghcr.io/diggsweden/forge-ci-runtime-rust-stable@sha256:PIN_RUST_IMAGE_DIGEST
       job-name: build-api-service
       working-directory: api-service
       artifact-name: api-service

@@ -49,8 +49,10 @@ select the repository's SHA-1 or SHA-256 object format before fetching.
 a bound revision, pass its commit ID instead. Relative `FORGE_CI_INSTALL_DIR`
 values are resolved against the invoking working directory.
 An omitted binary ref resolves the current published stable release to its
-concrete tag once. GitHub orchestrators use that tag for default runtime images
-as well; explicit image overrides take precedence. Self Release's explicit
+concrete tag once. GitHub orchestrators, and the reusable workflows a caller
+can also use on its own, use that tag for default runtime images as well,
+under the namespace of the repository serving them; explicit image overrides
+take precedence. Self Release's explicit
 request commit never takes this default-discovery path.
 See
 [CLI binary channels](runtime-images.md#cli-binary-channels).

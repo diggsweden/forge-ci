@@ -40,8 +40,8 @@ type PublishSelfRuntimeCLIInput struct {
 // PublishSelfRuntimeCLI validates the immutable inputs and exact GoReleaser
 // asset set before allowing the GitHub adapter to mutate the rolling channel.
 func PublishSelfRuntimeCLI(ctx context.Context, publisher selfRuntimeCLIPublisher, out io.Writer, in PublishSelfRuntimeCLIInput) error {
-	if in.Repository != in.Policy.AllowedRepository() {
-		return fmt.Errorf("self-runtime CLI publication requires repository %q (got %q): %w", in.Policy.AllowedRepository(), in.Repository, errs.ErrValidation)
+	if !in.Policy.RepositoryAllowed(in.Repository) {
+		return fmt.Errorf("self-runtime CLI publication requires repository %q (got %q): %w", in.Policy.Repository, in.Repository, errs.ErrValidation)
 	}
 
 	if !domaingit.ValidCommitSHA(in.TargetSHA) {

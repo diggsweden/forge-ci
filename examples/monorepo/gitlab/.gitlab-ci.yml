@@ -82,7 +82,7 @@ include:
 
 # Compute the build-stage plan from .forge-ci/artifacts.yml, then write the
 # child pipeline: one build-<ecosystem> include per artifact, with its
-# job-name, working-directory, build-type and version.
+# job-name, working-directory, build-type, version and runtime image.
 generate-build-pipeline:
   stage: prepare
   image: "ghcr.io/diggsweden/forge-ci-runtime-base:v0.90.0"
@@ -98,6 +98,8 @@ generate-build-pipeline:
         --component-base "gitlab.example.com/team/ci/forge-ci" \
         --component-ref 0.90.0 \
         --version "$CI_COMMIT_TAG" \
+        --runtime-image-java ghcr.io/diggsweden/forge-ci-runtime-java-25@sha256:PIN_JAVA_IMAGE_DIGEST \
+        --runtime-image-node ghcr.io/diggsweden/forge-ci-runtime-node-24@sha256:PIN_NODE_IMAGE_DIGEST \
         --output build-pipeline.yml
   artifacts:
     reports:

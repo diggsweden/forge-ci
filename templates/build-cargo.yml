@@ -45,8 +45,7 @@ spec:
       default: true
       description: Generate the cargo-cyclonedx Build SBOM.
     runtime-image:
-      default: "ghcr.io/diggsweden/forge-ci-runtime-rust-stable:v0.90.0"
-      description: forge-ci runtime image carrying cargo + cargo-cyclonedx (pin by @sha256).
+      description: forge-ci runtime image carrying cargo + cargo-cyclonedx, pinned by @sha256.
 ---
 "$[[ inputs.job-name ]]":
   stage: $[[ inputs.stage ]]
