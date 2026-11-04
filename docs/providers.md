@@ -328,16 +328,21 @@ lacks.
 | Job image | runtime images | runtime images; digest-pinned images you supply for `check` and `release` | the consumer's image or `setup-toolchain` |
 | Engine binary | runtime image or verified release archive | runtime image, or the checksum-bound build for `check` and `release` | the checksum-bound build |
 | Plan-driven fan-out from `artifacts.yml` | `release-build-stage.yml` | generated child pipeline | none: the consumer's workflow is the plan |
-| Image build, scan, ledger | `publish-container.yml` | the consumer's `build` commands; `release` imports the ledger | `release-images.yml` |
+| Image build, scan, ledger | `publish-container.yml` | native `release` image jobs; consumer `build` commands produce the release files | `release-images.yml` |
 | Release preparation, signed tag | `release-prepare-stage.yml` | `release` component | `prepare-release.yml` |
 | Release branch | `branch` input, required | `release-branch` input, the project's default branch by default | `release-branch` input, `main` by default |
-| Version bump in project files | `version-bump.yml` | `release` `version-bump: maven`: bumped in a key-free job, verified as text in `Prepare: release commit and tag`, committed with the changelog | `prepare-release.yml` `version-bump: maven`: bumped in a key-free job, verified as text in the signing job, committed with the changelog |
+| Version bump in project files | `version-bump.yml` | `release` version-bump input: key-free preparation, text verification, signed commit with the changelog | `prepare-release.yml` version-bump input: key-free preparation, text verification, signed commit with the changelog |
 | Signing and publication | keyless, GPG, KMS or Cosign key (`env://COSIGN_KEY`) | `release` component, separately privileged jobs, Cosign key | `sign-and-publish-release.yml`, separately privileged jobs, Cosign key |
 | Public transparency log | `sign.transparency`, `public` by default (keyless signing needs the log; `none` only with a key) | `transparency-log` input, `none` by default | `transparency-log` input, `none` by default |
 | Image promotion | `:dev` → `:staging` → release, gated by Environments | final tags in a separate publication project | final tags (`promote` job) |
-| Snapshot flow | `release-snapshot-orchestrator.yml` (npm) | none | none |
-| Forge package registry | `publish-maven-github.yml` | `publish-forge-packages` | none |
-| Base-image lifecycle | none | `release` with `base-images: true` | three workflows and `prune-base-images`; the build graph around them is the consumer's |
+| Snapshot flow | `snapshot-images.yml`; `release-snapshot-orchestrator.yml` for npm | `snapshot-images` component | `snapshot-images.yml` |
+| Forge package registry | Maven/npm registry workflows | `publish-forge-packages` | CLI composition; no reusable package-publisher workflow |
+| Base-image lifecycle | CLI composition; no dedicated wrapper family | `release` with `base-images: true` | release-image and base verify/promote workflows plus `prune-base-images`; the build graph remains caller policy |
+
+The [delivery parity table](flows.md#per-forge-delivery-parity) marks each
+documented asymmetry as deliberate or a gap, including builder, signing-mode
+and administrator-boundary differences. Shared CLI support does not imply
+that every delivery layer exposes the same workflow or has live acceptance.
 
 ## Per-forge notes
 

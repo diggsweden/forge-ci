@@ -180,6 +180,41 @@ build job cannot get an image signed and promoted under a tag outside the
 release it was authorised for. The rule is enforced by the party with
 something to lose.
 
+## Per-forge delivery parity
+
+The shared CLI owns the artifact, ledger and verification contracts; the
+reusable delivery layers expose different parts of them. **Deliberate** marks
+an integration or policy choice; **Gap** marks a missing reusable surface or a
+weaker boundary. Availability here describes the shipped interface, not a live
+acceptance result for every combination.
+
+| Flow or boundary | GitHub | GitLab | Forgejo | Status |
+|---|---|---|---|---|
+| Run-artifact transport | Run-scoped ZIP blob | Runner-native artifacts and needs | Per-file artifact API | **Deliberate:** native transports; their extraction checks differ as described above. |
+| Runtime selection | Bootstrap resolves the CLI ref and matching runtime images | Supplied runtime images; check/release/snapshot job images are digest-pinned | Supplied job image or setup-toolchain; checksum-bound engine binary | **Deliberate:** execution models differ; shipped workflows/components must not retain release-specific runtime defaults. |
+| Artifact build fan-out | release-build-stage derives jobs from the declaration | Build-pipeline planner emits a child pipeline | Caller composes the build workflows/commands | **Gap:** no equivalent automatic Forgejo artifact fan-out stage. |
+| Linux image builders | Reusable container and snapshot workflows select Buildah | Release and snapshot image jobs support Buildah or Kaniko | Release and snapshot image workflows support Buildah or Kaniko | **Gap:** GitHub reusable image workflows do not yet expose Kaniko selection. |
+| Container signing roles | Staged builds; separate publication, child-evidence and index-signing jobs | Key-free build/export jobs; separate signing/publication jobs | Key-free image builds; separate protected signing/publication workflow | **Parity:** signing authority is downstream of builds; the exact handoff and trust assumptions still differ. |
+| Release signing modes | Reusable flows expose keyless, GPG and KMS/key options | Protected release flow uses a Cosign key, with optional GPG package sidecars | Protected release flow uses a Cosign key, with optional GPG package sidecars | **Gap:** GitLab/Forgejo release entry points do not expose every signing mode the CLI supports. |
+| Transparency default | Public for the Sigstore flow | None unless selected | None unless selected | **Deliberate:** keyless needs public transparency; key-based private flows can avoid public disclosure. |
+| Release branch selection | Required branch input | Project default unless supplied | main unless supplied | **Deliberate:** caller/default discovery differs; each flow still verifies the selected release identity. |
+| Tagless snapshot images | snapshot-images workflow | snapshot-images component and generated child jobs | snapshot-images workflow | **Parity:** independent image snapshots exist on all three; builder selection differs in the row above. |
+| Base-image lifecycle wrappers | CLI composition; no dedicated base-image workflow family | release with base-images enabled | Release-image, verify/promote-base workflows and prune-base-images action | **Gap:** GitHub lacks the dedicated base-policy wrapper surface. |
+| Forge package publication wrappers | Maven/npm registry workflows | publish-forge-packages component | CLI composition | **Gap:** no equivalent reusable Forgejo package-publisher workflow. |
+| Xcode/iOS build wrapper | Hosted macOS workflow | No Xcode build component | No Xcode build workflow | **Gap:** CLI capability is not reusable delivery-layer or runner coverage. |
+| Admin-policy attachment | Organization-required wrapper | Administrator-controlled policy include | Protected administrator workflow | **Gap:** authority isolation differs; Forgejo cannot separate a consumer maintainer from settings, and GitLab external config is weaker than injected policy. |
+
+See [Admin Policy](admin-policy.md) for the authority assumptions, and the
+[GitHub](github.md), [GitLab](gitlab.md) and [Forgejo](forgejo.md) guides for
+the concrete entry points. The signing topology below also distinguishes the
+reusable flows from the engine's own binary-release job.
+
+Runtime-pin drift is prevented by resolution rather than a release-time search
+and replace: GitHub's bootstrap selects one modeled release, GitLab takes image
+inputs, and the self-release graph uses the request commit's sha-tagged images.
+The workflow guards reject shipped literal runtime-release pins and mismatched
+rolling self-runtime channels; a release must keep those guards passing.
+
 ## The details
 
 ### Invariants
@@ -337,9 +372,10 @@ deleting by manifest digest.
 ## How each flow binds build to signature
 
 The protocols below apply when build and signing are isolated into separate
-jobs, as in the Forgejo release flow. That separation must be established by
-the workflow. The default GitHub container workflow attests per-architecture
-SBOMs in its build job and signs the merged image in its publishing job; its
+jobs, as in the Forgejo and GitLab release flows. That separation must be
+established by the workflow. The default GitHub container workflow stages its
+builds before publication, attests per-architecture SBOMs in image-evidence,
+then signs and attests the merged index in merge. Its
 [SLSA scope](verification.md#container-image-attestation--verification) is
 documented separately.
 
