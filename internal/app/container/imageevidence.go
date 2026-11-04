@@ -82,12 +82,22 @@ type ImageEvidenceInput struct {
 	Gate func(ctx context.Context, layout, platform string) error
 }
 
-// imageEvidenceScan is how one Trivy scan runs: its own timeout and the
-// bounded retry around it.
+// imageEvidenceScan is how one Trivy scan runs: its own timeout, the
+// bounded retry around it, and the platform it scans, os/arch, which is
+// passed to Trivy as --platform when the scan names one, as the scan gate
+// does, so Trivy reads that platform's image and no other.
 type imageEvidenceScan struct {
 	timeout  string
 	attempts int
 	delay    time.Duration
+	platform string
+}
+
+// forPlatform is the scan of one platform's layout.
+func (scan imageEvidenceScan) forPlatform(platform imageEvidencePlatform) imageEvidenceScan {
+	scan.platform = platform.OS + "/" + platform.Arch
+
+	return scan
 }
 
 func imageEvidenceScanOf(in ImageEvidenceInput) (imageEvidenceScan, error) {
@@ -195,7 +205,7 @@ func imageEvidenceSingleRegistryDigest(ctx context.Context, deps imageEvidenceDe
 		return err
 	}
 
-	return scanImageEvidenceLayout(ctx, deps, layout, in.TrivyOutput, in.SBOMOutput, scan)
+	return scanImageEvidenceLayout(ctx, deps, layout, in.TrivyOutput, in.SBOMOutput, scan.forPlatform(platform))
 }
 
 func validateSingleImageEvidenceInput(in ImageEvidenceInput) error {
@@ -273,7 +283,7 @@ func imageEvidenceScanOnePlatform(ctx context.Context, deps imageEvidenceDeps, i
 	sbomOutput := renderImageEvidenceTemplate(in.SBOMOutputTemplate, platform)
 
 	var scanErr error
-	if err := scanImageEvidenceLayout(ctx, deps, layout, trivyOutput, sbomOutput, scan); err != nil {
+	if err := scanImageEvidenceLayout(ctx, deps, layout, trivyOutput, sbomOutput, scan.forPlatform(platform)); err != nil {
 		scanErr = err
 	} else if in.Gate != nil {
 		scanErr = in.Gate(ctx, layout, platform.OS+"/"+platform.Arch)
@@ -634,15 +644,16 @@ func retryImageEvidenceTrivy(ctx context.Context, deps imageEvidenceDeps, layout
 			return retry.Permanent(fmt.Errorf("remove previous trivy output %s: %w", trivyOutput, err))
 		}
 
-		return runImageEvidenceTrivy(ctx, deps.trivy, deps.out, deps.stderr, layout, trivyOutput, scan.timeout)
+		return runImageEvidenceTrivy(ctx, deps.trivy, deps.out, deps.stderr, layout, trivyOutput, scan.timeout, scan.platform)
 	}, retry.OnRetry(func(attempt, total int, wait time.Duration, _ error) {
 		_, _ = fmt.Fprintf(deps.out, "Trivy image scan failed (attempt %d/%d) for %s, retrying in %s...\n", attempt, total, layout, wait)
 	}))
 }
 
-// runImageEvidenceTrivy scans layout into trivyOutput. Trivy runs outside the
-// caller's directory, so both paths are made absolute.
-func runImageEvidenceTrivy(ctx context.Context, trivy ImageEvidenceTrivy, out, stderr io.Writer, layout, trivyOutput, timeout string) error {
+// runImageEvidenceTrivy scans layout into trivyOutput, the image of platform
+// when one is named. Trivy runs outside the caller's directory, so both
+// paths are made absolute.
+func runImageEvidenceTrivy(ctx context.Context, trivy ImageEvidenceTrivy, out, stderr io.Writer, layout, trivyOutput, timeout, platform string) error {
 	input, err := filepath.Abs(layout)
 	if err != nil {
 		return retry.Permanent(fmt.Errorf("resolve %s: %w", layout, err))
@@ -653,7 +664,7 @@ func runImageEvidenceTrivy(ctx context.Context, trivy ImageEvidenceTrivy, out, s
 		return retry.Permanent(fmt.Errorf("resolve %s: %w", trivyOutput, err))
 	}
 
-	code, err := trivy.RunInherit(ctx, out, stderr,
+	args := []string{
 		"image",
 		"--input", input,
 		"--scanners", "vuln",
@@ -661,7 +672,12 @@ func runImageEvidenceTrivy(ctx context.Context, trivy ImageEvidenceTrivy, out, s
 		"--timeout", timeout,
 		"--format", "json",
 		"--output", output,
-	)
+	}
+	if platform != "" {
+		args = append(args, "--platform", platform)
+	}
+
+	code, err := trivy.RunInherit(ctx, out, stderr, args...)
 	if err != nil {
 		return retry.Permanent(fmt.Errorf("trivy image --input %s: %w", layout, err))
 	}

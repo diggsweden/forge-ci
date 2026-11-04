@@ -466,6 +466,12 @@ func assertPerPlatformScans(t *testing.T, trivy *fakeImageEvidenceTrivy, syft *f
 	for index, arch := range []string{"amd64", "arm64"} {
 		layout := copies[index].destLayout
 
+		// The layout holds one platform; --platform makes Trivy read that
+		// platform's image and no other, as the scan gate does.
+		if got := trivyArg(t, trivy.calls[index], "--platform"); got != "linux/"+arch {
+			t.Errorf("trivy scanned platform %q for %s, want linux/%s", got, arch, arch)
+		}
+
 		if got := trivyArg(t, trivy.calls[index], "--input"); got != layout {
 			t.Errorf("trivy scanned %q for %s, want that platform's layout %q", got, arch, layout)
 		}
@@ -646,6 +652,10 @@ func TestImageEvidence_ScansTheRegistryImageItPulled(t *testing.T) {
 
 	if got := trivyArg(t, trivy.calls[0], "--input"); got != copied.destLayout {
 		t.Errorf("trivy scanned %q, want the layout pulled for it %q", got, copied.destLayout)
+	}
+
+	if got := trivyArg(t, trivy.calls[0], "--platform"); got != "linux/amd64" {
+		t.Errorf("trivy scanned platform %q, want the one pulled, linux/amd64", got)
 	}
 
 	assertPrivateEvidenceOutput(t, trivyArg(t, trivy.calls[0], "--output"), trivyOutput)

@@ -258,6 +258,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `container image-evidence` names the platform it scans to Trivy with
+  `--platform`, as the scan gate does, for each platform's layout and for a
+  registry image pulled by digest, so Trivy reads that platform's image and
+  no other.
 - The GitLab `release` component accepts an `artifacts-config` under
   `.forge-ci/`, such as the default `.forge-ci/artifacts.yml` named
   explicitly. Its regex refused a path that starts with a dot, so GitLab
