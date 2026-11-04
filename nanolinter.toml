@@ -84,3 +84,7 @@ exclude = '\.containerignore$'
 # The wrapper's default 60 seconds otherwise kills it before it can report.
 [linters.go-golangci]
 timeout_secs = 300
+
+# Shell sources use tabs; do not depend on the tool's bundled default.
+[linters.shell-format.settings]
+"shfmt.indent" = 0

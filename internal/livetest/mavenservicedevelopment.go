@@ -54,7 +54,7 @@ func MavenServiceDevelopmentVariables(plan, runtime map[string]string) (map[stri
 	return result, nil
 }
 
-//go:embed testdata/maven-service-development.yml
+//go:embed testdata/maven-service-development.yml.tmpl
 var mavenServiceDevelopmentRecipe string
 
 // NewMavenServiceDevelopmentFixture reuses the native Maven and snapshot layer

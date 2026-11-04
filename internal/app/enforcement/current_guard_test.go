@@ -7,7 +7,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io/fs"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -27,29 +27,31 @@ func TestOnlyResolveReadsTheEmbeddedDefault(t *testing.T) {
 	t.Parallel()
 
 	root := reporoot.Path(t)
-	allowed := filepath.Join("internal", "app", "enforcement", "admin.go")
+
+	offenders, checked, err := embeddedDefaultReaders(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if checked < 5 {
+		t.Fatalf("only %d files import the enforcement domain; this guard measured nothing", checked)
+	}
+
+	if len(offenders) > 0 {
+		t.Fatalf("these files read the embedded default instead of appenforcement.Resolve(ctx), so they ignore the --enforce-* flags and the environment refusal: %v", offenders)
+	}
+}
+
+func embeddedDefaultReaders(root string) ([]string, int, error) {
+	const allowed = "internal/app/enforcement/admin.go"
 
 	var offenders []string
 
 	checked := 0
 
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if entry.IsDir() {
-			switch entry.Name() {
-			case ".git", ".claude", "node_modules", "vendor":
-				return filepath.SkipDir
-			}
-
-			return nil
-		}
-
-		rel, _ := filepath.Rel(root, path)
-		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") || rel == allowed ||
-			strings.HasPrefix(rel, filepath.Join("internal", "domain", "enforcement")+string(filepath.Separator)) {
+	_, err := reporoot.WalkGoSources(root, func(path, rel string) error {
+		if strings.HasSuffix(path, "_test.go") || rel == allowed ||
+			strings.HasPrefix(rel, "internal/domain/enforcement/") {
 			return nil
 		}
 
@@ -90,15 +92,32 @@ func TestOnlyResolveReadsTheEmbeddedDefault(t *testing.T) {
 
 		return nil
 	})
+
+	return offenders, checked, err
+}
+
+func TestEmbeddedDefaultGuardChecksSourceInNestedOutputNamedDirectories(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	for _, name := range []string{"plain", "node_modules", "vendor"} {
+		dir := filepath.Join(root, "internal", "adapter", name)
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+
+		body := "package fixture\nimport enforcement \"" + domainEnforcement + "\"\nvar load = enforcement.Current\n"
+		if err := os.WriteFile(filepath.Join(dir, "reader.go"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	offenders, checked, err := embeddedDefaultReaders(root)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if checked < 5 {
-		t.Fatalf("only %d files import the enforcement domain; this guard measured nothing", checked)
-	}
-
-	if len(offenders) > 0 {
-		t.Fatalf("these files read the embedded default instead of appenforcement.Resolve(ctx), so they ignore the --enforce-* flags and the environment refusal: %v", offenders)
+	if checked != 3 || len(offenders) != 3 {
+		t.Fatalf("checked=%d offenders=%v, want all three source readers", checked, offenders)
 	}
 }

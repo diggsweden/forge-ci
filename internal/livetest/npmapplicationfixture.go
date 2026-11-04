@@ -37,7 +37,7 @@ type NPMApplicationFixtureConfig struct {
 	Library bool
 }
 
-//go:embed testdata/npm-application-development.yml
+//go:embed testdata/npm-application-development.yml.tmpl
 var npmApplicationDevelopment string
 
 // NewNPMApplicationFixture overlays the native npm recipe, or its development

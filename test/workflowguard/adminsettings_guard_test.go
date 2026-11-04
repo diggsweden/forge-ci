@@ -5,14 +5,15 @@ package workflowguard
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/diggsweden/forge-ci/internal/testutil/isolatedenv"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 	"gopkg.in/yaml.v3"
 )
@@ -436,48 +437,97 @@ var consumerSetting = regexp.MustCompile(`(?i)enforce[-_](lint|vulnerabilities|a
 // the administrator's, in the administrator's own entry point; a copy in a
 // consumer's file would teach the consumer to relax its own gate.
 func TestConsumerFilesNeverSetAnEnforcementSetting(t *testing.T) {
-	t.Parallel()
+	isolatedenv.Isolate(t)
 
-	root := reporoot.Path(t)
-
-	var findings []string
-
-	scanned := 0
-
-	for _, dir := range []string{"examples", "test/live/demos", "test/live/consumer-fixtures", "test/live/cases", "internal/livetest/testdata"} {
-		err := filepath.WalkDir(filepath.Join(root, dir), func(path string, entry fs.DirEntry, err error) error {
-			if err != nil || entry.IsDir() {
-				return err
-			}
-
-			body, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
-
-			scanned++
-
-			rel, _ := filepath.Rel(root, path)
-
-			for number, line := range strings.Split(string(body), "\n") {
-				if consumerSetting.MatchString(line) {
-					findings = append(findings, fmt.Sprintf("%s:%d: %s", rel, number+1, strings.TrimSpace(line)))
-				}
-			}
-
-			return nil
-		})
-		if err != nil {
-			t.Fatalf("%s: %v", dir, err)
-		}
-	}
-
+	findings, scanned := consumerEnforcementFindings(t, reporoot.Path(t))
 	if len(findings) > 0 {
 		t.Fatalf("consumer files that set an enforcement setting; only the administrator's entry point may:\n  %s", strings.Join(findings, "\n  "))
 	}
 
 	if scanned < 50 {
 		t.Fatalf("only %d consumer files were scanned; this guard measured nothing", scanned)
+	}
+}
+
+func consumerEnforcementFindings(t *testing.T, root string) ([]string, int) {
+	t.Helper()
+
+	// Git identifies source ownership, including untracked, nonignored edits.
+	// Ignored build output is not consumer configuration; a tracked file must
+	// still be checked even when an ignore rule also matches it.
+	command := exec.CommandContext(t.Context(), "git", "-C", root, "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--",
+		"examples", "test/live/demos", "test/live/consumer-fixtures", "test/live/cases", "internal/livetest/testdata")
+
+	output, err := command.Output()
+	if err != nil {
+		t.Fatalf("list consumer source files: %v", err)
+	}
+
+	var findings []string
+
+	scanned := 0
+
+	for rel := range strings.SplitSeq(string(output), "\x00") {
+		if rel == "" {
+			continue
+		}
+
+		body, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			t.Fatalf("read consumer source %s: %v", rel, err)
+		}
+
+		scanned++
+
+		for number, line := range strings.Split(string(body), "\n") {
+			if consumerSetting.MatchString(line) {
+				findings = append(findings, fmt.Sprintf("%s:%d: %s", rel, number+1, strings.TrimSpace(line)))
+			}
+		}
+	}
+
+	return findings, scanned
+}
+
+func TestConsumerEnforcementGuardUsesRepositoryFiles(t *testing.T) {
+	isolatedenv.Isolate(t)
+	root := t.TempDir()
+
+	for name, body := range map[string]string{
+		".gitignore":                           "**/generated/\n",
+		"examples/consumer.yml":                "enforce-lint: false\n",
+		"examples/safe.yml":                    "name: safe\n",
+		"examples/generated/ignored.txt":       "enforce-lint: false\n",
+		"examples/generated/tracked.yml":       "enforce-lint: false\n",
+		"test/live/demos/example/consumer.yml": "enforce-lint: false\n",
+	} {
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if output, err := exec.CommandContext(t.Context(), "git", "init", "--quiet", root).CombinedOutput(); err != nil {
+		t.Fatalf("initialize fixture: %v: %s", err, output)
+	}
+
+	if output, err := exec.CommandContext(t.Context(), "git", "-C", root, "add", "--force", "--", "examples/generated/tracked.yml").CombinedOutput(); err != nil {
+		t.Fatalf("track ignored fixture: %v: %s", err, output)
+	}
+
+	findings, scanned := consumerEnforcementFindings(t, root)
+	if scanned != 4 || len(findings) != 3 {
+		t.Fatalf("scanned=%d findings=%v, want four source files and three enforcement settings", scanned, findings)
+	}
+
+	for _, path := range []string{"examples/consumer.yml", "examples/generated/tracked.yml", "test/live/demos/example/consumer.yml"} {
+		if !slices.Contains(findings, path+":1: enforce-lint: false") {
+			t.Errorf("missing tracked or untracked source finding for %s", path)
+		}
 	}
 }
 

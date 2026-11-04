@@ -57,7 +57,7 @@ func TestRetryBackoffIsSingleSourced(t *testing.T) {
 
 			var findings []string
 
-			visited, err := walkGoSources(tc.root, func(path, rel string) error {
+			visited, err := reporoot.WalkGoSources(tc.root, func(path, rel string) error {
 				if rel == retryOwner {
 					return nil
 				}

@@ -96,7 +96,7 @@ func TestPlatformTypeIsSingleSourced(t *testing.T) {
 func platformOffenders(root string) ([]string, int, error) {
 	var offenders []string
 
-	visited, err := walkGoSources(root, func(path, rel string) error {
+	visited, err := reporoot.WalkGoSources(root, func(path, rel string) error {
 		if strings.HasPrefix(rel, platformOwner+"/") {
 			return nil
 		}
