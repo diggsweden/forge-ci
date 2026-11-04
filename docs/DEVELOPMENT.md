@@ -158,6 +158,16 @@ environment guard inspects Linux and the native build through compiler metadata.
 Neither operation executes cross-compiled code; native runtime checks remain
 separate.
 
+GitLab's provider-free structural renderer lives in
+`internal/testutil/gitlabrender`. Both component behavior tests and the live
+harness's offline demo tests use it. It interpolates typed inputs, expands this
+checkout's component definitions and release children, resolves inheritance, and
+checks images, runnable jobs, stages and needs. The demo matrix covers both image
+builders and each native MR/release event the demo serves; documented/example
+inputs render through the same checker after replacing marked placeholders with
+inert fixtures. This is structural evidence, not GitLab CI lint, remote pin or
+authorization proof, or evaluation of variable-dependent runtime rules.
+
 Container and VM runtime evidence must match the execution host: run AMD64
 jobs on AMD64 hosts, and ARM64 jobs on ARM64 hosts, including this Mac.
 Cross-compilation is separate from execution. Linux-only integration requires

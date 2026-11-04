@@ -17,6 +17,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/diggsweden/forge-ci/internal/testutil/gitlabrender"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
@@ -90,7 +91,7 @@ func TestReleaseImageStageTakesItsSettingsFromThePolicy(t *testing.T) {
 		"amd64": `"true" == "true"`,
 		"arm64": `'true' == 'true' && '$[[ inputs.build-runner-tags-arm64 ]]' != '[]'`,
 	} {
-		job := resolveGitLabExtends(withExports, withExports["Build: export "+arch].(map[string]any))
+		job := gitlabrender.ResolveExtends(t, withExports, withExports["Build: export "+arch].(map[string]any))
 
 		want := []any{
 			"if ! rc_export_selected " + arch + " '$[[ inputs.release-platforms ]]'; then exit 0; fi",
@@ -103,7 +104,7 @@ func TestReleaseImageStageTakesItsSettingsFromThePolicy(t *testing.T) {
 		}
 	}
 
-	exportJob := resolveGitLabExtends(withExports, withExports["Build: export amd64"].(map[string]any))
+	exportJob := gitlabrender.ResolveExtends(t, withExports, withExports["Build: export amd64"].(map[string]any))
 	if exportJob["image"].(map[string]any)["name"] != "$[[ inputs.builder-job-image ]]" || exportJob["variables"].(map[string]any)["RC_JOB_USER"] != "" {
 		t.Fatalf("exports must run in builder-job-image as its own user: %+v", exportJob)
 	}
@@ -128,7 +129,7 @@ func TestReleaseImageStageTakesItsSettingsFromThePolicy(t *testing.T) {
 	// when they never run, they name job-image, so that an empty
 	// builder-job-image leaves GitLab a job image name to validate.
 	withImages := releaseJobsBodyFor(t, "buildah")
-	builderJob := resolveGitLabExtends(withImages, withImages[".forge-ci-release-image-builder"].(map[string]any))
+	builderJob := gitlabrender.ResolveExtends(t, withImages, withImages[".forge-ci-release-image-builder"].(map[string]any))
 
 	if builderJob["image"].(map[string]any)["name"] != "$[[ inputs.builder-job-image ]]" ||
 		builderJob["variables"].(map[string]any)["RC_JOB_USER"] != "" {
@@ -584,7 +585,7 @@ func TestReleaseJobUserRunsOnlyTheJobImageJobs(t *testing.T) {
 				continue
 			}
 
-			fields := resolveGitLabExtends(body, job)
+			fields := gitlabrender.ResolveExtends(t, body, job)
 			variables, _ := fields["variables"].(map[string]any)
 			user := variables["RC_JOB_USER"]
 
@@ -627,8 +628,8 @@ func releaseJobsBodyFor(t *testing.T, builder string) map[string]any {
 func TestReleaseLabelsInputAdmitsKeyValueLines(t *testing.T) {
 	t.Parallel()
 
-	outer, _ := componentSpecInputs(t, "templates/release.yml")["labels"]["regex"].(string)
-	inner, _ := componentSpecInputs(t, "templates/release-jobs.yml")["labels"]["regex"].(string)
+	outer, _ := gitlabrender.InputSpec(t, "templates/release.yml")["labels"]["regex"].(string)
+	inner, _ := gitlabrender.InputSpec(t, "templates/release-jobs.yml")["labels"]["regex"].(string)
 
 	if outer == "" || outer != inner {
 		t.Fatalf("release.yml labels regex %q, release-jobs.yml %q; want one and the same", outer, inner)

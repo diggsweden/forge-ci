@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/diggsweden/forge-ci/internal/testutil/gitlabrender"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
@@ -63,7 +64,7 @@ func TestReleaseJobsOpenWithTheirLiteralRole(t *testing.T) {
 		}
 
 		jobs = append(jobs, name)
-		fields := resolveGitLabExtends(body, job)
+		fields := gitlabrender.ResolveExtends(t, body, job)
 
 		if before, _ := fields["before_script"].([]any); !slices.Equal(before, []any{"readonly rc_job_role=" + releaseJobRoles[name], start}) {
 			t.Errorf("%s opens with %.60q, want its role %q and the shared start", name, before, releaseJobRoles[name])
@@ -95,7 +96,7 @@ func TestReleaseJobStartFollowsItsRoleNotItsName(t *testing.T) {
 		body := releaseJobsBodyFor(t, builder)
 
 		for job, role := range releaseJobRoles {
-			fields := resolveGitLabExtends(body, body[job].(map[string]any))
+			fields := gitlabrender.ResolveExtends(t, body, body[job].(map[string]any))
 			user := strings.ReplaceAll(fields["variables"].(map[string]any)["RC_JOB_USER"].(string), "$[[ inputs.job-user ]]", "65532:65532")
 			start := joinedScript(fields["before_script"])
 
@@ -137,7 +138,7 @@ func runReleaseJobStart(t *testing.T, start, user, spoof string) (string, string
 	const probe = `printf 'home=%s\nhelpers=%s\n' "${HOME}" "${RC_HELPERS_DIR}"; exit 3`
 
 	pin := strings.Repeat("a", 40)
-	script := strings.Replace(renderScript(t, "templates/release-jobs.yml", start,
+	script := strings.Replace(gitlabrender.Script(t, "templates/release-jobs.yml", start,
 		map[string]any{"job-user": "65532:65532", "engine-sha": pin, "engine-reference": pin}), "object_format=sha1\n", probe+"\n", 1)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)

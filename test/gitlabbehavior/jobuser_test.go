@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/diggsweden/forge-ci/internal/testutil/gitlabrender"
 )
 
 type jobUserCase struct {
@@ -75,7 +77,7 @@ func TestEveryReleaseJobHoldsItsUserToItsOwnVariable(t *testing.T) {
 		body := releaseJobsBodyFor(t, builder)
 
 		for job := range releaseJobRoles {
-			fields := resolveGitLabExtends(body, body[job].(map[string]any))
+			fields := gitlabrender.ResolveExtends(t, body, body[job].(map[string]any))
 			variable := strings.ReplaceAll(fields["variables"].(map[string]any)["RC_JOB_USER"].(string), "$[[ inputs.job-user ]]", "65532:65532")
 			start := joinedScript(fields["before_script"])
 
@@ -102,7 +104,7 @@ func releaseJobStart(t *testing.T, job, builder string) string {
 
 	body := releaseJobsBodyFor(t, builder)
 
-	return joinedScript(resolveGitLabExtends(body, body[job].(map[string]any))["before_script"])
+	return joinedScript(gitlabrender.ResolveExtends(t, body, body[job].(map[string]any))["before_script"])
 }
 
 // fakeID is id as a shell function, answering FAKE_UID and FAKE_GID. A

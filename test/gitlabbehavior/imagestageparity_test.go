@@ -20,6 +20,7 @@ import (
 	appconfig "github.com/diggsweden/forge-ci/internal/app/config"
 	"github.com/diggsweden/forge-ci/internal/domain/output"
 	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
+	"github.com/diggsweden/forge-ci/internal/testutil/gitlabrender"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
@@ -283,8 +284,8 @@ func renderGitLabImageStage(t *testing.T, releaseImages, builder, arm64Tags stri
 			continue
 		}
 
-		fields := resolveGitLabExtends(body, raw.(map[string]any))
-		if !gitlabRulesAdmit(fields["rules"]) {
+		fields := gitlabrender.ResolveExtends(t, body, raw.(map[string]any))
+		if !gitlabrender.RulesAdmit(fields["rules"]) {
 			continue
 		}
 
@@ -324,72 +325,6 @@ func yamlStrings(value any) []string {
 	}
 
 	return out
-}
-
-// resolveGitLabExtends merges a job over its extends, in order, as GitLab
-// does: hashes merge key by key at every depth; any other value, a list
-// included, replaces the inherited one.
-func resolveGitLabExtends(body, job map[string]any) map[string]any {
-	resolved := map[string]any{}
-
-	var parents []any
-
-	switch extends := job["extends"].(type) {
-	case string:
-		parents = []any{extends}
-	case []any:
-		parents = extends
-	}
-
-	for _, parent := range parents {
-		mergeGitLabHash(resolved, resolveGitLabExtends(body, body[parent.(string)].(map[string]any)))
-	}
-
-	mergeGitLabHash(resolved, job)
-	delete(resolved, "extends")
-
-	return resolved
-}
-
-func mergeGitLabHash(into, from map[string]any) {
-	for key, value := range from {
-		inherited, isHash := into[key].(map[string]any)
-		if override, ok := value.(map[string]any); ok && isHash {
-			merged := maps.Clone(inherited)
-			mergeGitLabHash(merged, override)
-			into[key] = merged
-
-			continue
-		}
-
-		into[key] = value
-	}
-}
-
-// gitlabRulesAdmit evaluates the literal comparisons the image stage's rules
-// are made of, after interpolation.
-func gitlabRulesAdmit(rules any) bool {
-	list, _ := rules.([]any)
-	if len(list) == 0 {
-		return true
-	}
-
-	expression := list[0].(map[string]any)["if"].(string)
-	for clause := range strings.SplitSeq(expression, "&&") {
-		operator := "=="
-		if strings.Contains(clause, "!=") {
-			operator = "!="
-		}
-
-		sides := strings.SplitN(clause, operator, 2)
-		left, right := strings.Trim(strings.TrimSpace(sides[0]), `'"`), strings.Trim(strings.TrimSpace(sides[1]), `'"`)
-
-		if (left == right) != (operator == "==") {
-			return false
-		}
-	}
-
-	return true
 }
 
 type forgejoImageJobs struct {

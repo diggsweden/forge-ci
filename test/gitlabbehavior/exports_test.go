@@ -12,6 +12,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/diggsweden/forge-ci/internal/testutil/gitlabrender"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
@@ -174,7 +175,7 @@ func TestEmptyReleasePlatformsIsDescribedAlikeOnEveryForge(t *testing.T) {
 	t.Parallel()
 
 	described := map[string]string{
-		"templates/release.yml": fmt.Sprint(componentSpecInputs(t, "templates/release.yml")["release-platforms"]["description"]),
+		"templates/release.yml": fmt.Sprint(gitlabrender.InputSpec(t, "templates/release.yml")["release-platforms"]["description"]),
 	}
 
 	var workflow struct {

@@ -16,6 +16,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/diggsweden/forge-ci/internal/testutil/gitlabrender"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
@@ -77,12 +78,37 @@ func TestDocumentedIncludesPassValuesTheComponentAccepts(t *testing.T) {
 	for _, include := range includes {
 		spec, known := specs[include.component]
 		if !known {
-			spec = componentSpecInputs(t, "templates/"+include.component+".yml")
+			spec = gitlabrender.InputSpec(t, "templates/"+include.component+".yml")
 			specs[include.component] = spec
 		}
 
-		for _, problem := range documentedIncludeProblems(include, spec) {
+		problems := documentedIncludeProblems(include, spec)
+		for _, problem := range problems {
 			t.Error(problem)
+		}
+
+		if len(problems) != 0 {
+			continue
+		}
+
+		given := map[string]any{}
+
+		for name, value := range include.inputs {
+			if text, ok := value.(string); ok && (documentedPlaceholder.MatchString(text) || include.demo && demoPlaceholder.MatchString(text)) {
+				if fixture, known := gitlabrender.FixtureValue(name); known {
+					value = fixture
+				} else if fallback, known := spec[name]["default"]; known {
+					value = fallback
+				} else {
+					t.Fatalf("%s: placeholder input %s needs a render fixture", include.where, name)
+				}
+			}
+
+			given[name] = value
+		}
+
+		for _, problem := range gitlabrender.Problems(t, "templates/"+include.component+".yml", given) {
+			t.Errorf("%s: %s", include.where, problem)
 		}
 	}
 }
@@ -142,7 +168,7 @@ func documentedIncludeProblems(include documentedInclude, spec map[string]map[st
 			continue
 		}
 
-		if problem := gitlabInputProblem(declared, value); problem != "" {
+		if problem := gitlabrender.InputProblem(declared, value); problem != "" {
 			problems = append(problems, fmt.Sprintf("%s: %s input %s: %s", include.where, include.component, name, problem))
 		}
 	}
@@ -330,28 +356,6 @@ func consumeHeader(body []byte) string {
 	return header.String()
 }
 
-// componentSpecInputs is a component's spec inputs.
-func componentSpecInputs(t *testing.T, path string) map[string]map[string]any {
-	t.Helper()
-
-	header, _, _ := strings.Cut(string(reporoot.ReadFile(t, path)), "\n---\n")
-
-	var spec struct {
-		Spec struct {
-			Inputs map[string]map[string]any `yaml:"inputs"`
-		} `yaml:"spec"`
-	}
-	if err := yaml.Unmarshal([]byte(header), &spec); err != nil {
-		t.Fatalf("%s: %v", path, err)
-	}
-
-	if len(spec.Spec.Inputs) == 0 {
-		t.Fatalf("%s declares no inputs", path)
-	}
-
-	return spec.Spec.Inputs
-}
-
 // describedValue is an example value an input's description names: "for
 // example X", "e.g. X" or "Empty reads X".
 var describedValue = regexp.MustCompile(`(?:for example|e\.g\.|[Ee]mpty reads) ([^\s,;()]+)`)
@@ -375,14 +379,14 @@ func TestInputDescriptionsNameValuesTheInputAccepts(t *testing.T) {
 
 		path := "templates/" + entry.Name()
 
-		for name, input := range componentSpecInputs(t, path) {
+		for name, input := range gitlabrender.InputSpec(t, path) {
 			description, _ := input["description"].(string)
 
 			for _, match := range describedValue.FindAllStringSubmatch(description, -1) {
 				named++
 
 				value := strings.TrimSuffix(match[1], ".")
-				if problem := gitlabInputProblem(input, typedValue(input, value)); problem != "" {
+				if problem := gitlabrender.InputProblem(input, typedValue(input, value)); problem != "" {
 					t.Errorf("%s: input %s describes %q: %s", path, name, value, problem)
 				}
 			}
@@ -446,7 +450,7 @@ func TestInputsTableNamesValuesTheInputsAccept(t *testing.T) {
 			continue // build-*, publish-*: a family, described in prose
 		}
 
-		spec := componentSpecInputs(t, path)
+		spec := gitlabrender.InputSpec(t, path)
 
 		var inputs []map[string]any
 
@@ -465,7 +469,7 @@ func TestInputsTableNamesValuesTheInputsAccept(t *testing.T) {
 			checked++
 
 			if !slices.ContainsFunc(inputs, func(input map[string]any) bool {
-				return gitlabInputProblem(input, typedValue(input, value)) == ""
+				return gitlabrender.InputProblem(input, typedValue(input, value)) == ""
 			}) {
 				t.Errorf("docs/gitlab.md: the %s row names %q, which none of %s accepts", component, value, strings.TrimSpace(cells[2]))
 			}

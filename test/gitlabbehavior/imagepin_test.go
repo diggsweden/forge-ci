@@ -12,6 +12,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/diggsweden/forge-ci/internal/testutil/gitlabrender"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
@@ -45,7 +46,7 @@ func TestImageInputsAdmitOnlyDigestPins(t *testing.T) {
 		}
 
 		path := "templates/" + entry.Name()
-		spec := componentSpecInputs(t, path)
+		spec := gitlabrender.InputSpec(t, path)
 
 		for _, name := range jobImageInputs(t, path) {
 			seen++
@@ -112,11 +113,7 @@ func jobImageInputs(t *testing.T, path string) []string {
 					}
 
 					if text, ok := reference.(string); ok {
-						for _, match := range gitlabInterpolation.FindAllStringSubmatch(text, -1) {
-							if name, input := strings.CutPrefix(match[1], "inputs."); input {
-								names = append(names, name)
-							}
-						}
+						names = append(names, gitlabrender.InputReferences(text)...)
 					}
 				}
 

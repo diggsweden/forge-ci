@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/diggsweden/forge-ci/internal/testutil/gitlabrender"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
@@ -157,7 +158,7 @@ func TestGitLabJobsTakeThePolicyFromTheirLiteralInputs(t *testing.T) {
 			for _, match := range literalAssignment.FindAllStringSubmatch(script, -1) {
 				// Quoted, as the script quotes it: an input alone would render
 				// as its value, an array or a boolean.
-				quoted := renderScript(t, tc.path, "'$[[ inputs."+match[2]+" ]]'", tc.given)
+				quoted := gitlabrender.Script(t, tc.path, "'$[[ inputs."+match[2]+" ]]'", tc.given)
 				want[match[1]] = quoted[1 : len(quoted)-1]
 			}
 
@@ -184,7 +185,7 @@ func TestGitLabJobsTakeThePolicyFromTheirLiteralInputs(t *testing.T) {
 
 			probe := "\nfor name in " + strings.Join(names, " ") + `; do printf 'policy %s=%s\n' "${name}" "${!name}"; done` +
 				"\nprintf 'exported %s\\n' \"$(printenv FORGE_CI_COSIGN_TRANSPARENCY || :)\"\nexit 3\n"
-			output, err := runPolicyScript(t, fakeID+renderScript(t, tc.path, script, tc.given)+probe, append(env, tc.env...))
+			output, err := runPolicyScript(t, fakeID+gitlabrender.Script(t, tc.path, script, tc.given)+probe, append(env, tc.env...))
 
 			if tc.wantError != "" {
 				if err == nil || !strings.Contains(output, "ERROR: ") || !strings.Contains(output, tc.wantError) || strings.Contains(output, "policy ") {
@@ -377,7 +378,7 @@ func TestGitLabTokenDestinationsComeFromTheServerLiteral(t *testing.T) {
 	}
 
 	for _, path := range policyTemplates {
-		spec := componentSpecInputs(t, path)
+		spec := gitlabrender.InputSpec(t, path)
 
 		input, declared := spec["server-url"]
 		if pattern, _ := input["regex"].(string); !declared || pattern != serverLiteral {

@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/diggsweden/forge-ci/internal/testutil/gitlabrender"
 )
 
 func TestReleaseArtifactsAreReadableWithoutOpeningPrivateFiles(t *testing.T) {
@@ -96,7 +98,7 @@ func runReleaseAfterScript(t *testing.T, workspace, job string) {
 
 	body := releaseJobsBodyFor(t, "buildah")
 
-	script := joinedScript(resolveGitLabExtends(body, body[job].(map[string]any))["after_script"])
+	script := joinedScript(gitlabrender.ResolveExtends(t, body, body[job].(map[string]any))["after_script"])
 	if script == "" {
 		t.Fatal("release artifact publication hook is missing")
 	}

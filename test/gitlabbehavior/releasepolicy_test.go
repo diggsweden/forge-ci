@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/diggsweden/forge-ci/internal/testutil/gitlabrender"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
@@ -21,7 +22,7 @@ func TestReleasePolicyComesFromTrustedInputNotAmbientVariables(t *testing.T) {
 
 	for _, policy := range []string{"stable", "stable-prerelease"} {
 		t.Run(policy, func(t *testing.T) {
-			binding := renderScript(t, "templates/release-jobs.yml", prefix, map[string]any{"release-policy": policy, "job-user": ""})
+			binding := gitlabrender.Script(t, "templates/release-jobs.yml", prefix, map[string]any{"release-policy": policy, "job-user": ""})
 			program := binding + `source "$1"
 rc_engine() { printf 'selected=%s\n' "$RELEASE_POLICY"; }
 rc_release_context

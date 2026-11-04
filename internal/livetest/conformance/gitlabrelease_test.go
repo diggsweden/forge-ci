@@ -297,7 +297,11 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 		t.Fatalf("%s runs a container build, which the build job would run with Buildah whatever image-builder says; move it to %s", livetest.GitLabConsumerBuildScript, livetest.GitLabConsumerExportScript)
 	}
 
-	exportCommand := gitlabConsumerExportCommand(t, consumerRoot, settings.Variables)
+	exportCommand, err := livetest.GitLabConsumerExportCommands(consumerRoot, settings.Variables)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// The base fixture builds in the export jobs, with the selected builder;
 	// the build job only publishes what they staged.
 	if bases {
@@ -691,30 +695,6 @@ func gitlabConsumerBuildRunsAContainerBuild(t *testing.T, consumerRoot string) b
 	}
 
 	return strings.Contains(string(body), "forge-ci container build ")
-}
-
-// gitlabConsumerExportCommand returns the policy's export commands for a
-// consumer that exports files from a Containerfile stage, with its variables
-// scoped to them, or none for one that does not.
-func gitlabConsumerExportCommand(t *testing.T, consumerRoot string, variables map[string]string) []string {
-	t.Helper()
-
-	if consumerRoot == "" {
-		return []string{}
-	}
-
-	if _, err := os.Stat(filepath.Join(consumerRoot, livetest.GitLabConsumerExportScript)); os.IsNotExist(err) {
-		return []string{}
-	} else if err != nil {
-		t.Fatal(err)
-	}
-
-	command, err := livetest.GitLabConsumerCommand(livetest.GitLabConsumerExportScript, variables)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return []string{command}
 }
 
 // gitlabReleaseArchiveInputs reads the archives the recipe names, and reports

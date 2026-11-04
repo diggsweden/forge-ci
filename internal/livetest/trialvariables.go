@@ -6,6 +6,8 @@ package livetest
 import (
 	"fmt"
 	"maps"
+	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -178,6 +180,35 @@ const (
 // subprocess, without adding variables to the independent signing policy jobs.
 func GitLabConsumerBuildCommand(variables map[string]string) (string, error) {
 	return GitLabConsumerCommand(GitLabConsumerBuildScript, variables)
+}
+
+// GitLabConsumerExportCommands derives the native export invocation once for
+// both live release policies and offline rendering. An absent script means no
+// export jobs; other inspection errors and nonregular scripts are refused.
+func GitLabConsumerExportCommands(root string, variables map[string]string) ([]string, error) {
+	if root == "" {
+		return []string{}, nil
+	}
+
+	info, err := os.Lstat(filepath.Join(root, GitLabConsumerExportScript))
+	if os.IsNotExist(err) {
+		return []string{}, nil
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("inspect native export script: %w", err)
+	}
+
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("native export script must be a regular file: %w", errs.ErrValidation)
+	}
+
+	command, err := GitLabConsumerCommand(GitLabConsumerExportScript, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	return []string{command}, nil
 }
 
 // GitLabConsumerCommand runs the consumer's script with the literal settings
