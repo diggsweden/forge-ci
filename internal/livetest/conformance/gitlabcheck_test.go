@@ -27,7 +27,7 @@ import (
 // of the consumer cannot satisfy the commit assertion.
 func TestGitLabCheck_ChecksOutTheConsumerPipelineCommit(t *testing.T) {
 	livetest.RegisterLiveScenario(t)
-	runGitLabCheck(t, false)
+	runGitLabCheck(t, livetest.ScenarioPrivate(t))
 }
 
 func TestGitLabCheck_ChecksOutPrivateConsumerWithJobToken(t *testing.T) {

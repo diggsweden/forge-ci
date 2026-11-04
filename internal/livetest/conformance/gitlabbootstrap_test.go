@@ -23,6 +23,7 @@ import (
 
 // Private and job tokens publish to distinct fresh projects, so a package
 // uploaded by the first case cannot satisfy the second case's read-back.
+// These projects stand in for the engine, whose binary is downloaded anonymously.
 func TestGitLabBootstrap_PublishesAndDownloadsTheRecordedBinary(t *testing.T) {
 	livetest.RegisterLiveScenario(t)
 
@@ -34,7 +35,7 @@ func TestGitLabBootstrap_PublishesAndDownloadsTheRecordedBinary(t *testing.T) {
 	root := reporoot.Path(t)
 
 	t.Run("private-token", func(t *testing.T) {
-		repo := livetest.NewScratchRepo(t, target, "bootstrap-private")
+		repo := livetest.NewPublicScratchRepo(t, target, "bootstrap-private", "the engine bootstrap publishes the binary that jobs download without credentials")
 		publishGitLabBootstrap(t, target, repo)
 	})
 
