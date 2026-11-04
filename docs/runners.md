@@ -277,6 +277,15 @@ job's `--custom-platform` must be its runner's, which `build-arch` enforces,
 and every image, the job image included, is one native build per architecture
 assembled into an index. No emulation, anywhere.
 
+Kaniko uses full content snapshots and retains `--reproducible` for pinned
+builds. When remote layer caching is selected, the engine disables compressed
+caching to reduce compression memory pressure. It does not use `redo` or
+`time` snapshots: they can miss content changes whose metadata is unchanged.
+Large base filesystems still need sufficient job memory for extraction and
+full snapshots; disabling cache compression does not remove that requirement,
+and has no effect on builds without a layer-cache repository. Increase the
+runner's bounded memory allocation rather than weakening snapshot correctness.
+
 ### Choosing between lending and kaniko
 
 | | Lending | kaniko |

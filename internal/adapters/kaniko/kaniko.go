@@ -445,7 +445,9 @@ func imageArguments(spec build) []string {
 	}
 
 	if spec.CacheRepo != "" {
-		args = append(args, "--cache=true", "--cache-repo", spec.CacheRepo)
+		// Kaniko recommends this for lower cache-compression memory pressure.
+		// Keep full content snapshots: redo/time can miss same-metadata edits.
+		args = append(args, "--compressed-caching=false", "--cache=true", "--cache-repo", spec.CacheRepo)
 		if !spec.CachePush {
 			args = append(args, "--no-push-cache")
 		}

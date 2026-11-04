@@ -99,6 +99,7 @@ func TestBuildToLayout_ArgvShape(t *testing.T) {
 		"--label org.opencontainers.image.revision=abc",
 		"--reproducible",
 		"--snapshot-mode=full",
+		"--compressed-caching=false",
 		"--cache=true --cache-repo ghcr.io/org/cache --no-push-cache",
 		`CONFIG {"auths":{"ghcr.io":{"auth":"Y2FuYXJ5"}}}`,
 	} {
@@ -128,7 +129,7 @@ func TestBuildToLayout_WithoutCredentialsOrCacheStaysMinimal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, absent := range []string{"--dockerfile", "--custom-platform", "--reproducible", "--cache", "--target", "CONFIG "} {
+	for _, absent := range []string{"--dockerfile", "--custom-platform", "--reproducible", "--cache", "--compressed-caching", "--target", "CONFIG "} {
 		if strings.Contains(log.String(), absent) {
 			t.Errorf("unexpected %q:\n%s", absent, log.String())
 		}
