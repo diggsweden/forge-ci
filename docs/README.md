@@ -77,7 +77,6 @@ Current architectural decisions and the constraints future changes must retain.
 
 - [Development](DEVELOPMENT.md) - Local development, testing, branch verification, and releasing forge-ci itself.
 - [Testing](testing.md) - Go test helpers and testing conventions.
-- [Consumer Migration Handoff](consumer-migration-handoff.md) - DiggSweden trial results, fix ownership, remaining acceptance, cleanup and upstream adoption checklist.
 - [Consumer Validation Lessons](consumer-validation-lessons.md) - Reusable invariants and regressions from native consumer trials.
 - [Scripts](scripts.md) - Remaining bootstrap scripts and the workflow surface moved to the Go binary.
 - [Workflow Design Policy](workflow-design-policy.md) - Design rules for maintainers extending the workflow graph.
