@@ -51,6 +51,10 @@ func recoverGitLabConsumerAfterCandidate(t *testing.T, ctx context.Context, clie
 	defer cancel()
 
 	project := livetest.RepoSlug(target, repo)
+	// ImageDigest fatals on an uncertain registry read; only a proven missing
+	// tag becomes Found=false. Capture presence independently of its digest.
+	latestDigest, latestFound := livetest.ImageDigest(t, target, publication, "latest")
+	initialLatest := livetest.GitLabRecoveryTagState{Digest: latestDigest, Found: latestFound}
 
 	var (
 		parent          *gitlabapi.Pipeline
@@ -131,7 +135,7 @@ func recoverGitLabConsumerAfterCandidate(t *testing.T, ctx context.Context, clie
 		if err != nil {
 			t.Fatal(err)
 		}
-		return bytes.Contains(body, []byte("\nfci-live-candidate-checkpoint-ready\n")) || bytes.Contains(body, []byte("\nfci-live-candidate-checkpoint-ready\r\n"))
+		return gitlabRecoveryCheckpointReady(string(body))
 	})
 
 	receiptURL := fmt.Sprintf("%s/api/v4/projects/%s/jobs/%d/artifacts/_release-images/dist/release-images.json", target.BaseURL(), url.PathEscape(project), publisher)
@@ -194,9 +198,11 @@ func recoverGitLabConsumerAfterCandidate(t *testing.T, ctx context.Context, clie
 		t.Fatal("interrupted consumer published the new final tag")
 	}
 
+	prior := map[string]livetest.GitLabRecoveryTagState{"latest": initialLatest, "v0.0.0": {Digest: previousDigest, Found: true}}
 	for _, tag := range []string{"latest", "v0.0.0"} {
-		if digest, found := livetest.ImageDigest(t, target, publication, tag); !found || digest != previousDigest { //nolint:contextcheck // registry helper derives a bounded context from the test owner.
-			t.Fatalf("interrupted consumer changed prior publication tag %s", tag)
+		digest, found := livetest.ImageDigest(t, target, publication, tag) //nolint:contextcheck // registry helper derives a bounded context from the test owner.
+		if err := livetest.CheckGitLabRecoveryTag(tag, livetest.GitLabRecoveryTagState{Digest: digest, Found: found}, prior[tag], nil); err != nil {
+			t.Fatal(err)
 		}
 	}
 
@@ -263,13 +269,15 @@ func recoverGitLabConsumerAfterCandidate(t *testing.T, ctx context.Context, clie
 		t.Fatal("retry changed the original policy candidate receipt")
 	}
 
-	for tag, want := range map[string]string{finalTag: candidateDigest, "latest": candidateDigest, "v0.0.0": previousDigest} {
-		if digest, found := livetest.ImageDigest(t, target, publication, tag); !found || digest != want { //nolint:contextcheck // registry helper derives a bounded context from the test owner.
-			t.Fatalf("recovered publication tag %s has digest %s, want %s", tag, digest, want)
+	expected := livetest.GitLabRecoveryPublicationDigests(candidate, finalTag, previousDigest, initialLatest)
+	for _, tag := range []string{finalTag, "latest", "v0.0.0"} {
+		digest, found := livetest.ImageDigest(t, target, publication, tag) //nolint:contextcheck // registry helper derives a bounded context from the test owner.
+		if err := livetest.CheckGitLabRecoveryTag(tag, livetest.GitLabRecoveryTagState{Digest: digest, Found: found}, expected[tag], nil); err != nil {
+			t.Fatal(err)
 		}
 	}
 
-	t.Logf("consumer parent %d child %d: canceled after candidate %s; same-version retry preserved preparation and the prior image tag, then published the original digest and advanced latest", parent.ID, child, candidateDigest)
+	t.Logf("consumer parent %d child %d: canceled after candidate %s; same-version retry preserved preparation and the prior image tag, then published the original versioned digest; latest %+v follows the admitted receipt", parent.ID, child, candidateDigest, expected["latest"])
 
 	return parent, child
 }

@@ -208,7 +208,11 @@ It cancels the original child before signing, proves no release/new final image
 and unchanged prior `latest`/`v0.0.0`, clears the project variable, and retries that
 same child. Successful preparation, file-build and image jobs must retain their
 original job IDs; the prepared Git tag/commit and original receipt stay unchanged.
-The final publication and `latest` must use the original candidate digest while
+The versioned final publication must use the original candidate digest. The
+ordinary release-image plan declares no moving tag, so `latest` keeps its initial
+presence and digest (including remaining absent); uncertain registry reads fail.
+Only a receipt explicitly declaring `latest` may advance it to that same candidate
+digest. Other moving destinations are outside this fixture's scope and refused.
 `v0.0.0` remains unchanged. Normal signed-release verification still follows.
 One explicit nonzero version is required; `next-version` is not accepted for it.
 Local inert regressions cover wrapper/DAG ordering, fail-closed checkpoint behavior

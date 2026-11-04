@@ -6,6 +6,8 @@ package livetest
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"maps"
 	"os/exec"
 	"strings"
 	"testing"
@@ -14,6 +16,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/diggsweden/forge-ci/internal/domain/imageledger"
+	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
@@ -182,7 +185,7 @@ func TestGitLabRecoveryCandidateIdentity(t *testing.T) {
 	digest := "sha256:" + strings.Repeat("a", 64)
 	entry := imageledger.Entry{ImageKind: imageledger.ImageKindRelease, Role: "distroless", Ref: repository + "@" + digest, Digest: digest,
 		CandidateTag: repository + ":staging-v0.3.0", FinalTag: repository + ":v0.3.0"}
-	for _, mutation := range []string{"valid", "old-final-tag-as-candidate", "wrong-repository", "wrong-ref-digest", "wrong-version", "multiple-images"} {
+	for _, mutation := range []string{"valid", "old-final-tag-as-candidate", "wrong-repository", "wrong-ref-digest", "wrong-version", "multiple-images", "unrelated-moving-tag", "previous-version-moving-tag"} {
 		t.Run(mutation, func(t *testing.T) {
 			e := entry
 			switch mutation {
@@ -194,6 +197,10 @@ func TestGitLabRecoveryCandidateIdentity(t *testing.T) {
 				e.Ref = repository + "@sha256:" + strings.Repeat("b", 64)
 			case "wrong-version":
 				e.CandidateTag = repository + ":staging-v0.4.0"
+			case "unrelated-moving-tag":
+				e.MovingTag = repository + ":stable"
+			case "previous-version-moving-tag":
+				e.MovingTag = repository + ":v0.0.0"
 			}
 			entries := []imageledger.Entry{e}
 			if mutation == "multiple-images" {
@@ -209,6 +216,104 @@ func TestGitLabRecoveryCandidateIdentity(t *testing.T) {
 			}
 			if err == nil && got.Digest != digest {
 				t.Fatal("receipt changed immutable digest")
+			}
+		})
+	}
+}
+
+func TestGitLabRecoveryPublicationFollowsReceiptDestinations(t *testing.T) {
+	const repository = "registry.example/owned/consumer"
+	const finalTag = "v0.3.0"
+	// The terminal native run's distinct candidate and observed latest digests.
+	// Seed the previous image explicitly: no content equivalence or arbitrary
+	// post-retry digest is accepted as a substitute for the original candidate.
+	const candidateDigest = "sha256:c8238d06fc33526877e93b1608b9ddc234df498d761a381155161a6b19417da2"
+	const previousDigest = "sha256:a8544d4845c8b007f8ad36ed2f52265eb2b3b3ec53a4b8c389249788d062e5ac"
+	plan, err := pipeline.PlanReleaseImages([]pipeline.PlannedContainer{{
+		Name: "hello-cargo-container", ContainerFile: "Containerfile", Context: ".", Target: "runtime",
+		Platforms: "linux/amd64,linux/arm64",
+	}}, pipeline.ReleaseImagesInput{ImageRepository: repository, Repository: "owned/consumer", ReleaseTag: finalTag, ReleasePlatforms: "linux/amd64"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	image := plan.Images[0]
+	if image.MovingTagName != "" {
+		t.Fatal("ordinary release planner unexpectedly declares a moving destination")
+	}
+	for _, moving := range []string{"", repository + ":latest"} {
+		t.Run("moving="+moving, func(t *testing.T) {
+			entry := imageledger.Entry{ImageKind: imageledger.ImageKindRelease, Role: image.Name,
+				Ref: repository + "@" + candidateDigest, Digest: candidateDigest,
+				CandidateTag: repository + ":" + image.CandidateTag, FinalTag: repository + ":" + image.FinalTagName, MovingTag: moving}
+			body, err := json.Marshal([]imageledger.Entry{entry})
+			if err != nil {
+				t.Fatal(err)
+			}
+			candidate, err := GitLabRecoveryCandidate(body, repository, finalTag)
+			if err != nil {
+				t.Fatal(err)
+			}
+			latest := previousDigest
+			if moving != "" {
+				latest = candidateDigest
+			}
+			want := map[string]GitLabRecoveryTagState{finalTag: {Digest: candidateDigest, Found: true}, "latest": {Digest: latest, Found: true}, "v0.0.0": {Digest: previousDigest, Found: true}}
+			if got := GitLabRecoveryPublicationDigests(candidate, finalTag, previousDigest, GitLabRecoveryTagState{Digest: previousDigest, Found: true}); !maps.Equal(got, want) {
+				t.Fatalf("publication oracle = %v, want exact ledger destinations %v", got, want)
+			}
+		})
+	}
+}
+
+func TestGitLabRecoveryPublicationObservedStates(t *testing.T) {
+	const candidateDigest = "sha256:c8238d06fc33526877e93b1608b9ddc234df498d761a381155161a6b19417da2"
+	const previousDigest = "sha256:a8544d4845c8b007f8ad36ed2f52265eb2b3b3ec53a4b8c389249788d062e5ac"
+	present := GitLabRecoveryTagState{Digest: previousDigest, Found: true}
+	distinct := GitLabRecoveryTagState{Digest: "sha256:" + strings.Repeat("d", 64), Found: true}
+	promoted := GitLabRecoveryTagState{Digest: candidateDigest, Found: true}
+	absent := GitLabRecoveryTagState{}
+	readFailure := errors.New("registry read uncertain")
+	for _, tc := range []struct {
+		name, tag       string
+		initial, actual GitLabRecoveryTagState
+		declared        bool
+		readErr         error
+		wantErr         bool
+	}{
+		{name: "undeclared present preserved", tag: "latest", initial: present, actual: present},
+		{name: "undeclared distinct latest preserved", tag: "latest", initial: distinct, actual: distinct},
+		{name: "undeclared absent preserved", tag: "latest", initial: absent, actual: absent},
+		{name: "declared latest updated", tag: "latest", initial: present, actual: promoted, declared: true},
+		{name: "declared latest created", tag: "latest", initial: absent, actual: promoted, declared: true},
+		{name: "versioned final preserved", tag: "v0.3.0", initial: present, actual: promoted},
+		{name: "prior version preserved", tag: "v0.0.0", initial: present, actual: present},
+		{name: "wrong versioned digest", tag: "v0.3.0", initial: present, actual: present, wantErr: true},
+		{name: "wrong declared latest digest", tag: "latest", initial: present, actual: present, declared: true, wantErr: true},
+		{name: "undeclared latest advanced", tag: "latest", initial: present, actual: promoted, wantErr: true},
+		{name: "unexpected latest creation", tag: "latest", initial: absent, actual: promoted, wantErr: true},
+		{name: "missing final", tag: "v0.3.0", initial: present, actual: absent, wantErr: true},
+		{name: "missing declared latest", tag: "latest", initial: absent, actual: absent, declared: true, wantErr: true},
+		{name: "missing previously present latest", tag: "latest", initial: present, actual: absent, wantErr: true},
+		{name: "missing prior version", tag: "v0.0.0", initial: present, actual: absent, wantErr: true},
+		{name: "prior version changed", tag: "v0.0.0", initial: present, actual: promoted, wantErr: true},
+		{name: "uncertain absence", tag: "latest", initial: absent, actual: absent, readErr: readFailure, wantErr: true},
+		{name: "uncertain matching digest", tag: "v0.3.0", initial: present, actual: promoted, readErr: readFailure, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			candidate := imageledger.Entry{Digest: candidateDigest}
+			if tc.declared {
+				candidate.MovingTag = "registry.example/owned/consumer:latest"
+			}
+			expected := GitLabRecoveryPublicationDigests(candidate, "v0.3.0", previousDigest, tc.initial)
+			if tc.tag == "latest" && !tc.declared && expected[tc.tag] != tc.initial {
+				t.Errorf("undeclared latest expectation = %+v, want initial state %+v", expected[tc.tag], tc.initial)
+			}
+			err := CheckGitLabRecoveryTag(tc.tag, tc.actual, expected[tc.tag], tc.readErr)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("observed publication comparison = %v, want error %t", err, tc.wantErr)
+			}
+			if tc.readErr != nil && !errors.Is(err, tc.readErr) {
+				t.Fatal("registry uncertainty was not preserved")
 			}
 		})
 	}

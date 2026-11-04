@@ -129,7 +129,8 @@ esac`},
 // GitLabRecoveryCandidate admits exactly the single-image recovery case. Both
 // tags belong to the source repository; the signer later rewrites the final
 // destination to the separate publication repository. Never infer identity from
-// whichever mutable tag happens to exist in the registry.
+// whichever mutable tag happens to exist in the registry. The fixture seeds
+// latest and v0.0.0; only an explicitly declared latest may move on release.
 func GitLabRecoveryCandidate(ledger []byte, repository, finalTag string) (imageledger.Entry, error) {
 	entries, err := imageledger.Parse(ledger)
 	if err != nil {
@@ -143,8 +144,40 @@ func GitLabRecoveryCandidate(ledger []byte, repository, finalTag string) (imagel
 		return imageledger.Entry{}, err
 	}
 	if entry.ImageKind != imageledger.ImageKindRelease || entry.CandidateTag != repository+":staging-"+finalTag ||
-		entry.FinalTag != repository+":"+finalTag || entry.Ref != repository+"@"+entry.Digest {
+		entry.FinalTag != repository+":"+finalTag || entry.Ref != repository+"@"+entry.Digest ||
+		(entry.MovingTag != "" && entry.MovingTag != repository+":latest") {
 		return imageledger.Entry{}, fmt.Errorf("recovery receipt does not bind the exact candidate: %+v", entry)
 	}
 	return entry, nil
+}
+
+// GitLabRecoveryTagState distinguishes an absent tag from a present digest.
+// Registry read errors are not states and must be handled separately.
+type GitLabRecoveryTagState struct {
+	Digest string
+	Found  bool
+}
+
+// GitLabRecoveryPublicationDigests names the exact post-retry tag states for
+// an admitted candidate, seeded prior version and observed initial latest.
+func GitLabRecoveryPublicationDigests(candidate imageledger.Entry, finalTag, previousDigest string, initialLatest GitLabRecoveryTagState) map[string]GitLabRecoveryTagState {
+	latest := initialLatest
+	if candidate.MovingTag != "" {
+		latest = GitLabRecoveryTagState{Digest: candidate.Digest, Found: true}
+	}
+	return map[string]GitLabRecoveryTagState{
+		finalTag: {Digest: candidate.Digest, Found: true},
+		"latest": latest, "v0.0.0": {Digest: previousDigest, Found: true},
+	}
+}
+
+// CheckGitLabRecoveryTag compares an actual lookup with its exact expected state.
+func CheckGitLabRecoveryTag(tag string, observed, expected GitLabRecoveryTagState, readErr error) error {
+	if readErr != nil {
+		return fmt.Errorf("read recovery publication tag %s: %w", tag, readErr)
+	}
+	if observed != expected {
+		return fmt.Errorf("recovered publication tag %s has state %+v, want %+v", tag, observed, expected)
+	}
+	return nil
 }

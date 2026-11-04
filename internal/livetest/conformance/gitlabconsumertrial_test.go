@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -393,31 +392,4 @@ func logGitLabTrace(t *testing.T, trace string) {
 	t.Helper()
 	t.Log(trace)
 	t.Log(gitlabTraceEnd(trace))
-}
-
-// gitlabTraceNoise is what GitLab adds to every trace line and a reader does
-// not need: the timestamp and stream prefix, and terminal escapes.
-var gitlabTraceNoise = regexp.MustCompile(`^\S+Z \d\d[OE][+ ]?|\x1b\[[0-9;]*[A-Za-z]`)
-
-// gitlabTraceEnd is the last lines of a trace without that noise and without
-// GitLab's section markers.
-func gitlabTraceEnd(trace string) string {
-	const keep = 40
-
-	var lines []string
-
-	for line := range strings.SplitSeq(strings.TrimSpace(trace), "\n") {
-		line = strings.TrimSpace(gitlabTraceNoise.ReplaceAllString(strings.TrimSpace(line), ""))
-		if line == "" || strings.HasPrefix(line, "section_start:") || strings.HasPrefix(line, "section_end:") {
-			continue
-		}
-
-		lines = append(lines, line)
-	}
-
-	if len(lines) > keep {
-		lines = lines[len(lines)-keep:]
-	}
-
-	return "the end of the failed job's trace:\n" + strings.Join(lines, "\n")
 }
