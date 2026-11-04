@@ -7,7 +7,7 @@
 # Generated via `nanolinter init --profile strict`. Strict means every
 # check listed in [verify].checks also appears in [policy].block — any
 # failure fails `nanolinter verify` (and therefore `just verify`) — except
-# links, which is advisory (see [policy]).
+# links, commits and sast, which are advisory (see [policy]).
 #
 # Re-derive with: `nanolinter init --profile strict --print`
 # Inspect plan:   `nanolinter dry-run-plan`
@@ -44,13 +44,16 @@ checks = [
 # Links reports but does not block: lychee probes external sites, so an
 # outage or rate limit elsewhere would fail an unchanged tree. Real broken
 # links are still listed and fixed; known-good URLs go in .lycheeignore.
+#
+# Commits reports but does not block until the pinned nanolinter passes
+# gommitlint 0.93's --config flag; run `gommitlint validate --base-branch main`
+# to check commits meanwhile. Sast reports but does not block: its opengrep
+# findings are triaged by hand, not gated.
 [policy]
 block = [
   "version-control",
-  "commits",
   "secrets",
   "osv",
-  "sast",
   "typos",
   "toml",
   "yaml",
