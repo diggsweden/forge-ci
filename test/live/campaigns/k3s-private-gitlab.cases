@@ -16,8 +16,8 @@
 # hello-monorepo's core lint plan runs in the java flavour, and its gate
 # checks the frontend in the node image too. A release runs its job-image jobs
 # as the runtime images' nonroot (job-user=65532:65532) and builds with the
-# runtime image (build-archive=). hello-android has no gate here: the
-# campaign prepares no Android runtime image.
+# runtime image (build-archive=). Android's SDK/runtime is selected separately
+# through the optional k3s-private-android-gitlab.cases file.
 
 scenario TestGitLabRelease_MinimalSignedArtifacts
 

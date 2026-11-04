@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+# SPDX-License-Identifier: CC0-1.0
+
+# Optional Android MR lane: private, linux/amd64, no production signing credentials.
+# Add this cases file to campaign-prepare together with job-image=kotlin:<image>.
+# Its Android runtime archive is prepared only when this file is selected.
+consumer hello-android pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_ANDROID lint-archive=@LINT_IMAGE_ARCHIVE_KOTLIN

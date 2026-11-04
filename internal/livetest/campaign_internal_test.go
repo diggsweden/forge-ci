@@ -301,6 +301,29 @@ func TestCampaignRuntimeTargets_ComeFromTheLanesCasesAndTheirDemosGates(t *testi
 	}
 }
 
+func TestAndroidCampaignRuntimeIsExplicitlyOptedInAndRequiresItsLintFlavor(t *testing.T) {
+	t.Parallel()
+
+	root := reporoot.Path(t)
+	base := "gitlab=" + filepath.Join(root, "test", "live", "campaigns", "k3s-private-gitlab.cases")
+	android := "gitlab=" + filepath.Join(root, "test", "live", "campaigns", "k3s-private-android-gitlab.cases")
+	flavors := []string{"go", "java", "javascript-typescript", "rust"}
+	ordinary, err := CampaignRuntimeTargets(root, []string{base}, flavors)
+
+	if err != nil || slices.Contains(ordinary, "android") {
+		t.Fatalf("ordinary campaign unexpectedly prepares Android: %q, %v", ordinary, err)
+	}
+
+	if _, err := CampaignRuntimeTargets(root, []string{base, android}, flavors); err == nil || !strings.Contains(err.Error(), "job-image=kotlin:") {
+		t.Fatalf("Android lint image must be explicit before any image build: %v", err)
+	}
+
+	targets, err := CampaignRuntimeTargets(root, []string{base, android}, append(flavors, "kotlin"))
+	if want := []string{"android", "go", "java", "node", "rust"}; err != nil || !slices.Equal(targets, want) {
+		t.Fatalf("opt-in runtime targets: got %q, %v; want %q", targets, err, want)
+	}
+}
+
 // A GitLab lane refuses a demo whose gate checks in a further job image the
 // campaign was not prepared with, before any case runs.
 func TestPlanCampaignLane_RefusesAGateImageTheCampaignLacks(t *testing.T) {

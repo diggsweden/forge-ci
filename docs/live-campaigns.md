@@ -106,6 +106,28 @@ gate lints without `lint-archive=`. The lane then runs past failures and fails w
 `<dir>/<provider>.results`, one tab-separated line a case: interval, case,
 exit status and the `verdict.json` to read, as above.
 
+### Optional Android lane
+
+The default k3s cases do not prepare the large Android SDK/runtime image.
+To opt in, add both of these arguments to the same `campaign-prepare` command:
+
+```text
+gitlab=test/live/campaigns/k3s-private-android-gitlab.cases
+job-image=kotlin:localhost/nanolinter-kotlin:latest
+```
+
+Supply a reviewed local Kotlin-flavour nanolinter image under that name first.
+The additional cases file makes prepare build the linux/amd64 Android runtime
+archive; missing Kotlin lint input is refused before any image build. Keep the
+ordinary cases-file arguments too when preparing the combined campaign. Then
+run the optional file with `campaign-lane <dir> gitlab
+test/live/campaigns/k3s-private-android-gitlab.cases`, with the same private
+visibility and selected builder as the ordinary lane. It runs the real Android
+demo MR gate without production signing/store credentials. Debug APKs use the
+normal Android debug signing; release APK/AAB outputs remain unsigned.
+Budget additional SDK image/archive and Gradle-cache disk space before preparing
+or starting it; the base campaign's headroom estimate does not include Android.
+
 ## Shared dependencies
 
 Provider separation alone does not prove independence. Target rotation, runner
