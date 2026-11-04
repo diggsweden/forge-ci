@@ -17,8 +17,9 @@ import (
 
 func multiarchImageVerifyCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "verify",
-		Usage: "verify an existing digest-pinned index against the complete architecture metadata set without publishing",
+		DisableSliceFlagSeparator: true,
+		Name:                      "verify",
+		Usage:                     "verify an existing digest-pinned index against the complete architecture metadata set without publishing",
 		Flags: append(append(signerImageSourceFlags(), multiarchImageParamFlags()...),
 			&cli.StringFlag{Name: "ref", Required: true, Usage: "tag-free digest-pinned index reference"},
 			multiarchImageArchsFlag(),

@@ -5,6 +5,16 @@ reusable workflows. For other forges, see the [GitLab](gitlab.md#secrets-and-tok
 and [Forgejo](forgejo.md#secrets-and-tokens) guides.
 For the generated command surface, see [CLI Reference](cli-reference.md).
 
+## Repeated CLI pairs
+
+Flags taking repeated `key=value` pairs preserve commas inside each value.
+Repeat the flag to pass another pair, for example
+`--label 'example.features=one,two' --label 'example.owner=team'`;
+do not comma-join separate pairs into one flag argument. This also applies
+to build arguments, required image labels, report job rows and literal-input
+constraints. The isolation validator's separate `--signing-secret` name list
+continues to accept both repeated flags and comma-separated names.
+
 ## Canonical command environment names
 
 These names are consumed by the CLI inside a job. Repository variables do

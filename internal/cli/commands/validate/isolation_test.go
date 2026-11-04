@@ -49,6 +49,25 @@ func runIsolationThroughRoot(t *testing.T, workflow string, extra ...string) err
 	return root.Run(context.Background(), argv)
 }
 
+func TestIsolationCommaSeparatedSigningSecretsStillRejectsEitherSecret(t *testing.T) {
+	t.Parallel()
+
+	for _, secret := range []string{"CUSTOM_ONE", "CUSTOM_TWO"} {
+		t.Run(secret, func(t *testing.T) {
+			t.Parallel()
+
+			workflow := "jobs:\n  build:\n    steps:\n      - run: echo '${{ secrets." + secret + " }}'\n"
+			if err := runIsolationThroughRoot(t, workflow); err != nil {
+				t.Fatalf("custom name is not in the default signing-secret set: %v", err)
+			}
+
+			if err := runIsolationThroughRoot(t, workflow, "--signing-secret", "CUSTOM_ONE,CUSTOM_TWO"); !errors.Is(err, errs.ErrValidation) {
+				t.Fatalf("comma-list signing secrets did not reject %s: %v", secret, err)
+			}
+		})
+	}
+}
+
 func TestIsolationCmd_SinglePinInput(t *testing.T) {
 	pinFlags := []string{"--single-pin-subject", singlePinSubject, "--single-pin-input", singlePinInput}
 

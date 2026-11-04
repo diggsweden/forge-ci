@@ -6,6 +6,7 @@ package validate
 import (
 	"context"
 	"os"
+	"strings"
 
 	"github.com/urfave/cli/v3"
 
@@ -17,8 +18,9 @@ import (
 // release-isolation checks over a consumer's workflow.
 func isolationCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "isolation",
-		Usage: "check static release isolation (build job has no signing secrets; checkouts don't persist credentials)",
+		DisableSliceFlagSeparator: true,
+		Name:                      "isolation",
+		Usage:                     "check static release isolation (build job has no signing secrets; checkouts don't persist credentials)",
 		Description: `Static release-isolation checks: the artifact-producing build job must have no
 access to signing secrets (those belong only to the separately-trusted signing
 job), and every actions/checkout step must set persist-credentials: false.
@@ -74,8 +76,20 @@ EXAMPLE:
 				SinglePinInput:   cmd.String("single-pin-input"),
 				ContractRoot:     cmd.String("contract-root"),
 				LiteralInputs:    cmd.StringSlice("literal-input"),
-				SigningSecrets:   cmd.StringSlice("signing-secret"),
+				SigningSecrets:   signingSecretNames(cmd.StringSlice("signing-secret")),
 			})
 		},
 	}
+}
+
+// Keep the existing comma-list syntax for secret names, independently of the
+// literal-input pairs whose enum values must retain commas as data.
+func signingSecretNames(values []string) []string {
+	names := make([]string, 0, len(values))
+
+	for _, value := range values {
+		names = append(names, strings.Split(value, ",")...)
+	}
+
+	return names
 }

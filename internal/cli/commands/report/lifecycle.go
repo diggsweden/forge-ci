@@ -35,8 +35,9 @@ func readJSONInput(inline, path string) (string, error) {
 
 func prCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "pr",
-		Usage: "append the PR step-summary (quality table + run link)",
+		DisableSliceFlagSeparator: true,
+		Name:                      "pr",
+		Usage:                     "append the PR step-summary (quality table + run link)",
 		Description: `EXAMPLE:
    forge-ci report pr --project-type maven --source-branch feature/x --actor octocat`,
 		Flags: []cli.Flag{
@@ -80,8 +81,9 @@ func prCmd() *cli.Command {
 
 func releaseCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "release",
-		Usage: "append the release step-summary (job table + release/packages/run links)",
+		DisableSliceFlagSeparator: true,
+		Name:                      "release",
+		Usage:                     "append the release step-summary (job table + release/packages/run links)",
 		Description: `EXAMPLE:
    forge-ci report release --release-version v1.2.3 --release-branch main`,
 		Flags: []cli.Flag{

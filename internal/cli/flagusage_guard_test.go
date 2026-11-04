@@ -5,6 +5,8 @@
 package cli_test
 
 import (
+	"context"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -32,6 +34,53 @@ func TestFlagUsageHasNoBacktick(t *testing.T) {
 
 		for _, sub := range cmd.Commands {
 			walk(sub, path+" "+sub.Name)
+		}
+	}
+
+	walk(internalcli.New(internalcli.BuildInfo{}), "forge-ci")
+}
+
+// A key=value is one value even when its data contains commas. Exercise each
+// declared pair flag through the real parser while replacing only the action:
+// no registry, build tool or provider is involved in this contract.
+func TestKeyValueSliceFlagsPreserveCommas(t *testing.T) {
+	t.Parallel()
+
+	var walk func(cmd *cli.Command, path string)
+
+	walk = func(cmd *cli.Command, path string) {
+		for _, flag := range cmd.Flags {
+			slice, ok := flag.(*cli.StringSliceFlag)
+			if !ok || !strings.Contains(slice.Usage, "=") {
+				continue
+			}
+
+			t.Run(path+"/"+slice.Name, func(t *testing.T) {
+				var values []string
+
+				probe := &cli.Command{
+					Name: "pair", Flags: []cli.Flag{slice},
+					DisableSliceFlagSeparator: cmd.DisableSliceFlagSeparator,
+					Action: func(_ context.Context, parsed *cli.Command) error {
+						values = parsed.StringSlice(slice.Name)
+
+						return nil
+					},
+				}
+				want := []string{"key=one,two", "other=three,four"}
+
+				if err := probe.Run(t.Context(), []string{"pair", "--" + slice.Name, want[0], "--" + slice.Name, want[1]}); err != nil {
+					t.Fatal(err)
+				}
+
+				if !reflect.DeepEqual(values, want) {
+					t.Errorf("pair data split on commas: got %q, want %q; disable the command's slice separator", values, want)
+				}
+			})
+		}
+
+		for _, sub := range cmd.Commands {
+			walk(sub, path+"/"+sub.Name)
 		}
 	}
 

@@ -77,8 +77,9 @@ func multiarchImageArchsFlag() cli.Flag {
 
 func signerImageBuildArchCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "build-arch",
-		Usage: "build and push one architecture of the multi-arch image",
+		DisableSliceFlagSeparator: true,
+		Name:                      "build-arch",
+		Usage:                     "build and push one architecture of the multi-arch image",
 		Description: `Builds one image architecture, pushes its temporary architecture
 tag, computes the registry-served manifest digest, and writes <name>-<arch>.json
 for the manifest assembly job. --arch must be the host's own architecture: each
@@ -145,8 +146,9 @@ architecture builds on a native runner, never under CPU emulation.`,
 
 func signerImageAssembleCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "assemble",
-		Usage: "assemble and push the multi-arch manifest from the per-arch builds",
+		DisableSliceFlagSeparator: true,
+		Name:                      "assemble",
+		Usage:                     "assemble and push the multi-arch manifest from the per-arch builds",
 		Description: `Reads <name>-arch-<arch>/<name>-<arch>.json metadata, validates
 that every source image is digest-pinned under the expected repository, assembles
 the multi-arch manifest, and emits image-ref, image-digest, and image-tag

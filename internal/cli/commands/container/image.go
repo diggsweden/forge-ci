@@ -73,8 +73,9 @@ digest must match the exported OCI layout. Push retries reuse that same layout.`
 
 func imageUsableDigestCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "usable-digest",
-		Usage: "print an existing image digest only when architecture and labels match",
+		DisableSliceFlagSeparator: true,
+		Name:                      "usable-digest",
+		Usage:                     "print an existing image digest only when architecture and labels match",
 		Description: `Inspects --ref and prints its digest to stdout only when the
 image has the required architecture and every --require-label key=value pair
 matches the image config labels. Intended for safe tag reuse in workflows: a
