@@ -2668,7 +2668,7 @@ CI-runtime git + workspace operations (check out a repo, resolve a ref, inspect 
 exact, credential-free, sha256-aware checkout of a repository into the workspace
 
 ```
-Git-based checkout that works in minimal containers and for sha256 repositories. Resolves the object format from the forge, materializes the workspace at the given ref, and writes the resolved commit SHA to the output sink. The token (when set) is sent as transient HTTP Basic auth and never persisted to .git/config.
+Git-based checkout that works in minimal containers and for sha256 repositories. Resolves the object format from the current GitLab project's commit SHA or forge metadata, materializes the workspace at the given ref, and writes the resolved commit SHA to the output sink. The token (when set) is sent as transient HTTP Basic auth and never persisted to .git/config.
 
 EXAMPLES:
    # Check out a tag of a repo into the current directory
@@ -2685,7 +2685,7 @@ EXAMPLES:
 | `--ref` | commit SHA, refs/tags/…, refs/heads/…, or a bare tag/branch name to check out. Set via $CHECKOUT_REF; defaults to the triggering commit. | string | `""` | `$CHECKOUT_REF`, `$CI_COMMIT`, `$CI_COMMIT_SHA`, `$FORGEJO_SHA`, `$GITHUB_SHA` |
 | `--workspace` | target directory (default: current directory) | string | `""` | `$CI_WORKSPACE`, `$FORGEJO_WORKSPACE`, `$GITHUB_WORKSPACE` |
 | `--token-file` | Token for a private checkout. Read from a file ("-" for stdin); trailing CR/LF is trimmed. Explicit input overrides environment credentials; empty content supplies no token. Omit for environment selection, with runner-issued tokens scoped to their server. | string | `""` | n/a |
-| `--object-format` | override the forge-reported object format (sha1\|sha256); skips the metadata lookup | string | `""` | `$CHECKOUT_OBJECT_FORMAT` |
+| `--object-format` | override the repository object format (sha1\|sha256); skips automatic discovery | string | `""` | `$CHECKOUT_OBJECT_FORMAT` |
 | `--fetch-base` | extra branch to also fetch (diff/commit-range checks) | string | `""` | `$CHECKOUT_FETCH_BASE` |
 | `--fetch-tags` | also fetch all tags (the JS actions/checkout fetch-tags:true; needed for git-cliff/changelog) | bool | `false` | `$CHECKOUT_FETCH_TAGS` |
 | `--fetch-all-refs` | fetch every branch into refs/remotes/origin/* plus all tags (the JS actions/checkout fetch-depth:0); needed by builds that read git topology, e.g. "git rev-list --count origin/main" or "git describe" | bool | `false` | `$CHECKOUT_FETCH_ALL_REFS` |

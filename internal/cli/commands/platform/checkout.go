@@ -12,6 +12,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/diggsweden/forge-ci/internal/adapters/git"
+	"github.com/diggsweden/forge-ci/internal/adapters/gitlab"
 	appplatform "github.com/diggsweden/forge-ci/internal/app/platform"
 	"github.com/diggsweden/forge-ci/internal/cli/cienv"
 	"github.com/diggsweden/forge-ci/internal/cli/clitoken"
@@ -33,7 +34,7 @@ func checkoutCommand(withDeps func(context.Context, *cli.Command, appplatform.Ch
 		Name:  commandCheckout,
 		Usage: "exact, credential-free, sha256-aware checkout of a repository into the workspace",
 		Description: "Git-based checkout that works in minimal containers and for sha256 repositories. " +
-			"Resolves the object format from the forge, " +
+			"Resolves the object format from the current GitLab project's commit SHA or forge metadata, " +
 			"materializes the workspace at the given ref, and writes the resolved commit SHA to the output sink. " +
 			"The token (when set) is sent as transient HTTP Basic auth and never persisted to .git/config.\n\n" +
 			"EXAMPLES:\n" +
@@ -47,7 +48,7 @@ func checkoutCommand(withDeps func(context.Context, *cli.Command, appplatform.Ch
 			&cli.StringFlag{Name: flagRef, Sources: cienv.CheckoutRef(), Usage: "commit SHA, refs/tags/…, refs/heads/…, or a bare tag/branch name to check out. Set via $CHECKOUT_REF; defaults to the triggering commit."},
 			&cli.StringFlag{Name: flagWorkspace, Sources: cienv.Workspace(), Usage: "target directory (default: current directory)"},
 			clitoken.FileFlag("Token for a private checkout."),
-			&cli.StringFlag{Name: "object-format", Sources: cli.EnvVars("CHECKOUT_OBJECT_FORMAT"), Usage: "override the forge-reported object format (sha1|sha256); skips the metadata lookup"},
+			&cli.StringFlag{Name: "object-format", Sources: cli.EnvVars("CHECKOUT_OBJECT_FORMAT"), Usage: "override the repository object format (sha1|sha256); skips automatic discovery"},
 			&cli.StringFlag{Name: flagFetchBase, Sources: cli.EnvVars("CHECKOUT_FETCH_BASE"), Usage: "extra branch to also fetch (diff/commit-range checks)"},
 			&cli.BoolFlag{Name: "fetch-tags", Sources: cli.EnvVars("CHECKOUT_FETCH_TAGS"), Usage: "also fetch all tags (the JS actions/checkout fetch-tags:true; needed for git-cliff/changelog)"},
 			&cli.BoolFlag{Name: "fetch-all-refs", Sources: cli.EnvVars("CHECKOUT_FETCH_ALL_REFS"), Usage: "fetch every branch into refs/remotes/origin/* plus all tags (the JS actions/checkout fetch-depth:0); needed by builds that read git topology, e.g. \"git rev-list --count origin/main\" or \"git describe\""},
@@ -162,10 +163,11 @@ func resolveWorkspace(workspace, path string) (string, error) {
 	return os.Getwd()
 }
 
-// resolveObjectFormat applies the override-or-forge policy: an explicit
+// resolveObjectFormat applies the override-or-discovery policy: an explicit
 // --object-format wins (and skips the network entirely); otherwise the
-// provider's repo metadata supplies it. An empty result is fine — the app
-// defaults it to sha1.
+// same-project GitLab job already identifies its object format through its
+// full commit SHA; otherwise the provider's repo metadata supplies it.
+// An empty result is fine — the app defaults it to sha1.
 func resolveObjectFormat(ctx context.Context, dep *deps.Deps, cmd *cli.Command) (string, error) {
 	if override := cmd.String("object-format"); override != "" {
 		return override, nil
@@ -174,6 +176,10 @@ func resolveObjectFormat(ctx context.Context, dep *deps.Deps, cmd *cli.Command) 
 	repo := cmd.String(flagRepository)
 	if repo == "" {
 		return "", nil
+	}
+
+	if format := gitlab.CurrentProjectObjectFormat(repo, cmd.String(flagServerURL), os.Getenv); format != "" {
+		return format, nil
 	}
 
 	md, err := dep.RepoMetadataFetcher().FetchRepoMetadata(ctx, repo)

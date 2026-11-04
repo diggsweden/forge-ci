@@ -6,9 +6,33 @@ package gitlab
 import (
 	"context"
 	"os"
+	"strings"
 
+	domaingit "github.com/diggsweden/forge-ci/internal/domain/git"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
 )
+
+// CurrentProjectObjectFormat derives the current project's format from its native
+// pipeline commit. GitLab's Projects metadata API does not admit job tokens.
+// Another project/server or incomplete context still needs metadata discovery
+// or an explicit format. This selects no ref and grants no checkout authority.
+func CurrentProjectObjectFormat(repo, server string, getenv func(string) string) string {
+	if getenv("GITLAB_CI") != "true" || repo != getenv("CI_PROJECT_PATH") ||
+		strings.TrimRight(server, "/") != strings.TrimRight(getenv("CI_SERVER_URL"), "/") {
+		return ""
+	}
+
+	sha := getenv("CI_COMMIT_SHA")
+	if !domaingit.ValidCommitSHA(sha) {
+		return ""
+	}
+
+	if len(sha) == 64 {
+		return "sha256"
+	}
+
+	return "sha1"
+}
 
 // ResolveContext reads the canonical GitLab CI env vars and returns a
 // typed EventContext. No network, no I/O.

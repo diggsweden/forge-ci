@@ -171,7 +171,7 @@ jobs:
 	}
 
 	trial.checkDevelopmentStableState(repo, policySHA)
-	t.Logf("artifact-first snapshot accepted: source=%s policy=%s ref=%s tag=%s producer-file=%s mode=%s sha256=%s scans=false sbom=false", sourceSHA, policySHA, receipt.Ref, receipt.Tag, file.Path, file.Mode, file.SHA256)
+	t.Logf("artifact-first snapshot accepted: source=%s policy=%s ref=%s tag=%s producer-file=%s mode=%s sha256=%s scans=true sbom=false", sourceSHA, policySHA, receipt.Ref, receipt.Tag, file.Path, file.Mode, file.SHA256)
 }
 
 func snapshotGitHubArtifacts(t *testing.T, trial *GitHubTrial, repo string, run int64) map[string]map[string][]byte {

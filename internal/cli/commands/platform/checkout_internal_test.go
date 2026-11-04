@@ -109,6 +109,66 @@ func TestCheckoutCommand_TokenReadFailureBeforeMetadata(t *testing.T) {
 	require.Empty(t, entries)
 }
 
+func TestCheckoutCommand_GitLabCurrentProjectNeedsNoMetadataPermission(t *testing.T) {
+	for _, tc := range []struct {
+		name, sha, repository, server, native, override, want string
+	}{
+		{name: "sha1 different branch", sha: strings.Repeat("a", 40), want: "sha1"},
+		{name: "sha256 different branch", sha: strings.Repeat("b", 64), want: "sha256"},
+		{name: "explicit override wins", sha: strings.Repeat("a", 40), override: "sha256", want: "sha256"},
+		{name: "other project still requires metadata", sha: strings.Repeat("a", 40), repository: "other/project"},
+		{name: "other server still requires metadata", sha: strings.Repeat("a", 40), server: "https://other.example"},
+		{name: "non-native context still requires metadata", sha: strings.Repeat("a", 40), native: "false"},
+		{name: "missing commit still requires metadata"},
+		{name: "invalid commit still requires metadata", sha: strings.Repeat("g", 64)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			checkoutCommandEnv(t)
+			t.Setenv("GITLAB_CI", "true")
+			t.Setenv("CI_PROJECT_PATH", "group/project")
+			t.Setenv("CI_SERVER_URL", "https://gitlab.example")
+			t.Setenv("CI_COMMIT_SHA", tc.sha)
+
+			if tc.native != "" {
+				t.Setenv("GITLAB_CI", tc.native)
+			}
+
+			repository, server := "group/project", "https://gitlab.example"
+			if tc.repository != "" {
+				repository = tc.repository
+			}
+
+			if tc.server != "" {
+				server = tc.server
+			}
+
+			root := t.TempDir()
+			workspace := filepath.Join(root, "checkout")
+			probe := &checkoutCommandProbe{fetch: func(context.Context, string) (*provider.RepoMetadata, error) {
+				return nil, errs.ErrPermissionDenied
+			}}
+
+			args := []string{commandCheckout, "--repository", repository, "--server-url", server, "--ref", "refs/heads/selected-source", "--workspace", workspace}
+			if tc.override != "" {
+				args = append(args, "--object-format", tc.override)
+			}
+
+			err := probe.command(t, t.Context(), workspace).Run(t.Context(), args)
+			if tc.want != "" {
+				require.ErrorIs(t, err, errCheckoutCommandStop)
+				require.Equal(t, []string{"deps", "init:" + tc.want}, probe.events)
+			} else {
+				require.ErrorIs(t, err, errs.ErrPermissionDenied)
+				require.Equal(t, []string{"deps", "metadata:" + repository}, probe.events)
+			}
+
+			entries, readErr := os.ReadDir(root)
+			require.NoError(t, readErr)
+			require.Empty(t, entries, "metadata refusal or failed init must leave no checkout")
+		})
+	}
+}
+
 // requireCheckoutWorkDir accepts the two places Git may legitimately run: the
 // destination itself when it already existed, or the staging sibling this run
 // created beside it and renames into place only on success.

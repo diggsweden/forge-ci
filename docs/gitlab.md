@@ -587,6 +587,10 @@ consumer's object format from the full pipeline SHA, avoiding a metadata API
 request that job tokens cannot make for private projects. The engine
 source/package must still be publicly readable. The checkout component supports
 public and private consumers with SHA-1 or SHA-256 repositories.
+`forge-ci platform checkout` also derives the format from the native pipeline
+SHA when its requested repository and server both match the current project,
+including snapshot checkouts of another branch. For another private project,
+provide `--object-format sha1|sha256` or a credential that can read its metadata.
 Source-check jobs refuse `GITLAB_TOKEN`; scope long-lived API credentials to
 their publication jobs rather than supplying them for checkout.
 

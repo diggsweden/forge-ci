@@ -121,7 +121,7 @@ func Checkout(ctx context.Context, destinations CheckoutDestinations, newGit fun
 // runCheckout performs the Git sequence in whichever directory the destination
 // resolved to.
 func runCheckout(ctx context.Context, git CheckoutGit, sink domainci.OutputSink, out io.Writer, in CheckoutInput) (string, error) {
-	// The command resolves the override-or-provider object format and
+	// The command resolves the explicit, native-context or provider object format and
 	// passes it in; an empty value (no override, forge does not report
 	// one) defaults to sha1.
 	format := in.ObjectFormat

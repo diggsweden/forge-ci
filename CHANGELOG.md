@@ -301,6 +301,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Private GitLab snapshot checkout no longer requires a long-lived API token.
+  `platform checkout` derives SHA-1 or SHA-256 from the native pipeline's full
+  commit SHA when both repository and server match the current GitLab project.
+  GitLab job tokens cannot read the Projects metadata endpoint; other projects
+  still use metadata discovery or an explicit `--object-format`. Scoped Git
+  authentication and exact-ref verification remain in effect.
+- The hosted snapshot smoke's receipt correctly says `scans=true`, matching
+  its mandatory scan and delivered-plan assertion.
 - GitLab source-only gate components explicitly replace scheduling, artifact
   dependency, cache and checkout controls from an earlier same-named job. Policy
   inclusion selects when gates apply, including merge-request pipelines;

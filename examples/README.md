@@ -106,7 +106,7 @@ see their guides.
    - Replace every placeholder and `FIXME` the file's header lists
    - Extend `nanolinter.toml` as you like; the gate's `required-lints` floor
      (default `secrets,sast`) runs whatever the plan says. Findings are reported
-     by default; explicit `enforce-lint: true` makes them block. See
+     by default; administrator lint enforcement makes them block. See
      [check enforcement](../docs/admin-policy.md) for administrator-owned policy.
 
 4. **Configure release secrets:**
