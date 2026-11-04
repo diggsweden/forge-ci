@@ -77,6 +77,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The GitLab release takes a `labels` input, as the Forgejo release-images
+  workflow does: newline-separated `key=value` labels every release image
+  carries after the standard ones. A label that would replace one of the
+  standard provenance labels is refused at the release request, as are
+  `labels` without `release-images`. `container release-images plan` takes
+  them as `--label`.
 - The hello-go-cli, hello-go-service and hello-gradle demos run on GitHub:
   the go-cli, go-service and gradle-app examples' GitHub workflows now pass
   the runtime images of the release they call, pinned with it, which a

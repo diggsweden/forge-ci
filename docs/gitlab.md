@@ -200,7 +200,7 @@ images and pins, a validating regex. The inputs that are not obvious:
 | | `bot-name`, `bot-email` | The release bot identity; no default. |
 | | `checks`, `build` | Consumer commands: checks on the request commit, and the build that writes `dist/release-files.json` and `release-notes.md`. |
 | | `build-runner-tags` | Runner tags for the build job and, with Buildah, the amd64 image job, for example `[privileged]`. Empty, the default, leaves them untagged. |
-| | `release-images`, `artifacts-config`, `release-platforms` | `true` builds the `containers:` of `artifacts-config` (default `.forge-ci/artifacts.yml`; without it the root `Containerfile`) in the release's image jobs, narrowed to `release-platforms`. Default `false`: no image jobs. See [Release images](#release-images). |
+| | `release-images`, `artifacts-config`, `release-platforms`, `labels` | `true` builds the `containers:` of `artifacts-config` (default `.forge-ci/artifacts.yml`; without it the root `Containerfile`) in the release's image jobs, narrowed to `release-platforms`, with `labels` beside the standard ones. Default `false`: no image jobs. See [Release images](#release-images). |
 | | `image-builder`, `builder-job-image` | The image jobs' builder, `buildah` (default) or `kaniko`, and the digest-pinned job image they run in: the Buildah job image or the kaniko job image. |
 | | `build-runner-tags-arm64` | Tags of a native arm64 runner. The arm64 image and export jobs exist only when they are set. |
 | | `export-files`, `export` | `true` runs the `export` commands once per selected architecture, natively, in `builder-job-image` with `image-builder`, before the build job, and lays their `dist/` into its own. See [Files exported from a Containerfile](#files-exported-from-a-containerfile). |
@@ -745,8 +745,20 @@ the build and signing, as the Forgejo
 
 The build itself pushes no image: a `dist/release-images.json` from the
 `build` commands stops its hand-off. The images carry the source, revision,
-title, version, url, documentation, ref.name and created labels; their
-SBOMs are generated when they are signed. Build secrets, binary extraction
+title, version, url, documentation, ref.name and created labels, and after
+them the policy's `labels`, one `key=value` a line:
+
+```yaml
+release-images: true
+labels: |
+  org.opencontainers.image.licenses=EUPL-1.2
+  org.opencontainers.image.vendor=Example Agency
+```
+
+`Check: release request` refuses a label that names one of the standard
+eight, which describe where the image came from, a key that is not a
+lowercase dotted name, a key named twice, and `labels` without
+`release-images`. Their SBOMs are generated when they are signed. Build secrets, binary extraction
 and base images are not carried out by the image jobs; a binary extraction
 is the export jobs' work.
 

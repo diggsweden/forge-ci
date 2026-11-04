@@ -74,6 +74,10 @@ spec:
     release-platforms:
       regex: '^$|^linux/(amd64|arm64)(,linux/(amd64|arm64))?$'
       default: ''
+    labels:
+      regex: '^$|^[a-z0-9]+([._-][a-z0-9]+)*=[^''[:cntrl:]]+(\n[a-z0-9]+([._-][a-z0-9]+)*=[^''[:cntrl:]]+)*\n?$'
+      default: ''
+      description: Newline-separated key=value labels every release image carries after the standard ones. Requires release-images.
     image-builder:
       options: [buildah, kaniko]
       default: buildah
@@ -211,6 +215,7 @@ stages: [check, prepare, build, images, sign, publish]
       RC_CONSUMER_PROJECT='$[[ inputs.consumer-project ]]' \
       RC_SERVER_URL='$[[ inputs.server-url ]]' \
       RC_REGISTRY='$[[ inputs.registry ]]' \
+      RC_IMAGE_LABELS='$[[ inputs.labels ]]' \
       RC_PUBLICATION_PROJECT='$[[ inputs.publication-project ]]' \
       RC_PUBLICATION_IMAGE_REPOSITORY='$[[ inputs.publication-image-repository ]]' \
       RC_PUBLIC_KEY_SHA256='$[[ inputs.cosign-public-key-sha256 ]]' \

@@ -80,6 +80,11 @@ spec:
       description: Comma-separated subset of each container's platforms to build, for example linux/amd64. Empty builds them all.
       regex: '^$|^linux/(amd64|arm64)(,linux/(amd64|arm64))?$'
       default: ''
+    labels:
+      description: >-
+        Newline-separated key=value labels every release image carries, for example org.opencontainers.image.licenses=MIT. forge-ci sets source, revision, title, version, url, documentation, ref.name and created from the release; a label naming one of them is refused at the release request, as labels without release-images is. Values are single lines without quotes.
+      regex: '^$|^[a-z0-9]+([._-][a-z0-9]+)*=[^''[:cntrl:]]+(\n[a-z0-9]+([._-][a-z0-9]+)*=[^''[:cntrl:]]+)*\n?$'
+      default: ''
     image-builder:
       description: >-
         Image builder of the image jobs, which run in builder-job-image: buildah, the default, on the build-runner-tags runner, or kaniko on an ordinary runner, for runners that deny the user namespaces Buildah needs.
@@ -206,6 +211,7 @@ release:
           release-images: $[[ inputs.release-images ]]
           artifacts-config: $[[ inputs.artifacts-config ]]
           release-platforms: $[[ inputs.release-platforms ]]
+          labels: $[[ inputs.labels ]]
           image-builder: $[[ inputs.image-builder ]]
           builder-job-image: $[[ inputs.builder-job-image ]]
           build-runner-tags-arm64: $[[ inputs.build-runner-tags-arm64 ]]

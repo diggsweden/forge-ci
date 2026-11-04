@@ -393,10 +393,15 @@ rc_images_plan() {
 # rc_plan_release_images writes the image jobs' plan of the checkout to
 # output, refusing what no image job would carry out.
 rc_plan_release_images() {
-	local config=$1 platforms=$2 arm64_tags=$3 output=$4 archs=amd64
+	local config=$1 platforms=$2 arm64_tags=$3 output=$4 archs=amd64 label labels=()
 	if [ "${arm64_tags}" != '[]' ]; then archs=amd64,arm64; fi
+	# The labels input as written, one key=value a line; the engine admits
+	# each and refuses one that replaces a standard provenance label.
+	while IFS= read -r label; do
+		if [ -n "${label}" ]; then labels+=(--label "${label}"); fi
+	done <<<"${RC_IMAGE_LABELS?}"
 	rc_engine container release-images plan --file "${config}" --image-plan-json '' \
-		--release-tag "${RELEASE_TAG}" --release-platforms "${platforms}" \
+		--release-tag "${RELEASE_TAG}" --release-platforms "${platforms}" "${labels[@]}" \
 		--image-repository "${RC_REGISTRY_IMAGE:?}" --server-url "${RC_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
 		--registry-username gitlab-ci-token --runner-archs "${archs}" --output "${output}"
 }
@@ -411,7 +416,13 @@ rc_check_release_images() {
 	local images=$1 builder=$2 job_image=$3 config=$4 platforms=$5 arm64_tags=$6
 	case "${images}" in
 	true) ;;
-	false) return 0 ;;
+	false)
+		if [ -n "${RC_IMAGE_LABELS?}" ]; then
+			echo 'ERROR: the release policy sets labels but release-images is false; set release-images to true or remove labels.' >&2
+			return 1
+		fi
+		return 0
+		;;
 	*)
 		echo "ERROR: release-images must be true or false, got '${images}'" >&2
 		return 1

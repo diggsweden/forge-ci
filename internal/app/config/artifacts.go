@@ -149,6 +149,10 @@ func resolveReleaseImagesPlan(in EmitReleaseImagesPlanInput, annot output.Annota
 
 func planReleaseImages(in EmitReleaseImagesPlanInput, annot output.Annotator) (pipeline.ReleaseImagesPlan, error) {
 	if in.ResolvedPlan != "" {
+		if len(in.Images.Labels) != 0 {
+			return pipeline.ReleaseImagesPlan{}, fmt.Errorf("image labels are planned from artifacts.yml; a resolved image plan carries its own: %w", errs.ErrUsage)
+		}
+
 		plan, err := pipeline.ReadImageBuildPlan(in.ResolvedPlan, in.Images.ImageRepository, in.Images.ReleaseTag)
 		if err != nil {
 			return plan, err

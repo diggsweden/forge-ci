@@ -59,6 +59,11 @@ secrets, binary extraction, another scan threshold than its default CRITICAL gat
 platforms other than linux/amd64 and linux/arm64) are refused here, before any
 runner starts. RELEASE_PLATFORMS narrows every container's platforms.
 
+Each --label is planned onto every build, after the standard source,
+revision, title, version, url, documentation, ref.name and created labels,
+which a label may not replace. It is refused with --image-plan-json, whose
+builds carry their own labels.
+
 With --output, the plan is written to that file instead, for release-images
 build and publish on a forge whose jobs take no multiline outputs, and only
 registry-user is emitted. --runner-archs then names the architectures a native
@@ -66,6 +71,8 @@ build job exists for; a container building another is refused here.
 
 EXAMPLE:
    forge-ci container release-images plan --image-repository ghcr.io/owner/app --registry-username owner --release-tag v1.2.3`,
+		// A --label value may hold commas (a license expression, a text).
+		DisableSliceFlagSeparator: true,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "image-plan-json", Sources: cli.EnvVars("IMAGE_PLAN_JSON"), Usage: "resolved consumer image policy as builds/images JSON; admitted against --image-repository instead of loading artifacts.yml; supports content-addressed base tags"},
 			&cli.StringFlag{Name: "file", Value: defaultArtifactsFile, Sources: cli.EnvVars("ARTIFACTS_CONFIG"), Usage: "path to the artifacts.yml file declaring the containers; without it and the default file, the root Containerfile is the repository's image"},
@@ -76,6 +83,7 @@ EXAMPLE:
 			// falls back to, is not the release tag on a release-request push.
 			&cli.StringFlag{Name: "release-tag", Required: true, Usage: "release tag the image tags are made of, e.g. v1.2.3"},
 			&cli.StringFlag{Name: "release-platforms", Sources: cli.EnvVars("RELEASE_PLATFORMS"), Usage: "comma-separated subset of each container's platforms to build; empty builds them all"},
+			&cli.StringSliceFlag{Name: flagLabel, Usage: "key=value label every image carries after the standard ones, such as org.opencontainers.image.licenses=MIT (repeatable); a standard provenance label is refused"},
 			&cli.StringFlag{Name: flagOutput, Usage: "write the builds/images plan to this file instead of the builds, images and image-names outputs"},
 			&cli.StringFlag{Name: flagRunnerArchs, Usage: "with --output: comma-separated architectures that have a native build job; empty admits every one"},
 			regflags.UsernameFor("user the registry token logs in as, written to the registry-user output; empty is the --repository owner on the forge's own registry and refused on another one"),
@@ -111,6 +119,7 @@ EXAMPLE:
 						Repository:       cmd.String(flagRepository),
 						ReleaseTag:       cmd.String("release-tag"),
 						ReleasePlatforms: cmd.String("release-platforms"),
+						Labels:           cmd.StringSlice(flagLabel),
 					},
 				}
 

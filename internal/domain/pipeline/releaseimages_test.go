@@ -161,3 +161,45 @@ func TestPlanReleaseImages_RefusesWhatItDoesNotCarryOut(t *testing.T) {
 		t.Errorf("no containers: err = %v, want ErrInvalidConfig", err)
 	}
 }
+
+// The release's labels go on every build after the standard ones, as given;
+// one that would replace a standard provenance label is refused, as is a
+// key, value or repetition no image could carry.
+func TestPlanReleaseImages_PlansTheReleaseLabels(t *testing.T) {
+	t.Parallel()
+
+	containers := plannedContainers(t, `  - name: app
+    platforms: linux/amd64,linux/arm64
+`)
+
+	in := releaseImagesInput()
+	in.Labels = []string{"org.opencontainers.image.licenses=EUPL-1.2 OR MIT", "org.opencontainers.image.vendor=Acme, Inc."}
+
+	plan, err := pipeline.PlanReleaseImages(containers, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := "org.opencontainers.image.licenses=EUPL-1.2 OR MIT\norg.opencontainers.image.vendor=Acme, Inc."
+	for _, build := range plan.Builds {
+		if build.Labels != want {
+			t.Fatalf("%s labels = %q, want %q", build.Arch, build.Labels, want)
+		}
+	}
+
+	refused := map[string][]string{
+		"standard":  {"org.opencontainers.image.source=https://elsewhere.example/repo"},
+		"created":   {"org.opencontainers.image.created=2020-01-01T00:00:00Z"},
+		"no value":  {"org.opencontainers.image.licenses="},
+		"no equals": {"org.opencontainers.image.licenses"},
+		"key":       {"Org.Example=1"},
+		"newline":   {"org.example.a=1\norg.opencontainers.image.revision=0"},
+		"twice":     {"org.example.a=1", "org.example.a=2"},
+	}
+	for name, labels := range refused {
+		in.Labels = labels
+		if _, err := pipeline.PlanReleaseImages(containers, in); !errors.Is(err, errs.ErrUsage) {
+			t.Errorf("%s: %q planned, err = %v; want a usage error", name, labels, err)
+		}
+	}
+}

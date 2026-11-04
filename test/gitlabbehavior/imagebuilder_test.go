@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -237,7 +238,8 @@ const releaseImagesCheck = "rc_check_release_images '$[[ inputs.release-images ]
 // The release request check, which runs before Prepare pushes anything,
 // refuses an image stage that would stop later: either builder without the
 // job image it runs in, a publication project that is not separate, or a plan
-// no image job carries out. Without release images it checks nothing.
+// no image job carries out. Without release images it checks only that no
+// labels are set, which no image would carry.
 func TestReleaseRequestCheckRefusesAnImageStageThatWouldStop(t *testing.T) {
 	t.Parallel()
 
@@ -248,10 +250,13 @@ func TestReleaseRequestCheckRefusesAnImageStageThatWouldStop(t *testing.T) {
 	for name, tc := range map[string]struct {
 		args      string
 		env       []string
+		labels    string
 		wantError string
 		planned   bool
 	}{
 		"no release images":         {args: "false buildah ''"},
+		"labels without images":     {args: "false buildah ''", labels: "org.opencontainers.image.licenses=MIT", wantError: "sets labels but release-images is false"},
+		"labels with images":        {args: "true buildah " + buildahImage, env: separate, labels: "org.opencontainers.image.licenses=MIT\norg.opencontainers.image.vendor=Acme, Inc.\n", planned: true},
 		"kaniko without its image":  {args: "true kaniko ''", env: separate, wantError: "set it to the kaniko job image"},
 		"kaniko with its image":     {args: "true kaniko " + kanikoImage, env: separate, planned: true},
 		"buildah without its image": {args: "true buildah ''", env: separate, wantError: "set it to the buildah job image"},
@@ -263,14 +268,19 @@ func TestReleaseRequestCheckRefusesAnImageStageThatWouldStop(t *testing.T) {
 
 			work := t.TempDir()
 			env := append([]string{"RC_WORK=" + work, "RELEASE_TAG=v1.2.3", "RC_REGISTRY=registry.invalid", "RC_REGISTRY_IMAGE=registry.invalid/team/app",
-				"RC_SERVER_URL=https://gitlab.invalid", "CI_PROJECT_PATH=team/app"}, tc.env...)
+				"RC_SERVER_URL=https://gitlab.invalid", "CI_PROJECT_PATH=team/app", "RC_IMAGE_LABELS=" + tc.labels}, tc.env...)
 
 			output, err := runReleaseFunction(t, work, "rc_check_release_images "+tc.args+" .forge-ci/artifacts.yml '' '[]'", env...)
 			if (err == nil) != (tc.wantError == "") || !strings.Contains(output, tc.wantError) {
 				t.Fatalf("err = %v:\n%s", err, output)
 			}
 
-			plan := "engine: container release-images plan --file .forge-ci/artifacts.yml --image-plan-json  --release-tag v1.2.3 --release-platforms  " +
+			labelArgs := ""
+			if tc.labels != "" {
+				labelArgs = "--label org.opencontainers.image.licenses=MIT --label org.opencontainers.image.vendor=Acme, Inc. "
+			}
+
+			plan := "engine: container release-images plan --file .forge-ci/artifacts.yml --image-plan-json  --release-tag v1.2.3 --release-platforms  " + labelArgs +
 				"--image-repository registry.invalid/team/app --server-url https://gitlab.invalid --repository team/app " +
 				"--registry-username gitlab-ci-token --runner-archs amd64 --output " + work + "/release-images-plan.json"
 			if strings.Contains(output, plan) != tc.planned {
@@ -609,4 +619,31 @@ func releaseJobsBodyFor(t *testing.T, builder string) map[string]any {
 	}
 
 	return body
+}
+
+// The release's labels input admits key=value lines only, each value a
+// single line without the quote that ends the literal it is assigned to,
+// and both release components admit the same.
+func TestReleaseLabelsInputAdmitsKeyValueLines(t *testing.T) {
+	t.Parallel()
+
+	outer, _ := componentSpecInputs(t, "templates/release.yml")["labels"]["regex"].(string)
+	inner, _ := componentSpecInputs(t, "templates/release-jobs.yml")["labels"]["regex"].(string)
+
+	if outer == "" || outer != inner {
+		t.Fatalf("release.yml labels regex %q, release-jobs.yml %q; want one and the same", outer, inner)
+	}
+
+	admit := regexp.MustCompile(outer)
+	for _, value := range []string{"", "org.opencontainers.image.licenses=MIT", "a.b=Acme, Inc.\nc-d=EUPL-1.2 OR MIT\n"} {
+		if !admit.MatchString(value) {
+			t.Errorf("labels %q refused", value)
+		}
+	}
+
+	for _, value := range []string{"a.b=it's", "a.b=", "=x", "A.b=x", "a.b=x\n\nc.d=y", "a.b=x\r", "a.b=x' ; echo '", "a.b=x\tz", "\na.b=x"} {
+		if admit.MatchString(value) {
+			t.Errorf("labels %q admitted", value)
+		}
+	}
 }

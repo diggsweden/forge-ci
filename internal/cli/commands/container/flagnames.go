@@ -34,6 +34,7 @@ const (
 	flagImage                   = "image"
 	flagImageName               = "image-name"
 	flagImageRepository         = "image-repository"
+	flagLabel                   = "label"
 	flagLedger                  = "ledger"
 	flagManifestOutput          = "manifest-output"
 	flagMetadataDir             = "metadata-dir"

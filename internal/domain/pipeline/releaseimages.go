@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"maps"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	domaincontainer "github.com/diggsweden/forge-ci/internal/domain/container"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
@@ -26,6 +28,9 @@ type ReleaseImagesInput struct {
 	Repository       string // source owner/repository, which names the default image
 	ReleaseTag       string // e.g. v1.2.3
 	ReleasePlatforms string // RELEASE_PLATFORMS; empty builds every declared platform
+	// Labels are key=value labels every image carries after the standard
+	// ones; see ReleaseImageLabels.
+	Labels []string
 }
 
 // ReleaseImageBuild is one native architecture build of one container.
@@ -96,6 +101,11 @@ func PlanReleaseImages(containers []PlannedContainer, in ReleaseImagesInput) (Re
 		return ReleaseImagesPlan{}, fmt.Errorf("release tag %q must be vMAJOR.MINOR.PATCH with an optional -prerelease: %w", in.ReleaseTag, errs.ErrUsage)
 	}
 
+	labels, err := ReleaseImageLabels(in.Labels)
+	if err != nil {
+		return ReleaseImagesPlan{}, err
+	}
+
 	var plan ReleaseImagesPlan
 
 	published := map[string]string{}
@@ -121,6 +131,10 @@ func PlanReleaseImages(containers []PlannedContainer, in ReleaseImagesInput) (Re
 			}
 
 			published[ref] = container.Name
+		}
+
+		for index := range builds {
+			builds[index].Labels = labels
 		}
 
 		plan.Images = append(plan.Images, image)
@@ -242,4 +256,53 @@ func releaseImagesScanThreshold(declared string) bool {
 	gate, err := security.ParseContainerSeverityGate(declared)
 
 	return err == nil && gate.Threshold() == security.DefaultContainerBlockSeverity
+}
+
+// releaseImageLabelKey is an OCI annotation key: dot-separated lowercase
+// words, as org.opencontainers.image.licenses is.
+var releaseImageLabelKey = regexp.MustCompile(`^[a-z0-9]+([._-][a-z0-9]+)*$`)
+
+// StandardReleaseImageLabels are the labels every release image is built
+// with, which name its provenance: what built it from which source, and
+// when. A caller's label may not replace one, or the image would describe
+// another source than the one it was built from.
+var StandardReleaseImageLabels = []string{
+	"org.opencontainers.image.created", "org.opencontainers.image.documentation",
+	"org.opencontainers.image.ref.name", "org.opencontainers.image.revision",
+	"org.opencontainers.image.source", "org.opencontainers.image.title",
+	"org.opencontainers.image.url", "org.opencontainers.image.version",
+}
+
+// ReleaseImageLabels admits the labels every release image carries after the
+// standard ones, such as org.opencontainers.image.licenses=MIT, and returns
+// them newline-separated, in the order given: each is a single line of
+// key=value with an OCI annotation key, named once, and none is a standard
+// provenance label.
+func ReleaseImageLabels(lines []string) (string, error) {
+	seen := map[string]bool{}
+	admitted := make([]string, 0, len(lines))
+
+	for _, line := range lines {
+		key, value, found := strings.Cut(line, "=")
+		if !found || !releaseImageLabelKey.MatchString(key) {
+			return "", fmt.Errorf("image label %q must be key=value with a lowercase dotted key such as org.opencontainers.image.licenses: %w", line, errs.ErrUsage)
+		}
+
+		if strings.ContainsFunc(value, unicode.IsControl) || strings.TrimSpace(value) == "" {
+			return "", fmt.Errorf("image label %s must have a non-empty single-line value: %w", key, errs.ErrUsage)
+		}
+
+		if slices.Contains(StandardReleaseImageLabels, key) {
+			return "", fmt.Errorf("image label %s is one forge-ci sets from the release's source; it cannot be replaced: %w", key, errs.ErrUsage)
+		}
+
+		if seen[key] {
+			return "", fmt.Errorf("image label %s is named twice: %w", key, errs.ErrUsage)
+		}
+
+		seen[key] = true
+		admitted = append(admitted, key+"="+value)
+	}
+
+	return strings.Join(admitted, "\n"), nil
 }

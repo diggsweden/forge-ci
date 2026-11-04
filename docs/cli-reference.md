@@ -1907,6 +1907,11 @@ secrets, binary extraction, another scan threshold than its default CRITICAL gat
 platforms other than linux/amd64 and linux/arm64) are refused here, before any
 runner starts. RELEASE_PLATFORMS narrows every container's platforms.
 
+Each --label is planned onto every build, after the standard source,
+revision, title, version, url, documentation, ref.name and created labels,
+which a label may not replace. It is refused with --image-plan-json, whose
+builds carry their own labels.
+
 With --output, the plan is written to that file instead, for release-images
 build and publish on a forge whose jobs take no multiline outputs, and only
 registry-user is emitted. --runner-archs then names the architectures a native
@@ -1925,6 +1930,7 @@ EXAMPLE:
 | `--repository` | owner/repo the image repositories are derived from | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
 | `--release-tag` | release tag the image tags are made of, e.g. v1.2.3 (required) | string | `""` | n/a |
 | `--release-platforms` | comma-separated subset of each container's platforms to build; empty builds them all | string | `""` | `$RELEASE_PLATFORMS` |
+| `--label` | key=value label every image carries after the standard ones, such as org.opencontainers.image.licenses=MIT (repeatable); a standard provenance label is refused | string | `""` | n/a |
 | `--output` | write the builds/images plan to this file instead of the builds, images and image-names outputs | string | `""` | n/a |
 | `--runner-archs` | with --output: comma-separated architectures that have a native build job; empty admits every one | string | `""` | n/a |
 | `--registry-username` | user the registry token logs in as, written to the registry-user output; empty is the --repository owner on the forge's own registry and refused on another one | string | `""` | `$REGISTRY_USER` |

@@ -13,6 +13,7 @@ import (
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
 	domaincontainer "github.com/diggsweden/forge-ci/internal/domain/container"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
 )
 
 type fakeLabelsRegistry struct {
@@ -394,4 +395,21 @@ func TestOCIImageLabelsJSON_RefusesBadInputWithoutTouchingTheRegistry(t *testing
 			t.Errorf("a failed read returned %q", got)
 		}
 	})
+}
+
+// Every label a release image is built with from its source is one the
+// release's own labels may not replace.
+func TestReleaseLabelsMayNotReplaceTheStandardOnes(t *testing.T) {
+	t.Parallel()
+
+	standard, err := appcontainer.OCIReleaseLabels(validOCIReleaseLabelsInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, label := range standard {
+		if _, err := pipeline.ReleaseImageLabels([]string{label}); !errors.Is(err, errs.ErrUsage) {
+			t.Errorf("release label %s admitted: %v", label, err)
+		}
+	}
 }
