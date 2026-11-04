@@ -26,8 +26,9 @@ func TestReleaseOrchestratorResolvesForgeCIRefFromCanonicalRemote(t *testing.T) 
 }
 
 // canonicalForgeCIRemote is repository configuration (a variable an
-// administrator sets for a fork), never caller input, and falls back to upstream.
-const canonicalForgeCIRemote = "${{ github.server_url }}/${{ vars.FORGE_CI_REPOSITORY || 'diggsweden/forge-ci' }}"
+// administrator may set), never caller input, and falls back to the repository
+// serving the called workflow.
+const canonicalForgeCIRemote = "${{ github.server_url }}/${{ vars.FORGE_CI_REPOSITORY || job.workflow_repository }}"
 
 func canonicalResolveStep(body []byte) bool {
 	var workflow eventWorkflow

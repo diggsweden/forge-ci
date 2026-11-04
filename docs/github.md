@@ -162,12 +162,12 @@ Configuration of what is built, published and signed lives in
 [Components Reference](components.md).
 
 **Repository variables.** The workflows read these from the calling
-repository; each falls back to the upstream value. A consumer of upstream sets
-none. [Forks](#forks) says when to set them.
+repository; each falls back to the default below. A consumer sets none.
+[Forks](#forks) says when to set them.
 
 | Variable | Default | Used for |
 |---|---|---|
-| `FORGE_CI_REPOSITORY` | `diggsweden/forge-ci` | bootstrap checkouts and script downloads, binary installs, release URLs, trusted signing identities, and the repository allowed to publish the rolling pre-release CLI |
+| `FORGE_CI_REPOSITORY` | the repository serving the called workflow (`job.workflow_repository`); GitHub Enterprise Server has no such context and must set it | bootstrap checkouts and script downloads, binary installs, release URLs, trusted signing identities, and the repository allowed to publish the rolling pre-release CLI |
 | `FORGE_CI_PRERELEASE_BRANCH` | `main` | the branch whose pushes publish runtime images and the pre-release CLI, and the branch the installer trusts for pre-release signatures |
 | `RELEASE_PLATFORMS` | `linux/amd64,linux/arm64` | the runtime images' platforms in Self Runtime Container; unset selects both declared architectures, and an explicit value may narrow the selection. An undeclared, duplicated or malformed entry fails before anything is built. Consumers read the same variable for their images with the same meaning, unset building what their configuration declares |
 | `RUNTIME_IMAGE_RETENTION` | unset: nothing is deleted | how many of the newest commit images (`sha-*`) of each runtime image Self Runtime Container keeps after it publishes; older versions are deleted through the GitHub Packages API with the job token, except release and pre-release tags and every platform manifest, signature and attestation a kept image needs. `forge-ci container package-retention --dry-run` shows what a value would delete |
@@ -478,8 +478,9 @@ A fork of this repository on GitHub serves the workflows to its own consumers.
 1. **Fork or copy** the repository. Consumers pin your fork's commits or tags
    in `uses:`.
 2. **Set the [repository variables](#inputs-and-variables)** in the
-   repository that runs the workflows: `FORGE_CI_REPOSITORY` to the fork, and
-   the others where they differ. Scheduling and provider-layer branch
+   repository that runs the workflows where they differ from the defaults.
+   `FORGE_CI_REPOSITORY` already defaults to the repository the called
+   workflow comes from, so the fork's workflows install the fork's engine. Scheduling and provider-layer branch
    restrictions still apply.
 3. **Publish runtime images** from the fork with Self Runtime Container on
    the pre-release branch, and have consumers override the `runtime-image*`
@@ -487,9 +488,9 @@ A fork of this repository on GitHub serves the workflows to its own consumers.
 4. **Provision the rolling pre-release** if the fork publishes the
    pre-release CLI (below).
 
-`vars` resolve in the calling repository, so a consumer that sets
-`FORGE_CI_REPOSITORY` to a fork runs that fork's bootstrap scripts and binary,
-and trusts signatures made by its identity.
+`vars` resolve in the calling repository. A consumer that calls a fork's
+workflows runs that fork's bootstrap scripts and binary, and trusts signatures
+made by its identity; setting `FORGE_CI_REPOSITORY` overrides that choice.
 
 A fork that publishes the rolling pre-release CLI provisions its release once.
 Self Runtime Container replaces the assets of an existing `v0.90.0-pre`

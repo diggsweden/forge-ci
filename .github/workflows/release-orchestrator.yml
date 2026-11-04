@@ -391,7 +391,7 @@ jobs:
       - name: Resolve forge-ci ref to commit SHA
         id: resolve-ref
         env:
-          REMOTE_URL: ${{ github.server_url }}/${{ vars.FORGE_CI_REPOSITORY || 'diggsweden/forge-ci' }}
+          REMOTE_URL: ${{ github.server_url }}/${{ vars.FORGE_CI_REPOSITORY || job.workflow_repository }}
           REF: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
         run: forge-ci platform resolve-ref
       - name: Derive release tag from request ref

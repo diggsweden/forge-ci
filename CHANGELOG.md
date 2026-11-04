@@ -161,6 +161,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- GitHub workflows called from a fork install that fork's engine, bootstrap
+  scripts and signing identity. `FORGE_CI_REPOSITORY` now defaults to the
+  repository serving the called workflow (`job.workflow_repository`) instead
+  of `diggsweden/forge-ci`; the variable still overrides it, and GitHub
+  Enterprise Server, which lacks that context, must set it.
 - A report-only engine can waive the assertion failures of a large test suite.
   The summary was parsed from at most 8 MiB of captured output, so a larger
   suite was never waivable, and Go's stderr could land inside a `go test -json`

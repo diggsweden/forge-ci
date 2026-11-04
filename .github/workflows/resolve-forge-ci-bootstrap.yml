@@ -48,7 +48,7 @@ jobs:
           REQUESTED_REF: ${{ inputs['forge-ci-binary-ref'] }}
           GH_TOKEN: ${{ github.token }}
           SERVER_URL: ${{ github.server_url }}
-          REPOSITORY: ${{ vars.FORGE_CI_REPOSITORY || 'diggsweden/forge-ci' }}
+          REPOSITORY: ${{ vars.FORGE_CI_REPOSITORY || job.workflow_repository }}
         run: |
           set -euo pipefail
           ref="$REQUESTED_REF"
@@ -66,7 +66,7 @@ jobs:
         if: ${{ steps.requested.outputs.checkout == 'true' }}
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          repository: ${{ vars.FORGE_CI_REPOSITORY || 'diggsweden/forge-ci' }}
+          repository: ${{ vars.FORGE_CI_REPOSITORY || job.workflow_repository }}
           ref: ${{ steps.requested.outputs.ref }}
           sparse-checkout: scripts/bootstrap
           persist-credentials: false
@@ -75,7 +75,7 @@ jobs:
         env:
           REQUESTED_REF: ${{ steps.requested.outputs.ref }}
           SOURCE_SHA: ${{ steps.bootstrap.outputs.commit }}
-          REPOSITORY: ${{ vars.FORGE_CI_REPOSITORY || 'diggsweden/forge-ci' }}
+          REPOSITORY: ${{ vars.FORGE_CI_REPOSITORY || job.workflow_repository }}
           IMAGE_NAMESPACE: ${{ vars.FORGE_CI_IMAGE_NAMESPACE }}
         run: |
           set -euo pipefail
