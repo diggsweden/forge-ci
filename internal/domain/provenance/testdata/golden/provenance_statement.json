@@ -20,12 +20,12 @@
       "buildType": "https://diggsweden.github.io/forge-ci/release-build/v1",
       "externalParameters": {
         "ref": "v1.2.3",
-        "source": "git+https://codeberg.org/itiquette/gommitlint"
+        "source": "git+https://forge.example/examplescope/myapp"
       },
       "internalParameters": {},
       "resolvedDependencies": [
         {
-          "uri": "git+https://codeberg.org/itiquette/gommitlint@v1.2.3",
+          "uri": "git+https://forge.example/examplescope/myapp@v1.2.3",
           "digest": {
             "gitCommit": "cccccccccccccccccccccccccccccccccccccccc"
           }
@@ -40,10 +40,10 @@
     },
     "runDetails": {
       "builder": {
-        "id": "https://codeberg.org/itiquette/gommitlint/release.yml@v1.2.3"
+        "id": "https://forge.example/examplescope/myapp/release.yml@v1.2.3"
       },
       "metadata": {
-        "invocationId": "https://codeberg.org/itiquette/gommitlint/actions/runs/4242",
+        "invocationId": "https://forge.example/examplescope/myapp/actions/runs/4242",
         "startedOn": "2026-06-01T12:00:00Z",
         "finishedOn": "2026-06-01T12:00:00Z"
       }

@@ -62,7 +62,7 @@ path = [
   "internal/livetest/mavenlibrarydevelopment.md",
   "internal/livetest/mavenlibraryfixture.md",
   "internal/livetest/npmapplicationfixture.md",
-  "test/live/cases/rest-api-profil-lint-processor/README.md",
+  "test/live/cases/npm-rest-service/README.md",
   "examples/README.md",
   "examples/container-snapshot/README.md",
   "examples/container-snapshot/hello.txt",

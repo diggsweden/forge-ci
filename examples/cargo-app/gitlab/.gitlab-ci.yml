@@ -70,13 +70,13 @@ include:
   # example targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"].
   - component: gitlab.example.com/team/ci/forge-ci/build-cargo@0.90.0
     inputs:
-      job-name: build-hsm-worker
-      working-directory: hsm-worker
-      artifact-name: hsm-worker
+      job-name: build-worker
+      working-directory: worker
+      artifact-name: worker
       platforms: "linux/amd64,linux/arm64"
   - component: gitlab.example.com/team/ci/forge-ci/build-cargo@0.90.0
     inputs:
-      job-name: build-wallet-bff
-      working-directory: wallet-bff
-      artifact-name: wallet-bff
+      job-name: build-api-service
+      working-directory: api-service
+      artifact-name: api-service
       platforms: "linux/amd64,linux/arm64"

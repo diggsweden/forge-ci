@@ -770,8 +770,8 @@ jobs:
       # just within this workflow_call invocation: when multiple containers
       # are matrix-dispatched (release-publish-stage's per-container
       # matrix), each container's publish-container call shares
-      # github.run_id. Without per-container scoping, hsm-worker's
-      # digests-<run_id>-amd64 would collide with wallet-bff's; one upload
+      # github.run_id. Without per-container scoping, worker's
+      # digests-<run_id>-amd64 would collide with api-service's; one upload
       # silently wins and the merge job downloads the wrong container's
       # digest. Same root cause applies to SARIF + SBOM uploads below.
       - name: Upload staged OCI layout
@@ -851,8 +851,8 @@ jobs:
       # Suffix each extracted binary's basename with -linux-${arch} so that
       # when the GitHub Release attach step pulls per-arch artefacts together,
       # they don't collide on the same basename. Convention matches Go's
-      # release-asset naming (e.g., hsm-worker-linux-amd64,
-      # hsm-worker-linux-arm64).
+      # release-asset naming (e.g., worker-linux-amd64,
+      # worker-linux-arm64).
       - name: Suffix extracted binaries with arch
         if: ${{ inputs['extract-binary-target'] != '' || inputs['extract-binary-paths'] != '' }}
         env:

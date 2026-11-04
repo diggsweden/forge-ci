@@ -192,7 +192,7 @@ opt-in.
 | Multi-arch artifact-first (linux x86 + arm) | ✅ | `build-cargo.yml` with `platforms: linux/amd64,linux/arm64` | The `runtime-rust-stable` image installs `aarch64-unknown-linux-gnu` target + `gcc-aarch64-linux-gnu` cross-linker. |
 | Multi-arch artifact-first (macOS / Windows) | partial | runtime image extension required | The mapping table accepts darwin/windows triples; the default runtime image does not install osxcross / mingw-w64. Adopters extend the image or use a host runner with the right toolchain. |
 | Binary extraction (CI artifact) | ✅ | `extract.binary` field | Opt-in; uploads one `${name}-binaries-${arch}` artifact per architecture |
-| Multi-binary in one container | ✅ | `extract.binary.names: [a, b]` | E.g., `hsm-worker` + `digg-hsm-keytool`; basenames suffixed with `-linux-${arch}` to avoid release-asset collision |
+| Multi-binary in one container | ✅ | `extract.binary.names: [a, b]` | E.g., `worker` + `admin-tool`; basenames suffixed with `-linux-${arch}` to avoid release-asset collision |
 | Workspace (multi-crate) | ✅ | sbom-cargo `--all`; bump-version `[workspace.package]` | One bump per release |
 | Single-crate | ✅ | Same workflows; bump-version `[package].version` | |
 | Version-bump (Cargo.toml + Cargo.lock) | ✅ | `forge-ci version bump --project-type cargo --version 1.2.3` | `cargo update --workspace` syncs lockfile |

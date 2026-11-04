@@ -54,7 +54,7 @@ func ParseDefaults(data []byte) (Defaults, error) {
 // path, the release tag and the commit it names.
 type Source struct {
 	Host       string // e.g. codefloe.com
-	Repository string // e.g. itiquette/forge-ci
+	Repository string // e.g. examplescope/forge-ci
 	Tag        string // e.g. v0.90.0
 	Commit     string // full commit SHA of Tag
 }

@@ -800,8 +800,8 @@ layer of this checkout?
 ```text
 just test-live-forgejo-consumer <consumer-checkout> <pull-request|release> [setting ...]
 
-just test-live-forgejo-consumer ~/src/gommitlint pull-request CI_JOB_IMAGE=<digest reference>
-just test-live-forgejo-consumer ~/src/gommitlint release
+just test-live-forgejo-consumer /absolute/myapp pull-request CI_JOB_IMAGE=<digest reference>
+just test-live-forgejo-consumer /absolute/myapp release
 ```
 
 It is `TestForgejoLayer_ConsumerTrial` behind `just test-live`'s script, so
@@ -859,8 +859,8 @@ separate repositories, and a cross-format push into one repository is not a
 supported migration route. GitHub.com remains a separate, unproven live tier.
 
 ```text
-FORGE_CI_LIVE_CONSUMER_VISIBILITY=private just test-live-forgejo-consumer /absolute/gommitlint pull-request CI_JOB_IMAGE=<digest reference>
-FORGE_CI_LIVE_CONSUMER_VISIBILITY=private just test-live-forgejo-consumer /absolute/gommitlint release
+FORGE_CI_LIVE_CONSUMER_VISIBILITY=private just test-live-forgejo-consumer /absolute/myapp pull-request CI_JOB_IMAGE=<digest reference>
+FORGE_CI_LIVE_CONSUMER_VISIBILITY=private just test-live-forgejo-consumer /absolute/myapp release
 ```
 
 **What is rewritten** is read from the consumer's workflows under
@@ -1051,7 +1051,7 @@ export FORGE_CI_LIVE_SIGNER_IMAGE="$(just test-live-signer-image /absolute/forge
 just publish-image --account forgeci <package> <local image>
 
 # 3. The trial. Gommitlint, then Nanolinter from a clone with its lab selection.
-just test-live-forgejo-consumer /absolute/gommitlint release
+just test-live-forgejo-consumer /absolute/myapp release
 just test-live-forgejo-consumer /absolute/nanolinter-clone release RELEASE_PLATFORMS=linux/amd64
 ```
 
@@ -1352,11 +1352,11 @@ Forge Lab; the trial creates its own repositories, so the session prepares
 none), which writes the private context `FORGE_LAB_GITHUB_CONTEXT` names:
 
 ```text
-just test-live-github-consumer <org-id> /absolute/gommitlint pull-request
-just test-live-github-consumer <org-id> /absolute/gommitlint dev-release
-just test-live-github-consumer <org-id> /absolute/gommitlint release version=0.1.0 image=gommitlint
+just test-live-github-consumer <org-id> /absolute/myapp pull-request
+just test-live-github-consumer <org-id> /absolute/myapp dev-release
+just test-live-github-consumer <org-id> /absolute/myapp release version=0.1.0 image=myapp
 just test-live-github-consumer <org-id> /absolute/workspace release version=0.1.0 image=worker,keytool,bff
-just test-live-github-consumer <org-id> /absolute/gommitlint release RELEASE_PLATFORMS=linux/amd64,linux/arm64
+just test-live-github-consumer <org-id> /absolute/myapp release RELEASE_PLATFORMS=linux/amd64,linux/arm64
 ```
 
 A trial builds `linux/amd64` only unless `RELEASE_PLATFORMS=` states otherwise,
@@ -1474,7 +1474,7 @@ TEST_PLATFORMS=linux/amd64 CONTAINER_ENGINE=podman \
   NANOLINTER_CONTAINER_FLAVOR=rust \
   NANOLINTER_CONTAINER_IMAGE=localhost/nanolinter-ci:rust-source \
   NANOLINTER_BUILT_BY=local \
-  just --justfile /home/jos/development/codefloe/itiquette/nanolinter/justfile build-image-local
+  just --justfile <engine-checkout>/justfile build-image-local
 podman image inspect localhost/nanolinter-ci:rust-source
 podman run --rm --network=none localhost/nanolinter-ci:rust-source --version
 ```

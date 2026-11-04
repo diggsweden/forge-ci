@@ -1,6 +1,6 @@
 # Cargo application example
 
-A Cargo workspace with two services (`hsm-worker`, `wallet-bff`) shipped as
+A Cargo workspace with two services (`worker`, `api-service`) shipped as
 separate container images. The example also shows how to extract the compiled
 binaries as CI artefacts so they can be attached to a GitHub Release alongside
 each container manifest.
@@ -81,7 +81,7 @@ Docker is not required. For local development with Podman:
 
 ```bash
 # Build the runtime image
-podman build --target runtime --build-arg SERVICE=hsm-worker -t hsm-worker:dev .
+podman build --target runtime --build-arg SERVICE=worker -t worker:dev .
 
 # Extract just the binary
 podman build --target export-binary -o ./out .
@@ -116,7 +116,7 @@ jobs:
             target
           key: cargo-test-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
       - run: |
-          cargo test --workspace --features hsm-worker/testcontainers,wallet-bff/testcontainers \
+          cargo test --workspace --features worker/testcontainers,api-service/testcontainers \
             -- --test-threads=1
 ```
 
@@ -142,9 +142,9 @@ Use `containers[].build-secrets` instead. Declare the name once:
 
 ```yaml
 containers:
-  - name: hsm-worker
-    from: [hsm-worker]
-    container-file: hsm-worker/Containerfile
+  - name: worker
+    from: [worker]
+    container-file: worker/Containerfile
     context: .
     build-secrets:
       - PRIVATE_CARGO_REGISTRY_TOKEN

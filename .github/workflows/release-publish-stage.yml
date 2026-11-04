@@ -359,7 +359,7 @@ jobs:
       branch: ${{ inputs.branch }}
       enable-build-sbom: ${{ contains(matrix.artifact.effective_sboms, 'build') }}
       # Per-artefact unique upload name. Without this, multi-cargo-artefact
-      # workspaces (e.g., a workspace shipping hsm-worker AND wallet-bff
+      # workspaces (e.g., a workspace shipping worker AND api-service
       # as separate cargo artefacts in artifacts.yml) would all upload as
       # `cargo-build-sbom` and the second matrix leg's actions/upload-artifact
       # would conflict with the first. Mirrors build-gradle's pattern.

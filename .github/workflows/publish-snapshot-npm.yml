@@ -72,7 +72,7 @@ on:
         default: "https://npm.pkg.github.com"
         type: string
       package-scope:
-        description: "Required package scope, e.g. @<github-repository-owner> (@diggsweden for DiggSweden repositories). Leave empty to skip validation."
+        description: "Required package scope, e.g. @<github-repository-owner>. Leave empty to skip validation."
         required: false
         default: ""
         type: string

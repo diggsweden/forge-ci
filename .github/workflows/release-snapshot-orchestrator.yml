@@ -114,7 +114,7 @@ on:
         default: "https://npm.pkg.github.com"
         type: string
       package-scope:
-        description: "Required NPM package scope, e.g. @<github-repository-owner> (@diggsweden for DiggSweden repositories)"
+        description: "Required NPM package scope, e.g. @<github-repository-owner>"
         required: false
         default: ""
         type: string

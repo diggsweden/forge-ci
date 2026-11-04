@@ -139,14 +139,14 @@ func TestBuild_Golden(t *testing.T) {
 			{Name: "dist/checksums.txt", SHA256: strings.Repeat("b", 64)},
 		},
 		BuildType:    provenance.ReleaseBuildType,
-		BuilderID:    "https://codeberg.org/itiquette/gommitlint/release.yml@v1.2.3",
-		SourceURI:    "git+https://codeberg.org/itiquette/gommitlint",
+		BuilderID:    "https://forge.example/examplescope/myapp/release.yml@v1.2.3",
+		SourceURI:    "git+https://forge.example/examplescope/myapp",
 		Ref:          "v1.2.3",
-		InvocationID: "https://codeberg.org/itiquette/gommitlint/actions/runs/4242",
+		InvocationID: "https://forge.example/examplescope/myapp/actions/runs/4242",
 		StartedOn:    "2026-06-01T12:00:00Z",
 		FinishedOn:   "2026-06-01T12:00:00Z",
 		ResolvedDeps: []provenance.Dependency{
-			provenance.SourceDependency("https://codeberg.org/itiquette/gommitlint", "v1.2.3", strings.Repeat("c", 40)),
+			provenance.SourceDependency("https://forge.example/examplescope/myapp", "v1.2.3", strings.Repeat("c", 40)),
 			{URI: "pkg:golang/github.com/foo/bar@v1.2.3", DigestType: "gomod_h1", Digest: "abc123"},
 		},
 	}
@@ -206,14 +206,14 @@ func TestPredicate_BaseLineage(t *testing.T) {
 
 	body, err := provenance.Predicate(provenance.Input{
 		BuildType:   provenance.ContainerBuildType,
-		BuilderID:   "https://codeberg.org/itiquette/forgejo-ci/.forgejo/workflows/sign-container-images.yml@refs/tags/v1.2.3",
-		SourceURI:   "git+https://codeberg.org/itiquette/forgejo-ci",
+		BuilderID:   "https://forge.example/examplescope/ci-layer/.forgejo/workflows/sign-container-images.yml@refs/tags/v1.2.3",
+		SourceURI:   "git+https://forge.example/examplescope/ci-layer",
 		Ref:         "refs/tags/v1.2.3",
-		ImageName:   "codeberg.org/itiquette/ci-builder-rust",
+		ImageName:   "forge.example/examplescope/ci-builder-rust",
 		Flavor:      "rust",
 		BaseInputID: strings.Repeat("a", 64),
 		ResolvedDeps: []provenance.Dependency{
-			provenance.SourceDependency("https://codeberg.org/itiquette/forgejo-ci", "refs/tags/v1.2.3", strings.Repeat("c", 40)),
+			provenance.SourceDependency("https://forge.example/examplescope/ci-layer", "refs/tags/v1.2.3", strings.Repeat("c", 40)),
 			provenance.BaseImageDependency("docker.io/library/debian:trixie-slim", "sha256:"+strings.Repeat("b", 64)),
 		},
 	})

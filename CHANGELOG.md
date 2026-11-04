@@ -335,6 +335,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Examples, templates, verification recipes and live fixtures use neutral
+  names and coordinates (`examplescope/myapp`, `forge.example`) instead of
+  organisation or consumer names; the cargo-app example's services are
+  `api-service`, `worker` and `admin-tool`.
 - **BREAKING:** Every published image is scanned, and the administrator
   policy (`enforce-vulnerabilities`) alone decides whether findings block.
   A container's `enable-scan: false` no longer skips the scan of release

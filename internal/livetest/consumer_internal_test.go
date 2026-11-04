@@ -24,7 +24,7 @@ import (
 const (
 	consumerPinned       = "b369db7d70af68fa93a4b404841c4ce2ddbf90c0"
 	consumerPinnedBinary = "f43d7a4ac43046a5fe3aac36259edec1f1361a3e076fa75d6aef76b61fc1227b"
-	consumerSignerImage  = "codefloe.com/itiquette/forge-ci-signer@sha256:9a51d9f761cd269cadb2066710c9d2dd293f4e1020e229ff4f47ee1e6bce6234"
+	consumerSignerImage  = "forge.example/examplescope/forge-ci-signer@sha256:9a51d9f761cd269cadb2066710c9d2dd293f4e1020e229ff4f47ee1e6bce6234"
 	consumerKeyDigest    = "0a118a651aac6f751385aeaeb4242996ecc5b1b30c272d8da4a75369abd6b630" // gitleaks:allow -- public-key digest, not a credential.
 
 	labSignerImage = "forgejo.compose.forgelab:8443/forgeci/forge-ci-live-signer@sha256:" + unrunDigest
@@ -167,21 +167,21 @@ func TestReadConsumerPin_ReadsRealConsumers(t *testing.T) {
 	t.Parallel()
 
 	const (
-		actions   = "https://codefloe.com/itiquette/forge-ci/.forgejo/actions/"
-		workflows = "itiquette/forge-ci/.forgejo/workflows/"
+		actions   = "https://forge.example/examplescope/forge-ci/.forgejo/actions/"
+		workflows = "examplescope/forge-ci/.forgejo/workflows/"
 	)
 
 	pin, err := ReadConsumerPin(map[string]string{
-		"pullrequest.yml": consumerWorkflow(t, "gommitlint-pullrequest.yml"),
-		"release.yml":     consumerWorkflow(t, "gommitlint-release.yml"),
+		"pullrequest.yml": consumerWorkflow(t, "go-cli-pullrequest.yml"),
+		"release.yml":     consumerWorkflow(t, "go-cli-release.yml"),
 	})
 	if want := (ConsumerPin{Actions: actions, Workflows: workflows, Commit: consumerPinned}); err != nil || pin != want {
-		t.Errorf("Gommitlint's pin = %+v, %v; want %+v", pin, err, want)
+		t.Errorf("the Go CLI's pin = %+v, %v; want %+v", pin, err, want)
 	}
 
 	// Nanolinter passes the binary's digest as a literal, and calls no
 	// workflow of the layer from its pull request.
-	pin, err = ReadConsumerPin(map[string]string{"pullrequest.yml": consumerWorkflow(t, "nanolinter-pullrequest.yml")})
+	pin, err = ReadConsumerPin(map[string]string{"pullrequest.yml": consumerWorkflow(t, "lint-pullrequest.yml")})
 	if want := (ConsumerPin{Actions: actions, Commit: consumerPinned, BinarySHA256: consumerPinnedBinary}); err != nil || pin != want {
 		t.Errorf("Nanolinter's pin = %+v, %v; want %+v", pin, err, want)
 	}
@@ -207,16 +207,16 @@ func TestReadConsumerPin_RefusesAConsumerItCannotStandInFor(t *testing.T) {
 	}
 }
 
-// TestPlanConsumer_RendersARealRelease plans Gommitlint's release as the
+// TestPlanConsumer_RendersARealRelease plans the Go CLI's release as the
 // trial does, and holds the rendering to what a job would fetch and read.
 func TestPlanConsumer_RendersARealRelease(t *testing.T) {
 	t.Parallel()
 
 	layer := sampleLayer()
-	source := consumerWorkflow(t, "gommitlint-release.yml")
+	source := consumerWorkflow(t, "go-cli-release.yml")
 
 	plan, err := layer.PlanConsumer(map[string]string{
-		"pullrequest.yml": consumerWorkflow(t, "gommitlint-pullrequest.yml"), "release.yml": source,
+		"pullrequest.yml": consumerWorkflow(t, "go-cli-pullrequest.yml"), "release.yml": source,
 	}, releaseFacts())
 	if err != nil {
 		t.Fatal(err)
@@ -249,7 +249,7 @@ func TestPlanConsumer_RendersARealRelease(t *testing.T) {
 	// A comment may still name the organization's repository; nothing that is
 	// fetched or compared does.
 	for _, gone := range []string{
-		"itiquette/forge-ci/.forgejo", "forge-ci-repository: itiquette/forge-ci", consumerPinned, consumerSignerImage, consumerKeyDigest,
+		"examplescope/forge-ci/.forgejo", "forge-ci-repository: examplescope/forge-ci", consumerPinned, consumerSignerImage, consumerKeyDigest,
 	} {
 		if strings.Contains(rendered, gone) {
 			t.Errorf("the rendered release still holds %q", gone)
@@ -273,18 +273,18 @@ func TestPlanConsumer_RendersARealRelease(t *testing.T) {
 
 	// A consumer's policy test holds the same literals, and its Go code may
 	// import a module whose path only looks like the layer's.
-	policy := `	layerSetupAction = "https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-forge-ci@` + consumerPinned + `"
-	layerPrepare     = "itiquette/forge-ci/.forgejo/workflows/prepare-release.yml@` + consumerPinned + `"
+	policy := `	layerSetupAction = "https://forge.example/examplescope/forge-ci/.forgejo/actions/setup-forge-ci@` + consumerPinned + `"
+	layerPrepare     = "examplescope/forge-ci/.forgejo/workflows/prepare-release.yml@` + consumerPinned + `"
 	signerImage      = "` + consumerSignerImage + `"
 	trustRootDigest  = "` + consumerKeyDigest + `"
-	import "codefloe.com/itiquette/forge-ci/pkg"
+	import "forge.example/examplescope/forge-ci/pkg"
 `
 
 	wantPolicy := `	layerSetupAction = "https://forgejo.compose.forgelab:8443/forgeci/fci-layer-artifact/.forgejo/actions/setup-forge-ci@` + layer.Commit + `"
 	layerPrepare     = "forgeci/fci-layer-artifact/.forgejo/workflows/prepare-release.yml@` + layer.Commit + `"
 	signerImage      = "` + labSignerImage + `"
 	trustRootDigest  = "` + strings.Repeat("c", 64) + `"
-	import "codefloe.com/itiquette/forge-ci/pkg"
+	import "forge.example/examplescope/forge-ci/pkg"
 `
 	if got := plan.Render(policy); got != wantPolicy {
 		t.Errorf("a policy test renders to:\n%s\nwant:\n%s", got, wantPolicy)
@@ -298,9 +298,9 @@ func TestPlanConsumer_APullRequestLeavesTheReleaseTrustAlone(t *testing.T) {
 	t.Parallel()
 
 	layer := sampleLayer()
-	release := consumerWorkflow(t, "gommitlint-release.yml")
+	release := consumerWorkflow(t, "go-cli-release.yml")
 
-	plan, err := layer.PlanConsumer(map[string]string{"pullrequest.yml": consumerWorkflow(t, "gommitlint-pullrequest.yml"), "release.yml": release},
+	plan, err := layer.PlanConsumer(map[string]string{"pullrequest.yml": consumerWorkflow(t, "go-cli-pullrequest.yml"), "release.yml": release},
 		ConsumerFacts{Inputs: map[string]string{"forge-ci-repository": layer.Repository}})
 	if err != nil {
 		t.Fatal(err)
@@ -319,7 +319,7 @@ func TestPlanConsumer_ReplacesTheBinaryDigestWhereverItStands(t *testing.T) {
 	t.Parallel()
 
 	layer := sampleLayer()
-	source := consumerWorkflow(t, "nanolinter-pullrequest.yml")
+	source := consumerWorkflow(t, "lint-pullrequest.yml")
 
 	plan, err := layer.PlanConsumer(map[string]string{"pullrequest.yml": source}, ConsumerFacts{})
 	if err != nil {
@@ -386,7 +386,7 @@ func TestPlanConsumer_RefusesAReferenceLeftPointingAway(t *testing.T) {
 
 	for name, more := range map[string]string{
 		"a branch":             "      - uses: https://forge.example/owner/forge-ci/.forgejo/actions/build-go@main\n",
-		"a second layer":       "      - uses: https://forge.example/owner/release-ci/.forgejo/actions/build-go@" + strings.Repeat("1", 40) + "\n",
+		"a second layer":       "      - uses: https://forge.example/owner/ci-layer/.forgejo/actions/build-go@" + strings.Repeat("1", 40) + "\n",
 		"a workflow by branch": "  call:\n    uses: owner/forge-ci/.forgejo/workflows/prepare-release.yml@main\n",
 	} {
 		if plan, err := sampleLayer().PlanConsumer(map[string]string{"ci.yml": pinned + more}, ConsumerFacts{}); !errors.Is(err, errs.ErrValidation) {

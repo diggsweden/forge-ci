@@ -76,17 +76,17 @@ rejects unexpected registry aliases, Git tags/releases and movement of either
 scratch branch. Existing SDK/session ownership and package cleanup remain in
 charge. Successful job traces are retained by the existing log protocol.
 
-## Wallet attestation issuer case
+## Maven issuer service case
 
 Set the fixture input to the absolute path of
-`test/live/cases/wallet-attestation-issuer/service-fixture.sh` in this engine
+`test/live/cases/maven-issuer-service/service-fixture.sh` in this engine
 checkout. It generates a one-day EC PKCS12 key with Java's `keytool` in the
 Java 25 job and supplies inert issuer metadata using `example.invalid` URLs.
 The current source POM declares no external database or Testcontainers
 dependency. If a future project adds such dependencies, provision its runner
 fixture, tool path and build environment; do not disable its checks.
 
-The inspected original wallet Containerfile copies only `.mvn`, `mvnw`,
+The issuer service's Containerfile copies only `.mvn`, `mvnw`,
 `pom.xml` and `src` into its builder. Its POM references configuration below
 `development/`, which that image build does not copy. It also explicitly skips
 tests/checkstyle/formatter in its own package command and builds a layered
@@ -101,7 +101,7 @@ It records the named controller's bounded acceptance, not a current-candidate
 pass of the changed test/scan contracts; revalidate those contracts with the
 current enforcing distribution.
 
-Public Forgejo run **309** passed against admitted wallet-attestation-issuer
+Public Forgejo run **309** passed against admitted maven-issuer-service
 source `8ab871fdc5581234f48a6c376bc74c4313d11495`, with selected development source
 `4230fad5e56c27f50baba1317a4db75f5525a541`. The published image was read back and
 started by immutable digest:

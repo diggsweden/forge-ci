@@ -19,10 +19,10 @@ func TestRequireAccountMode_KeepsTrialsAndDemosApart(t *testing.T) {
 		refused     bool
 	}{
 		"trial as the trial account": {owner: labAccount},
-		"demo as the demo account":   {owner: demoAccount, demo: "wallet-provider"},
+		"demo as the demo account":   {owner: demoAccount, demo: "hello-maven-service"},
 		"trial as the demo account":  {owner: demoAccount, refused: true},
-		"demo as the trial account":  {owner: labAccount, demo: "wallet-provider", refused: true},
-		"demo as another account":    {owner: "releaseci", demo: "wallet-provider", refused: true},
+		"demo as the trial account":  {owner: labAccount, demo: "hello-maven-service", refused: true},
+		"demo as another account":    {owner: "releaseci", demo: "hello-maven-service", refused: true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			err := requireAccountMode(test.owner, test.demo)
@@ -41,7 +41,7 @@ func TestLiveAccount_FollowsDemoMode(t *testing.T) {
 		refused    bool
 	}{
 		"no demo":             {want: labAccount},
-		"demo":                {demo: "wallet-provider", want: demoAccount},
+		"demo":                {demo: "hello-maven-service", want: demoAccount},
 		"uppercase":           {demo: "Wallet", refused: true},
 		"path":                {demo: "a/b", refused: true},
 		"trailing hyphen":     {demo: "wallet-", refused: true},
@@ -70,11 +70,11 @@ func TestLiveAccount_FollowsDemoMode(t *testing.T) {
 }
 
 func TestDemoLayerRepo_NamesTheDemosOwnLayer(t *testing.T) {
-	if got := DemoLayerRepo("wallet-provider"); got != "demo-wallet-provider-forge-ci" {
+	if got := DemoLayerRepo("hello-maven-service"); got != "demo-hello-maven-service-forge-ci" {
 		t.Fatalf("DemoLayerRepo() = %q", got)
 	}
 
-	if got := DemoHelperRepo("wallet-provider", "engine"); got != "demo-wallet-provider-release-engine" {
+	if got := DemoHelperRepo("hello-maven-service", "engine"); got != "demo-hello-maven-service-release-engine" {
 		t.Fatalf("DemoHelperRepo() = %q", got)
 	}
 }

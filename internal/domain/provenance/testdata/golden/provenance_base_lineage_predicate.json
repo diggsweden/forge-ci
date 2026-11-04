@@ -4,14 +4,14 @@
     "externalParameters": {
       "base_input_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "flavor": "rust",
-      "image": "codeberg.org/itiquette/ci-builder-rust",
+      "image": "forge.example/examplescope/ci-builder-rust",
       "ref": "refs/tags/v1.2.3",
-      "source": "git+https://codeberg.org/itiquette/forgejo-ci"
+      "source": "git+https://forge.example/examplescope/ci-layer"
     },
     "internalParameters": {},
     "resolvedDependencies": [
       {
-        "uri": "git+https://codeberg.org/itiquette/forgejo-ci@refs/tags/v1.2.3",
+        "uri": "git+https://forge.example/examplescope/ci-layer@refs/tags/v1.2.3",
         "digest": {
           "gitCommit": "cccccccccccccccccccccccccccccccccccccccc"
         }
@@ -29,7 +29,7 @@
   },
   "runDetails": {
     "builder": {
-      "id": "https://codeberg.org/itiquette/forgejo-ci/.forgejo/workflows/sign-container-images.yml@refs/tags/v1.2.3"
+      "id": "https://forge.example/examplescope/ci-layer/.forgejo/workflows/sign-container-images.yml@refs/tags/v1.2.3"
     },
     "metadata": {}
   }

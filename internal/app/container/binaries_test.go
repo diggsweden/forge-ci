@@ -42,7 +42,7 @@ func TestSuffixExtractedBinaries_AllFilesWhenNoExpected(t *testing.T) {
 	fsys := testfs.NewReal(t)
 
 	dir := fsys.Root
-	for _, name := range []string{"hsm-worker", "digg-hsm-keytool"} {
+	for _, name := range []string{"worker", "admin-tool"} {
 		fsys.WriteFile(name, []byte("ELF"))
 	}
 
@@ -58,8 +58,8 @@ func TestSuffixExtractedBinaries_AllFilesWhenNoExpected(t *testing.T) {
 
 	// The whole directory, not just the names expected to appear: this is a
 	// rename, so the originals must be gone. Copying instead would leave
-	// hsm-worker beside hsm-worker-linux-amd64 and both would ship.
-	want := []string{"digg-hsm-keytool-linux-amd64", "hsm-worker-linux-amd64"}
+	// worker beside worker-linux-amd64 and both would ship.
+	want := []string{"admin-tool-linux-amd64", "worker-linux-amd64"}
 	if got := dirEntryNames(t, dir); !slices.Equal(got, want) {
 		t.Errorf("directory = %v, want %v", got, want)
 	}
@@ -69,7 +69,7 @@ func TestSuffixExtractedBinaries_AllFilesWhenNoExpected(t *testing.T) {
 	// rename it never performed; the log is what a release operator reads to
 	// confirm what shipped, so its content and its order are the contract.
 	// Directory order is what drives it, which is why it is deterministic.
-	if got := out.String(); got != "renamed digg-hsm-keytool -> digg-hsm-keytool-linux-amd64\nrenamed hsm-worker -> hsm-worker-linux-amd64\n" {
+	if got := out.String(); got != "renamed admin-tool -> admin-tool-linux-amd64\nrenamed worker -> worker-linux-amd64\n" {
 		t.Errorf("rename log =\n%s", got)
 	}
 }
@@ -78,20 +78,20 @@ func TestSuffixExtractedBinaries_ExpectedNamesOnly(t *testing.T) {
 	fsys := testfs.NewReal(t)
 
 	dir := fsys.Root
-	for _, name := range []string{"hsm-worker", "extra-tool"} {
+	for _, name := range []string{"worker", "extra-tool"} {
 		fsys.WriteFile(name, []byte("ELF"))
 	}
 
 	err := appcontainer.SuffixExtractedBinaries(io.Discard, appcontainer.SuffixExtractedBinariesInput{
-		Dir: dir, Arch: "arm64", ExpectedNames: " hsm-worker ",
+		Dir: dir, Arch: "arm64", ExpectedNames: " worker ",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// hsm-worker renamed and gone; extra-tool untouched and not renamed.
+	// worker renamed and gone; extra-tool untouched and not renamed.
 	// Stating the directory covers all three, including the one the separate
 	// checks missed: that the original no longer exists.
-	want := []string{"extra-tool", "hsm-worker-linux-arm64"}
+	want := []string{"extra-tool", "worker-linux-arm64"}
 	if got := dirEntryNames(t, dir); !slices.Equal(got, want) {
 		t.Errorf("directory = %v, want %v", got, want)
 	}
@@ -99,12 +99,12 @@ func TestSuffixExtractedBinaries_ExpectedNamesOnly(t *testing.T) {
 
 func TestSuffixExtractedBinaries_MissingExpectedNameErrors(t *testing.T) {
 	fsys := testfs.NewReal(t)
-	fsys.WriteFile("hsm-worker", []byte("ELF"))
+	fsys.WriteFile("worker", []byte("ELF"))
 
 	err := appcontainer.SuffixExtractedBinaries(io.Discard, appcontainer.SuffixExtractedBinariesInput{
-		Dir: fsys.Root, Arch: "arm64", ExpectedNames: " hsm-worker , digg-missing ",
+		Dir: fsys.Root, Arch: "arm64", ExpectedNames: " worker , missing-tool ",
 	})
-	if err == nil || !strings.Contains(err.Error(), "digg-missing") {
+	if err == nil || !strings.Contains(err.Error(), "missing-tool") {
 		t.Fatalf("expected missing binary error, got %v", err)
 	}
 }
@@ -154,7 +154,7 @@ func TestSuffixExtractedBinaries_NestedFilesUntouched(t *testing.T) {
 	dir := fsys.Root
 	fsys.MkdirAll("nested")
 	fsys.WriteFile("nested/keepme", []byte("deep"))
-	fsys.WriteFile("hsm-worker", []byte("ELF"))
+	fsys.WriteFile("worker", []byte("ELF"))
 
 	err := appcontainer.SuffixExtractedBinaries(io.Discard, appcontainer.SuffixExtractedBinariesInput{
 		Dir:  dir,
@@ -164,7 +164,7 @@ func TestSuffixExtractedBinaries_NestedFilesUntouched(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := os.Stat(fsys.Path("hsm-worker-linux-amd64")); err != nil {
+	if _, err := os.Stat(fsys.Path("worker-linux-amd64")); err != nil {
 		t.Errorf("missing renamed top-level binary: %v", err)
 	}
 

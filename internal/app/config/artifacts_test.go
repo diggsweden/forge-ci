@@ -727,23 +727,23 @@ func TestEmitConfigPlan_ContainerTargetExtractAndBuildArgsArePreserved(t *testin
 	t.Parallel()
 	path := writeYAML(t, `
 artifacts:
-  - name: hsm-worker
+  - name: worker
     project-type: cargo
-    working-directory: hsm-worker
+    working-directory: worker
     config:
       build-mode: container-first
 containers:
-  - name: hsm-worker
-    from: [hsm-worker]
-    container-file: hsm-worker/Containerfile
+  - name: worker
+    from: [worker]
+    container-file: worker/Containerfile
     context: .
     target: runtime
     extract:
       binary:
         target: export-binary
-        names: [hsm-worker, digg-hsm-keytool]
+        names: [worker, admin-tool]
     build-args:
-      SERVICE: hsm-worker
+      SERVICE: worker
       RUST_VERSION: "1.94"
 `)
 
@@ -766,11 +766,11 @@ containers:
 		t.Errorf("extract_binary_target = %v", plannedContainer.ExtractBinaryTarget)
 	}
 
-	if len(plannedContainer.ExtractBinaryNames) != 2 || plannedContainer.ExtractBinaryNames[0] != "hsm-worker" || plannedContainer.ExtractBinaryNames[1] != "digg-hsm-keytool" {
+	if len(plannedContainer.ExtractBinaryNames) != 2 || plannedContainer.ExtractBinaryNames[0] != "worker" || plannedContainer.ExtractBinaryNames[1] != "admin-tool" {
 		t.Fatalf("extract_binary_names = %v", plannedContainer.ExtractBinaryNames)
 	}
 
-	if got := plannedContainer.BuildArgsString; got != "RUST_VERSION=1.94\nSERVICE=hsm-worker" {
+	if got := plannedContainer.BuildArgsString; got != "RUST_VERSION=1.94\nSERVICE=worker" {
 		t.Errorf("build-args-string = %v", got)
 	}
 }

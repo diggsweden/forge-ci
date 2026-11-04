@@ -5,9 +5,9 @@
 
 package safeexec
 
-// SwapEnabled is the non-Linux stub. Production CI for diggsweden
-// runs on Linux runners; on other platforms the swap policy
-// degenerates to "we have no observable swap state" — soft-pass.
+// SwapEnabled is the non-Linux stub. Production CI runs on Linux
+// runners; on other platforms the swap policy degenerates to "we have
+// no observable swap state" — soft-pass.
 func SwapEnabled() (bool, error) { return false, nil }
 
 // RequireNoSwap is the non-Linux stub. See the Linux build of this file for

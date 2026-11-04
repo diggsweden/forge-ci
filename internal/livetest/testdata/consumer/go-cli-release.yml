@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Verify Forgejo package token
-        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/verify-forgejo-token@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
+        uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/verify-forgejo-token@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
         with:
           token: ${{ secrets.PACKAGE_PUBLISH_TOKEN }}
   # =============================================================================
@@ -48,10 +48,10 @@ jobs:
   prepare:
     needs: preflight
     name: Prepare release
-    uses: itiquette/forge-ci/.forgejo/workflows/prepare-release.yml@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
+    uses: examplescope/forge-ci/.forgejo/workflows/prepare-release.yml@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
     with:
       runner-label: ${{ vars.CI_RUNNER_LABEL }}
-      forge-ci-repository: itiquette/forge-ci
+      forge-ci-repository: examplescope/forge-ci
       forge-ci-sha: b369db7d70af68fa93a4b404841c4ce2ddbf90c0
       bot-name: Gommitlint Release Bot
       bot-email: release-bot@example.invalid
@@ -88,7 +88,7 @@ jobs:
       RELEASE_TAG: ${{ needs.prepare.outputs.release-tag }}
     steps:
       - name: Set up forge-ci
-        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-forge-ci@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
+        uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/setup-forge-ci@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
       - name: Checkout prepared release
         env:
           CHECKOUT_REF: ${{ needs.prepare.outputs.release-sha }}
@@ -96,11 +96,11 @@ jobs:
           set -euo pipefail
           forge-ci platform checkout --object-format sha256 --fetch-all-refs
       - name: Verify Forgejo package token
-        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/verify-forgejo-token@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
+        uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/verify-forgejo-token@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
         with:
           token: ${{ secrets.PACKAGE_PUBLISH_TOKEN }}
       - name: Setup toolchain
-        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-toolchain@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
+        uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/setup-toolchain@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
         with:
           cache-key-suffix: build
           # SLSA isolation mode: no restored cache as unverified input into
@@ -120,12 +120,12 @@ jobs:
           tools: aqua:goreleaser/goreleaser aqua:anchore/syft aqua:git-chglog/git-chglog aqua:aquasecurity/trivy
           install-dev-tools: false
       - name: Set up Buildah
-        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-buildah@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
+        uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/setup-buildah@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
         with:
           extra-packages: jq gettext
       - name: Login to container registry
         id: registry-login
-        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/registry-login@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
+        uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/registry-login@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
         with:
           username: ${{ forgejo.repository_owner }}
           token: ${{ secrets.PACKAGE_PUBLISH_TOKEN }}
@@ -222,11 +222,11 @@ jobs:
             --builds-json '[{"platform":"linux/amd64","build-args":["DIRPATH=dist/gommitlint-pie_linux_amd64_v1/"]},{"platform":"linux/arm64","build-args":["DIRPATH=dist/gommitlint-pie_linux_arm64_v8.0/"]}]' \
             --title gommitlint --version "${RELEASE_TAG}" --ref-name "${RELEASE_TAG}-distroless" \
             --description 'Git commit message linter and validator' --licenses 'EUPL-1.2 OR GPL-3.0-or-later' \
-            --vendor Itiquette --authors 'Forge CI Test Author <author@example.invalid>' \
+            --vendor Example --authors 'Forge CI Test Author <author@example.invalid>' \
             --auth-file "${REGISTRY_AUTH_FILE:?}" --server-url "${SERVER_URL:?}" --repository "${REPOSITORY:?}" \
             --scan-output-template 'dist/trivy-results-distroless-{arch}.json'
       - name: Record distroless container images
-        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/record-release-image@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
+        uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/record-release-image@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
         with:
           role: distroless
           image: ${{ steps.distroless-image.outputs.image }}
@@ -281,11 +281,11 @@ jobs:
             --builds-json '[{"platform":"linux/amd64","build-args":["DIRPATH=dist/musl-amd64/"]},{"platform":"linux/arm64","build-args":["DIRPATH=dist/musl-arm64/"]}]' \
             --title gommitlint --auth-file "${REGISTRY_AUTH_FILE:?}" \
             --description 'Git commit message linter and validator' --licenses 'EUPL-1.2 OR GPL-3.0-or-later' \
-            --vendor Itiquette --authors 'Forge CI Test Author <author@example.invalid>' \
+            --vendor Example --authors 'Forge CI Test Author <author@example.invalid>' \
             --server-url "${SERVER_URL:?}" --repository "${REPOSITORY:?}" \
             --scan-output-template 'dist/trivy-results-alpine-{arch}.json'
       - name: Record Alpine container images
-        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/record-release-image@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
+        uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/record-release-image@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
         with:
           role: alpine
           image: ${{ steps.alpine-image.outputs.image }}
@@ -309,7 +309,7 @@ jobs:
       # and the digest output feeds the build-and-release job output below.
       - name: Hand off dist/ to sign-and-publish
         id: handoff
-        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/upload-dist@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
+        uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/upload-dist@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
         with:
           artifact-name: build-dist
           path: dist/
@@ -317,7 +317,7 @@ jobs:
   # =============================================================================
   # JOB 4: sign-and-publish (cross-repo reusable workflow)
   #
-  # The signing logic lives in itiquette/forge-ci — a separate repository
+  # The signing logic lives in examplescope/forge-ci — a separate repository
   # with its own review process. This call site is the explicit hand-off of
   # signing material; the `secrets:` block enumerates exactly what crosses the
   # boundary. The build-and-release job above does NOT receive any of these.
@@ -325,7 +325,7 @@ jobs:
   # The target SLSA Build L3 design requires three isolation mechanisms. These
   # comments describe the guarded release shape, not published L3 evidence:
   #   1. Cross-repo separation — modifying signing logic requires a PR to
-  #      itiquette/forge-ci, not this repo.
+  #      examplescope/forge-ci, not this repo.
   #   2. Immutable ref pinning — every forge-ci reference must use one
   #      immutable commit, reviewed on the protected branch the release
   #      request tag must point at.
@@ -341,10 +341,10 @@ jobs:
     # Cosign-signs checksums, SBOMs, provenance, and the images listed in
     # dist/release-images.json; GPG-signs distro package sidecars; then promotes
     # image tags and publishes the Forgejo release in separately scoped jobs.
-    # Runs inside Itiquette's digest-pinned signer image, which release-ci
-    # publishes; no rate-limit tokens are needed here because the image ships
-    # its tools (no mise resolution).
-    uses: itiquette/forge-ci/.forgejo/workflows/sign-and-publish-release.yml@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
+    # Runs inside the organisation's digest-pinned signer image; no rate-limit
+    # tokens are needed here because the image ships its tools (no mise
+    # resolution).
+    uses: examplescope/forge-ci/.forgejo/workflows/sign-and-publish-release.yml@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
     with:
       runner-label: ${{ vars.CI_RUNNER_LABEL }}
       release-tag: ${{ needs.prepare.outputs.release-tag }}
@@ -358,10 +358,10 @@ jobs:
       artifact-path: dist/
       release-images-path: dist/release-images.json
       caller-workflow: release.yml
-      forge-ci-repository: itiquette/forge-ci
+      forge-ci-repository: examplescope/forge-ci
       forge-ci-sha: b369db7d70af68fa93a4b404841c4ce2ddbf90c0
-      signer-image: codefloe.com/itiquette/forge-ci-signer@sha256:9a51d9f761cd269cadb2066710c9d2dd293f4e1020e229ff4f47ee1e6bce6234
-      # Itiquette's Cosign trust root. The key is public and comes from a
+      signer-image: forge.example/examplescope/forge-ci-signer@sha256:9a51d9f761cd269cadb2066710c9d2dd293f4e1020e229ff4f47ee1e6bce6234
+      # the organisation's Cosign trust root. The key is public and comes from a
       # variable; the digest is release-policy's keys/cosign.pub.sha256, written
       # out so a changed variable cannot replace the key without a reviewed
       # commit here.

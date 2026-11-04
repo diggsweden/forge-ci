@@ -23,21 +23,21 @@ sign:
   method: sigstore
 
 artifacts:
-  - name: hsm-worker
+  - name: worker
     project-type: cargo
-    working-directory: ./hsm-worker
+    working-directory: ./worker
     config:
       build-mode: container-first
-  - name: wallet-bff
+  - name: api-service
     project-type: cargo
-    working-directory: ./wallet-bff
+    working-directory: ./api-service
     config:
       build-mode: container-first
 
 containers:
-  - name: hsm-worker
-    from: [hsm-worker]
-    container-file: hsm-worker/Containerfile
+  - name: worker
+    from: [worker]
+    container-file: worker/Containerfile
     context: .
     target: runtime
     platforms: linux/amd64,linux/arm64
@@ -48,15 +48,15 @@ containers:
     extract:
       binary:
         target: export-binary
-        names: [hsm-worker, digg-hsm-keytool]
+        names: [worker, admin-tool]
 
-  - name: wallet-bff
-    from: [wallet-bff]
-    container-file: wallet-bff/Containerfile
+  - name: api-service
+    from: [api-service]
+    container-file: api-service/Containerfile
     context: .
     target: runtime
     platforms: linux/amd64,linux/arm64
     extract:
       binary:
         target: export-binary
-        names: [wallet-bff]
+        names: [api-service]

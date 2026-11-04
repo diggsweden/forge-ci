@@ -27,7 +27,7 @@ spec:
       description: Directory containing package.json.
     scope:
       default: ""
-      description: Expected package scope (e.g. @diggsweden); errors when package.json disagrees.
+      description: Expected package scope (e.g. @examplescope); errors when package.json disagrees.
     private-dependencies:
       type: boolean
       default: false

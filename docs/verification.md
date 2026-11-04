@@ -680,7 +680,7 @@ The signed request tag stays in the repo as the cryptographic anchor of who auth
 
 ### Org policy: allowlisting is on by default at the caller layer
 
-The engine input `release.requireallowlistedsigner` defaults to **false** so the tool stays usable in any repo. Org policy turns it on in the shared release-workflow template, so every diggsweden release is signed by an allowlisted maintainer. The reference consumer (`wallet-backend-reference`) shows the live wiring:
+The engine input `release.requireallowlistedsigner` defaults to **false** so the tool stays usable in any repo. An organisation turns it on in its shared release-workflow template, so every release is signed by an allowlisted maintainer. A caller wires it like this:
 
 ```yaml
 # .github/workflows/release-workflow.yml
@@ -1019,7 +1019,8 @@ This is operative, not aspirational:
 - **Third-party GitHub Actions** (`uses: actions/checkout@…`,
   `step-security/harden-runner@…`, etc.) carry full 40-character commit SHAs
   plus `# vX.Y.Z` comments. Enforced by `pinDigests: true` on the
-  `github-actions` manager in `local>diggsweden/.github:renovate-base`.
+  `github-actions` manager in your organisation's Renovate preset, for
+  example `local>OWNER/.github:renovate-base`.
 - **Containerfile FROM lines** (the runtime image build) are
   digest-pinned. `TestRuntimeContainerfileExternalFromImagesAreDigestPinned`
   rejects external bases without `@sha256:…`; Renovate's `dockerfile` manager
@@ -1432,7 +1433,7 @@ cosign verify-attestation \
   --type slsaprovenance1 \
   --certificate-identity "${EXPECTED_SIGNER_IDENTITY:?set the trusted signing workflow/ref}" \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  ghcr.io/diggsweden/my-app@sha256:PLATFORM_DIGEST
+  ghcr.io/examplescope/myapp@sha256:PLATFORM_DIGEST
 ```
 
 Manifest-list SLSA provenance is generated for tag builds with
@@ -1461,7 +1462,7 @@ forge (no GitHub attestation API needed):
 cosign verify-attestation --type cyclonedx \
   --certificate-identity "${EXPECTED_SIGNER_IDENTITY:?set the trusted signing workflow/ref}" \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  "ghcr.io/diggsweden/${PROJECT}@sha256:PLATFORM_DIGEST" > verified-attestations.json &&
+  "ghcr.io/OWNER/${PROJECT}@sha256:PLATFORM_DIGEST" > verified-attestations.json &&
   jq -r '.payload | @base64d | fromjson | .predicate' verified-attestations.json
 ```
 
@@ -1483,27 +1484,30 @@ Verifies release signature and artifact integrity.
 #### Verify GPG Signature
 
 ```bash
-# Import the publishing key (Digg OSPO bot)
-curl -sSfL https://github.com/diggsweden/.github/raw/main/pubkey/ospo.digg.pub.asc -o ospo.digg.pub.asc
+# Import the publisher's key
+curl -sSfL https://forge.example/OWNER/.github/raw/main/pubkey/publisher.pub.asc -o publisher.pub.asc
 
 # Verify fingerprint before importing
-gpg --show-keys ospo.digg.pub.asc
-# Expected: 94DC AF60 8AA5 3E16 4F94 F2C8 5D23 336A 384E D816
+gpg --show-keys publisher.pub.asc
+# Expected: the fingerprint the publisher announced out of band
 
-gpg --import ospo.digg.pub.asc
+gpg --import publisher.pub.asc
 
 # Download artifact and signature from GitHub Packages
 curl -H "Authorization: token GITHUB_TOKEN" \
-  -L https://maven.pkg.github.com/diggsweden/${PROJECT}/${ARTIFACT}/${VERSION}/${ARTIFACT}-${VERSION}.jar \
+  -L https://maven.pkg.github.com/OWNER/${PROJECT}/${ARTIFACT}/${VERSION}/${ARTIFACT}-${VERSION}.jar \
   -o ${ARTIFACT}.jar
 
 curl -H "Authorization: token GITHUB_TOKEN" \
-  -L https://maven.pkg.github.com/diggsweden/${PROJECT}/${ARTIFACT}/${VERSION}/${ARTIFACT}-${VERSION}.jar.asc \
+  -L https://maven.pkg.github.com/OWNER/${PROJECT}/${ARTIFACT}/${VERSION}/${ARTIFACT}-${VERSION}.jar.asc \
   -o ${ARTIFACT}.jar.asc
 
 # Verify signature
 gpg --verify ${ARTIFACT}.jar.asc ${ARTIFACT}.jar
 ```
+
+Digg's own releases are signed with the OSPO key published at
+<https://github.com/diggsweden/.github/raw/main/pubkey/ospo.digg.pub.asc>.
 
 ### 3. NPM Package Verification
 
@@ -1598,8 +1602,8 @@ Verify the signature and attestations first, then inspect or pull the exact
 digest you authenticated:
 
 ```bash
-skopeo inspect --raw docker://ghcr.io/diggsweden/${PROJECT}@sha256:DIGEST
-podman pull ghcr.io/diggsweden/${PROJECT}@sha256:DIGEST
+skopeo inspect --raw docker://ghcr.io/OWNER/${PROJECT}@sha256:DIGEST
+podman pull ghcr.io/OWNER/${PROJECT}@sha256:DIGEST
 ```
 
 ## Local setup and references

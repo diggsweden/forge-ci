@@ -81,9 +81,9 @@ signing/publication and downloaded-payload verification remain blocking.
 Prepare a **new snapshot** with four arguments and no exclusion flag:
 
 ```sh
-bash /home/jos/development/github.com/diggsweden/r3/forge-ci/test/live/consumer-fixtures/generic-cli/prepare.sh \
-  /home/jos/development/codefloe/itiquette/nanolinter \
-  /tmp/opencode/digg-nano-gitlab-stable-diagnostic-lint-fixture \
+bash test/live/consumer-fixtures/generic-cli/prepare.sh \
+  <engine-checkout> \
+  /absolute/lint-fixture-snapshot \
   cargo cfc3aefb659d87c314dad2c33e5ad117bd1d52b6d4633d107adc4fecca59619e
 ```
 

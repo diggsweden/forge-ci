@@ -4,7 +4,7 @@
 #
 # Reference Containerfile for a Rust service in a Cargo workspace.
 #
-# Place this file at <service>/Containerfile (e.g., hsm-worker/Containerfile).
+# Place this file at <service>/Containerfile (e.g., worker/Containerfile).
 # Build context is the workspace root (`context: .` in artifacts.yml) so
 # the COPY statements can pull workspace-level Cargo.toml/Cargo.lock and
 # every workspace member's Cargo.toml + src.
@@ -23,7 +23,7 @@
 #
 # CI uses daemonless Buildah; Podman uses the same Containerfile locally.
 # Local example:
-# `podman build --target runtime --build-arg SERVICE=hsm-worker .`
+# `podman build --target runtime --build-arg SERVICE=worker .`
 
 # syntax=docker/dockerfile:1.7
 
@@ -45,21 +45,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Workspace context: bring in everything cargo needs to resolve.
 COPY Cargo.toml Cargo.lock ./
-COPY hsm-common ./hsm-common
-COPY hsm-worker ./hsm-worker
-COPY wallet-bff ./wallet-bff
+COPY common ./common
+COPY worker ./worker
+COPY api-service ./api-service
 # Add other workspace members as needed.
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target,id=cargo-${TARGETPLATFORM} \
-    cargo build --release --locked -p hsm-worker \
+    cargo build --release --locked -p worker \
  && mkdir -p /out \
- && cp target/release/hsm-worker /out/ \
- && cp target/release/digg-hsm-keytool /out/
+ && cp target/release/worker /out/ \
+ && cp target/release/admin-tool /out/
 
 FROM scratch AS export-binary
-COPY --from=builder /out/hsm-worker /hsm-worker
-COPY --from=builder /out/digg-hsm-keytool /digg-hsm-keytool
+COPY --from=builder /out/worker /worker
+COPY --from=builder /out/admin-tool /admin-tool
 
 FROM debian:${DEBIAN_VARIANT} AS runtime
 # hadolint ignore=DL3008
@@ -68,6 +68,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/* \
  && useradd -r -u 10001 -m app
 USER app
-COPY --from=builder /out/hsm-worker /usr/local/bin/hsm-worker
-COPY --from=builder /out/digg-hsm-keytool /usr/local/bin/digg-hsm-keytool
-ENTRYPOINT ["/usr/local/bin/hsm-worker"]
+COPY --from=builder /out/worker /usr/local/bin/worker
+COPY --from=builder /out/admin-tool /usr/local/bin/admin-tool
+ENTRYPOINT ["/usr/local/bin/worker"]

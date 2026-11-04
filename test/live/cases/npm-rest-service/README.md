@@ -1,7 +1,7 @@
 # REST npm application operator case
 
-Source: `/home/jos/development/github.com/diggsweden/forge-ci-migrations/rest-api-profil-lint-processor`.
-Engine: `/home/jos/development/github.com/diggsweden/r3/forge-ci`.
+Source: a consumer checkout (path not recorded).
+Engine: this forge-ci checkout.
 
 The source is admitted as a clean Git revision. The fixture reads regular tracked
 `package.json` and `Containerfile` blobs through the existing exact-path/mode
@@ -13,7 +13,7 @@ SBOM and pack. No host npm or application execution is needed for preparation.
 ## Operator execution
 
 Load the usual **Compose Forgejo** lab-contract environment and then source
-`test/live/cases/rest-api-profil-lint-processor/operator.env`. From the engine
+`test/live/cases/npm-rest-service/operator.env`. From the engine
 checkout:
 
 ```sh

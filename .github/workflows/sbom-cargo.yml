@@ -110,7 +110,7 @@ jobs:
         if: steps.sbom.outcome == 'success'
         # When called from release-build-stage.yml's per-artefact matrix,
         # artifact-name is set to the cargo artefact's user-chosen name
-        # (e.g. "hsm-worker") so each upload is unique. Direct callers
+        # (e.g. "worker") so each upload is unique. Direct callers
         # who don't pass artifact-name fall back to the bare default,
         # which is fine for single-cargo-artefact projects.
         # Enabled Build SBOMs are mandatory release deliverables.

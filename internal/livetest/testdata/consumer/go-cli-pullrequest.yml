@@ -42,7 +42,7 @@ jobs:
       # (the JS actions/checkout can't run in this node-less image). fetch-base
       # brings the pull request's base branch for the commit-range/diff checks.
       - name: Checkout repository
-        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/checkout-consumer@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
+        uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/checkout-consumer@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
         with:
           ref: ${{ forgejo.sha }}
           fetch-base: ${{ forgejo.base_ref }}
@@ -55,7 +55,7 @@ jobs:
       # owns the three network-backed checks left out here, so the parallel
       # quality plan does not duplicate downloads and scan results.
       - name: Run lint suite (nanolinter verify)
-        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/lint-nanolinter@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
+        uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/lint-nanolinter@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
         with:
           disable-checks: go-vulncheck,osv,trivy-fs
   # Repo-specific gates that aren't nanolinter linting: the embedded JSON Schema
@@ -69,7 +69,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Set up forge-ci
-        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-forge-ci@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
+        uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/setup-forge-ci@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
       - name: Checkout repository
         run: |
           set -euo pipefail
@@ -121,7 +121,7 @@ jobs:
       # runner-safe underscore spelling configured below.
       # See docs/modules/ROOT/pages/security-posture.adoc.
       - name: Verify SLSA L3 isolation invariants
-        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/check-l3-isolation@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
+        uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/check-l3-isolation@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
         with:
           dist-digest-output: dist_digest
   security:
@@ -135,7 +135,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout repository
-        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/checkout-consumer@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
+        uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/checkout-consumer@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
         with:
           ref: ${{ forgejo.sha }}
           object-format: sha256
@@ -156,7 +156,7 @@ jobs:
     needs: [lint, security]
     steps:
       - name: Set up forge-ci
-        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-forge-ci@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
+        uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/setup-forge-ci@b369db7d70af68fa93a4b404841c4ce2ddbf90c0
       - name: Checkout repository
         run: |
           set -euo pipefail

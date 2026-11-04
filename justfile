@@ -894,14 +894,14 @@ test-live-kaniko-job-image forge_lab:
 # visibility before pushing source and verifies anonymous reads are refused.
 # This same selection applies to both GitLab consumer recipes below.
 #
-#   just test-live-forgejo-consumer ~/src/gommitlint pull-request CI_JOB_IMAGE=<digest reference>
-#   just test-live-forgejo-consumer ~/src/gommitlint release RELEASE_PLATFORMS=linux/amd64
+#   just test-live-forgejo-consumer /absolute/myapp pull-request CI_JOB_IMAGE=<digest reference>
+#   just test-live-forgejo-consumer /absolute/myapp release RELEASE_PLATFORMS=linux/amd64
 #
 # It needs what `just test-live` needs, and a release also FORGE_CI_LIVE_SIGNER_IMAGE
 # from `just test-live-signer-image`, ssh-keygen and gpg. The lock, the
 # preflight and the log are those of `just test-live`.
 [arg('event', help='Consumer workflow kind: pull-request or release')]
-[arg('checkout', help='Absolute path to a clean consumer checkout, for example /absolute/gommitlint')]
+[arg('checkout', help='Absolute path to a clean consumer checkout, for example /absolute/myapp')]
 [arg('settings', help='Optional key=value settings, for example workflow=pullrequest.yml; see docs/testing.md for permitted settings')]
 [doc('Live Forgejo; run a consumer checkout against this engine')]
 [group('live')]
@@ -932,7 +932,7 @@ test-live-forgejo-consumer checkout event *settings:
 #
 #   just lab --account demo --runners gitlab forgejo    # in Forge Lab, first
 #   just demo forgejo hello-maven version=0.2.0 CI_JOB_IMAGE=<reference>
-#   just demo gitlab wallet-provider checkout=/abs/wallet-provider \
+#   just demo gitlab hello-maven-service checkout=/abs/myapp \
 #     job-archive=/abs/job.tar build-archive=/abs/build.tar signer-archive=/abs/signer.tar
 #   just targets-revoke ~/.local/state/forge-lab/targets/demo.json   # when over
 #
@@ -1097,7 +1097,7 @@ demo-list forge *settings:
 # demo's name (or takes confirm=<name>); each repository is deleted by the ID
 # it was listed with. When the lab has no demo left it says how to retire the
 # account's token in Forge Lab.
-[arg('name', help='The demo, as `just demo-list` names it, for example wallet-provider')]
+[arg('name', help='The demo, as `just demo-list` names it, for example hello-maven-service')]
 [arg('forge', help='forgejo, gitlab or github')]
 [arg('settings', help='confirm=<name> instead of typing it; github: org=<numeric organization ID>')]
 [doc('Live; delete a kept demo')]
