@@ -16,10 +16,6 @@ type SwiftLintOutcome string
 const (
 	// SwiftLintPassed indicates the linter exited 0.
 	SwiftLintPassed SwiftLintOutcome = "passed"
-	// SwiftLintWarned indicates the linter exited non-zero AND the workflow
-	// allows warnings. Only used by SwiftLint —
-	// swift-format has no concept of "warning that's not a failure".
-	SwiftLintWarned SwiftLintOutcome = "warned"
 	// SwiftLintFailed indicates the linter exited non-zero AND must fail the step.
 	SwiftLintFailed SwiftLintOutcome = "failed"
 	// SwiftLintNoFiles indicates swift-format found no Swift files matching
@@ -45,9 +41,6 @@ func RenderSwiftFormatBlock(outcome SwiftLintOutcome, output string) string {
 		_, _ = fmt.Fprintln(&builder, "## Swift Format ⊘")
 		_, _ = fmt.Fprintln(&builder, "")
 		_, _ = fmt.Fprintln(&builder, "No Swift files matched the configured pattern; nothing to lint.")
-	case SwiftLintWarned:
-		// swift-format has no warning level — never produced for this
-		// outcome. Block left empty so the caller emits nothing.
 	}
 
 	return builder.String()
@@ -65,10 +58,6 @@ func RenderSwiftLintBlock(outcome SwiftLintOutcome, output string) string {
 		_, _ = fmt.Fprintln(&builder, "No SwiftLint violations found.")
 	case SwiftLintFailed:
 		_, _ = fmt.Fprintln(&builder, "## SwiftLint Issues 🔴")
-		_, _ = fmt.Fprintln(&builder, "")
-		writeFenced(&builder, output)
-	case SwiftLintWarned:
-		_, _ = fmt.Fprintln(&builder, "## SwiftLint Warnings ⚠️")
 		_, _ = fmt.Fprintln(&builder, "")
 		writeFenced(&builder, output)
 	case SwiftLintNoFiles:

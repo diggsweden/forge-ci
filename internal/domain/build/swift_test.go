@@ -47,7 +47,6 @@ func TestRenderSwiftLintBlock_RendersPassFailAndWarnBlocks(t *testing.T) {
 	}{
 		{name: "passed", outcome: build.SwiftLintPassed, want: []string{"## SwiftLint ✓", "No SwiftLint violations"}},
 		{name: "failed", outcome: build.SwiftLintFailed, body: "violation 1", want: []string{"## SwiftLint Issues 🔴", "violation 1"}},
-		{name: "warned", outcome: build.SwiftLintWarned, body: "warning 1", want: []string{"## SwiftLint Warnings ⚠️", "warning 1"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -146,7 +145,6 @@ func TestSwiftDiagnosticBlocks_ExactFraming(t *testing.T) {
 		for _, block := range []struct{ got, heading string }{
 			{build.RenderSwiftFormatBlock(build.SwiftLintFailed, tc.body), "## Swift Format Issues 🔴"},
 			{build.RenderSwiftLintBlock(build.SwiftLintFailed, tc.body), "## SwiftLint Issues 🔴"},
-			{build.RenderSwiftLintBlock(build.SwiftLintWarned, tc.body), "## SwiftLint Warnings ⚠️"},
 		} {
 			want := block.heading + "\n\n```\n" + tc.want + "```\n"
 			if block.got != want {
@@ -169,7 +167,6 @@ func TestRenderSwiftBlocks_OutputCannotCloseTheFence(t *testing.T) {
 	for name, block := range map[string]string{
 		"format failure": build.RenderSwiftFormatBlock(build.SwiftLintFailed, output),
 		"lint failure":   build.RenderSwiftLintBlock(build.SwiftLintFailed, output),
-		"lint warnings":  build.RenderSwiftLintBlock(build.SwiftLintWarned, output),
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
