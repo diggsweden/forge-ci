@@ -16,8 +16,8 @@
 # hello-monorepo's core lint plan runs in the java flavour, and its gate
 # checks the frontend in the node image too. A release runs its job-image jobs
 # as the runtime images' nonroot (job-user=65532:65532) and builds with the
-# runtime image (build-archive=). hello-cargo-container has no release here:
-# its own build runs Buildah, which a kaniko lane does not cover.
+# runtime image (build-archive=). hello-android has no gate here: the
+# campaign prepares no Android runtime image.
 
 scenario TestGitLabRelease_MinimalSignedArtifacts
 
@@ -29,10 +29,15 @@ consumer hello-go-service pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCH
 consumer hello-maven-service pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA lint-archive=@LINT_IMAGE_ARCHIVE_JAVA
 consumer hello-gradle pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA lint-archive=@LINT_IMAGE_ARCHIVE_JAVA
 consumer hello-monorepo pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA lint-archive=@LINT_IMAGE_ARCHIVE_JAVA
+consumer hello-cargo-workspace pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_RUST lint-archive=@LINT_IMAGE_ARCHIVE_RUST
+consumer hello-npm-package pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_NODE lint-archive=@LINT_IMAGE_ARCHIVE_JAVASCRIPT_TYPESCRIPT
 
 consumer hello-maven release job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA build-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA signer-archive=@FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE lint-archive=@LINT_IMAGE_ARCHIVE_JAVA version=0.2.0 version-bump=maven job-user=65532:65532
 consumer hello-npm-service release job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_NODE build-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_NODE signer-archive=@FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE lint-archive=@LINT_IMAGE_ARCHIVE_JAVASCRIPT_TYPESCRIPT version=0.2.0 version-bump=npm job-user=65532:65532
 consumer hello-maven-service release job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA build-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA signer-archive=@FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE lint-archive=@LINT_IMAGE_ARCHIVE_JAVA version=0.2.0 version-bump=maven job-user=65532:65532
+consumer hello-cargo-container release job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_RUST build-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_RUST signer-archive=@FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE lint-archive=@LINT_IMAGE_ARCHIVE_RUST version=0.2.0 version-bump=cargo job-user=65532:65532
+consumer hello-cargo-workspace release job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_RUST build-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_RUST signer-archive=@FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE lint-archive=@LINT_IMAGE_ARCHIVE_RUST version=0.2.0 version-bump=cargo job-user=65532:65532
+consumer hello-npm-package release job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_NODE build-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_NODE signer-archive=@FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE lint-archive=@LINT_IMAGE_ARCHIVE_JAVASCRIPT_TYPESCRIPT version=0.2.0 version-bump=npm job-user=65532:65532
 
 scenario TestGitLabCheck_ChecksOutPrivateConsumerWithJobToken
 scenario TestGitLabCheck_ChecksOutTheConsumerPipelineCommit
