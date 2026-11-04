@@ -318,6 +318,9 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 	if recovery && (consumerRoot == "" || settings.Version == "" || settings.Version == "0.0.0" || settings.NextVersion != "") {
 		t.Fatal("consumer recovery requires one explicit nonzero version and no next-version")
 	}
+	if recovery && !releaseImages {
+		t.Fatal("consumer recovery requires policy-owned release-images")
+	}
 
 	requestTag, finalTag := releaseRequestTag, releaseFinalTag
 	if settings.Version != "" {
@@ -496,6 +499,25 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 			"export":               exportCommand,
 		})),
 	}}
+	if recovery {
+		// Extend the exact captured parent, not a retained fork or consumer CI.
+		policyProject := livetest.RepoSlug(target, policyRepo)
+		extension, err := livetest.GitLabRecoveryExtension(jobImage)
+		if err != nil {
+			t.Fatal(err)
+		}
+		extensionCommit := gitlabPolicyCommit(t, ctx, client, policyProject, "recovery-checkpoint.yml", string(extension), gitlabapi.FileCreate)
+		parentSource, _, err := client.RepositoryFiles.GetRawFile(layer.Repository, "templates/release.yml", &gitlabapi.GetRawFileOptions{Ref: new(layer.Commit)}, gitlabapi.WithContext(ctx))
+		if err != nil {
+			t.Fatal(err)
+		}
+		wrapper, err := livetest.GitLabRecoveryParent(parentSource, layer.Commit, policyProject, extensionCommit.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wrapperCommit := gitlabPolicyCommit(t, ctx, client, policyProject, "templates/recovery.yml", string(wrapper), gitlabapi.FileCreate)
+		policyIncludes[0].(map[string]any)["component"] = strings.TrimPrefix(target.BaseURL(), "https://") + "/" + policyProject + "/recovery@" + wrapperCommit.ID
+	}
 	// Snapshot the admitted MR gate into the independently pinned policy project.
 	// Its jobs still check out the MR source; the consumer cannot rewrite the
 	// administrator's component inputs. Release-request tags stay release-only.
@@ -561,7 +583,7 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 	if recovery {
 		previousDigest = livetest.PushImageTags(t, target, publication, "v0.0.0", "latest").Digest
 		if _, _, err := client.ProjectVariables.CreateVariable(project, &gitlabapi.CreateProjectVariableOptions{
-			Key: new(gitlabCandidatePauseVariable), Value: new("true"), Protected: new(true),
+			Key: new(livetest.GitLabRecoveryPauseVariable), Value: new("true"), Protected: new(true),
 		}, gitlabapi.WithContext(ctx)); err != nil {
 			t.Fatal(err)
 		}

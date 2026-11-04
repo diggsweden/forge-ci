@@ -4,7 +4,8 @@
 # Opt-in explicit-input regressions. Prepare the normal lane's images first,
 # then add the reviewed consumer/archive coordinates below to campaign.env.
 # The Buildah capability probe has its separate build-capability-gitlab.cases.
-# RECOVERY_CONSUMER must publish and pause at the documented candidate checkpoint.
+# RECOVERY_CONSUMER declares one policy-owned release image; the harness owns
+# the post-publication checkpoint. Its build must not publish or pause itself.
 setting visibility=private
 setting image-builder=kaniko
 setting admin-lint=false

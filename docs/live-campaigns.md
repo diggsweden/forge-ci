@@ -163,7 +163,7 @@ The normal consumer release recipe also selects these exact scenarios with
 | `TestGitLabRelease_ConsumerBranchProtection` | `test-live-gitlab-consumer-branch-protection <checkout>`; no job images |
 | `TestGitLabRelease_BuildImageCapability` | `test-live-gitlab-build-image-capability <build archive>`; specifically Buildah and a privileged runner |
 | `TestGitLabRelease_RejectsPreseededProvenance` | Consumer release recipe with `scenario=TestGitLabRelease_RejectsPreseededProvenance`; the harness adds the inert provenance fixture in its private index |
-| `TestGitLabRelease_ConsumerInterruptedRecovery` | Consumer release recipe with `scenario=TestGitLabRelease_ConsumerInterruptedRecovery version=0.3.0`; reviewed image-producing checkpoint consumer required |
+| `TestGitLabRelease_ConsumerInterruptedRecovery` | Consumer release recipe with `scenario=TestGitLabRelease_ConsumerInterruptedRecovery version=0.3.0`; reviewed single-image policy-owned release consumer required |
 | `TestGitLabWorkflow_InterruptedJob` | `test-live-gitlab-interrupted-job`; manual observed-signal proof |
 
 For provenance rejection, use an ordinary reviewed native-release consumer. Its
@@ -171,12 +171,37 @@ original build runs first, then the controller's wrapper inserts inert unsigned
 provenance into `dist`. The source checkout remains clean. The test must observe
 the specific handoff refusal, blocked signer/publication and empty release APIs.
 
-Recovery still requires a reviewed consumer whose build publishes the candidate
-and waits while `FIXTURE_PAUSE_AFTER_CANDIDATE` is true. The controller cancels only
-after observing that candidate and the running build, clears the checkpoint, then
-retries the same child pipeline and checks prior publications and final identity.
+Recovery requires a reviewed consumer using `release-images: true`, producing one
+release image in the source project's root image repository, with the unsuffixed
+version tag (no image flavor suffix). Its build produces files/image context only;
+it must not write the registry or implement a pause. The old build-running checkpoint
+is unreachable: policy image builds and `Images: publish` need successful
+`Build: release files`. Retained consumers that publish inside the build are not
+compatible and must not be reused as this case's fixture.
+
+The harness generates a test-owned component from the exact captured engine parent
+and pins it in the independent policy project. It preserves the engine SHA,
+parent mirror/lock/forwarding policy and production child include, then adds a
+separately pinned child extension. `Fixture: candidate checkpoint` runs after
+successful `Images: publish`, without a credential environment or downloaded
+artifacts. Signing keeps its original image-publication artifact dependency and
+also waits for this checkpoint. Production templates have no fixture-variable
+hook. The checkpoint prints `fci-live-candidate-checkpoint-ready` and holds while
+its launch-time `FIXTURE_PAUSE_AFTER_CANDIDATE` value is true; expiry fails closed.
+
+The controller observes the owned running checkpoint, reads the exact successful
+publication job's immutable `_release-images/dist/release-images.json` receipt,
+and checks the source `staging-v<version>` tag against its repository and digest.
+It cancels the original child before signing, proves no release/new final image
+and unchanged prior `latest`/`v0.0.0`, clears the project variable, and retries that
+same child. Successful preparation, file-build and image jobs must retain their
+original job IDs; the prepared Git tag/commit and original receipt stay unchanged.
+The final publication and `latest` must use the original candidate digest while
+`v0.0.0` remains unchanged. Normal signed-release verification still follows.
 One explicit nonzero version is required; `next-version` is not accepted for it.
-Naming an arbitrary image demo does not create this checkpoint automatically.
+Local inert regressions cover wrapper/DAG ordering, fail-closed checkpoint behavior
+and receipt identity; only a later explicit-input live run can prove GitLab's
+cancellation/retry semantics and registry/signing outcome.
 
 `test/live/campaigns/harness-inputs-gitlab.cases` supplies the four consumer case
 lines. After preparing the normal images, add these reviewed references/absolute

@@ -1,0 +1,215 @@
+// SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+// SPDX-License-Identifier: EUPL-1.2 OR GPL-3.0-or-later
+
+package livetest
+
+import (
+	"bytes"
+	"encoding/json"
+	"os/exec"
+	"strings"
+	"testing"
+
+	gitlabapi "gitlab.com/gitlab-org/api/client-go"
+	"gopkg.in/yaml.v3"
+
+	"github.com/diggsweden/forge-ci/internal/domain/imageledger"
+	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
+)
+
+func TestGitLabRecoveryObservationAfterPolicyPublication(t *testing.T) {
+	// The old oracle rejected this reachable state because the file build had
+	// succeeded. The policy DAG regression below proves that success is required.
+	jobs := []*gitlabapi.Job{
+		{ID: 11, Name: "Build: release files", Status: "success"},
+		{ID: 12, Name: "Images: publish", Status: "success"},
+		{ID: 13, Name: GitLabRecoveryCheckpoint, Status: "running"},
+		{ID: 14, Name: "Sign: files and images", Status: "created"},
+		{ID: 15, Name: "Publish: images", Status: "created"},
+	}
+	publisher, checkpoint, err := GitLabRecoveryObservation(jobs)
+	if err != nil || publisher != 12 || checkpoint != 13 {
+		t.Fatalf("current policy boundary not observed: %d, %d, %v", publisher, checkpoint, err)
+	}
+	jobs[0].Status, jobs[1].Status, jobs[2].Status = "running", "created", "created"
+	if _, checkpoint, err := GitLabRecoveryObservation(jobs); err != nil || checkpoint != 0 {
+		t.Fatalf("historical consumer-build boundary admitted: %d, %v", checkpoint, err)
+	}
+	jobs[0].Status, jobs[1].Status, jobs[2].Status = "success", "success", "running"
+	jobs[3].Status = "pending"
+	if _, _, err := GitLabRecoveryObservation(jobs); err == nil {
+		t.Fatal("signer scheduled before cancellation was accepted")
+	}
+	jobs[3].Status, jobs[2].Status = "created", "success"
+	if _, _, err := GitLabRecoveryObservation(jobs); err == nil {
+		t.Fatal("completed checkpoint was accepted as cancellation coverage")
+	}
+}
+
+func TestGitLabRecoveryPolicyDAG(t *testing.T) {
+	// Exercise the real parent and child, not a hand-maintained fixture DAG.
+	engine := strings.Repeat("a", 40)
+	extensionRef := strings.Repeat("b", 40)
+	body, err := GitLabRecoveryParent(reporoot.ReadFile(t, "templates/release.yml"), engine, "owned/policy", extensionRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent := recoveryJobs(t, body)
+	trigger := parent["release"].(map[string]any)["trigger"].(map[string]any)
+	if trigger["strategy"] != "mirror" {
+		t.Fatal("wrapper lost parent lock lifetime")
+	}
+	includes := trigger["include"].([]any)
+	if len(includes) != 2 {
+		t.Fatalf("child needs production DAG then test extension, got %v", includes)
+	}
+	production := includes[0].(map[string]any)
+	if production["file"] != "/templates/release-jobs.yml" || production["ref"] != engine || production["project"] != "$[[ inputs.forge-ci-repository ]]" {
+		t.Fatalf("wrapper changed production child source: %v", production)
+	}
+	inputs := production["inputs"].(map[string]any)
+	if inputs["engine-sha"] != engine || inputs["engine-reference"] != engine {
+		t.Fatal("engine pin drifted to the policy wrapper's commit")
+	}
+	ext := includes[1].(map[string]any)
+	if ext["project"] != "owned/policy" || ext["ref"] != extensionRef || ext["file"] != "/recovery-checkpoint.yml" {
+		t.Fatalf("checkpoint is not independently pinned: %v", ext)
+	}
+
+	child := recoveryJobs(t, reporoot.ReadFile(t, "templates/release-jobs.yml"))
+	extension, err := GitLabRecoveryExtension("registry.example/job@sha256:" + strings.Repeat("c", 64))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gate map[string]any
+	if err := yaml.Unmarshal(extension, &gate); err != nil {
+		t.Fatal(err)
+	}
+	// GitLab deep-merges mappings; needs arrays replace the inherited array.
+	for name, override := range gate {
+		job, exists := child[name].(map[string]any)
+		if !exists {
+			job = map[string]any{}
+		}
+		for key, value := range override.(map[string]any) {
+			job[key] = value
+		}
+		child[name] = job
+	}
+	// This is precisely why the old build-running/finalTag oracle is impossible:
+	// candidate publication is downstream of successful file build.
+	if !recoveryDepends(t, child, "Images: publish", "Build: release files") ||
+		!recoveryDepends(t, child, GitLabRecoveryCheckpoint, "Images: publish") {
+		t.Fatal("checkpoint must follow completed file build and policy publication")
+	}
+	for _, name := range []string{"Sign: files and images", "Publish: images", "Publish: release", "Publish: tidy up"} {
+		if !recoveryDepends(t, child, name, GitLabRecoveryCheckpoint) {
+			t.Fatalf("%s can escape the running checkpoint", name)
+		}
+	}
+	signer := child["Sign: files and images"].(map[string]any)
+	if signer["script"].([]any)[0] != "rc_sign_release '$[[ inputs.release-images ]]'" {
+		t.Fatal("extension replaced production signing")
+	}
+	needs := signer["needs"].([]any)
+	if len(needs) != 2 || needs[0].(map[string]any)["job"] != "Images: publish" || needs[0].(map[string]any)["artifacts"] != true || needs[1].(map[string]any)["artifacts"] != false {
+		t.Fatal("signer lost its original artifact source")
+	}
+	checkpoint := child[GitLabRecoveryCheckpoint].(map[string]any)
+	if _, exists := checkpoint["environment"]; exists {
+		t.Fatal("checkpoint must not select a credential environment")
+	}
+}
+
+func recoveryJobs(t *testing.T, body []byte) map[string]any {
+	t.Helper()
+	d := yaml.NewDecoder(bytes.NewReader(body))
+	var spec, jobs map[string]any
+	if err := d.Decode(&spec); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Decode(&jobs); err != nil {
+		t.Fatal(err)
+	}
+	return jobs
+}
+
+func recoveryDepends(t *testing.T, jobs map[string]any, from, on string) bool {
+	t.Helper()
+	job := jobs[from].(map[string]any)
+	needs, _ := job["needs"].([]any)
+	for _, need := range needs {
+		name, ok := need.(string)
+		if !ok {
+			name = need.(map[string]any)["job"].(string)
+		}
+		if name == on || recoveryDepends(t, jobs, name, on) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestGitLabRecoveryCheckpointFailClosed(t *testing.T) {
+	body, err := GitLabRecoveryExtension("example.invalid/job")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var jobs map[string]any
+	if err := yaml.Unmarshal(body, &jobs); err != nil {
+		t.Fatal(err)
+	}
+	script := jobs[GitLabRecoveryCheckpoint].(map[string]any)["script"].([]any)[0].(string)
+	for _, value := range []string{"true", "false", "", "garbage"} {
+		t.Run("pause="+value, func(t *testing.T) {
+			// Let the sleep expire immediately: a controller that misses its
+			// cancellation window must fail, never claim recovery coverage.
+			cmd := exec.Command("bash", "-c", "sleep() { :; };\n"+script)
+			cmd.Env = []string{"PATH=/usr/bin:/bin", GitLabRecoveryPauseVariable + "=" + value}
+			out, err := cmd.CombinedOutput()
+			if (err == nil) != (value == "false") {
+				t.Fatalf("checkpoint status: %v: %s", err, out)
+			}
+			if value == "true" && !bytes.Contains(out, []byte("fci-live-candidate-checkpoint-ready")) {
+				t.Fatal("missing controller observation marker")
+			}
+		})
+	}
+}
+
+func TestGitLabRecoveryCandidateIdentity(t *testing.T) {
+	const repository = "registry.example/owned/consumer"
+	digest := "sha256:" + strings.Repeat("a", 64)
+	entry := imageledger.Entry{ImageKind: imageledger.ImageKindRelease, Role: "distroless", Ref: repository + "@" + digest, Digest: digest,
+		CandidateTag: repository + ":staging-v0.3.0", FinalTag: repository + ":v0.3.0"}
+	for _, mutation := range []string{"valid", "old-final-tag-as-candidate", "wrong-repository", "wrong-ref-digest", "wrong-version", "multiple-images"} {
+		t.Run(mutation, func(t *testing.T) {
+			e := entry
+			switch mutation {
+			case "old-final-tag-as-candidate":
+				e.CandidateTag = e.FinalTag
+			case "wrong-repository":
+				e.Ref = "registry.example/other/consumer@" + digest
+			case "wrong-ref-digest":
+				e.Ref = repository + "@sha256:" + strings.Repeat("b", 64)
+			case "wrong-version":
+				e.CandidateTag = repository + ":staging-v0.4.0"
+			}
+			entries := []imageledger.Entry{e}
+			if mutation == "multiple-images" {
+				entries = append(entries, e)
+			}
+			ledger, err := json.Marshal(entries)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := GitLabRecoveryCandidate(ledger, repository, "v0.3.0")
+			if (err == nil) != (mutation == "valid") {
+				t.Fatalf("candidate admission: %+v, %v", got, err)
+			}
+			if err == nil && got.Digest != digest {
+				t.Fatal("receipt changed immutable digest")
+			}
+		})
+	}
+}
