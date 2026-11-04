@@ -62,6 +62,36 @@ Two further stages, `go-toolchain` (the Go release, taken from the official
 publiccode-parser compiled with it), only feed `runtime-base` and
 `runtime-go-1.27` and are not published.
 
+## Users and caches
+
+Every image runs as root by default: GitHub `container:` jobs and kaniko need
+it. Each image also has the ordinary user `nonroot`, UID and GID 65532, home
+`/home/nonroot`, for jobs whose tests need ordinary-user filesystem semantics;
+on GitLab the check component's `job-user` and the release policy's
+`job-user` select it. The toolchains under `/usr/local` and `/opt` are
+read-only for that user, and every cache lives in the home of the user a job
+runs as, at each tool's default: `~/.cargo` (no `CARGO_HOME` is set),
+`~/go` (no `GOPATH`), `~/.cache/go-build`, `~/.m2`, `~/.gradle` and `~/.npm`.
+The images set no `HOME`; the container runtime takes it from `/etc/passwd`,
+and GitHub's `container:` jobs set `/github/home`. A workflow that caches these
+directories names them under `~`.
+
+What a job installs itself goes to `/opt/job-tools/bin`, on `PATH` ahead of
+`/usr/local/bin` and writable for root and `nonroot`: `go install` through
+`GOBIN`, `cargo install` through `CARGO_INSTALL_ROOT` and `npm install -g`
+through `NPM_CONFIG_PREFIX`. A fixed directory rather than `~/go/bin` and
+`~/.cargo/bin` keeps the command found whatever `HOME` the job has. Other UIDs
+cannot write it. With `GOBIN` set, `go install` refuses to cross-compile; use
+`go build -o`. The smoke test of each image builds and installs with its
+toolchain as `nonroot`.
+
+Workflows of this source cache `~/go` and `~/.cargo`, while images up to
+`v0.90.0` keep modules in `/go` and crates in `/usr/local/cargo`. A
+`runtime-image` older than the workflow misses the cache without failing;
+select the runtime image of the workflow's release. At a release cut,
+`just bump-runtime-tags <version>` moves every workflow's default to that
+release's images.
+
 ## Workflow → image mapping
 
 | Workflow | Image | Notes |

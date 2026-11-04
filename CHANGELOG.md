@@ -67,6 +67,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `snapshot-images.yml` takes a `registry` input, the registry host of the
   default image repository (default `ghcr.io`), which the snapshot
   orchestrator passes on.
+- `containers/buildah-job/Containerfile`: a Buildah job image built from the
+  digest-pinned Debian base with Buildah, netavark, aardvark-dns and
+  fuse-overlayfs from Debian's packages, so image jobs install nothing at run
+  time. Like the kaniko job image, it is built and pinned by the organization.
 - Administrator policy setting `enforce-reproducible-builds` (strict
   reproducible builds, default `true`). With `false`, missing Maven
   `project.build.outputTimestamp` or Gradle reproducible-archive settings are
@@ -439,6 +443,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   own base, not from the previous image's files. `/tmp` goes with it, so the
   kaniko job image now sets `TMPDIR=/kaniko/tmp`; rebuild and re-pin it from
   `containers/kaniko-job/Containerfile`. `docs/runners.md`.
+- **BREAKING:** The runtime images carry the ordinary user `nonroot`
+  (65532:65532, home `/home/nonroot`) beside their root default, and keep
+  every toolchain cache in the job user's home: `CARGO_HOME` and `GOPATH` are
+  no longer set, so crates and modules go to `~/.cargo` and `~/go`. The Go and
+  Cargo workflows cache those paths. What a job installs (`go install`, `cargo
+  install`, `npm install -g`) goes to `/opt/job-tools/bin`, on `PATH` for
+  either user, instead of `/go/bin` and `/usr/local/cargo/bin`. Migration: a
+  workflow `runtime-image` override older than this release misses the Go and
+  Cargo caches; select the matching runtime image. `docs/runtime-images.md`,
+  Users and caches.
 - **BREAKING:** Every published image is scanned, and the administrator
   policy (`enforce-vulnerabilities`) alone decides whether findings block.
   A container can no longer skip the scan of release images (Forgejo

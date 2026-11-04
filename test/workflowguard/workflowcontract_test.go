@@ -866,6 +866,64 @@ func TestRuntimeContainerfileExternalFromImagesAreDigestPinned(t *testing.T) {
 	}
 }
 
+// The runtime images run as root, which GitHub container jobs and kaniko
+// need, and carry the ordinary user nonroot (65532) a GitLab job may select.
+// A toolchain cache pinned to a root-owned directory would fail that user, so
+// none is set: each tool keeps its cache in the home of the job's user.
+func TestRuntimeContainerfileKeepsRootAndAWorkingNonrootUser(t *testing.T) {
+	t.Parallel()
+
+	body := string(reporoot.ReadFile(t, "containers/runtime/Containerfile"))
+
+	if !strings.Contains(body, "useradd --uid 65532 --gid 65532 --home-dir /home/nonroot --create-home") {
+		t.Error("the base stage must create the user nonroot, 65532:65532, with its home")
+	}
+
+	// One instruction per entry, continuation lines joined.
+	for instruction := range strings.SplitSeq(strings.ReplaceAll(body, "\\\n", " "), "\n") {
+		fields := strings.Fields(instruction)
+		if len(fields) == 0 {
+			continue
+		}
+
+		switch strings.ToUpper(fields[0]) {
+		case "USER":
+			t.Errorf("%q: the images run as root by default", instruction)
+		case "ENV":
+			for _, field := range fields[1:] {
+				name, _, _ := strings.Cut(field, "=")
+				if slices.Contains([]string{"HOME", "CARGO_HOME", "GOPATH", "GOMODCACHE", "GOCACHE", "GRADLE_USER_HOME", "MAVEN_CONFIG", "npm_config_cache"}, name) {
+					t.Errorf("ENV %s: the cache belongs in the job user's home, at the tool's default", name)
+				}
+			}
+		}
+	}
+}
+
+// The Buildah job image is built from a digest-pinned distribution base, not
+// a rotating Buildah image, and carries every package setup-buildah would
+// otherwise install, so the release's image jobs install nothing at run time.
+func TestBuildahJobImageIsPinnedAndCarriesBuildahsHelpers(t *testing.T) {
+	t.Parallel()
+
+	body := string(reporoot.ReadFile(t, "containers/buildah-job/Containerfile"))
+
+	for _, violation := range unpinnedRuntimeStages(body) {
+		t.Error(violation)
+	}
+
+	if strings.Contains(body, "quay.io/") {
+		t.Error("the Buildah job image must not start from quay.io's Buildah images, whose old manifests are deleted")
+	}
+
+	for _, want := range []string{"    buildah \\\n", "    netavark", "    aardvark-dns \\\n", "    fuse-overlayfs \\\n", "    git \\\n", "    curl \\\n", "    jq \\\n",
+		`org.opencontainers.image.title="forge-ci buildah job image"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("containers/buildah-job/Containerfile lacks %q", strings.TrimSpace(strings.TrimSuffix(want, "\\\n")))
+		}
+	}
+}
+
 func unpinnedRuntimeStages(body string) []string {
 	var violations []string
 

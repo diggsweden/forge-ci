@@ -28,6 +28,15 @@
 # Scripts are baked at /opt/forge-ci/scripts and templates at
 # /opt/forge-ci/templates. The Go binary lives at /usr/local/bin/
 # forge-ci. WORKDIR is /workspace.
+#
+# Every image runs as root unless the job says otherwise: GitHub's
+# `container:` jobs and kaniko need it. Each also has the user nonroot,
+# UID and GID 65532, home /home/nonroot, for a job that runs its checks as
+# an ordinary user (GitLab's image user). The toolchains are read-only for it
+# and keep their caches and downloads in the home of whoever runs them:
+# ~/.cargo, ~/go, ~/.m2, ~/.gradle, ~/.npm. No image sets HOME; the runtime
+# takes it from /etc/passwd. What a job installs itself (go install, cargo
+# install, npm install -g) goes to /opt/job-tools, first on PATH.
 # Tool versions are pinned via Renovate (datasource comments below or in
 # the install-*.sh helpers).
 #
@@ -183,6 +192,20 @@ RUN bash -c 'set -euo pipefail \
 # CI sandbox; the broadened scope introduces no multi-tenant exposure.
 RUN git config --system --add safe.directory '*'
 
+# The ordinary user a job may run as instead of root, at the UID distroless
+# images use. Nothing in the image is its own but its home and /opt/job-tools.
+#
+# A job's own tools go to /opt/job-tools/bin: GOBIN, CARGO_INSTALL_ROOT and
+# NPM_CONFIG_PREFIX name it in the toolchain stages. An install under ~ would
+# need ~/go/bin and ~/.cargo/bin on PATH, which ENV cannot expand per user,
+# and GitHub's container jobs run with HOME=/github/home; one fixed directory
+# works whatever HOME is. Root and nonroot may write it, the image's two users.
+RUN groupadd --gid 65532 nonroot \
+  && useradd --uid 65532 --gid 65532 --home-dir /home/nonroot --create-home --shell /bin/bash nonroot \
+  && install -d -o 65532 -g 65532 -m 0755 /opt/job-tools /opt/job-tools/bin
+
+ENV PATH=/opt/job-tools/bin:$PATH
+
 WORKDIR /workspace
 
 FROM base AS full
@@ -203,8 +226,13 @@ RUN bash -c 'set -euo pipefail \
 
 FROM base AS rust
 
-ENV CARGO_HOME=/usr/local/cargo \
-    RUSTUP_HOME=/usr/local/rustup \
+# The toolchain and cargo-cyclonedx are installed under /usr/local/cargo and
+# /usr/local/rustup, read-only for any user but root. CARGO_HOME is that
+# directory only while the image builds: a job's crates, registry index and
+# git checkouts go to its own ~/.cargo, cargo's default, and what it installs
+# to /opt/job-tools (CARGO_INSTALL_ROOT, set below).
+ARG CARGO_HOME=/usr/local/cargo
+ENV RUSTUP_HOME=/usr/local/rustup \
     PATH=/usr/local/cargo/bin:$PATH
 
 # renovate: datasource=github-releases depName=rust-lang/rust extractVersion=^(?<version>.*)$
@@ -243,7 +271,8 @@ RUN apt-get update \
 # Point cargo at the cross-linker for aarch64. Without this the
 # x86_64 default linker is used and aarch64 compiles fail with
 # "wrong architecture" link errors.
-ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
+    CARGO_INSTALL_ROOT=/opt/job-tools
 
 # =============================================================================
 # Go toolchain (build-go, sbom-go)
@@ -254,9 +283,13 @@ FROM base AS go
 # renovate: datasource=github-releases depName=CycloneDX/cyclonedx-gomod
 ARG CYCLONEDX_GOMOD_VERSION=v1.12.0
 
+# No GOPATH: modules and the build cache go to the job user's ~/go and
+# ~/.cache, Go's defaults, cyclonedx-gomod to /usr/local/bin and what a job
+# installs to /opt/job-tools/bin. With GOBIN set, go install refuses a
+# cross-compiled binary; go build -o places one.
 ENV GOROOT=/usr/local/go \
-    GOPATH=/go \
-    PATH=/usr/local/go/bin:/go/bin:$PATH
+    GOBIN=/opt/job-tools/bin \
+    PATH=/usr/local/go/bin:$PATH
 
 # CGO and the race detector require a C compiler and libc development headers.
 # gettext supplies msgmerge, msgen, msgattrib and msgfmt for catalog checks.
@@ -271,13 +304,12 @@ RUN apt-get update \
 # itself does not retry.
 COPY --from=go-toolchain /usr/local/go /usr/local/go
 
-RUN mkdir -p "$GOPATH" \
-  && for attempt in 1 2 3 4 5; do \
+RUN for attempt in 1 2 3 4 5; do \
        GOBIN=/usr/local/bin go install "github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@${CYCLONEDX_GOMOD_VERSION}" && break; \
        if [ "$attempt" -eq 5 ]; then exit 1; fi; \
        sleep $((attempt * 5)); \
      done \
-  && rm -rf "$GOPATH/pkg/mod" "$GOPATH/pkg/sumdb" /root/.cache/go-build \
+  && rm -rf /root/go /root/.cache/go-build \
   && go version \
   && cyclonedx-gomod version
 
@@ -306,6 +338,10 @@ RUN arch="$(dpkg --print-architecture)" \
   && node --version \
   && npm --version \
   && corepack --version
+
+# npm install -g puts packages in /opt/job-tools/lib and their commands in
+# /opt/job-tools/bin, not in the image's read-only /usr/local.
+ENV NPM_CONFIG_PREFIX=/opt/job-tools
 
 # =============================================================================
 # Java toolchain (build-maven, build-gradle-app, publish-maven-central)

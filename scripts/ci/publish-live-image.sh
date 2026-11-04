@@ -13,8 +13,10 @@
 #                CI_IMAGE_BUILDER=kaniko. A run admits it only when its source
 #                label names the repository the layer runs from, so it is
 #                labelled with the Forgejo consumer trial's scratch layer.
+#   buildah-job  containers/buildah-job/Containerfile, the GitLab release
+#                policy's builder-job-image with image-builder: buildah.
 #
-#   publish-live-image.sh <signer|kaniko-job> <forge-lab checkout> [<archive>]
+#   publish-live-image.sh <signer|kaniko-job|buildah-job> <forge-lab checkout> [<archive>]
 #
 # With an archive path, the image published is also saved there as a
 # docker-archive, for a GitLab trial that takes the image by archive.
@@ -27,9 +29,9 @@ repo_root=$(CDPATH='' cd -- "$script_dir/../.." && pwd -P)
 kind=${1:-}
 forge_lab=${2:-}
 archive=${3:-}
-if [[ $# -lt 2 || $# -gt 3 || ! "$kind" =~ ^(signer|kaniko-job)$ || "$forge_lab" != /* || ! -f "$forge_lab/justfile" ||
+if [[ $# -lt 2 || $# -gt 3 || ! "$kind" =~ ^(signer|kaniko-job|buildah-job)$ || "$forge_lab" != /* || ! -f "$forge_lab/justfile" ||
 	($# -eq 3 && "$archive" != /*) ]]; then
-	printf 'usage: %s <signer|kaniko-job> <absolute path of a Forge Lab checkout> [<absolute archive path>]\n' "$0" >&2
+	printf 'usage: %s <signer|kaniko-job|buildah-job> <absolute path of a Forge Lab checkout> [<absolute archive path>]\n' "$0" >&2
 	exit 2
 fi
 
@@ -44,7 +46,7 @@ done
 
 # What each image is built from. The image is keyed by the commit, so these
 # must be that commit's: the signer's Containerfile, its ignore file and the
-# one script it copies; the kaniko job image's own directory, its context.
+# one script it copies; a builder job image's own directory, its context.
 source_url=
 case "$kind" in
 signer)
@@ -55,6 +57,10 @@ kaniko-job)
 	context=$repo_root/containers/kaniko-job
 	image_inputs=(containers/kaniko-job)
 	source_url=$(cd -- "$repo_root" && "${GO:-go}" run ./internal/livetest/preflight consumer-trial-layer) || exit 2
+	;;
+buildah-job)
+	context=$repo_root/containers/buildah-job
+	image_inputs=(containers/buildah-job)
 	;;
 esac
 

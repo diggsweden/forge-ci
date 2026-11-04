@@ -71,3 +71,67 @@ java | android)
 	exit 1
 	;;
 esac
+
+# The same toolchain for the image's ordinary user, as a GitLab job with an
+# image user runs it: HOME from /etc/passwd, every cache below it, and nothing
+# outside it written but what the job installs, which lands on PATH in
+# /opt/job-tools. Root is the image's default, so the check drops to it.
+nonroot_smoke() {
+	local target=$1 work
+	installed() {
+		test "$(command -v -- "$1")" = "/opt/job-tools/bin/$1"
+	}
+	test "$(id -u):$(id -g)" = 65532:65532
+	test "$HOME" = /home/nonroot
+	work=$(mktemp -d "$HOME/smoke.XXXXXXXX")
+	cd -- "$work"
+	git init --quiet repository
+	case "$target" in
+	base | full) ;;
+	go)
+		printf 'module example.test/smoke\n\ngo 1.21\n' >go.mod
+		printf 'package main\n\nfunc main() {}\n' >main.go
+		go build -o smoke .
+		case "$(go env GOMODCACHE) $(go env GOCACHE)" in
+		"$HOME"/*" $HOME"/*) ;;
+		*) echo 'Go caches are not in the user home' >&2 && return 1 ;;
+		esac
+		go install .
+		installed smoke && smoke
+		cyclonedx-gomod version
+		;;
+	rust)
+		cargo new --quiet --vcs none smoke
+		cargo build --quiet --offline --manifest-path smoke/Cargo.toml
+		test -d "$HOME/.cargo"
+		cargo install --quiet --offline --path smoke
+		installed smoke && smoke
+		cargo cyclonedx --version
+		;;
+	node)
+		npm cache verify >/dev/null
+		test -d "$HOME/.npm"
+		corepack --version
+		mkdir smoke
+		printf '{"name":"smoke","version":"1.0.0","bin":{"smoke":"smoke.js"}}\n' >smoke/package.json
+		printf '#!/usr/bin/env node\n' >smoke/smoke.js
+		npm install --global --offline --no-audit --no-fund --silent ./smoke
+		installed smoke && smoke
+		;;
+	java | android)
+		gradle --version >/dev/null
+		test -d "$HOME/.gradle"
+		# Maven's local repository is ~/.m2, which only a plugin run creates.
+		mvn --batch-mode -version >/dev/null
+		mkdir -p -- "$HOME/.m2/repository"
+		;;
+	esac
+	cd -- "$HOME"
+	rm -rf -- "$work"
+}
+if [[ "$(id -u)" -eq 0 ]]; then
+	home=$(getent passwd 65532 | cut -d: -f6)
+	setpriv --reuid=65532 --regid=65532 --clear-groups \
+		env HOME="$home" USER=nonroot LOGNAME=nonroot \
+		bash -c "set -euo pipefail; $(declare -f nonroot_smoke); nonroot_smoke \"\$1\"" nonroot-smoke "$target"
+fi

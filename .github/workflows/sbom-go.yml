@@ -70,7 +70,7 @@ jobs:
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
-            /go/pkg/mod
+            ~/go/pkg/mod
             ~/.cache/go-build
           key: go-sbom-${{ runner.os }}-${{ hashFiles(format('{0}/go.sum', inputs['working-directory']), format('{0}/go.mod', inputs['working-directory'])) }}
           restore-keys: |
