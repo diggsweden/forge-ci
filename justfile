@@ -250,12 +250,15 @@ test-fuzz-all time="14s": (_job "test-fuzz-all" ("suite=generated fuzz campaign;
     #!/usr/bin/env bash
     set -euo pipefail
     FUZZTIME="$1"
+    # Assigned first so a package that does not list or compile fails the run.
+    packages=$(go list ./...)
     while IFS= read -r pkg; do
+        targets=$(go test -list '^Fuzz' "$pkg")
         while IFS= read -r testname; do
-            [[ -n "$testname" ]] || continue
+            [[ "$testname" == Fuzz* ]] || continue
             go test "$pkg" -run=^$ -fuzz="^${testname}$" -fuzztime="$FUZZTIME"
-        done < <(go test -list '^Fuzz' "$pkg" 2>/dev/null | grep '^Fuzz' || true)
-    done < <(go list ./...)
+        done <<<"$targets"
+    done <<<"$packages"
 
 # The guards over .forgejo/ (test/forgejoguard) and the layer's own shell
 # (test/forgejobehavior), run against fakes and, in its engine tier, against the
@@ -719,7 +722,7 @@ upgrade-list:
     @printf "=== mise (pinned tools) ===\n"
     @mise outdated || true
     @printf "\n=== Go modules (entries with [...] have updates available) ===\n"
-    @go list -u -m all 2>/dev/null | grep -E '\[' || printf "No Go module updates available.\n"
+    @modules=$(go list -u -m all) && { grep -E '\[' <<<"$modules" || printf "No Go module updates available.\n"; }
 
 # ==================================================================================== #
 # MAINTENANCE - Clean build outputs and caches

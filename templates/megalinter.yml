@@ -128,6 +128,10 @@ spec:
       # it. Conversion is best-effort and does not change the lint gate's exit
       # code.
       if [ "$ENABLE_GITLAB_SAST" = "true" ] && [ -f "$SARIF_FILE" ]; then
+        # GitLab runs the script under errexit, which would end the job on a
+        # failed conversion, while an `if` or `||` around the subshell would
+        # switch its own errexit off. Pause the job's errexit around it instead.
+        set +e
         (
           set -euo pipefail
           expected='$[[ component.sha ]]'
@@ -157,10 +161,8 @@ spec:
           SIGNER_STRICT=1 verify_forge_ci
           run_forge_ci security report to-gitlab-sast --input "$SARIF_FILE" --output "$GL_SAST_FILE"
         )
-        # Read the status afterwards, not with `||` or `if !`: errexit is
-        # ignored inside a subshell in either context, so a failed step would
-        # not stop the conversion.
         converted=$?
+        set -e
         if [ "$converted" -ne 0 ]; then
           echo "WARN: GitLab-SAST conversion skipped (engine checkout, download or conversion failed); SARIF kept as plain artifact."
         fi
