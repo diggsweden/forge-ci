@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: The Forge CI Authors
 # SPDX-License-Identifier: CC0-1.0
 set -euo pipefail
-test "$(id -u)" = 65532
+test "$(id -u):$(id -g)" = 65532:65532
 test "${CARGO_BUILD_JOBS:-}" = 2
 test "$(rustc --version | cut -d ' ' -f2)" = 1.99.1
 rustup target list --installed | grep -Fx x86_64-unknown-linux-gnu

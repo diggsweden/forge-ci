@@ -66,7 +66,9 @@ const settingVersionBump = "version-bump"
 // input of that name.
 const settingJobUser = "job-user"
 
-var jobUserValue = regexp.MustCompile(`^[0-9]+(:[0-9]+)?$`)
+// jobUserValue is UID[:GID] in canonical decimal: a leading zero would pass
+// the policy's input check and then never equal what `id -u` prints.
+var jobUserValue = regexp.MustCompile(`^(0|[1-9][0-9]*)(:(0|[1-9][0-9]*))?$`)
 
 // ParseGitLabReleaseSettings reads one setting per line: version-bump=maven|npm|cargo
 // and job-user=UID[:GID], which the trial writes into the release policy,

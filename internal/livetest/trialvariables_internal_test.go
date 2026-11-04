@@ -84,6 +84,7 @@ func TestParseGitLabReleaseSettings_SeparatesTheBumpFromVariables(t *testing.T) 
 		"version-bump=gradle", "version-bump=maven\nversion-bump=maven", "version-bump=",
 		"version=vv0.2.0", "version=0.2", "version=1.0.0\nversion=1.0.1",
 		"job-user=", "job-user=nonroot", "job-user=65532\njob-user=65532", "job-user=65532:",
+		"job-user=065532", "job-user=65532:065532", "job-user=00",
 		// The policy selects the builder and the job user on GitLab, not the
 		// build's environment.
 		"CI_IMAGE_BUILDER=kaniko", "CI_IMAGE_BUILDER_JOB_IMAGE=registry.invalid/kaniko@sha256:" + strings.Repeat("a", 64),
