@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 # SPDX-License-Identifier: CC0-1.0
 
-# Install git-cliff if not already available.
+# Install the pinned git-cliff, unless that version is already on PATH.
 #
 # Usage: source this file, then call install_git_cliff
 #   source "$(dirname "$0")/../bootstrap/install-git-cliff.sh"
@@ -60,10 +60,7 @@ resolve_git_cliff_sha256() {
 }
 
 install_git_cliff() {
-	if command -v git-cliff &>/dev/null; then
-		ci_print_already_installed "git-cliff" "$(git-cliff --version 2>/dev/null | tr -d '\r')"
-		return 0
-	fi
+	ci_use_installed_pin git-cliff git-cliff "$GIT_CLIFF_VERSION" --version && return 0
 
 	local install_dir dist sha256 asset_url archive
 	install_dir="$(ci_install_dir git-cliff)"

@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 # SPDX-License-Identifier: CC0-1.0
 
-# Install Trivy vulnerability scanner if not already available.
+# Install the pinned Trivy vulnerability scanner, unless that version is already on PATH.
 #
 # Usage: source this file, then call install_trivy
 #   source "$(dirname "$0")/../bootstrap/install-trivy.sh"
@@ -21,10 +21,7 @@ readonly TRIVY_SHA256_DARWIN_AMD64="7aa762eacd582052d053b62dcf972a1ab058abe39a57
 readonly TRIVY_SHA256_DARWIN_ARM64="11a9b6cd2752011b54f01ea4bd0dbfa9f0c41dc6538d5a3f9d23955f471bf4e5"
 
 install_trivy() {
-	if command -v trivy &>/dev/null; then
-		ci_print_already_installed "Trivy" "$(trivy --version 2>/dev/null | head -1)"
-		return 0
-	fi
+	ci_use_installed_pin trivy Trivy "$TRIVY_VERSION" --version && return 0
 
 	local install_dir os arch asset sha256 archive version
 	install_dir="$(ci_install_dir trivy)"

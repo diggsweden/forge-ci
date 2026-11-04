@@ -69,10 +69,26 @@ ci_require_command() {
 	fi
 }
 
-ci_print_already_installed() {
-	local label="$1"
-	local version="$2"
-	printf '%s already installed: %s\n\n' "$label" "$version"
+# ci_use_installed_pin succeeds when cmd on PATH already is the pinned
+# version: its version output names the pin as a whole version, with or
+# without a leading v. Anything else, an unreadable version or a mise shim
+# with nothing behind it included, is left for the pinned, checksum-verified
+# download to replace, because the jobs' results depend on the exact version.
+#   ci_use_installed_pin trivy Trivy "$TRIVY_VERSION" --version && return 0
+ci_use_installed_pin() {
+	local cmd="$1" label="$2" pin="$3" version reported
+	shift 3
+	command -v "$cmd" &>/dev/null || return 1
+
+	version="${pin#v}"
+	reported="$("$cmd" "$@" 2>/dev/null | tr -d '\r')" || true
+	if grep -Eq "(^|[^0-9A-Za-z.])v?${version//./\\.}([^0-9A-Za-z.+-]|\$)" <<<"$reported"; then
+		printf '%s already installed: %s\n\n' "$label" "$(head -1 <<<"$reported")"
+		return 0
+	fi
+	printf '%s on PATH is not the pinned %s (it reports: %s); installing the pinned one\n' \
+		"$label" "$pin" "$(head -1 <<<"${reported:-nothing}")"
+	return 1
 }
 
 ci_print_installed() {

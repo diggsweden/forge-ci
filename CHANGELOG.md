@@ -161,6 +161,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Bootstrap installers reuse a tool already on `PATH` only when it reports the
+  pinned version; any other version is replaced by the pinned,
+  checksum-verified download, so a runner's older Trivy no longer decides the
+  scan gate.
 - GitHub workflows called from a fork install that fork's engine, bootstrap
   scripts and signing identity. `FORGE_CI_REPOSITORY` now defaults to the
   repository serving the called workflow (`job.workflow_repository`) instead

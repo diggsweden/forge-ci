@@ -2,12 +2,12 @@
 # SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 # SPDX-License-Identifier: CC0-1.0
 
-# Install cargo-cyclonedx, the Cargo Build SBOM generator, if not already available.
+# Install the pinned cargo-cyclonedx, the Cargo Build SBOM generator.
 #
 # forge-ci's runtime image carries it; a Forgejo build job runs on the
 # consumer's runner instead, so build-cargo brings it the same way
 # release-images brings Trivy. A cargo-cyclonedx already on PATH (from the
-# consumer's mise config, say) is used as it is.
+# consumer's mise config, say) is used only when it is the pinned version.
 #
 # Usage: source this file, then call install_cargo_cyclonedx
 #   source "$(dirname "$0")/../bootstrap/install-cargo-cyclonedx.sh"
@@ -27,10 +27,7 @@ readonly CARGO_CYCLONEDX_SHA256_DARWIN_AMD64="59d2a583fa632f8759456c1b5313403312
 readonly CARGO_CYCLONEDX_SHA256_DARWIN_ARM64="4c53dfa21e70b65bf7f8d2592aadde3bcb02c1a40b6ec63b877e5ca65a29e180"
 
 install_cargo_cyclonedx() {
-	if command -v cargo-cyclonedx &>/dev/null; then
-		ci_print_already_installed "cargo-cyclonedx" "$(cargo-cyclonedx cyclonedx --version 2>/dev/null | head -1)"
-		return 0
-	fi
+	ci_use_installed_pin cargo-cyclonedx cargo-cyclonedx "$CARGO_CYCLONEDX_VERSION" cyclonedx --version && return 0
 
 	local install_dir triple asset sha256 archive
 	install_dir="$(ci_install_dir cargo-cyclonedx)"

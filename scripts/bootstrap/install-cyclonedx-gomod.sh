@@ -2,12 +2,12 @@
 # SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 # SPDX-License-Identifier: CC0-1.0
 
-# Install cyclonedx-gomod, the Go Build SBOM generator, if not already available.
+# Install the pinned cyclonedx-gomod, the Go Build SBOM generator.
 #
 # forge-ci's runtime image carries it; a Forgejo build job runs on the
 # consumer's runner instead, so build-go brings it the same way release-images
 # brings Trivy. A cyclonedx-gomod already on PATH (from the consumer's mise
-# config, say) is used as it is.
+# config, say) is used only when it is the pinned version.
 #
 # Usage: source this file, then call install_cyclonedx_gomod
 #   source "$(dirname "$0")/../bootstrap/install-cyclonedx-gomod.sh"
@@ -27,10 +27,7 @@ readonly CYCLONEDX_GOMOD_SHA256_DARWIN_AMD64="94ab2d999341e4bc8d26767bffda2823ac
 readonly CYCLONEDX_GOMOD_SHA256_DARWIN_ARM64="43dcd58b7a7ef9d84a2d21df9c6eeeb907d5b4ee2b1fe6c1330e5bc9b478281e"
 
 install_cyclonedx_gomod() {
-	if command -v cyclonedx-gomod &>/dev/null; then
-		ci_print_already_installed "cyclonedx-gomod" "$(cyclonedx-gomod version 2>/dev/null | head -1)"
-		return 0
-	fi
+	ci_use_installed_pin cyclonedx-gomod cyclonedx-gomod "$CYCLONEDX_GOMOD_VERSION" version && return 0
 
 	local install_dir os arch asset sha256 archive version
 	install_dir="$(ci_install_dir cyclonedx-gomod)"

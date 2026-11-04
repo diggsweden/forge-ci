@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 # SPDX-License-Identifier: CC0-1.0
 
-# Install the publiccode-parser-go CLI if not already available.
+# Install the pinned the publiccode-parser-go CLI, unless that version is already on PATH.
 #
 # Usage: source this file, then call install_publiccode_parser
 #   source "$(dirname "$0")/../bootstrap/install-publiccode-parser.sh"
@@ -60,10 +60,7 @@ resolve_publiccode_parser_sha256() {
 }
 
 install_publiccode_parser() {
-	if command -v publiccode-parser &>/dev/null; then
-		ci_print_already_installed "publiccode-parser" "$(publiccode-parser --version 2>/dev/null | head -1 | tr -d '\r')"
-		return 0
-	fi
+	ci_use_installed_pin publiccode-parser publiccode-parser "$PUBLICCODE_PARSER_VERSION" --version && return 0
 
 	local install_dir dist sha256 asset_url archive
 	install_dir="$(ci_install_dir publiccode-parser)"

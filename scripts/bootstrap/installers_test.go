@@ -1427,3 +1427,51 @@ func TestBootstrapForgeCICosign_StaysOutOfLaterSteps(t *testing.T) {
 		t.Errorf("the bootstrap cosign reached GITHUB_PATH: %q", body)
 	}
 }
+
+// TestPinnedInstallers_ReuseOnlyThePinnedVersion puts the tool on PATH as a
+// fixture reporting a version the way the real tool does. Only the pinned
+// version is reused; any other, an unreadable one included, goes on to the
+// pinned download, which the inert curl of runSourcedScript then refuses.
+func TestPinnedInstallers_ReuseOnlyThePinnedVersion(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct{ tool, pinned, other string }{
+		{"trivy", "Version: 0.76.1", "Version: 0.76.0"},
+		{"cyclonedx-gomod", "Version:          v1.12.0", "Version:          v1.12.0-rc1"},
+		{"cargo-cyclonedx", "cargo-cyclonedx 0.5.9", "cargo-cyclonedx 0.5.10"},
+		{"git-cliff", "git-cliff 2.14.2", "git-cliff 2.14.1"},
+		{"gh", "gh version 2.103.2 (2026-10-01)", "gh version 2.103.20 (2026-10-01)"},
+		{"glab", "glab 1.124.0 (abc1234)", "glab 1.123.0 (abc1234)"},
+		{"yq", "yq (https://example.invalid/yq/) version v4.54.1", "yq version v4.54.11"},
+		{"mise", "2026.10.19 linux-x64 (2026-10-19)", "2026.10.1 linux-x64 (2026-10-01)"},
+		{"publiccode-parser", "publiccode-parser v5.4.3", ""},
+	} {
+		t.Run(tc.tool, func(t *testing.T) {
+			t.Parallel()
+
+			for _, reported := range []string{tc.pinned, tc.other} {
+				bin := t.TempDir()
+				fixture := "#!/bin/sh\nprintf '%s\\n' '" + reported + "'\n"
+
+				if err := os.WriteFile(filepath.Join(bin, tc.tool), []byte(fixture), 0o700); err != nil {
+					t.Fatal(err)
+				}
+
+				stdout, stderr, err := runSourcedScript(t, "install-"+tc.tool+".sh", "install_"+strings.ReplaceAll(tc.tool, "-", "_"),
+					map[string]string{"PATH": bin})
+
+				if reported == tc.pinned {
+					if err != nil || !strings.Contains(stdout, "already installed") {
+						t.Errorf("%q: err=%v stdout=%q stderr=%q, want the pinned tool reused", reported, err, stdout, stderr)
+					}
+
+					continue
+				}
+
+				if err == nil || !strings.Contains(stdout, "is not the pinned") || !strings.Contains(stderr, "unexpected download attempt") {
+					t.Errorf("%q: err=%v stdout=%q stderr=%q, want the pinned download", reported, err, stdout, stderr)
+				}
+			}
+		})
+	}
+}

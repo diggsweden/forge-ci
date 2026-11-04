@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 # SPDX-License-Identifier: CC0-1.0
 
-# Install Mike Farah yq if not already available.
+# Install the pinned Mike Farah yq, unless that version is already on PATH.
 #
 # Usage: source this file, then call install_yq
 #   source "$(dirname "$0")/../bootstrap/install-yq.sh"
@@ -63,10 +63,7 @@ resolve_yq_sha256() {
 }
 
 install_yq() {
-	if command -v yq &>/dev/null; then
-		ci_print_already_installed "yq" "$(yq --version 2>/dev/null | tr -d '\r')"
-		return 0
-	fi
+	ci_use_installed_pin yq yq "$YQ_VERSION" --version && return 0
 
 	local install_dir dist sha256 asset_url download
 	install_dir="$(ci_install_dir yq)"

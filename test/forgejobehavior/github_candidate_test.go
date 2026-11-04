@@ -55,10 +55,14 @@ func TestGoJobInstallsOnlyPinnedJustBeforeRunningItsRecipes(t *testing.T) {
 		box.write(path, string(reporoot.ReadFile(t, path)), 0o600)
 	}
 
+	// The runner's mise is reused only at the installer's pin.
+	_, pin, _ := strings.Cut(string(reporoot.ReadFile(t, "scripts/bootstrap/install-mise.sh")), `readonly MISE_VERSION="`)
+	pin, _, _ = strings.Cut(pin, `"`)
+
 	box.write("bin/mise", `#!/bin/sh
 set -eu
 case "$*" in
-  --version) printf 'fixture mise\n' ;;
+  --version) printf '%s linux-x64 (fixture)\n' "$MISE_PIN" ;;
   'install aqua:casey/just') printf installed >"$INSTALL_MARKER" ;;
   'bin-paths aqua:casey/just') test -f "$INSTALL_MARKER"; printf '%s\n' "$PINNED_JUST_BIN" ;;
   *) printf 'unexpected tool request: %s\n' "$*" >&2; exit 98 ;;
@@ -68,7 +72,7 @@ esac
 	just := filepath.Join(box.root, "pinned-just-bin")
 
 	result := box.run(setup.Run, "PATH="+filepath.Join(box.root, "bin")+":/usr/bin:/bin",
-		"GITHUB_PATH="+path, "PINNED_JUST_BIN="+just, "INSTALL_MARKER="+filepath.Join(box.root, "installed"))
+		"GITHUB_PATH="+path, "PINNED_JUST_BIN="+just, "MISE_PIN="+pin, "INSTALL_MARKER="+filepath.Join(box.root, "installed"))
 	if result.status != 0 {
 		t.Fatalf("Just-only bootstrap failed: %s", result.stderr)
 	}
