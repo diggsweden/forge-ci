@@ -125,8 +125,15 @@ one.
 #### GitHub
 
 The entry point is an organization ruleset that requires a workflow from the
-administrator's repository on the consumer's branches. That workflow calls the
-orchestrators with the settings written out:
+administrator's repository on the consumer's branches.
+
+The selected GitHub plan must support ruleset workflows, and the source
+repository's visibility/access must permit running them in the consumers.
+Configure the actual workflow rule; matching a consumer-controlled status-check
+name does not establish the same ownership boundary. See GitHub's
+[ruleset workflow requirements](https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#require-workflows-to-pass-before-merging).
+
+That workflow calls the orchestrators with the settings written out:
 
 ```yaml
 jobs:
