@@ -53,6 +53,24 @@ func TestReadImageBuildPlan_PreservesConsumerPolicyWithoutBackendKnowledge(t *te
 	require.Equal(t, ordinary, got)
 }
 
+func TestResolvedBuildLabelsCannotReplaceReleaseIdentity(t *testing.T) {
+	t.Parallel()
+
+	for _, key := range pipeline.StandardReleaseImageLabels {
+		t.Run(key, func(t *testing.T) {
+			t.Parallel()
+
+			plan := resolvedBasePlan()
+			plan.Builds[0].Labels = key + "=another-source"
+			body, err := json.Marshal(plan)
+			require.NoError(t, err)
+			_, err = pipeline.ReadImageBuildPlan(string(body), "ghcr.io/acme/app-base", "v1.2.3")
+			require.ErrorIs(t, err, errs.ErrInvalidConfig)
+			require.ErrorContains(t, err, "cannot be replaced")
+		})
+	}
+}
+
 func TestReadImageBuildPlan_RefusesIncompleteOrInconsistentPublication(t *testing.T) {
 	t.Parallel()
 

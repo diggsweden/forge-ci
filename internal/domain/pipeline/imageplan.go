@@ -255,6 +255,11 @@ func (index *imagePlanIndex) claimBuild(build ReleaseImageBuild, repository stri
 		return err
 	}
 
+	if _, err := ReleaseImageLabels(imagePlanLines(build.Labels)); err != nil {
+		// This is malformed resolved configuration, not CLI flag syntax.
+		return fmt.Errorf("image build plan labels for %q: %s: %w", key, err.Error(), errs.ErrInvalidConfig)
+	}
+
 	request := domaincontainer.BuildRequest{
 		Context: build.Context, Containerfile: build.ContainerFile, Target: build.Target,
 		Platform: build.Platform, BuildArgs: imagePlanLines(build.BuildArgs),

@@ -23,6 +23,42 @@ printf '%s\0' "$@" >"${FAKE_ARGV_LOG:?}"
 pwd >"${FAKE_ARGV_LOG}.pwd"
 `
 
+func TestReleaseImageLabelsReachThePlanBeforeAnyBuild(t *testing.T) {
+	t.Parallel()
+
+	box := newSandbox(t, "release-image-labels")
+	box.write(".engine/bin/forge-ci", directoryRecordingEngine, 0o700)
+	box.write("workspace/source/Containerfile", "FROM scratch\n", 0o600)
+
+	step := workflowStep(t, "release-images.yml", "plan", "Plan release images")
+	labels := []string{"org.example.features=one,two", "org.opencontainers.image.licenses=MIT"}
+
+	got := box.run(step.Run,
+		"HELPERS_DIR="+box.root, "GITHUB_WORKSPACE="+filepath.Join(box.root, "workspace"),
+		"DECLARATION_FILE=", "IMAGE_REPOSITORY=registry.invalid/org/app", "REGISTRY_USER=org",
+		"RELEASE_TAG=v1.2.3", "RELEASE_PLATFORMS=linux/amd64", "IMAGE_PLAN_JSON=",
+		"FORGEJO_SERVER=https://forgejo.invalid", "FORGEJO_REPO=org/app", "IMAGE_LABELS="+strings.Join(labels, "\n"))
+
+	if got.status != 0 {
+		t.Fatalf("plan step: status %d: %s", got.status, got.stderr)
+	}
+
+	argv := box.argv()
+	for _, label := range labels {
+		if at := slices.Index(argv, label); at < 1 || argv[at-1] != "--label" {
+			t.Errorf("label %q did not reach the engine's plan-time admission: %q", label, argv)
+		}
+	}
+
+	if step.Env["IMAGE_LABELS"] != "${{ inputs.labels }}" {
+		t.Fatal("workflow labels must enter the plan step")
+	}
+
+	if _, late := workflowStep(t, "release-images.yml", "build", "Build ${{ matrix.build.arch }} layout").Env["IMAGE_LABELS"]; late {
+		t.Fatal("build step must consume admitted plan labels rather than the raw workflow input")
+	}
+}
+
 // The engine takes only relative metadata directories and resolves the
 // Containerfile and context against its working directory. The build stages
 // beside the checkout, never in a build context, and uploads what it staged;

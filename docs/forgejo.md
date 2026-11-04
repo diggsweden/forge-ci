@@ -933,8 +933,9 @@ in `.forge-ci/artifacts.yml` for more images, other platforms or tag variants.
       RELEASE_REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
 ```
 
-The builds need user namespaces, so the runner labels follow the container
-runners where an installation names them, as other image-building jobs do.
+Buildah builds need user namespaces, so their runner labels follow the
+container runners where an installation names them. Kaniko builds use the
+admitted builder job image on the ordinary runner pool instead.
 
 - **plan** reads the declaration and stops the run before any build on what
   the workflow does not do: `build-secrets`, `extract`, a `scan-severity`
@@ -946,7 +947,8 @@ runners where an installation names them, as other image-building jobs do.
   over it when one is named (binaries built in an earlier job, for example),
   and builds to an OCI layout with `build-arch --stage`, labelled with the
   source, revision, title, version, url, documentation, ref.name (the final
-  tag) and created (the release commit's time), then the `labels` input. It
+  tag) and created (the release commit's time), then the labels admitted by
+  the plan. Custom labels cannot replace those provenance labels. It
   writes nothing to a
   registry and receives no secret, so the Containerfile never runs beside a
   token. Its pulls are anonymous, whatever login the runner keeps, so the
@@ -1028,7 +1030,11 @@ IDs can pass `image-plan-json` instead of `artifacts-config`. This is the same
 `builds`/`images` JSON contract that `container release-images plan` emits, not a
 second builder interface. Each build supplies its name, native architecture and
 platform, repository-local Containerfile/context, target, public arguments and
-optional labels. Each image supplies its destination, staging/final tags,
+optional labels. Resolved labels undergo the same admission as the workflow's
+`labels` input: standard source/revision/title/version/url/documentation/ref.name/
+created labels cannot be replaced. A resolved plan carries its own labels and
+cannot be combined with the workflow's separate `labels` input.
+Each image supplies its destination, staging/final tags,
 complete architecture set and, optionally, `scan: true`. Optional ledger policy fields carry
 the image kind, flavor, base ref/input ID and moving tag; `required-labels` are
 checked on every staged child before publication.

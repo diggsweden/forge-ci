@@ -87,7 +87,7 @@ on:
         default: ''
       labels:
         description: >-
-          Newline-separated key=value image labels for every image, for example org.opencontainers.image.licenses=MIT. The workflow sets source, revision, title, version, url, documentation (<source>#readme), ref.name (the final tag) and created (the release commit's time); labels named here are applied after them.
+          Newline-separated key=value image labels for every image, for example org.opencontainers.image.licenses=MIT. The workflow sets source, revision, title, version, url, documentation (<source>#readme), ref.name (the final tag) and created (the release commit's time); labels named here are admitted by the plan and cannot replace those provenance labels. A resolved image-plan-json carries its own labels and cannot be combined with this input.
         type: string
         required: false
         default: ''
@@ -292,6 +292,7 @@ jobs:
           RELEASE_TAG: ${{ inputs['release-tag'] }}
           RELEASE_PLATFORMS: ${{ inputs['release-platforms'] }}
           IMAGE_PLAN_JSON: ${{ inputs['image-plan-json'] }}
+          IMAGE_LABELS: ${{ inputs.labels }}
         run: |
           set -euo pipefail
           # shellcheck source=.engine/bin/lib-forge-ci.sh
@@ -301,8 +302,13 @@ jobs:
           if [ -n "${DECLARATION_FILE}" ]; then
             file=(--file "${DECLARATION_FILE}")
           fi
+          labels=()
+          while IFS= read -r line; do
+            [ -z "${line}" ] || labels+=(--label "${line}")
+          done <<<"${IMAGE_LABELS}"
           run_forge_ci container release-images plan \
             "${file[@]}" \
+            "${labels[@]}" \
             --release-tag "${RELEASE_TAG:?}" \
             --release-platforms "${RELEASE_PLATFORMS}" \
             --server-url "${FORGEJO_SERVER:?}" \
@@ -424,7 +430,6 @@ jobs:
           EXPECTED_BUILDER_MATERIAL_ID: ${{ matrix.build['builder-material-id'] }}
           CACHE_TAG: ${{ matrix.build['cache-tag'] }}
           REQUIRED_IMAGE_LABELS: ${{ matrix.build['required-labels'] }}
-          IMAGE_LABELS: ${{ inputs.labels }}
           RELEASE_TAG: ${{ inputs['release-tag'] }}
           RELEASE_SHA: ${{ matrix.build.revision || inputs['release-sha'] }}
         run: |
@@ -441,7 +446,7 @@ jobs:
           # The standard labels a release image carries beside the source,
           # revision, title and version the engine sets. The created time is
           # the release commit's, so it names the source, not the build. The
-          # caller's labels come after these and replace any of them.
+          # plan admits additional labels without replacing this provenance.
           source_url="${FORGEJO_SERVER:?}/${FORGEJO_REPO:?}"
           created=$(TZ=UTC0 git -C "${GITHUB_WORKSPACE:?}/source" show -s --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd HEAD)
           args=(
@@ -456,9 +461,6 @@ jobs:
           while IFS= read -r line; do
             [ -z "${line}" ] || args+=(--label "${line}")
           done <<<"${PLANNED_IMAGE_LABELS:-}"
-          while IFS= read -r line; do
-            [ -z "${line}" ] || args+=(--label "${line}")
-          done <<<"${IMAGE_LABELS}"
           if [ -n "${CACHE_TAG:-}" ]; then
             args+=(--cache-tag "${CACHE_TAG}")
             while IFS= read -r line; do
