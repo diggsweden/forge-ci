@@ -316,6 +316,27 @@ type StagedSignerRegistry interface {
 // PublishAndAssembleSignerImage admits all architecture records and local blobs
 // before uploading any of them, then retains the existing manifest/output contract.
 func PublishAndAssembleSignerImage(ctx context.Context, registry StagedSignerRegistry, sink ci.OutputSink, summary ci.SummarySink, out io.Writer, in SignerImageAssembleInput) (*SignerImageMetadata, error) {
+	staged, err := AdmitStagedSignerImage(ctx, registry, out, in)
+	if err != nil {
+		return nil, err
+	}
+
+	return staged.Publish(ctx, registry, sink, summary, out)
+}
+
+// StagedSignerImage is an image whose staged architecture layouts are
+// admitted, verified and, with evidence, scanned and gated, and that has not
+// been uploaded.
+type StagedSignerImage struct {
+	in      SignerImageAssembleInput
+	derived signerImageManifestDerived
+	inputs  []LayoutRecordInput
+}
+
+// AdmitStagedSignerImage reads and checks every staged architecture of one
+// image without a registry write. Callers publishing several images admit
+// them all before publishing any.
+func AdmitStagedSignerImage(ctx context.Context, registry StagedSignerRegistry, out io.Writer, in SignerImageAssembleInput) (*StagedSignerImage, error) {
 	derived, err := deriveSignerImageManifest(in)
 	if err != nil {
 		return nil, err
@@ -345,7 +366,15 @@ func PublishAndAssembleSignerImage(ctx context.Context, registry StagedSignerReg
 		}
 	}
 
-	if _, uploadErr := PublishImageLayouts(ctx, registry, out, inputs, in.RetryAttempts, in.RetryDelay); uploadErr != nil {
+	return &StagedSignerImage{in: in, derived: derived, inputs: inputs}, nil
+}
+
+// Publish uploads the admitted layouts, assembles their index and writes
+// its evidence.
+func (s *StagedSignerImage) Publish(ctx context.Context, registry StagedSignerRegistry, sink ci.OutputSink, summary ci.SummarySink, out io.Writer) (*SignerImageMetadata, error) {
+	in := s.in
+
+	if _, uploadErr := PublishImageLayouts(ctx, registry, out, s.inputs, in.RetryAttempts, in.RetryDelay); uploadErr != nil {
 		return nil, uploadErr
 	}
 
@@ -355,12 +384,12 @@ func PublishAndAssembleSignerImage(ctx context.Context, registry StagedSignerReg
 	}
 
 	if in.Evidence != nil && in.Evidence.IndexSBOMOutput != "" {
-		if err := writeStagedIndexEvidence(ctx, sink, in, inputs, meta); err != nil {
+		if err := writeStagedIndexEvidence(ctx, sink, in, s.inputs, meta); err != nil {
 			return nil, err
 		}
 	}
 
-	if cacheErr := publishArchitectureCaches(ctx, registry, out, in, derived, inputs); cacheErr != nil {
+	if cacheErr := publishArchitectureCaches(ctx, registry, out, in, s.derived, s.inputs); cacheErr != nil {
 		return nil, cacheErr
 	}
 

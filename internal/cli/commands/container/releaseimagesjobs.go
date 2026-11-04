@@ -23,6 +23,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
 	"github.com/diggsweden/forge-ci/internal/cliio"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/imageledger"
 	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
 )
 
@@ -76,12 +77,7 @@ EXAMPLE:
 			builds := releaseImageBuildsOf(plan, arch)
 
 			for _, build := range builds {
-				input, err := releaseImageBuildInput(cmd, build)
-				if err != nil {
-					return err
-				}
-
-				if _, err := appcontainer.StageSignerImageArch(ctx, signerImageTool{builder}, ociregistry.NewAnonymous(), os.Stderr, input); err != nil {
+				if _, err := appcontainer.StageSignerImageArch(ctx, signerImageTool{builder}, ociregistry.NewAnonymous(), os.Stderr, releaseImageBuildInput(cmd, build)); err != nil {
 					return fmt.Errorf("release image %s (%s): %w", build.Name, build.Arch, err)
 				}
 			}
@@ -109,13 +105,7 @@ func releaseImageBuildsOf(plan pipeline.ReleaseImagesPlan, arch string) []pipeli
 
 // releaseImageBuildInput is the build-arch --stage call the Forgejo workflow's
 // build step makes for one planned build.
-func releaseImageBuildInput(cmd *cli.Command, build pipeline.ReleaseImageBuild) (appcontainer.SignerImageBuildArchInput, error) {
-	// A builder material ID comes only from a consumer's image-plan-json,
-	// which this route does not take.
-	if build.BuilderMaterialID != "" {
-		return appcontainer.SignerImageBuildArchInput{}, fmt.Errorf("release image %s: a planned builder-material-id is not carried out by release-images build: %w", build.Name, errs.ErrInvalidConfig)
-	}
-
+func releaseImageBuildInput(cmd *cli.Command, build pipeline.ReleaseImageBuild) appcontainer.SignerImageBuildArchInput {
 	source := cmd.String(flagSourceDir)
 	sourceURL := strings.TrimRight(cmd.String(flagServerURL), "/") + "/" + cmd.String(flagRepository)
 
@@ -151,7 +141,7 @@ func releaseImageBuildInput(cmd *cli.Command, build pipeline.ReleaseImageBuild) 
 		CacheLabels:     cacheLabels,
 		MetadataDir:     filepath.Join(cmd.String(flagMetadataDir), build.Name+"-arch-"+build.Arch),
 		RetryAttempts:   cmd.Int(flagRetryAttempts),
-	}, nil
+	}
 }
 
 func releaseImagesPublishCmd() *cli.Command {
@@ -160,8 +150,8 @@ func releaseImagesPublishCmd() *cli.Command {
 		Usage: "scan, assemble and push every planned release image from its staged layouts, and write the release-images ledger",
 		Description: `Reads the plan file and admits --layouts-dir: it must hold exactly the
 planned <name>-arch-<arch> layouts, with no other entry and no link, and is
-only read. Then, for each image, it verifies and scans every staged
-architecture layout before the first upload, pushes the index under its
+only read. Then it verifies and scans every staged architecture layout of
+every image, and only when all of them pass pushes each index under its
 staging candidate tag, as multiarch-image assemble --from-layouts does, and
 records it as ledger add does. The ledger
 release-images.json, the Trivy results and the index manifests are written to
@@ -226,12 +216,41 @@ func readReleaseImagesPlanFile(cmd *cli.Command) (pipeline.ReleaseImagesPlan, er
 		return pipeline.ReleaseImagesPlan{}, err
 	}
 
-	return pipeline.ReadImageBuildPlan(string(body), cmd.String(flagImageRepository), cmd.String(flagReleaseTag))
+	plan, err := pipeline.ReadImageBuildPlan(string(body), cmd.String(flagImageRepository), cmd.String(flagReleaseTag))
+	if err != nil {
+		return pipeline.ReleaseImagesPlan{}, err
+	}
+
+	return plan, refuseUnsupportedJobPlan(plan)
+}
+
+// refuseUnsupportedJobPlan refuses what the job verbs do not carry out: a
+// base image, which has its own import and signing path, and a builder
+// material ID, which comes only from a consumer's image-plan-json.
+func refuseUnsupportedJobPlan(plan pipeline.ReleaseImagesPlan) error {
+	for _, image := range plan.Images {
+		if image.ImageKind == string(imageledger.ImageKindBase) {
+			return fmt.Errorf("release image %s: a base image is not published by the release-images job verbs: %w", image.Name, errs.ErrInvalidConfig)
+		}
+	}
+
+	for _, build := range plan.Builds {
+		if build.BuilderMaterialID != "" {
+			return fmt.Errorf("release image %s: a planned builder-material-id is not carried out by the release-images job verbs: %w", build.Name, errs.ErrInvalidConfig)
+		}
+	}
+
+	return nil
 }
 
 // writeReleaseImagesPlanFile writes the plan for the job verbs, after
-// refusing a build of an architecture no job builds.
+// refusing what they do not carry out and a build of an architecture no job
+// builds, so the plan stops before any image job runs.
 func writeReleaseImagesPlanFile(path string, plan pipeline.ReleaseImagesPlan, runnerArchs string) error {
+	if err := refuseUnsupportedJobPlan(plan); err != nil {
+		return err
+	}
+
 	if runnerArchs != "" {
 		available := strings.FieldsFunc(runnerArchs, func(r rune) bool { return r == ',' || r == '\n' || r == ' ' })
 		for _, build := range plan.Builds {

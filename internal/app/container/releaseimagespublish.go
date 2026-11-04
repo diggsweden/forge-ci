@@ -47,18 +47,14 @@ type PublishReleaseImagesInput struct {
 	Gate func(ctx context.Context, layout, platform string) error
 }
 
-// PublishReleaseImages scans and pushes every planned image from its staged
-// layouts, as the Forgejo publish job does for one, and writes their ledger
-// to OutputDir. The ledger is built in memory: nothing under LayoutsDir is
-// appended to or trusted beyond the planned layouts.
+// PublishReleaseImages publishes every planned image from its staged layouts
+// and writes their ledger to OutputDir. It admits, verifies, scans and gates
+// the layouts of all images first and pushes only when every one passes. The
+// ledger is built in memory: nothing under LayoutsDir is appended to or
+// trusted beyond the planned layouts. Unlike the Forgejo publish job it pins
+// no SBOM before publication: signing generates each image's SBOM from the
+// pushed image.
 func PublishReleaseImages(ctx context.Context, registry StagedSignerRegistry, summary ci.SummarySink, out io.Writer, in PublishReleaseImagesInput) error {
-	for _, image := range in.Plan.Images {
-		// Base images have their own import and signing path.
-		if image.ImageKind == string(imageledger.ImageKindBase) {
-			return fmt.Errorf("release image %s: a base image is not published by release-images publish: %w", image.Name, errs.ErrInvalidConfig)
-		}
-	}
-
 	if _, err := os.Lstat(in.OutputDir); err == nil {
 		return fmt.Errorf("release-images publish: %s already exists: %w", in.OutputDir, errs.ErrUsage)
 	}
@@ -79,13 +75,31 @@ func PublishReleaseImages(ctx context.Context, registry StagedSignerRegistry, su
 	}
 	defer func() { _ = os.RemoveAll(work) }()
 
+	// Every image passes its gate before any is pushed: a later image's
+	// finding must not leave earlier ones in the registry.
+	staged := make([]*StagedSignerImage, 0, len(in.Plan.Images))
+
+	for _, image := range in.Plan.Images {
+		admitted, err := AdmitStagedSignerImage(ctx, registry, out, releaseImageAssembleInput(out, in, image, work))
+		if err != nil {
+			return fmt.Errorf("release image %s: %w", image.Name, err)
+		}
+
+		staged = append(staged, admitted)
+	}
+
 	ledger, err := imageledger.Marshal(nil)
 	if err != nil {
 		return err
 	}
 
-	for _, image := range in.Plan.Images {
-		ledger, err = publishReleaseImage(ctx, registry, summary, out, in, image, work, ledger)
+	for index, image := range in.Plan.Images {
+		meta, err := staged[index].Publish(ctx, registry, nil, summary, out)
+		if err != nil {
+			return fmt.Errorf("release image %s: %w", image.Name, err)
+		}
+
+		ledger, err = AppendLedgerEntry(ledger, releaseImageLedgerEntry(in, image, meta.Digest))
 		if err != nil {
 			return fmt.Errorf("release image %s: %w", image.Name, err)
 		}
@@ -101,12 +115,12 @@ func PublishReleaseImages(ctx context.Context, registry StagedSignerRegistry, su
 	return nil
 }
 
-// publishReleaseImage scans and assembles one image, then returns ledger
-// with its entry appended.
-func publishReleaseImage(ctx context.Context, registry StagedSignerRegistry, summary ci.SummarySink, out io.Writer, in PublishReleaseImagesInput, image pipeline.ReleaseImage, work string, ledger []byte) ([]byte, error) {
+// releaseImageAssembleInput is the staged-layout publication of one planned
+// image, its scans and gate run before any upload.
+func releaseImageAssembleInput(out io.Writer, in PublishReleaseImagesInput, image pipeline.ReleaseImage, work string) SignerImageAssembleInput {
 	revision := cmp.Or(image.Revision, in.ReleaseSHA)
 
-	meta, err := PublishAndAssembleSignerImage(ctx, registry, nil, summary, out, SignerImageAssembleInput{
+	return SignerImageAssembleInput{
 		LayoutsDir:      in.LayoutsDir,
 		AuthFile:        in.AuthFile,
 		SourceSHA:       revision,
@@ -127,17 +141,17 @@ func publishReleaseImage(ctx context.Context, registry StagedSignerRegistry, sum
 			TrivyOutputTemplate: filepath.Join(in.OutputDir, "trivy-results-"+image.Name+"-{arch}.json"),
 			Gate:                in.Gate,
 		},
-	})
-	if err != nil {
-		return nil, err
 	}
+}
 
-	return AppendLedgerEntry(ledger, AddLedgerEntryInput{
+// releaseImageLedgerEntry records one pushed image, its SBOM left to signing.
+func releaseImageLedgerEntry(in PublishReleaseImagesInput, image pipeline.ReleaseImage, digest string) AddLedgerEntryInput {
+	return AddLedgerEntryInput{
 		ReleaseTag:         in.ReleaseTag,
 		Role:               cmp.Or(image.Role, image.Name),
 		ImageKind:          cmp.Or(image.ImageKind, string(imageledger.ImageKindRelease)),
 		ImageName:          image.ImageRepository,
-		Digest:             meta.Digest,
+		Digest:             digest,
 		ProvenanceJSON:     image.ProvenanceJSON,
 		DefaultSBOM:        true,
 		FinalTagName:       image.FinalTagName,
@@ -146,7 +160,7 @@ func publishReleaseImage(ctx context.Context, registry StagedSignerRegistry, sum
 		DeriveCandidateTag: true,
 		BaseRef:            image.BaseRef,
 		BaseInputID:        image.BaseInputID,
-	})
+	}
 }
 
 // AdmitReleaseImageLayouts admits the directory the build jobs' layouts were

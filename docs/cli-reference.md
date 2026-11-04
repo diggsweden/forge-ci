@@ -1952,8 +1952,8 @@ scan, assemble and push every planned release image from its staged layouts, and
 ```
 Reads the plan file and admits --layouts-dir: it must hold exactly the
 planned <name>-arch-<arch> layouts, with no other entry and no link, and is
-only read. Then, for each image, it verifies and scans every staged
-architecture layout before the first upload, pushes the index under its
+only read. Then it verifies and scans every staged architecture layout of
+every image, and only when all of them pass pushes each index under its
 staging candidate tag, as multiarch-image assemble --from-layouts does, and
 records it as ledger add does. The ledger
 release-images.json, the Trivy results and the index manifests are written to

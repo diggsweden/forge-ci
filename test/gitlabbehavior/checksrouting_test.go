@@ -64,7 +64,7 @@ func TestReleaseChecksRoutingAndPreparationBarrier(t *testing.T) {
 	_, jobs := releaseRouting(t, "templates/release-jobs.yml")
 
 	auth, checks := jobs["Check: release request"], jobs["Check: consumer checks"]
-	if auth.Tags != "" || !reflect.DeepEqual(auth.Script, []string{"rc_request_checkout"}) {
+	if auth.Tags != "" || !reflect.DeepEqual(auth.Script, []string{"rc_request_checkout", releaseImagesCheck}) {
 		t.Fatalf("authorization must stay restricted and execute no consumer commands: %+v", auth)
 	}
 

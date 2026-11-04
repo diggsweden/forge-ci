@@ -43,8 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `release-images: true` it plans the `containers:` of `artifacts-config`,
   builds each architecture natively in jobs of its own (amd64, and arm64 with
   `build-runner-tags-arm64`), scans and stages them with the job token and
-  hands the ledger to signing, as Forgejo's `release-images.yml` does. The
-  builder is `image-builder: buildah|kaniko`, kaniko in `builder-job-image`.
+  hands the ledger to signing, as Forgejo's `release-images.yml` does, except
+  that no SBOM is pinned before publication: signing generates each image's
+  SBOM from the pushed image. The builder is `image-builder: buildah|kaniko`, kaniko in `builder-job-image`.
   Migration: drop the `build-push-oci-image` and `ledger add` steps from the
   build script, declare the image under `containers:`, leave the files its
   Containerfile copies in `image-context/`, and set `release-images: true`.

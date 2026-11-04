@@ -617,22 +617,32 @@ the build and signing, as the Forgejo
 
 1. `Images: plan` plans the `containers:` of `artifacts-config` at the release
    commit, one build per container and architecture, each published to this
-   project's registry, `CI_REGISTRY_IMAGE`, under `staging-<final tag>`. A
-   container that builds linux/arm64 without `build-runner-tags-arm64` stops
-   here; narrow `release-platforms` or name the runner.
+   project's registry, `CI_REGISTRY_IMAGE`, under `staging-<final tag>`.
+   `Check: release request` makes the same plan at the request commit first,
+   so a stage that would stop later stops the release before `Prepare`
+   pushes the release commit and tag: a container that builds linux/arm64
+   without `build-runner-tags-arm64` (narrow `release-platforms` or name the
+   runner), `image-builder: kaniko` without `builder-job-image`, or a
+   `publication-project` that is not a separate project.
 2. `Images: build amd64` and, with `build-runner-tags-arm64`, `Images: build
    arm64` build every planned image of their architecture natively to OCI
    layouts, with no registry write. The engine passes the build no
    credential of the job, but this is the trust `Build: release files` gives
    the consumer, not a boundary: under kaniko the Containerfile's `RUN` steps
-   run in the job's own container and can read its job token. The checkout
+   run in the job's own container and can read its job token. The build
+   therefore pulls its `FROM` images anonymously: a base image in this
+   project's registry must be public, and the dependency proxy, which always
+   asks for credentials, cannot serve one. The job token is
+   not handed to the builder for pulls because it is not pull-only: it can
+   also push to this project's registry. The checkout
    is the release commit with the build's `image-context/` laid over it, for
    the files the Containerfiles copy that are not in the repository, such as
    the jar the build made.
-3. `Images: publish` scans every layout, then pushes each image's index with
-   the job token, records it in `release-images.json` with the scan results,
-   and joins them to the build's `dist/` in a hand-off of its own, digested
-   again.
+3. `Images: publish` admits, verifies and scans the layouts of every image
+   and, only when all of them pass the scan gate, pushes each image's index
+   with the job token, records it in `release-images.json` with the scan
+   results, and joins them to the build's `dist/` in a hand-off of its own,
+   digested again. A finding in any image leaves the registry untouched.
 4. `Sign: files and images` reads that hand-off, and only it, and imports the
    staging images into the publication project as before.
 

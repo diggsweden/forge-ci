@@ -145,9 +145,20 @@ func TestPublishReleaseImagesRecordsEveryImageInOneLedger(t *testing.T) {
 // nothing and leaves no ledger.
 func TestPublishReleaseImagesGatesBeforeAnyUpload(t *testing.T) {
 	fixture := newReleaseImagesPublishFixture(t)
-	fixture.in.Gate = func(context.Context, string, string) error { return errs.ErrValidation }
+	gated := []string{}
+	// Only the last image fails its gate; the ones before it pass theirs and
+	// must not be pushed either.
+	fixture.in.Gate = func(_ context.Context, layout, _ string) error {
+		gated = append(gated, filepath.Base(filepath.Dir(layout)))
+		if strings.HasPrefix(filepath.Base(filepath.Dir(layout)), "worker-") {
+			return errs.ErrValidation
+		}
+
+		return nil
+	}
 
 	require.ErrorIs(t, fixture.publish(t), errs.ErrValidation)
+	require.Equal(t, []string{"app-arch-amd64", "app-arch-arm64", "worker-arch-amd64"}, gated)
 	require.Zero(t, fixture.writes.Load())
 	require.NoFileExists(t, filepath.Join(fixture.in.OutputDir, appcontainer.ReleaseImagesLedgerName))
 }

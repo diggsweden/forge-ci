@@ -125,7 +125,7 @@ rc_release_checkout() {
 # the job's own image, builder-job-image, admitted as the snapshot builds admit
 # it: by the kaniko job image's title and the engine project it was built from.
 rc_image_builder() {
-	local -a auth=()
+	local -a auth_args=()
 	case "${CI_IMAGE_BUILDER:-buildah}" in
 	buildah)
 		rc_engine container setup-buildah --install-packages=true --probe-build=true --print-store=false --summary=false
@@ -143,18 +143,18 @@ rc_image_builder() {
 	fi
 	# The job token reads what the runner pulled the job's image with.
 	if [ -n "${CI_REGISTRY:-}" ]; then
-		auth=(--auth-file "${RC_WORK:?}/builder-auth.json")
+		auth_args=(--auth-file "${RC_WORK:?}/builder-auth.json")
 		printf '%s' "${CI_JOB_TOKEN:?}" | rc_engine container login --registry "${CI_REGISTRY}" \
-			--registry-username gitlab-ci-token --registry-password-file - "${auth[@]}" || return
+			--registry-username gitlab-ci-token --registry-password-file - "${auth_args[@]}" || return
 	fi
 	rc_engine container image usable-digest --ref "${CI_IMAGE_BUILDER_JOB_IMAGE}" \
-		--arch "${HELPERS_ENGINE_ARCH:?}" "${auth[@]}" \
+		--arch "${HELPERS_ENGINE_ARCH:?}" "${auth_args[@]}" \
 		--require-label "org.opencontainers.image.source=${FORGE_CI_REPOSITORY_URL%.git}" \
 		--require-label 'org.opencontainers.image.title=forge-ci kaniko job image' >/dev/null || {
 		echo "ERROR: builder-job-image is not a kaniko job image built from ${FORGE_CI_REPOSITORY_URL%.git} for ${HELPERS_ENGINE_ARCH}" >&2
 		return 1
 	}
-	if [ ${#auth[@]} -ne 0 ]; then rm -f -- "${RC_WORK}/builder-auth.json"; fi
+	if [ ${#auth_args[@]} -ne 0 ]; then rm -f -- "${RC_WORK}/builder-auth.json"; fi
 }
 
 rc_render_changelog() {
@@ -269,15 +269,53 @@ rc_build_handoff() {
 # hold the job token alone; their arguments are the policy's literal inputs,
 # never project variables.
 rc_images_plan() {
-	local config=$1 platforms=$2 arm64_tags=$3 archs=amd64
 	rc_release_checkout
-	if [ "${arm64_tags}" != '[]' ]; then archs=amd64,arm64; fi
 	rc_new_handoff "${CI_PROJECT_DIR}/_release-images-plan" || return
+	rc_plan_release_images "$1" "$2" "$3" "${CI_PROJECT_DIR}/_release-images-plan/plan.json"
+}
+
+# rc_plan_release_images writes the image jobs' plan of the checkout to
+# output, refusing what no image job would carry out.
+rc_plan_release_images() {
+	local config=$1 platforms=$2 arm64_tags=$3 output=$4 archs=amd64
+	if [ "${arm64_tags}" != '[]' ]; then archs=amd64,arm64; fi
 	rc_engine container release-images plan --file "${config}" --image-plan-json '' \
 		--release-tag "${RELEASE_TAG}" --release-platforms "${platforms}" \
 		--image-repository "${CI_REGISTRY_IMAGE:?}" --server-url "${CI_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
-		--registry-username gitlab-ci-token --runner-archs "${archs}" \
-		--output "${CI_PROJECT_DIR}/_release-images-plan/plan.json"
+		--registry-username gitlab-ci-token --runner-archs "${archs}" --output "${output}"
+}
+
+# rc_builder_needs_job_image succeeds for an image builder that runs in
+# builder-job-image.
+rc_builder_needs_job_image() {
+	case $1 in
+	kaniko) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+# rc_check_release_images refuses, at the release request and before Prepare
+# pushes the release commit and tag, a policy whose image stage would stop
+# after it: a builder without its job image, a publication project that is
+# not separate, or a plan no image job carries out. The arguments are the
+# policy's literal inputs. The image jobs plan again at the release commit,
+# which differs from the request only by the changelog and version bump.
+rc_check_release_images() {
+	local images=$1 builder=$2 job_image=$3 config=$4 platforms=$5 arm64_tags=$6
+	case "${images}" in
+	true) ;;
+	false) return 0 ;;
+	*)
+		echo "ERROR: release-images must be true or false, got '${images}'" >&2
+		return 1
+		;;
+	esac
+	if rc_builder_needs_job_image "${builder}" && [ -z "${job_image}" ]; then
+		echo "ERROR: image-builder ${builder} builds in builder-job-image; set it to the job image pinned by digest" >&2
+		return 1
+	fi
+	rc_publication_scope || return
+	rc_plan_release_images "${config}" "${platforms}" "${arm64_tags}" "${RC_WORK:?}/release-images-plan.json"
 }
 
 rc_images_build() {
@@ -298,7 +336,9 @@ rc_images_build() {
 		# a boundary: under kaniko the RUN steps run in this container and
 		# can read the job token from the job shell's /proc environment, the
 		# trust Build: release files already gives the consumer. The layouts
-		# are uploaded by the publishing job.
+		# are uploaded by the publishing job. FROM images are pulled
+		# anonymously: the job token is not pull-only, so it is not handed to
+		# the builder for pulls (docs/gitlab.md).
 		unset CI_JOB_TOKEN CI_REGISTRY_PASSWORD CI_DEPLOY_PASSWORD CI_DEPENDENCY_PROXY_PASSWORD
 		rc_engine container release-images build --plan "${CI_PROJECT_DIR}/_release-images-plan/plan.json" \
 			--arch "${arch}" --image-repository "${CI_REGISTRY_IMAGE:?}" --release-tag "${RELEASE_TAG}" \
@@ -319,25 +359,23 @@ rc_images_build() {
 # tag in this project's registry with the job token, then joins the ledger and
 # its evidence to the build's dist in a hand-off of its own, digested again.
 rc_images_publish() {
-	local arch file layouts="${RC_WORK}/layouts" images="${RC_WORK}/images" auth="${RC_WORK}/registry-auth.json"
+	local arch file layouts="${RC_WORK}/layouts" images="${RC_WORK}/images" auth_file="${RC_WORK}/registry-auth.json"
 	rc_release_checkout
 	rc_read_handoff "${CI_PROJECT_DIR}/_release-build" || return
 	mkdir -m 0700 -- "${layouts}"
 	for arch in amd64 arm64; do
-		if [ -d "${CI_PROJECT_DIR}/_release-images-${arch}" ] && [ ! -L "${CI_PROJECT_DIR}/_release-images-${arch}" ]; then
-			cp -R -- "${CI_PROJECT_DIR}/_release-images-${arch}/." "${layouts}/"
-		fi
+		rc_gather_layouts "${CI_PROJECT_DIR}/_release-images-${arch}" "${arch}" "${layouts}" || return
 	done
 	# shellcheck source=scripts/bootstrap/install-trivy.sh
 	source "${RC_HELPERS_DIR}/scripts/bootstrap/install-trivy.sh"
 	install_trivy
 	printf '%s' "${CI_JOB_TOKEN:?}" | rc_engine container login --registry "${CI_REGISTRY:?}" \
-		--registry-username gitlab-ci-token --registry-password-file - --auth-file "${auth}"
+		--registry-username gitlab-ci-token --registry-password-file - --auth-file "${auth_file}"
 	rc_engine container release-images publish --plan "${CI_PROJECT_DIR}/_release-images-plan/plan.json" \
 		--image-repository "${CI_REGISTRY_IMAGE:?}" --release-tag "${RELEASE_TAG}" --release-sha "${RELEASE_SHA}" \
 		--server-url "${CI_SERVER_URL}" --repository "${CI_PROJECT_PATH}" \
-		--layouts-dir "${layouts}" --output-dir "${images}" --auth-file "${auth}"
-	rm -f -- "${auth}"
+		--layouts-dir "${layouts}" --output-dir "${images}" --auth-file "${auth_file}"
+	rm -f -- "${auth_file}"
 	for file in "${images}"/*; do
 		rc_require_absent "${DIST_DIR:?}/${file##*/}" || return 1
 		cp -- "${file}" "${DIST_DIR}/"
@@ -348,6 +386,30 @@ rc_images_publish() {
 	rc_new_handoff "${handoff}" || return
 	cp -R -- "${DIST_DIR}" "${handoff}/dist"
 	rc_engine release dist-digest --dist-dir "${handoff}/dist" --manifest-root . >"${handoff}/digest"
+}
+
+# rc_gather_layouts copies the <name>-arch-<arch> layout directories of one
+# architecture's hand-off into layouts, and refuses any other entry, so each
+# layout comes from its own architecture's job and none replaces another.
+# Each is copied to a name that does not exist yet, which cp -R defines the
+# same everywhere. The engine admits the gathered directory again.
+rc_gather_layouts() {
+	local handoff=$1 arch=$2 layouts=$3 entry name
+	if [ ! -e "${handoff}" ] && [ ! -L "${handoff}" ]; then return 0; fi
+	if [ ! -d "${handoff}" ] || [ -L "${handoff}" ]; then
+		echo "ERROR: ${handoff} must be a directory, not a link." >&2
+		return 1
+	fi
+	for entry in "${handoff}"/* "${handoff}"/.[!.]* "${handoff}"/..?*; do
+		if [ ! -e "${entry}" ] && [ ! -L "${entry}" ]; then continue; fi
+		name=${entry##*/}
+		if [[ "${name}" != ?*-arch-"${arch}" ]] || [ ! -d "${entry}" ] || [ -L "${entry}" ]; then
+			echo "ERROR: ${entry} is not a <name>-arch-${arch} layout directory of the ${arch} image job." >&2
+			return 1
+		fi
+		rc_require_absent "${layouts}/${name}" || return 1
+		cp -R -- "${entry}" "${layouts}/${name}" || return
+	done
 }
 
 rc_read_handoff() {
@@ -483,8 +545,13 @@ rc_sign_bases() {
 		--method kms --key env://COSIGN_KEY
 }
 
+# rc_publication_scope returns explicitly, not through errexit, which a
+# conditional caller disables.
 rc_publication_scope() {
-	test "${RC_PUBLICATION_PROJECT:?}" != "${CI_PROJECT_PATH:?}"
+	if [ "${RC_PUBLICATION_PROJECT:?}" = "${CI_PROJECT_PATH:?}" ]; then
+		echo 'ERROR: publication-project must be a separate project, not this one.' >&2
+		return 1
+	fi
 	case "${RC_PUBLICATION_IMAGE_REPOSITORY:?}" in
 	"${CI_REGISTRY:?}/${RC_PUBLICATION_PROJECT}" | "${CI_REGISTRY}/${RC_PUBLICATION_PROJECT}/"*) ;;
 	*)

@@ -69,17 +69,17 @@ func TestReleaseImageStageMatchesTheForgejoWorkflow(t *testing.T) {
 		t.Run(builder, func(t *testing.T) {
 			t.Parallel()
 
-			gitlab := renderGitLabImageStage(t, "true", builder)
+			gitlab := renderGitLabImageStage(t, "true", builder, `["arm64"]`)
 
 			// The same stages, in the same order: Forgejo's build matrix is one
 			// job per planned build, GitLab's one job per planned architecture,
 			// each handing off the directory the next job reads.
 			want := map[string]gitlabImageJob{
-				"Images: plan":           {stage: "images", needs: []string{"Prepare: release commit and tag"}, artifacts: []string{"_release-images-plan/"}},
-				"Images: build amd64":    {stage: "images", needs: []string{"Images: plan", "Build: release files"}, artifacts: []string{"_release-images-amd64/"}},
-				"Images: build arm64":    {stage: "images", needs: []string{"Images: plan", "Build: release files"}, artifacts: []string{"_release-images-arm64/"}},
-				"Images: publish":        {stage: "images", needs: []string{"Images: plan", "Build: release files", "Images: build amd64", "Images: build arm64"}, artifacts: []string{"_release-images/"}},
-				"Sign: files and images": {stage: "sign", needs: []string{"Images: publish"}, artifacts: []string{"_release-sign/"}},
+				"Images: plan":           {stage: "images", needs: []map[string]any{{"job": "Prepare: release commit and tag", "artifacts": false}}, artifacts: []string{"_release-images-plan/"}},
+				"Images: build amd64":    {stage: "images", needs: needsOf("Images: plan", "Build: release files"), artifacts: []string{"_release-images-amd64/"}},
+				"Images: build arm64":    {stage: "images", needs: needsOf("Images: plan", "Build: release files"), artifacts: []string{"_release-images-arm64/"}},
+				"Images: publish":        {stage: "images", needs: publishNeeds, artifacts: []string{"_release-images/"}},
+				"Sign: files and images": {stage: "sign", needs: needsOf("Images: publish"), artifacts: []string{"_release-sign/"}},
 			}
 			if len(gitlab) != len(want) {
 				t.Fatalf("GitLab renders %d image stage jobs, want %d", len(gitlab), len(want))
@@ -124,19 +124,39 @@ func TestReleaseImageStageMatchesTheForgejoWorkflow(t *testing.T) {
 	}
 }
 
+// Without an arm64 runner there is no arm64 build, and publishing, whose need
+// of it is optional, runs after the amd64 build alone.
+func TestReleaseImageStageWithoutAnARM64Runner(t *testing.T) {
+	t.Parallel()
+
+	gitlab := renderGitLabImageStage(t, "true", "buildah", "[]")
+
+	if _, ok := gitlab["Images: build arm64"]; ok {
+		t.Fatal("GitLab renders an arm64 build without an arm64 runner")
+	}
+
+	if _, ok := gitlab["Images: build amd64"]; !ok {
+		t.Fatal("GitLab renders no amd64 build")
+	}
+
+	if got := gitlab["Images: publish"].needs; !reflect.DeepEqual(got, publishNeeds) {
+		t.Fatalf("publishing needs %v, want %v", got, publishNeeds)
+	}
+}
+
 // Without release images there is no image stage, and signing reads the
 // build's hand-off.
 func TestReleaseImageStageIsAbsentWithoutReleaseImages(t *testing.T) {
 	t.Parallel()
 
-	gitlab := renderGitLabImageStage(t, "false", "buildah")
+	gitlab := renderGitLabImageStage(t, "false", "buildah", `["arm64"]`)
 
 	sign, ok := gitlab["Sign: files and images"]
 	if len(gitlab) != 1 || !ok {
 		t.Fatalf("GitLab renders %v, want only signing", slices.Collect(maps.Keys(gitlab)))
 	}
 
-	if !reflect.DeepEqual(sign.needs, []string{"Build: release files"}) {
+	if !reflect.DeepEqual(sign.needs, needsOf("Build: release files")) {
 		t.Fatalf("signing needs %v, want the build alone", sign.needs)
 	}
 }
@@ -209,13 +229,30 @@ func parityPlan(t *testing.T) pipeline.ReleaseImagesPlan {
 
 type gitlabImageJob struct {
 	stage, image, builder string
-	needs, tags, artifacts []string
+	needs                 []map[string]any
+	tags, artifacts       []string
 }
 
+// needsOf is the needs of a job that downloads the artifacts of each job.
+func needsOf(jobs ...string) []map[string]any {
+	needs := make([]map[string]any, 0, len(jobs))
+	for _, job := range jobs {
+		needs = append(needs, map[string]any{"job": job, "artifacts": true})
+	}
+
+	return needs
+}
+
+// publishNeeds is what publishing needs whether or not an arm64 build runs:
+// that build is optional, so a policy without an arm64 runner still
+// publishes the amd64 image.
+var publishNeeds = append(needsOf("Images: plan", "Build: release files", "Images: build amd64"),
+	map[string]any{"job": "Images: build arm64", "artifacts": true, "optional": true})
+
 // renderGitLabImageStage interpolates the release jobs' inputs, as GitLab
-// does, for a policy with an arm64 runner, and keeps the image stage and
-// signing jobs whose rules admit them, their extends resolved.
-func renderGitLabImageStage(t *testing.T, releaseImages, builder string) map[string]gitlabImageJob {
+// does, for a policy whose arm64 runner tags are arm64Tags, and keeps the
+// image stage and signing jobs whose rules admit them, their extends resolved.
+func renderGitLabImageStage(t *testing.T, releaseImages, builder, arm64Tags string) map[string]gitlabImageJob {
 	t.Helper()
 
 	text := string(reporoot.ReadFile(t, "templates/release-jobs.yml"))
@@ -223,7 +260,7 @@ func renderGitLabImageStage(t *testing.T, releaseImages, builder string) map[str
 
 	for name, value := range map[string]string{
 		"release-images": releaseImages, "image-builder": builder, "builder-job-image": parityKanikoImage,
-		"build-image": parityBuildImage, "build-runner-tags": `["privileged"]`, "build-runner-tags-arm64": `["arm64"]`,
+		"build-image": parityBuildImage, "build-runner-tags": `["privileged"]`, "build-runner-tags-arm64": arm64Tags,
 	} {
 		text = strings.ReplaceAll(text, "$[[ inputs."+name+" ]]", value)
 	}
@@ -248,7 +285,7 @@ func renderGitLabImageStage(t *testing.T, releaseImages, builder string) map[str
 		job := gitlabImageJob{stage: fields["stage"].(string), tags: yamlStrings(fields["tags"])}
 
 		for _, need := range fields["needs"].([]any) {
-			job.needs = append(job.needs, need.(map[string]any)["job"].(string))
+			job.needs = append(job.needs, need.(map[string]any))
 		}
 
 		if artifacts, ok := fields["artifacts"].(map[string]any); ok {
@@ -283,6 +320,9 @@ func yamlStrings(value any) []string {
 	return out
 }
 
+// resolveGitLabExtends merges a job over its extends, in order, as GitLab
+// does: hashes merge key by key at every depth; any other value, a list
+// included, replaces the inherited one.
 func resolveGitLabExtends(body, job map[string]any) map[string]any {
 	resolved := map[string]any{}
 
@@ -296,12 +336,28 @@ func resolveGitLabExtends(body, job map[string]any) map[string]any {
 	}
 
 	for _, parent := range parents {
-		maps.Copy(resolved, resolveGitLabExtends(body, body[parent.(string)].(map[string]any)))
+		mergeGitLabHash(resolved, resolveGitLabExtends(body, body[parent.(string)].(map[string]any)))
 	}
 
-	maps.Copy(resolved, job)
+	mergeGitLabHash(resolved, job)
+	delete(resolved, "extends")
 
 	return resolved
+}
+
+func mergeGitLabHash(into, from map[string]any) {
+	for key, value := range from {
+		inherited, isHash := into[key].(map[string]any)
+		if override, ok := value.(map[string]any); ok && isHash {
+			merged := maps.Clone(inherited)
+			mergeGitLabHash(merged, override)
+			into[key] = merged
+
+			continue
+		}
+
+		into[key] = value
+	}
 }
 
 // gitlabRulesAdmit evaluates the literal comparisons the image stage's rules

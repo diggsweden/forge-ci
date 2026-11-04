@@ -14,6 +14,7 @@ import (
 
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/imageledger"
 	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
 	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
 )
@@ -91,15 +92,29 @@ func TestReleaseImagesPlanOutput_RefusesAnArchitectureWithoutABuildJob(t *testin
 	require.ErrorIs(t, err, errs.ErrUsage)
 }
 
+// What the job verbs do not carry out stops the plan before any image job
+// runs, and is refused again when a job reads the plan.
+func TestReleaseImagesPlanFile_RefusesWhatTheJobVerbsDoNotCarryOut(t *testing.T) {
+	for name, plan := range map[string]pipeline.ReleaseImagesPlan{
+		"base image":          {Images: []pipeline.ReleaseImage{{Name: "base", ImageKind: string(imageledger.ImageKindBase)}}},
+		"builder material ID": {Builds: []pipeline.ReleaseImageBuild{{Name: "app", Arch: "amd64", BuilderMaterialID: "sha256:x"}}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "plan.json")
+
+			require.ErrorIs(t, writeReleaseImagesPlanFile(path, plan, ""), errs.ErrInvalidConfig)
+			require.NoFileExists(t, path)
+			require.ErrorIs(t, refuseUnsupportedJobPlan(plan), errs.ErrInvalidConfig)
+		})
+	}
+}
+
 // releaseImageBuildInputFor is the build input of build under the release
 // job verbs' flags.
-func releaseImageBuildInputFor(t *testing.T, build pipeline.ReleaseImageBuild) (appcontainer.SignerImageBuildArchInput, error) {
+func releaseImageBuildInputFor(t *testing.T, build pipeline.ReleaseImageBuild) appcontainer.SignerImageBuildArchInput {
 	t.Helper()
 
-	var (
-		input    appcontainer.SignerImageBuildArchInput
-		inputErr error
-	)
+	var input appcontainer.SignerImageBuildArchInput
 
 	cmd := &cli.Command{
 		Name: "build",
@@ -109,7 +124,7 @@ func releaseImageBuildInputFor(t *testing.T, build pipeline.ReleaseImageBuild) (
 			&cli.StringFlag{Name: flagMetadataDir},
 		),
 		Action: func(_ context.Context, cmd *cli.Command) error {
-			input, inputErr = releaseImageBuildInput(cmd, build)
+			input = releaseImageBuildInput(cmd, build)
 
 			return nil
 		},
@@ -120,7 +135,7 @@ func releaseImageBuildInputFor(t *testing.T, build pipeline.ReleaseImageBuild) (
 		"--source-dir", "consumer", "--metadata-dir", "staged",
 	}))
 
-	return input, inputErr
+	return input
 }
 
 // Each planned build is the build-arch --stage call the Forgejo workflow's
@@ -132,8 +147,7 @@ func TestReleaseImageBuildInput_IsTheForgejoBuildStep(t *testing.T) {
 		ImageRepository: "registry.example/group/app", CandidateTag: "staging-v1.2.3", FinalTagName: "v1.2.3",
 	}
 
-	in, err := releaseImageBuildInputFor(t, build)
-	require.NoError(t, err)
+	in := releaseImageBuildInputFor(t, build)
 	require.Equal(t, "abc", in.SourceSHA)
 	require.Equal(t, "staging-v1.2.3", in.TagName)
 	require.Equal(t, "runtime", in.Target)
@@ -151,13 +165,8 @@ func TestReleaseImageBuildInput_IsTheForgejoBuildStep(t *testing.T) {
 	}, in.Labels)
 
 	build.Revision = "def"
-	in, err = releaseImageBuildInputFor(t, build)
-	require.NoError(t, err)
+	in = releaseImageBuildInputFor(t, build)
 	require.Equal(t, "def", in.SourceSHA)
-
-	build.BuilderMaterialID = "sha256:x"
-	_, err = releaseImageBuildInputFor(t, build)
-	require.ErrorIs(t, err, errs.ErrInvalidConfig)
 }
 
 // Each architecture's job builds that architecture's planned builds alone, in

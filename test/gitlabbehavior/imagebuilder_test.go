@@ -172,6 +172,55 @@ func TestReleaseImageBuilderAdmitsOnlyTheKanikoJobImage(t *testing.T) {
 	}
 }
 
+// releaseImagesCheck is the release request check's refusal of an image stage
+// that would stop after Prepare pushed the release commit and tag.
+const releaseImagesCheck = "rc_check_release_images '$[[ inputs.release-images ]]' '$[[ inputs.image-builder ]]' " +
+	"'$[[ inputs.builder-job-image ]]' '$[[ inputs.artifacts-config ]]' '$[[ inputs.release-platforms ]]' '$[[ inputs.build-runner-tags-arm64 ]]'"
+
+// The release request check, which runs before Prepare pushes anything,
+// refuses an image stage that would stop later: a builder without the job
+// image it runs in, a publication project that is not separate, or a plan
+// no image job carries out. Without release images it checks nothing.
+func TestReleaseRequestCheckRefusesAnImageStageThatWouldStop(t *testing.T) {
+	t.Parallel()
+
+	kanikoImage := "registry.invalid/team/kaniko-job@sha256:" + strings.Repeat("a", 64)
+	separate := []string{"RC_PUBLICATION_PROJECT=team/publication", "RC_PUBLICATION_IMAGE_REPOSITORY=registry.invalid/team/publication"}
+
+	for name, tc := range map[string]struct {
+		args      string
+		env       []string
+		wantError string
+		planned   bool
+	}{
+		"no release images":        {args: "false kaniko ''"},
+		"kaniko without its image": {args: "true kaniko ''", env: separate, wantError: "image-builder kaniko builds in builder-job-image"},
+		"kaniko with its image":    {args: "true kaniko " + kanikoImage, env: separate, planned: true},
+		"buildah":                  {args: "true buildah ''", env: separate, planned: true},
+		"publication not separate": {args: "true buildah ''", env: []string{"RC_PUBLICATION_PROJECT=team/app", "RC_PUBLICATION_IMAGE_REPOSITORY=registry.invalid/team/app"}, wantError: "publication-project must be a separate project"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			work := t.TempDir()
+			env := append([]string{"RC_WORK=" + work, "RELEASE_TAG=v1.2.3", "CI_REGISTRY=registry.invalid", "CI_REGISTRY_IMAGE=registry.invalid/team/app",
+				"CI_SERVER_URL=https://gitlab.invalid", "CI_PROJECT_PATH=team/app"}, tc.env...)
+
+			output, err := runReleaseFunction(t, work, "rc_check_release_images "+tc.args+" .forge-ci/artifacts.yml '' '[]'", env...)
+			if (err == nil) != (tc.wantError == "") || !strings.Contains(output, tc.wantError) {
+				t.Fatalf("err = %v:\n%s", err, output)
+			}
+
+			plan := "engine: container release-images plan --file .forge-ci/artifacts.yml --image-plan-json  --release-tag v1.2.3 --release-platforms  " +
+				"--image-repository registry.invalid/team/app --server-url https://gitlab.invalid --repository team/app " +
+				"--registry-username gitlab-ci-token --runner-archs amd64 --output " + work + "/release-images-plan.json"
+			if strings.Contains(output, plan) != tc.planned {
+				t.Fatalf("planned=%t, want %t:\n%s", strings.Contains(output, plan), tc.planned, output)
+			}
+		})
+	}
+}
+
 func kanikoAdmission(image string) []string {
 	return []string{
 		"container login --registry registry.invalid --registry-username gitlab-ci-token --registry-password-file - --auth-file ",
@@ -368,4 +417,81 @@ func releaseDocumentBody(t *testing.T, path string) map[string]any {
 	}
 
 	return body
+}
+
+// Each architecture's hand-off contributes only its own <name>-arch-<arch>
+// layout directories: an entry of another architecture, which could replace
+// that job's layout, or anything but such a directory stops publishing.
+func TestReleaseImagesPublishGathersEachArchitecturesOwnLayouts(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct {
+		plant     func(t *testing.T, handoff string)
+		wantError string
+	}{
+		"own layouts":            {},
+		"another arch's layout":  {plant: mkdirLayout("app-arch-arm64"), wantError: "layout directory of the amd64 image job"},
+		"a file":                 {plant: writeFile(".ledger"), wantError: "layout directory of the amd64 image job"},
+		"a linked layout":        {plant: linkLayout("worker-arch-amd64"), wantError: "layout directory of the amd64 image job"},
+		"an unnamed arch layout": {plant: mkdirLayout("-arch-amd64"), wantError: "layout directory of the amd64 image job"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			work := t.TempDir()
+			handoff, layouts := filepath.Join(work, "_release-images-amd64"), filepath.Join(work, "layouts")
+
+			for _, dir := range []string{filepath.Join(handoff, "app-arch-amd64", "layout"), layouts} {
+				if err := os.MkdirAll(dir, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			if tc.plant != nil {
+				tc.plant(t, handoff)
+			}
+
+			output, err := runReleaseFunction(t, work, `rc_gather_layouts "${HANDOFF}" amd64 "${LAYOUTS}"`, "HANDOFF="+handoff, "LAYOUTS="+layouts)
+
+			if (err == nil) != (tc.wantError == "") || !strings.Contains(output, tc.wantError) {
+				t.Fatalf("err = %v:\n%s", err, output)
+			}
+
+			if tc.wantError == "" {
+				if _, statErr := os.Stat(filepath.Join(layouts, "app-arch-amd64", "layout")); statErr != nil {
+					t.Fatalf("the layout was not gathered: %v", statErr)
+				}
+			}
+		})
+	}
+}
+
+func mkdirLayout(name string) func(t *testing.T, handoff string) {
+	return func(t *testing.T, handoff string) {
+		t.Helper()
+
+		if err := os.MkdirAll(filepath.Join(handoff, name, "layout"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func writeFile(name string) func(t *testing.T, handoff string) {
+	return func(t *testing.T, handoff string) {
+		t.Helper()
+
+		if err := os.WriteFile(filepath.Join(handoff, name), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func linkLayout(name string) func(t *testing.T, handoff string) {
+	return func(t *testing.T, handoff string) {
+		t.Helper()
+
+		if err := os.Symlink(t.TempDir(), filepath.Join(handoff, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
 }

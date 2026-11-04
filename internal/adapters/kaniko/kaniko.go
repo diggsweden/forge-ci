@@ -19,8 +19,9 @@
 //     the first one's filesystem. Only mounts and the ignored paths survive:
 //     the kaniko job image keeps what later steps need under /kaniko, which
 //     kaniko never touches, and this adapter protects the layout, the context
-//     and the registry credentials with --ignore-path. A job that builds
-//     more than once keeps TMPDIR on a mount, since /tmp does not survive.
+//     and the registry credentials with --ignore-path. /tmp does not
+//     survive, so the kaniko job image sets TMPDIR to /kaniko/tmp, which
+//     kaniko leaves alone, for a job that builds more than once.
 //   - Build secrets are refused: kaniko keeps them recoverable by later RUN
 //     steps of the same build.
 //

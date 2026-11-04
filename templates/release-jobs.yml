@@ -250,6 +250,7 @@ stages: [check, prepare, build, images, sign, publish]
   needs: ["Check: signing access", "Check: publishing access", "Check: registry access"]
   script:
     - rc_request_checkout
+    - rc_check_release_images '$[[ inputs.release-images ]]' '$[[ inputs.image-builder ]]' '$[[ inputs.builder-job-image ]]' '$[[ inputs.artifacts-config ]]' '$[[ inputs.release-platforms ]]' '$[[ inputs.build-runner-tags-arm64 ]]'
 "Check: consumer checks":
   extends: .forge-ci-release
   stage: check
