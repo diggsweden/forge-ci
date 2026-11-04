@@ -2,3 +2,4 @@ node_modules/
 *.tgz
 bom.json
 dist/
+release-notes.md

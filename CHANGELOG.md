@@ -68,6 +68,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The hello-android demo has a GitLab merge-request gate: the kotlin
+  nanolinter lint gate and the unsigned build and unit tests in Forge CI's
+  Android runtime image, as its nonroot user, with no signing credential.
+- The hello-npm-package demo runs on Forgejo and GitLab as well as GitHub:
+  a pull or merge-request gate that installs the packed package offline, and
+  a release that ships the tarball and its Build SBOM as signed release
+  files. Neither layer publishes it to a package registry.
+- The hello-cargo-workspace demo runs on Forgejo and GitLab as well as
+  GitHub: a pull or merge-request gate, and a release that exports both
+  workspace binaries from one Containerfile stage per platform
+  `RELEASE_PLATFORMS` selects (`linux/amd64` when unset), with the selected
+  image builder, and builds its two runtime images as the tag variants
+  `<tag>-worker` and `<tag>-keytool`.
 - The GitLab `release` component takes `export-files` and `export`: commands
   that export files from a Containerfile stage, run once per selected
   architecture in `Build: export amd64` and `Build: export arm64`, natively,

@@ -12,4 +12,9 @@ for each registry publication and retain the exact package/version identity
 for cleanup. Public and private registry installation must be verified by the
 live trial; the offline installation test does not prove registry permissions.
 
-GitLab and Forgejo workflow coverage and development releases remain pending.
+On Forgejo and GitLab the pull or merge-request gate runs the same tests, and
+the release ships the packed tarball and its Build SBOM as signed files of the
+release, the version `package.json` declares. Neither layer publishes it to a
+package registry: Forgejo's has no registry publication, and the GitLab
+release does not run `publish-forge-packages`. Development releases remain
+pending.

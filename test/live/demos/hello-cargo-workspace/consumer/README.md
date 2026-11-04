@@ -9,7 +9,15 @@ Run `cargo test --workspace --locked --offline`. The Containerfile runs the same
 tests before building both release binaries. The GitHub release configuration
 selects both runtime and export targets on Linux amd64 only.
 
+The Forgejo and GitLab releases export both binaries from the `export-binaries`
+stage, one native job per platform `RELEASE_PLATFORMS` selects (`linux/amd64`
+when unset), with the image builder the organization selects, Buildah or
+kaniko. They build the two runtime images `.forge-ci/release-images.yml`
+declares, published to the release's one image repository as the tag variants
+`<tag>-worker` and `<tag>-keytool`. The version in `Cargo.toml` stays as
+committed: the release tag names the release.
+
 Live acceptance must pull both published images and execute both extracted
 binaries, checking their names and requested release version. Local tests and
-workflow rendering are not evidence of image publication. Forgejo/GitLab
-container-first workspace workflows and dev releases remain pending.
+workflow rendering are not evidence of image publication. Development releases
+remain pending.

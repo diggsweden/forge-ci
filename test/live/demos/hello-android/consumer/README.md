@@ -23,5 +23,10 @@ from `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`
 and `ANDROID_KEY_PASSWORD`. No key is committed. Verify resulting APK/AAB
 identity, versions and signatures, and prove private artifact access separately.
 
-Signed releases, development publishing and Forgejo/GitLab workflows remain to
-be wired and tested. Google Play is not configured for this disposable fixture.
+On GitLab the merge-request gate lints in the kotlin nanolinter flavour and
+runs the same unsigned build and tests in the Android runtime image, as its
+nonroot user. That image is linux/amd64 only.
+
+Signed releases, development publishing and a Forgejo workflow remain to be
+wired and tested; the Forgejo lane has no Android SDK job image. Google Play is
+not configured for this disposable fixture.

@@ -17,7 +17,7 @@ and then reviewed in a pull or merge request, and kept for people to look at.
 
 On GitLab every demo runs in Forge CI's own images, built from this tree:
 its checks and release jobs in the runtime image of its toolchain (`just
-runtime-image-archive java|node|rust|go <directory>`), as the image's
+runtime-image-archive java|node|rust|go|android <directory>`), as the image's
 `nonroot` user (`job-user: "65532"` in the gate, `job-user=65532:65532` for
 the release), and its release image builds in the Buildah job image (`just
 buildah-job-image-archive <directory>`). No demo carries an image of its own.
@@ -52,27 +52,54 @@ inputs fail `just test-unit`. Rendering is not a live-flow pass.
 
 ## Coverage still to execute
 
-| Fixture | Declared forge workflows | Distinct coverage |
-|---|---|---|
-| hello-maven | GitHub, Forgejo, GitLab | Maven JAR |
-| hello-maven-service | GitHub, Forgejo, GitLab | Executable JAR and runtime image |
-| hello-npm-service | GitHub, Forgejo, GitLab | Private npm application archive and image |
-| hello-cargo-container | GitHub | Container-first Rust binary |
-| hello-npm-package | GitHub | Publishable scoped package; offline packed-package installation test |
-| hello-cargo-workspace | GitHub | Shared version; two binaries and images |
-| hello-android | GitHub PR/build | Demo flavor, unit tests, unsigned release APK/AAB |
-| hello-ios | GitHub PR/build | macOS ARM64 simulator tests, XcodeGen app, unsigned archive |
-| hello-go-cli | Forgejo, GitLab MR gate | The go-cli example as shipped; `cmd/my-cli` layout |
-| hello-go-service | Forgejo, GitLab MR gate | The go-service example as shipped; binaries and runtime image |
-| hello-gradle | GitLab MR gate | The gradle-app example as shipped; reproducible Java library jars |
-| hello-monorepo | GitLab MR gate | The monorepo example as shipped; Maven and npm services checked together |
+Each cell is the demo's workflows for that forge: the pull or merge-request
+gate, then the release. A dash is a flow the demo does not declare; the
+reasons follow the table.
+
+| Fixture | GitHub | Forgejo | GitLab | Distinct coverage |
+|---|---|---|---|---|
+| hello-maven | PR, release | PR, release | MR, release | Maven JAR |
+| hello-maven-service | PR, release | PR, release | MR, release | Executable JAR and runtime image |
+| hello-npm-service | PR, release | PR, release | MR, release | Private npm application archive and image |
+| hello-cargo-container | PR, release | PR, release | MR, release | Container-first Rust binary |
+| hello-cargo-workspace | PR, release | PR, release | MR, release | Shared version; two binaries and images |
+| hello-npm-package | PR, release | PR, release | MR, release | Publishable scoped package; offline packed-package installation test |
+| hello-android | PR/build | - | MR | Demo flavor, unit tests, unsigned release APK/AAB |
+| hello-ios | PR/build | - | - | macOS ARM64 simulator tests, XcodeGen app, unsigned archive |
+| hello-go-cli | - | PR, release | MR | The go-cli example as shipped; `cmd/my-cli` layout |
+| hello-go-service | - | PR, release | MR | The go-service example as shipped; binaries and runtime image |
+| hello-gradle | - | - | MR | The gradle-app example as shipped; reproducible Java library jars |
+| hello-monorepo | - | - | MR | The monorepo example as shipped; Maven and npm services checked together |
+
+Why a flow is missing:
+
+- **iOS on Forgejo and GitLab**, deliberately: the build needs macOS ARM64
+  runners with Xcode, and neither lab has one. GitLab's components build no
+  Xcode either.
+- **Mobile releases**: neither mobile demo declares a release on any forge.
+  Signing-capable mobile build leaves stay branch-only, and no disposable
+  release-signing setup exists for them yet.
+- **Android on Forgejo**: the Forgejo lane's job image is a nanolinter
+  flavour, which has no Android SDK, and the lane publishes no runtime image
+  to run the build in.
+- **The example demos on GitHub**: their CI files are the examples', whose
+  GitHub workflows pass no `runtime-image`, which the GitHub renderer
+  requires to point a trial at the engine under test. The monorepo example
+  has no pull-request workflow.
+- **The example demos' GitLab releases**: the GitLab examples are the
+  merge-request gate; the release policy's commands are the adopter's, and no
+  example ships them. The live release also renders with git-chglog from
+  `.chglog/`, which the examples, on git-cliff, do not carry.
+- **hello-gradle and hello-monorepo on Forgejo**: their examples have no
+  Forgejo workflows; the Forgejo layer has no Gradle or npm build action.
+
+The npm package releases on Forgejo and GitLab ship the tarball as a signed
+release file; neither publishes it to a package registry.
 
 Record live results separately by commit, provider, visibility and flow. Local
 package, binary and Android build tests do not establish registry permissions,
-release signing or promotion. The iOS build requires macOS. The mobile
-fixtures currently provide build workflows, not signed release workflows.
-Forgejo/GitLab wiring for the new fixtures, web archive coverage and
-development-release parity remain outstanding. Run public
+release signing or promotion. Web archive coverage and development-release
+parity remain outstanding. Run public
 amd64 first, then private PR/MR and release flows; mixed architectures are deferred.
 
 PR build/test jobs are separate from the reusable PR lint orchestrator. A green

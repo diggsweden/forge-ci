@@ -13,6 +13,12 @@ COPY --from=builder /src/target/release/hello-worker /hello-worker
 FROM scratch AS export-keytool
 COPY --from=builder /src/target/release/hello-keytool /hello-keytool
 
+# Both binaries in one stage, for the Forgejo and GitLab releases' export
+# jobs: one native export per selected platform, with the selected builder.
+FROM scratch AS export-binaries
+COPY --from=builder /src/target/release/hello-worker /hello-worker
+COPY --from=builder /src/target/release/hello-keytool /hello-keytool
+
 FROM gcr.io/distroless/cc-debian13:nonroot@sha256:e792ab3d241a468a4fd7519ddbbebe66b49b5f365771716ea688ad40b6c6f1c2 AS runtime-worker
 COPY --from=builder /src/target/release/hello-worker /usr/local/bin/hello-worker
 USER 65532:65532
