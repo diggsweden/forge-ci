@@ -205,7 +205,7 @@ func googlePlayPublishKind() summaryKind {
 		example: `forge-ci report publish google-play --aab-file app.aab --track internal`,
 		flags: []cli.Flag{
 			&cli.StringFlag{Name: "aab-file", Sources: cli.EnvVars("AAB_FILE"), Usage: "uploaded .aab file path (shown in the summary row)"},
-			&cli.StringFlag{Name: "package-name", Sources: cli.EnvVars("PACKAGE_NAME"), Usage: "Android application id (e.g. com.example.app)"},
+			&cli.StringFlag{Name: "package-name", Sources: cli.EnvVars("ANDROID_PACKAGE_NAME"), Usage: "Android application id (e.g. com.example.app)"},
 			&cli.StringFlag{Name: "track", Sources: cli.EnvVars("TRACK"), Usage: "Google Play track (internal/alpha/beta/production)"},
 			&cli.StringFlag{Name: "status", Sources: cli.EnvVars("STATUS"), Usage: "Google Play release status (draft/inProgress/completed)"}, //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
 			&cli.StringFlag{Name: "release-name", Sources: cli.EnvVars("RELEASE_NAME"), Usage: "release name shown in Google Play"},

@@ -3065,7 +3065,7 @@ EXAMPLE:
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
 | `--working-dir` | directory containing package.json (used when --name is omitted) | string | `"."` | `$WORKING_DIRECTORY` |
-| `--name` | package name (defaults to the value in package.json) | string | `""` | `$PACKAGE_NAME` |
+| `--name` | package name (defaults to the value in package.json) | string | `""` | `$NPM_PACKAGE_NAME` |
 | `--version` | package version to check against the registry | string | `""` | `$VERSION` |
 | `--registry` | npm registry to query | string | `""` | `$NPM_REGISTRY` |
 
@@ -4008,7 +4008,7 @@ EXAMPLE:
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
 | `--aab-file` | uploaded .aab file path (shown in the summary row) | string | `""` | `$AAB_FILE` |
-| `--package-name` | Android application id (e.g. com.example.app) | string | `""` | `$PACKAGE_NAME` |
+| `--package-name` | Android application id (e.g. com.example.app) | string | `""` | `$ANDROID_PACKAGE_NAME` |
 | `--track` | Google Play track (internal/alpha/beta/production) | string | `""` | `$TRACK` |
 | `--status` | Google Play release status (draft/inProgress/completed) | string | `""` | `$STATUS` |
 | `--release-name` | release name shown in Google Play | string | `""` | `$RELEASE_NAME` |

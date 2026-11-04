@@ -592,6 +592,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING:** `PACKAGE_NAME` is split in two. `--name` of `publish npm
+  deploy` and `publish npm validate-version` reads `NPM_PACKAGE_NAME`, and
+  `report publish google-play --package-name` reads `ANDROID_PACKAGE_NAME`.
+  The one name meant an npm package to one command and an Android
+  application id to the other, so a job that set it for one handed it to
+  the other. `PACKAGE_NAME` is no longer read; rename it in your job env or
+  pass the flag.
 - **BREAKING:** The `runtime-image` input of the GitLab `build-*`,
   `publish-forge-packages` and `publish-maven-central` components admits only
   a digest pin, `<image>@sha256:<64 hex>`, as GitLab checks it before any job

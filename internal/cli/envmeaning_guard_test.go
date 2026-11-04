@@ -194,8 +194,6 @@ func sharedEnvSpellings() map[string]sharedEnvSpelling {
 			Sites: []string{"forge-ci version bump --maven-cli-opts", "forge-ci version bump-plan --maven-cli-opts"}},
 		"NPM_REGISTRY": {Canonical: "registry", Why: "the npm registry URL",
 			Sites: []string{"forge-ci plan snapshot-release --npm-registry"}},
-		"PACKAGE_NAME": {Canonical: "name", Why: "the name a package is published under in its store: npm name or Play packageName; one store per job",
-			Sites: []string{"forge-ci report publish google-play --package-name"}},
 		"PLATFORMS": {Canonical: "platforms", Why: "the os/arch platform set; image-evidence reads $IMAGE_EVIDENCE_PLATFORMS first",
 			Sites: []string{"forge-ci container image-evidence --platform"}},
 		"RELEASE_ASSEMBLY": {Canonical: "assembly", Why: "the assembly document: assemble writes it, the rest read it",

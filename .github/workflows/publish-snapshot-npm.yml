@@ -265,7 +265,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ inputs['use-ci-token'] && secrets.GITHUB_TOKEN || secrets['registry-password'] }}
           NPM_REGISTRY: ${{ inputs.registry }}
-          PACKAGE_NAME: ${{ steps.meta.outputs.name }}
+          NPM_PACKAGE_NAME: ${{ steps.meta.outputs.name }}
           SNAPSHOT_VERSION: ${{ steps.tags.outputs.snapshot-version }}
           NPM_TAG: ${{ inputs['npm-tag'] }}
         run: forge-ci publish npm deploy --working-dir .forge-ci/npm-snapshot-artifact

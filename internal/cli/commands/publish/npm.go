@@ -167,7 +167,7 @@ func npmValidateVersionCmd() *cli.Command {
    forge-ci publish npm validate-version --name @examplescope/app --version 1.2.3`,
 		Flags: []cli.Flag{
 			commonflags.WorkingDir("directory containing package.json (used when --name is omitted)"),
-			&cli.StringFlag{Name: "name", Sources: cli.EnvVars("PACKAGE_NAME"), Usage: "package name (defaults to the value in package.json)"},
+			&cli.StringFlag{Name: "name", Sources: cli.EnvVars("NPM_PACKAGE_NAME"), Usage: "package name (defaults to the value in package.json)"},
 			&cli.StringFlag{Name: flagVersion, Sources: cli.EnvVars("VERSION"), Usage: "package version to check against the registry"},
 			&cli.StringFlag{Name: "registry", Sources: cli.EnvVars("NPM_REGISTRY"), Usage: "npm registry to query"},
 		},

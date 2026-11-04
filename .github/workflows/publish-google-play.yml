@@ -177,7 +177,7 @@ jobs:
       - name: Generate upload summary
         env:
           AAB_FILE: ${{ steps.find-aab.outputs.aab-file }}
-          PACKAGE_NAME: ${{ inputs['package-name'] }}
+          ANDROID_PACKAGE_NAME: ${{ inputs['package-name'] }}
           TRACK: ${{ inputs.track }}
           STATUS: ${{ inputs.status }}
           RELEASE_NAME: ${{ inputs['release-name'] }}
