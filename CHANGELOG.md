@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The focused Forgejo Maven-library stable trial honors an explicit private
+  consumer selection instead of always creating a public consumer. Its default
+  public lane and anonymous engine-distribution fixture remain unchanged.
+
 ### Removed
 
 - **BREAKING:** `artifact upload`, `artifact download` and `artifact digest`

@@ -18,7 +18,7 @@ RELEASE_PLATFORMS=linux/amd64
 Then run the existing driver from the engine checkout:
 
 ```bash
-FORGE_CI_LIVE_CONSUMER_VISIBILITY=public \
+FORGE_CI_LIVE_CONSUMER_VISIBILITY=private \
 FORGE_CI_LIVE_SNAPSHOT_EVIDENCE_DIR=/absolute/external/evidence \
 bash scripts/ci/run-live-tests.sh focused '^TestForgejoMavenLibraryConsumer_Stable$'
 ```
@@ -30,10 +30,13 @@ Target credentials and supplied fixture secrets are redacted before writing;
 the console keeps its 4,000-byte tail and prints the retained file's path.
 `FORGE_CI_LIVE_SNAPSHOT_EVIDENCE` remains the fallback environment variable.
 
-The filter runs one public scratch lane through the ordinary focused profile.
-Set `FORGE_CI_LIVE_CONSUMER_VISIBILITY=public` in the operator environment.
-Both engine and consumer scratch repositories are public; the local staging
-index remains private. It admits the clean source through
+The filter runs one scratch lane through the ordinary focused profile. Set
+`FORGE_CI_LIVE_CONSUMER_VISIBILITY=private` for a private consumer, or `public`
+for a public consumer. Unset or `both` retains this case's single public lane;
+it does not run a public/private matrix. The engine-serving repository remains
+public under the existing `ReadLayerAnonymously` infrastructure exception;
+only the consumer's visibility follows the selector. The local staging index
+remains private. It admits the clean source through
 `OpenConsumer`, overlays native CI and changelog files only in its private Git
 index, and pushes a parentless fixture commit. The source POM, Java, quality
 rules and test gates remain the admitted originals. `PlanConsumer` rebinds every

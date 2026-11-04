@@ -85,7 +85,7 @@ func TestForgejoMavenLibraryConsumer_Stable(t *testing.T) {
 	const name = "maven-library-consumer-stable"
 
 	scenario := layerScenario{target: target, label: livetest.RunnerLabel(t, target)}
-	scenario.layer, scenario.repo = newConsumerRepos(t, target, consumer, name, false)
+	scenario.layer, scenario.repo = newConsumerRepos(t, target, consumer, name, livetest.ScenarioPrivate(t))
 	repo := scenario.repo
 	facts := livetest.ConsumerFacts{}
 	keys := trialReleaseFacts(t, target, repo, &facts)
