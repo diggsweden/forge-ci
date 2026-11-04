@@ -66,6 +66,13 @@ Two assumptions sit under every row. Within one job, state persists between step
 
 ## Subprocess credential policy
 
+GitLab's literal server/registry inputs bind token destinations, but do not
+pin the job's TLS roots or network route. `CI_SERVER_TLS_CA_FILE` and other
+CA/proxy environment settings remain administrator/runner trust inputs;
+lower-trust variable overrides can replace them. See
+[The instance as a literal](gitlab.md#the-instance-as-a-literal) for this
+boundary. Supporting private CAs does not authenticate who supplied the CA.
+
 Keep environment selection tool- and mode-specific. `internal/cli/secretenv`
 removes the engine's known credential names, plus caller-selected key variables,
 from tools such as Syft, Trivy and changelog renderers. This is a denylist, not

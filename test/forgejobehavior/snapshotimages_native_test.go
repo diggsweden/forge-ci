@@ -167,8 +167,12 @@ func TestSnapshotNativeKanikoAdmissionReadsWithTheJobToken(t *testing.T) {
 		env  []string
 		want string
 	}{
-		"gitlab":  {env: []string{"CI_REGISTRY=registry.example", "CI_JOB_TOKEN=job-token-canary"}, want: "login registry.example gitlab-ci-token job-token-canary\nusable-digest --auth-file\n"},
-		"forgejo": {want: "usable-digest\n"},
+		"gitlab": {env: []string{
+			"FORGE_CI_PROVIDER=gitlab", "RC_REGISTRY=registry.example", "CI_REGISTRY=registry.attacker.invalid", "CI_JOB_TOKEN=job-token-canary",
+		}, want: "login registry.example gitlab-ci-token job-token-canary\nusable-digest --auth-file\n"},
+		"forgejo": {env: []string{
+			"FORGE_CI_PROVIDER=forgejo", "RC_REGISTRY=registry.example", "CI_REGISTRY=registry.attacker.invalid", "CI_JOB_TOKEN=job-token-canary",
+		}, want: "usable-digest\n"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()

@@ -277,6 +277,17 @@ variable that points the jobs elsewhere stops them instead of receiving the
 job token or a release token. The URL is an origin, `https://host[:port]`: an
 instance served under a relative URL path is not supported.
 
+This binds the destination, not the runner's network trust. Token-bearing jobs
+still use `CI_SERVER_TLS_CA_FILE` for instances with a private CA. GitLab can
+override that predefined variable with a project, group or pipeline variable,
+so the administrator must control it as well as `GIT_SSL_CAINFO`,
+`CURL_CA_BUNDLE`, `SSL_CERT_FILE`, `SSL_CERT_DIR` and proxy settings. An
+attacker-controlled CA combined with a redirected route can impersonate even
+the literal server name. The components do not pin a CA digest or establish
+the provenance of these environment values. Keep CA/proxy configuration in
+trusted runner/admin configuration and prevent lower-trust overrides; setting
+`server-url` alone does not enforce that boundary.
+
 | Secret | Used for |
 |---|---|
 | `RELEASE_SSH_SIGNING_KEY` | The signed release commit and final tag; a deploy key that may push to the project. |

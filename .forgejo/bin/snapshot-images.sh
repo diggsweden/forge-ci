@@ -111,11 +111,12 @@ snapshot_build() {
 		local auth_dir='' status=0
 		local -a auth=()
 		# A private GitLab registry refuses an anonymous read; the job token
-		# reads what the runner pulled the job image with.
-		if [ -n "${CI_REGISTRY:-}" ] && [ -n "${CI_JOB_TOKEN:-}" ]; then
+		# reads what the runner pulled the job image with. Its destination is
+		# the policy's readonly literal, never the overridable CI_REGISTRY.
+		if [ "${FORGE_CI_PROVIDER:-}" = gitlab ] && [ -n "${RC_REGISTRY:-}" ] && [ -n "${CI_JOB_TOKEN:-}" ]; then
 			auth_dir=$(mktemp -d) || return
 			auth=(--auth-file "${auth_dir}/auth.json")
-			printf '%s' "${CI_JOB_TOKEN}" | snapshot_engine container login --registry "${CI_REGISTRY}" \
+			printf '%s' "${CI_JOB_TOKEN}" | snapshot_engine container login --registry "${RC_REGISTRY}" \
 				--registry-username gitlab-ci-token --registry-password-file - "${auth[@]}" || status=$?
 		fi
 		if [ "${status}" -eq 0 ]; then

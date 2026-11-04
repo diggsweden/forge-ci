@@ -8,7 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -415,8 +417,22 @@ func TestGitLabTokenDestinationsComeFromTheServerLiteral(t *testing.T) {
 		texts = append(texts, path+"\x00"+body)
 	}
 
-	for _, path := range []string{".gitlab/bin/release.sh", ".gitlab/bin/snapshot-images.sh"} {
-		texts = append(texts, path+"\x00"+string(reporoot.ReadFile(t, path)))
+	// GitLab sources shared Forgejo step helpers too. Inventory both owners,
+	// rather than checking only the two current GitLab entry-point scripts.
+	for _, dir := range []string{".gitlab/bin", ".forgejo/bin"} {
+		entries, err := os.ReadDir(filepath.Join(reporoot.Path(t), dir))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sh") {
+				continue
+			}
+
+			path := dir + "/" + entry.Name()
+			texts = append(texts, path+"\x00"+string(reporoot.ReadFile(t, path)))
+		}
 	}
 
 	held := 0
