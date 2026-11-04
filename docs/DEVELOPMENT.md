@@ -185,6 +185,22 @@ configured golangci-lint cache. Just defaults that cache to
 `.golangci-lint-cache/` in each checkout so linked worktrees do not replay
 each other's diagnostic paths. `GOLANGCI_LINT_CACHE` overrides the location.
 
+### Known lint gaps
+
+The pinned nanolinter 0.8.6 drives two tools with flags they no longer
+take, and both checks report rather than block until its next release:
+
+- Commits: it passes gommitlint `--gommitconfig`, which gommitlint 0.93
+  calls `--config`. Run `gommitlint validate --base-branch main` instead.
+- SAST: it passes opengrep `--no-secrets-validation`, which opengrep
+  removed in 1.27.1. Run `opengrep scan --config p/default .` instead.
+
+In a linked worktree under the checkout's ignored `.claude/` directory,
+osv-scanner reads the main checkout's `.gitignore`, ignores the whole
+worktree and reports "No package sources found", which fails the blocking
+OSV check. Run `osv-scanner scan source --recursive --no-ignore .` in the
+worktree, or put worktrees outside the checkout.
+
 ## Local verification tools
 
 Project contributors get the repository's pinned toolchain with

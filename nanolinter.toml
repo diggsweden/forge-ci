@@ -46,9 +46,13 @@ checks = [
 # links are still listed and fixed; known-good URLs go in .lycheeignore.
 #
 # Commits reports but does not block until the pinned nanolinter passes
-# gommitlint 0.93's --config flag; run `gommitlint validate --base-branch main`
-# to check commits meanwhile. Sast reports but does not block: its opengrep
-# findings are triaged by hand, not gated.
+# gommitlint 0.93's --config flag (0.8.6 passes --gommitconfig); run
+# `gommitlint validate --base-branch main` to check commits meanwhile. Sast
+# reports but does not block: its opengrep findings are triaged by hand, not
+# gated. Until nanolinter's next release it also fails to start: 0.8.6 passes
+# --no-secrets-validation, which opengrep removed in 1.27.1, so no opengrep
+# pin can fix it short of an older scanner; run `opengrep scan --config p/default .`
+# meanwhile. docs/DEVELOPMENT.md lists both.
 [policy]
 block = [
   "version-control",
