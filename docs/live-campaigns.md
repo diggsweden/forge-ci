@@ -132,7 +132,8 @@ inputs. The embedded engine default stays enforcing; no lab-only policy source
 edit or checksum rebuild is needed to choose the run's settings.
 
 A cases file then holds one case a line: `consumer <demo> <pull-request|release>
-[key=value ...]` or `scenario <TestName>`. A value `@NAME` is campaign.env's
+[key=value ...]` or `scenario <TestName> [key=value ...]`. Explicit scenario inputs
+are supported by the GitLab recipes described below. A value `@NAME` is campaign.env's
 `NAME`; a GitLab consumer names its archives with `job-archive=` (and for a
 release `build-archive=` and `signer-archive=`), for example
 `job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_JAVA`, which a campaign prepared
@@ -149,6 +150,62 @@ demo's gate, the campaign was not prepared with, and a GitLab consumer whose
 gate lints without `lint-archive=`. The lane then runs past failures and fails when any case did. Read the outcome from
 `<dir>/<provider>.results`, one tab-separated line a case: interval, case,
 exit status and the `verdict.json` to read, as above.
+
+### Explicit-input GitLab regressions
+
+The normal consumer release recipe also selects these exact scenarios with
+`scenario=<name>`; the controller validates the selector before launch:
+
+| Scenario | Recipe/input |
+|---|---|
+| `TestGitLabRelease_ConsumerTrial` | `test-live-gitlab-consumer-release`; default scenario |
+| `TestGitLabRelease_ConsumerBranchProtection` | `test-live-gitlab-consumer-branch-protection <checkout>`; no job images |
+| `TestGitLabRelease_BuildImageCapability` | `test-live-gitlab-build-image-capability <build archive>`; specifically Buildah and a privileged runner |
+| `TestGitLabRelease_RejectsPreseededProvenance` | Consumer release recipe with `scenario=TestGitLabRelease_RejectsPreseededProvenance`; the harness adds the inert provenance fixture in its private index |
+| `TestGitLabRelease_ConsumerInterruptedRecovery` | Consumer release recipe with `scenario=TestGitLabRelease_ConsumerInterruptedRecovery version=0.3.0`; reviewed image-producing checkpoint consumer required |
+| `TestGitLabWorkflow_InterruptedJob` | `test-live-gitlab-interrupted-job`; manual observed-signal proof |
+
+For provenance rejection, use an ordinary reviewed native-release consumer. Its
+original build runs first, then the controller's wrapper inserts inert unsigned
+provenance into `dist`. The source checkout remains clean. The test must observe
+the specific handoff refusal, blocked signer/publication and empty release APIs.
+
+Recovery still requires a reviewed consumer whose build publishes the candidate
+and waits while `FIXTURE_PAUSE_AFTER_CANDIDATE` is true. The controller cancels only
+after observing that candidate and the running build, clears the checkpoint, then
+retries the same child pipeline and checks prior publications and final identity.
+One explicit nonzero version is required; `next-version` is not accepted for it.
+Naming an arbitrary image demo does not create this checkpoint automatically.
+
+`test/live/campaigns/harness-inputs-gitlab.cases` supplies the four consumer case
+lines. After preparing the normal images, add these reviewed references/absolute
+paths as literal entries in `campaign.env`:
+
+- `NATIVE_CONSUMER`, `NATIVE_JOB_ARCHIVE`, `NATIVE_BUILD_ARCHIVE`, `NATIVE_SIGNER_ARCHIVE`, `NATIVE_LINT_ARCHIVE`;
+- `RECOVERY_CONSUMER`, `RECOVERY_JOB_ARCHIVE`, `RECOVERY_BUILD_ARCHIVE`, `RECOVERY_LINT_ARCHIVE`.
+
+The archive toolchains must fit their consumer. Checkouts must be clean reviewed
+Git roots and kept frozen through the lane. Scenario input records use
+`checkout=@NAME` and explicit archive words; missing references, duplicate
+checkout/selector settings, invalid scenario names and incomplete inputs refuse
+the whole plan. These explicit-input consumers do not infer additional lint or
+runtime images from the demo catalog; provide every image their gate requires.
+The example case lines include `lint-archive=` for a gate that lints. Remove that
+word for a consumer whose gate does not lint; a mismatch is refused at admission.
+
+Run `build-capability-gitlab.cases` separately with
+`FORGE_CI_LIVE_GITLAB_IMAGE_BUILDER=buildah` and `BUILD_PROBE_ARCHIVE` in
+`campaign.env`. It requires a privileged runner and a reviewed Buildah RUN-capable
+image. A Kaniko lane is refused before any case executes; changing only the
+archive cannot change the selected builder.
+
+For interruption, run the dedicated recipe separately, or use the one-case
+`interruption-manual-gitlab.cases`. Observe `fci-live-interruption-ready` in the
+owned GitLab job trace, then interrupt the launcher with Ctrl-C. Its expected
+outcome is exit 130, an `interrupted` verdict and normal exact-resource cleanup
+receipts. The campaign lane stops on interruption; this is not an automated PASS
+and must not be counted as normal successful scenario coverage. If the fixture
+finishes its sleep normally, it fails rather than claiming cancellation proof.
 
 ### Optional Android lane
 

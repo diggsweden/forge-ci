@@ -203,7 +203,7 @@ lane() {
 		# An interrupted case stops the lane; the operator asked for it.
 		if [[ "$status" -eq 130 ]]; then
 			printf 'campaign: interrupted; the cases after it are not run\n' >&2
-			break
+			return 130
 		fi
 	done 3<"$plan"
 	printf 'campaign: %d of %d cases failed; results in %s\n' "$failed" "$ran" "$results" >&2

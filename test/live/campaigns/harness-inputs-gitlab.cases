@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: The Forge CI Authors
+# SPDX-License-Identifier: CC0-1.0
+
+# Opt-in explicit-input regressions. Prepare the normal lane's images first,
+# then add the reviewed consumer/archive coordinates below to campaign.env.
+# The Buildah capability probe has its separate build-capability-gitlab.cases.
+# RECOVERY_CONSUMER must publish and pause at the documented candidate checkpoint.
+setting visibility=private
+setting image-builder=kaniko
+setting admin-lint=false
+setting admin-vulnerabilities=false
+setting admin-application-tests=false
+setting admin-reproducible-builds=true
+
+scenario TestGitLabRelease_ConsumerBranchProtection checkout=@NATIVE_CONSUMER
+scenario TestGitLabRelease_ConsumerTrial checkout=@NATIVE_CONSUMER job-archive=@NATIVE_JOB_ARCHIVE build-archive=@NATIVE_BUILD_ARCHIVE signer-archive=@NATIVE_SIGNER_ARCHIVE lint-archive=@NATIVE_LINT_ARCHIVE
+scenario TestGitLabRelease_RejectsPreseededProvenance checkout=@NATIVE_CONSUMER job-archive=@NATIVE_JOB_ARCHIVE build-archive=@NATIVE_BUILD_ARCHIVE signer-archive=@NATIVE_SIGNER_ARCHIVE lint-archive=@NATIVE_LINT_ARCHIVE
+scenario TestGitLabRelease_ConsumerInterruptedRecovery checkout=@RECOVERY_CONSUMER job-archive=@RECOVERY_JOB_ARCHIVE build-archive=@RECOVERY_BUILD_ARCHIVE signer-archive=@NATIVE_SIGNER_ARCHIVE lint-archive=@RECOVERY_LINT_ARCHIVE version=0.3.0

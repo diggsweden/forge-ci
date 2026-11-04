@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: The Forge CI Authors
+# SPDX-License-Identifier: CC0-1.0
+
+# Explicitly Buildah-only: supply a reviewed Buildah RUN-capable archive and
+# privileged runner. Keep separate from the Kaniko consumer-regression lane.
+setting visibility=private
+setting image-builder=buildah
+scenario TestGitLabRelease_BuildImageCapability build-archive=@BUILD_PROBE_ARCHIVE

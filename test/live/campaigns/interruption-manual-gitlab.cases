@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: The Forge CI Authors
+# SPDX-License-Identifier: CC0-1.0
+
+# Manual proof only: observe fci-live-interruption-ready in the GitLab job trace,
+# then interrupt the launcher. Expect interrupted/130 plus cleanup evidence,
+# never a normal passing scenario. Keep separate from automated success lanes.
+setting visibility=private
+scenario TestGitLabWorkflow_InterruptedJob

@@ -340,6 +340,10 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 
 	if consumerRoot != "" {
 		opened := livetest.OpenConsumer(t, target, consumerRoot)
+		if preseeded {
+			opened = opened.WithPreseededGitLabProvenance(t)
+		}
+
 		if livetest.DemoName() != "" {
 			opened = opened.WithHistory()
 		}

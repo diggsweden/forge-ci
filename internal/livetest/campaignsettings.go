@@ -139,6 +139,14 @@ func CampaignRunSettings(provider string, getenv func(string) string) (CampaignR
 }
 
 func (run CampaignRun) caseSettings(args []string) (map[string]string, error) {
+	if len(args) != 0 && args[0] == "test-live-gitlab-build-image-capability" {
+		if run.BuilderSelector != "" && run.BuilderSelector != ImageBuilderBuildah {
+			return nil, fmt.Errorf("build-image capability probes Buildah; select a Buildah lane: %w", errs.ErrValidation)
+		}
+
+		return run.withBuilder(ImageBuilderBuildah), nil
+	}
+
 	if len(args) < 3 || args[0] != "test-live-forgejo-consumer" {
 		return run.Settings, nil
 	}
@@ -153,6 +161,10 @@ func (run CampaignRun) caseSettings(args []string) (map[string]string, error) {
 		return nil, err
 	}
 
+	return run.withBuilder(builder), nil
+}
+
+func (run CampaignRun) withBuilder(builder string) map[string]string {
 	facts := maps.Clone(run.Settings)
 	if facts == nil {
 		facts = map[string]string{}
@@ -160,5 +172,5 @@ func (run CampaignRun) caseSettings(args []string) (map[string]string, error) {
 
 	facts["image-builder"] = builder
 
-	return facts, nil
+	return facts
 }

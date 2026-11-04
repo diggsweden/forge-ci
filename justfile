@@ -1203,7 +1203,7 @@ test-live-gitlab-release job_image_archive signer_image_archive:
 # Run a clean consumer's .gitlab/build-release.sh under the pinned release policy.
 # The consumer trial signs distro packages and needs the guarded full-release profile.
 [arg('checkout', help='Absolute path to a clean consumer checkout with its GitLab check and build scripts')]
-[arg('settings', help='Optional KEY=value consumer variables scoped to the key-free release build, and lint-archive=<nanolinter image archive> for a gate that lints')]
+[arg('settings', help='Optional KEY=value build variables, lint-archive=<archive>, or scenario=<exact consumer release test name>; see live-campaigns.md')]
 [arg('job_image_archive', help='Path to the prepared Docker archive for the non-root check image')]
 [arg('build_image_archive', help='Path to the prepared Docker archive for the release builder')]
 [arg('signer_image_archive', help='Path to the prepared Docker archive for the signer image')]
@@ -1224,7 +1224,28 @@ test-live-gitlab-consumer-release checkout job_image_archive build_image_archive
     done
     FORGE_CI_LIVE_CONSUMER_SETTINGS="$(printf '%s\n' "${settings[@]}")"
     export FORGE_CI_LIVE_CONSUMER_SETTINGS
-    exec bash scripts/ci/run-live-tests.sh focused '^TestGitLabRelease_ConsumerTrial$'
+    scenario=$(go run ./internal/livetest/preflight gitlab-consumer-scenario)
+    exec bash scripts/ci/run-live-tests.sh focused "^${scenario}$"
+
+# Check first-push protection with a real clean consumer; no job images needed.
+[arg('checkout', help='Absolute path to a clean reviewed consumer checkout')]
+[doc('Live GitLab consumer branch protection; network, destructive')]
+[group('live')]
+test-live-gitlab-consumer-branch-protection checkout:
+    @FORGE_CI_LIVE_CONSUMER="$1" exec bash scripts/ci/run-live-tests.sh focused '^TestGitLabRelease_ConsumerBranchProtection$'
+
+# This specifically probes Buildah RUN capability on the privileged runner.
+[arg('build_image_archive', help='Prepared Docker archive of the reviewed Buildah-capable build image; requires the privileged runner')]
+[doc('Live GitLab build-image capability; network, destructive')]
+[group('live')]
+test-live-gitlab-build-image-capability build_image_archive:
+    @FORGE_CI_LIVE_BUILD_IMAGE_ARCHIVE="$1" exec bash scripts/ci/run-live-tests.sh focused '^TestGitLabRelease_BuildImageCapability$'
+
+# Observe the ready marker in GitLab's job trace, then interrupt this launcher.
+[doc('Manual GitLab active-job interruption proof; expected exit 130, network, destructive')]
+[group('live')]
+test-live-gitlab-interrupted-job:
+    @FORGE_CI_LIVE_INTERRUPT_PROBE=gitlab-workflow exec bash scripts/ci/run-live-tests.sh focused '^TestGitLabWorkflow_InterruptedJob$'
 
 # Exercise one cold base publication and verified warm reuse in native release jobs.
 [arg('job_image_archive', help='Path to the prepared Docker archive for the non-root check image')]

@@ -207,8 +207,8 @@ func TestCampaignLane_StopsAtAnInterruptedCase(t *testing.T) {
 	stderr, status := lane.run(t, "gitlab", "env", "FORGE_CI_LIVE_PROVIDER=gitlab",
 		"case", "scenario TestInterrupted", "2", "test-live", "^TestInterrupted$",
 		"case", "scenario TestNext", "2", "test-live", "^TestNext$")
-	if status != 1 || !strings.Contains(stderr, "interrupted") {
-		t.Fatalf("status %d, want 1 and the interruption named\n%s", status, stderr)
+	if status != 130 || !strings.Contains(stderr, "interrupted") {
+		t.Fatalf("status %d, want 130 and the interruption named\n%s", status, stderr)
 	}
 
 	if calls := readLines(t, lane.argvFile); len(calls) != 1 {

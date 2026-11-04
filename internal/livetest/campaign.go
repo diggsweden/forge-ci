@@ -224,12 +224,8 @@ func PlanCampaignLane(dir, provider, casesPath, head string, run CampaignRun) (C
 // campaignCaseArgs maps one case's words to the recipe that runs it.
 func campaignCaseArgs(dir, provider string, env map[string]string, words []string) ([]string, error) {
 	switch words[0] {
-	case "scenario":
-		if len(words) != 2 || !campaignTest.MatchString(words[1]) {
-			return nil, fmt.Errorf("want scenario <Go test name>: %w", errs.ErrValidation)
-		}
-
-		return []string{"test-live", "^" + words[1] + "$"}, nil
+	case settingScenario:
+		return campaignScenarioRecipe(provider, env, words)
 	case "consumer":
 	default:
 		return nil, fmt.Errorf("a case is consumer or scenario: %w", errs.ErrValidation)
@@ -253,17 +249,39 @@ func campaignCaseArgs(dir, provider string, env map[string]string, words []strin
 	}
 
 	if provider == campaignGitLab {
-		gate, gateErr := readCampaignGate(filepath.Join(dir, "demos", words[1], filepath.FromSlash(GitLabGateFile)), words[3:])
-		if gateErr != nil {
-			return nil, gateErr
-		}
-
-		if gateErr = campaignHasGateImages(env, gate); gateErr != nil {
-			return nil, gateErr
+		if err := campaignAdmitGitLabConsumer(filepath.Join(dir, "demos", words[1]), words[2], words[3:], settings, env); err != nil {
+			return nil, err
 		}
 	}
 
 	return consumerRecipe(provider, words[2], filepath.Join(dir, "demos", words[1]), archives, settings)
+}
+
+func campaignScenarioRecipe(provider string, env map[string]string, words []string) ([]string, error) {
+	if special, handled, err := campaignGitLabScenarioArgs(provider, env, words); handled {
+		return special, err
+	}
+
+	if len(words) != 2 || !campaignTest.MatchString(words[1]) {
+		return nil, fmt.Errorf("want scenario <Go test name>: %w", errs.ErrValidation)
+	}
+
+	return []string{"test-live", "^" + words[1] + "$"}, nil
+}
+
+func campaignAdmitGitLabConsumer(checkout, event string, words, settings []string, env map[string]string) error {
+	if event == TrialRelease {
+		if _, err := ParseGitLabReleaseSettings(strings.Join(settings, "\n")); err != nil {
+			return err
+		}
+	}
+
+	gate, err := readCampaignGate(filepath.Join(checkout, GitLabGateFile), words)
+	if err != nil {
+		return err
+	}
+
+	return campaignHasGateImages(env, gate)
 }
 
 // readCampaignGate reads the GitLab gate at path of a consumer with the

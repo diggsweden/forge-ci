@@ -47,6 +47,8 @@ func ParseTrialVariables(input string) (map[string]string, error) {
 // decides: the release policy's version bump, and literal variables for the
 // consumer's build.
 type GitLabReleaseSettings struct {
+	// Scenario selects a reviewed consumer release case; empty is ConsumerTrial.
+	Scenario string
 	// VersionBump is the release component's version-bump input: maven/npm/cargo, or ""
 	// for none.
 	VersionBump string
@@ -68,6 +70,14 @@ const settingVersionBump = "version-bump"
 // input of that name.
 const settingJobUser = "job-user"
 
+const settingScenario = "scenario"
+
+const (
+	gitlabConsumerTrialTest = "TestGitLabRelease_ConsumerTrial"
+	gitlabPreseededTest     = "TestGitLabRelease_RejectsPreseededProvenance"
+	gitlabRecoveryTest      = "TestGitLabRelease_ConsumerInterruptedRecovery"
+)
+
 // jobUserValue is UID[:GID] in canonical decimal: a leading zero would pass
 // the policy's input check and then never equal what `id -u` prints.
 var jobUserValue = regexp.MustCompile(`^(0|[1-9][0-9]*)(:(0|[1-9][0-9]*))?$`)
@@ -84,26 +94,12 @@ func ParseGitLabReleaseSettings(input string) (GitLabReleaseSettings, error) {
 	for word := range strings.SplitSeq(input, "\n") {
 		key, value, _ := strings.Cut(word, "=")
 
-		switch key {
-		case settingVersionBump:
-			if settings.VersionBump != "" || !slices.Contains([]string{"maven", "npm", "cargo"}, value) {
-				return GitLabReleaseSettings{}, fmt.Errorf("%s must be given once, as maven, npm or cargo: %w", settingVersionBump, errs.ErrValidation)
-			}
+		handled, err := settings.setRecipeOption(key, value)
+		if err != nil {
+			return GitLabReleaseSettings{}, err
+		}
 
-			settings.VersionBump = value
-		case settingJobUser:
-			if err := setTrialJobUser(&settings.JobUser, value); err != nil {
-				return GitLabReleaseSettings{}, err
-			}
-		case settingVersion:
-			if err := setTrialVersion(&settings.Version, key, value); err != nil {
-				return GitLabReleaseSettings{}, err
-			}
-		case "next-version":
-			if err := setTrialVersion(&settings.NextVersion, key, value); err != nil {
-				return GitLabReleaseSettings{}, err
-			}
-		default:
+		if !handled {
 			variables = append(variables, word)
 		}
 	}
@@ -118,11 +114,63 @@ func ParseGitLabReleaseSettings(input string) (GitLabReleaseSettings, error) {
 	}
 
 	settings.Variables = parsed
+	if settings.Scenario == gitlabPreseededTest && settings.NextVersion != "" {
+		return GitLabReleaseSettings{}, fmt.Errorf("preseeded provenance rejection takes no next-version: %w", errs.ErrValidation)
+	}
+
+	if settings.Scenario == gitlabRecoveryTest && (settings.Version == "" || settings.Version == "0.0.0" || settings.NextVersion != "") {
+		return GitLabReleaseSettings{}, fmt.Errorf("consumer recovery requires one explicit nonzero version and no next-version: %w", errs.ErrValidation)
+	}
+
 	if !validNextTrialVersion(settings) {
 		return GitLabReleaseSettings{}, fmt.Errorf("next-version requires an increasing explicit version and isolated version-bump mode: %w", errs.ErrValidation)
 	}
 
 	return settings, nil
+}
+
+func (settings *GitLabReleaseSettings) setRecipeOption(key, value string) (bool, error) {
+	switch key {
+	case settingScenario:
+		if settings.Scenario != "" || value == "" {
+			return true, fmt.Errorf("scenario must be supplied once: %w", errs.ErrValidation)
+		}
+
+		if _, err := GitLabConsumerReleaseScenario(value); err != nil {
+			return true, err
+		}
+
+		settings.Scenario = value
+	case settingVersionBump:
+		if settings.VersionBump != "" || !slices.Contains([]string{"maven", "npm", "cargo"}, value) {
+			return true, fmt.Errorf("%s must be given once, as maven, npm or cargo: %w", settingVersionBump, errs.ErrValidation)
+		}
+
+		settings.VersionBump = value
+	case settingJobUser:
+		return true, setTrialJobUser(&settings.JobUser, value)
+	case settingVersion:
+		return true, setTrialVersion(&settings.Version, key, value)
+	case "next-version":
+		return true, setTrialVersion(&settings.NextVersion, key, value)
+	default:
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// GitLabConsumerReleaseScenario admits an exact registered case, not a caller's
+// regular expression. The archive/checkout recipe is shared by these cases.
+func GitLabConsumerReleaseScenario(name string) (string, error) {
+	switch name {
+	case "", gitlabConsumerTrialTest:
+		return gitlabConsumerTrialTest, nil
+	case gitlabPreseededTest, gitlabRecoveryTest:
+		return name, nil
+	default:
+		return "", fmt.Errorf("scenario must be one of %s: %w", strings.Join([]string{gitlabConsumerTrialTest, gitlabPreseededTest, gitlabRecoveryTest}, ", "), errs.ErrValidation)
+	}
 }
 
 // refusePolicyBuilderVariables refuses build variables that name what the

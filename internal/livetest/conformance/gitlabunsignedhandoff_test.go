@@ -23,7 +23,7 @@ func TestGitLabRelease_RejectsPreseededProvenance(t *testing.T) {
 
 	root := os.Getenv(consumerCheckoutEnv)
 	if root == "" {
-		livetest.NotCoveredf(t, "requires a reviewed consumer that preseeds dist/slsa-provenance.intoto.json after release files declare")
+		livetest.NotCoveredf(t, "requires a reviewed native consumer; the harness inserts preseeded provenance in its private build wrapper")
 	}
 
 	for _, visibility := range livetest.ConsumerVisibilities(t) {
