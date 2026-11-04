@@ -58,7 +58,14 @@ func TestForgejoLayer_ConsumerTrial(t *testing.T) {
 		t.Skip("no consumer checkout is named; run `just test-live-forgejo-consumer <checkout> <pull-request|release>`")
 	}
 
-	for _, visibility := range livetest.ConsumerVisibilities(t) {
+	visibilities := livetest.ConsumerVisibilities(t)
+	// The npm registry belongs to the owner, not to the scratch repository, so
+	// a second case would publish the same name@version again and be refused.
+	if os.Getenv("FORGE_CI_LIVE_NPM_APPLICATION_IMAGE") != "" && len(visibilities) != 1 {
+		t.Fatal("npm application acceptance publishes one package version to the owner's registry; set FORGE_CI_LIVE_CONSUMER_VISIBILITY to public or private")
+	}
+
+	for _, visibility := range visibilities {
 		t.Run(visibility.Name, func(t *testing.T) {
 			runForgejoConsumerTrial(t, root, visibility.Private)
 		})
@@ -89,8 +96,8 @@ func runForgejoConsumerTrial(t *testing.T, root string, private bool) {
 
 	consumer := livetest.OpenConsumer(t, target, root)
 	if image := os.Getenv("FORGE_CI_LIVE_NPM_APPLICATION_IMAGE"); image != "" {
-		if private || livetest.RunnerArch(t, target) != "amd64" || livetest.DemoName() != "" {
-			t.Fatal("npm application acceptance requires public disposable native amd64 repositories")
+		if livetest.RunnerArch(t, target) != "amd64" || livetest.DemoName() != "" {
+			t.Fatal("npm application acceptance requires disposable native amd64 repositories")
 		}
 
 		recipe, err := filepath.Abs("../../../test/live/demos/hello-npm-service/consumer")
@@ -111,8 +118,8 @@ func runForgejoConsumerTrial(t *testing.T, root string, private bool) {
 	}
 
 	if image := os.Getenv("FORGE_CI_LIVE_MAVEN_TESTCONTAINERS_IMAGE"); image != "" {
-		if private || settings.Event != livetest.TrialRelease || livetest.RunnerArch(t, target) != "amd64" || livetest.DemoName() != "" || livetest.PrivilegedRunnerLabel(t, target) == "" || os.Getenv("FORGE_CI_LIVE_MAVEN_APPLICATION_IMAGE") == "" {
-			t.Fatal("Maven Testcontainers acceptance requires a public disposable native amd64 Maven application fixture and acknowledged privileged runner capacity")
+		if settings.Event != livetest.TrialRelease || livetest.RunnerArch(t, target) != "amd64" || livetest.DemoName() != "" || livetest.PrivilegedRunnerLabel(t, target) == "" || os.Getenv("FORGE_CI_LIVE_MAVEN_APPLICATION_IMAGE") == "" {
+			t.Fatal("Maven Testcontainers acceptance requires a disposable native amd64 Maven application fixture and acknowledged privileged runner capacity")
 		}
 
 		consumer = livetest.WithMavenContainerTests(t, consumer, image, livetest.PrivilegedRunnerLabel(t, target))

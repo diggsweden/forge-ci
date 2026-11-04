@@ -23,15 +23,19 @@ func TestForgejoLayer_NPMApplicationDevelopment(t *testing.T) {
 		t.Skip("name npm application source, pinned image and installed-package oracle")
 	}
 
-	for _, visibility := range livetest.ConsumerVisibilities(t) {
-		if visibility.Private {
-			t.Fatal("npm application acceptance requires public scratch repositories")
-		}
-	}
-
 	if livetest.DemoName() != "" {
 		t.Fatal("npm application acceptance requires disposable scratch repositories")
 	}
+
+	for _, visibility := range livetest.ConsumerVisibilities(t) {
+		t.Run(visibility.Name, func(t *testing.T) {
+			runForgejoNPMApplicationDevelopment(t, root, visibility.Private)
+		})
+	}
+}
+
+func runForgejoNPMApplicationDevelopment(t *testing.T, root string, private bool) {
+	t.Helper()
 
 	if !livetest.Requires(t, provider.ForgeForgejo, livetest.NeedsInRunner, livetest.NeedsPackages) {
 		livetest.NotCoveredf(t, "npm application needs runner and packages")
@@ -49,7 +53,7 @@ func TestForgejoLayer_NPMApplicationDevelopment(t *testing.T) {
 
 	c := livetest.NPMApplicationFixtureConfig{RecipeDirectory: recipe, NodeImage: os.Getenv("FORGE_CI_LIVE_NPM_APPLICATION_IMAGE"), Oracle: os.Getenv("FORGE_CI_LIVE_NPM_APPLICATION_ORACLE"), Branch: os.Getenv("FORGE_CI_LIVE_NPM_APPLICATION_BRANCH")}
 	consumer := livetest.NewNPMApplicationFixture(t, livetest.OpenConsumer(t, target, root), c, true)
-	layer, repo := newConsumerRepos(t, target, consumer, "npm-application-development", false)
+	layer, repo := newConsumerRepos(t, target, consumer, "npm-application-development", private)
 
 	plan, err := layer.PlanConsumer(consumer.Workflows(t), livetest.ConsumerFacts{Inputs: map[string]string{"forge-ci-repository": layer.Repository}})
 	if err != nil {

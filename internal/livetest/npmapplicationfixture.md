@@ -1,6 +1,6 @@
-# Public npm release package fixtures
+# npm release package fixtures
 
-The public Forgejo consumer release trial reuses the native npm application's
+The Forgejo consumer release trial reuses the native npm application's
 preparation, build, artifact handoff and signing recipe. It retains the built
 tarball and metadata, publishes those bytes in a separate job, and runs an
 operator-supplied fresh-install oracle in another job. The publisher has no
@@ -17,10 +17,15 @@ Supply the existing release trial inputs plus:
   requiring a CLI `bin`.
   The default remains CLI/application mode. Private packages are refused.
 
-Run `just test-live '^TestForgejoLayer_ConsumerTrial$/public$'` with the usual v5
-contract, public visibility, clean consumer, release event, version and reviewed
-signer image. Library mode has no image-development fixture. This mode changes
-test infrastructure, not administrator enforcement policy.
+Run `just test-live '^TestForgejoLayer_ConsumerTrial$/private$'` (or `/public$`)
+with the usual v5 contract, clean consumer, release event, version and reviewed
+signer image. Set `FORGE_CI_LIVE_CONSUMER_VISIBILITY` to `private` or `public`:
+the package goes to the owner's npm registry, not the scratch repository's, so a
+second visibility case in the same run would publish the same version again and
+is refused up front. Every registry call already authenticates with the release
+token, so a private consumer needs nothing more. Library mode has no
+image-development fixture. This mode changes test infrastructure, not
+administrator enforcement policy.
 
 The demo's `@example-org` scope is a parameter: choose the admitted disposable
 registry owner before committing the clean input, consistently in package.json

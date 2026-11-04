@@ -99,6 +99,9 @@ func TestMavenServiceDevelopmentPreservesSource(t *testing.T) {
 				}
 			}
 
+			readiness := shellJobs.Jobs["readiness"].Steps
+			requireAuthenticatedReadinessPull(t, readiness[len(readiness)-1].Run)
+
 			decl, err := githubWorkflow(t.Context(), fixture, ".forge-ci/service-development.yml")
 			if err != nil {
 				t.Fatal(err)
@@ -140,5 +143,21 @@ func TestMavenServiceDevelopmentPreservesSource(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A private consumer's snapshot image need not be anonymously readable, so the
+// readiness job logs in to pull it, and the credential is gone before the
+// service under test starts.
+func requireAuthenticatedReadinessPull(t *testing.T, script string) {
+	t.Helper()
+
+	login := strings.Index(script, `forge-ci container login --registry "${ref%@*}"`)
+	pull := strings.Index(script, `podman pull --authfile "$auth" "$ref"`)
+	drop := strings.LastIndex(script, `rm -f -- "$auth"`)
+	start := strings.Index(script, "podman run ")
+
+	if login < 0 || pull < login || drop < pull || start < drop || !strings.Contains(script[login:pull], "unset REGISTRY_PASSWORD") {
+		t.Fatalf("readiness must pull with a job-local credential and drop it before the service starts:\n%s", script)
 	}
 }

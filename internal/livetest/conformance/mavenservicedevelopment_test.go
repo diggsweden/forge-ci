@@ -34,10 +34,14 @@ func runForgejoMavenServiceDevelopment(t *testing.T) {
 	}
 
 	for _, visibility := range livetest.ConsumerVisibilities(t) {
-		if visibility.Private {
-			t.Fatal("service development acceptance currently admits public repositories only")
-		}
+		t.Run(visibility.Name, func(t *testing.T) {
+			runForgejoMavenServiceCase(t, root, visibility.Private)
+		})
 	}
+}
+
+func runForgejoMavenServiceCase(t *testing.T, root string, private bool) {
+	t.Helper()
 
 	if !livetest.Requires(t, provider.ForgeForgejo, livetest.NeedsInRunner, livetest.NeedsPackages) {
 		livetest.NotCoveredf(t, "service development needs a native runner and packages")
@@ -63,7 +67,7 @@ func runForgejoMavenServiceDevelopment(t *testing.T) {
 	source := livetest.OpenConsumer(t, target, root)
 	admitted := source.Commit
 	consumer := livetest.NewMavenServiceDevelopmentFixture(t, source, config)
-	layer, repo := newConsumerRepos(t, target, consumer, "consumer-development", false)
+	layer, repo := newConsumerRepos(t, target, consumer, "consumer-development", private)
 
 	registry, err := livetest.RegistryHost(target)
 	if err != nil {

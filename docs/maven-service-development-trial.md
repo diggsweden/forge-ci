@@ -4,8 +4,8 @@
 # Maven service development acceptance
 
 The existing `TestForgejoLayer_ConsumerDevelopment` selects the Java-service
-case when `FORGE_CI_LIVE_MAVEN_APPLICATION_IMAGE` is set. This is a public,
-native **linux/amd64**, unsigned snapshot trial, using the existing Consumer
+case when `FORGE_CI_LIVE_MAVEN_APPLICATION_IMAGE` is set. This is a public or
+private, native **linux/amd64**, unsigned snapshot trial, using the existing Consumer
 private-index staging, scratch-resource cleanup and shared snapshot workflow.
 It does not exercise stable release, PR linting or other forges.
 
@@ -16,7 +16,7 @@ Use the normal live-suite contract/session and strict base UID setup. Select:
 | Environment variable | Value |
 | --- | --- |
 | `FORGE_CI_LIVE_CONSUMER` | Absolute path to a clean checkout at the desired source revision |
-| `FORGE_CI_LIVE_CONSUMER_VISIBILITY` | `public` (required) |
+| `FORGE_CI_LIVE_CONSUMER_VISIBILITY` | `public`, `private` or `both` (default) |
 | `FORGE_CI_LIVE_MAVEN_APPLICATION_IMAGE` | Trusted Maven/JDK **25** job image, full registry reference pinned with `@sha256:…` |
 | `FORGE_CI_LIVE_SERVICE_BRANCH` | Logical scratch source branch, e.g. `feature/service-trial`, different from `main` |
 | `FORGE_CI_LIVE_SERVICE_READINESS_URL` | Project-owned readiness endpoint, e.g. `http://127.0.0.1:8080/actuator/health/readiness` |
@@ -30,8 +30,11 @@ runner must permit the existing Buildah setup helper and apt package installatio
 The readiness job uses that same helper to provision Podman, jq and nftables in
 its isolated job storage, rather than assuming they are in the runner's default
 image. Netavark needs `nft` for the loopback port mapping.
-Podman must trust and anonymously pull the public lab
-registry; configure that in the runner fixture rather than bypassing TLS.
+Podman must trust the lab registry; configure that in the runner fixture
+rather than bypassing TLS. A private consumer's image need not be anonymously
+readable, so the readiness job logs in with the development registry credential
+(`forge-ci container login` into a job-local auth file), pulls the digest, and
+deletes the file before the service starts.
 
 Use Go **1.27.3** with its matching `GOROOT` and exact pinned toolchain directory
 first on `PATH` for local checks:

@@ -4,11 +4,14 @@ The original Wallet Account tests start PostgreSQL through Testcontainers. A
 plain Maven job has no Docker API and cannot satisfy that contract. Do not skip
 those tests or present a missing engine as an application pass.
 
-The existing public Forgejo Maven application trial can opt into a job-local
-test-engine sidecar with `FORGE_CI_LIVE_MAVEN_TESTCONTAINERS_IMAGE`. The image must
-be an operator-reviewed immutable digest. The controller requires the public,
-disposable, native amd64 Maven application fixture and the acknowledged
-privileged runner label from the v5 contract before publishing its workflow.
+The existing Forgejo Maven application trial, public or private, can opt into a
+job-local test-engine sidecar with `FORGE_CI_LIVE_MAVEN_TESTCONTAINERS_IMAGE`.
+The image must be an operator-reviewed immutable digest. The controller
+requires the disposable, native amd64 Maven application fixture and the
+acknowledged privileged runner label from the v5 contract before publishing its
+workflow. Nothing in the trial reads the consumer anonymously: the sidecar and
+the images it starts come from their own registries, so a private consumer
+needs no extra credential.
 
 Only the key-free build job gains the service and Docker client environment.
 Preparation, signing and publication retain their existing jobs and credentials.
@@ -24,12 +27,12 @@ image:
 
 ```bash
 export FORGE_CI_LIVE_CONSUMER=/home/operator/consumers/wallet-account
-export FORGE_CI_LIVE_CONSUMER_VISIBILITY=public
+export FORGE_CI_LIVE_CONSUMER_VISIBILITY=private
 export FORGE_CI_LIVE_CONSUMER_EVENT=release
 export FORGE_CI_LIVE_CONSUMER_SETTINGS=version=4.0.1
 export FORGE_CI_LIVE_MAVEN_APPLICATION_IMAGE='docker.io/library/maven:3.9-eclipse-temurin-25@sha256:96f175708f766ea049ab6c794a85335d238894c75f8eb364bddd98086a5b7cfd'
 export FORGE_CI_LIVE_MAVEN_TESTCONTAINERS_IMAGE='docker.io/library/docker@sha256:2a232a42256f70d78e3cc5d2b5d6b3276710a0de0596c145f627ecfae90282ac'
-just test-live '^TestForgejoLayer_ConsumerTrial$/public$'
+just test-live '^TestForgejoLayer_ConsumerTrial$/private$'
 ```
 
 That service digest resolves the reviewed Docker 28 DinD image. It supports the

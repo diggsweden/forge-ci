@@ -59,6 +59,8 @@ jobs:
           SOURCE_SHA: ${{ needs.snapshot.outputs.source-sha }}
           IMAGES_JSON: ${{ needs.snapshot.outputs.container-images-json }}
           READINESS_URL: @URL@
+          REGISTRY_USERNAME: ${{ vars.DEVELOPMENT_REGISTRY_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.DEVELOPMENT_REGISTRY_TOKEN }}
         run: |
           set -euo pipefail
           command -v podman
@@ -69,9 +71,15 @@ jobs:
           ref=$(jq -er 'if length == 1 then .[0].ref else error("one image required") end' service-evidence/container-images.json)
           [[ "$ref" =~ @sha256:[0-9a-f]{64}$ ]]
           cid=
-          cleanup() { if [ -n "$cid" ]; then podman rm -f "$cid" >/dev/null; fi; }
+          # A private consumer's image need not be anonymously readable. Pull with
+          # the development credential and drop it before the service starts.
+          auth=$(mktemp)
+          cleanup() { rm -f -- "$auth"; if [ -n "$cid" ]; then podman rm -f "$cid" >/dev/null; fi; }
           trap cleanup EXIT
-          podman pull "$ref"
+          forge-ci container login --registry "${ref%@*}" --registry-username "$REGISTRY_USERNAME" --auth-file "$auth"
+          unset REGISTRY_PASSWORD
+          podman pull --authfile "$auth" "$ref"
+          rm -f -- "$auth"
           port_path=${READINESS_URL#http://127.0.0.1:}
           port=${port_path%%/*}
           cid=$(podman run -d --pull=never -p "127.0.0.1::$port" --env-file trial-runtime/runtime.env -v "$PWD/trial-runtime:/trial:ro" "$ref")
