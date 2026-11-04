@@ -157,6 +157,50 @@ snapshot_build api amd64
 	}
 }
 
+// On GitLab the kaniko job image is read with the job token, which a private
+// registry needs; elsewhere, and before the build, anonymously and with no
+// auth file left behind.
+func TestSnapshotNativeKanikoAdmissionReadsWithTheJobToken(t *testing.T) {
+	image := "registry.example/team/kaniko-job@sha256:" + strings.Repeat("a", 64)
+
+	for name, tc := range map[string]struct {
+		env  []string
+		want string
+	}{
+		"gitlab":  {env: []string{"CI_REGISTRY=registry.example", "CI_JOB_TOKEN=job-token-canary"}, want: "login registry.example gitlab-ci-token job-token-canary\nusable-digest --auth-file\n"},
+		"forgejo": {want: "usable-digest\n"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.Mkdir(filepath.Join(dir, "snapshot-source"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+
+			program := `set -euo pipefail
+source "$1"
+snapshot_engine() {
+  case "$1 $2" in
+  "container login") printf 'login %s %s %s\n' "$4" "$6" "$(cat)"; test -n "${10}" && : >"${10}"; printf '%s\n' "${10}" >auth-path ;;
+  "container image") if [ "$8" = --auth-file ]; then test -f "$9"; echo 'usable-digest --auth-file' >&2; else echo usable-digest >&2; fi ;;
+  esac
+}
+snapshot_build api amd64
+if [ -f auth-path ]; then test ! -e "$(<auth-path)"; fi
+`
+			cmd := exec.CommandContext(t.Context(), "bash", "--noprofile", "--norc", "-c", program, "snapshot", filepath.Join(reporoot.Path(t), ".forgejo/bin/snapshot-images.sh"))
+			cmd.Dir = dir
+
+			cmd.Env = append(append(os.Environ(), "CI_REGISTRY=", "CI_JOB_TOKEN=", "SNAPSHOT_SERVER=https://forge.example", "SNAPSHOT_REPOSITORY=org/app",
+				"CI_IMAGE_BUILDER=kaniko", "CI_IMAGE_BUILDER_JOB_IMAGE="+image, "FORGE_CI_REPOSITORY_URL=https://forge.example/team/engine.git"), tc.env...)
+
+			output, err := cmd.CombinedOutput()
+			if err != nil || string(output) != tc.want {
+				t.Fatalf("admission ran %q, want %q: %v", output, tc.want, err)
+			}
+		})
+	}
+}
+
 func TestSnapshotNativeArtifactProducerUsesSharedCLIWithoutPublicationCredentials(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "snapshot-source"), 0o700); err != nil {

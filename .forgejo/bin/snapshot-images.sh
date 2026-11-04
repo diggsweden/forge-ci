@@ -99,9 +99,23 @@ snapshot_build() {
 		# Same job-image admission as setup-image-builder; the layer's source
 		# identity is part of the trusted builder, never supplied by the project.
 		[[ "${CI_IMAGE_BUILDER_JOB_IMAGE:-}" =~ @sha256:[0-9a-f]{64}$ ]]
-		snapshot_engine container image usable-digest --ref "${CI_IMAGE_BUILDER_JOB_IMAGE}" \
-			--arch "${arch}" --require-label "org.opencontainers.image.source=${FORGE_CI_REPOSITORY_URL%.git}" \
-			--require-label 'org.opencontainers.image.title=forge-ci kaniko job image' >/dev/null
+		local auth_dir='' status=0
+		local -a auth=()
+		# A private GitLab registry refuses an anonymous read; the job token
+		# reads what the runner pulled the job image with.
+		if [ -n "${CI_REGISTRY:-}" ] && [ -n "${CI_JOB_TOKEN:-}" ]; then
+			auth_dir=$(mktemp -d) || return
+			auth=(--auth-file "${auth_dir}/auth.json")
+			printf '%s' "${CI_JOB_TOKEN}" | snapshot_engine container login --registry "${CI_REGISTRY}" \
+				--registry-username gitlab-ci-token --registry-password-file - "${auth[@]}" || status=$?
+		fi
+		if [ "${status}" -eq 0 ]; then
+			snapshot_engine container image usable-digest --ref "${CI_IMAGE_BUILDER_JOB_IMAGE}" \
+				--arch "${arch}" "${auth[@]}" --require-label "org.opencontainers.image.source=${FORGE_CI_REPOSITORY_URL%.git}" \
+				--require-label 'org.opencontainers.image.title=forge-ci kaniko job image' >/dev/null || status=$?
+		fi
+		if [ -n "${auth_dir}" ]; then rm -rf -- "${auth_dir}"; fi
+		if [ "${status}" -ne 0 ]; then return "${status}"; fi
 		;;
 	*)
 		echo 'ERROR: snapshot builder must be buildah or kaniko' >&2
