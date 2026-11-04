@@ -33,6 +33,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -169,8 +170,8 @@ func (r Reader) gitLabRelease(ctx context.Context, repo, tag string) (Release, b
 	project := url.PathEscape(r.Owner + "/" + repo)
 	endpoint := r.Base + "/api/v4/projects/" + project + "/releases/" + url.PathEscape(tag)
 
-	// GitLab models attachments as generic-package links rather than files on
-	// the release, so the shapes genuinely differ here. That difference is the
+	// GitLab models attachments as links rather than files on the release,
+	// so the shapes genuinely differ here. That difference is the
 	// adapter's to hide; the oracle just reads each forge as it is.
 	var payload struct {
 		TagName     string `json:"tag_name"`
@@ -192,7 +193,12 @@ func (r Reader) gitLabRelease(ctx context.Context, repo, tag string) (Release, b
 	release := Release{Tag: payload.TagName, Name: payload.Name, Body: payload.Description}
 
 	for _, link := range payload.Assets.Links {
-		digest, size, digestErr := r.digestAndSize(ctx, link.URL)
+		source, err := r.gitLabAssetURL(repo, link.URL)
+		if err != nil {
+			return Release{}, false, err
+		}
+
+		digest, size, digestErr := r.digestAndSize(ctx, source)
 		if digestErr != nil {
 			return Release{}, false, digestErr
 		}
@@ -201,6 +207,37 @@ func (r Reader) gitLabRelease(ctx context.Context, repo, tag string) (Release, b
 	}
 
 	return release, true, nil
+}
+
+// A private upload's browser URL requires a session cookie; PRIVATE-TOKEN
+// authenticates the uploads API instead. Resolve only GitLab's two project
+// upload URL shapes, using the project and upload identity recorded in the
+// release link, never an adapter's interpretation of its own writes.
+func (r Reader) gitLabAssetURL(repo, source string) (string, error) {
+	remote, err := url.Parse(source)
+	if err != nil || !r.allowedURL(remote) {
+		return "", fmt.Errorf("rawref: asset URL is outside the forge or points to login: %w", ErrForge)
+	}
+
+	project := r.Owner + "/" + repo
+	upload, found := strings.CutPrefix(remote.Path, "/"+project+"/uploads/")
+	if !found {
+		// full_path returned by GitLab uses the numeric project ID.
+		path, numeric := strings.CutPrefix(remote.Path, "/-/project/")
+		id, rest, uploaded := strings.Cut(path, "/uploads/")
+		if _, parseErr := strconv.ParseUint(id, 10, 64); !numeric || !uploaded || parseErr != nil {
+			return source, nil
+		}
+
+		project, upload = id, rest
+	}
+
+	secret, filename, found := strings.Cut(upload, "/")
+	if decoded, decodeErr := hex.DecodeString(secret); !found || decodeErr != nil || len(decoded) != 16 || filename == "" || strings.Contains(filename, "/") {
+		return "", fmt.Errorf("rawref: malformed GitLab upload URL: %w", ErrForge)
+	}
+
+	return r.Base + "/api/v4/projects/" + url.PathEscape(project) + "/uploads/" + secret + "/" + url.PathEscape(filename), nil
 }
 
 func (r Reader) get(ctx context.Context, endpoint string, into any) (bool, error) {
@@ -260,7 +297,11 @@ func (r Reader) digestAndSize(ctx context.Context, rawURL string) (string, int64
 func (r Reader) do(ctx context.Context, endpoint string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return nil, fmt.Errorf("rawref: build request: %w", err)
+		return nil, fmt.Errorf("rawref: invalid request URL: %w", ErrForge)
+	}
+
+	if !r.allowedURL(req.URL) {
+		return nil, fmt.Errorf("rawref: request URL is outside the forge or points to login: %w", ErrForge)
 	}
 
 	switch r.Forge {
@@ -270,12 +311,39 @@ func (r Reader) do(ctx context.Context, endpoint string) (*http.Response, error)
 		req.Header.Set("PRIVATE-TOKEN", r.Token)
 	}
 
-	resp, err := r.client().Do(req)
+	// PRIVATE-TOKEN is not one of net/http's sensitive headers: the default
+	// redirect policy forwards it even to unrelated origins. Clone the client
+	// so the oracle's boundary does not mutate a caller's shared client.
+	client := *r.client()
+	checkRedirect := client.CheckRedirect
+	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
+		if !r.allowedURL(next.URL) || len(via) >= 10 {
+			return ErrForge
+		}
+		if checkRedirect != nil {
+			return checkRedirect(next, via)
+		}
+
+		return nil
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("rawref: GET %s: %w", redact(endpoint), err)
+		// Client errors can contain a redirect Location's credentials/query.
+		return nil, fmt.Errorf("rawref: GET %s failed: %w", redact(endpoint), ErrForge)
 	}
 
 	return resp, nil
+}
+
+func (r Reader) allowedURL(remote *url.URL) bool {
+	base, err := url.Parse(r.Base)
+	if err != nil || remote == nil || remote.User != nil || remote.Scheme != base.Scheme || remote.Host != base.Host ||
+		(remote.Scheme != "https" && remote.Scheme != "http") || remote.Host == "" {
+		return false
+	}
+
+	return r.Forge != GitLab || !strings.HasSuffix(remote.Path, "/users/sign_in")
 }
 
 // SHA256 digests a local file, so a scenario can state the digest it uploaded
@@ -308,6 +376,8 @@ func redact(endpoint string) string {
 	}
 
 	parsed.RawQuery = ""
+	parsed.User = nil
+	parsed.Fragment = ""
 
 	return parsed.String()
 }
