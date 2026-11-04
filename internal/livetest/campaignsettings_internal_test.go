@@ -71,8 +71,8 @@ func TestCampaignDeclarationGrammarIsSharedWithPreparation(t *testing.T) {
 func TestCampaignDeclarationAdmissionIsNotTiedToIndividualSettings(t *testing.T) {
 	t.Parallel()
 
-	dir, path := newCampaign(t, "CAMPAIGN_COMMIT="+campaignHead+"\n", "setting enforcement=report-only\nscenario TestOne\n")
-	if _, err := PlanCampaignLane(dir, "forgejo", path, campaignHead, CampaignRun{Settings: map[string]string{"enforcement": "report-only"}}); err != nil {
+	dir, path := newCampaign(t, "CAMPAIGN_COMMIT="+campaignHead+"\n", "setting future-setting=value\nscenario TestOne\n")
+	if _, err := PlanCampaignLane(dir, "forgejo", path, campaignHead, CampaignRun{Settings: map[string]string{"future-setting": "value"}}); err != nil {
 		t.Fatalf("a caller-supplied run setting required a new case-parser branch: %v", err)
 	}
 

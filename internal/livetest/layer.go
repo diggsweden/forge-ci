@@ -91,6 +91,7 @@ type Layer struct {
 	// BinarySHA256 is the digest that tree records for the layer's binary,
 	// and the digest of the build published for it.
 	BinarySHA256 string
+	admin        *workflowAdmin
 }
 
 // PushLayer makes the scratch repository serve this checkout's layer and
@@ -137,6 +138,11 @@ func PushLayer(tb TB, target Target, repo string) Layer {
 		tb.Fatalf("livetest: snapshot the layer: %v", err)
 	}
 
+	admin, err := newWorkflowAdmin(Context(tb), root, commit, os.Getenv)
+	if err != nil {
+		tb.Fatalf("livetest: administrator inputs: %v", err)
+	}
+
 	if err = git.push(ctx, root, scratchRemote(target, repo), commit, layerBranch); err != nil {
 		tb.Fatalf("livetest: push the layer to %s/%s: %v", target.Owner, repo, err)
 	}
@@ -165,6 +171,7 @@ func PushLayer(tb TB, target Target, repo string) Layer {
 		Repository:   RepoSlug(target, repo),
 		Commit:       commit,
 		BinarySHA256: recorded,
+		admin:        admin,
 	}
 }
 
@@ -279,6 +286,11 @@ func (layer Layer) Render(fixture string, facts ...string) (string, error) {
 
 	rendered := strings.NewReplacer(pairs...).Replace(fixture)
 
+	rendered, err := layer.renderAdmin(rendered)
+	if err != nil {
+		return "", err
+	}
+
 	for _, left := range []string{"FORGE_HOST", "OWNER/", "PIN_", "RENDER_"} {
 		if strings.Contains(rendered, left) {
 			return "", fmt.Errorf("the rendered fixture still holds a %q placeholder: %w", left, errs.ErrValidation)
@@ -310,6 +322,14 @@ func (layer Layer) RenderReleaseExample(example string) (string, error) {
 		"FORGE_HOST", strings.TrimPrefix(layer.ServerURL, "https://"),
 		"OWNER", owner,
 	)
+}
+
+// renderAdmin adds literals only for inputs declared by the called engine.
+func (layer Layer) renderAdmin(text string) (string, error) {
+	return layer.admin.render(text, map[string]string{
+		layer.workflowBase() + ".forgejo/workflows/": ".forgejo/workflows",
+		layer.actionBase() + ".forgejo/actions/":     ".forgejo/actions",
+	}, layer.Commit)
 }
 
 // actionBase is what an action's uses: line starts with: the served

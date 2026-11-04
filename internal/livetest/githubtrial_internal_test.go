@@ -68,6 +68,15 @@ func TestReuseGitHubEngineOnlyReadsPreparedSessionEngine(t *testing.T) {
 	trial.api = client
 
 	got := trial.ReuseEngine(root)
+	if got.admin == nil || got.admin.commit != commit {
+		t.Fatal("reused engine lost the controller's administrator policy")
+	}
+
+	if _, present := got.admin.values["enforce-reproducible-builds"]; !present {
+		t.Fatal("reused engine lost an administrator setting")
+	}
+
+	got.admin = nil
 	if got != (GitHubEngine{Owner: trial.org, Repository: "fc-forge-ci", Commit: commit, Namespace: "ghcr.io/example-org/fc-forge-ci"}) || len(reads) != 3 {
 		t.Fatalf("reuse = %+v; reads = %v", got, reads)
 	}

@@ -261,9 +261,9 @@ func protectGitLabReleaseTags(ctx context.Context, t *testing.T, client *gitlaba
 	}
 }
 
-// useGitLabReleasePolicy points the consumer's pipeline at the pinned policy
+// useGitLabAdminPolicy points the consumer's pipeline at the pinned policy
 // file and takes pipeline variables and job-token pushes away from everyone.
-func useGitLabReleasePolicy(ctx context.Context, t *testing.T, client *gitlabapi.Client, project, configPath string) {
+func useGitLabAdminPolicy(ctx context.Context, t *testing.T, client *gitlabapi.Client, project, configPath string) {
 	t.Helper()
 
 	if _, _, err := client.Projects.EditProject(project, &gitlabapi.EditProjectOptions{
@@ -462,7 +462,7 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 
 	policyIncludes := []any{map[string]any{
 		"component": strings.TrimPrefix(target.BaseURL(), "https://") + "/" + layer.Repository + "/release@" + layer.Commit,
-		"inputs": withGitChglog(map[string]any{
+		"inputs": livetest.AdminInputs(t, withGitChglog(map[string]any{
 			"forge-ci-repository": layer.Repository, "consumer-project": project,
 			"server-url": target.BaseURL(), "registry": registry,
 			"job-image": jobImage, "job-user": settings.JobUser, "build-image": buildImage, "signer-image": signerImage,
@@ -486,14 +486,21 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 			"builder-job-image":    builderJobImage,
 			"export-files":         len(exportCommand) != 0,
 			"export":               exportCommand,
-		}),
+		})),
 	}}
-	// The consumer's own merge-request gate, for merge-request pipelines only,
-	// read at the merge request's commit: docs/gitlab.md, The merge-request
-	// gate under a policy. Release-request tag pipelines stay policy-only.
+	// Snapshot the admitted MR gate into the independently pinned policy project.
+	// Its jobs still check out the MR source; the consumer cannot rewrite the
+	// administrator's component inputs. Release-request tags stay release-only.
 	gate := consumer != nil && consumer.HasGitLabGate(t)
+
+	gateImages := livetest.GitLabGateImages{Job: jobImage, Lint: images.lint}
 	if gate {
-		policyIncludes = append([]any{gitlabGateInclude(project)}, policyIncludes...)
+		gateImages.ExtraJobs = livetest.PushGitLabGateExtraJobImages(t, target, *consumer, func(name string) string {
+			return gitlabReleaseRepo(t, target, "release-job-image-"+strings.ToLower(name), livetest.ReadJobImageAnonymously)
+		})
+		body := consumer.GitLabAdminPolicy(t, layer, gateImages)
+		gateCommit := gitlabPolicyCommit(t, ctx, client, livetest.RepoSlug(target, policyRepo), livetest.GitLabAdminGateFile, body, gitlabapi.FileCreate)
+		policyIncludes = append([]any{gitlabGateInclude(livetest.RepoSlug(target, policyRepo), gateCommit.ID)}, policyIncludes...)
 	}
 
 	policyConfig := map[string]any{}
@@ -501,8 +508,8 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 	if bases {
 		policyIncludes = append(policyIncludes, map[string]any{
 			"component": strings.TrimPrefix(target.BaseURL(), "https://") + "/" + layer.Repository + "/check@" + layer.Commit,
-			"inputs": map[string]any{"forge-ci-repository": layer.Repository, "server-url": target.BaseURL(), "job-image": jobImage,
-				"job-name": "candidate-check", "commands": []string{"test -f next-release-request.txt"}},
+			"inputs": livetest.AdminInputs(t, map[string]any{"forge-ci-repository": layer.Repository, "server-url": target.BaseURL(), "job-image": jobImage,
+				"job-name": "candidate-check", "commands": []string{"test -f next-release-request.txt"}}),
 		})
 		policyConfig["candidate-check"] = map[string]any{
 			"rules": []any{map[string]string{"if": `$CI_PIPELINE_SOURCE == "merge_request_event"`}},
@@ -517,7 +524,7 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 	}
 
 	policy := gitlabPolicyCommit(t, ctx, client, livetest.RepoSlug(target, policyRepo), "release.yml", string(policyBody), gitlabapi.FileCreate)
-	useGitLabReleasePolicy(ctx, t, client, project, "release.yml@"+livetest.RepoSlug(target, policyRepo)+":"+policy.ID)
+	useGitLabAdminPolicy(ctx, t, client, project, "release.yml@"+livetest.RepoSlug(target, policyRepo)+":"+policy.ID)
 
 	livetest.RestrictGitLabJobToken(t, target, repo)
 
@@ -535,10 +542,7 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 	livetest.RestrictGitLabReleaseBranch(t, target, repo, deploy.ID)
 
 	if consumer != nil {
-		extra := livetest.PushGitLabGateExtraJobImages(t, target, *consumer, func(name string) string {
-			return gitlabReleaseRepo(t, target, "release-job-image-"+strings.ToLower(name), livetest.ReadJobImageAnonymously)
-		})
-		request = consumer.PushGitLabRelease(t, repo, layer, livetest.GitLabGateImages{Job: jobImage, Lint: images.lint, ExtraJobs: extra})
+		request = consumer.PushGitLabRelease(t, repo, layer, gateImages)
 	} else {
 		request = seedGitLabReleaseCanary(t, ctx, client, project, files)
 	}
@@ -794,11 +798,10 @@ func requireGitLabDemoScenario(t *testing.T, consumerRoot string, bases bool) {
 	}
 }
 
-// gitlabGateInclude admits the consumer's merge-request gate into the policy,
-// for merge-request pipelines only, at the merge request's commit.
-func gitlabGateInclude(project string) map[string]any {
+// gitlabGateInclude admits the separately pinned administrator MR gate.
+func gitlabGateInclude(project, commit string) map[string]any {
 	return map[string]any{
-		"project": project, "ref": "$CI_COMMIT_SHA", "file": livetest.GitLabGateFile,
+		"project": project, "ref": commit, "file": livetest.GitLabAdminGateFile,
 		"rules": []any{map[string]string{"if": `$CI_PIPELINE_SOURCE == "merge_request_event"`}},
 	}
 }

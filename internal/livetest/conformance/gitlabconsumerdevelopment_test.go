@@ -128,6 +128,7 @@ func runGitLabDevelopment(t *testing.T, root string, private bool, acceptance de
 	defer cancel()
 
 	project := livetest.RepoSlug(target, repo)
+	installGitLabDevelopmentPolicy(t, client, target, project, consumer, layer, images, private)
 	main := consumer.PushGitLab(t, repo, layer, images)
 	requireObjectFormats(t, consumer.ObjectFormat, main, layer.Commit)
 

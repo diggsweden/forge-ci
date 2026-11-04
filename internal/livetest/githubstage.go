@@ -126,12 +126,12 @@ func validateGitHubControlEntries(entries []string) error {
 			return errConsumerTreeEntry
 		}
 
-		if path == ".github" || path == ".github/workflows" || strings.HasPrefix(path, ".github/workflows/") || path == consumerCanary {
+		if path == ".github" || path == githubWorkflowDirectory || strings.HasPrefix(path, ".github/workflows/") || path == consumerCanary {
 			if fields[0] != "100644" && fields[0] != "100755" {
 				return fmt.Errorf("%w: %s", errControlPathNotRegular, path)
 			}
 
-			if path == ".github" || path == ".github/workflows" {
+			if path == ".github" || path == githubWorkflowDirectory {
 				return fmt.Errorf("%w: %s", errControlDirectoryIsFile, path)
 			}
 		}

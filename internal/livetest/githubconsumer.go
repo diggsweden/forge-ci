@@ -26,6 +26,8 @@ import (
 // the commit it built, and the binary ref a trial's consumer installs.
 const GitHubPrerelease = "v0.90.0-pre"
 
+const githubWorkflowDirectory = ".github/workflows"
+
 // GitHubEngine is the engine under test in the organization: what the rendered
 // consumer names in place of the published diggsweden/forge-ci.
 type GitHubEngine struct {
@@ -33,6 +35,7 @@ type GitHubEngine struct {
 	Repository string // repository name, without the owner
 	Commit     string // the full commit its reusable workflows are pinned to
 	Namespace  string // optional full runtime image namespace; empty preserves owner-global coordinates
+	admin      *workflowAdmin
 }
 
 // ImageTag is the runtime-image tag Self Runtime Container publishes for the
@@ -111,6 +114,14 @@ func RenderGitHubConsumer(name, text string, engine GitHubEngine, overrides map[
 		if !strings.HasPrefix(use[1], prefix) || !strings.HasSuffix(use[1], "@"+engine.Commit) {
 			return "", nil, fmt.Errorf("%s still calls %s after rendering, which is not the engine under test at its commit: %w", name, use[1], errs.ErrValidation)
 		}
+	}
+
+	rendered, err := engine.admin.render(rendered, map[string]string{
+		engine.Owner + "/" + engine.Repository + "/.github/workflows/": githubWorkflowDirectory,
+		engine.Owner + "/" + engine.Repository + "/.github/actions/":   ".github/actions",
+	}, engine.Commit)
+	if err != nil {
+		return "", nil, err
 	}
 
 	return rendered, applied, nil

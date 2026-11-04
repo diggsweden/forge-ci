@@ -36,6 +36,10 @@ type LivePreflightSummary struct {
 // provider. It runs before anything is built so a missing or stale contract is
 // reported in seconds, with where the suite looked for it.
 func CheckLiveInputs(now time.Time) (LivePreflightSummary, error) {
+	if _, err := readAdminInputs(os.Getenv); err != nil {
+		return LivePreflightSummary{}, err
+	}
+
 	scope, err := liveProviderScope()
 	if err != nil {
 		return LivePreflightSummary{}, err
@@ -52,21 +56,9 @@ func CheckLiveInputs(now time.Time) (LivePreflightSummary, error) {
 		return LivePreflightSummary{}, err
 	}
 
-	selected := 0
-
-	for _, forge := range liveForges {
-		if scope != "" && scope != forge {
-			continue
-		}
-
-		accepted, err := checkLiveForge(lab, forge, now)
-		if err != nil {
-			return LivePreflightSummary{}, err
-		}
-
-		if accepted {
-			selected++
-		}
+	selected, err := checkSelectedLiveForges(lab, scope, now)
+	if err != nil {
+		return LivePreflightSummary{}, err
 	}
 
 	if selected == 0 {
@@ -95,6 +87,27 @@ func CheckLiveInputs(now time.Time) (LivePreflightSummary, error) {
 		Generation:  lab.Generation.ID,
 		Explanation: "execution_provider=" + name + "\n" + labcontract.Explain(lab, now),
 	}, nil
+}
+
+func checkSelectedLiveForges(lab *labcontract.Contract, scope provider.ForgeAPI, now time.Time) (int, error) {
+	selected := 0
+
+	for _, forge := range liveForges {
+		if scope != "" && scope != forge {
+			continue
+		}
+
+		accepted, err := checkLiveForge(lab, forge, now)
+		if err != nil {
+			return 0, err
+		}
+
+		if accepted {
+			selected++
+		}
+	}
+
+	return selected, nil
 }
 
 // checkLiveForge runs the guard for one forge exactly as Accept will, and

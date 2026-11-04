@@ -174,6 +174,43 @@ are refused.
 
 ## The receipt
 
+### Live harness administrator inputs
+
+The live controller passes the same four settings independently, all `true` by
+default. Each controller variable accepts exactly `true` or `false`:
+
+| Existing administrator input | Live controller variable |
+|---|---|
+| `enforce-lint` | `FORGE_CI_LIVE_ADMIN_LINT` |
+| `enforce-vulnerabilities` | `FORGE_CI_LIVE_ADMIN_VULNERABILITIES` |
+| `enforce-application-tests` | `FORGE_CI_LIVE_ADMIN_APPLICATION_TESTS` |
+| `enforce-reproducible-builds` | `FORGE_CI_LIVE_ADMIN_REPRODUCIBLE_BUILDS` |
+
+For a single scenario, use invocation-only assignments:
+
+```bash
+FORGE_CI_LIVE_ADMIN_LINT=false \
+FORGE_CI_LIVE_ADMIN_APPLICATION_TESTS=false \
+just test-live '^TestGitLabRelease_MinimalSignedArtifacts$'
+```
+
+The other two settings remain enabled. These variables belong to the controller;
+it translates them into the existing literal inputs/flags, not job variables.
+
+The controller writes literal inputs in the Forgejo/GitHub wrappers it generates
+and the independent GitLab policy projects it pins. It reads the called engine's
+input declarations, so a leaf receives only the settings it supports. A copied
+consumer wrapper that already supplies an enforcement setting is refused. Ordinary
+GitLab consumer CI rendering carries no enforcement settings; the controller owns
+the separately rendered and pinned gate policy instead. Source checkouts and the
+engine's embedded default are not edited. There is no additional policy mode.
+
+These scratch wrappers exercise input propagation. GitHub organization-required
+workflow enforcement and Forgejo administrator protection remain the deployment
+requirements above; a successful scratch wrapper is not proof of either.
+
+### Effective policy output
+
 Inspect the effective policy with:
 
 ```bash

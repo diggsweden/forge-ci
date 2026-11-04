@@ -459,11 +459,23 @@ func (layer Layer) PlanConsumer(workflows map[string]string, facts ConsumerFacts
 		}
 	}
 
+	renderedWorkflows := make(map[string]string, len(workflows))
 	for _, name := range sortedKeys(workflows) {
-		if err = layer.requireRendered(name, plan.Render(workflows[name])); err != nil {
+		rendered := strings.NewReplacer(plan.Replace...).Replace(plan.workflowInputs[workflows[name]])
+
+		rendered, err = layer.renderAdmin(rendered)
+		if err != nil {
+			return ConsumerPlan{}, fmt.Errorf("administrator wrapper %s: %w", name, err)
+		}
+
+		if err = layer.requireRendered(name, rendered); err != nil {
 			return ConsumerPlan{}, err
 		}
+
+		renderedWorkflows[workflows[name]] = rendered
 	}
+
+	plan.workflowInputs = renderedWorkflows
 
 	return plan, nil
 }
@@ -490,8 +502,8 @@ func (layer Layer) inPlaceOf(pin ConsumerPin) []string {
 // Render applies the plan to the text of one file. No old string begins
 // inside another's match, so the order of the pairs decides nothing.
 func (plan *ConsumerPlan) Render(text string) string {
-	if migrated, found := plan.workflowInputs[text]; found {
-		text = migrated
+	if rendered, found := plan.workflowInputs[text]; found {
+		return rendered
 	}
 
 	return strings.NewReplacer(plan.Replace...).Replace(text)

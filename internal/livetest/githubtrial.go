@@ -71,6 +71,10 @@ type GitHubTrial struct {
 func OpenGitHubTrial(tb TB, organizationID int64) *GitHubTrial {
 	tb.Helper()
 
+	if _, err := readAdminInputs(os.Getenv); err != nil {
+		tb.Fatalf("livetest: administrator policy: %v", err)
+	}
+
 	path := os.Getenv(GitHubContextEnv)
 	if path == "" {
 		tb.Skipf("no hosted GitHub context; run inside `just github run` of Forge Lab, which sets %s", GitHubContextEnv)
@@ -102,6 +106,16 @@ func OpenGitHubTrial(tb TB, organizationID int64) *GitHubTrial {
 func (trial *GitHubTrial) EnsureEngine(root, platforms string) GitHubEngine {
 	trial.tb.Helper()
 
+	commit := strings.TrimSpace(trial.git(root, "rev-parse", "HEAD"))
+	if len(commit) != 40 {
+		trial.tb.Fatalf("livetest: the engine checkout must be SHA-1 for GitHub; HEAD is %q", commit)
+	}
+
+	admin, err := newWorkflowAdmin(trial.tb.Context(), root, commit, os.Getenv)
+	if err != nil {
+		trial.tb.Fatalf("livetest: administrator policy: %v", err)
+	}
+
 	ctx := trial.tb.Context()
 	name := trial.prefix + "forge-ci"
 
@@ -118,11 +132,6 @@ func (trial *GitHubTrial) EnsureEngine(root, platforms string) GitHubEngine {
 		}
 	}
 
-	commit := strings.TrimSpace(trial.git(root, "rev-parse", "HEAD"))
-	if len(commit) != 40 {
-		trial.tb.Fatalf("livetest: the engine checkout must be SHA-1 for GitHub; HEAD is %q", commit)
-	}
-
 	// The runtime images' platforms are this run's, set before the push that
 	// builds them; the default comes back when the trial ends, so a selection
 	// never outlives its run.
@@ -133,7 +142,7 @@ func (trial *GitHubTrial) EnsureEngine(root, platforms string) GitHubEngine {
 	}
 
 	namespace := "ghcr.io/" + strings.ToLower(trial.org+"/"+name)
-	engine := GitHubEngine{Owner: trial.org, Repository: name, Commit: commit, Namespace: namespace}
+	engine := GitHubEngine{Owner: trial.org, Repository: name, Commit: commit, Namespace: namespace, admin: admin}
 
 	packageNames, err := engine.RuntimePackageNames()
 	if err != nil {
@@ -171,6 +180,11 @@ func (trial *GitHubTrial) ReuseEngine(root string) GitHubEngine {
 		trial.tb.Fatalf("livetest: the engine checkout must be SHA-1 for GitHub; HEAD is %q", commit)
 	}
 
+	admin, err := newWorkflowAdmin(trial.tb.Context(), root, commit, os.Getenv)
+	if err != nil {
+		trial.tb.Fatalf("livetest: administrator inputs: %v", err)
+	}
+
 	name := trial.prefix + "forge-ci"
 	for _, refName := range []string{"heads/main", "tags/" + GitHubPrerelease} {
 		ref, _, err := trial.api.Git.GetRef(trial.tb.Context(), trial.org, name, refName)
@@ -187,7 +201,7 @@ func (trial *GitHubTrial) ReuseEngine(root string) GitHubEngine {
 
 	trial.tb.Logf("reusing prepared engine without mutations: %s/%s at %s", trial.org, name, commit)
 
-	return GitHubEngine{Owner: trial.org, Repository: name, Commit: commit, Namespace: "ghcr.io/" + strings.ToLower(trial.org+"/"+name)}
+	return GitHubEngine{Owner: trial.org, Repository: name, Commit: commit, Namespace: "ghcr.io/" + strings.ToLower(trial.org+"/"+name), admin: admin}
 }
 
 // WithHistory returns the trial pushing the consumer's own history under the

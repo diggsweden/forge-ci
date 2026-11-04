@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -32,6 +33,10 @@ const (
 	// GitLabGateFile is the consumer's merge-request gate file, which the
 	// release policy includes for merge-request pipelines.
 	GitLabGateFile = ".gitlab/merge-request.yml"
+	// GitLabAdminGateFile is the gate snapshot in the independent policy project.
+	GitLabAdminGateFile = "merge-request.yml"
+	// GitLabAdminPipelineFile preserves a development consumer's root pipeline.
+	GitLabAdminPipelineFile = "pipeline.yml"
 )
 
 // WithGitLabGateFromSource imports an admitted regular source blob into the
@@ -175,6 +180,154 @@ func (consumer Consumer) stageGitLabGate(ctx context.Context, file string, layer
 	}
 
 	return consumer.stageFile(ctx, "100644", file, rendered)
+}
+
+// GitLabAdminPolicy renders the admitted gate into an independent administrator
+// policy. Enforcement literals are written here, never into the consumer index.
+// The caller publishes this file in its separate policy project and pins it.
+func (consumer Consumer) GitLabAdminPolicy(tb TB, layer Layer, images GitLabGateImages) string {
+	tb.Helper()
+
+	file := gitlabCIFile
+	if consumer.HasGitLabGate(tb) {
+		file = GitLabGateFile
+	}
+
+	ctx, cancel := context.WithTimeout(Context(tb), timeoutLayerPush)
+	defer cancel()
+
+	body, err := consumer.git.output(ctx, consumer.stage, nil, "cat-file", "blob", consumer.Commit+":"+file)
+	if err != nil {
+		tb.Fatalf("livetest: read policy gate source: %v", err)
+	}
+
+	rendered, err := renderGitLabAdminPolicy(body, layer, images)
+	if err != nil {
+		tb.Fatalf("livetest: render administrator gate: %v", err)
+	}
+
+	return rendered
+}
+
+func renderGitLabAdminPolicy(body []byte, layer Layer, images GitLabGateImages) (string, error) {
+	if layer.admin == nil || layer.admin.commit != layer.Commit {
+		return "", fmt.Errorf("administrator gate requires captured policy: %w", errs.ErrValidation)
+	}
+
+	rendered, err := renderGitLabConsumer(body, layer, images)
+	if err != nil {
+		return "", err
+	}
+
+	document, entries, err := gitlabGateComponents([]byte(rendered))
+	if err != nil {
+		return "", err
+	}
+
+	for _, entry := range entries {
+		_, name, _, _ := gitlabGateComponent(gitlabMappingValue(entry, "component"))
+
+		declared, err := layer.admin.declaredInputs(filepath.Join("templates", name+".yml"))
+		if err != nil {
+			return "", err
+		}
+
+		if _, err := layer.admin.bindInputs(entry, declared, "inputs"); err != nil {
+			return "", err
+		}
+	}
+
+	return encodeAdminYAML(document)
+}
+
+// GitLabDevelopmentPolicy preserves root workflow admission and development
+// jobs while its local gate include resolves inside the pinned policy project.
+func (consumer Consumer) GitLabDevelopmentPolicy(tb TB, layer Layer, images GitLabGateImages) (string, string) {
+	tb.Helper()
+
+	ctx, cancel := context.WithTimeout(Context(tb), timeoutLayerPush)
+	defer cancel()
+
+	root, err := consumer.git.output(ctx, consumer.stage, nil, "cat-file", "blob", consumer.Commit+":"+gitlabCIFile)
+	if err != nil {
+		tb.Fatalf("livetest: read development root policy source: %v", err)
+	}
+
+	gate, err := consumer.git.output(ctx, consumer.stage, nil, "cat-file", "blob", consumer.Commit+":"+GitLabGateFile)
+	if err != nil {
+		tb.Fatalf("livetest: read development gate policy source: %v", err)
+	}
+
+	pipeline, renderedGate, err := renderGitLabDevelopmentPolicy(root, gate, layer, images)
+	if err != nil {
+		tb.Fatalf("livetest: render development administrator policy: %v", err)
+	}
+
+	return pipeline, renderedGate
+}
+
+func renderGitLabDevelopmentPolicy(root, gate []byte, layer Layer, images GitLabGateImages) (string, string, error) {
+	renderedGate, err := renderGitLabAdminPolicy(gate, layer, images)
+	if err != nil {
+		return "", "", err
+	}
+
+	var document yaml.Node
+	if err := yaml.Unmarshal(root, &document); err != nil {
+		return "", "", err
+	}
+
+	if len(document.Content) == 0 {
+		return "", "", fmt.Errorf("development root pipeline is empty: %w", errs.ErrValidation)
+	}
+
+	includes := gitlabMappingValue(document.Content[0], "include")
+	if includes == nil {
+		return "", "", fmt.Errorf("development root pipeline must include its gate: %w", errs.ErrValidation)
+	}
+
+	entries := []*yaml.Node{includes}
+	if includes.Kind == yaml.SequenceNode {
+		entries = includes.Content
+	}
+
+	foundGate := false
+
+	for _, entry := range entries {
+		local := entry
+		if entry.Kind == yaml.MappingNode {
+			local = gitlabMappingValue(entry, "local")
+		}
+
+		if local != nil && local.Kind == yaml.ScalarNode && local.Value == GitLabGateFile {
+			local.Value = GitLabAdminGateFile
+			foundGate = true
+
+			continue
+		}
+
+		name, _, err := bindGitLabGateComponent(entry, layer, images)
+		if err != nil {
+			return "", "", fmt.Errorf("development policy include: %w", err)
+		}
+
+		declared, err := layer.admin.declaredInputs(filepath.Join("templates", name+".yml"))
+		if err != nil {
+			return "", "", err
+		}
+
+		if _, err := layer.admin.bindInputs(entry, declared, "inputs"); err != nil {
+			return "", "", err
+		}
+	}
+
+	if !foundGate {
+		return "", "", fmt.Errorf("development root pipeline must include %s: %w", GitLabGateFile, errs.ErrValidation)
+	}
+
+	pipeline, err := encodeAdminYAML(&document)
+
+	return pipeline, renderedGate, err
 }
 
 func renderGitLabConsumer(body []byte, layer Layer, images GitLabGateImages) (string, error) {

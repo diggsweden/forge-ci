@@ -85,27 +85,7 @@ func runGitLabConsumerTrial(t *testing.T, root string, private bool) {
 	ctx, cancel := context.WithTimeout(livetest.Context(t), 60*time.Minute)
 	defer cancel()
 
-	if consumer.HasGitLabGate(t) {
-		// The standalone MR trial has no release policy to include this gate.
-		// Select the file we render before source publication: GitLab otherwise
-		// reads .gitlab-ci.yml and silently creates no MR pipeline.
-		if _, _, err = client.Projects.EditProject(project, &gitlabapi.EditProjectOptions{
-			CIConfigPath: gitlabapi.Ptr(livetest.GitLabGateFile),
-		}, gitlabapi.WithContext(ctx)); err != nil {
-			t.Fatal(err)
-		}
-
-		settings, _, settingsErr := client.Projects.GetProject(project, nil, gitlabapi.WithContext(ctx))
-		if settingsErr != nil {
-			t.Fatal(settingsErr)
-		}
-
-		if settings.CIConfigPath != livetest.GitLabGateFile {
-			t.Fatalf("GitLab CI config path = %q, want rendered MR gate %q", settings.CIConfigPath, livetest.GitLabGateFile)
-		}
-
-		t.Logf("standalone MR CI configuration: %s", settings.CIConfigPath)
-	}
+	installGitLabConsumerPolicy(t, client, target, project, consumer, layer, images, private)
 
 	main := consumer.PushGitLab(t, repo, layer, images)
 	requireObjectFormats(t, consumer.ObjectFormat, main, layer.Commit)
@@ -202,6 +182,38 @@ func runGitLabConsumerTrial(t *testing.T, root string, private bool) {
 	if !settings.OnlyAllowMergeIfPipelineSucceeds || settings.AllowMergeOnSkippedPipeline {
 		t.Fatal("the project must require successful, non-skipped pipelines")
 	}
+}
+
+// The harness owns this independent policy project. The consumer's CI files
+// retain no enforcement settings and cannot replace the pinned gate includes.
+func installGitLabConsumerPolicy(t *testing.T, client *gitlabapi.Client, target livetest.Target,
+	project string, consumer livetest.Consumer, layer livetest.Layer, images livetest.GitLabGateImages, private bool,
+) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(livetest.Context(t), time.Minute)
+	defer cancel()
+
+	body := consumer.GitLabAdminPolicy(t, layer, images)
+	repo := livetest.NewBareScratchRepo(t, target, "consumer-admin-policy", "sha1", private)
+	policy := gitlabPolicyCommit(t, ctx, client, livetest.RepoSlug(target, repo), livetest.GitLabAdminGateFile, body, gitlabapi.FileCreate)
+	useGitLabAdminPolicy(ctx, t, client, project, livetest.GitLabAdminGateFile+"@"+livetest.RepoSlug(target, repo)+":"+policy.ID)
+}
+
+func installGitLabDevelopmentPolicy(t *testing.T, client *gitlabapi.Client, target livetest.Target,
+	project string, consumer livetest.Consumer, layer livetest.Layer, images livetest.GitLabGateImages, private bool,
+) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(livetest.Context(t), time.Minute)
+	defer cancel()
+
+	pipeline, gate := consumer.GitLabDevelopmentPolicy(t, layer, images)
+	repo := livetest.NewBareScratchRepo(t, target, "development-admin-policy", "sha1", private)
+	policyProject := livetest.RepoSlug(target, repo)
+	gitlabPolicyCommit(t, ctx, client, policyProject, livetest.GitLabAdminGateFile, gate, gitlabapi.FileCreate)
+	policy := gitlabPolicyCommit(t, ctx, client, policyProject, livetest.GitLabAdminPipelineFile, pipeline, gitlabapi.FileCreate)
+	useGitLabAdminPolicy(ctx, t, client, project, livetest.GitLabAdminPipelineFile+"@"+policyProject+":"+policy.ID)
 }
 
 func waitGitLabMRPipeline(t *testing.T, ctx context.Context, client *gitlabapi.Client, project string, mr int64, sha string, id int64) *gitlabapi.Pipeline {

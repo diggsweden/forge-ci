@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 
+	"github.com/diggsweden/forge-ci/internal/domain/enforcement"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
@@ -96,6 +98,11 @@ func (file campaignCases) checkSettings(run map[string]string) error {
 // CampaignRunSettings resolves credential-free run facts for declaration
 // admission. It does not change the environment or choose settings for a lane.
 func CampaignRunSettings(provider string, getenv func(string) string) (CampaignRun, error) {
+	admin, err := readAdminInputs(getenv)
+	if err != nil {
+		return CampaignRun{}, err
+	}
+
 	visibility := getenv(consumerVisibilityEnv)
 	if _, err := parseConsumerVisibilities(visibility); err != nil {
 		return CampaignRun{}, err
@@ -123,7 +130,12 @@ func CampaignRunSettings(provider string, getenv func(string) string) (CampaignR
 		return CampaignRun{}, fmt.Errorf("%s must be buildah or kaniko: %w", builderEnv, errs.ErrValidation)
 	}
 
-	return CampaignRun{Settings: map[string]string{"visibility": visibility, "image-builder": builder}, BuilderSelector: selector}, nil
+	settings := map[string]string{"visibility": visibility, "image-builder": builder}
+	for _, check := range enforcement.Checks {
+		settings["admin-"+string(check)] = strconv.FormatBool(admin[enforcement.Setting(check)])
+	}
+
+	return CampaignRun{Settings: settings, BuilderSelector: selector}, nil
 }
 
 func (run CampaignRun) caseSettings(args []string) (map[string]string, error) {

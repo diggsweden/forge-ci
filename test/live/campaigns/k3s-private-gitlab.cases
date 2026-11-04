@@ -21,6 +21,10 @@
 
 setting visibility=private
 setting image-builder=kaniko
+setting admin-lint=false
+setting admin-vulnerabilities=false
+setting admin-application-tests=false
+setting admin-reproducible-builds=true
 
 scenario TestGitLabRelease_MinimalSignedArtifacts
 

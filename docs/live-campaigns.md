@@ -82,6 +82,9 @@ set.
 ```bash
 export FORGE_CI_LIVE_CONSUMER_VISIBILITY=private
 export FORGE_CI_LIVE_FORGEJO_IMAGE_BUILDER=kaniko
+export FORGE_CI_LIVE_ADMIN_LINT=false
+export FORGE_CI_LIVE_ADMIN_VULNERABILITIES=false
+export FORGE_CI_LIVE_ADMIN_APPLICATION_TESTS=false
 just campaign-lane ~/campaigns/k3s forgejo test/live/campaigns/k3s-private-forgejo.cases &
 FORGE_CI_LIVE_GITLAB_IMAGE_BUILDER=kaniko \
   just campaign-lane ~/campaigns/k3s gitlab test/live/campaigns/k3s-private-gitlab.cases &
@@ -93,6 +96,10 @@ A cases file can declare expected run settings before its first case:
 ```text
 setting visibility=private
 setting image-builder=kaniko
+setting admin-lint=false
+setting admin-vulnerabilities=false
+setting admin-application-tests=false
+setting admin-reproducible-builds=true
 ```
 
 The lane checks these declarations against the caller's effective settings before
@@ -106,6 +113,23 @@ Unknown declarations, mismatches, duplicate declarations and
 settings after a case are refused. Preparation validates the declaration syntax
 before building images. The checked-in private k3s lanes require private visibility
 and Kaniko; set the corresponding Forgejo or GitLab image-builder selector.
+The four administrator settings are independent and default to `true`. For these
+lanes the controller sets lint, vulnerabilities and application tests to `false`,
+leaving reproducible builds enabled. Each controller variable accepts exactly
+`true` or `false`; invalid values refuse preflight. Checks still run when their
+findings are nonblocking.
+
+The harness supplies literals only in the wrappers and independent GitLab policy
+projects it owns. Consumer source checkouts and repository variables receive no
+enforcement settings. GitLab MR gates are snapshotted into a separately pinned
+policy project, including the MR gate used by a release trial. Development trials
+preserve their root push workflow and jobs in that policy project, with its local
+gate include bound to the captured administrator gate. Forgejo and GitHub wrappers
+receive only the settings declared by the called engine workflow/action at its
+exact pinned Git commit, including when local uncommitted files differ.
+The run header and verdict record the controller's four `FORGE_CI_LIVE_ADMIN_*`
+inputs. The embedded engine default stays enforcing; no lab-only policy source
+edit or checksum rebuild is needed to choose the run's settings.
 
 A cases file then holds one case a line: `consumer <demo> <pull-request|release>
 [key=value ...]` or `scenario <TestName>`. A value `@NAME` is campaign.env's

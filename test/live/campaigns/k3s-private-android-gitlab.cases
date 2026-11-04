@@ -6,5 +6,9 @@
 # Its Android runtime archive is prepared only when this file is selected.
 setting visibility=private
 setting image-builder=kaniko
+setting admin-lint=false
+setting admin-vulnerabilities=false
+setting admin-application-tests=false
+setting admin-reproducible-builds=true
 
 consumer hello-android pull-request job-archive=@FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_ANDROID lint-archive=@LINT_IMAGE_ARCHIVE_KOTLIN
