@@ -20,6 +20,6 @@ url_api = "https://api.github.com/repos/aquasecurity/trivy/releases/assets/66225
 provenance = "cosign"
 
 [[tools.rust]]
-version = "1.99.0"
+version = "1.99.1"
 backend = "core:rust"
-specifiers = ["1.99.0"]
+specifiers = ["1.99.1"]

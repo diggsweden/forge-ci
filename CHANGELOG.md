@@ -301,6 +301,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Built-in Cargo demos pin the same Rust patch release as the prepared runtime
+  across rustup, Mise and their digest-pinned container builders. Native checks
+  no longer try to install an absent compiler into the image's shared toolchain.
 - GitLab snapshot jobs clear Bash's command cache after a Kaniko build so
   layout handoff uses the surviving `/kaniko` tools instead of removed native
   paths. The existing handoff regression covers stale `mv` and `find` entries.
