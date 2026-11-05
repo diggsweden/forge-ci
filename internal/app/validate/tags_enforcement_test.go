@@ -196,7 +196,7 @@ func TestTagSignature_SSHEnforcementMatrix(t *testing.T) {
 	t.Parallel()
 
 	answers := map[string]sshAnswer{
-		"accepted":       {ok: true, output: `Good "git" signature for alice@example.com with ED25519 key SHA256:x`},
+		"accepted":       {ok: true, output: `Good "git" signature for release-signer@example.com with ED25519 key SHA256:x`},
 		"false and nil":  {output: "unexplained", want: errs.ErrPermissionDenied},
 		"signer refused": {err: fmt.Errorf("signer is not in allowed_signers: %w", errs.ErrPermissionDenied), want: errs.ErrPermissionDenied},
 		"infrastructure": {err: fmt.Errorf("git not found in $PATH: %w", errs.ErrDependencyUnavailable), want: errs.ErrDependencyUnavailable},
@@ -221,7 +221,7 @@ func checkSSHEnforcement(t *testing.T, present bool, answer sshAnswer, mode enfo
 
 	signers := filepath.Join(t.TempDir(), "allowed_signers")
 	if present {
-		signers = testfs.NewReal(t).WriteFile("allowed_signers", []byte("alice@example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyMaterialOnly\n"))
+		signers = testfs.NewReal(t).WriteFile("allowed_signers", []byte("release-signer@example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyMaterialOnly\n"))
 	}
 
 	var asked [][2]string

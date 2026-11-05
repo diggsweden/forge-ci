@@ -46,7 +46,7 @@ func TestRegistryLogin_WritesAuthFile0600(t *testing.T) {
 
 	err := appcontainer.RegistryLogin(io.Discard, appcontainer.RegistryLoginInput{
 		Registry: "ghcr.io",
-		Username: "alice",
+		Username: "publisher",
 		Password: "s3cret",
 		AuthFile: path,
 	})
@@ -54,7 +54,7 @@ func TestRegistryLogin_WritesAuthFile0600(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := readAuth(t, path, "ghcr.io"); got != base64.StdEncoding.EncodeToString([]byte("alice:s3cret")) {
+	if got := readAuth(t, path, "ghcr.io"); got != base64.StdEncoding.EncodeToString([]byte("publisher:s3cret")) {
 		t.Errorf("auth entry = %q", got)
 	}
 

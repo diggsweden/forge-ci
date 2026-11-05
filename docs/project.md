@@ -33,9 +33,11 @@ their original attribution.
 
 ## External black-box suite integration
 
-The suite builds `../forge-ci/cmd/forge-ci` by default. `FORGE_CI_TEST_BINARY` selects an
-explicit binary instead. A binary-identity test checks that its help names
-Forge CI. Strict mode requires complete test selection and the egress audit.
+The engine's self-workflows select the exact candidate with `FORGE_CI_TEST_BINARY`.
+A binary-identity test checks that its help names Forge CI. Strict mode requires
+complete test selection and the egress audit. For local source builds, select a
+suite revision supporting `FORGE_CI_TEST_SOURCE` and set it to the absolute engine
+checkout path; `FORGE_CI_TEST_BINARY` takes precedence when both are set.
 
 Both engine self-workflows pin the suite by a reviewed commit. The
 suite's drift workflow defaults to `diggsweden/forge-ci` on `main` and

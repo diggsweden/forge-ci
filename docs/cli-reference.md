@@ -1676,7 +1676,7 @@ repository, or a classic token with read:packages and delete:packages.
 
 EXAMPLE:
    forge-ci container package-retention \
-     --repository-prefix ghcr.io/acme/forge-ci-runtime --recent-count 10
+     --repository-prefix ghcr.io/example-org/forge-ci-runtime --recent-count 10
 ```
 
 | Flag | Description | Type | Default | Env vars |
@@ -2719,8 +2719,8 @@ A runner pool that shares its kernel between tenants denies user namespaces, whi
 The lender's token is read from a file or stdin, never from the runner's own credentials: those stay with the forge that issued them.
 
 EXAMPLES:
-   # Ask the GitHub repository acme/lender for an arm64 runner
-   printf '%s' "$CI_RUNNER_LENDER_TOKEN" | forge-ci platform request-runner --lender github --lender-repository acme/lender --arch arm64 --token-file -
+   # Ask the GitHub repository example-org/runner-lender for an arm64 runner
+   printf '%s' "$CI_RUNNER_LENDER_TOKEN" | forge-ci platform request-runner --lender github --lender-repository example-org/runner-lender --arch arm64 --token-file -
 
    # An installation with its own container runners
    forge-ci platform request-runner --lender none --arch amd64

@@ -62,7 +62,7 @@ repository, or a classic token with read:packages and delete:packages.
 
 EXAMPLE:
    forge-ci container package-retention \
-     --repository-prefix ghcr.io/acme/forge-ci-runtime --recent-count 10`,
+     --repository-prefix ghcr.io/example-org/forge-ci-runtime --recent-count 10`,
 		Flags: []cli.Flag{
 			&cli.StringSliceFlag{Name: flagKeepDigest, Usage: "consumer-pinned sha256 digest to preserve regardless of tag age; repeatable with one --repository"},
 			&cli.StringSliceFlag{Name: flagRetentionRepository, Usage: "package to prune, as ghcr.io/<owner>/<name>; repeatable"},

@@ -62,10 +62,10 @@ func TestPrerequisites_TagSection(t *testing.T) {
 		tagMessage: "Release v1.0.0\nTAG-BODY-CANARY",
 		tagBody:    "-----BEGIN PGP SIGNATURE-----\n…\n",
 		commit: git.CommitInfo{
-			Author:  "Alice <alice@example.invalid>",
+			Author:  "Author <author@example.invalid>",
 			Date:    "2026-05-09",
 			Message: "fix: bug",
-			Body:    "tree abc\nparent def\nauthor Alice\n",
+			Body:    "tree abc\nparent def\nauthor Author\n",
 		},
 	}
 
@@ -95,7 +95,7 @@ func TestPrerequisites_TagSection(t *testing.T) {
 		"- **Tag Message:** Release v1.0.0", // first line only
 		"## 📦 Tagged Commit",
 		"- **SHA:** `abcdef0123`",
-		"- **Author:** Alice &#60;alice&#64;example.invalid&#62;",
+		"- **Author:** Author &#60;author&#64;example.invalid&#62;",
 		"- **Message:** fix&#58; bug\n",
 		"- **Date:** 2026-05-09",
 		"### ✓ All selected prerequisite checks passed!",

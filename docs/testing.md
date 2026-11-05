@@ -1085,9 +1085,10 @@ export FORGE_CI_LIVE_SIGNER_IMAGE="$(just test-live-signer-image /absolute/forge
 # 2. In Forge Lab: the consumer's job image; pass what it prints as CI_JOB_IMAGE=.
 just publish-image --account forgeci <package> <local image>
 
-# 3. The trial. Gommitlint, then Nanolinter from a clone with its lab selection.
-just test-live-forgejo-consumer /absolute/myapp release
-just test-live-forgejo-consumer /absolute/nanolinter-clone release RELEASE_PLATFORMS=linux/amd64
+# 3. The trial, using a consumer checkout prepared for the lab.
+just test-live-forgejo-consumer /absolute/consumer release
+# For a consumer whose workflow supports platform selection:
+just test-live-forgejo-consumer /absolute/consumer release RELEASE_PLATFORMS=linux/amd64
 ```
 
 **Image builds** on Compose are tried in two cells, each public and private

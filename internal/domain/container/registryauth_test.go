@@ -33,12 +33,12 @@ func TestMergeAuth_NewConfig(t *testing.T) {
 	t.Parallel()
 
 	for _, existing := range [][]byte{nil, {}, []byte(" \n\t"), []byte(`{}`)} {
-		out, err := container.MergeAuth(existing, "ghcr.io", "alice", "s3cret")
+		out, err := container.MergeAuth(existing, "ghcr.io", "publisher", "s3cret")
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		assertAuthJSON(t, out, `{"auths":{"ghcr.io":{"auth":"YWxpY2U6czNjcmV0"}}}`)
+		assertAuthJSON(t, out, `{"auths":{"ghcr.io":{"auth":"cHVibGlzaGVyOnMzY3JldA=="}}}`) // gitleaks:allow -- base64 of publisher:s3cret, a synthetic auth fixture.
 	}
 }
 
@@ -82,12 +82,12 @@ func TestMergeAuth_ReauthenticatingReplacesTheCredential(t *testing.T) {
 
 	existing := []byte(`{"auths":{"ghcr.io":{"auth":"b2xkOnBhc3M=","identitytoken":"stale-token","email":"a@b.c"}}}`)
 
-	out, err := container.MergeAuth(existing, "ghcr.io", "alice", "newpass")
+	out, err := container.MergeAuth(existing, "ghcr.io", "publisher", "newpass")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if got, want := authOf(t, out, "ghcr.io"), base64.StdEncoding.EncodeToString([]byte("alice:newpass")); got != want {
+	if got, want := authOf(t, out, "ghcr.io"), base64.StdEncoding.EncodeToString([]byte("publisher:newpass")); got != want {
 		t.Errorf("auth = %q, want the new credential %q", got, want)
 	}
 

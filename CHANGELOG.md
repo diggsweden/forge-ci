@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Use role-based identities in signing examples and synthetic fixtures, and
+  describe development settings and consumer trials without project affiliations.
 - The focused Forgejo Maven-library stable trial honors an explicit private
   consumer selection instead of always creating a public consumer. Its default
   public lane and anonymous engine-distribution fixture remain unchanged.

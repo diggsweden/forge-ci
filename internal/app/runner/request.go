@@ -29,7 +29,7 @@ type RequestInput struct {
 	Arch string
 	// TTLMinutes is how long the lent runner waits for that job.
 	TTLMinutes int
-	// LenderName names the lender in the summary, e.g. "github:acme/lender".
+	// LenderName names the lender in the summary, e.g. "github:example-org/runner-lender".
 	// Empty means no lender is configured and nothing is requested.
 	LenderName string
 }

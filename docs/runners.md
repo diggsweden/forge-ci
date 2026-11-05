@@ -245,7 +245,7 @@ with the registry token, so it is a reviewed digest set by a person, never a
 tag and never written by a workflow.
 
 1. Run the bootstrap. Its last step prints the line to set, for example
-   `CI_IMAGE_BUILDER_JOB_IMAGE=ghcr.io/acme/forge-ci-kaniko-job@sha256:…`.
+   `CI_IMAGE_BUILDER_JOB_IMAGE=ghcr.io/example-org/forge-ci-kaniko-job@sha256:…`.
    That is the multi-arch index, not one of its `-amd64` or `-arm64` children.
 2. After the first publication, make the package public: the build jobs pull
    it without credentials.

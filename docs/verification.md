@@ -726,8 +726,9 @@ warnings appear through the runner's annotator and prerequisites summary.
 
 ```text
 # .forge-ci/allowed_signers
-alice@example.com ssh-ed25519 BASE64_PUBLIC_KEY alice's release key
-bob@example.com valid-before="20270101Z" ssh-ed25519 BASE64_PUBLIC_KEY bob's release key
+release-signer@example.com ssh-ed25519 BASE64_PUBLIC_KEY primary release key
+# Backup release key
+backup-signer@example.com valid-before="20270101Z" ssh-ed25519 BASE64_PUBLIC_KEY
 ```
 
 Replace each `BASE64_PUBLIC_KEY` with that signer's public-key base64 field.
@@ -749,10 +750,10 @@ never be read in part.
 ```text
 # .forge-ci/allowed_gpg_keys.asc
 -----BEGIN PGP PUBLIC KEY BLOCK-----
-...alice's release key...
+...primary release key...
 -----END PGP PUBLIC KEY BLOCK-----
 -----BEGIN PGP PUBLIC KEY BLOCK-----
-...bob's release key...
+...backup release key...
 -----END PGP PUBLIC KEY BLOCK-----
 ```
 

@@ -107,7 +107,7 @@ var errUnexpectedSSHAllowlistCheck = errors.New("fakeTagGit: SSH allowed_signers
 func (f *fakeTagGit) TaggerInfo(_ context.Context, ref string) (git.TaggerInfo, error) {
 	f.record("TaggerInfo", ref)
 
-	return git.TaggerInfo{Tagger: "Alice <alice@example.com>", Date: "2026-05-14"}, nil
+	return git.TaggerInfo{Tagger: "Release Signer <release-signer@example.com>", Date: "2026-05-14"}, nil
 }
 
 func (f *fakeTagGit) TagMessage(_ context.Context, ref string) (string, error) {
@@ -161,7 +161,7 @@ func TestTagSignature_GPGSignedVerifiesInProcessAndPrintsSigner(t *testing.T) {
 
 	gitr := &fakeTagGit{
 		body:            "object abc\ntype commit\n-----BEGIN PGP SIGNATURE-----\n...\n-----END PGP SIGNATURE-----\n",
-		verifySigSigner: "Alice <alice@example.com>",
+		verifySigSigner: "Release Signer <release-signer@example.com>",
 		verifySigOK:     true,
 	}
 
@@ -185,7 +185,7 @@ func TestTagSignature_GPGSignedVerifiesInProcessAndPrintsSigner(t *testing.T) {
 
 	for _, want := range []string{
 		"GPG signature verified",
-		"Signed by: Alice <alice@example.com>",
+		"Signed by: Release Signer <release-signer@example.com>",
 		"Tagged commit: abc1234",
 		"Release v1.0.0",
 	} {
@@ -275,7 +275,7 @@ func TestTagSignature_AsksOnlyAboutTheRequestedTag(t *testing.T) {
 	gitr := &fakeTagGit{
 		body:                 "object abc\ntype commit\n-----BEGIN PGP SIGNATURE-----\n...\n-----END PGP SIGNATURE-----\n",
 		verifySigOK:          true,
-		verifySigSigner:      "Alice <alice@example.com>",
+		verifySigSigner:      "Release Signer <release-signer@example.com>",
 		verifySigFingerprint: "AAAABBBBCCCCDDDDEEEEFFFF0000111122223333",
 	}
 
@@ -337,7 +337,7 @@ func TestTagSignature_SSHPathAlsoAsksAboutTheRequestedTag(t *testing.T) {
 	const requested = "v7.0.0-ssh-audit"
 
 	signers := testfs.NewReal(t).WriteFile("allowed_signers",
-		[]byte("alice@example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyMaterialOnly\n"))
+		[]byte("release-signer@example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyMaterialOnly\n"))
 
 	gitr := &fakeTagGit{body: "-----BEGIN SSH SIGNATURE-----\n...\n-----END SSH SIGNATURE-----\n"}
 

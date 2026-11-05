@@ -28,7 +28,7 @@ func TestPRSummary_HappyPath(t *testing.T) {
 		ProjectType: "npm",
 		Branch:      "feat/foo",
 		Commit:      "abcdef0123456789",
-		Actor:       "alice",
+		Actor:       "reviewer",
 		RunURL:      "https://example.com/run/1",
 		QualityStageResultJSON: stageResultJSON(t, "pr-quality", map[string]string{
 			"nanolinter": "success",
@@ -46,7 +46,7 @@ func TestPRSummary_HappyPath(t *testing.T) {
 		"| **Project Type** | `npm` |",
 		"| **Branch** | `feat/foo` |",
 		"| **Commit** | `abcdef0` |", // truncated
-		"| **Checked By** | @alice |",
+		"| **Checked By** | @reviewer |",
 		"| **Checked At** | 2026-05-10 14:30:00 UTC |",
 		"| Nanolinter | ✓ |",
 		"| Swift Lint | − |",
@@ -151,7 +151,7 @@ func TestPRSummary_NamedJobsReplaceTheQualityTargets(t *testing.T) {
 		ProjectType: "maven",
 		Branch:      "feat/foo",
 		Commit:      "abcdef0123456789",
-		Actor:       "alice",
+		Actor:       "reviewer",
 		Jobs: []domainsummary.JobRow{
 			{Label: "Check: lint", Result: domainsummary.ResultSuccess},
 			{Label: "Check: build and test", Result: domainsummary.ResultFailure},

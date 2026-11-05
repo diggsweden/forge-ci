@@ -12,8 +12,7 @@ pipx.uvx = true      # Install pipx: backend tools via uv (uvx), never pipx
 
 # Supply-chain quarantine: refuse to install a tool release published within
 # the last 7 days, so a freshly-poisoned release has time to be noticed before
-# it lands here. git-provider-lab sets the same, and calls it "as in the sibling
-# repos" -- this repo was the sibling that did not.
+# it lands here.
 minimum_release_age = "7d"
 # osv-scanner 2.6.0 is the first release built with Go 1.27, which its Go
 # call analysis needs; exempt until it clears the window.

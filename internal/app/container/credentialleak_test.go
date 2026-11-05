@@ -18,7 +18,7 @@ import (
 // they did, name the file they wrote, and wrap failures from the filesystem
 // underneath. Every one of those lines reaches a CI log.
 //
-// The existing tests use short fixtures — "s3cret", "alice" — and assert what
+// The existing tests use short fixtures — "s3cret", "publisher" — and assert what
 // was written where. None asserts what was NOT written, and a short fixture
 // could not carry that assertion anyway: "s3cret" is too small to distinguish a
 // leak from a coincidence, and the registry and username are supposed to appear.
@@ -87,7 +87,7 @@ func TestRegistryLogin_NeverEchoesThePassword(t *testing.T) {
 
 			err := appcontainer.RegistryLogin(&out, appcontainer.RegistryLoginInput{
 				Registry: "ghcr.io",
-				Username: "alice",
+				Username: "publisher",
 				Password: canaryPassword,
 				AuthFile: path,
 			})

@@ -60,8 +60,8 @@ func requestRunnerCommand(build func(lenderSelection, runcontext.Credential) (le
 			"The lender's token is read from a file or stdin, never from the runner's own credentials: " +
 			"those stay with the forge that issued them.\n\n" +
 			"EXAMPLES:\n" +
-			"   # Ask the GitHub repository acme/lender for an arm64 runner\n" +
-			"   printf '%s' \"$CI_RUNNER_LENDER_TOKEN\" | forge-ci platform request-runner --lender github --lender-repository acme/lender --arch arm64 --token-file -\n\n" +
+			"   # Ask the GitHub repository example-org/runner-lender for an arm64 runner\n" +
+			"   printf '%s' \"$CI_RUNNER_LENDER_TOKEN\" | forge-ci platform request-runner --lender github --lender-repository example-org/runner-lender --arch arm64 --token-file -\n\n" +
 			"   # An installation with its own container runners\n" +
 			"   forge-ci platform request-runner --lender none --arch amd64",
 		Flags: []cli.Flag{

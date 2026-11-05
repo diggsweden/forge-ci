@@ -56,9 +56,9 @@ For example, after both native jobs have produced `widget` metadata:
 ```bash
 forge-ci container multiarch-image assemble \
   --server-url https://forge.example \
-  --repository acme/widget \
+  --repository example-org/widget \
   --source-sha "$SOURCE_SHA" \
-  --image-repository registry.example/acme/widget \
+  --image-repository registry.example/example-org/widget \
   --tag staging-v1.2.3 \
   --name widget \
   --archs $'amd64\narm64' \
@@ -73,9 +73,9 @@ path, relative to the current workspace. Their schema is:
 ```json
 {
   "arch": "amd64",
-  "tag": "registry.example/acme/widget:staging-v1.2.3-amd64",
+  "tag": "registry.example/example-org/widget:staging-v1.2.3-amd64",
   "digest": "sha256:<64 lowercase hex>",
-  "ref": "registry.example/acme/widget@sha256:<same 64 lowercase hex>"
+  "ref": "registry.example/example-org/widget@sha256:<same 64 lowercase hex>"
 }
 ```
 
@@ -144,14 +144,14 @@ the release evidence directory:
   "platforms": [
     {
       "platform": "linux/amd64",
-      "image_ref": "registry.example/acme/widget@sha256:<amd64 digest>",
+      "image_ref": "registry.example/example-org/widget@sha256:<amd64 digest>",
       "file": "sbom-amd64.json",
       "url": "https://downloads.example/widget/v1.2.3/sbom-amd64.json",
       "sha256": "<producer checksum of sbom-amd64.json>"
     },
     {
       "platform": "linux/arm64",
-      "image_ref": "registry.example/acme/widget@sha256:<arm64 digest>",
+      "image_ref": "registry.example/example-org/widget@sha256:<arm64 digest>",
       "file": "sbom-arm64.json",
       "url": "https://downloads.example/widget/v1.2.3/sbom-arm64.json",
       "sha256": "<producer checksum of sbom-arm64.json>"

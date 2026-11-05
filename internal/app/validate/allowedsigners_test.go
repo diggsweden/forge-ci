@@ -33,22 +33,22 @@ func TestValidateAllowedSignersFormat(t *testing.T) {
 	}{
 		{
 			name:    "valid single entry",
-			content: "alice@example.com ssh-ed25519 " + realKeyB64 + "\n",
+			content: "release-signer@example.com ssh-ed25519 " + realKeyB64 + "\n",
 			wantErr: 0,
 		},
 		{
 			name:    "certificate type with plain key",
-			content: "alice@example.com ssh-ed25519-cert-v01@openssh.com " + realKeyB64 + "\n",
+			content: "release-signer@example.com ssh-ed25519-cert-v01@openssh.com " + realKeyB64 + "\n",
 			wantErr: 1,
 		},
 		{
 			name:    "security key type with plain key",
-			content: "alice@example.com sk-ssh-ed25519@openssh.com " + realKeyB64 + "\n",
+			content: "release-signer@example.com sk-ssh-ed25519@openssh.com " + realKeyB64 + "\n",
 			wantErr: 1,
 		},
 		{
 			name:    "valid multiple principals",
-			content: "alice@example.com,bob@example.com ssh-ed25519 " + realKeyB64 + "\n",
+			content: "release-signer@example.com,backup-signer@example.com ssh-ed25519 " + realKeyB64 + "\n",
 			wantErr: 0,
 		},
 		{
@@ -58,12 +58,12 @@ func TestValidateAllowedSignersFormat(t *testing.T) {
 		},
 		{
 			name:    "valid multiple entries with comments and blanks",
-			content: "# comment\n\nalice@example.com ssh-ed25519 " + realKeyB64 + "\nbob@example.com ssh-ed25519 " + realKeyB64 + " bob's key\n",
+			content: "# comment\n\nrelease-signer@example.com ssh-ed25519 " + realKeyB64 + "\nbackup-signer@example.com ssh-ed25519 " + realKeyB64 + " backup signer's key\n",
 			wantErr: 0,
 		},
 		{
 			name:    "valid entry with options",
-			content: `alice@example.com valid-before="20270101Z" ssh-ed25519 ` + realKeyB64 + "\n",
+			content: `release-signer@example.com valid-before="20270101Z" ssh-ed25519 ` + realKeyB64 + "\n",
 			wantErr: 0,
 		},
 		{
@@ -73,40 +73,40 @@ func TestValidateAllowedSignersFormat(t *testing.T) {
 		},
 		{
 			name:    "valid entry with namespaces option",
-			content: `alice@example.com namespaces="file,git" ssh-ed25519 ` + realKeyB64 + "\n",
+			content: `release-signer@example.com namespaces="file,git" ssh-ed25519 ` + realKeyB64 + "\n",
 			wantErr: 0,
 		},
 		{
 			name:    "declared RSA with Ed25519 key",
-			content: "alice@example.com ssh-rsa " + realKeyB64,
+			content: "release-signer@example.com ssh-rsa " + realKeyB64,
 			wantErr: 1,
 		},
 		{
 			name:    "unknown option",
-			content: "alice@example.com nonsense-option ssh-ed25519 " + realKeyB64,
+			content: "release-signer@example.com nonsense-option ssh-ed25519 " + realKeyB64,
 			wantErr: 1,
 		},
 		{
 			name:    "multiple option fields",
-			content: "alice@example.com cert-authority nonsense-option ssh-ed25519 " + realKeyB64,
+			content: "release-signer@example.com cert-authority nonsense-option ssh-ed25519 " + realKeyB64,
 			wantErr: 1,
 		},
 		{
 			name:    "unterminated quoted option",
-			content: "alice@example.com namespaces=\"git ssh-ed25519 " + realKeyB64,
+			content: "release-signer@example.com namespaces=\"git ssh-ed25519 " + realKeyB64,
 			wantErr: 1,
 		},
 		{
 			name:    "case insensitive option names",
-			content: `alice@example.com CERT-AUTHORITY,NameSpaces="git",VALID-BEFORE="20270101Z" ssh-ed25519 ` + realKeyB64,
+			content: `release-signer@example.com CERT-AUTHORITY,NameSpaces="git",VALID-BEFORE="20270101Z" ssh-ed25519 ` + realKeyB64,
 		},
 		{
 			name:    "combined options",
-			content: `alice@example.com cert-authority,namespaces="file,git",valid-before="20270101Z" ssh-ed25519 ` + realKeyB64,
+			content: `release-signer@example.com cert-authority,namespaces="file,git",valid-before="20270101Z" ssh-ed25519 ` + realKeyB64,
 		},
 		{
 			name:    "option without required value",
-			content: "alice@example.com namespaces ssh-ed25519 " + realKeyB64,
+			content: "release-signer@example.com namespaces ssh-ed25519 " + realKeyB64,
 			wantErr: 1,
 		},
 		{
@@ -116,27 +116,27 @@ func TestValidateAllowedSignersFormat(t *testing.T) {
 		},
 		{
 			name:    "too few fields",
-			content: "alice@example.com ssh-ed25519\n",
+			content: "release-signer@example.com ssh-ed25519\n",
 			wantErr: 1,
 		},
 		{
 			name:    "unknown key type",
-			content: "alice@example.com foo-bar " + realKeyB64 + "\n",
+			content: "release-signer@example.com foo-bar " + realKeyB64 + "\n",
 			wantErr: 1,
 		},
 		{
 			name:    "invalid base64 key",
-			content: "alice@example.com ssh-ed25519 !!!not-base64!!!\n",
+			content: "release-signer@example.com ssh-ed25519 !!!not-base64!!!\n",
 			wantErr: 1,
 		},
 		{
 			name:    "valid base64 but not an SSH key",
-			content: "alice@example.com ssh-ed25519 " + invalidKeyB64 + "\n",
+			content: "release-signer@example.com ssh-ed25519 " + invalidKeyB64 + "\n",
 			wantErr: 1,
 		},
 		{
 			name:    "multiple errors across lines",
-			content: "ssh-ed25519 " + realKeyB64 + " alice@example.com\nalice@example.com foo-bar " + realKeyB64 + "\n",
+			content: "ssh-ed25519 " + realKeyB64 + " release-signer@example.com\nrelease-signer@example.com foo-bar " + realKeyB64 + "\n",
 			wantErr: 2,
 		},
 		{

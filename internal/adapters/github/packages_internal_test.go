@@ -114,10 +114,10 @@ func TestPackages_ListsAUserPackageWithASlashInItsName(t *testing.T) {
 	t.Parallel()
 
 	srv := &packageServer{deleteStatus: http.StatusNoContent}
-	packages := srv.start(t, "/users/alice/packages/container/app%2Fcli/versions",
+	packages := srv.start(t, "/users/publisher/packages/container/app%2Fcli/versions",
 		"["+versionJSON(1, 'a', "v1.0.0")+","+versionJSON(2, 'b')+"]")
 
-	versions, err := packages.PackageVersions(t.Context(), "alice", "app/cli")
+	versions, err := packages.PackageVersions(t.Context(), "publisher", "app/cli")
 	if err != nil {
 		t.Fatal(err)
 	}
