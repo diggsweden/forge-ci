@@ -23,34 +23,37 @@ readonly TRIVY_SHA256_DARWIN_ARM64="11a9b6cd2752011b54f01ea4bd0dbfa9f0c41dc6538d
 install_trivy() {
 	ci_use_installed_pin trivy Trivy "$TRIVY_VERSION" --version && return 0
 
-	local install_dir os arch asset sha256 archive version
+	local install_dir raw_os raw_arch platform os arch asset sha256 archive version
 	install_dir="$(ci_install_dir trivy)"
 	mkdir -p "$install_dir"
 	version="${TRIVY_VERSION#v}"
+	raw_os="${OS:-$(uname -s)}"
+	raw_arch="${ARCH:-$(uname -m)}"
+	platform="$(ci_normalize_os "$raw_os")/$(ci_normalize_arch "$raw_arch")" || true
 
-	case "$(uname -s):$(uname -m)" in
-	Linux:x86_64)
+	case "$platform" in
+	linux/amd64)
 		os=Linux
 		arch=64bit
 		sha256="$TRIVY_SHA256_LINUX_AMD64"
 		;;
-	Linux:aarch64 | Linux:arm64)
+	linux/arm64)
 		os=Linux
 		arch=ARM64
 		sha256="$TRIVY_SHA256_LINUX_ARM64"
 		;;
-	Darwin:x86_64)
+	darwin/amd64)
 		os=macOS
 		arch=64bit
 		sha256="$TRIVY_SHA256_DARWIN_AMD64"
 		;;
-	Darwin:arm64)
+	darwin/arm64)
 		os=macOS
 		arch=ARM64
 		sha256="$TRIVY_SHA256_DARWIN_ARM64"
 		;;
 	*)
-		printf 'ERROR: unsupported platform for Trivy: %s/%s\n' "$(uname -s)" "$(uname -m)" >&2
+		printf 'ERROR: unsupported platform for Trivy: %s/%s\n' "$raw_os" "$raw_arch" >&2
 		return 1
 		;;
 	esac

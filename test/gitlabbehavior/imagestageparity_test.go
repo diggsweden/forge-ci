@@ -400,7 +400,7 @@ func forgejoBuilderSelection(t *testing.T, builder string) (string, string) {
 	defer cancel()
 
 	outputs := filepath.Join(t.TempDir(), "outputs")
-	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", script)
+	command := exec.CommandContext(ctx, componentBash(t), "--noprofile", "--norc", "-c", script)
 	command.Env = []string{
 		"PATH=/usr/bin:/bin", "FORGEJO_OUTPUT=" + outputs, "SERVER_URL=https://forge.invalid",
 		"HELPERS_REPOSITORY_INPUT=team/engine", "BUILDER_INPUT=" + builder, "BUILDER_JOB_IMAGE_INPUT=" + parityKanikoImage,

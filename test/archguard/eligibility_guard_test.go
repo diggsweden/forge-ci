@@ -36,10 +36,10 @@ import (
 // constrained files are declared here, one row each, and anything new fails
 // until someone says how the scanners should treat it.
 //
-// buildConstrainedProductFiles is that declaration. `_other`/`!linux` variants
-// are the ones the environment guard and depguard cannot see on a Linux CI
-// runner, which is why the eligibility checks below hold them to source-level
-// rules instead.
+// buildConstrainedProductFiles is that declaration. Variants outside both
+// released operating systems are the ones the environment guard and depguard
+// cannot see, which is why the eligibility checks below hold them to
+// source-level rules instead.
 func buildConstrainedProductFiles() map[string]string {
 	return map[string]string{
 		"internal/app/platform/stagepublickey_other.go": "!unix",
@@ -122,9 +122,8 @@ func TestGuardEligibility_ConstrainedAndGeneratedProductFilesAreDeclared(t *test
 }
 
 // TestGuardEligibility_UnbuiltVariantsDoNotReadTheEnvironment checks variants
-// outside the Linux reference build. The semantic environment guard loads Linux
-// and the contributor's native GOOS, and lint also checks Linux on other hosts.
-// Keep the reference independent of the machine running this policy test.
+// outside the Linux and Darwin release builds. The semantic environment guard
+// and lint load both, independent of the machine running this policy test.
 //
 // The rule is deliberately not "widen this list when a variant needs one". If a
 // non-Linux variant genuinely has to read the environment, the fix is to run
@@ -136,7 +135,7 @@ func TestGuardEligibility_UnbuiltVariantsDoNotReadTheEnvironment(t *testing.T) {
 	checked := 0
 
 	for rel, tag := range buildConstrainedProductFiles() {
-		if satisfiedByReferenceBuild(t, tag) {
+		if satisfiedByReleaseBuilds(t, tag) {
 			continue
 		}
 
@@ -176,7 +175,7 @@ func TestGuardEligibility_UnbuiltVariantsImportNoInternalPackage(t *testing.T) {
 	}
 
 	for rel, tag := range buildConstrainedProductFiles() {
-		if satisfiedByReferenceBuild(t, tag) {
+		if satisfiedByReleaseBuilds(t, tag) {
 			continue
 		}
 
@@ -267,9 +266,9 @@ func buildConstraintOf(t *testing.T, name, source string) (string, bool) {
 	return "", false
 }
 
-// satisfiedByReferenceBuild evaluates constraints for the Linux baseline that
-// both the semantic guard and golangci-lint inspect, regardless of host GOOS.
-func satisfiedByReferenceBuild(t *testing.T, expr string) bool {
+// satisfiedByReleaseBuilds evaluates constraints for both released operating
+// systems, which the semantic guard and golangci-lint inspect on every host.
+func satisfiedByReleaseBuilds(t *testing.T, expr string) bool {
 	t.Helper()
 
 	parsed, err := constraint.Parse("//go:build " + expr)
@@ -277,9 +276,15 @@ func satisfiedByReferenceBuild(t *testing.T, expr string) bool {
 		t.Fatalf("parse constraint %q: %v", expr, err)
 	}
 
-	return parsed.Eval(func(tag string) bool {
-		return tag == "linux" || tag == runtime.GOARCH || tag == "unix"
-	})
+	for _, goos := range []string{"linux", "darwin"} {
+		if parsed.Eval(func(tag string) bool {
+			return tag == goos || tag == runtime.GOARCH || tag == "unix"
+		}) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // environmentReadsIn returns the os/syscall environment calls in a file, by

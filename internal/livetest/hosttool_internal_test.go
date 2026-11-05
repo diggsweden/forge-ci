@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/diggsweden/forge-ci/internal/testutil/testfs"
 )
 
 // fakeMise lays out a mise install with a cosign shim: shims/cosign is a
@@ -15,7 +17,7 @@ import (
 func fakeMise(t *testing.T, which string) (string, string) {
 	t.Helper()
 
-	root := t.TempDir()
+	root := testfs.NewReal(t).Root
 	bin := filepath.Join(root, "bin")
 	shims := filepath.Join(root, "data", "mise", "shims")
 	tool := filepath.Join(root, "installs", "cosign", "cosign")

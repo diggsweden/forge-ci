@@ -131,6 +131,51 @@ func TestVerifiedDownloadRejectsMissingPinBeforeNetwork(t *testing.T) {
 	}
 }
 
+func TestPlatformNormalization_CoversInstallerAliases(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		function string
+		input    string
+		want     string
+	}{
+		{"ci_normalize_os", "Linux", "linux"},
+		{"ci_normalize_os", "linux", "linux"},
+		{"ci_normalize_os", "Darwin", "darwin"},
+		{"ci_normalize_os", "darwin", "darwin"},
+		{"ci_normalize_arch", "x86_64", "amd64"},
+		{"ci_normalize_arch", "amd64", "amd64"},
+		{"ci_normalize_arch", "aarch64", "arm64"},
+		{"ci_normalize_arch", "arm64", "arm64"},
+		{"ci_normalize_arch", "armv7l", "arm"},
+	} {
+		t.Run(tc.function+"/"+tc.input, func(t *testing.T) {
+			t.Parallel()
+
+			stdout, stderr, err := runSourcedScript(t, "install-common.sh", tc.function+` "$INPUT"`, map[string]string{"INPUT": tc.input})
+			if err != nil || stderr != "" || stdout != tc.want {
+				t.Fatalf("stdout=%q stderr=%q err=%v; want %q, empty stderr, nil", stdout, stderr, err, tc.want)
+			}
+		})
+	}
+
+	for _, input := range []string{"FreeBSD", "riscv64"} {
+		t.Run("unsupported/"+input, func(t *testing.T) {
+			t.Parallel()
+
+			function := "ci_normalize_os"
+			if input == "riscv64" {
+				function = "ci_normalize_arch"
+			}
+
+			stdout, stderr, err := runSourcedScript(t, "install-common.sh", function+` "$INPUT"`, map[string]string{"INPUT": input})
+			if err == nil || stdout != "" || stderr != "" {
+				t.Fatalf("stdout=%q stderr=%q err=%v; want a silent refusal", stdout, stderr, err)
+			}
+		})
+	}
+}
+
 // pinnedInstallerCase is one installer on one platform branch. An empty os
 // and arch mean Linux x86_64.
 type pinnedInstallerCase struct{ tool, url, pin, entry, os, arch string }

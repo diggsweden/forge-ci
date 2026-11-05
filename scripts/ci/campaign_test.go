@@ -15,6 +15,7 @@ import (
 
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
+	"github.com/diggsweden/forge-ci/internal/testutil/testfs"
 )
 
 // These tests drive campaign.sh lane and demo-checkout.sh offline. A fake go
@@ -49,13 +50,13 @@ type campaignLane struct {
 func newCampaignLane(t *testing.T, extraEnv ...string) campaignLane {
 	t.Helper()
 
-	fakeDir, state := t.TempDir(), t.TempDir()
+	fakeDir, state := testfs.NewReal(t).Root, testfs.NewReal(t).Root
 	writeExecutable(t, filepath.Join(fakeDir, "go"), fakeCampaignGo)
 	writeExecutable(t, filepath.Join(fakeDir, "just"), fakeCampaignJust)
 
 	lane := campaignLane{
 		dir:        filepath.Join(state, "campaign"),
-		workDir:    t.TempDir(),
+		workDir:    testfs.NewReal(t).Root,
 		argvFile:   filepath.Join(state, "just-argv"),
 		goArgvFile: filepath.Join(state, "go-argv"),
 		envFile:    filepath.Join(state, "just-env"),
@@ -68,8 +69,8 @@ func newCampaignLane(t *testing.T, extraEnv ...string) campaignLane {
 		"PATH=" + fakeDir + string(os.PathListSeparator) +
 			testenv.GNUPath(t, "bash", "sed", "tail", "tee", "date", "mktemp", "rm", "dirname", "wc", "cat") +
 			string(os.PathListSeparator) + testenv.ToolPath(t, "git"),
-		"HOME=" + t.TempDir(),
-		"TMPDIR=" + t.TempDir(),
+		"HOME=" + testfs.NewReal(t).Root,
+		"TMPDIR=" + testfs.NewReal(t).Root,
 		"LC_ALL=C",
 		"FAKE_GO_ARGV=" + lane.goArgvFile,
 		"FAKE_JUST_ARGV=" + lane.argvFile,
@@ -107,7 +108,7 @@ func runScript(t *testing.T, dir string, env []string, script string, args ...st
 	ctx, cancel := context.WithTimeout(t.Context(), liveCommandBound)
 	defer cancel()
 
-	command := exec.CommandContext(ctx, "bash", append([]string{path}, args...)...)
+	command := exec.CommandContext(ctx, testBash(t), append([]string{path}, args...)...)
 	command.Env, command.Dir = env, dir
 
 	var errOut strings.Builder

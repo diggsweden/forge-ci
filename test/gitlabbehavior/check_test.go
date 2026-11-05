@@ -26,7 +26,13 @@ import (
 func componentTools(t *testing.T) string {
 	t.Helper()
 
-	return testenv.GNUPath(t, "cp", "chmod", "wc", "sha256sum") + ":/usr/bin:/bin"
+	return testenv.GNUPath(t, "cp", "chmod", "realpath", "wc", "sha256sum") + ":/usr/bin:/bin"
+}
+
+func componentBash(t *testing.T) string {
+	t.Helper()
+
+	return testenv.GNUExecutable(t, "bash")
 }
 
 // Execute the actual component's guard. A fake Git records any attempted
@@ -70,7 +76,7 @@ func TestCheckRefusesSigningMaterialAndMutablePinsBeforeCheckout(t *testing.T) {
 
 			defer cancel()
 
-			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", script)
+			command := exec.CommandContext(ctx, componentBash(t), "--noprofile", "--norc", "-c", script)
 			command.Dir = dir
 			command.Env = []string{"PATH=" + dir + ":/usr/bin:/bin", "HOME=" + dir, "TMPDIR=" + dir, "MARKER=" + marker,
 				"CI_SERVER_URL=https://gitlab.invalid", "RC_FORGE_CI_REPOSITORY=owner/engine", "CI_COMMIT_SHA=not-a-commit"}
@@ -147,7 +153,7 @@ func TestCheckPreservesPublicRootsAndExportsPrivateRegistryTrust(t *testing.T) {
 
 			script := strings.NewReplacer("/etc/ssl/certs/ca-certificates.crt", public,
 				"/etc/pki/tls/certs/ca-bundle.crt", filepath.Join(dir, "absent.pem")).Replace("git_options=" + trust)
-			command := exec.CommandContext(t.Context(), "/bin/bash", "--noprofile", "--norc", "-c",
+			command := exec.CommandContext(t.Context(), componentBash(t), "--noprofile", "--norc", "-c",
 				"set -eu\n"+script+"\nprintf '%s\\n' \"${SSL_CERT_FILE:-}\" \"${CURL_CA_BUNDLE:-}\" \"${GIT_SSL_CAINFO:-}\"")
 
 			command.Env = []string{"PATH=/usr/bin:/bin", "RC_HELPERS_DIR=" + dir}

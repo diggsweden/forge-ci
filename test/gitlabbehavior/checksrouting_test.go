@@ -160,7 +160,7 @@ func TestReleaseSummaryIncludesChecksAndOnlyEnabledVersionBump(t *testing.T) {
 	for _, bump := range []string{"", "cargo"} {
 		t.Run("bump="+bump, func(t *testing.T) {
 			t.Parallel()
-			command := exec.CommandContext(t.Context(), "/bin/bash", "--noprofile", "--norc", "-eu", "-c",
+			command := exec.CommandContext(t.Context(), componentBash(t), "--noprofile", "--norc", "-eu", "-c",
 				`source "$1"; rc_engine() { printf '%s\n' "$@"; }; rc_release_summary`, "summary",
 				filepath.Join(reporoot.Path(t), ".gitlab/bin/release.sh"))
 			command.Env = []string{"PATH=/usr/bin:/bin", "RC_VERSION_BUMP=" + bump, "RELEASE_TAG=v1.2.3", "RC_RELEASE_BRANCH=main"}
@@ -185,7 +185,7 @@ func TestConsumerChecksRevalidateImmutableRequestBeforeCommands(t *testing.T) {
 		t.Run(failure, func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
-			command := exec.CommandContext(t.Context(), "/bin/bash", "--noprofile", "--norc", "-eu", "-c", `source "$1"
+			command := exec.CommandContext(t.Context(), componentBash(t), "--noprofile", "--norc", "-eu", "-c", `source "$1"
 rc_engine() {
   printf 'engine %s\n' "$*"
   case "$1 $2" in

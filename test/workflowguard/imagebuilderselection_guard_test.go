@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
@@ -219,7 +220,7 @@ func testGitHubBuilderAdmission(t *testing.T, script string, buildSecrets bool) 
 		t.Run(tc.name, func(t *testing.T) {
 			output := filepath.Join(t.TempDir(), "output")
 			require.NoError(t, os.WriteFile(output, nil, 0o600))
-			command := exec.CommandContext(t.Context(), "bash", "-e", "-c", script)
+			command := exec.CommandContext(t.Context(), testenv.GNUExecutable(t, "bash"), "-e", "-c", script)
 			command.Env = []string{"PATH=" + os.Getenv("PATH"), "BUILDER=" + tc.builder, "JOB_IMAGE=" + tc.image, "BUILD_SECRETS=" + tc.secrets, "GITHUB_OUTPUT=" + output}
 
 			log, err := command.CombinedOutput()

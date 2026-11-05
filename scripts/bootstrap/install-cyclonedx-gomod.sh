@@ -29,34 +29,37 @@ readonly CYCLONEDX_GOMOD_SHA256_DARWIN_ARM64="43dcd58b7a7ef9d84a2d21df9c6eeeb907
 install_cyclonedx_gomod() {
 	ci_use_installed_pin cyclonedx-gomod cyclonedx-gomod "$CYCLONEDX_GOMOD_VERSION" version && return 0
 
-	local install_dir os arch asset sha256 archive version
+	local install_dir raw_os raw_arch platform os arch asset sha256 archive version
 	install_dir="$(ci_install_dir cyclonedx-gomod)"
 	mkdir -p "$install_dir"
 	version="${CYCLONEDX_GOMOD_VERSION#v}"
+	raw_os="${OS:-$(uname -s)}"
+	raw_arch="${ARCH:-$(uname -m)}"
+	platform="$(ci_normalize_os "$raw_os")/$(ci_normalize_arch "$raw_arch")" || true
 
-	case "$(uname -s):$(uname -m)" in
-	Linux:x86_64)
+	case "$platform" in
+	linux/amd64)
 		os=linux
 		arch=amd64
 		sha256="$CYCLONEDX_GOMOD_SHA256_LINUX_AMD64"
 		;;
-	Linux:aarch64 | Linux:arm64)
+	linux/arm64)
 		os=linux
 		arch=arm64
 		sha256="$CYCLONEDX_GOMOD_SHA256_LINUX_ARM64"
 		;;
-	Darwin:x86_64)
+	darwin/amd64)
 		os=darwin
 		arch=amd64
 		sha256="$CYCLONEDX_GOMOD_SHA256_DARWIN_AMD64"
 		;;
-	Darwin:arm64)
+	darwin/arm64)
 		os=darwin
 		arch=arm64
 		sha256="$CYCLONEDX_GOMOD_SHA256_DARWIN_ARM64"
 		;;
 	*)
-		printf 'ERROR: unsupported platform for cyclonedx-gomod: %s/%s\n' "$(uname -s)" "$(uname -m)" >&2
+		printf 'ERROR: unsupported platform for cyclonedx-gomod: %s/%s\n' "$raw_os" "$raw_arch" >&2
 		return 1
 		;;
 	esac

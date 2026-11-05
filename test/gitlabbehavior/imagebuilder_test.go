@@ -200,7 +200,7 @@ func TestReleaseImageBuilderAdmitsOnlyTheKanikoJobImage(t *testing.T) {
 			script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
 			// The fake engine records its arguments and stdin, and fails the
 			// admission when told to.
-			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-euo", "pipefail", "-c",
+			command := exec.CommandContext(ctx, componentBash(t), "--noprofile", "--norc", "-euo", "pipefail", "-c",
 				`source "$1"; rc_engine() { printf '%s\n' "$*" >>"${RC_WORK}/engine"; if [ "$2" = login ]; then cat >>"${RC_WORK}/engine"; echo >>"${RC_WORK}/engine"; fi; if [ "$2" = image ]; then return "${USABLE_STATUS}"; fi; }; rc_image_builder`,
 				"image-builder", script)
 
@@ -461,10 +461,10 @@ func runReleaseFunction(t *testing.T, dir, body string, env ...string) (string, 
 	defer cancel()
 
 	script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
-	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-euo", "pipefail", "-c",
+	command := exec.CommandContext(ctx, componentBash(t), "--noprofile", "--norc", "-euo", "pipefail", "-c",
 		`source "$1"; rc_engine() { echo "engine: $*"; }; `+body, "release-function", script)
 	command.Dir = dir
-	command.Env = append([]string{"PATH=/usr/bin:/bin", "HOME=" + dir}, env...)
+	command.Env = append([]string{"PATH=" + componentTools(t), "HOME=" + dir}, env...)
 
 	output, err := command.CombinedOutput()
 

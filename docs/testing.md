@@ -38,6 +38,11 @@ toolchain are pinned in `.mise.toml`; run `just install-dev-tools` before the
 gates. On macOS/BSD mise skips Nanolinter, whose release is Linux-only; build
 it from source as [DEVELOPMENT.md](DEVELOPMENT.md) describes.
 
+The Go lint preflight analyzes both released operating systems, Linux and
+Darwin, on every host. This keeps build-constrained implementations under the
+same dependency and environment rules; it cross-compiles/type-checks them but
+does not claim runtime evidence for the other OS or CPU architecture.
+
 Integration requires real GnuPG 2 and Git. On macOS install GnuPG with
 `sudo port install gnupg2`; the integration recipes refuse early when `gpg`
 is missing. Buildah and other optional tools retain the evidence policy below.

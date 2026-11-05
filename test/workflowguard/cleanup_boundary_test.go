@@ -73,7 +73,7 @@ func checkMaterializedCleanup(t *testing.T, script string) {
 		canary := filepath.Join(root, "keep")
 		require.NoError(t, os.WriteFile(canary, []byte("outside cleanup"), 0o600))
 		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-		cmd := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", previous+" || :\n"+script)
+		cmd := exec.CommandContext(ctx, testBash(t), "--noprofile", "--norc", "-eu", "-c", previous+" || :\n"+script)
 		cmd.Dir = root
 		cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + root, "TMPDIR=" + root, "BUILD_SECRETS_DIR=" + secretDir}
 		output, err := cmd.CombinedOutput()

@@ -44,38 +44,45 @@ func ToolPath(t *testing.T, names ...string) string {
 func GNUPath(t *testing.T, names ...string) string {
 	t.Helper()
 
-	return linkTools(t, names, func(name string) string {
-		binary, err := exec.LookPath("g" + name)
-		if err != nil {
-			binary, err = exec.LookPath(name)
+	return linkTools(t, names, func(name string) string { return GNUExecutable(t, name) })
+}
+
+// GNUExecutable resolves and validates one GNU-compatible host tool. Use it
+// when the tool is the executable itself rather than a command found by a
+// Linux shell fixture through GNUPath.
+func GNUExecutable(t *testing.T, name string) string {
+	t.Helper()
+
+	binary, err := exec.LookPath("g" + name)
+	if err != nil {
+		binary, err = exec.LookPath(name)
+	}
+
+	if err != nil {
+		t.Fatalf("GNU %s is required for this Linux shell fixture: %v; see docs/DEVELOPMENT.md", name, err)
+	}
+
+	// The binary is a PATH lookup of a test-named GNU tool; only --version runs.
+	// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
+	output, err := exec.CommandContext(t.Context(), binary, "--version").CombinedOutput() //nolint:gosec // test-owned selection of installed host utilities, version probe only.
+	// uutils coreutils, the default on recent Ubuntu, follows the GNU
+	// interface; BSD tools, which these fixtures cannot use, print neither.
+	if err != nil || (!strings.Contains(string(output), "GNU") && !strings.Contains(string(output), "uutils coreutils")) {
+		t.Fatalf("%s is not a working GNU %s; see docs/DEVELOPMENT.md", binary, name)
+	}
+
+	if name == "bash" {
+		major := 0
+		if match := bashVersion.FindSubmatch(output); match != nil {
+			major, _ = strconv.Atoi(string(match[1]))
 		}
 
-		if err != nil {
-			t.Fatalf("GNU %s is required for this Linux shell fixture: %v; see docs/DEVELOPMENT.md", name, err)
+		if major < minBashMajor {
+			t.Fatalf("%s is not GNU Bash %d or later; see docs/DEVELOPMENT.md", binary, minBashMajor)
 		}
+	}
 
-		// The binary is a PATH lookup of a test-named GNU tool; only --version runs.
-		// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
-		output, err := exec.CommandContext(t.Context(), binary, "--version").CombinedOutput() //nolint:gosec // test-owned selection of installed host utilities, version probe only.
-		// uutils coreutils, the default on recent Ubuntu, follows the GNU
-		// interface; BSD tools, which these fixtures cannot use, print neither.
-		if err != nil || (!strings.Contains(string(output), "GNU") && !strings.Contains(string(output), "uutils coreutils")) {
-			t.Fatalf("%s is not a working GNU %s; see docs/DEVELOPMENT.md", binary, name)
-		}
-
-		if name == "bash" {
-			major := 0
-			if match := bashVersion.FindSubmatch(output); match != nil {
-				major, _ = strconv.Atoi(string(match[1]))
-			}
-
-			if major < minBashMajor {
-				t.Fatalf("%s is not GNU Bash %d or later; see docs/DEVELOPMENT.md", binary, minBashMajor)
-			}
-		}
-
-		return binary
-	})
+	return binary
 }
 
 // linkTools symlinks each resolved tool into a fresh private directory.

@@ -19,27 +19,21 @@ readonly GH_SHA256_DARWIN_AMD64="2dc7f1fc4761f96732995f6e4f4c6b4d705f2635da41266
 readonly GH_SHA256_DARWIN_ARM64="5416000f5d17580a187339e0c4068a01ca5c87f7d4fe6ca64933696f967bc418"
 
 resolve_gh_dist() {
-	local os arch dist=""
-	os="${OS:-$(uname -s)}"
-	arch="${ARCH:-$(uname -m)}"
+	local raw_os raw_arch os="" arch="" dist=""
+	raw_os="${OS:-$(uname -s)}"
+	raw_arch="${ARCH:-$(uname -m)}"
+	os="$(ci_normalize_os "$raw_os")" || true
+	arch="$(ci_normalize_arch "$raw_arch")" || true
 
-	case "$os" in
-	Linux)
-		case "$arch" in
-		x86_64 | amd64) dist="gh_${GH_VERSION#v}_linux_amd64.tar.gz" ;;
-		aarch64 | arm64) dist="gh_${GH_VERSION#v}_linux_arm64.tar.gz" ;;
-		esac
-		;;
-	Darwin)
-		case "$arch" in
-		x86_64 | amd64) dist="gh_${GH_VERSION#v}_macOS_amd64.zip" ;;
-		aarch64 | arm64) dist="gh_${GH_VERSION#v}_macOS_arm64.zip" ;;
-		esac
-		;;
+	case "$os/$arch" in
+	linux/amd64) dist="gh_${GH_VERSION#v}_linux_amd64.tar.gz" ;;
+	linux/arm64) dist="gh_${GH_VERSION#v}_linux_arm64.tar.gz" ;;
+	darwin/amd64) dist="gh_${GH_VERSION#v}_macOS_amd64.zip" ;;
+	darwin/arm64) dist="gh_${GH_VERSION#v}_macOS_arm64.zip" ;;
 	esac
 
 	if [[ -z "$dist" ]]; then
-		printf "ERROR: Unsupported gh platform: %s/%s\n" "$os" "$arch" >&2
+		printf "ERROR: Unsupported gh platform: %s/%s\n" "$raw_os" "$raw_arch" >&2
 		return 1
 	fi
 

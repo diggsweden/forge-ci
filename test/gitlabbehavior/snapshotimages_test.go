@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
+	"github.com/diggsweden/forge-ci/internal/testutil/testfs"
 	"gopkg.in/yaml.v3"
 )
 
@@ -24,7 +25,7 @@ func generateSnapshot(t *testing.T, plan string, extra ...string) (map[string]an
 		t.Fatal(err)
 	}
 
-	cmd := exec.CommandContext(t.Context(), "bash", "--noprofile", "--norc", "-c", `set -euo pipefail; source "$1"; snapshot_gitlab_generate plan.json child.json`, "snapshot", filepath.Join(reporoot.Path(t), ".gitlab/bin/snapshot-images.sh"))
+	cmd := exec.CommandContext(t.Context(), componentBash(t), "--noprofile", "--norc", "-c", `set -euo pipefail; source "$1"; snapshot_gitlab_generate plan.json child.json`, "snapshot", filepath.Join(reporoot.Path(t), ".gitlab/bin/snapshot-images.sh"))
 	cmd.Dir = dir
 	cmd.Env = append([]string{
 		"PATH=" + os.Getenv("PATH"), "HOME=" + dir,
@@ -192,7 +193,7 @@ func TestSnapshotNativeContainerFirstStillGathersAnEmptyBoundContext(t *testing.
 func TestSnapshotNativeGatherUsesFrozenSourceAndDoesNotPublishAfterFailure(t *testing.T) {
 	for _, refused := range []bool{false, true} {
 		t.Run(map[bool]string{false: "success", true: "missing-producer"}[refused], func(t *testing.T) {
-			dir := t.TempDir()
+			dir := testfs.NewReal(t).Root
 
 			sha := strings.Repeat("a", 40)
 			if err := os.WriteFile(filepath.Join(dir, "snapshot-plan.json"), []byte(`{"source_sha":"`+sha+`"}`), 0o600); err != nil {
@@ -221,7 +222,7 @@ test -f snapshot-context/source-sha
 test ! -e snapshot-source/snapshot-context
 printf 'ready-for-images\n'
 `
-			cmd := exec.CommandContext(t.Context(), "bash", "--noprofile", "--norc", "-c", program, "snapshot", reporoot.Path(t))
+			cmd := exec.CommandContext(t.Context(), componentBash(t), "--noprofile", "--norc", "-c", program, "snapshot", reporoot.Path(t))
 			cmd.Dir = dir
 
 			value := "false"
@@ -229,7 +230,7 @@ printf 'ready-for-images\n'
 				value = "true"
 			}
 
-			cmd.Env = append(os.Environ(), "TEST_ROOT="+dir, "EXPECTED_SHA="+sha, "REFUSE="+value)
+			cmd.Env = append(os.Environ(), "PATH="+componentTools(t)+":"+os.Getenv("PATH"), "TEST_ROOT="+dir, "EXPECTED_SHA="+sha, "REFUSE="+value)
 
 			output, err := cmd.CombinedOutput()
 			if refused {
@@ -308,7 +309,7 @@ run_forge_ci() {
 }
 snapshot_checkout refs/heads/development
 `
-			cmd := exec.CommandContext(t.Context(), "bash", "--noprofile", "--norc", "-c", program, "snapshot", reporoot.Path(t))
+			cmd := exec.CommandContext(t.Context(), componentBash(t), "--noprofile", "--norc", "-c", program, "snapshot", reporoot.Path(t))
 			cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "FORGE_CI_PROVIDER=gitlab", "REFUSE=" + refuse,
 				"ALLOWED_EVENTS=pull_request,trigger,pipeline", "GITHUB_EVENT_NAME=push",
 				"SNAPSHOT_REPOSITORY=org/app", "SNAPSHOT_SERVER=https://gitlab.example",
@@ -342,9 +343,9 @@ func TestSnapshotBuildHandsOffItsOwnReadableLayouts(t *testing.T) {
 			body := `snapshot_gitlab_checkout() { :; }; snapshot_apply_context() { :; }; ` +
 				`snapshot_build() { mkdir -p snapshot-source/snapshot-layouts/api-arch-amd64; touch snapshot-source/snapshot-layouts/api-arch-amd64/api-amd64.json; hash -p /removed-native-tools/mv mv; hash -p /removed-native-tools/find find; }; ` +
 				`umask 077; snapshot_gitlab_build api amd64 ''`
-			cmd := exec.CommandContext(t.Context(), "bash", "--noprofile", "--norc", "-c", `set -euo pipefail; source "$1"; `+body, "snapshot", filepath.Join(reporoot.Path(t), ".gitlab/bin/snapshot-images.sh"))
+			cmd := exec.CommandContext(t.Context(), componentBash(t), "--noprofile", "--norc", "-c", `set -euo pipefail; source "$1"; `+body, "snapshot", filepath.Join(reporoot.Path(t), ".gitlab/bin/snapshot-images.sh"))
 			cmd.Dir = dir
-			cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + dir}
+			cmd.Env = []string{"PATH=" + componentTools(t), "HOME=" + dir}
 
 			out, err := cmd.CombinedOutput()
 			if planted {

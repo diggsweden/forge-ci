@@ -11,6 +11,7 @@ import (
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/testutil/mockbinary"
+	"github.com/diggsweden/forge-ci/internal/testutil/testfs"
 )
 
 func TestMavenExecForwardsArgumentsDirectoryAndScopedEnvironment(t *testing.T) {
@@ -31,7 +32,7 @@ test "$DEPENDENCY_USERNAME" = reader
 		t.Setenv(key, value)
 	}
 
-	dir := t.TempDir()
+	dir := testfs.NewReal(t).Root
 	args := []string{"--batch-mode", "-Dmaven.repo.local=/fixture/fresh repo", "dependency:get", "-Dartifact=org.example:library:1-SNAPSHOT:jar", "-Dliteral=$(not-evaluated)"}
 	require.NoError(t, mavenCmd().Run(t.Context(), append([]string{"maven", "exec", "--private-dependencies", "--dependency-username", "reader", "--working-dir", dir, "--"}, args...)))
 

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
 	"gopkg.in/yaml.v3"
 )
 
@@ -38,7 +39,7 @@ func TestConsumerPRPublicInstallCredentialBoundary(t *testing.T) {
 
 	dir := t.TempDir()
 
-	fake := `#!/bin/bash
+	fake := `#!/usr/bin/env bash
 set -euo pipefail
 for name in FORGEJO_TOKEN MISE_FORGEJO_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN; do
   if [[ -v $name ]]; then
@@ -63,7 +64,7 @@ if [[ ${FAIL_INSTALL:-0} == 1 && $1 == install ]]; then exit 42; fi
 			pathOutput := filepath.Join(t.TempDir(), "path")
 			// An explicit environment excludes ambient host credentials entirely.
 			env := make([]string, 0, 9)
-			env = append(env, "PATH="+dir+":/usr/bin:/bin", "CALLS="+calls,
+			env = append(env, "PATH="+dir+":"+testenv.GNUPath(t, "bash")+":/usr/bin:/bin", "CALLS="+calls,
 				"FORGEJO_PATH="+pathOutput, "JUST_VERSION="+version)
 
 			for _, name := range []string{"FORGEJO_TOKEN", "MISE_FORGEJO_TOKEN", "GITHUB_TOKEN", "MISE_GITHUB_TOKEN"} {
@@ -83,7 +84,7 @@ if [[ ${FAIL_INSTALL:-0} == 1 && $1 == install ]]; then exit 42; fi
 			}
 			// A subsequent non-tool operation still has its repository credential.
 			script := strings.Join(scripts, "\n") + "\n test -n \"${FORGEJO_TOKEN:?}\"\n"
-			cmd := exec.CommandContext(t.Context(), "bash", "-c", script)
+			cmd := exec.CommandContext(t.Context(), testBash(t), "-c", script)
 
 			cmd.Env = env
 			if out, err := cmd.CombinedOutput(); err != nil {
@@ -100,7 +101,7 @@ if [[ ${FAIL_INSTALL:-0} == 1 && $1 == install ]]; then exit 42; fi
 				t.Fatalf("tool installation requests changed: %q", got)
 			}
 
-			cmd = exec.CommandContext(t.Context(), "bash", "-c", scripts[0]+"\nexit 0\n")
+			cmd = exec.CommandContext(t.Context(), testBash(t), "-c", scripts[0]+"\nexit 0\n")
 
 			cmd.Env = append(slices.Clone(env), "FAIL_INSTALL=1")
 

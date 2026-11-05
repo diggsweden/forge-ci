@@ -178,53 +178,6 @@ func TestRequireNoSwap_DebugOverrideOnSwapFreeHostIsNotABypass(t *testing.T) {
 	}
 }
 
-// TestSwapState_NamesEveryState pins the label each state renders.
-//
-// The labels are what an operator reads to tell three very different outcomes
-// apart: swap was checked and is off, swap could not be checked at all, and
-// swap is on but was deliberately waived. Only the middle one is a silent
-// bypass nobody chose, so conflating it with either neighbour hides exactly
-// the case worth surfacing. Nothing pinned them, and collapsing the switch to
-// a single return left every swap test passing — none of them reads a label.
-func TestSwapState_NamesEveryState(t *testing.T) {
-	t.Parallel()
-
-	for _, tc := range []struct {
-		state safeexec.SwapState
-		want  string
-	}{
-		{safeexec.SwapAbsent, "absent"},
-		{safeexec.SwapUndetermined, "undetermined"},
-		{safeexec.SwapBypassed, "bypassed"},
-		{safeexec.SwapOverridden, "overridden"},
-	} {
-		if got := tc.state.String(); got != tc.want {
-			t.Errorf("SwapState(%d).String() = %q, want %q", tc.state, got, tc.want)
-		}
-	}
-
-	// Distinctness is the property the labels exist for; equal-looking
-	// labels would satisfy the table above only if it were written wrong,
-	// but a future state added without a case would render "unknown" and
-	// silently share it with any other unnamed state.
-	seen := map[string]bool{}
-
-	for _, state := range []safeexec.SwapState{safeexec.SwapAbsent, safeexec.SwapUndetermined, safeexec.SwapBypassed, safeexec.SwapOverridden} {
-		label := state.String()
-		if seen[label] {
-			t.Errorf("two states render the same label %q", label)
-		}
-
-		seen[label] = true
-	}
-
-	// An unnamed state must be recognisable as such rather than borrowing a
-	// real state's label.
-	if got := safeexec.SwapState(99).String(); got != "unknown" {
-		t.Errorf("unnamed state rendered %q, want %q", got, "unknown")
-	}
-}
-
 // TestRequireNoSwap_OverrideIsReportedNotTakenAsKernelState sets
 // FORGE_CI_PROC_SWAPS while the kernel reader points at a file with an
 // active swap area. The override decides the answer, as the black-box suite

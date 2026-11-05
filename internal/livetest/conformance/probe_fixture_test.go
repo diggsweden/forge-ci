@@ -68,7 +68,7 @@ func runProbeShell(t *testing.T, script string, env ...string) error {
 	defer cancel()
 
 	dir := t.TempDir()
-	cmd := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", script)
+	cmd := exec.CommandContext(ctx, testBash(t), "--noprofile", "--norc", "-eu", "-c", script)
 	cmd.Dir = dir
 	cmd.Env = append([]string{"PATH=/usr/bin:/bin", "HOME=" + dir, "TMPDIR=" + dir, "LC_ALL=C"}, env...)
 

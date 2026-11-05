@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
+	"github.com/diggsweden/forge-ci/internal/testutil/testfs"
 )
 
 func TestGitLabJobEvidenceBeforeTeardown(t *testing.T) {
@@ -157,7 +158,7 @@ func TestJobLogEvidenceRedactsOverlappingAndTimestampedSecrets(t *testing.T) {
 }
 
 func TestJobLogEvidenceDestinationRefusals(t *testing.T) {
-	parent := t.TempDir()
+	parent := testfs.NewReal(t).Root
 
 	consumer := filepath.Join(parent, "consumer")
 	if err := os.Mkdir(consumer, 0700); err != nil {

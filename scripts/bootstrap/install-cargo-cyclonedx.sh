@@ -29,29 +29,32 @@ readonly CARGO_CYCLONEDX_SHA256_DARWIN_ARM64="4c53dfa21e70b65bf7f8d2592aadde3bcb
 install_cargo_cyclonedx() {
 	ci_use_installed_pin cargo-cyclonedx cargo-cyclonedx "$CARGO_CYCLONEDX_VERSION" cyclonedx --version && return 0
 
-	local install_dir triple asset sha256 archive
+	local install_dir raw_os raw_arch platform triple asset sha256 archive
 	install_dir="$(ci_install_dir cargo-cyclonedx)"
 	mkdir -p "$install_dir"
+	raw_os="${OS:-$(uname -s)}"
+	raw_arch="${ARCH:-$(uname -m)}"
+	platform="$(ci_normalize_os "$raw_os")/$(ci_normalize_arch "$raw_arch")" || true
 
-	case "$(uname -s):$(uname -m)" in
-	Linux:x86_64)
+	case "$platform" in
+	linux/amd64)
 		triple=x86_64-unknown-linux-gnu
 		sha256="$CARGO_CYCLONEDX_SHA256_LINUX_AMD64"
 		;;
-	Linux:aarch64 | Linux:arm64)
+	linux/arm64)
 		triple=aarch64-unknown-linux-gnu
 		sha256="$CARGO_CYCLONEDX_SHA256_LINUX_ARM64"
 		;;
-	Darwin:x86_64)
+	darwin/amd64)
 		triple=x86_64-apple-darwin
 		sha256="$CARGO_CYCLONEDX_SHA256_DARWIN_AMD64"
 		;;
-	Darwin:arm64)
+	darwin/arm64)
 		triple=aarch64-apple-darwin
 		sha256="$CARGO_CYCLONEDX_SHA256_DARWIN_ARM64"
 		;;
 	*)
-		printf 'ERROR: unsupported platform for cargo-cyclonedx: %s/%s\n' "$(uname -s)" "$(uname -m)" >&2
+		printf 'ERROR: unsupported platform for cargo-cyclonedx: %s/%s\n' "$raw_os" "$raw_arch" >&2
 		return 1
 		;;
 	esac

@@ -21,6 +21,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/imageledger"
 	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
+	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
 )
 
 //go:embed testdata/layer/resolved-image-plan.yml
@@ -262,9 +263,9 @@ func TestResolvedImagePlanPolicyPhases(t *testing.T) {
 		output := filepath.Join(dir, "output-"+phase)
 		// Inert collaborator supplies only the opaque native builder identity;
 		// execute the actual fixture policy and admit it with the real engine.
-		cmd := exec.CommandContext(t.Context(), "/bin/bash", "--noprofile", "--norc", "-c", "forge-ci() { test \"$*\" = 'container builder-identity' || return 1; printf '%064d\\n' 1; }; "+script)
+		cmd := exec.CommandContext(t.Context(), testBash(t), "--noprofile", "--norc", "-c", "forge-ci() { test \"$*\" = 'container builder-identity' || return 1; printf '%064d\\n' 1; }; "+script)
 		cmd.Dir = dir
-		cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + dir, "LC_ALL=C", "BASE_IMAGE_REPOSITORY=registry.example/base", "FORGEJO_OUTPUT=" + output}
+		cmd.Env = []string{"PATH=" + testenv.GNUPath(t, "sha256sum") + ":/usr/bin:/bin", "HOME=" + dir, "LC_ALL=C", "BASE_IMAGE_REPOSITORY=registry.example/base", "FORGEJO_OUTPUT=" + output}
 
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%s policy: %v: %s", phase, err, out)

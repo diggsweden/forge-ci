@@ -23,6 +23,7 @@ import (
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/secretenv"
+	"github.com/diggsweden/forge-ci/internal/testutil/testfs"
 )
 
 func publicCATestPEM(t *testing.T) []byte {
@@ -380,7 +381,7 @@ exit 1
 }
 
 func TestMavenMiseDiscoveryPreservesAdmittedRuntimeEnvironment(t *testing.T) {
-	root, runtime, working := t.TempDir(), t.TempDir(), t.TempDir()
+	root, runtime, working := testfs.NewReal(t).Root, testfs.NewReal(t).Root, testfs.NewReal(t).Root
 	java, capture := filepath.Join(root, "java"), filepath.Join(root, "environment")
 
 	script := fmt.Sprintf(`#!/bin/sh

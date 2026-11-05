@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
+	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
 )
 
 func TestRuntimePublicationBarriersAndSigningBoundary(t *testing.T) {
@@ -128,9 +129,9 @@ cat "$INDEX_FIXTURE"
 			}
 
 			marker := filepath.Join(root, "uploaded")
-			cmd := exec.CommandContext(t.Context(), "bash", "-c", literal.Value.Value)
+			cmd := exec.CommandContext(t.Context(), testBash(t), "-c", literal.Value.Value)
 			cmd.Dir = root
-			cmd.Env = append(os.Environ(), "PATH="+root+":"+os.Getenv("PATH"), "TARGET=base", "REGISTRY_AUTH_FILE="+auth, "IMAGE_REPOSITORY=registry.example/acme/runtime", "SOURCE_SHA="+strings.Repeat("a", 40), "INDEX_FIXTURE="+input, "PUBLISHED_MARKER="+marker)
+			cmd.Env = append(os.Environ(), "PATH="+root+":"+testenv.GNUPath(t, "sha256sum")+":"+os.Getenv("PATH"), "TARGET=base", "REGISTRY_AUTH_FILE="+auth, "IMAGE_REPOSITORY=registry.example/acme/runtime", "SOURCE_SHA="+strings.Repeat("a", 40), "INDEX_FIXTURE="+input, "PUBLISHED_MARKER="+marker)
 
 			out, err := cmd.CombinedOutput()
 			if changed {
@@ -219,7 +220,7 @@ printf '%s\n' "$*" >> "$CALL_LOG"
 `
 			require.NoError(t, os.WriteFile(tool, []byte(body), 0o600))
 			require.NoError(t, os.Chmod(tool, 0o700))
-			cmd := exec.CommandContext(t.Context(), "bash", "-c", script)
+			cmd := exec.CommandContext(t.Context(), testBash(t), "-c", script)
 			cmd.Dir = root
 			cmd.Env = append(os.Environ(), "PATH="+root+":"+os.Getenv("PATH"), "CALL_LOG="+log, "CI_RUNNER_LENDER_TOKEN=fixture-token", "lender_token=previous-export", "SMOKE_MATRIX_JSON="+tc.matrix)
 

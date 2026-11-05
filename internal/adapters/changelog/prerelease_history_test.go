@@ -14,6 +14,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/adapters/changelog"
 	"github.com/diggsweden/forge-ci/internal/testutil/mockbinary"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
+	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
 	"gopkg.in/yaml.v3"
 )
 
@@ -23,6 +24,10 @@ func TestPrereleaseAndFinalNotesUsePreviousStableBoundary(t *testing.T) {
 			binary, err := exec.LookPath(backend)
 			if err != nil {
 				t.Skip("native changelog renderer not installed")
+			}
+
+			if output, probeErr := exec.CommandContext(t.Context(), binary, "--version").CombinedOutput(); probeErr != nil {
+				t.Skipf("native changelog renderer is not runnable: %v: %s", probeErr, output)
 			}
 
 			root := t.TempDir()
@@ -90,7 +95,7 @@ func TestPrereleaseAndFinalNotesUsePreviousStableBoundary(t *testing.T) {
 					mock.OnPath()
 
 					output := filepath.Join(root, "release-notes.md")
-					cmd := exec.CommandContext(t.Context(), "/bin/bash", "-euo", "pipefail", "-c", releaseNotesWorkflowScript(t))
+					cmd := exec.CommandContext(t.Context(), testenv.GNUExecutable(t, "bash"), "-euo", "pipefail", "-c", releaseNotesWorkflowScript(t))
 
 					cmd.Env = append(os.Environ(), "CONFIG="+config, "ARGS=--latest", "OUTPUT="+output, "GITHUB_REPO=owner/repo", "REF_TYPE=tag", "REF_NAME=release-request/"+tag, "RELEASE_POLICY=stable-prerelease")
 

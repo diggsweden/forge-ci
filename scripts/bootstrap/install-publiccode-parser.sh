@@ -19,27 +19,21 @@ readonly PUBLICCODE_PARSER_SHA256_DARWIN_AMD64="38d6bb4be977a1b0ea723e1c4decece8
 readonly PUBLICCODE_PARSER_SHA256_DARWIN_ARM64="61b3754455bfa5c04fe766d549e8b1d01fe804f7d914c93ee19e3ea28e6a46ae"
 
 resolve_publiccode_parser_dist() {
-	local os arch dist=""
-	os="${OS:-$(uname -s)}"
-	arch="${ARCH:-$(uname -m)}"
+	local raw_os raw_arch os="" arch="" dist=""
+	raw_os="${OS:-$(uname -s)}"
+	raw_arch="${ARCH:-$(uname -m)}"
+	os="$(ci_normalize_os "$raw_os")" || true
+	arch="$(ci_normalize_arch "$raw_arch")" || true
 
-	case "$os" in
-	Linux)
-		case "$arch" in
-		x86_64 | amd64) dist="publiccode-parser-go_Linux_x86_64.tar.gz" ;;
-		aarch64 | arm64) dist="publiccode-parser-go_Linux_arm64.tar.gz" ;;
-		esac
-		;;
-	Darwin)
-		case "$arch" in
-		x86_64 | amd64) dist="publiccode-parser-go_Darwin_x86_64.tar.gz" ;;
-		aarch64 | arm64) dist="publiccode-parser-go_Darwin_arm64.tar.gz" ;;
-		esac
-		;;
+	case "$os/$arch" in
+	linux/amd64) dist="publiccode-parser-go_Linux_x86_64.tar.gz" ;;
+	linux/arm64) dist="publiccode-parser-go_Linux_arm64.tar.gz" ;;
+	darwin/amd64) dist="publiccode-parser-go_Darwin_x86_64.tar.gz" ;;
+	darwin/arm64) dist="publiccode-parser-go_Darwin_arm64.tar.gz" ;;
 	esac
 
 	if [[ -z "$dist" ]]; then
-		printf "ERROR: Unsupported publiccode-parser platform: %s/%s\n" "$os" "$arch" >&2
+		printf "ERROR: Unsupported publiccode-parser platform: %s/%s\n" "$raw_os" "$raw_arch" >&2
 		return 1
 	fi
 

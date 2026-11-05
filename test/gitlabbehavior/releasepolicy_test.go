@@ -27,7 +27,7 @@ func TestReleasePolicyComesFromTrustedInputNotAmbientVariables(t *testing.T) {
 rc_engine() { printf 'selected=%s\n' "$RELEASE_POLICY"; }
 rc_release_context
 `
-			cmd := exec.CommandContext(t.Context(), "/bin/bash", "--noprofile", "--norc", "-c", program, "release-policy", filepath.Join(reporoot.Path(t), ".gitlab/bin/release.sh"))
+			cmd := exec.CommandContext(t.Context(), componentBash(t), "--noprofile", "--norc", "-c", program, "release-policy", filepath.Join(reporoot.Path(t), ".gitlab/bin/release.sh"))
 			cmd.Dir = t.TempDir()
 			cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + cmd.Dir, "CI_DEFAULT_BRANCH=main", "CI_COMMIT_TAG=release-request/v1.0.0", "CI_COMMIT_SHA=" + strings.Repeat("a", 40), "RC_RELEASE_POLICY=stable-prerelease", "RELEASE_POLICY=stable-prerelease",
 				"GIT_STRATEGY=empty", "GIT_SUBMODULE_STRATEGY=none", "CI_SERVER_URL=https://gitlab.invalid", "CI_REGISTRY=registry.gitlab.invalid"}
@@ -53,7 +53,7 @@ func TestCentralPublisherBindsItsOwnReleasePolicy(t *testing.T) {
 	for _, policy := range []string{"stable", "stable-prerelease"} {
 		t.Run(policy, func(t *testing.T) {
 			program := strings.ReplaceAll(prefix, "$[[ inputs.release-policy ]]", policy) + `printf 'selected=%s\n' "$RELEASE_POLICY"`
-			cmd := exec.CommandContext(t.Context(), "/bin/bash", "--noprofile", "--norc", "-c", program)
+			cmd := exec.CommandContext(t.Context(), componentBash(t), "--noprofile", "--norc", "-c", program)
 			cmd.Dir = t.TempDir()
 			cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + cmd.Dir, "RELEASE_POLICY=stable-prerelease"}
 

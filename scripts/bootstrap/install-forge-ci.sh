@@ -60,23 +60,19 @@ check_forge_ci_source() {
 resolve_forge_ci_os() {
 	local os
 	os="$(uname -s)"
-	case "$os" in
-	Linux) printf 'linux' ;;
-	Darwin) printf 'darwin' ;;
-	*)
+	if ! ci_normalize_os "$os"; then
 		printf 'ERROR: Unsupported forge-ci OS: %s\n' "$os" >&2
 		return 1
-		;;
-	esac
+	fi
 }
 
 # resolve_forge_ci_arch prints amd64|arm64, or fails on unsupported hosts.
 resolve_forge_ci_arch() {
-	local arch
+	local arch normalized
 	arch="$(uname -m)"
-	case "$arch" in
-	x86_64 | amd64) printf 'amd64' ;;
-	aarch64 | arm64) printf 'arm64' ;;
+	normalized="$(ci_normalize_arch "$arch")" || true
+	case "$normalized" in
+	amd64 | arm64) printf '%s' "$normalized" ;;
 	*)
 		printf 'ERROR: Unsupported forge-ci arch: %s\n' "$arch" >&2
 		return 1

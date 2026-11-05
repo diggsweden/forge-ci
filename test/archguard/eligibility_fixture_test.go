@@ -66,7 +66,7 @@ func TestBuildConstraintOf_ReadsOnlyRealConstraintLines(t *testing.T) {
 	}
 }
 
-func TestSatisfiedByReferenceBuild_LinuxIndependentOfHost(t *testing.T) {
+func TestSatisfiedByReleaseBuilds_IndependentOfHost(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
@@ -74,11 +74,11 @@ func TestSatisfiedByReferenceBuild_LinuxIndependentOfHost(t *testing.T) {
 		want bool
 	}{
 		{"linux", true},
-		{"!linux", false},
+		{"!linux", true},
 		{"linux || plan9", true},
 		{"linux && plan9", false},
-		{"!linux && !plan9", false},
-		{"darwin", false},
+		{"!linux && !plan9", true},
+		{"darwin", true},
 		{"unix", true},
 		{runtime.GOARCH, true},
 		{"some_tag_nobody_sets", false},
@@ -86,8 +86,8 @@ func TestSatisfiedByReferenceBuild_LinuxIndependentOfHost(t *testing.T) {
 		t.Run(strings.ReplaceAll(tc.expr, " ", "_"), func(t *testing.T) {
 			t.Parallel()
 
-			if got := satisfiedByReferenceBuild(t, tc.expr); got != tc.want {
-				t.Errorf("%q evaluated to %v for the Linux reference, want %v", tc.expr, got, tc.want)
+			if got := satisfiedByReleaseBuilds(t, tc.expr); got != tc.want {
+				t.Errorf("%q evaluated to %v for the release builds, want %v", tc.expr, got, tc.want)
 			}
 		})
 	}

@@ -20,28 +20,22 @@ readonly YQ_SHA256_DARWIN_AMD64="3a812fce205a4d67014fb71b7fa297092210e580df3d8f5
 readonly YQ_SHA256_DARWIN_ARM64="fee511a181bd8b3e6b7da98842b41973bfac8cd3bcd341ed29a584620b5b2844"
 
 resolve_yq_dist() {
-	local os arch dist=""
-	os="${OS:-$(uname -s)}"
-	arch="${ARCH:-$(uname -m)}"
+	local raw_os raw_arch os="" arch="" dist=""
+	raw_os="${OS:-$(uname -s)}"
+	raw_arch="${ARCH:-$(uname -m)}"
+	os="$(ci_normalize_os "$raw_os")" || true
+	arch="$(ci_normalize_arch "$raw_arch")" || true
 
-	case "$os" in
-	Linux)
-		case "$arch" in
-		x86_64 | amd64) dist="yq_linux_amd64" ;;
-		aarch64 | arm64) dist="yq_linux_arm64" ;;
-		armv6l | armv7l | arm) dist="yq_linux_arm" ;;
-		esac
-		;;
-	Darwin)
-		case "$arch" in
-		x86_64 | amd64) dist="yq_darwin_amd64" ;;
-		aarch64 | arm64) dist="yq_darwin_arm64" ;;
-		esac
-		;;
+	case "$os/$arch" in
+	linux/amd64) dist="yq_linux_amd64" ;;
+	linux/arm64) dist="yq_linux_arm64" ;;
+	linux/arm) dist="yq_linux_arm" ;;
+	darwin/amd64) dist="yq_darwin_amd64" ;;
+	darwin/arm64) dist="yq_darwin_arm64" ;;
 	esac
 
 	if [[ -z "$dist" ]]; then
-		printf "ERROR: Unsupported yq platform: %s/%s\n" "$os" "$arch" >&2
+		printf "ERROR: Unsupported yq platform: %s/%s\n" "$raw_os" "$raw_arch" >&2
 		return 1
 	fi
 

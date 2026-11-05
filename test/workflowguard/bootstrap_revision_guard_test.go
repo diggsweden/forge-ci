@@ -113,7 +113,7 @@ func TestBootstrapResolverRefusesAnUnknownRepository(t *testing.T) {
 			t.Parallel()
 
 			output := filepath.Join(t.TempDir(), "outputs")
-			cmd := exec.CommandContext(t.Context(), "/bin/bash", "--noprofile", "--norc", "-c", steps[0].Run)
+			cmd := exec.CommandContext(t.Context(), testBash(t), "--noprofile", "--norc", "-c", steps[0].Run)
 			cmd.Env = []string{"PATH=/usr/bin:/bin", "REPOSITORY=" + tc.repository, "GITHUB_OUTPUT=" + output}
 
 			out, err := cmd.CombinedOutput()
@@ -185,7 +185,7 @@ func TestBootstrapResolverPreservesSignedAssetsAndPinsSource(t *testing.T) {
 			t.Parallel()
 
 			output := filepath.Join(t.TempDir(), "outputs")
-			cmd := exec.CommandContext(t.Context(), "/bin/bash", "--noprofile", "--norc", "-c", script)
+			cmd := exec.CommandContext(t.Context(), testBash(t), "--noprofile", "--norc", "-c", script)
 			cmd.Env = []string{"PATH=/usr/bin:/bin", "REQUESTED_REF=" + tc.ref, "SOURCE_SHA=" + tc.sha, "REPOSITORY=diggsweden/forge-ci", "IMAGE_NAMESPACE=", "GITHUB_OUTPUT=" + output}
 
 			out, err := cmd.CombinedOutput()
@@ -264,7 +264,7 @@ func TestBootstrapDefaultResolvesOneConcreteStableTag(t *testing.T) {
 
 			output := filepath.Join(t.TempDir(), "outputs")
 			body := `gh() { [[ "$METADATA" != must-not-query ]] || return 94; printf '%s' "$METADATA"; }; ` + script
-			cmd := exec.CommandContext(t.Context(), "/bin/bash", "--noprofile", "--norc", "-c", body)
+			cmd := exec.CommandContext(t.Context(), testBash(t), "--noprofile", "--norc", "-c", body)
 			cmd.Env = []string{"PATH=/usr/bin:/bin", "REQUESTED_REF=" + tc.ref, "METADATA=" + tc.metadata, "SERVER_URL=https://github.com", "REPOSITORY=diggsweden/forge-ci", "GITHUB_OUTPUT=" + output}
 
 			out, err := cmd.CombinedOutput()

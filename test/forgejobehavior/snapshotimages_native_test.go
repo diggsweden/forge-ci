@@ -13,13 +13,21 @@ import (
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
+	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
+	"github.com/diggsweden/forge-ci/internal/testutil/testfs"
 	"gopkg.in/yaml.v3"
 )
+
+func snapshotTestEnvironment(t *testing.T, extra ...string) []string {
+	t.Helper()
+
+	return append(os.Environ(), append([]string{"PATH=" + testenv.GNUPath(t, "realpath") + ":" + os.Getenv("PATH")}, extra...)...)
+}
 
 func TestSnapshotNativeContextDelegatesRestoreAndPropagatesRefusal(t *testing.T) {
 	for _, refused := range []bool{false, true} {
 		t.Run(strconv.FormatBool(refused), func(t *testing.T) {
-			dir := t.TempDir()
+			dir := testfs.NewReal(t).Root
 			for _, sub := range []string{"context", "snapshot-source"} {
 				if err := os.MkdirAll(filepath.Join(dir, sub), 0o700); err != nil {
 					t.Fatal(err)
@@ -44,9 +52,9 @@ snapshot_engine() {
 snapshot_apply_context context plan.json
 printf 'ready-for-build\n'
 `
-			cmd := exec.CommandContext(t.Context(), "bash", "--noprofile", "--norc", "-c", program, "snapshot", filepath.Join(reporoot.Path(t), ".forgejo/bin/snapshot-images.sh"))
+			cmd := exec.CommandContext(t.Context(), testBash(t), "--noprofile", "--norc", "-c", program, "snapshot", filepath.Join(reporoot.Path(t), ".forgejo/bin/snapshot-images.sh"))
 			cmd.Dir = dir
-			cmd.Env = append(os.Environ(), "TEST_ROOT="+dir, fmt.Sprintf("REFUSE=%t", refused))
+			cmd.Env = snapshotTestEnvironment(t, "TEST_ROOT="+dir, fmt.Sprintf("REFUSE=%t", refused))
 
 			output, err := cmd.CombinedOutput()
 			if refused {
@@ -61,7 +69,7 @@ printf 'ready-for-build\n'
 }
 
 func TestSnapshotNativePlanResolvesSelectedLogicalBranchOnce(t *testing.T) {
-	dir := t.TempDir()
+	dir := testfs.NewReal(t).Root
 	program := `set -euo pipefail
 source "$1"
 snapshot_engine() {
@@ -79,9 +87,9 @@ snapshot_engine() {
 snapshot_plan
 git -C snapshot-source rev-parse HEAD
 `
-	cmd := exec.CommandContext(t.Context(), "bash", "--noprofile", "--norc", "-c", program, "snapshot", filepath.Join(reporoot.Path(t), ".forgejo/bin/snapshot-images.sh"))
+	cmd := exec.CommandContext(t.Context(), testBash(t), "--noprofile", "--norc", "-c", program, "snapshot", filepath.Join(reporoot.Path(t), ".forgejo/bin/snapshot-images.sh"))
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "TEST_LOG="+dir, "SNAPSHOT_BRANCH=feature/chosen", "GITHUB_REF_NAME=wrong-trigger", "CI_COMMIT_REF_NAME=wrong-trigger", "SNAPSHOT_REPOSITORY=org/app", "SNAPSHOT_SERVER=https://forge.example", "SNAPSHOT_IMAGE_REPOSITORY=forge.example/org/app")
+	cmd.Env = snapshotTestEnvironment(t, "TEST_LOG="+dir, "SNAPSHOT_BRANCH=feature/chosen", "GITHUB_REF_NAME=wrong-trigger", "CI_COMMIT_REF_NAME=wrong-trigger", "SNAPSHOT_REPOSITORY=org/app", "SNAPSHOT_SERVER=https://forge.example", "SNAPSHOT_IMAGE_REPOSITORY=forge.example/org/app")
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -102,7 +110,7 @@ git -C snapshot-source rev-parse HEAD
 }
 
 func TestSnapshotNativePreparedPlanUsesProducerCommitWithoutResolvingBranchAgain(t *testing.T) {
-	dir := t.TempDir()
+	dir := testfs.NewReal(t).Root
 	program := `set -euo pipefail
 source "$1"
 git init --quiet snapshot-source
@@ -121,17 +129,17 @@ snapshot_engine() {
 snapshot_plan producer-plan.json
 test "$(<checkout-ref)" = "$sha"
 `
-	cmd := exec.CommandContext(t.Context(), "bash", "--noprofile", "--norc", "-c", program, "snapshot", filepath.Join(reporoot.Path(t), ".forgejo/bin/snapshot-images.sh"))
+	cmd := exec.CommandContext(t.Context(), testBash(t), "--noprofile", "--norc", "-c", program, "snapshot", filepath.Join(reporoot.Path(t), ".forgejo/bin/snapshot-images.sh"))
 	cmd.Dir = dir
 
-	cmd.Env = append(os.Environ(), "SNAPSHOT_BRANCH=feature/chosen", "SNAPSHOT_IMAGE_REPOSITORY=forge.example/org/app")
+	cmd.Env = snapshotTestEnvironment(t, "SNAPSHOT_BRANCH=feature/chosen", "SNAPSHOT_IMAGE_REPOSITORY=forge.example/org/app")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("prepared plan source: %v\n%s", err, output)
 	}
 }
 
 func TestSnapshotNativeBuildDoesNotReceivePublicationCredentials(t *testing.T) {
-	dir := t.TempDir()
+	dir := testfs.NewReal(t).Root
 	if err := os.Mkdir(filepath.Join(dir, "snapshot-source"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -146,10 +154,10 @@ snapshot_engine() {
 }
 snapshot_build api amd64
 `
-	cmd := exec.CommandContext(t.Context(), "bash", "--noprofile", "--norc", "-c", program, "snapshot", filepath.Join(reporoot.Path(t), ".forgejo/bin/snapshot-images.sh"))
+	cmd := exec.CommandContext(t.Context(), testBash(t), "--noprofile", "--norc", "-c", program, "snapshot", filepath.Join(reporoot.Path(t), ".forgejo/bin/snapshot-images.sh"))
 	cmd.Dir = dir
 
-	cmd.Env = append(os.Environ(), "SNAPSHOT_SERVER=https://forge.example", "SNAPSHOT_REPOSITORY=org/app", "FORGEJO_TOKEN=private", "CI_JOB_TOKEN=private", "SNAPSHOT_REGISTRY_PASSWORD=private")
+	cmd.Env = snapshotTestEnvironment(t, "SNAPSHOT_SERVER=https://forge.example", "SNAPSHOT_REPOSITORY=org/app", "FORGEJO_TOKEN=private", "CI_JOB_TOKEN=private", "SNAPSHOT_REGISTRY_PASSWORD=private")
 
 	output, err := cmd.CombinedOutput()
 	if err != nil || strings.TrimSpace(string(output)) != "native-build" {
@@ -175,7 +183,7 @@ func TestSnapshotNativeKanikoAdmissionReadsWithTheJobToken(t *testing.T) {
 		}, want: "usable-digest\n"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			dir := t.TempDir()
+			dir := testfs.NewReal(t).Root
 			if err := os.Mkdir(filepath.Join(dir, "snapshot-source"), 0o700); err != nil {
 				t.Fatal(err)
 			}
@@ -191,10 +199,10 @@ snapshot_engine() {
 snapshot_build api amd64
 if [ -f auth-path ]; then test ! -e "$(<auth-path)"; fi
 `
-			cmd := exec.CommandContext(t.Context(), "bash", "--noprofile", "--norc", "-c", program, "snapshot", filepath.Join(reporoot.Path(t), ".forgejo/bin/snapshot-images.sh"))
+			cmd := exec.CommandContext(t.Context(), testBash(t), "--noprofile", "--norc", "-c", program, "snapshot", filepath.Join(reporoot.Path(t), ".forgejo/bin/snapshot-images.sh"))
 			cmd.Dir = dir
 
-			cmd.Env = append(append(os.Environ(), "CI_REGISTRY=", "CI_JOB_TOKEN=", "SNAPSHOT_SERVER=https://forge.example", "SNAPSHOT_REPOSITORY=org/app",
+			cmd.Env = append(snapshotTestEnvironment(t, "CI_REGISTRY=", "CI_JOB_TOKEN=", "SNAPSHOT_SERVER=https://forge.example", "SNAPSHOT_REPOSITORY=org/app",
 				"CI_IMAGE_BUILDER=kaniko", "CI_IMAGE_BUILDER_JOB_IMAGE="+image, "FORGE_CI_REPOSITORY_URL=https://forge.example/team/engine.git"), tc.env...)
 
 			output, err := cmd.CombinedOutput()
@@ -206,7 +214,7 @@ if [ -f auth-path ]; then test ! -e "$(<auth-path)"; fi
 }
 
 func TestSnapshotNativeArtifactProducerUsesSharedCLIWithoutPublicationCredentials(t *testing.T) {
-	dir := t.TempDir()
+	dir := testfs.NewReal(t).Root
 	if err := os.Mkdir(filepath.Join(dir, "snapshot-source"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -221,9 +229,9 @@ snapshot_engine() {
 }
 snapshot_build_artifact web
 `
-	cmd := exec.CommandContext(t.Context(), "bash", "--noprofile", "--norc", "-c", program, "snapshot", filepath.Join(reporoot.Path(t), ".forgejo/bin/snapshot-images.sh"))
+	cmd := exec.CommandContext(t.Context(), testBash(t), "--noprofile", "--norc", "-c", program, "snapshot", filepath.Join(reporoot.Path(t), ".forgejo/bin/snapshot-images.sh"))
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "TEST_ROOT="+dir, "FORGEJO_TOKEN=private", "CI_JOB_TOKEN=private", "CI_REGISTRY_PASSWORD=private", "SNAPSHOT_REGISTRY_PASSWORD=private", "COSIGN_KEY=private", "RELEASE_COSIGN_PRIVATE_KEY=private")
+	cmd.Env = snapshotTestEnvironment(t, "TEST_ROOT="+dir, "FORGEJO_TOKEN=private", "CI_JOB_TOKEN=private", "CI_REGISTRY_PASSWORD=private", "SNAPSHOT_REGISTRY_PASSWORD=private", "COSIGN_KEY=private", "RELEASE_COSIGN_PRIVATE_KEY=private")
 
 	output, err := cmd.CombinedOutput()
 	if err != nil || !strings.Contains(string(output), "--plan\n../snapshot-plan.json\n--name\nweb\n--output-dir\n_snapshot-artifacts\n") {

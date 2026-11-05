@@ -44,7 +44,7 @@ func TestReleaseJobRejectsCredentialsOutsideItsRole(t *testing.T) {
 			defer cancel()
 
 			script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
-			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", `source "$1"; rc_engine() { echo engine-called; }; rc_release_context`, "release-guard", script)
+			command := exec.CommandContext(ctx, componentBash(t), "--noprofile", "--norc", "-c", `source "$1"; rc_engine() { echo engine-called; }; rc_release_context`, "release-guard", script)
 			command.Dir = t.TempDir()
 			// Named by a project variable as the job that holds the secret.
 			command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + command.Dir, "rc_job_role=" + releaseJobRoles[pair[0]],
@@ -74,7 +74,7 @@ func TestReleaseHandoffNeverSourcesItsDigestAsShell(t *testing.T) {
 
 	const invocation = `set -eu; source "$1"; engine_status=$3; rc_engine() { echo engine-called; return "$engine_status"; }; if rc_read_handoff "$2"; then exit 0; else exit $?; fi`
 
-	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", invocation, "handoff-guard", script, dir, "0")
+	command := exec.CommandContext(ctx, componentBash(t), "--noprofile", "--norc", "-c", invocation, "handoff-guard", script, dir, "0")
 	command.Dir = dir
 	command.Env = []string{"PATH=" + componentTools(t), "HOME=" + dir}
 
@@ -96,7 +96,7 @@ func TestReleaseHandoffNeverSourcesItsDigestAsShell(t *testing.T) {
 	}
 
 	for _, status := range []string{"17", "0"} {
-		control := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", invocation, "handoff-guard", script, dir, status)
+		control := exec.CommandContext(ctx, componentBash(t), "--noprofile", "--norc", "-c", invocation, "handoff-guard", script, dir, status)
 		control.Dir, control.Env = t.TempDir(), command.Env
 
 		output, err := control.CombinedOutput()
@@ -139,7 +139,7 @@ func TestBaseSigningRequiresExplicitPolicyOptIn(t *testing.T) {
 	defer cancel()
 
 	script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
-	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c",
+	command := exec.CommandContext(ctx, componentBash(t), "--noprofile", "--norc", "-eu", "-c",
 		`source "$1"; rc_engine() { echo engine-called; }; rc_sign_bases`, "base-policy", script)
 	command.Dir = dir
 	command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + dir, "DIST_DIR=" + dir, "RC_BASE_IMAGES=false"}
@@ -171,7 +171,7 @@ func TestPublicationRegistryBelongsToTheSeparateProject(t *testing.T) {
 			defer cancel()
 
 			script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
-			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-eu", "-c", `source "$1"; rc_publication_scope`, "publication-scope", script)
+			command := exec.CommandContext(ctx, componentBash(t), "--noprofile", "--norc", "-eu", "-c", `source "$1"; rc_publication_scope`, "publication-scope", script)
 
 			command.Env = []string{"PATH=/usr/bin:/bin", "RC_REGISTRY=registry.invalid", "CI_PROJECT_PATH=owner/source",
 				"RC_PUBLICATION_PROJECT=" + tc.project, "RC_PUBLICATION_IMAGE_REPOSITORY=" + tc.image}
@@ -240,7 +240,7 @@ func TestReleaseBranchInputMustBeABranchName(t *testing.T) {
 	defer cancel()
 
 	script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
-	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c",
+	command := exec.CommandContext(ctx, componentBash(t), "--noprofile", "--norc", "-c",
 		`set -eu; source "$1"; rc_engine() { printf 'engine %s\n' "$*"; }; rc_release_context`, "branch-name", script)
 	command.Env = []string{
 		"PATH=/usr/bin:/bin", "HOME=" + t.TempDir(), "rc_job_role=prepare",
@@ -278,7 +278,7 @@ func runReleasePrepareIn(t *testing.T, dir, script, input string, extraEnv ...st
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
-	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c",
+	command := exec.CommandContext(ctx, componentBash(t), "--noprofile", "--norc", "-c",
 		`set -eu; source "$1"; rc_engine() { printf 'engine %s\n' "$*"; }; git() { printf 'git %s\n' "$*"; }; rc_release_context; rc_request_checkout() { rc_engine validate tag commit --branch "${RC_RELEASE_BRANCH}"; }; rc_prepare_release`,
 		"branch-guard", script)
 	command.Dir = dir
@@ -407,7 +407,7 @@ func TestReleasePathGuardsStopTheJob(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 
-			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c",
+			command := exec.CommandContext(ctx, componentBash(t), "--noprofile", "--norc", "-c",
 				`set -euo pipefail; source "$1"; rc_engine() { :; }; `+setup+`; `+test.call+`; echo went-on`, "guards", script)
 			command.Dir = t.TempDir()
 			command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + command.Dir}
@@ -454,7 +454,7 @@ func TestReleaseJobKeepsTheCredentialsOfItsRole(t *testing.T) {
 			defer cancel()
 
 			script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
-			command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c",
+			command := exec.CommandContext(ctx, componentBash(t), "--noprofile", "--norc", "-c",
 				`source "$1"; rc_engine() { :; }; rc_release_context`, "release-guard", script)
 			command.Dir = t.TempDir()
 			command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + command.Dir, "rc_job_role=" + releaseJobRoles[pair[0]], pair[1] + "=inert-canary-value",

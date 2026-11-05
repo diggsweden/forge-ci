@@ -21,20 +21,18 @@ readonly FORGEJO_RUNNER_SHA256_LINUX_AMD64="fadaec897f5e6641c363f87ecaf75f866f99
 readonly FORGEJO_RUNNER_SHA256_LINUX_ARM64="9d3d462ee83e4e629f959faeacceb20eed2f25290bddea402e65ace46a31afd9"
 
 resolve_forgejo_runner_asset() {
-	local os arch asset=""
-	os="${OS:-$(uname -s)}"
-	arch="${ARCH:-$(uname -m)}"
+	local raw_os raw_arch os="" arch="" asset=""
+	raw_os="${OS:-$(uname -s)}"
+	raw_arch="${ARCH:-$(uname -m)}"
+	os="$(ci_normalize_os "$raw_os")" || true
+	arch="$(ci_normalize_arch "$raw_arch")" || true
 
-	case "$arch" in
-	x86_64 | amd64) arch=amd64 ;;
-	aarch64 | arm64) arch=arm64 ;;
-	esac
 	case "$os/$arch" in
-	Linux/amd64 | Linux/arm64) asset="forgejo-runner-${FORGEJO_RUNNER_VERSION#v}-linux-${arch}" ;;
+	linux/amd64 | linux/arm64) asset="forgejo-runner-${FORGEJO_RUNNER_VERSION#v}-linux-${arch}" ;;
 	esac
 
 	if [[ -z "$asset" ]]; then
-		printf 'ERROR: unsupported forgejo-runner platform: %s/%s\n' "$os" "$arch" >&2
+		printf 'ERROR: unsupported forgejo-runner platform: %s/%s\n' "$raw_os" "$raw_arch" >&2
 		return 1
 	fi
 

@@ -10,6 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
+	"github.com/diggsweden/forge-ci/internal/testutil/testfs"
 )
 
 // Only synthetic repositories are written. No application, forge or compiler is
@@ -18,10 +21,10 @@ func TestPrepareMaterializesPrivateSnapshot(t *testing.T) {
 	for _, format := range []string{"sha1", "sha256"} {
 		t.Run(format, func(t *testing.T) {
 			kind := map[string]string{"sha1": "go", "sha256": "cargo"}[format]
-			root := t.TempDir()
+			root := testfs.NewReal(t).Root
 			source, destination := filepath.Join(root, "source"), filepath.Join(root, "prepared")
 
-			env := append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_AUTHOR_NAME=Fixture", "GIT_AUTHOR_EMAIL=fixture@localhost", "GIT_COMMITTER_NAME=Fixture", "GIT_COMMITTER_EMAIL=fixture@localhost")
+			env := append(os.Environ(), "PATH="+testenv.GNUPath(t, "realpath")+":"+os.Getenv("PATH"), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_AUTHOR_NAME=Fixture", "GIT_AUTHOR_EMAIL=fixture@localhost", "GIT_COMMITTER_NAME=Fixture", "GIT_COMMITTER_EMAIL=fixture@localhost")
 			run := func(input string, args ...string) string {
 				t.Helper()
 				cmd := exec.CommandContext(t.Context(), "git", args...)
@@ -61,7 +64,7 @@ func TestPrepareMaterializesPrivateSnapshot(t *testing.T) {
 			objectsBefore := run("", "-C", source, "count-objects", "-v")
 
 			prepare := func(dest, expected string) ([]byte, error) {
-				cmd := exec.CommandContext(t.Context(), "bash", "prepare.sh", source, dest, kind, expected)
+				cmd := exec.CommandContext(t.Context(), testBash(t), "prepare.sh", source, dest, kind, expected)
 				cmd.Env = env
 
 				return cmd.CombinedOutput()
@@ -181,7 +184,7 @@ func TestPrepareMaterializesPrivateSnapshot(t *testing.T) {
 
 			t.Run("forgejo-overlay", func(t *testing.T) {
 				native := filepath.Join(root, "forgejo")
-				cmd := exec.CommandContext(t.Context(), "bash", "prepare.sh", source, native, kind, commit, "forgejo")
+				cmd := exec.CommandContext(t.Context(), testBash(t), "prepare.sh", source, native, kind, commit, "forgejo")
 
 				cmd.Env = env
 				if out, err := cmd.CombinedOutput(); err != nil {
@@ -217,7 +220,7 @@ func TestPrepareMaterializesPrivateSnapshot(t *testing.T) {
 			}
 
 			for _, flag := range []string{"--exclude-kics", "--exclude-security"} {
-				cmd := exec.CommandContext(t.Context(), "bash", "prepare.sh", source, filepath.Join(root, "unadmitted-exclusion"), kind, commit, flag)
+				cmd := exec.CommandContext(t.Context(), testBash(t), "prepare.sh", source, filepath.Join(root, "unadmitted-exclusion"), kind, commit, flag)
 
 				cmd.Env = env
 				if out, err := cmd.CombinedOutput(); err == nil {

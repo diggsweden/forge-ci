@@ -25,21 +25,19 @@ readonly COSIGN_SHA256_DARWIN_AMD64="9d1e4abe2b6be279ed0d2ff706fde1ccd738747c834
 readonly COSIGN_SHA256_DARWIN_ARM64="9f9b8cd557cf2e5b3df3373a00baa005a86b02391e3e06dd0ce37b3a1533d3a4"
 
 resolve_cosign_asset() {
-	local os arch asset=""
-	os="${OS:-$(uname -s)}"
-	arch="${ARCH:-$(uname -m)}"
+	local raw_os raw_arch os="" arch="" asset=""
+	raw_os="${OS:-$(uname -s)}"
+	raw_arch="${ARCH:-$(uname -m)}"
+	os="$(ci_normalize_os "$raw_os")" || true
+	arch="$(ci_normalize_arch "$raw_arch")" || true
 
-	case "$arch" in
-	x86_64 | amd64) arch=amd64 ;;
-	aarch64 | arm64) arch=arm64 ;;
-	esac
 	case "$os/$arch" in
-	Linux/amd64 | Linux/arm64) asset="cosign-linux-${arch}" ;;
-	Darwin/amd64 | Darwin/arm64) asset="cosign-darwin-${arch}" ;;
+	linux/amd64 | linux/arm64) asset="cosign-linux-${arch}" ;;
+	darwin/amd64 | darwin/arm64) asset="cosign-darwin-${arch}" ;;
 	esac
 
 	if [[ -z "$asset" ]]; then
-		printf 'ERROR: unsupported cosign platform: %s/%s\n' "$os" "$arch" >&2
+		printf 'ERROR: unsupported cosign platform: %s/%s\n' "$raw_os" "$raw_arch" >&2
 		return 1
 	fi
 

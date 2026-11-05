@@ -13,6 +13,8 @@ import (
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
+	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
+	"github.com/diggsweden/forge-ci/internal/testutil/testfs"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,7 +23,7 @@ import (
 // package separately tests restore-context's actual confinement and inventory.
 func TestSnapshotContextCannotWriteThroughCheckoutSymlink(t *testing.T) {
 	t.Parallel()
-	workspace, outside := t.TempDir(), t.TempDir()
+	workspace, outside := testfs.NewReal(t).Root, testfs.NewReal(t).Root
 	require.NoError(t, os.MkdirAll(filepath.Join(workspace, "snapshot-source", "dist"), 0o700))
 	require.NoError(t, os.MkdirAll(filepath.Join(workspace, "bundle", "files", "dist"), 0o700))
 
@@ -46,10 +48,10 @@ func TestSnapshotContextCannotWriteThroughCheckoutSymlink(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(workspace, name), body, 0o600))
 	}
 
-	command := exec.CommandContext(t.Context(), "bash", "-euo", "pipefail", "-c", `run_forge_ci() { printf '%s\n' "$PWD" "$@"; }; source "$1"; snapshot_apply_context bundle snapshot-plan.json`, "snapshot-context-test", filepath.Join(reporoot.Path(t), ".forgejo/bin/snapshot-images.sh"))
+	command := exec.CommandContext(t.Context(), testBash(t), "-euo", "pipefail", "-c", `run_forge_ci() { printf '%s\n' "$PWD" "$@"; }; source "$1"; snapshot_apply_context bundle snapshot-plan.json`, "snapshot-context-test", filepath.Join(reporoot.Path(t), ".forgejo/bin/snapshot-images.sh"))
 	command.Dir = workspace
 
-	command.Env = append(os.Environ(), "SNAPSHOT_ADMIN_APPLICATION_TESTS=true", "SNAPSHOT_ADMIN_VULNERABILITIES=true")
+	command.Env = append(os.Environ(), "PATH="+testenv.GNUPath(t, "realpath")+":"+os.Getenv("PATH"), "SNAPSHOT_ADMIN_APPLICATION_TESTS=true", "SNAPSHOT_ADMIN_VULNERABILITIES=true")
 	output, err := command.CombinedOutput()
 	require.NoError(t, err, "%s", output)
 	require.Equal(t, fmt.Sprintf("%s\n--enforce-application-tests=true\n--enforce-vulnerabilities=true\ncontainer\nsnapshot-images\nrestore-context\n--plan\n%s\n--input\n%s\n", filepath.Join(workspace, "snapshot-source"), filepath.Join(workspace, "snapshot-plan.json"), filepath.Join(workspace, "bundle")), string(output))

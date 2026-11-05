@@ -19,27 +19,21 @@ readonly MISE_SHA256_DARWIN_AMD64="8d5e1591811143f15334f690373cefb58c13bd6cbd029
 readonly MISE_SHA256_DARWIN_ARM64="7dc61dfa71abbcda1c40d18440bc556b5d58b80e6042bc4f95fd106fa1bb3c66"
 
 resolve_mise_dist() {
-	local os arch dist=""
-	os="${OS:-$(uname -s)}"
-	arch="${ARCH:-$(uname -m)}"
+	local raw_os raw_arch os="" arch="" dist=""
+	raw_os="${OS:-$(uname -s)}"
+	raw_arch="${ARCH:-$(uname -m)}"
+	os="$(ci_normalize_os "$raw_os")" || true
+	arch="$(ci_normalize_arch "$raw_arch")" || true
 
-	case "$os" in
-	Linux)
-		case "$arch" in
-		x86_64 | amd64) dist="mise-${MISE_VERSION}-linux-x64" ;;
-		aarch64 | arm64) dist="mise-${MISE_VERSION}-linux-arm64" ;;
-		esac
-		;;
-	Darwin)
-		case "$arch" in
-		x86_64 | amd64) dist="mise-${MISE_VERSION}-macos-x64" ;;
-		aarch64 | arm64) dist="mise-${MISE_VERSION}-macos-arm64" ;;
-		esac
-		;;
+	case "$os/$arch" in
+	linux/amd64) dist="mise-${MISE_VERSION}-linux-x64" ;;
+	linux/arm64) dist="mise-${MISE_VERSION}-linux-arm64" ;;
+	darwin/amd64) dist="mise-${MISE_VERSION}-macos-x64" ;;
+	darwin/arm64) dist="mise-${MISE_VERSION}-macos-arm64" ;;
 	esac
 
 	if [[ -z "$dist" ]]; then
-		printf "ERROR: Unsupported mise platform: %s/%s\n" "$os" "$arch" >&2
+		printf "ERROR: Unsupported mise platform: %s/%s\n" "$raw_os" "$raw_arch" >&2
 		return 1
 	fi
 

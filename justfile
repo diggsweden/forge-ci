@@ -330,7 +330,7 @@ test-coverage: (_job "test-coverage" ("suites=unit + integration; outputs=" + bi
 [arg('args', help=tool_args_help)]
 [doc('▪ Run the full lint suite; network')]
 [group('lint')]
-lint *args: (_require-tool "nanolinter" nanolinter_hint) _lint-linux-platform
+lint *args: (_require-tool "nanolinter" nanolinter_hint) _lint-release-platforms
     @"{{ just_executable() }}" --justfile "{{ justfile() }}" --fmt --check
     @go mod tidy -diff
     @nanolinter verify "$@"
@@ -339,7 +339,7 @@ lint *args: (_require-tool "nanolinter" nanolinter_hint) _lint-linux-platform
 [arg('args', help=tool_args_help)]
 [doc('Run the Go lint suite')]
 [group('lint')]
-lint-go *args: _lint-linux-platform
+lint-go *args: _lint-release-platforms
     @nanolinter lint go "$@"
 
 # Individual Go checks (each is also part of the umbrella above).
@@ -359,31 +359,34 @@ lint-go-staticcheck *args:
 # Run golangci-lint
 [arg('args', help=tool_args_help)]
 [group('lint')]
-lint-go-golangci *args: _lint-linux-platform
+lint-go-golangci *args: _lint-release-platforms
     @nanolinter lint go-golangci "$@"
 
-# The reference platform's build-tagged files must not disappear from depguard
-# when a contributor lints on macOS/BSD. This is analysis, not guest execution.
+# Build-tagged files for either released OS must not disappear from depguard.
+# Cross-lint the other OS; this is analysis, not guest execution.
 [private]
-_lint-linux-platform: _lint-darwin-platform
-    @if [[ "$(go env GOOS)" != linux ]]; then \
-        "{{ just_executable() }}" --justfile "{{ justfile() }}" _require-tool golangci-lint "Install: just install-dev-tools"; \
-        GOOS=linux nanolinter lint go-golangci; \
-    fi
+_lint-release-platforms:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    "{{ just_executable() }}" --justfile "{{ justfile() }}" _require-tool golangci-lint "Install: just install-dev-tools"
+    host=$(go env GOOS)
+    for goos in linux darwin; do
+        [[ "$goos" == "$host" ]] || GOOS="$goos" nanolinter lint go-golangci
+    done
 
-# Check non-Linux path handling even on Linux hosts; no foreign binary runs.
-[private]
-_lint-darwin-platform:
-    @GOOS=darwin GOARCH=arm64 golangci-lint run --config development/golangci-lint/golangci.yml ./internal/pathsafe/...
-
-# Functions no build of the tree reaches, tests and every build tag included.
+# Functions no released OS build of the tree reaches, with tests and every
+# build tag included. Cross-analysis does not execute foreign binaries.
 # Not a nanolinter check: the pinned deadcode, built with the pinned Go.
 [doc('Find unreachable Go functions')]
 [group('lint')]
 lint-go-deadcode: (_require-tool "deadcode" "Install: just install-dev-tools")
     #!/usr/bin/env bash
     set -euo pipefail
-    found="$(deadcode -test -tags live,integration,smoke ./...)"
+    found=""
+    for goos in linux darwin; do
+        report=$(GOOS="$goos" deadcode -test -tags live,integration,smoke ./...)
+        [[ -z "$report" ]] || found+="${goos}:"$'\n'"${report}"$'\n'
+    done
     if [[ -n "${found}" ]]; then
         printf '%s\n' "${found}" >&2
         printf 'Unreachable functions: delete them, or reach them from a test that means it.\n' >&2
@@ -1035,11 +1038,7 @@ runtime-image-archive target directory:
     #!/usr/bin/env bash
     set -euo pipefail
     target=$1 directory=$2
-    case "$(uname -m)" in
-    x86_64) arch=amd64 ;;
-    aarch64 | arm64) arch=arm64 ;;
-    *) printf 'no runtime image for %s\n' "$(uname -m)" >&2 && exit 2 ;;
-    esac
+    arch=$("{{ just_executable() }}" --justfile "{{ justfile() }}" _host-goarch)
     if ! jq -e --arg target "$target" --arg arch "$arch" \
         'any(.[]; .target == $target and (.archs | index($arch)))' containers/runtime/images.json >/dev/null; then
         printf 'no %s runtime target %q in containers/runtime/images.json\n' "$arch" "$target" >&2

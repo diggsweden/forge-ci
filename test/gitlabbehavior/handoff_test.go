@@ -106,7 +106,7 @@ func runReleaseAfterScript(t *testing.T, workspace, job string) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
-	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", script)
+	command := exec.CommandContext(ctx, componentBash(t), "--noprofile", "--norc", "-c", script)
 	command.Dir = workspace
 	command.Env = []string{"PATH=" + componentTools(t), "HOME=" + workspace, "CI_PROJECT_DIR=" + workspace,
 		"CI_JOB_NAME=Publish: release", "rc_handoff=private", "CI_JOB_STATUS=failed"}

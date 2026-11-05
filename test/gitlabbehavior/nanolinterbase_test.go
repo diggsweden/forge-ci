@@ -244,7 +244,7 @@ func runNanolinterScriptWith(t *testing.T, dir, workspace string, inputs map[str
 	rendered := strings.NewReplacer("$[[ component.sha ]]", strings.TrimSpace(string(pin)), "$[[ inputs.server-url ]]", "file://"+dir,
 		"$[[ inputs.required-lints ]]", "secrets,sast", "$[[ inputs.enable-gitlab-sast ]]", "false",
 		"$[[ inputs.enforce-lint ]]", inputs["enforce-lint"], "$[[ inputs.enforce-vulnerabilities ]]", inputs["enforce-vulnerabilities"]).Replace(script[0])
-	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", rendered)
+	command := exec.CommandContext(ctx, componentBash(t), "--noprofile", "--norc", "-c", rendered)
 	command.Dir = workspace
 
 	command.Env = append([]string{

@@ -124,7 +124,7 @@ func runJobUserCheck(t *testing.T, script string, tc jobUserCase, pin ...string)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
-	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", fakeID+strings.NewReplacer(replacements...).Replace(script))
+	command := exec.CommandContext(ctx, componentBash(t), "--noprofile", "--norc", "-c", fakeID+strings.NewReplacer(replacements...).Replace(script))
 	command.Dir = dir
 	command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + dir, "FAKE_UID=" + tc.uid, "FAKE_GID=" + tc.gid,
 		"CI_JOB_NAME=" + tc.spoof, "CI_PROJECT_DIR=" + dir, "RC_JOB_USER=" + tc.variable}

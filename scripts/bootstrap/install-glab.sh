@@ -19,27 +19,21 @@ readonly GLAB_SHA256_DARWIN_AMD64="6adb7155566bedd6272d8f286e6c75b080d0050a349de
 readonly GLAB_SHA256_DARWIN_ARM64="04aad4d989d98cb030318e09359f02e0ba2637ede682ec0dee1f5974dedd44c1"
 
 resolve_glab_dist() {
-	local os arch dist=""
-	os="${OS:-$(uname -s)}"
-	arch="${ARCH:-$(uname -m)}"
+	local raw_os raw_arch os="" arch="" dist=""
+	raw_os="${OS:-$(uname -s)}"
+	raw_arch="${ARCH:-$(uname -m)}"
+	os="$(ci_normalize_os "$raw_os")" || true
+	arch="$(ci_normalize_arch "$raw_arch")" || true
 
-	case "$os" in
-	Linux)
-		case "$arch" in
-		x86_64 | amd64) dist="glab_${GLAB_VERSION#v}_linux_amd64.tar.gz" ;;
-		aarch64 | arm64) dist="glab_${GLAB_VERSION#v}_linux_arm64.tar.gz" ;;
-		esac
-		;;
-	Darwin)
-		case "$arch" in
-		x86_64 | amd64) dist="glab_${GLAB_VERSION#v}_darwin_amd64.tar.gz" ;;
-		aarch64 | arm64) dist="glab_${GLAB_VERSION#v}_darwin_arm64.tar.gz" ;;
-		esac
-		;;
+	case "$os/$arch" in
+	linux/amd64) dist="glab_${GLAB_VERSION#v}_linux_amd64.tar.gz" ;;
+	linux/arm64) dist="glab_${GLAB_VERSION#v}_linux_arm64.tar.gz" ;;
+	darwin/amd64) dist="glab_${GLAB_VERSION#v}_darwin_amd64.tar.gz" ;;
+	darwin/arm64) dist="glab_${GLAB_VERSION#v}_darwin_arm64.tar.gz" ;;
 	esac
 
 	if [[ -z "$dist" ]]; then
-		printf "ERROR: Unsupported glab platform: %s/%s\n" "$os" "$arch" >&2
+		printf "ERROR: Unsupported glab platform: %s/%s\n" "$raw_os" "$raw_arch" >&2
 		return 1
 	fi
 

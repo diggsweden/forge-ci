@@ -222,7 +222,7 @@ func runPolicyScript(t *testing.T, script string, env []string) (string, error) 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
-	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", script)
+	command := exec.CommandContext(ctx, componentBash(t), "--noprofile", "--norc", "-c", script)
 	command.Dir = dir
 	command.Env = append([]string{"HOME=" + dir, "CI_PROJECT_DIR=" + dir, "TMPDIR=" + dir}, env...)
 

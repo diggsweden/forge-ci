@@ -19,27 +19,21 @@ readonly GIT_CLIFF_SHA256_DARWIN_AMD64="4e647d2deb152aca1e987f225cf42b080b991dd9
 readonly GIT_CLIFF_SHA256_DARWIN_ARM64="a0be97e237d440d34c5e508ec21d070b2c85cbb8be48a46a56f9a4e8bd247f05"
 
 resolve_git_cliff_dist() {
-	local os arch dist=""
-	os="${OS:-$(uname -s)}"
-	arch="${ARCH:-$(uname -m)}"
+	local raw_os raw_arch os="" arch="" dist=""
+	raw_os="${OS:-$(uname -s)}"
+	raw_arch="${ARCH:-$(uname -m)}"
+	os="$(ci_normalize_os "$raw_os")" || true
+	arch="$(ci_normalize_arch "$raw_arch")" || true
 
-	case "$os" in
-	Linux)
-		case "$arch" in
-		x86_64 | amd64) dist="git-cliff-${GIT_CLIFF_VERSION#v}-x86_64-unknown-linux-gnu.tar.gz" ;;
-		aarch64 | arm64) dist="git-cliff-${GIT_CLIFF_VERSION#v}-aarch64-unknown-linux-gnu.tar.gz" ;;
-		esac
-		;;
-	Darwin)
-		case "$arch" in
-		x86_64 | amd64) dist="git-cliff-${GIT_CLIFF_VERSION#v}-x86_64-apple-darwin.tar.gz" ;;
-		aarch64 | arm64) dist="git-cliff-${GIT_CLIFF_VERSION#v}-aarch64-apple-darwin.tar.gz" ;;
-		esac
-		;;
+	case "$os/$arch" in
+	linux/amd64) dist="git-cliff-${GIT_CLIFF_VERSION#v}-x86_64-unknown-linux-gnu.tar.gz" ;;
+	linux/arm64) dist="git-cliff-${GIT_CLIFF_VERSION#v}-aarch64-unknown-linux-gnu.tar.gz" ;;
+	darwin/amd64) dist="git-cliff-${GIT_CLIFF_VERSION#v}-x86_64-apple-darwin.tar.gz" ;;
+	darwin/arm64) dist="git-cliff-${GIT_CLIFF_VERSION#v}-aarch64-apple-darwin.tar.gz" ;;
 	esac
 
 	if [[ -z "$dist" ]]; then
-		printf "ERROR: Unsupported git-cliff platform: %s/%s\n" "$os" "$arch" >&2
+		printf "ERROR: Unsupported git-cliff platform: %s/%s\n" "$raw_os" "$raw_arch" >&2
 		return 1
 	fi
 

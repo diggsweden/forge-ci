@@ -35,8 +35,8 @@ forge_ci_admin_path "$3/admin-bin" "${@:4}"
 forge-ci build maven run --working-dir 'a b'
 `
 		args := append([]string{"--noprofile", "--norc", "-c", script, "admin-path", filepath.Join(reporoot.Path(t), ".engine/bin/lib-forge-ci.sh"), engine, dir}, settings...)
-		command := exec.CommandContext(t.Context(), "/bin/bash", args...)
-		command.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + dir}
+		command := exec.CommandContext(t.Context(), componentBash(t), args...)
+		command.Env = []string{"PATH=" + componentTools(t), "HOME=" + dir}
 
 		output, err := command.CombinedOutput()
 
@@ -105,10 +105,10 @@ echo "bin=${FORGE_CI_BIN}"
 forge-ci by-name
 "${FORGE_CI_BIN}" by-variable
 `
-		command := exec.CommandContext(t.Context(), "/bin/bash", "--noprofile", "--norc", "-c", script)
+		command := exec.CommandContext(t.Context(), componentBash(t), "--noprofile", "--norc", "-c", script)
 		command.Dir = dir
 		command.Env = []string{
-			"PATH=/usr/bin:/bin", "HOME=" + dir, "HELPERS=" + helpers, "ENGINE=" + filepath.Join(dir, "engine"),
+			"PATH=" + componentTools(t), "HOME=" + dir, "HELPERS=" + helpers, "ENGINE=" + filepath.Join(dir, "engine"),
 			"RC_HELPERS_DIR=" + helpers, "RC_WORK=" + filepath.Join(dir, "work"), "rc_job_role=" + start.role,
 			"RC_ADMIN_LINT=false", "RC_ADMIN_VULNERABILITIES=true", "RC_ADMIN_APPLICATION_TESTS=false", "RC_ADMIN_REPRODUCIBLE_BUILDS=true",
 			"CI_PROJECT_DIR=" + dir, "CI_SERVER_URL=https://gitlab.invalid", "CI_REGISTRY=registry.gitlab.invalid", "RC_SERVER_URL=https://gitlab.invalid", "CI_PROJECT_PATH=team/app",

@@ -123,10 +123,20 @@ See
    ```
 
    Then restart your terminal.
-3. Check that MacPorts Bash is selected ahead of macOS's older `/bin/bash`:
+3. Check that MacPorts Bash and the prefixed GNU utilities are available.
+   Keep `/opt/local/libexec/gnubin` out of the general `PATH`: the test fixtures
+   expose GNU semantics privately, while native tests continue to exercise the
+   macOS tools.
 
    ```bash
-   bash --version
+   command -v bash                    # /opt/local/bin/bash
+   bash --version                     # GNU bash 5.x
+   gcp --version
+   grealpath --version
+   gfind --version
+   gsed --version
+   gsha256sum --version
+   command -v flock xmllint
    ```
 
 4. Install the pinned project tools, including the uv-backed REUSE checker and
@@ -178,6 +188,19 @@ Container and VM runtime evidence must match the execution host: run AMD64
 jobs on AMD64 hosts, and ARM64 jobs on ARM64 hosts, including this Mac.
 Cross-compilation is separate from execution. Linux-only integration requires
 a native Linux environment; the external suite's strict profile is a Linux gate.
+
+### Host capability matrix
+
+| Host | Native local gates | Cross-compilation | Container/runtime evidence | Strict external suite |
+|---|---|---|---|---|
+| Linux AMD64 | Full unit, lint, smoke and integration gates | Linux/macOS, AMD64/ARM64 binaries | Native `linux/amd64` only | Supported when every prerequisite is installed |
+| Linux ARM64 | Full unit, lint, smoke and integration gates | Linux/macOS, AMD64/ARM64 binaries | Native `linux/arm64` only | Supported; architecture-specific exclusions are reported by the suite |
+| macOS ARM64 (M1 or later) | Unit, lint, smoke and permissive integration with the MacPorts tools above | Linux/macOS, AMD64/ARM64 binaries | Native macOS checks only; Linux container rows may skip | Not supported; use native Linux for strict evidence |
+
+`just build-all` proves compilation of release targets; it does not execute the
+foreign binaries. `just lint` type-checks and applies the Go architecture rules
+to both released operating systems (`linux` and `darwin`) regardless of host.
+Skipped runtime rows remain **NOT PROVEN**, not successful evidence.
 
 ## Available Commands
 

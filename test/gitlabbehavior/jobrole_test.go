@@ -144,7 +144,7 @@ func runReleaseJobStart(t *testing.T, start, user, spoof string) (string, string
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
-	command := exec.CommandContext(ctx, "/bin/bash", "--noprofile", "--norc", "-c", fakeID+script)
+	command := exec.CommandContext(ctx, componentBash(t), "--noprofile", "--norc", "-c", fakeID+script)
 	command.Dir = dir
 	command.Env = []string{
 		"PATH=/usr/bin:/bin", "HOME=" + imageHome, "CI_PROJECT_DIR=" + project, "FAKE_UID=65532", "FAKE_GID=65532",

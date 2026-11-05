@@ -7,6 +7,25 @@ ci_install_dir() {
 	printf '%s/%s-bin' "${CI_TEMP_DIR:-/tmp}" "$tool"
 }
 
+# Normalize the uname and Go spellings accepted by the bootstrap installers.
+# Asset-specific names (macOS, x64, triples, and so on) stay in each installer.
+ci_normalize_os() {
+	case "$1" in
+	Linux | linux) printf 'linux' ;;
+	Darwin | darwin) printf 'darwin' ;;
+	*) return 1 ;;
+	esac
+}
+
+ci_normalize_arch() {
+	case "$1" in
+	x86_64 | amd64) printf 'amd64' ;;
+	aarch64 | arm64) printf 'arm64' ;;
+	armv6l | armv7l | arm) printf 'arm' ;;
+	*) return 1 ;;
+	esac
+}
+
 ci_verify_sha256() {
 	local file="$1"
 	local expected="$2"

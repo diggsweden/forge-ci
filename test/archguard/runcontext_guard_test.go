@@ -89,7 +89,7 @@ func ownedNames() map[string]string {
 func TestLayersDoNotNameRunContextVars(t *testing.T) {
 	t.Parallel()
 
-	for _, goos := range slices.Compact([]string{"linux", runtime.GOOS}) {
+	for _, goos := range []string{"linux", "darwin"} {
 		t.Run(goos, func(t *testing.T) {
 			t.Parallel()
 
