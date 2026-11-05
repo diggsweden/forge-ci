@@ -59,6 +59,11 @@ var (
 	globalLockRefs int
 )
 
+// agentCleanupMu keeps concurrent test cleanups from competing in gpgconf.
+// The cross-process lock above cannot serialize goroutines in the same test
+// binary because that process acquires the file lock only once.
+var agentCleanupMu sync.Mutex
+
 // Key holds the throwaway key's metadata and the GNUPGHOME it lives in.
 type Key struct {
 	t           *testing.T
@@ -194,13 +199,16 @@ func (k *Key) KeyID() string {
 
 // cleanupTimeout bounds the agent shutdown so a wedged gpgconf cannot hang the
 // test binary.
-const cleanupTimeout = 10 * time.Second
+const cleanupTimeout = 30 * time.Second
 
 // stopAgents stops every agent of the private keyring. t.Context() is
 // already cancelled when cleanups run, so the shutdown gets its own bounded
 // context; with the test's context gpgconf never started and every key left
 // its agent running.
 func (k *Key) stopAgents() error {
+	agentCleanupMu.Lock()
+	defer agentCleanupMu.Unlock()
+
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(k.t.Context()), cleanupTimeout)
 	defer cancel()
 
