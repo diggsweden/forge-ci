@@ -9,6 +9,7 @@ import (
 )
 
 //nolint:staticcheck // ST1005: Buildah is a proper noun and the message text is asserted.
+//lint:ignore ST1005 Buildah is a proper noun and the message text is asserted.
 var errBuildahChecksFixture = errors.New("Buildah checks require the generic Go CLI integration fixture")
 
 // GitLabChecksNeedBuildah recognizes only the generic Go CLI fixture's explicit

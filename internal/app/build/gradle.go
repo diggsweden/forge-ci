@@ -187,12 +187,14 @@ func gradleConfigurationOption(args []string, index int) ([]string, int, error) 
 		}
 
 		if index+1 == len(args) || strings.HasPrefix(args[index+1], "-") {
+			//lint:ignore ST1005 Gradle is a proper noun and the message text is asserted.
 			return nil, index, fmt.Errorf("Gradle option %q requires a value: %w", arg, errs.ErrUsage) //nolint:staticcheck // ST1005: Gradle is a proper noun and the message text is asserted.
 		}
 
 		return []string{arg, args[index+1]}, index + 1, nil
 	case "--daemon", "--no-daemon", "--offline", "--parallel", "--no-parallel", "--configure-on-demand", "--no-configure-on-demand", "--configuration-cache", "--no-configuration-cache", "--build-cache", "--no-build-cache", "--refresh-dependencies", "--rerun-tasks", "--continue", "--stacktrace", "-s", "--full-stacktrace", "-S", "--info", "-i", "--debug", "-d", "--warn", "-w", "--quiet", "-q":
 		if attached {
+			//lint:ignore ST1005 Gradle is a proper noun and the message text is asserted.
 			return nil, index, fmt.Errorf("Gradle flag %q does not take a value: %w", arg, errs.ErrUsage) //nolint:staticcheck // ST1005: Gradle is a proper noun and the message text is asserted.
 		}
 
