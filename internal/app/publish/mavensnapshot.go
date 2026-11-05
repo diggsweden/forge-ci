@@ -96,8 +96,11 @@ func snapshotDeploymentCommands(directory string) ([][]string, error) {
 func snapshotDeploymentArgs(directory string, publication domainpublish.MavenPublication, payloads []string) ([]string, error) {
 	stem := path.Join(publication.Directory(), publication.Stem())
 	main := stem + "." + publication.Packaging
+	// Resolver 2 (Maven 3.10+) renamed the Resolver 1 HTTP properties.
+	// Supply both namespaces so neither version silently uses unsafe defaults.
 	args := []string{"--batch-mode", "--no-transfer-progress", "org.apache.maven.plugins:maven-deploy-plugin:3.2.0:deploy-file",
 		"-Dmaven.resolver.transport=native", "-Daether.connector.http.followRedirects=false", "-Daether.connector.http.retryHandler.count=0", "-Daether.connector.http.expectContinue=false",
+		"-Daether.transport.apache.followRedirects=false", "-Daether.transport.http.retryHandler.count=0", "-Daether.transport.http.expectContinue=false",
 		"-DretryFailedDeploymentCount=1", "-Dmaven.deploy.file.skip=releases",
 		"-Dfile=" + filepath.Join(directory, filepath.FromSlash(main)), "-DpomFile=" + filepath.Join(directory, filepath.FromSlash(stem+".pom")),
 		"-DgroupId=" + publication.GroupID, "-DartifactId=" + publication.ArtifactID, "-Dversion=" + publication.Version, "-Dpackaging=" + publication.Packaging}
