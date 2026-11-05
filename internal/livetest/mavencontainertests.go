@@ -20,11 +20,17 @@ var (
 
 //nolint:staticcheck // ST1005: Maven is a proper noun and the message text is asserted.
 var (
-	errMavenRecipeNoJobs       = errors.New("Maven recipe has no jobs")
-	errMavenRecipeNoBuildJob   = errors.New("Maven recipe has no build job")
-	errMavenNoJobContainer     = errors.New("Maven container tests require an isolated job container")
-	errMavenRecipeHasServices  = errors.New("Maven recipe already declares build services")
-	errMavenRecipeNoBuildEnv   = errors.New("Maven recipe has no build environment")
+	//lint:ignore ST1005 Maven is a proper noun and the message text is asserted.
+	errMavenRecipeNoJobs = errors.New("Maven recipe has no jobs")
+	//lint:ignore ST1005 Maven is a proper noun and the message text is asserted.
+	errMavenRecipeNoBuildJob = errors.New("Maven recipe has no build job")
+	//lint:ignore ST1005 Maven is a proper noun and the message text is asserted.
+	errMavenNoJobContainer = errors.New("Maven container tests require an isolated job container")
+	//lint:ignore ST1005 Maven is a proper noun and the message text is asserted.
+	errMavenRecipeHasServices = errors.New("Maven recipe already declares build services")
+	//lint:ignore ST1005 Maven is a proper noun and the message text is asserted.
+	errMavenRecipeNoBuildEnv = errors.New("Maven recipe has no build environment")
+	//lint:ignore ST1005 Maven is a proper noun and the message text is asserted.
 	errMavenRecipeOwnsVariable = errors.New("Maven recipe already owns")
 )
 

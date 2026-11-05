@@ -236,7 +236,7 @@ jobs:
     # images are built asynchronously — pushing the release-request tag does
     # not wait for them. The blackbox and evidence gates run in parallel with
     # the image build, so by the time they finish the images are usually
-    # ready. This job is a safety net: it polls briefly for any images still
+    # ready. This job allows up to 10 minutes for any images still
     # being published, then fails with an actionable message if they never
     # appear. Check anonymously so a token cannot hide a private package.
     name: Wait for runtime images
@@ -244,7 +244,7 @@ jobs:
     needs: [resolve-branch, checksums, blackbox, evidence]
     if: ${{ !cancelled() && needs.resolve-branch.result == 'success' && needs.checksums.result == 'success' && (vars.SELF_RELEASE_INTEGRATION_GATES != 'true' || (needs.blackbox.result == 'success' && needs.evidence.result == 'success')) }}
     runs-on: ubuntu-26.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -254,7 +254,7 @@ jobs:
           IMAGE_TAG: ${{ needs.resolve-branch.outputs.image-tag }}
         run: |
           set -euo pipefail
-          timeout=300  # 5 minutes
+          timeout=600  # 10 minutes
           interval=30  # check every 30 seconds
           elapsed=0
           while [ "$elapsed" -lt "$timeout" ]; do

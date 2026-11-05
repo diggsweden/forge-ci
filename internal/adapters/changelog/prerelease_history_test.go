@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/adapters/changelog"
+	"github.com/diggsweden/forge-ci/internal/testutil/evidence"
 	"github.com/diggsweden/forge-ci/internal/testutil/mockbinary"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
@@ -21,14 +22,7 @@ import (
 func TestPrereleaseAndFinalNotesUsePreviousStableBoundary(t *testing.T) {
 	for _, backend := range []string{"git-cliff", "git-chglog"} {
 		t.Run(backend, func(t *testing.T) {
-			binary, err := exec.LookPath(backend)
-			if err != nil {
-				t.Skip("native changelog renderer not installed")
-			}
-
-			if output, probeErr := exec.CommandContext(t.Context(), binary, "--version").CombinedOutput(); probeErr != nil {
-				t.Skipf("native changelog renderer is not runnable: %v: %s", probeErr, output)
-			}
+			binary := evidence.RequireWorkingTool(t, backend, "--version")
 
 			root := t.TempDir()
 			t.Chdir(root)
