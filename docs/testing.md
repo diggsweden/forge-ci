@@ -19,7 +19,7 @@ the black-box suite is its own repository, and the live tier needs a lab.
 | **repo guards** | rules about the tree itself, not about behaviour | (default) | <1s | yes | no |
 | **Forgejo layer** | the shell of `.forgejo/` workflows and actions, against fakes and against the CLI built from the tree | (default; Linux) | seconds, plus one CLI build | yes | builds binary |
 | **CLI smoke** | the binary as a black box, in this repo | `smoke` | <5s | no | builds binary |
-| **black-box suite** | the binary against real toolchains and fixtures in the companion testsuite | `blackbox`, in that repo | minutes | yes | real tools; forge endpoints faked; package downloads may use network |
+| **black-box suite** | the binary against real toolchains and fixtures in the external testsuite | `blackbox`, in that repo | minutes | yes | real tools; forge endpoints faked; package downloads may use network |
 | **live / conformance** | the same scenario against configured real lab forges (currently GitLab and Forgejo, not GitHub) | `live` | minutes | per-forge subtests only (`-p 1`) | a real lab |
 
 Run them as:
@@ -46,12 +46,17 @@ is missing. Buildah and other optional tools retain the evidence policy below.
 tests (which include untagged tests). Integration can run containers, fetch
 images and skip optional evidence; builds/tests also write caches and may fetch
 modules. CI additionally runs standalone workflow-input-default validation,
-CLI smoke/fuzz jobs and companion strict compatibility, with strict integration
+CLI smoke/fuzz jobs and external suite strict compatibility, with strict integration
 in release CI. See the workflow files for each exact gate.
+
+### Rust development publication evidence
+
+For the external Rust workspace's role declaration and publication layout, see
+the [Rust development fixture contract](../test/live/cases/rust-development/README.md).
 
 ### Maven-format publication evidence
 
-The companion fixtures cover JVM and Android-library publication with real
+The black-box fixtures cover JVM and Android-library publication with real
 Gradle, Maven and GPG tools. The Android fixture builds in a digest-pinned SDK
 container using the suite's isolated Buildah store; no host SDK installation is
 required. It checks compiled AAR contents, sources/javadoc, the Build SBOM, and
@@ -61,7 +66,7 @@ snapshot routing against a local HTTP collaborator.
 `TestInRunner_ExportedMavenPublications` exercises stable and repeated snapshot
 uploads on the configured Forgejo and GitLab runners. The oracle reads the
 registry API, Maven metadata and archive contents independently of the publisher.
-Its AAR-shaped transport fixture is distinct from the companion's actual Android
+Its AAR-shaped transport fixture is distinct from the suite's actual Android
 SDK build proof. Run it with:
 
 ```sh
@@ -313,7 +318,7 @@ It captures the compiler and Go cache locations before per-test HOME isolation,
 then builds offline from those caches. Product subprocesses retain the isolated
 HOME and refusing proxies; captured cache settings are added only to builds.
 The bulk of the black-box scenarios (every ecosystem's real toolchain, the
-signing round-trips, reproducibility, host isolation) are in the companion
+signing round-trips, reproducibility, host isolation) are in the external suite
 repository, which drives the built binary against committed fixtures.
 
 `docs/cli-black-box.md` is the catalogue for both. When adding a scenario,

@@ -37,5 +37,5 @@ and `container base-images` carry workflow-specific admission policy.
 Further simplification of overlapping publication checks, version commands and
 container orchestration needs an explicit API design and compatibility review.
 Any accepted rename updates the engine, its delivery layers, documentation and
-companion expectations together. External caller migrations are coordinated
+black-box suite expectations together. External caller migrations are coordinated
 separately with their maintainers.

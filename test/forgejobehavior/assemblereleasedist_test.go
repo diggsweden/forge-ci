@@ -19,7 +19,7 @@ exit "${FAKE_ENGINE_STATUS:-0}"
 
 // Both composite steps forward their inputs to the engine under the Forgejo
 // provider and propagate its status. Dist assembly and upload semantics belong
-// to the engine and its companion suite.
+// to the engine and the external black-box suite.
 func TestAssembleReleaseDist(t *testing.T) {
 	t.Parallel()
 	action := loadAction(t, "assemble-release-dist")

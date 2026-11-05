@@ -83,7 +83,7 @@ esac
 	}
 }
 
-func TestCompanionUsesFreshBinaryFromTheExactPRCheckout(t *testing.T) {
+func TestBlackboxSuiteUsesFreshBinaryFromTheExactPRCheckout(t *testing.T) {
 	t.Parallel()
 
 	file := ".github/workflows/self-pullrequest.yml"
@@ -92,7 +92,7 @@ func TestCompanionUsesFreshBinaryFromTheExactPRCheckout(t *testing.T) {
 	test := jobStep(t, file, "integration-testsuite", "Run the black-box suite against this checkout")
 	if build.Env["EXPECTED_SOURCE_SHA"] != "${{ github.sha }}" ||
 		test.Env["FORGE_CI_TEST_BINARY"] != "${{ runner.temp }}/forge-ci-candidate" {
-		t.Fatal("companion must use the fresh binary built from the PR's exact source SHA")
+		t.Fatal("suite must use the fresh binary built from the PR's exact source SHA")
 	}
 
 	for _, matching := range []bool{true, false} {

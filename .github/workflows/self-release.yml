@@ -7,7 +7,7 @@
 #
 # Nothing here depends on the repository's default branch or a fixed branch
 # name: the release branch is the branch whose head the request tag names
-# (override with the RELEASE_BRANCH variable), the companion suite repository
+# (override with the RELEASE_BRANCH variable), the external suite repository
 # can be overridden with FORGE_CI_TESTSUITE_REPOSITORY, and runtime images
 # come from ghcr.io/<owner> (or FORGE_CI_IMAGE_NAMESPACE) at this commit's
 # sha-<short> tags, which Self Runtime Container publishes when the commit lands
@@ -75,7 +75,7 @@ jobs:
     # TEMPORARY bootstrap pause until Nanolinter is published. Set the repository
     # variable SELF_RELEASE_INTEGRATION_GATES=true to restore both strict gates.
     if: ${{ vars.SELF_RELEASE_INTEGRATION_GATES == 'true' }}
-    name: Strict companion black-box gate
+    name: Strict external black-box gate
     runs-on: ubuntu-26.04
     timeout-minutes: 60
     permissions:
@@ -85,7 +85,7 @@ jobs:
         with:
           path: forge-ci
           persist-credentials: false
-      - name: Checkout companion testsuite (pinned)
+      - name: Checkout external testsuite (pinned)
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ vars.FORGE_CI_TESTSUITE_REPOSITORY || 'diggsweden/forge-ci-blackbox-tests' }}
@@ -102,18 +102,18 @@ jobs:
           cache-dependency-path: |
             forge-ci/go.sum
             forge-ci-blackbox-tests/go.sum
-      - name: Validate strict companion behavioral contract
+      - name: Validate strict suite behavioral contract
         working-directory: forge-ci-blackbox-tests
         run: ./scripts/validate-strict-profile-contract.sh
       - name: Ensure distro toolchains
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq buildah
-      - name: Install the companion's pinned Maven
+      - name: Install the suite's pinned Maven
         # Not Ubuntu's maven package: it is 3.8, which ignores MAVEN_ARGS
         # (3.9+), so the harness's settings isolation and reproducible-build
         # checks fail. Only Maven's own bin directory goes on PATH, so the
-        # companion's other mise pins do not shadow setup-go.
+        # suite's other mise pins do not shadow setup-go.
         working-directory: forge-ci-blackbox-tests
         run: |
           source ../forge-ci/scripts/bootstrap/install-mise.sh

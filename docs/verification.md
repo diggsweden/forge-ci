@@ -1209,7 +1209,7 @@ are distinct. A future authorized release is needed to validate this hosted fix.
 | NPM | `.tgz` | npm ≥ 10 (fixed in npm/cli#3536) | Runtime image pins node 24 LTS (npm 10+) |
 | Container image (both flows) | OCI image-config + layer blobs | `SOURCE_DATE_EPOCH` env on the build step (buildah `--timestamp`) | Yes, automatic (computed once in `prep` from `git log -1 --format=%ct HEAD`) |
 
-Black-box reproducibility coverage is distributed across the companion suite.
+Black-box reproducibility coverage is distributed across the external suite.
 `tests/blackbox/reproducibility_test.go` compares rebuild hashes for Maven
 main/sources JARs, Gradle JAR/distZip/distTar, Cargo binaries/crates, npm
 tarballs, and a generic buildah image-config digest.
@@ -1218,9 +1218,9 @@ checks. This is available coverage, not every cell in the implementation table:
 Android APK/AAB, the Cargo container-first embedded binary, and every
 ecosystem/container-flow combination are not rebuilt there.
 
-The companion suite has two explicit modes. Its default local mode keeps
+The external suite has two explicit modes. Its default local mode keeps
 `requireTool` skips so a developer can run the available subset without first
-installing every ecosystem toolchain. Authoritative companion CI and the parent
+installing every ecosystem toolchain. Authoritative suite CI and the engine
 PR/release gates set `FORGE_CI_BLACKBOX_PROFILE=strict`: required tools are
 preflighted, post-preflight Buildah failures are fatal, and a minimum scenario
 floor rejects partial runs. Go test-selection flags such as `-run` and `-skip`
@@ -1229,7 +1229,7 @@ strict run therefore cannot
 silently mean that Maven, Gradle, Cargo, npm, Buildah, or signing coverage was
 omitted.
 
-The parent gates pin
+The engine compatibility gates pin
 `9fd37b40703075b4319d63e251b6e2860121ad82`, which contains the strict-profile
 implementation. Both gates validate the checked-out source contract before tool
 setup and then run the suite with the strict profile enabled. Future updates

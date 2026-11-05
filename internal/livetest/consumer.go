@@ -811,7 +811,7 @@ func (consumer Consumer) WithHistory() Consumer {
 	return consumer
 }
 
-// Workflows returns the consumer's workflow files at HEAD, by file name.
+// Workflows returns the consumer's workflow files at its captured commit, by name.
 func (consumer Consumer) Workflows(tb TB) map[string]string {
 	tb.Helper()
 

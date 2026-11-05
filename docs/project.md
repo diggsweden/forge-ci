@@ -1,7 +1,7 @@
 # Forge CI project reference
 
 Forge CI is a forge-neutral build and release engine with GitHub, GitLab and
-Forgejo delivery layers. Its first planned release is **0.90.0**.
+Forgejo delivery layers.
 
 ## Project identity
 
@@ -9,11 +9,11 @@ Forgejo delivery layers. Its first planned release is **0.90.0**.
 |---|---|
 | Engine repository and executable | `forge-ci` |
 | Engine Go module | `github.com/diggsweden/forge-ci` |
-| Companion repository | `forge-ci-blackbox-tests` |
-| Companion Go module | `github.com/diggsweden/forge-ci-blackbox-tests` |
+| External black-box suite repository | `forge-ci-blackbox-tests` |
+| External black-box suite Go module | `github.com/diggsweden/forge-ci-blackbox-tests` |
 | Configuration and build metadata directory | `.forge-ci` |
 | Product environment prefix | `FORGE_CI_*` |
-| Companion binary override | `FORGE_CI_TEST_BINARY` |
+| Engine binary under test | `FORGE_CI_TEST_BINARY` |
 | Workflow input prefix | `forge-ci-*` |
 | Installer | `install-forge-ci.sh` |
 | Layer setup action | `setup-forge-ci` |
@@ -31,19 +31,19 @@ Project-owned headers and REUSE metadata use
 `2026 Digg - Agency for Digital Government`. Third-party licence notices retain
 their original attribution.
 
-## Companion wiring
+## External black-box suite integration
 
 The suite builds `../forge-ci/cmd/forge-ci` by default. `FORGE_CI_TEST_BINARY` selects an
 explicit binary instead. A binary-identity test checks that its help names
 Forge CI. Strict mode requires complete test selection and the egress audit.
 
-Both engine self-workflows pin the companion by a reviewed commit. The
-companion's drift workflow defaults to `diggsweden/forge-ci` on `main` and
+Both engine self-workflows pin the suite by a reviewed commit. The
+suite's drift workflow defaults to `diggsweden/forge-ci` on `main` and
 records the resolved engine commit for each run.
 
 ## Before 0.90.0 publication
 
-- Complete the engine race, integration and smoke gates and the companion's
+- Complete the engine race, integration and smoke gates and the suite's
   complete strict black-box gate against the intended release binary.
 - Regenerate the CLI reference, schemas and engine checksum from that revision.
 - Publish the engine source, checksum-bound package, runtime images and signer

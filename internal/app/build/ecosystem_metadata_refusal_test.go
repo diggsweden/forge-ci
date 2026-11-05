@@ -189,7 +189,7 @@ func TestAndroidMetadata_RefusesNoncredentialInputBeforeAnyGradleCall(t *testing
 		},
 		{
 			name:    "control character in the repository name",
-			mutate:  func(in *appbuild.AndroidReleaseBuildInput) { in.RepoName = "wallet\x1b" },
+			mutate:  func(in *appbuild.AndroidReleaseBuildInput) { in.RepoName = "android-app\x1b" },
 			refused: true,
 		},
 		{
@@ -227,7 +227,7 @@ func TestAndroidMetadata_RefusesNoncredentialInputBeforeAnyGradleCall(t *testing
 
 			in := appbuild.AndroidReleaseBuildInput{
 				Dir: fsys.Path("project"), EnableBuildSBOM: true, SkipTests: false,
-				RepoName:        "wallet",
+				RepoName:        "android-app",
 				BuildTypes:      "release",
 				SBOMToolVersion: "2.3.4",
 				TempDir:         fsys.MkdirAll("scratch"),
@@ -276,16 +276,16 @@ func TestAndroidSelection_NamesEveryPublishedArtifact(t *testing.T) {
 			name:   "repository name alone",
 			mutate: func(*appbuild.AndroidReleaseBuildInput) {},
 			want: map[string]string{
-				"debug-name": "wallet - APK debug", "release-name": "wallet - APK release",
-				"aab-name": "wallet - AAB release", "sbom-name": "wallet - build SBOM",
+				"debug-name": "android-app - APK debug", "release-name": "android-app - APK release",
+				"aab-name": "android-app - AAB release", "sbom-name": "android-app - build SBOM",
 			},
 		},
 		{
 			name:   "flavor qualifies every name",
 			mutate: func(in *appbuild.AndroidReleaseBuildInput) { in.ProductFlavor = "fdroid" },
 			want: map[string]string{
-				"debug-name": "wallet - fdroid - APK debug", "release-name": "wallet - fdroid - APK release",
-				"aab-name": "wallet - fdroid - AAB release", "sbom-name": "wallet - fdroid - build SBOM",
+				"debug-name": "android-app - fdroid - APK debug", "release-name": "android-app - fdroid - APK release",
+				"aab-name": "android-app - fdroid - AAB release", "sbom-name": "android-app - fdroid - build SBOM",
 			},
 		},
 		{
@@ -294,8 +294,8 @@ func TestAndroidSelection_NamesEveryPublishedArtifact(t *testing.T) {
 				in.ArtifactNamePrefix, in.ProductFlavor = "nightly", "fdroid"
 			},
 			want: map[string]string{
-				"debug-name": "nightly - wallet - fdroid - APK debug", "release-name": "nightly - wallet - fdroid - APK release",
-				"aab-name": "nightly - wallet - fdroid - AAB release", "sbom-name": "nightly - wallet - fdroid - build SBOM",
+				"debug-name": "nightly - android-app - fdroid - APK debug", "release-name": "nightly - android-app - fdroid - APK release",
+				"aab-name": "nightly - android-app - fdroid - AAB release", "sbom-name": "nightly - android-app - fdroid - build SBOM",
 			},
 		},
 		{
@@ -317,7 +317,7 @@ func TestAndroidSelection_NamesEveryPublishedArtifact(t *testing.T) {
 			sink := fakeoutputsink.New(t)
 			in := appbuild.AndroidReleaseBuildInput{
 				Dir: newGradleDir(t), SkipTests: false,
-				RepoName:    "wallet",
+				RepoName:    "android-app",
 				BuildTypes:  "release",
 				BuildModule: "app",
 			}

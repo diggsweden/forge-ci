@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>se.itiquette.demo</groupId>
+  <groupId>org.example.fixture</groupId>
   <artifactId>hello-maven-service</artifactId>
   <version>0.1.0</version>
   <packaging>jar</packaging>
@@ -39,7 +39,7 @@
         <configuration>
           <archive>
             <manifest>
-              <mainClass>se.itiquette.hello.Server</mainClass>
+              <mainClass>org.example.fixture.Server</mainClass>
             </manifest>
           </archive>
         </configuration>

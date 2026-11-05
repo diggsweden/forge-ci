@@ -33,7 +33,7 @@ func TestAndroidReleaseBuild_SBOMTempPreflight(t *testing.T) {
 			fsys.WriteFile("signing/caller", []byte("signing canary"))
 			in := appbuild.AndroidReleaseBuildInput{
 				Dir: fsys.Path("project"), EnableBuildSBOM: !strings.HasPrefix(name, "disabled_"),
-				RepoName: "wallet", BuildTypes: "release", SBOMToolVersion: "2.3.4",
+				RepoName: "android-app", BuildTypes: "release", SBOMToolVersion: "2.3.4",
 				EnableSigning: true, KeystoreBase64: "aw==", KeystorePassword: "store", KeyAlias: "alias", KeyPassword: "key",
 				TempDir: fsys.Path("signing"), SecretsPropertiesBase64: "cA==",
 			}
@@ -108,7 +108,7 @@ func TestAndroidReleaseBuild_SBOMTempPreflight(t *testing.T) {
 				}
 
 				require.Len(t, ops.calls, wantCalls)
-				require.Equal(t, "wallet - APK release", sink.Single("release-name"))
+				require.Equal(t, "android-app - APK release", sink.Single("release-name"))
 				require.NoFileExists(t, fsys.Path("project/secrets.properties"))
 			}
 
@@ -128,7 +128,7 @@ func TestAndroidReleaseBuild_SBOMCleanupErrors(t *testing.T) {
 
 			in := appbuild.AndroidReleaseBuildInput{
 				Dir: fsys.Path("project"), EnableBuildSBOM: true,
-				RepoName: "wallet", BuildTypes: "release", SBOMToolVersion: "2.3.4",
+				RepoName: "android-app", BuildTypes: "release", SBOMToolVersion: "2.3.4",
 				EnableSigning: true, KeystoreBase64: "aw==", KeystorePassword: "store", KeyAlias: "alias", KeyPassword: "key",
 				TempDir: fsys.MkdirAll("signing"), SecretsPropertiesBase64: "cA==",
 			}
@@ -219,8 +219,8 @@ func TestAndroidReleaseBuild_IntegratedArtifactNames(t *testing.T) {
 		want           map[string]string
 	}{
 		{"composed", "", false, map[string]string{
-			"debug-name": "agency - wallet - demoFree - APK debug", "release-name": "agency - wallet - demoFree - APK release",
-			"aab-name": "agency - wallet - demoFree - AAB release", "sbom-name": "agency - wallet - demoFree - build SBOM",
+			"debug-name": "fixture - android-app - demoFree - APK debug", "release-name": "fixture - android-app - demoFree - APK release",
+			"aab-name": "fixture - android-app - demoFree - AAB release", "sbom-name": "fixture - android-app - demoFree - build SBOM",
 			"version": "unknown", "version-code": "unknown",
 		}},
 		{"override", "release-42", true, map[string]string{
@@ -228,8 +228,8 @@ func TestAndroidReleaseBuild_IntegratedArtifactNames(t *testing.T) {
 			"version": "unknown", "version-code": "unknown",
 		}},
 		{"dated_composed", "", true, map[string]string{
-			"debug-name": "2023-11-14 - agency - wallet - demoFree - APK debug", "release-name": "2023-11-14 - agency - wallet - demoFree - APK release",
-			"aab-name": "2023-11-14 - agency - wallet - demoFree - AAB release", "sbom-name": "2023-11-14 - agency - wallet - demoFree - build SBOM",
+			"debug-name": "2023-11-14 - fixture - android-app - demoFree - APK debug", "release-name": "2023-11-14 - fixture - android-app - demoFree - APK release",
+			"aab-name": "2023-11-14 - fixture - android-app - demoFree - AAB release", "sbom-name": "2023-11-14 - fixture - android-app - demoFree - build SBOM",
 			"version": "unknown", "version-code": "unknown",
 		}},
 	} {
@@ -249,7 +249,7 @@ func TestAndroidReleaseBuild_IntegratedArtifactNames(t *testing.T) {
 				sink, ops := fakeoutputsink.New(t), &androidGradleRecorder{}
 				err := appbuild.AndroidReleaseBuild(t.Context(), sink, &recordingSummarySink{}, ops, output.Annotator{}, io.Discard, io.Discard, appbuild.AndroidReleaseBuildInput{
 					Dir: fsys.Path("project"), ArtifactName: testCase.override,
-					ArtifactNamePrefix: "agency", RepoName: "wallet", ProductFlavor: "demoFree", IncludeDateStamp: testCase.includeDate,
+					ArtifactNamePrefix: "fixture", RepoName: "android-app", ProductFlavor: "demoFree", IncludeDateStamp: testCase.includeDate,
 					BuildTypes: "release", IncludeAAB: true, BuildModule: "application",
 				})
 				require.NoError(t, err)

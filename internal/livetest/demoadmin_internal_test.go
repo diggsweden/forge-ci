@@ -16,19 +16,19 @@ import (
 // the account is taken for part of one, so a deletion takes exactly its set.
 func TestGroupDemos_TakesEachDemoAndItsHelpersOnly(t *testing.T) {
 	listed := []DemoRepository{
-		{Name: "demo-wallet-release-engine", ID: 3},
-		{Name: "demo-wallet", ID: 1},
-		{Name: "demo-wallet-forge-ci", ID: 2},
+		{Name: "demo-service-release-engine", ID: 3},
+		{Name: "demo-service", ID: 1},
+		{Name: "demo-service-forge-ci", ID: 2},
 		{Name: "demo-other", ID: 4},
 		{Name: "fci-consumer-trial", ID: 5},
 		{Name: "demo-", ID: 6},
-		{Name: "wallet", ID: 7},
+		{Name: "service", ID: 7},
 	}
 
 	want := []DemoSet{
 		{Name: "other", Repositories: []DemoRepository{{Name: "demo-other", ID: 4}}},
-		{Name: "wallet", Repositories: []DemoRepository{
-			{Name: "demo-wallet", ID: 1}, {Name: "demo-wallet-forge-ci", ID: 2}, {Name: "demo-wallet-release-engine", ID: 3},
+		{Name: "service", Repositories: []DemoRepository{
+			{Name: "demo-service", ID: 1}, {Name: "demo-service-forge-ci", ID: 2}, {Name: "demo-service-release-engine", ID: 3},
 		}},
 	}
 
@@ -40,7 +40,7 @@ func TestGroupDemos_TakesEachDemoAndItsHelpersOnly(t *testing.T) {
 // A repository is deleted only while the forge still gives its name the ID the
 // listing showed: one replaced since is refused, one already gone is skipped.
 func TestDeleteListed_DeletesOnlyTheListedIdentity(t *testing.T) {
-	listed := DemoRepository{Name: "demo-wallet", ID: 7}
+	listed := DemoRepository{Name: "demo-service", ID: 7}
 
 	for name, test := range map[string]struct {
 		current int64

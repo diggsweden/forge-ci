@@ -65,7 +65,7 @@ func TestAndroidReleaseBuild_SelectedTaskPreflight(t *testing.T) {
 
 			in := appbuild.AndroidReleaseBuildInput{
 				Dir: fsys.Path("project"), ArtifactName: "release-bundle", EnableBuildSBOM: true,
-				RepoName: "wallet", BuildTypes: "release", GradleTasksOverride: tc.override, BuildModule: tc.module, IncludeAAB: tc.includeAAB,
+				RepoName: "android-app", BuildTypes: "release", GradleTasksOverride: tc.override, BuildModule: tc.module, IncludeAAB: tc.includeAAB,
 				EnableSigning: true, KeystoreBase64: base64.StdEncoding.EncodeToString([]byte("owned-keystore")),
 				KeystorePassword: "owned-store-password", KeyAlias: "owned-alias", KeyPassword: "owned-key-password",
 				SecretsPropertiesBase64: base64.StdEncoding.EncodeToString([]byte("token=owned-properties\n")),

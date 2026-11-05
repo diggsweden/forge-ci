@@ -18,7 +18,7 @@ import (
 // The login step hands the token to the engine only on stdin: it is absent
 // from argv, from the engine environment and from the shell the resolver is
 // sourced into, and the inputs map to their own engine flags. Auth-file
-// writing is covered by the forge-ci companion suite.
+// writing is covered by the external black-box suite.
 func TestRegistryLogin(t *testing.T) {
 	t.Parallel()
 	script := actionStep(t, "registry-login", "login")

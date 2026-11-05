@@ -134,6 +134,11 @@ SPDX-FileCopyrightText = "2026 Digg - Agency for Digital Government"
 SPDX-License-Identifier = "CC0-1.0"
 
 [[annotations]]
+path = "test/live/cases/rust-development/consumer/**"
+SPDX-FileCopyrightText = "2026 Digg - Agency for Digital Government"
+SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
 path = "containers/runtime/images.json"
 SPDX-FileCopyrightText = "The Forge CI Authors"
 SPDX-License-Identifier = "CC0-1.0"

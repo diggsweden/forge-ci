@@ -1724,9 +1724,9 @@ URL and resolved tag. Review the reported remaining placeholders before use.
 The source-coordinate tests exercise renamed GitHub, GitLab and Forgejo
 repositories, including full SHA-256 Forgejo pins.
 
-The companion suite is a separate repository. Engine self-CI can select its
-location with `FORGE_CI_TESTSUITE_REPOSITORY`; keep its checkout commit pinned.
-The companion's drift workflow accepts `FORGE_CI_REPOSITORY` and `FORGE_CI_REF`
+The external black-box suite is a separate repository. Engine self-CI can select
+its location with `FORGE_CI_TESTSUITE_REPOSITORY`; keep its checkout commit pinned.
+The suite's drift workflow accepts `FORGE_CI_REPOSITORY` and `FORGE_CI_REF`
 as defaults and explicit repository/ref inputs for manual runs. The local
 checkout directory may remain `forge-ci` even when the remote repository has a
 different name. A prebuilt candidate can instead be selected with
@@ -1741,10 +1741,10 @@ fixtures should use neutral identities such as `fixture/integration`,
 `@fixture/npm-lib` and `org.example.fixture`, so a new hosting organization does
 not need to rewrite test data or weaken assertions.
 
-The GitHub and GitLab lint workflows select Nanolinter images from
-`ghcr.io/itiquette/nanolinter`. Verify the chosen image is published and readable
-and pass its digest through `nanolinter-image`; see
-[lint images](components.md#lint-nanolinteryml-default) for migration status.
+For the GitHub and GitLab lint workflows, select a published, readable image
+for the required toolchain and pass its verified digest through
+`nanolinter-image`; see the supported coordinates under
+[lint images](components.md#lint-nanolinteryml-default).
 
 What a copy cannot do yet, such as a non-amd64 runner, is listed under
 [Limits](#limits).

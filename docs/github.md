@@ -175,7 +175,7 @@ repository; each falls back to the default below. A consumer sets none.
 | `CI_IMAGE_BUILDER_JOB_IMAGE` | unset | Approved digest-pinned Kaniko job image; required when Kaniko is selected. The image leaves' explicit `image-builder-job-image` input takes precedence. |
 | `RUNTIME_IMAGE_RETENTION` | unset: nothing is deleted | how many of the newest commit images (`sha-*`) of each runtime image Self Runtime Container keeps after it publishes; older versions are deleted through the GitHub Packages API with the job token, except release and pre-release tags and every platform manifest, signature and attestation a kept image needs. `forge-ci container package-retention --dry-run` shows what a value would delete |
 | `FORGE_CI_IMAGE_NAMESPACE` | `ghcr.io/<repository owner>`, lowercased | Trusted repository variable selecting the runtime publication namespace and the images used by Self Pull Request and Self Release. Use a lowercase, tag-free GHCR path under the owner, e.g. `ghcr.io/owner/scratch-repo`, to isolate a scratch engine's packages. Source labels still identify the source repository; the layer cache remains repository-scoped. |
-| `FORGE_CI_TESTSUITE_REPOSITORY` | `diggsweden/forge-ci-blackbox-tests` | the companion black-box suite checked out by the PR and release gates |
+| `FORGE_CI_TESTSUITE_REPOSITORY` | `diggsweden/forge-ci-blackbox-tests` | the external black-box suite checked out by the PR and release gates |
 | `RELEASE_BRANCH` | the branch whose head the release-request tag names | the fork's own Self Release: an explicit release branch when several branches share that head. A consumer names its branch with the orchestrator's `branch` input instead |
 
 Scratch engine trials set the runtime namespace before pushing their source and

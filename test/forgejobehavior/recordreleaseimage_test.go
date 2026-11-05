@@ -26,7 +26,7 @@ func recordReleaseImageInputs() []string {
 // The record step forwards every input to its own engine flag (distinct values
 // catch a swapped pair), turns the candidate switch into
 // LEDGER_DERIVE_CANDIDATE_TAG, and refuses an empty required input before the
-// engine starts. Ledger semantics are covered by the forge-ci companion
+// engine starts. Ledger semantics are covered by the external black-box
 // suite.
 func TestRecordReleaseImage(t *testing.T) {
 	t.Parallel()

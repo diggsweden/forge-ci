@@ -13,7 +13,7 @@ import (
 
 // The setup step binds each input to the variable it reads and forwards them
 // as engine flags, defaulting unset ones. Setup, package-list parsing and
-// storage fallback belong to the engine and its companion suite.
+// storage fallback belong to the engine and the external black-box suite.
 func TestSetupBuildah(t *testing.T) {
 	t.Parallel()
 	action := loadAction(t, "setup-buildah")

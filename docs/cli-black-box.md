@@ -25,7 +25,7 @@ are the catalogue and acceptance criteria for both:
   auxiliary application/signing toolchain for the root scenarios. It covers the root
   contract: command discovery, help, version, flag parsing, the exit-code
   ladder, stream discipline.
-- The companion black-box testsuite, where most of the scenarios below actually
+- The external black-box testsuite, where most of the scenarios below actually
   live. It drives the built binary against committed fixture projects with
   the real toolchains (`syft`, `gpg`, `cosign`, `mvn`, `gradle`, `cargo`,
   `npm`). Forge/service endpoints are faked, while package tools may download
@@ -110,7 +110,7 @@ requirements need; the table maps each to the helper that satisfies it.
 | HAR-03 | Neutralize ambient Git/GPG/SSH state. | `isolatedenv` sets `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`, fixed `GIT_AUTHOR/COMMITTER_*`, `GIT_TERMINAL_PROMPT=0`, empty `GIT_ASKPASS`/`SSH_AUTH_SOCK`, `GNUPGHOME` under temp. |
 | HAR-03b | Neutralize ambient **CI/forge/token** state so a test (and any binary it spawns with `os.Environ()`) never inherits the developer's or the runner's real forge context. | `isolatedenv` scrubs every `GITHUB_*`/`ACTIONS_*`/`RUNNER_*`/`GITLAB_*`/`CI_*`/`FORGEJO_*`/`GITEA_*`/`FORGE_CI_*`/`ARTIFACT_*`/`REGISTRY_*` var plus standalone `CI`, `GH_TOKEN`, `DOCKER_CONFIG`, `GPG_PRIVATE_KEY`, `COSIGN_*`, … to empty (detection reads empty as absent). A test that needs one re-sets it *after* `Isolate`. Locked by `TestIsolate_ScrubsAmbientCIEnv`. |
 | HAR-04 | Pin locale and disable colour for default assertions; opt into colour/locale only where under test. | Set `LANG=C.UTF-8 LC_ALL=C.UTF-8` and `--no-color` / `NO_COLOR=1` (or `FORGE_CI_NO_COLOR`) in the scenario env. |
-| HAR-05 | Real forge, registry-publish, identity, and transparency-log endpoints are forbidden; forge scenarios use a **loopback mock**. Real package tools may fetch public dependencies/plugins/base images on a cold isolated cache, without user settings or credentials. | `fakegitserver` (`New` for GitHub REST, `NewGitLab` for GitLab) via `APIBaseOverride`; the companion harness redirects tool homes/caches and pins private Maven settings. |
+| HAR-05 | Real forge, registry-publish, identity, and transparency-log endpoints are forbidden; forge scenarios use a **loopback mock**. Real package tools may fetch public dependencies/plugins/base images on a cold isolated cache, without user settings or credentials. | `fakegitserver` (`New` for GitHub REST, `NewGitLab` for GitLab) via `APIBaseOverride`; the black-box harness redirects tool homes/caches and pins private Maven settings. |
 | HAR-06 | Drive auth with fake tokens only; never the host keyring. | Export disposable tokens (`GITHUB_TOKEN=dummy`, `REGISTRY_PASSWORD=…`) into the scenario env; assert they are absent from stdout/stderr/written files. |
 | HAR-07 | Capture stdout, stderr, exit code separately for every command; assert on stable machine output, not human prose, where a JSON/sink field exists. | `runBinary` returns `(stdout, stderr, exit)`. |
 | HAR-08 | Exercise both `--flag value` and `--flag=value` for string/int flags; assert equivalent results. | Scenario matrix (see `CLI-05`). |
@@ -328,4 +328,4 @@ coverage.
 | `internal/domain/artifact/*_test.go` | Supporting collection and path-safety evidence for `ART-06` and `ART-08`; not binary wiring. |
 | `internal/adapters/{github,forgejo}/*artifact*_test.go` | Supporting provider-method evidence for `ART-07`–`ART-09`; not CLI provider selection. |
 | `internal/livetest/conformance/artifact_test.go` | Opt-in named run-artifact round trip; currently Forgejo only, not pattern/zero-match coverage. |
-| Companion black-box testsuite | The bulk of these scenarios: real toolchains, fixtures, signing round-trips, reproducibility. |
+| External black-box testsuite | The bulk of these scenarios: real toolchains, fixtures, signing round-trips, reproducibility. |

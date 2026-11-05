@@ -74,7 +74,7 @@ func TestMavenContainerTestsStayInTheKeyFreeBuildJob(t *testing.T) {
 
 func TestMavenContainerTestOverlayPreservesOriginalSource(t *testing.T) {
 	root, git := stageTestRepo(t, "sha1")
-	pom := "<project><artifactId>wallet-account</artifactId><version>1.0.0</version></project>"
+	pom := "<project><artifactId>service-app</artifactId><version>1.0.0</version></project>"
 	stageTestWrite(t, root, "pom.xml", pom, 0644)
 	stageTestWrite(t, root, "src/main/java/Original.java", "source-owned\n", 0644)
 	stageTestCommit(t, git, root)

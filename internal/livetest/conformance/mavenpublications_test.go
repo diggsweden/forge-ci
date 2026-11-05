@@ -21,7 +21,7 @@ import (
 
 // This is registry/runner acceptance, not an Android SDK build claim. A native
 // JAR and an AAR-shaped archive exercise both publication layouts; real Gradle
-// producer behavior belongs to the companion toolchain tests.
+// producer behavior belongs to the external black-box toolchain tests.
 func TestInRunner_ExportedMavenPublications(t *testing.T) {
 	livetest.RegisterLiveScenario(t)
 

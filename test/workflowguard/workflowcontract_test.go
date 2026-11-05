@@ -228,10 +228,10 @@ func TestNanolinterImageIsRequiredAndDigestPinned(t *testing.T) {
 	t.Parallel()
 
 	root := reporoot.Path(t)
-	guide := string(reporoot.ReadFile(t, "docs/forgejo.md"))
+	guide := string(reporoot.ReadFile(t, "docs/components.md"))
 
 	if !strings.Contains(guide, "`"+pipeline.NanolinterImageRepository+"`") {
-		t.Error("the fork guide must name the Nanolinter image repository used by both lint layers")
+		t.Error("the lint reference must name the Nanolinter image repository used by both lint layers")
 	}
 
 	orchestrator := parseConsumerContract(t, filepath.Join(root, ".github", "workflows", "pullrequest-orchestrator.yml"))
@@ -282,7 +282,7 @@ func TestPublishContainerAlwaysRemovesMaterializedBuildSecrets(t *testing.T) {
 	checkMaterializedCleanup(t, script)
 }
 
-func TestPinnedCompanionSuiteUsesStrictBlackboxContract(t *testing.T) {
+func TestPinnedSuiteUsesStrictBlackboxContract(t *testing.T) {
 	t.Parallel()
 
 	const validatorInvocation = "run: ./scripts/validate-strict-profile-contract.sh"
@@ -297,29 +297,29 @@ func TestPinnedCompanionSuiteUsesStrictBlackboxContract(t *testing.T) {
 
 		text := string(body)
 
-		pin, err := companionCheckoutPin(body)
+		pin, err := suiteCheckoutPin(body)
 		require.NoError(t, err, "%s", workflow)
 
 		if sharedPin == "" {
 			sharedPin = pin
 		} else if pin != sharedPin {
-			t.Errorf("%s companion pin %s differs from %s", workflow, pin, sharedPin)
+			t.Errorf("%s suite pin %s differs from %s", workflow, pin, sharedPin)
 		}
 
 		for _, want := range []string{
 			"ref: " + pin,
-			"name: Validate strict companion behavioral contract",
+			"name: Validate strict suite behavioral contract",
 			validatorInvocation,
 			"FORGE_CI_BLACKBOX_PROFILE: strict",
 			"run: go test -tags=blackbox -count=1 -timeout 45m ./tests/blackbox/...",
 		} {
 			if !strings.Contains(text, want) {
-				t.Errorf("%s pinned companion contract is missing %q", workflow, want)
+				t.Errorf("%s pinned suite contract is missing %q", workflow, want)
 			}
 		}
 
 		if got := strings.Count(text, pin); got != 1 {
-			t.Errorf("%s immutable companion pin occurrences = %d, want checkout only", workflow, got)
+			t.Errorf("%s immutable suite pin occurrences = %d, want checkout only", workflow, got)
 		}
 
 		checkoutAt := strings.Index(text, "ref: "+pin)
@@ -334,17 +334,17 @@ func TestPinnedCompanionSuiteUsesStrictBlackboxContract(t *testing.T) {
 
 		runAt := strings.Index(text, "run: go test -tags=blackbox")
 		if checkoutAt < 0 || setupAt <= checkoutAt || validationAt <= setupAt || runAt <= validationAt {
-			t.Errorf("%s companion gate order checkout=%d setup=%d validation=%d run=%d", workflow, checkoutAt, setupAt, validationAt, runAt)
+			t.Errorf("%s suite gate order checkout=%d setup=%d validation=%d run=%d", workflow, checkoutAt, setupAt, validationAt, runAt)
 		}
 	}
 }
 
 // The workflow owns the immutable pin; the guard checks its shape and agreement
 // across callers rather than keeping a third copy that every fork must edit.
-func companionCheckoutPin(body []byte) (string, error) {
+func suiteCheckoutPin(body []byte) (string, error) {
 	var workflow eventWorkflow
 	if err := yaml.Unmarshal(body, &workflow); err != nil {
-		return "", fmt.Errorf("parse companion workflow: %w", err)
+		return "", fmt.Errorf("parse suite workflow: %w", err)
 	}
 
 	var pin string
@@ -358,7 +358,7 @@ func companionCheckoutPin(body []byte) (string, error) {
 			}
 
 			if !strings.HasPrefix(step.Uses, "actions/checkout@") {
-				return "", fmt.Errorf("companion path must be populated by actions/checkout: %w", errs.ErrValidation)
+				return "", fmt.Errorf("suite path must be populated by actions/checkout: %w", errs.ErrValidation)
 			}
 
 			pin = scalarChild(&step.With, "ref")
@@ -367,17 +367,17 @@ func companionCheckoutPin(body []byte) (string, error) {
 	}
 
 	if matches != 1 {
-		return "", fmt.Errorf("expected exactly one companion checkout, found %d: %w", matches, errs.ErrValidation)
+		return "", fmt.Errorf("expected exactly one suite checkout, found %d: %w", matches, errs.ErrValidation)
 	}
 
 	if !git.ValidCommitSHA(pin) {
-		return "", fmt.Errorf("companion checkout requires a full immutable pin: %q: %w", pin, errs.ErrValidation)
+		return "", fmt.Errorf("suite checkout requires a full immutable pin: %q: %w", pin, errs.ErrValidation)
 	}
 
 	return pin, nil
 }
 
-func TestCompanionCheckoutPinRejectsInvalidCheckouts(t *testing.T) {
+func TestSuiteCheckoutPinRejectsInvalidCheckouts(t *testing.T) {
 	t.Parallel()
 
 	pin := strings.Repeat("a", 40)
@@ -393,7 +393,7 @@ func TestCompanionCheckoutPinRejectsInvalidCheckouts(t *testing.T) {
 		{"lookalike action", strings.ReplaceAll(workflow, "actions/checkout@", "fixture/actions/checkout@"), ""},
 		{"different action", strings.ReplaceAll(workflow, "actions/checkout@", "actions/upload-artifact@"), ""},
 		{"branch ref", strings.ReplaceAll(workflow, pin, "main"), ""},
-		{"expression ref", strings.ReplaceAll(workflow, pin, "${{ vars.COMPANION_REF }}"), ""},
+		{"expression ref", strings.ReplaceAll(workflow, pin, "${{ vars.SUITE_REF }}"), ""},
 		{"abbreviated ref", strings.ReplaceAll(workflow, pin, pin[:12]), ""},
 		{"missing ref", strings.ReplaceAll(workflow, "          ref: "+pin+"\n", ""), ""},
 		{"missing checkout", "jobs: {}\n", ""},
@@ -403,7 +403,7 @@ func TestCompanionCheckoutPinRejectsInvalidCheckouts(t *testing.T) {
 		t.Run(scenario.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := companionCheckoutPin([]byte(scenario.body))
+			got, err := suiteCheckoutPin([]byte(scenario.body))
 			if scenario.want == "" {
 				require.Error(t, err)
 				require.Empty(t, got)

@@ -177,7 +177,7 @@ authorization proof, or evaluation of variable-dependent runtime rules.
 Container and VM runtime evidence must match the execution host: run AMD64
 jobs on AMD64 hosts, and ARM64 jobs on ARM64 hosts, including this Mac.
 Cross-compilation is separate from execution. Linux-only integration requires
-a native Linux environment; the companion's strict profile is a Linux gate.
+a native Linux environment; the external suite's strict profile is a Linux gate.
 
 ## Available Commands
 
@@ -186,7 +186,7 @@ Run `just` to see all available commands.
 `just verify` runs local lint, tagged compilation and integration tests,
 including the untagged unit tests. It can use containers and network access;
 optional integration evidence may skip and is reported. CI has additional
-workflow-contract, smoke/fuzz and companion strict gates; see
+workflow-contract, smoke/fuzz and external black-box strict gates; see
 [Testing conventions](testing.md) for the scope and full live prerequisites.
 `just lint-fix` formats the justfile and runs nanolinter's supported fixers.
 `just lint-go-deadcode` lists the Go functions no build of the tree reaches,

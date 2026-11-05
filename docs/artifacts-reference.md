@@ -538,7 +538,7 @@ and Google Play publisher agree.
 - **Type:** `string`
 - **Description:** Xcode scheme to build
 - **Required:** Yes
-- **Example:** `scheme: "Wallet Demo"`
+- **Example:** `scheme: "DemoApp"`
 
 #### `config.workspace`
 
@@ -1307,23 +1307,23 @@ Use `project` or `workspace` alongside XcodeGen so version detection and archive
 
 ```yaml
 artifacts:
-  - name: wallet-ios-demo
+  - name: ios-app-demo
     project-type: xcode-ios
     working-directory: .
     config:
       xcode-version: "16.1"
-      scheme: "Wallet Demo"
-      project: "Wallet.xcodeproj"
+      scheme: "DemoApp"
+      project: "DemoApp.xcodeproj"
       configuration: Release
       submit-for-review: false  # Upload only for demo builds
 
-  - name: wallet-ios-production
+  - name: ios-app-production
     project-type: xcode-ios
     working-directory: .
     config:
       xcode-version: "16.1"
-      scheme: "Wallet Production"
-      project: "Wallet.xcodeproj"
+      scheme: "ProductionApp"
+      project: "DemoApp.xcodeproj"
       configuration: Release
       submit-for-review: true  # Record production review intent in the summary
 ```

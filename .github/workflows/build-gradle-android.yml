@@ -23,7 +23,7 @@
 #
 # Outputs:
 #   - Separate artifacts per variant with custom names
-#   - Examples: "2025-01-15 - testing_store - wallet-app - demo - APK debug"
+#   - Examples: "2025-01-15 - testing_store - android-app - demo - APK debug"
 #
 # Required Secrets (for signing):
 #   ANDROID_KEYSTORE: Base64-encoded keystore file

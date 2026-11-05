@@ -42,12 +42,12 @@ func TestLiveAccount_FollowsDemoMode(t *testing.T) {
 	}{
 		"no demo":             {want: labAccount},
 		"demo":                {demo: "hello-maven-service", want: demoAccount},
-		"uppercase":           {demo: "Wallet", refused: true},
+		"uppercase":           {demo: "App", refused: true},
 		"path":                {demo: "a/b", refused: true},
-		"trailing hyphen":     {demo: "wallet-", refused: true},
+		"trailing hyphen":     {demo: "app-", refused: true},
 		"one character":       {demo: "w", refused: true},
-		"a layer's name":      {demo: "wallet-forge-ci", refused: true},
-		"a helper's name":     {demo: "wallet-release-engine", refused: true},
+		"a layer's name":      {demo: "app-forge-ci", refused: true},
+		"a helper's name":     {demo: "app-release-engine", refused: true},
 		"over the length cap": {demo: "a1234567890123456789012345678901234567890", refused: true},
 	} {
 		t.Run(name, func(t *testing.T) {

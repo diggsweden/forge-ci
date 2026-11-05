@@ -8,9 +8,8 @@ Complete working examples for different project types.
 > and its matching runtime images. For an unreleased candidate, use the
 > branch-testing flow in **[docs/runtime-images.md](../docs/runtime-images.md)**.
 >
-> Image digests such as `PIN_DIGEST` are placeholders. Nanolinter's GHCR migration
-> destination is `ghcr.io/itiquette/nanolinter`; verify the chosen flavour is
-> published and readable before replacing its digest, or use an available mirror.
+> Image digests such as `PIN_DIGEST` are placeholders. Select a published,
+> readable lint image for the required toolchain and pin its verified digest.
 > See **[lint images](../docs/components.md#lint-nanolinteryml-default)**.
 
 ## Available Examples

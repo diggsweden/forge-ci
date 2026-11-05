@@ -99,7 +99,7 @@ func publishReleaseForbidden() []string {
 // FORGEJO_TOKEN, drops every ambient credential alias before the resolver and
 // engine see them, and maps its inputs to the engine flags and provider
 // environment. Release publication itself is covered by the forge-ci
-// companion suite.
+// external black-box suite.
 func TestPublishRelease(t *testing.T) {
 	t.Parallel()
 

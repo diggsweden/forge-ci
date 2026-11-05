@@ -158,7 +158,7 @@ jobs:
           FORGE_CI_TEST_PROFILE: strict
         run: go test -count=1 -buildvcs=false -run '^TestRecordedEngineChecksum' ./test/forgejobehavior
   integration-testsuite:
-    # Gate every engine change on the companion black-box suite
+    # Gate every engine change on the external black-box suite
     # (diggsweden/forge-ci-blackbox-tests): real toolchains, real git/gpg/ssh,
     # externally-observable behaviour. Without this edge the suite only ran
     # on its own pushes plus a daily drift schedule — an engine commit could
@@ -179,7 +179,7 @@ jobs:
           path: forge-ci
           ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Checkout companion testsuite (pinned)
+      - name: Checkout external testsuite (pinned)
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ vars.FORGE_CI_TESTSUITE_REPOSITORY || 'diggsweden/forge-ci-blackbox-tests' }}
@@ -196,7 +196,7 @@ jobs:
           cache-dependency-path: |
             forge-ci/go.sum
             forge-ci-blackbox-tests/go.sum
-      - name: Validate strict companion behavioral contract
+      - name: Validate strict suite behavioral contract
         working-directory: forge-ci-blackbox-tests
         run: ./scripts/validate-strict-profile-contract.sh
 
@@ -214,11 +214,11 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq buildah
-      - name: Install the companion's pinned Maven
+      - name: Install the suite's pinned Maven
         # Not Ubuntu's maven package: it is 3.8, which ignores MAVEN_ARGS
         # (3.9+), so the harness's settings isolation and reproducible-build
         # checks fail. Only Maven's own bin directory goes on PATH, so the
-        # companion's other mise pins do not shadow setup-go.
+        # suite's other mise pins do not shadow setup-go.
         working-directory: forge-ci-blackbox-tests
         run: |
           source ../forge-ci/scripts/bootstrap/install-mise.sh

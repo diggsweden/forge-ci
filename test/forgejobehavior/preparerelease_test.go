@@ -255,7 +255,7 @@ exit "${FAKE_SIGNER_STATUS:-0}"
 // The key-free render step hands the engine its inputs, each as one argument,
 // keeps the SSH signing key from the resolver and the engine, refuses a
 // missing repository URL before starting the engine, and propagates the
-// engine status. Rendering belongs to the engine and its companion suite.
+// engine status. Rendering belongs to the engine and the external black-box suite.
 func TestPrepareReleaseRenderChangelog(t *testing.T) {
 	t.Parallel()
 	script := loadAction(t, "render-changelog").script(t, "Generate changelog without SSH key")

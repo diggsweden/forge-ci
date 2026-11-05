@@ -630,6 +630,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Rust development acceptance uses a repository-owned fixture with four neutral
+  executable names and three runtime images; see the
+  [fixture](test/live/cases/rust-development/README.md). Source, checksum,
+  architecture and image-byte verification remain required. No separate
+  role-declaration file or external application's checkout is needed.
+- Examples and synthetic fixtures use role-based names and reserved JVM
+  coordinates. Documentation describes the black-box suite as an independent
+  executable-level test dependency.
 - **BREAKING:** All four `enforce-*` settings now default to `false` in the
   engine, GitHub workflows, Forgejo actions/workflows, GitLab components and
   live controller. Checks still run and retain their findings. Set each input

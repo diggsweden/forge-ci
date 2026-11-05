@@ -46,7 +46,7 @@ on:
         required: true
         type: string
       scheme:
-        description: "Xcode scheme to build (e.g., 'Wallet Demo', 'MyApp')"
+        description: "Xcode scheme to build (e.g., 'DemoApp', 'MyApp')"
         required: true
         type: string
       # === XCODE PROJECT CONFIGURATION ===
