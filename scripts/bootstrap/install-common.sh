@@ -29,6 +29,20 @@ ci_verify_sha256() {
 	fi
 }
 
+# curl owns transient-error classification, Retry-After and exponential backoff.
+# The retry window bounds starting new attempts; each attempt is also bounded.
+ci_download() {
+	local url="$1" destination="$2"
+	printf 'Downloading %s\n' "$url" >&2
+	if ! curl --retry 5 --retry-max-time 600 --connect-timeout 30 --max-time 180 \
+		--retry-connrefused --proto '=https' --proto-redir '=https' --tlsv1.2 \
+		-sSfL "$url" -o "$destination"; then
+		rm -f "$destination"
+		printf 'ERROR: download failed: %s\n' "$url" >&2
+		return 1
+	fi
+}
+
 ci_download_verified() {
 	local url="$1"
 	local destination="$2"
@@ -38,10 +52,7 @@ ci_download_verified() {
 		return 1
 	fi
 
-	if ! curl --retry 5 --retry-delay 3 --retry-connrefused --proto '=https' --tlsv1.2 -sSfL "$url" -o "$destination"; then
-		rm -f "$destination"
-		return 1
-	fi
+	ci_download "$url" "$destination" || return 1
 	ci_verify_sha256 "$destination" "$sha256"
 }
 
