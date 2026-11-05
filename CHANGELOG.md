@@ -7,14 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- Use role-based identities in signing examples and synthetic fixtures, and
-  describe development settings and consumer trials without project affiliations.
-- The focused Forgejo Maven-library stable trial honors an explicit private
-  consumer selection instead of always creating a public consumer. Its default
-  public lane and anonymous engine-distribution fixture remain unchanged.
-
 ### Removed
 
 - **BREAKING:** `artifact upload`, `artifact download` and `artifact digest`
@@ -309,6 +301,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Use role-based identities in signing examples and synthetic fixtures, and
+  describe development settings and consumer trials without project affiliations.
+- The focused Forgejo Maven-library stable trial honors an explicit private
+  consumer selection instead of always creating a public consumer. Its default
+  public lane and anonymous engine-distribution fixture remain unchanged.
 - Built-in Cargo demos pin the same Rust patch release as the prepared runtime
   across rustup, Mise and their digest-pinned container builders. Native checks
   no longer try to install an absent compiler into the image's shared toolchain.

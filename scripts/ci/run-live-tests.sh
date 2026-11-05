@@ -176,7 +176,10 @@ exec 8> >(
 	exec 7>&-
 	exec 9>&-
 	trap '' INT TERM
-	sanitize_live_log | (trap '' INT TERM; exec tee -a "$log")
+	sanitize_live_log | (
+		trap '' INT TERM
+		exec tee -a "$log"
+	)
 )
 logger_pid=$!
 suite_pid=

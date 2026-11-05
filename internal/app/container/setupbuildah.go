@@ -664,7 +664,29 @@ func printFilesystemStat(out io.Writer, path string, inodes bool) {
 		return
 	}
 
-	_, _ = fmt.Fprintf(out, "  %s: avail=%d total=%d\n", path, stat.Bavail*uint64(stat.Bsize), stat.Blocks*uint64(stat.Bsize)) //nolint:gosec // Bsize is a positive filesystem block size; conversion cannot overflow.
+	available, availableOK := filesystemBytes(stat.Bavail, stat.Bsize)
+
+	total, totalOK := filesystemBytes(stat.Blocks, stat.Bsize)
+	if !availableOK || !totalOK {
+		_, _ = fmt.Fprintf(out, "  %s: byte count unavailable (block-size=%d)\n", path, stat.Bsize)
+
+		return
+	}
+
+	_, _ = fmt.Fprintf(out, "  %s: avail=%d total=%d\n", path, available, total)
+}
+
+func filesystemBytes[T ~int64 | ~uint32](blocks uint64, blockSize T) (uint64, bool) {
+	if blockSize <= 0 {
+		return 0, false
+	}
+
+	size := uint64(blockSize)
+	if blocks > ^uint64(0)/size {
+		return 0, false
+	}
+
+	return blocks * size, true
 }
 
 func defaultString(value, fallback string) string {

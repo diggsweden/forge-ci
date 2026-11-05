@@ -29,3 +29,8 @@
 # the CISA 3-layer SBOM baseline; ntia.gov serves an incomplete TLS
 # chain that lychee's trust store rejects. The URL itself is correct.
 ^https://www\.ntia\.gov/sites/default/files/publications/sbom_minimum_elements_report_0\.pdf$
+
+# Canonical CISA SBOM guidance. CISA rejects anonymous automated GET requests
+# with 403, while these remain the public references readers should follow.
+^https://www\.cisa\.gov/sbom/?$
+^https://www\.cisa\.gov/resources-tools/resources/types-software-bill-materials-sbom/?$
