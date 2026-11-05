@@ -88,8 +88,9 @@ func hermeticStore(t *testing.T) []string {
 		"--root", filepath.Join(store, "root"),
 		"--runroot", filepath.Join(store, "runroot"),
 	}
+
 	t.Cleanup(func() {
-		_ = exec.Command("buildah", append(append([]string{}, global...), "rmi", "--all", "--force")...).Run() //nolint:gosec,noctx // test-controlled args; cleanup outlives the test context.
+		_ = exec.Command("buildah", append(append([]string{}, global...), "rmi", "--all", "--force")...).Run() //nolint:noctx // cleanup outlives the test context.
 	})
 
 	return global
@@ -112,17 +113,19 @@ func requireBuildahStore(t *testing.T, global []string) {
 
 	evidence.RequireTool(t, "buildah")
 
-	cmd := exec.CommandContext(t.Context(), "buildah", append(append([]string{}, global...), "from", "scratch")...) //nolint:gosec // test-controlled args.
+	cmd := exec.CommandContext(t.Context(), "buildah", append(append([]string{}, global...), "from", "scratch")...)
+
 	out, stderr, err := buildahCommandOutput(cmd)
 	if err != nil {
 		t.Fatalf("buildah is installed but cannot create a container in the hermetic store "+
 			"(storage driver, permissions, or configuration): %v", err)
 	}
+
 	if stderr != "" {
 		t.Logf("buildah from scratch stderr:\n%s", stderr)
 	}
 
-	lines := strings.Fields(string(out))
+	lines := strings.Fields(out)
 	if len(lines) == 0 {
 		t.Fatalf("buildah from scratch printed no container name")
 	}
@@ -189,6 +192,7 @@ func TestBuildTimestamp_InheritedEpoch_WithRealBuildah(t *testing.T) {
 	requireBuildahStore(t, global)
 	cdir := hermeticContext(t)
 	t.Setenv("SOURCE_DATE_EPOCH", "1792421899")
+
 	adapter := &buildah.Adapter{Global: global}
 	req := container.BuildRequest{
 		Context: cdir, Containerfile: filepath.Join(cdir, "Containerfile"),
@@ -198,14 +202,17 @@ func TestBuildTimestamp_InheritedEpoch_WithRealBuildah(t *testing.T) {
 	// Confirm the exact original failure against the installed binary. Older
 	// Buildah lacks this environment default and may successfully build instead.
 	args := append(append([]string{}, global...), "build", "--isolation", "chroot", "--timestamp", req.SourceDateEpoch, cdir)
-	out, err := exec.CommandContext(t.Context(), "buildah", args...).CombinedOutput() //nolint:gosec // test-owned paths and arguments.
+
+	out, err := exec.CommandContext(t.Context(), "buildah", args...).CombinedOutput()
 	if err != nil && !strings.Contains(string(out), "timestamp and source-date-epoch would be ambiguous") {
 		t.Fatalf("unexpected baseline failure: %v\n%s", err, out)
 	}
+
 	ambiguous := strings.Contains(string(out), "would be ambiguous")
 	t.Logf("baseline inherited epoch plus --timestamp: err=%v; ambiguous=%t", err, ambiguous)
 
 	var previous v1.Hash
+
 	for attempt := range 2 {
 		// Perturb the input mtime between builds. --timestamp must still produce
 		// identical layer headers and image digests, not just pinned config time.
@@ -213,58 +220,76 @@ func TestBuildTimestamp_InheritedEpoch_WithRealBuildah(t *testing.T) {
 		if err := os.Chtimes(filepath.Join(cdir, "hello.txt"), mtime, mtime); err != nil {
 			t.Fatal(err)
 		}
+
 		dest := t.TempDir()
 		if err := adapter.BuildToLayout(t.Context(), req, dest, os.Stderr); err != nil {
 			t.Fatal(err)
 		}
+
 		requireLayoutMetadata(t, dest, "2023-11-14T22:13:20Z", nil)
+
 		index, err := layout.ImageIndexFromPath(dest)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		manifest, err := index.IndexManifest()
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		digest := manifest.Manifests[0].Digest
 		if attempt > 0 && digest != previous {
 			t.Errorf("rebuild changed digest: %s != %s", digest, previous)
 		}
+
 		previous = digest
+
 		image, err := index.Image(digest)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		layers, err := image.Layers()
 		if err != nil || len(layers) != 1 {
 			t.Fatalf("layers=%d err=%v", len(layers), err)
 		}
+
 		body, err := layers[0].Uncompressed()
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		reader := tar.NewReader(body)
 		found := false
+
 		for {
 			header, err := reader.Next()
 			if errors.Is(err, io.EOF) {
 				break
 			}
+
 			if err != nil {
 				_ = body.Close()
+
 				t.Fatal(err)
 			}
+
 			if strings.TrimPrefix(header.Name, "/") == "hello.txt" {
 				found = true
+
 				if header.ModTime.Unix() != 1700000000 {
 					t.Errorf("COPY layer mtime=%v, want requested epoch", header.ModTime)
 				}
 			}
 		}
+
 		_ = body.Close()
+
 		if !found {
 			t.Fatal("COPY file absent from layer")
 		}
+
 		t.Logf("normalized build %d digest: %s", attempt+1, digest)
 	}
 
@@ -273,6 +298,7 @@ func TestBuildTimestamp_InheritedEpoch_WithRealBuildah(t *testing.T) {
 	if err := adapter.Build(t.Context(), req, os.Stderr); err != nil {
 		t.Fatal(err)
 	}
+
 	if body, err := os.ReadFile(filepath.Join(req.OutputDir, "hello.txt")); err != nil || string(body) != "hi\n" {
 		t.Fatalf("local export=%q err=%v", body, err)
 	}
@@ -283,21 +309,26 @@ func TestBuildTimestamp_InheritedEpoch_WithRealBuildah(t *testing.T) {
 	}, os.Stderr); err != nil {
 		t.Fatalf("manifest build: %v", err)
 	}
+
 	dest := t.TempDir()
 	if err := adapter.ExportLocalManifestToLayout(t.Context(), "localhost/timestamp-regression:list", dest, os.Stderr); err != nil {
 		t.Fatal(err)
 	}
+
 	requireLayoutMetadata(t, dest, "2023-11-14T22:13:20Z", nil)
 
 	// SOURCE_DATE_EPOCH as an explicit build argument is itself a Buildah mode
 	// selector on newer versions. Scrubbing the inherited environment cannot
 	// make it compatible with --timestamp; do not silently drop user arguments.
 	req.BuildArgs = []string{"SOURCE_DATE_EPOCH=1700000000"}
+
 	var log strings.Builder
+
 	err = adapter.Build(t.Context(), req, &log)
 	if ambiguous && (err == nil || !strings.Contains(log.String(), "would be ambiguous")) {
 		t.Fatalf("explicit build-arg should retain Buildah's conflict: err=%v\n%s", err, log.String())
 	}
+
 	t.Logf("explicit SOURCE_DATE_EPOCH build-arg with --timestamp: err=%v; ambiguous=%t", err, strings.Contains(log.String(), "would be ambiguous"))
 }
 
@@ -407,6 +438,7 @@ func requireLayoutMetadata(t *testing.T, layoutDir, created string, labels map[s
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		manifest, err = index.IndexManifest()
 		if err != nil || len(manifest.Manifests) != 1 {
 			t.Fatalf("platform index = %+v, %v, want one image", manifest, err)

@@ -25,7 +25,6 @@ import (
 func remoteMain(t *testing.T, remote string) string {
 	t.Helper()
 
-	//nolint:gosec // test infra; remote is the test's own bare repository.
 	out, err := exec.CommandContext(t.Context(), "git", "--git-dir", remote, "rev-parse", "refs/heads/main").CombinedOutput()
 	require.NoError(t, err, string(out))
 
@@ -40,7 +39,7 @@ func anotherWriterPushes(t *testing.T, remote string) string {
 	before := remoteMain(t, remote)
 
 	other := t.TempDir()
-	//nolint:gosec // test infra; both paths are the test's own directories.
+
 	out, err := exec.CommandContext(t.Context(), "git", "clone", "-q", remote, other).CombinedOutput()
 	require.NoError(t, err, string(out))
 
@@ -48,7 +47,6 @@ func anotherWriterPushes(t *testing.T, remote string) string {
 		{"-c", "user.name=Other", "-c", "user.email=other@example.invalid", "commit", "-q", "--allow-empty", "-m", "another writer"},
 		{"push", "-q", "origin", "main"},
 	} {
-		//nolint:gosec // test infra; fixed git arguments in the test's clone.
 		gitOut, gitErr := exec.CommandContext(t.Context(), "git", append([]string{"-C", other}, args...)...).CombinedOutput()
 		require.NoError(t, gitErr, string(gitOut))
 	}
@@ -86,6 +84,8 @@ func TestCommitPush_PublishesExactlyTheRequestedPathsToTheRemote(t *testing.T) {
 
 	for _, leased := range []bool{false, true} {
 		t.Run(map[bool]string{false: "legacy", true: "leased"}[leased], func(t *testing.T) {
+			t.Parallel()
+
 			r, remote := commitPushFixture(t)
 			before := r.HeadSHA()
 
@@ -115,6 +115,8 @@ func TestCommitPush_RemoteUnchangedOnNoOpAndRefusal(t *testing.T) {
 	t.Parallel()
 
 	t.Run("nothing to commit", func(t *testing.T) {
+		t.Parallel()
+
 		r := isolatedgit.NewRepo(t)
 		remote := r.AddBareRemote()
 		before := r.HeadSHA()
@@ -130,6 +132,8 @@ func TestCommitPush_RemoteUnchangedOnNoOpAndRefusal(t *testing.T) {
 	})
 
 	t.Run("remote moved after authorization", func(t *testing.T) {
+		t.Parallel()
+
 		r, remote := commitPushFixture(t)
 		authorized := r.HeadSHA()
 		moved := anotherWriterPushes(t, remote)
@@ -146,6 +150,8 @@ func TestCommitPush_RemoteUnchangedOnNoOpAndRefusal(t *testing.T) {
 	// The legacy mode has no lease and no ancestry check, so the push itself is
 	// what keeps another writer's commit: it must never be a forced one.
 	t.Run("remote moved under the legacy mode", func(t *testing.T) {
+		t.Parallel()
+
 		r, remote := commitPushFixture(t)
 		moved := anotherWriterPushes(t, remote)
 

@@ -200,7 +200,7 @@ func (worker *lendingWorker) cleanupRegistration(tb TB, ctx context.Context) {
 }
 
 func (worker *lendingWorker) register(tb TB, ctx context.Context, scenario string) {
-	if _, err := decode(ctx, worker.target, http.MethodPost, worker.base, map[string]any{"name": worker.name, "ephemeral": true}, &worker.created, http.StatusCreated, http.StatusOK); err != nil {
+	if _, err := decode(ctx, worker.target, http.MethodPost, worker.base, map[string]any{fieldName: worker.name, "ephemeral": true}, &worker.created, http.StatusCreated, http.StatusOK); err != nil {
 		tb.Fatalf("local lending: repository-scoped ephemeral registration refused (requires Actions runner management on the owned scratch repository)")
 	}
 

@@ -114,13 +114,14 @@ func gitTreeDigest(t *testing.T, dir string) map[string]string {
 		if infoErr != nil {
 			return infoErr
 		}
+
 		if entry.IsDir() {
 			digests[rel] = "dir " + info.Mode().String()
 
 			return nil
 		}
 
-		body, readErr := os.ReadFile(path) //nolint:gosec // owned temporary repository.
+		body, readErr := os.ReadFile(path)
 		if readErr != nil {
 			return readErr
 		}
@@ -145,7 +146,7 @@ func gitTreeDigest(t *testing.T, dir string) map[string]string {
 func readFile(t *testing.T, path string) string {
 	t.Helper()
 
-	body, err := os.ReadFile(path) //nolint:gosec // owned temporary repository.
+	body, err := os.ReadFile(path)
 	require.NoError(t, err)
 
 	return string(body)

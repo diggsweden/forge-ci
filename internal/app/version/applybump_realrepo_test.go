@@ -30,6 +30,7 @@ func TestApplyBump_RealGitRoundTrip(t *testing.T) {
 	repo := isolatedgit.NewRepo(t)
 	root := strings.ReplaceAll(applyBumpPOM, "%s", "0.1.9")
 	module := "<project>\n  <parent>\n    <groupId>se.digg</groupId>\n    <artifactId>app</artifactId>\n    <version>0.1.9</version>\n  </parent>\n\n  <artifactId>core</artifactId>\n</project>\n"
+
 	repo.AddFile("pom.xml", root, "chore: root")
 	repo.AddFile("core/pom.xml", module, "chore: module")
 

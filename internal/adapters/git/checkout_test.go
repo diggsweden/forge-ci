@@ -25,10 +25,12 @@ func TestInitWithObjectFormat_SetsTheFormatOrRejectsItBeforeRunningGit(t *testin
 
 	t.Run("sha1", func(t *testing.T) {
 		dir := t.TempDir()
+
 		r := &adaptergit.Repo{Dir: dir}
 		if err := r.InitWithObjectFormat(t.Context(), "sha1"); err != nil {
 			t.Fatal(err)
 		}
+
 		if got := gitIn(t, dir, "rev-parse", "--show-object-format"); got != "sha1" {
 			t.Errorf("object format = %q, want sha1", got)
 		}
@@ -36,10 +38,12 @@ func TestInitWithObjectFormat_SetsTheFormatOrRejectsItBeforeRunningGit(t *testin
 
 	t.Run("sha256", func(t *testing.T) {
 		dir := t.TempDir()
+
 		r := &adaptergit.Repo{Dir: dir}
 		if err := r.InitWithObjectFormat(t.Context(), "sha256"); err != nil {
 			t.Fatal(err)
 		}
+
 		if got := gitIn(t, dir, "rev-parse", "--show-object-format"); got != "sha256" {
 			t.Errorf("object format = %q, want sha256", got)
 		}
@@ -48,10 +52,12 @@ func TestInitWithObjectFormat_SetsTheFormatOrRejectsItBeforeRunningGit(t *testin
 	t.Run("invalid is rejected before git runs", func(t *testing.T) {
 		dir := t.TempDir()
 		r := &adaptergit.Repo{Dir: dir}
+
 		err := r.InitWithObjectFormat(t.Context(), "sha512")
 		if !errors.Is(err, errs.ErrValidation) {
 			t.Fatalf("err = %v, want ErrValidation", err)
 		}
+
 		if _, statErr := os.Stat(filepath.Join(dir, ".git")); statErr == nil {
 			t.Error("git init should not have run for an invalid object format")
 		}
@@ -60,15 +66,19 @@ func TestInitWithObjectFormat_SetsTheFormatOrRejectsItBeforeRunningGit(t *testin
 
 func TestRemoteAdd_SetsTheOriginURL(t *testing.T) {
 	isolatedenv.Isolate(t)
+
 	ctx := context.Background()
 	dir := t.TempDir()
+
 	r := &adaptergit.Repo{Dir: dir}
 	if err := r.InitWithObjectFormat(ctx, "sha1"); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := r.RemoteAdd(ctx, "origin", "https://forge.example/owner/repo.git"); err != nil {
 		t.Fatal(err)
 	}
+
 	if got := gitIn(t, dir, "remote", "get-url", "origin"); got != "https://forge.example/owner/repo.git" {
 		t.Errorf("origin url = %q", got)
 	}
@@ -90,32 +100,38 @@ func TestFetchAndCheckoutDetach_Local(t *testing.T) {
 	src.Git("checkout", "-")
 
 	target := t.TempDir()
-	r := &adaptergit.Repo{Dir: target}
-	if err := r.InitWithObjectFormat(ctx, "sha1"); err != nil {
+
+	repository := &adaptergit.Repo{Dir: target}
+	if err := repository.InitWithObjectFormat(ctx, "sha1"); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.RemoteAdd(ctx, "origin", src.Dir); err != nil {
+
+	if err := repository.RemoteAdd(ctx, "origin", src.Dir); err != nil {
 		t.Fatal(err)
 	}
 
 	// Tag path.
-	if err := r.Fetch(ctx, src.Dir, []string{"+refs/tags/v1.0.0:refs/tags/v1.0.0"}, runcontext.Credential{}, 0); err != nil {
+	if err := repository.Fetch(ctx, src.Dir, []string{"+refs/tags/v1.0.0:refs/tags/v1.0.0"}, runcontext.Credential{}, 0); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.CheckoutDetach(ctx, "refs/tags/v1.0.0"); err != nil {
+
+	if err := repository.CheckoutDetach(ctx, "refs/tags/v1.0.0"); err != nil {
 		t.Fatal(err)
 	}
+
 	if got := gitIn(t, target, "rev-parse", "HEAD"); got != mainSHA {
 		t.Errorf("after tag checkout HEAD = %q, want %q", got, mainSHA)
 	}
 
 	// Branch path.
-	if err := r.Fetch(ctx, src.Dir, []string{"+refs/heads/feature:refs/remotes/origin/feature"}, runcontext.Credential{}, 0); err != nil {
+	if err := repository.Fetch(ctx, src.Dir, []string{"+refs/heads/feature:refs/remotes/origin/feature"}, runcontext.Credential{}, 0); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.CheckoutDetach(ctx, "refs/remotes/origin/feature"); err != nil {
+
+	if err := repository.CheckoutDetach(ctx, "refs/remotes/origin/feature"); err != nil {
 		t.Fatal(err)
 	}
+
 	if got := gitIn(t, target, "rev-parse", "HEAD"); got != featureSHA {
 		t.Errorf("after branch checkout HEAD = %q, want %q", got, featureSHA)
 	}
@@ -173,19 +189,19 @@ func TestFetchTags_Local(t *testing.T) {
 	src.AddCommit("second")
 
 	target := t.TempDir()
-	r := &adaptergit.Repo{Dir: target}
+	repository := &adaptergit.Repo{Dir: target}
 
-	if err := r.InitWithObjectFormat(ctx, "sha1"); err != nil {
+	if err := repository.InitWithObjectFormat(ctx, "sha1"); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := r.RemoteAdd(ctx, "origin", src.Dir); err != nil {
+	if err := repository.RemoteAdd(ctx, "origin", src.Dir); err != nil {
 		t.Fatal(err)
 	}
 
 	// Default fetch is --no-tags: the branch's commits arrive, the tag ref
 	// does not.
-	if err := r.Fetch(ctx, src.Dir, []string{"+refs/heads/work:refs/remotes/origin/work"}, runcontext.Credential{}, 0); err != nil {
+	if err := repository.Fetch(ctx, src.Dir, []string{"+refs/heads/work:refs/remotes/origin/work"}, runcontext.Credential{}, 0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -193,7 +209,7 @@ func TestFetchTags_Local(t *testing.T) {
 		t.Fatalf("tag present after --no-tags fetch: %q", tags)
 	}
 
-	if err := r.FetchTags(ctx, src.Dir, runcontext.Credential{}); err != nil {
+	if err := repository.FetchTags(ctx, src.Dir, runcontext.Credential{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -258,13 +274,16 @@ func TestFetch_AuthHeaderNotPersisted(t *testing.T) {
 	src.AddTag("v1.0.0", "release one")
 
 	target := t.TempDir()
+
 	r := &adaptergit.Repo{Dir: target}
 	if err := r.InitWithObjectFormat(ctx, "sha1"); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := r.RemoteAdd(ctx, "origin", src.Dir); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := r.Fetch(ctx, "https://forge.example/owner/repo.git", []string{"+refs/tags/v1.0.0:refs/tags/v1.0.0"}, runcontext.OperatorCredential("secret-token"), 0); err != nil {
 		t.Fatal(err)
 	}
@@ -273,6 +292,7 @@ func TestFetch_AuthHeaderNotPersisted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	for _, leak := range []string{"extraheader", "Authorization", "secret-token", "x-access-token"} {
 		if strings.Contains(string(cfg), leak) {
 			t.Errorf(".git/config leaked %q — the auth header must stay transient", leak)
@@ -296,6 +316,7 @@ func TestFetchDepth_Local(t *testing.T) {
 	remote := "file://" + src.Dir
 
 	target := t.TempDir()
+
 	r := &adaptergit.Repo{Dir: target}
 	if err := r.InitWithObjectFormat(ctx, "sha1"); err != nil {
 		t.Fatal(err)
@@ -347,7 +368,9 @@ func TestFetchDepth_Local(t *testing.T) {
 // gitIn runs git in dir and returns trimmed stdout, failing the test on error.
 func gitIn(t *testing.T, dir string, args ...string) string {
 	t.Helper()
+
 	r := &adaptergit.Repo{Dir: dir}
+
 	out, err := r.Run(t.Context(), args...)
 	if err != nil {
 		t.Fatalf("git %s: %v", strings.Join(args, " "), err)

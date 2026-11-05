@@ -78,6 +78,7 @@ func TestLiveLauncherWaitsForCleanupAndReleasesLock(t *testing.T) {
 			if mode == "just interruption recipe group interrupt" {
 				signal = syscall.SIGINT
 			}
+
 			if mode == "process-group signal" || mode == "just interruption recipe group interrupt" {
 				if err := syscall.Kill(-command.Process.Pid, signal); err != nil {
 					t.Fatal(err)
@@ -151,11 +152,13 @@ func liveLauncherCommand(t *testing.T, ctx context.Context, root, script, mode, 
 	}
 
 	args := []string{"--justfile", filepath.Join(root, "repo/justfile"), "--working-directory", filepath.Join(root, "repo")}
-	if mode == "just interruption recipe group interrupt" {
+
+	switch mode {
+	case "just interruption recipe group interrupt":
 		args = append(args, "test-live-gitlab-interrupted-job")
-	} else if mode == "just release recipe signal" {
+	case "just release recipe signal":
 		args = append(args, "test-live-gitlab-release", filepath.Join(root, "job.tar"), filepath.Join(root, "signer.tar"))
-	} else {
+	default:
 		args = append(args, "test-live", "^TestLiveLauncherLifecycleFixture$")
 	}
 

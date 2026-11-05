@@ -148,7 +148,7 @@ func gitOutput(t *testing.T, dir string, args ...string) string {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
-	command := exec.CommandContext(ctx, "git", args...) //nolint:gosec // Fixed git subcommands on owned directories.
+	command := exec.CommandContext(ctx, "git", args...)
 	command.Dir = dir
 
 	out, err := command.Output()
@@ -184,7 +184,7 @@ func requireNoCredentialForm(t *testing.T, workspace string, produced ...string)
 			return err
 		}
 
-		content, readErr := os.ReadFile(path) //nolint:gosec // Files under the test's own workspace.
+		content, readErr := os.ReadFile(path)
 		if readErr != nil {
 			return readErr
 		}
@@ -207,7 +207,7 @@ func lsRemotePeeled(t *testing.T, repository, ref string) string {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
-	out, err := exec.CommandContext(ctx, "git", "ls-remote", repository, ref+"^{}", ref).Output() //nolint:gosec // owned repository and fixed refs.
+	out, err := exec.CommandContext(ctx, "git", "ls-remote", repository, ref+"^{}", ref).Output()
 	if err != nil {
 		t.Fatalf("git ls-remote %s %s: %v", repository, ref, err)
 	}

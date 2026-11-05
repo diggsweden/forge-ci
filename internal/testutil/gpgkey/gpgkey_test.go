@@ -22,23 +22,29 @@ func TestKey_NestedTemporaryRootAndCleanup(t *testing.T) {
 	if err := os.Mkdir(longRoot, 0o700); err != nil {
 		t.Fatal(err)
 	}
+
 	t.Setenv("TMPDIR", longRoot)
 
 	var keyring string
+
 	t.Run("generate", func(t *testing.T) {
 		key := gpgkey.New(t)
 		keyring = key.GNUPGHOME
+
 		info, err := os.Stat(keyring)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		if info.Mode().Perm() != 0o700 {
 			t.Fatalf("keyring permissions = %v, want owner-only", info.Mode())
 		}
+
 		if !slices.Contains(listSecretFingerprints(t, keyring), key.Fingerprint) {
 			t.Fatal("generated key is absent from its private keyring")
 		}
 	})
+
 	if _, err := os.Stat(keyring); !os.IsNotExist(err) {
 		t.Fatalf("keyring remains after its test: %v", err)
 	}
@@ -54,11 +60,11 @@ func TestKey_NestedTemporaryRootAndCleanup(t *testing.T) {
 // this proves is that the fixture is readable by the code it feeds, not merely
 // that gpg emitted something.
 func TestArmoredKeys_ParseAsTheKeyTheyClaimToBe(t *testing.T) {
-	k := gpgkey.New(t)
+	signingKey := gpgkey.New(t)
 
 	for name, armor := range map[string]string{
-		"private": k.ArmoredPrivateKey(),
-		"public":  k.ArmoredPublicKey(),
+		"private": signingKey.ArmoredPrivateKey(),
+		"public":  signingKey.ArmoredPublicKey(),
 	} {
 		t.Run(name, func(t *testing.T) {
 			md, err := openpgp.ReadMetadata([]byte(armor))
@@ -66,16 +72,16 @@ func TestArmoredKeys_ParseAsTheKeyTheyClaimToBe(t *testing.T) {
 				t.Fatalf("parse armored %s key: %v", name, err)
 			}
 
-			if md.Fingerprint != k.Fingerprint {
-				t.Errorf("parsed fingerprint = %q, want %q", md.Fingerprint, k.Fingerprint)
+			if md.Fingerprint != signingKey.Fingerprint {
+				t.Errorf("parsed fingerprint = %q, want %q", md.Fingerprint, signingKey.Fingerprint)
 			}
 
-			if md.KeyID != k.KeyID() {
-				t.Errorf("parsed key ID = %q, want %q", md.KeyID, k.KeyID())
+			if md.KeyID != signingKey.KeyID() {
+				t.Errorf("parsed key ID = %q, want %q", md.KeyID, signingKey.KeyID())
 			}
 
-			if md.Name != k.Name || md.Email != k.Email {
-				t.Errorf("parsed identity = %q <%s>, want %q <%s>", md.Name, md.Email, k.Name, k.Email)
+			if md.Name != signingKey.Name || md.Email != signingKey.Email {
+				t.Errorf("parsed identity = %q <%s>, want %q <%s>", md.Name, md.Email, signingKey.Name, signingKey.Email)
 			}
 		})
 	}
@@ -83,16 +89,16 @@ func TestArmoredKeys_ParseAsTheKeyTheyClaimToBe(t *testing.T) {
 	// The private armor must carry the secret half. ReadMetadata reads only
 	// the public material, so it cannot tell the two blocks apart; the signer
 	// constructor refuses a public-only armor by name.
-	signer, err := openpgp.NewSignerFromArmor([]byte(k.ArmoredPrivateKey()), "")
+	signer, err := openpgp.NewSignerFromArmor([]byte(signingKey.ArmoredPrivateKey()), "")
 	if err != nil {
 		t.Fatalf("the private armor is not usable for signing: %v", err)
 	}
 
-	if got := signer.Fingerprint(); got != k.Fingerprint {
-		t.Errorf("signer fingerprint = %q, want %q", got, k.Fingerprint)
+	if got := signer.Fingerprint(); got != signingKey.Fingerprint {
+		t.Errorf("signer fingerprint = %q, want %q", got, signingKey.Fingerprint)
 	}
 
-	if _, err := openpgp.NewSignerFromArmor([]byte(k.ArmoredPublicKey()), ""); err == nil {
+	if _, err := openpgp.NewSignerFromArmor([]byte(signingKey.ArmoredPublicKey()), ""); err == nil {
 		t.Error("the public armor was accepted as signing material, so the two exports are not distinct")
 	}
 }
@@ -130,7 +136,6 @@ func TestKeys_AreIsolated_AcrossKeyrings(t *testing.T) {
 func listSecretFingerprints(t *testing.T, homedir string) []string {
 	t.Helper()
 
-	//nolint:gosec // test infra; homedir is t.TempDir()-based.
 	out, err := exec.CommandContext(t.Context(), "gpg", "--homedir", homedir,
 		"--batch", "--with-colons", "--list-secret-keys").Output()
 	if err != nil {

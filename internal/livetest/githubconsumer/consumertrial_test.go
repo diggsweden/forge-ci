@@ -9,6 +9,7 @@
 package githubconsumer_test
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"net/mail"
@@ -315,12 +316,16 @@ func releaseSigning(root, fixtures string, settings livetest.GitHubTrialSettings
 		return false, "", fmt.Errorf("parse the fixture's release workflow: %w", err)
 	}
 
-	var keySigned bool
-	var principal string
+	var (
+		keySigned bool
+		principal string
+	)
+
 	for name, job := range workflow.Jobs {
 		if _, pinsKey := job.With["cosign-public-key-sha256"]; pinsKey {
 			keySigned = true
 		}
+
 		var inherited string
 		if err := job.Secrets.Decode(&inherited); err == nil && inherited == "inherit" {
 			continue
@@ -331,22 +336,28 @@ func releaseSigning(root, fixtures string, settings livetest.GitHubTrialSettings
 		if err := job.Secrets.Decode(&secrets); err != nil {
 			return false, "", fmt.Errorf("decode release job %s secrets: %w", name, err)
 		}
+
 		for _, secret := range secrets {
 			if !strings.Contains(secret, "secrets.RELEASE_SSH_SIGNING_KEY") {
 				continue
 			}
+
 			email, literal := job.With["bot-email"].(string)
+
 			address, err := mail.ParseAddress(email)
 			if !literal || err != nil || address.Name != "" || address.Address != email ||
 				strings.ContainsAny(email, "*?![],\\") || strings.Contains(email, "${{") {
 				return false, "", fmt.Errorf("release job %s requires a literal bot-email signing principal without SSH patterns", name)
 			}
+
 			if principal != "" && principal != email {
-				return false, "", fmt.Errorf("release jobs require different SSH signing principals")
+				return false, "", errors.New("release jobs require different SSH signing principals")
 			}
+
 			principal = email
 		}
 	}
+
 	return keySigned, principal, nil
 }
 

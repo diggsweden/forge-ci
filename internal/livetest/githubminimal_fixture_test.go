@@ -67,6 +67,7 @@ WITH    secrets:
       RELEASE_SSH_SIGNING_KEY: ${{ secrets.RELEASE_SSH_SIGNING_KEY }}
       RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 `
+
 	return strings.NewReplacer("ENGINE", engine, "LEAF", leaf, "COMMIT", commit, "IMAGE", minimalNodeImage, "EMAIL", minimalBotEmail, "WITH", with).Replace(workflow)
 }
 
@@ -74,7 +75,9 @@ func TestMinimalPreparationWorkflowPinsBootstrapToEngineSnapshot(t *testing.T) {
 	t.Parallel()
 
 	const engine = "fixture-owner/minimal-engine"
+
 	commit := strings.Repeat("a", 40)
+
 	for _, tc := range []struct {
 		name, leaf string
 		multi      bool
@@ -83,6 +86,8 @@ func TestMinimalPreparationWorkflowPinsBootstrapToEngineSnapshot(t *testing.T) {
 		{"multi-artifact", "release-prepare-stage.yml", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			var workflow struct {
 				Jobs map[string]struct {
 					Uses string            `yaml:"uses"`
@@ -97,9 +102,11 @@ func TestMinimalPreparationWorkflowPinsBootstrapToEngineSnapshot(t *testing.T) {
 			if call.Uses != engine+"/.github/workflows/"+tc.leaf+"@"+commit {
 				t.Fatalf("consumer must call the immutable fixture engine snapshot: %s", call.Uses)
 			}
+
 			if ref := call.With["forge-ci-binary-ref"]; ref != commit {
 				t.Errorf("bootstrap ref = %q, want fixture engine commit %s; an empty ref selects a stable release absent from the scratch engine", ref, commit)
 			}
+
 			if call.With["runtime-image"] != minimalNodeImage {
 				t.Error("fixture toolchain image must remain digest-pinned")
 			}

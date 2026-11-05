@@ -37,14 +37,17 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 	if phaseErr != nil {
 		t.Fatal(phaseErr)
 	}
+
 	flavor, err := sourceImageFlavor(os.Getenv("FORGE_CI_LIVE_IMAGE_FLAVOR"))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	batchRetain, err := sourceImageBatchRetention(phase, os.Getenv("FORGE_CI_LIVE_IMAGE_BATCH_RETAIN_ACK"))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	t.Logf("source image phase admitted: phase=%s flavor=%s", phase, flavor)
 
 	if os.Getenv(GitHubContextEnv) == "" {
@@ -113,6 +116,7 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 		identity GitHubPackageIdentity
 		versions []sourceImageVersion
 	)
+
 	uploadAcknowledged := false
 
 	if phase == "resume" || phase == "cleanup" {
@@ -154,14 +158,17 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 	if trial.org != organization || !strings.HasPrefix(repo, trial.prefix) {
 		t.Fatal("runtime organization/repository mismatch")
 	}
+
 	repository, _, err := trial.api.Repositories.Get(t.Context(), trial.org, repo)
 	if err != nil || repository.GetID() != repoID || repository.GetPrivate() {
 		t.Fatal("public retained engine identity mismatch")
 	}
+
 	actor, _, err := trial.api.Users.Get(t.Context(), "")
 	if err != nil {
 		t.Fatal("actor metadata unavailable")
 	}
+
 	options := []remote.Option{remote.WithContext(t.Context()), remote.WithAuth(authn.FromConfig(authn.AuthConfig{Username: actor.GetLogin(), Password: trial.token}))}
 	if phase == "resume" || phase == "cleanup" {
 		if err := trial.checkSourceImageVersions(t.Context(), identity, versions); err != nil {
@@ -171,6 +178,7 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 		if _, err := trial.ReadContainerPackageIdentity(t.Context(), packageName, repoID); !errors.Is(err, os.ErrNotExist) {
 			t.Fatal("publication destination already exists or is not safely readable")
 		}
+
 		t.Logf("source image publication starting: package=%s source=%s original_config=%s", packageName, source, configHash)
 
 		writeErr = remote.Write(reference, mirrored, options...)
@@ -212,10 +220,12 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 	if writeErr != nil {
 		t.Fatal("source image upload failed; exact owned package scheduled for cleanup")
 	}
+
 	if phase == "cleanup" {
 		// Receipt and immutable package identity were checked above. Do not
 		// republish or launch another consumer just to release a batch fixture.
 		retained = false
+
 		return
 	}
 
@@ -262,6 +272,7 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 	if !sourceImageLayersMatch(image, served) {
 		t.Fatal("mirror layer bytes changed")
 	}
+
 	if phase != "resume" {
 		versions, err = trial.readSourceImageVersions(t.Context(), identity, expected.String())
 		if err != nil {
@@ -328,6 +339,7 @@ func TestGitHubSourceImageConsumerPullRequest(t *testing.T) {
 	}
 
 	t.Logf("public source image verified: id=%d repo=%d ref=%s", identity.ID, repoID, digestReference)
+
 	if retained {
 		// The caller owns both consumer trials and exact-package cleanup after
 		// their completion. Qualification itself launches no consumer workflow.

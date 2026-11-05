@@ -318,6 +318,7 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 	if recovery && (consumerRoot == "" || settings.Version == "" || settings.Version == "0.0.0" || settings.NextVersion != "") {
 		t.Fatal("consumer recovery requires one explicit nonzero version and no next-version")
 	}
+
 	if recovery && !releaseImages {
 		t.Fatal("consumer recovery requires policy-owned release-images")
 	}
@@ -502,19 +503,24 @@ func runGitLabReleaseScenario(t *testing.T, consumerRoot string, scenario gitlab
 	if recovery {
 		// Extend the exact captured parent, not a retained fork or consumer CI.
 		policyProject := livetest.RepoSlug(target, policyRepo)
+
 		extension, err := livetest.GitLabRecoveryExtension(jobImage)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		extensionCommit := gitlabPolicyCommit(t, ctx, client, policyProject, "recovery-checkpoint.yml", string(extension), gitlabapi.FileCreate)
+
 		parentSource, _, err := client.RepositoryFiles.GetRawFile(layer.Repository, "templates/release.yml", &gitlabapi.GetRawFileOptions{Ref: new(layer.Commit)}, gitlabapi.WithContext(ctx))
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		wrapper, err := livetest.GitLabRecoveryParent(parentSource, layer.Commit, policyProject, extensionCommit.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		wrapperCommit := gitlabPolicyCommit(t, ctx, client, policyProject, "templates/recovery.yml", string(wrapper), gitlabapi.FileCreate)
 		policyIncludes[0].(map[string]any)["component"] = strings.TrimPrefix(target.BaseURL(), "https://") + "/" + policyProject + "/recovery@" + wrapperCommit.ID
 	}
@@ -1098,40 +1104,52 @@ func requireGitLabReleaseBundles(t *testing.T, client *gitlabapi.Client, target 
 
 	release := mustReadRelease(ctx, t, target, repo, tag)
 	project := livetest.RepoSlug(target, repo)
+
 	jobs, _, err := client.Jobs.ListPipelineJobs(project, child, &gitlabapi.ListJobsOptions{PerPage: 100}, gitlabapi.WithContext(ctx))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	var signerID, producerID int64
+
 	for _, job := range jobs {
 		if job.Pipeline.ID != child || job.Commit == nil || requestSHA == "" || job.Commit.ID != requestSHA {
 			t.Fatal("release artifact job is not bound to the expected native child pipeline/commit")
 		}
+
 		if job.Name == "Build: release files" && job.Status == "success" && job.ArtifactsFile.Size > 0 {
 			if producerID != 0 {
 				t.Fatal("release has multiple successful producer artifacts")
 			}
+
 			producerID = job.ID
 		}
+
 		if job.Name == "Sign: files and images" && job.Status == "success" && job.ArtifactsFile.Size > 0 {
 			if signerID != 0 {
 				t.Fatal("release has multiple successful signer artifacts")
 			}
+
 			signerID = job.ID
 		}
 	}
+
 	if signerID == 0 || producerID == 0 {
 		t.Fatal("release has no unique successful producer/signer artifact pair")
 	}
+
 	archive := func(id int64) []byte {
 		address := fmt.Sprintf("%s/api/v4/projects/%s/jobs/%d/artifacts", target.BaseURL(), url.PathEscape(project), id)
+
 		return livetest.GitLabReleaseArchive(t, target, address, fmt.Sprintf("gitlab-release-%d-job-%d.zip", child, id))
 	}
+
 	evidence, err := livetest.VerifyGitLabReleaseEvidence(livetest.Context(t), livetest.Binary(t), archive(producerID), archive(signerID), release.AssetNames(), func(assetName string) ([]byte, error) {
 		limit := int64(maxReleaseFile)
 		if strings.HasSuffix(assetName, ".apk") {
 			limit = 256 << 20
 		}
+
 		return livetest.Download(t, target, livetest.ReleaseAssetURL(t, target, repo, tag, assetName), limit), nil
 	}, func(blob, bundle []byte) error {
 		return livetest.VerifyBlob(t, target, keys.cosignPublicPath, blob, bundle)
@@ -1139,6 +1157,7 @@ func requireGitLabReleaseBundles(t *testing.T, client *gitlabapi.Client, target 
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	requireReleaseBundleRejections(t, target, keys.cosignPublicPath, evidence.Checksum, evidence.Bundle)
 
 	return evidence.Verified

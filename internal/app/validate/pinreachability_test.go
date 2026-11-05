@@ -47,8 +47,8 @@ func writePinnedWorkflow(t *testing.T, sha string) string {
 
 	path := filepath.Join(t.TempDir(), "release.yml")
 
-	body := "jobs:\n  sign:\n    uses: examplescope/ci-layer/.forgejo/workflows/sign.yml@" + sha + "\n"
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil { //nolint:gosec // test-owned path.
+	body := "jobs:\n  sign:\n    uses: examplescope/forgejo-ci/.forgejo/workflows/sign.yml@" + sha + "\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -67,10 +67,10 @@ func writeWorkflowWithPins(t *testing.T, name string, shas ...string) string {
 	body.WriteString("jobs:\n")
 
 	for i, sha := range shas {
-		fmt.Fprintf(&body, "  job%d:\n    uses: examplescope/ci-layer/.forgejo/workflows/sign.yml@%s\n", i, sha)
+		fmt.Fprintf(&body, "  job%d:\n    uses: examplescope/forgejo-ci/.forgejo/workflows/sign.yml@%s\n", i, sha)
 	}
 
-	if err := os.WriteFile(path, []byte(body.String()), 0o644); err != nil { //nolint:gosec // test-owned path.
+	if err := os.WriteFile(path, []byte(body.String()), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -113,6 +113,8 @@ func TestPinReachability_ChecksEveryPinInEveryFile(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			repo := isolatedgit.NewRepo(t)
 			reachable := repo.AddCommit("reachable")
 			orphan := repo.AddCommit("orphan")
@@ -213,7 +215,7 @@ func TestPinReachability_TaggedPinPasses(t *testing.T) {
 
 func TestPinReachability_NoPinsPasses(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "release.yml")
-	if err := os.WriteFile(path, []byte("jobs: {}\n"), 0o644); err != nil { //nolint:gosec // test-owned path.
+	if err := os.WriteFile(path, []byte("jobs: {}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

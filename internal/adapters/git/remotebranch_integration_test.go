@@ -60,24 +60,30 @@ func TestRemoteBranchCommit_UsesTheSelectedForeignOwnedWorkspace(t *testing.T) {
 	// Git's own test switch models a mounted checkout owned by the runner's
 	// helper UID, without changing host ownership or trusting every directory.
 	t.Setenv("GIT_TEST_ASSUME_DIFFERENT_OWNER", "1")
+
 	config := filepath.Join(t.TempDir(), "remote.gitconfig")
 	if err := os.WriteFile(config, []byte("[safe]\n\tdirectory = "+remote+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+
 	t.Setenv("GIT_CONFIG_GLOBAL", config)
+
 	adapter := &adaptergit.Repo{Dir: repo.Dir}
 	if sha, err := adapter.RevParse(t.Context(), "HEAD"); err != nil || sha != published {
 		t.Fatalf("foreign-owned selected HEAD: %q, %v", sha, err)
 	}
+
 	for _, credential := range []runcontext.Credential{{}, runcontext.OperatorCredential("inert-fixture")} {
 		sha, exists, err := adapter.RemoteBranchCommit(t.Context(), "origin", "main", credential)
 		if err != nil || !exists || sha != published {
 			t.Fatalf("foreign-owned selected workspace: %q, %v, %v", sha, exists, err)
 		}
+
 		sha, exists, err = adapter.RemoteTagCommitIfExists(t.Context(), "origin", "v1.0.0", credential)
 		if err != nil || !exists || sha != published {
 			t.Fatalf("foreign-owned remote tag probe: %q, %v, %v", sha, exists, err)
 		}
+
 		sha, err = adapter.RemoteTagCommit(t.Context(), "origin", "v1.0.0", credential)
 		if err != nil || sha != published {
 			t.Fatalf("foreign-owned required remote tag: %q, %v", sha, err)

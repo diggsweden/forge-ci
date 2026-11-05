@@ -18,6 +18,7 @@ func TestAndroidDemoBindsBothJobsToPreparedEngine(t *testing.T) {
 	body := reporoot.ReadFile(t, "test/live/demos/hello-android/consumer/test/live/github/workflows/pullrequest.yml")
 	rendered, _, err := RenderGitHubConsumer("pullrequest.yml", string(body), trialEngine, nil)
 	require.NoError(t, err)
+
 	var workflow struct {
 		Jobs map[string]struct {
 			Uses string
@@ -26,14 +27,18 @@ func TestAndroidDemoBindsBothJobsToPreparedEngine(t *testing.T) {
 		}
 	}
 	require.NoError(t, yaml.Unmarshal([]byte(rendered), &workflow))
+
 	for job, leaf := range map[string]string{"pr-checks": "pullrequest-orchestrator.yml", "build": "build-gradle-android.yml"} {
 		t.Run(job, func(t *testing.T) {
+			t.Parallel()
+
 			call, ok := workflow.Jobs[job]
 			require.True(t, ok)
 			require.Equal(t, trialEngine.Owner+"/"+trialEngine.Repository+"/.github/workflows/"+leaf+"@"+trialEngine.Commit, call.Uses)
 			require.Equal(t, GitHubPrerelease, call.With["forge-ci-binary-ref"], "missing binary ref would resolve latest stable instead of the prepared engine")
 		})
 	}
+
 	build := workflow.Jobs["build"]
 	require.Equal(t, "${{ github.event_name == 'workflow_dispatch' }}", build.If)
 	require.Equal(t, "ghcr.io/example-org/forge-ci-runtime-android-35:sha-aaaaaaa", build.With["runtime-image"])

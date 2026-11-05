@@ -21,12 +21,15 @@ func GitHubReleaseToken(path string) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("%s is required for a consumer release: %w", GitHubReleaseTokenFileEnv, errs.ErrUsage)
 	}
+
 	token, err := readTokenFile(path)
 	if err != nil {
 		return "", fmt.Errorf("%s must name a private regular file containing one bounded token: %w", GitHubReleaseTokenFileEnv, errs.ErrUsage)
 	}
+
 	if !strings.HasPrefix(token, "github_pat_") || len(token) <= len("github_pat_") {
 		return "", fmt.Errorf("%s requires a fine-grained PAT, not a classic management/Packages token: %w", GitHubReleaseTokenFileEnv, errs.ErrUsage)
 	}
+
 	return token, nil
 }

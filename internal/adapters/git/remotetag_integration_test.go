@@ -26,6 +26,7 @@ func TestRemoteTagReads_RequireTheExactRef(t *testing.T) {
 	// Git can serve this disposable working repository directly; no push or
 	// network is needed to exercise its real advertisement and matching.
 	repo := &adaptergit.Repo{Dir: remote.Dir}
+
 	for _, test := range []struct {
 		tag  string
 		want bool
@@ -36,6 +37,8 @@ func TestRemoteTagReads_RequireTheExactRef(t *testing.T) {
 		{tag: "v3.0.0"},
 	} {
 		t.Run(test.tag, func(t *testing.T) {
+			t.Parallel()
+
 			exists, err := repo.RemoteTagExists(t.Context(), remote.Dir, test.tag, runcontext.Credential{})
 			if err != nil || exists != test.want {
 				t.Errorf("RemoteTagExists = %v, %v; want %v, nil", exists, err, test.want)

@@ -45,6 +45,7 @@ func buildConstrainedProductFiles() map[string]string {
 		"internal/app/platform/stagepublickey_other.go": "!unix",
 		"internal/app/platform/stagepublickey_unix.go":  "unix",
 		"internal/cliio/lock_unix.go":                   "unix",
+		"internal/pathsafe/root_other.go":               "!linux",
 		"internal/safeexec/hardening_linux.go":          "linux",
 		"internal/safeexec/hardening_other.go":          "!linux",
 		"internal/safeexec/processgroup_linux.go":       "linux",
@@ -161,13 +162,18 @@ func TestGuardEligibility_UnbuiltVariantsDoNotReadTheEnvironment(t *testing.T) {
 // TestGuardEligibility_UnbuiltVariantsImportNoInternalPackage is the layering
 // half of the same question. The depguard layer rules run inside golangci-lint,
 // including the Linux reference build on every host. An internal import in
-// a variant outside that baseline needs explicit coverage. None needs one today; a variant
-// that does should be linted under its GOOS rather than exempted here.
+// a variant outside that baseline needs explicit coverage. The pathsafe fallback
+// is cross-linted for Darwin by the mandatory lint prerequisite below.
 func TestGuardEligibility_UnbuiltVariantsImportNoInternalPackage(t *testing.T) {
 	t.Parallel()
 
 	root := reporoot.Path(t)
 	checked := 0
+
+	justfile, err := reporoot.ReadFileAt(root, "justfile")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for rel, tag := range buildConstrainedProductFiles() {
 		if satisfiedByReferenceBuild(t, tag) {
@@ -175,6 +181,15 @@ func TestGuardEligibility_UnbuiltVariantsImportNoInternalPackage(t *testing.T) {
 		}
 
 		checked++
+
+		if rel == "internal/pathsafe/root_other.go" {
+			if !strings.Contains(string(justfile), "_lint-linux-platform: _lint-darwin-platform") ||
+				!strings.Contains(string(justfile), "GOOS=darwin GOARCH=arm64 golangci-lint run --config development/golangci-lint/golangci.yml ./internal/pathsafe/...") {
+				t.Fatal("pathsafe fallback requires the mandatory Darwin lint prerequisite")
+			}
+
+			continue
+		}
 
 		file, err := parser.ParseFile(token.NewFileSet(), filepath.Join(root, rel), nil, parser.ImportsOnly)
 		if err != nil {

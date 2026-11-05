@@ -37,8 +37,9 @@ func TestAuthEnv_GitAppliesTheHeaderOnlyForTheRemoteAndNeverStoresIt(t *testing.
 		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		defer cancel()
 
-		cmd := exec.CommandContext(ctx, "git", args...) //nolint:gosec // fixed git subcommands against an owned temp repository.
+		cmd := exec.CommandContext(ctx, "git", args...)
 		cmd.Dir = dir
+
 		cmd.Env = append([]string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null"}, extra...)
 		out, err := cmd.Output()
 

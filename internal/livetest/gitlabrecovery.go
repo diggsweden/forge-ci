@@ -5,6 +5,7 @@ package livetest
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -14,40 +15,66 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/imageledger"
 )
 
+// GitLabRecoveryCheckpoint names the policy-owned interruption gate.
 const GitLabRecoveryCheckpoint = "Fixture: candidate checkpoint"
+
+// GitLabRecoveryPauseVariable controls the disposable checkpoint job.
 const GitLabRecoveryPauseVariable = "FIXTURE_PAUSE_AFTER_CANDIDATE"
+
+const (
+	recoveryPublisher = "Images: publish"
+	recoveryArtifacts = "artifacts"
+)
+
+var errRecovery = errors.New("recovery contract violated")
 
 // GitLabRecoveryObservation recognizes the current DAG's interruption boundary.
 // A running consumer build is not a checkpoint, even if it wrote a registry tag.
-func GitLabRecoveryObservation(jobs []*gitlabapi.Job) (publisher, checkpoint int64, err error) {
+func GitLabRecoveryObservation(jobs []*gitlabapi.Job) (int64, int64, error) {
+	var publisher, checkpoint int64
+
 	buildSucceeded := false
+
 	for _, job := range jobs {
-		if job.Status == "failed" || job.Status == "canceled" {
-			return 0, 0, fmt.Errorf("consumer failed before the interruption checkpoint: %s", job.Name)
+		if err := checkRecoveryJob(job); err != nil {
+			return 0, 0, err
 		}
-		if (strings.HasPrefix(job.Name, "Sign:") || strings.HasPrefix(job.Name, "Publish:")) && job.Status != "created" && job.Status != "skipped" {
-			return 0, 0, fmt.Errorf("downstream job %s advanced before checkpoint cancellation: %s", job.Name, job.Status)
-		}
+
 		switch job.Name {
 		case "Build: release files":
-			buildSucceeded = job.Status == "success"
-		case "Images: publish":
-			if job.Status == "success" {
+			buildSucceeded = job.Status == runSuccess
+		case recoveryPublisher:
+			if job.Status == runSuccess {
 				publisher = job.ID
 			}
 		case GitLabRecoveryCheckpoint:
-			if job.Status == "success" {
-				return 0, 0, fmt.Errorf("checkpoint completed without controller cancellation")
+			if job.Status == runSuccess {
+				return 0, 0, fmt.Errorf("checkpoint completed without controller cancellation: %w", errRecovery)
 			}
+
 			if job.Status == "running" {
 				checkpoint = job.ID
 			}
 		}
 	}
+
 	if publisher == 0 || checkpoint == 0 || !buildSucceeded {
 		return 0, 0, nil
 	}
+
 	return publisher, checkpoint, nil
+}
+
+func checkRecoveryJob(job *gitlabapi.Job) error {
+	if job.Status == "failed" || job.Status == "canceled" {
+		return fmt.Errorf("consumer failed before the interruption checkpoint: %s: %w", job.Name, errRecovery)
+	}
+
+	if (strings.HasPrefix(job.Name, "Sign:") || strings.HasPrefix(job.Name, "Publish:")) && job.Status != "created" && job.Status != "skipped" {
+		return fmt.Errorf("downstream job %s advanced before checkpoint cancellation: %s: %w", job.Name, job.Status, errRecovery)
+	}
+
+	return nil
 }
 
 // GitLabRecoveryParent extends the captured engine parent, rather than retaining
@@ -59,39 +86,50 @@ func GitLabRecoveryParent(parent []byte, engineSHA, policyProject, extensionRef 
 	parent = bytes.ReplaceAll(parent, []byte("$[[ component.sha ]]"), []byte(engineSHA))
 	parent = bytes.ReplaceAll(parent, []byte("$[[ component.reference ]]"), []byte(engineSHA))
 	decoder := yaml.NewDecoder(bytes.NewReader(parent))
+
 	var spec, jobs map[string]any
 	if err := decoder.Decode(&spec); err != nil {
 		return nil, err
 	}
+
 	if err := decoder.Decode(&jobs); err != nil {
 		return nil, err
 	}
+
 	release, ok := jobs["release"].(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("recovery: captured parent has no release job")
+		return nil, fmt.Errorf("captured parent has no release job: %w", errRecovery)
 	}
+
 	trigger, ok := release["trigger"].(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("recovery: captured parent has no child trigger")
+		return nil, fmt.Errorf("captured parent has no child trigger: %w", errRecovery)
 	}
+
 	includes, ok := trigger["include"].([]any)
 	if !ok || len(includes) != 1 {
-		return nil, fmt.Errorf("recovery: expected one production child include")
+		return nil, fmt.Errorf("expected one production child include: %w", errRecovery)
 	}
+
 	trigger["include"] = append(includes, map[string]any{
 		"project": policyProject, "ref": extensionRef, "file": "/recovery-checkpoint.yml",
 	})
+
 	var out bytes.Buffer
+
 	encoder := yaml.NewEncoder(&out)
 	if err := encoder.Encode(spec); err != nil {
 		return nil, err
 	}
+
 	if err := encoder.Encode(jobs); err != nil {
 		return nil, err
 	}
+
 	if err := encoder.Close(); err != nil {
 		return nil, err
 	}
+
 	return out.Bytes(), nil
 }
 
@@ -102,9 +140,9 @@ func GitLabRecoveryParent(parent []byte, engineSHA, policyProject, extensionRef 
 func GitLabRecoveryExtension(image string) ([]byte, error) {
 	return yaml.Marshal(map[string]any{
 		GitLabRecoveryCheckpoint: map[string]any{
-			"stage": "sign", "image": map[string]any{"name": image, "entrypoint": []string{""}},
+			"stage": "sign", "image": map[string]any{fieldName: image, "entrypoint": []string{""}},
 			"variables": map[string]string{"GIT_STRATEGY": "empty", "GIT_SUBMODULE_STRATEGY": "none"},
-			"needs":     []any{map[string]any{"job": "Images: publish", "artifacts": false}},
+			"needs":     []any{map[string]any{lendingJob: recoveryPublisher, recoveryArtifacts: false}},
 			"script": []string{`set -eu
 case "${FIXTURE_PAUSE_AFTER_CANDIDATE:?}" in
   true)
@@ -119,8 +157,8 @@ esac`},
 		},
 		"Sign: files and images": map[string]any{
 			"needs": []any{
-				map[string]any{"job": "Images: publish", "artifacts": true},
-				map[string]any{"job": GitLabRecoveryCheckpoint, "artifacts": false},
+				map[string]any{lendingJob: recoveryPublisher, recoveryArtifacts: true},
+				map[string]any{lendingJob: GitLabRecoveryCheckpoint, recoveryArtifacts: false},
 			},
 		},
 	})
@@ -136,18 +174,22 @@ func GitLabRecoveryCandidate(ledger []byte, repository, finalTag string) (imagel
 	if err != nil {
 		return imageledger.Entry{}, err
 	}
+
 	if len(entries) != 1 {
-		return imageledger.Entry{}, fmt.Errorf("recovery requires exactly one candidate, got %d", len(entries))
+		return imageledger.Entry{}, fmt.Errorf("recovery requires exactly one candidate, got %d: %w", len(entries), errRecovery)
 	}
+
 	entry := entries[0]
 	if err := entry.Validate(finalTag); err != nil {
 		return imageledger.Entry{}, err
 	}
+
 	if entry.ImageKind != imageledger.ImageKindRelease || entry.CandidateTag != repository+":staging-"+finalTag ||
 		entry.FinalTag != repository+":"+finalTag || entry.Ref != repository+"@"+entry.Digest ||
 		(entry.MovingTag != "" && entry.MovingTag != repository+":latest") {
-		return imageledger.Entry{}, fmt.Errorf("recovery receipt does not bind the exact candidate: %+v", entry)
+		return imageledger.Entry{}, fmt.Errorf("recovery receipt does not bind the exact candidate: %+v: %w", entry, errRecovery)
 	}
+
 	return entry, nil
 }
 
@@ -165,6 +207,7 @@ func GitLabRecoveryPublicationDigests(candidate imageledger.Entry, finalTag, pre
 	if candidate.MovingTag != "" {
 		latest = GitLabRecoveryTagState{Digest: candidate.Digest, Found: true}
 	}
+
 	return map[string]GitLabRecoveryTagState{
 		finalTag: {Digest: candidate.Digest, Found: true},
 		"latest": latest, "v0.0.0": {Digest: previousDigest, Found: true},
@@ -176,8 +219,10 @@ func CheckGitLabRecoveryTag(tag string, observed, expected GitLabRecoveryTagStat
 	if readErr != nil {
 		return fmt.Errorf("read recovery publication tag %s: %w", tag, readErr)
 	}
+
 	if observed != expected {
-		return fmt.Errorf("recovered publication tag %s has state %+v, want %+v", tag, observed, expected)
+		return fmt.Errorf("recovered publication tag %s has state %+v, want %+v: %w", tag, observed, expected, errRecovery)
 	}
+
 	return nil
 }

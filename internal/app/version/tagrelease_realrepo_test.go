@@ -109,7 +109,7 @@ func TestTagRelease_RefusesARemoteTagThatAlreadyClaimsAnotherCommit(t *testing.T
 
 	require.Equal(t, foreignTag, remoteRef(t, repo, remote, "refs/tags/v1.2.3"),
 		"the other writer's tag must survive untouched")
-	require.Equal(t, "", localTagObject(t, repo, "v1.2.3"),
+	require.Empty(t, localTagObject(t, repo, "v1.2.3"),
 		"a refused release must not leave a local tag behind either")
 
 	// The documented, uncompensated half: the branch commit stays published.

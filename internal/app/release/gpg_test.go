@@ -30,21 +30,23 @@ import (
 // gpgRoundTrip wipes the throwaway key, then re-imports it via app.GPGImport.
 func gpgRoundTrip(t *testing.T, key *gpgkey.Key, sink *fakeoutputsink.Sink, in apprelease.GPGImportInput, gitRepo *git.Repo) string {
 	t.Helper()
+
 	if in.PrivateKey == "" {
 		in.PrivateKey = key.ArmoredPrivateKey()
 	}
 
-	a := adaptergpg.New()
+	adapter := adaptergpg.New()
 	ctx := context.Background()
-	a.DeleteSecretKey(ctx, key.Fingerprint)
-	a.DeleteKey(ctx, key.Fingerprint)
+	adapter.DeleteSecretKey(ctx, key.Fingerprint)
+	adapter.DeleteKey(ctx, key.Fingerprint)
 
 	if got := secretKeyFingerprints(t, key.GNUPGHOME); len(got) != 0 {
 		t.Fatalf("keyring still holds secret keys %v before the import", got)
 	}
 
 	var out bytes.Buffer
-	md, err := apprelease.GPGImport(ctx, a, openpgp.ReadMetadata, gitRepo, sink, in, &out)
+
+	md, err := apprelease.GPGImport(ctx, adapter, openpgp.ReadMetadata, gitRepo, sink, in, &out)
 	if err != nil {
 		t.Fatalf("GPGImport: %v", err)
 	}
@@ -54,15 +56,19 @@ func gpgRoundTrip(t *testing.T, key *gpgkey.Key, sink *fakeoutputsink.Sink, in a
 	if got := secretKeyFingerprints(t, key.GNUPGHOME); !slices.Equal(got, []string{key.Fingerprint}) {
 		t.Fatalf("secret keys after import = %v, want exactly %s", got, key.Fingerprint)
 	}
+
 	if md.Fingerprint != key.Fingerprint {
 		t.Errorf("Fingerprint = %q, want %q", md.Fingerprint, key.Fingerprint)
 	}
+
 	if md.KeyID != key.KeyID() {
 		t.Errorf("KeyID = %q, want %q", md.KeyID, key.KeyID())
 	}
+
 	if md.Name != key.Name {
 		t.Errorf("Name = %q, want %q", md.Name, key.Name)
 	}
+
 	if md.Email != key.Email {
 		t.Errorf("Email = %q, want %q", md.Email, key.Email)
 	}
@@ -75,7 +81,6 @@ func gpgRoundTrip(t *testing.T, key *gpgkey.Key, sink *fakeoutputsink.Sink, in a
 func secretKeyFingerprints(t *testing.T, home string) []string {
 	t.Helper()
 
-	//nolint:gosec // test infra; home is the key's own temp GNUPGHOME.
 	out, err := exec.CommandContext(t.Context(), "gpg", "--homedir", home, "--batch", "--with-colons", "--list-secret-keys").Output()
 	if err != nil && !strings.Contains(string(out), "sec:") {
 		// gpg exits non-zero for an empty keyring on some versions; an empty
@@ -105,15 +110,15 @@ func secretKeyFingerprints(t *testing.T, home string) []string {
 }
 
 func TestGPGImport_EmitsExpectedOutputs(t *testing.T) {
-	k := gpgkey.New(t)
+	signingKey := gpgkey.New(t)
 	sink := fakeoutputsink.New(t)
-	log := gpgRoundTrip(t, k, sink, apprelease.GPGImportInput{}, nil)
+	log := gpgRoundTrip(t, signingKey, sink, apprelease.GPGImportInput{}, nil)
 
 	for key, want := range map[string]string{
-		"fingerprint": k.Fingerprint,
-		"keyid":       k.KeyID(),
-		"name":        k.Name,
-		"email":       k.Email,
+		"fingerprint": signingKey.Fingerprint,
+		"keyid":       signingKey.KeyID(),
+		"name":        signingKey.Name,
+		"email":       signingKey.Email,
 	} {
 		if got := sink.Single(key); got != want {
 			t.Errorf("output %q = %q, want %q", key, got, want)
@@ -121,10 +126,10 @@ func TestGPGImport_EmitsExpectedOutputs(t *testing.T) {
 	}
 
 	for _, want := range []string{
-		"Fingerprint : " + k.Fingerprint,
-		"KeyID       : " + k.KeyID(),
-		"Name        : " + k.Name,
-		"Email       : " + k.Email,
+		"Fingerprint : " + signingKey.Fingerprint,
+		"KeyID       : " + signingKey.KeyID(),
+		"Name        : " + signingKey.Name,
+		"Email       : " + signingKey.Email,
 	} {
 		if !strings.Contains(log, want) {
 			t.Errorf("log missing %q:\n%s", want, log)
@@ -139,6 +144,7 @@ func TestGPGImport_RejectsEmptyKey(t *testing.T) {
 	isolatedenv.Isolate(t)
 
 	sink := fakeoutputsink.New(t)
+
 	_, err := apprelease.GPGImport(context.Background(), adaptergpg.New(), openpgp.ReadMetadata, nil, sink,
 		apprelease.GPGImportInput{}, &bytes.Buffer{})
 	if !errors.Is(err, errs.ErrUsage) || !strings.Contains(err.Error(), "PrivateKey is required") {
@@ -151,14 +157,14 @@ func TestGPGImport_RejectsEmptyKey(t *testing.T) {
 }
 
 func TestGPGImport_AcceptsBase64EncodedArmoredKey(t *testing.T) {
-	k := gpgkey.New(t)
+	signingKey := gpgkey.New(t)
 	sink := fakeoutputsink.New(t)
-	gpgRoundTrip(t, k, sink, apprelease.GPGImportInput{
-		PrivateKey: base64.StdEncoding.EncodeToString([]byte(k.ArmoredPrivateKey())),
+	gpgRoundTrip(t, signingKey, sink, apprelease.GPGImportInput{
+		PrivateKey: base64.StdEncoding.EncodeToString([]byte(signingKey.ArmoredPrivateKey())),
 	}, nil)
 
-	if got := sink.Single("fingerprint"); got != k.Fingerprint {
-		t.Errorf("fingerprint = %q, want %q", got, k.Fingerprint)
+	if got := sink.Single("fingerprint"); got != signingKey.Fingerprint {
+		t.Errorf("fingerprint = %q, want %q", got, signingKey.Fingerprint)
 	}
 }
 
@@ -166,22 +172,25 @@ func TestGPGImport_ConfiguresGitSigning(t *testing.T) {
 	repo := isolatedgit.NewRepo(t)
 	gitRepo := &git.Repo{Dir: repo.Dir}
 
-	k := gpgkey.New(t)
+	signingKey := gpgkey.New(t)
 	sink := fakeoutputsink.New(t)
-	gpgRoundTrip(t, k, sink, apprelease.GPGImportInput{
+	gpgRoundTrip(t, signingKey, sink, apprelease.GPGImportInput{
 		GitUserSigningKey: true,
 		GitCommitGPGSign:  true,
 	}, gitRepo)
 
-	if got := repo.Git("config", "--get", "user.signingkey"); got != k.KeyID() {
-		t.Errorf("user.signingkey = %q, want %q", got, k.KeyID())
+	if got := repo.Git("config", "--get", "user.signingkey"); got != signingKey.KeyID() {
+		t.Errorf("user.signingkey = %q, want %q", got, signingKey.KeyID())
 	}
-	if got := repo.Git("config", "--get", "user.name"); got != k.Name {
-		t.Errorf("user.name = %q, want %q", got, k.Name)
+
+	if got := repo.Git("config", "--get", "user.name"); got != signingKey.Name {
+		t.Errorf("user.name = %q, want %q", got, signingKey.Name)
 	}
-	if got := repo.Git("config", "--get", "user.email"); got != k.Email {
-		t.Errorf("user.email = %q, want %q", got, k.Email)
+
+	if got := repo.Git("config", "--get", "user.email"); got != signingKey.Email {
+		t.Errorf("user.email = %q, want %q", got, signingKey.Email)
 	}
+
 	if got := repo.Git("config", "--get", "commit.gpgsign"); got != "true" {
 		t.Errorf("commit.gpgsign = %q, want %q", got, "true")
 	}
@@ -209,7 +218,7 @@ func TestGPGImport_WritesSigningConfigToTheScopeAsked(t *testing.T) {
 			repo := isolatedgit.NewRepo(t)
 			gitRepo := &git.Repo{Dir: repo.Dir}
 
-			k := gpgkey.New(t)
+			signingKey := gpgkey.New(t)
 
 			// isolatedenv points GIT_CONFIG_GLOBAL at /dev/null so a stray
 			// global write can never reach the developer's ~/.gitconfig, and
@@ -219,7 +228,7 @@ func TestGPGImport_WritesSigningConfigToTheScopeAsked(t *testing.T) {
 			t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(t.TempDir(), "gitconfig"))
 
 			sink := fakeoutputsink.New(t)
-			gpgRoundTrip(t, k, sink, apprelease.GPGImportInput{
+			gpgRoundTrip(t, signingKey, sink, apprelease.GPGImportInput{
 				GitUserSigningKey: true,
 				GitCommitGPGSign:  true,
 				GitConfigGlobal:   global,
@@ -237,9 +246,9 @@ func TestGPGImport_WritesSigningConfigToTheScopeAsked(t *testing.T) {
 			// the wrong scope would put the imported value there.
 			ctx := context.Background()
 			for key, want := range map[string]string{
-				"user.signingkey": k.KeyID(),
-				"user.name":       k.Name,
-				"user.email":      k.Email,
+				"user.signingkey": signingKey.KeyID(),
+				"user.name":       signingKey.Name,
+				"user.email":      signingKey.Email,
 				"commit.gpgsign":  "true",
 			} {
 				got, err := gitRepo.Run(ctx, "config", wrote, "--get", key)
@@ -259,13 +268,14 @@ func TestGPGImport_DoesNotEnableCommitGPGSignWithoutFlag(t *testing.T) {
 	repo := isolatedgit.NewRepo(t)
 	gitRepo := &git.Repo{Dir: repo.Dir}
 
-	k := gpgkey.New(t)
+	signingKey := gpgkey.New(t)
 	sink := fakeoutputsink.New(t)
-	gpgRoundTrip(t, k, sink, apprelease.GPGImportInput{GitUserSigningKey: true}, gitRepo)
+	gpgRoundTrip(t, signingKey, sink, apprelease.GPGImportInput{GitUserSigningKey: true}, gitRepo)
 
-	if got := repo.Git("config", "--get", "user.signingkey"); got != k.KeyID() {
-		t.Errorf("user.signingkey = %q, want %q", got, k.KeyID())
+	if got := repo.Git("config", "--get", "user.signingkey"); got != signingKey.KeyID() {
+		t.Errorf("user.signingkey = %q, want %q", got, signingKey.KeyID())
 	}
+
 	if got := repo.Git("config", "--get", "commit.gpgsign"); got != "false" {
 		t.Errorf("commit.gpgsign = %q, want %q", got, "false")
 	}
@@ -275,58 +285,63 @@ func TestGPGImport_SkipsGitConfigWhenNotRequested(t *testing.T) {
 	repo := isolatedgit.NewRepo(t)
 	gitRepo := &git.Repo{Dir: repo.Dir}
 
-	k := gpgkey.New(t)
+	signingKey := gpgkey.New(t)
 	sink := fakeoutputsink.New(t)
-	gpgRoundTrip(t, k, sink, apprelease.GPGImportInput{}, gitRepo)
+	gpgRoundTrip(t, signingKey, sink, apprelease.GPGImportInput{}, gitRepo)
 
 	ctx := context.Background()
 	if got, err := gitRepo.Run(ctx, "config", "--get", "user.signingkey"); err == nil {
 		t.Errorf("user.signingkey = %q, want missing config", got)
 	}
+
 	if got := repo.Git("config", "--get", "user.name"); got != "Test Bot" {
 		t.Errorf("user.name = %q, want %q", got, "Test Bot")
 	}
+
 	if got := repo.Git("config", "--get", "user.email"); got != "bot@example.invalid" {
 		t.Errorf("user.email = %q, want %q", got, "bot@example.invalid")
 	}
+
 	if got := repo.Git("config", "--get", "commit.gpgsign"); got != "false" {
 		t.Errorf("commit.gpgsign = %q, want %q", got, "false")
 	}
 }
 
 func TestGPGImport_IsIdempotentOnReimport(t *testing.T) {
-	k := gpgkey.New(t)
-	armored := k.ArmoredPrivateKey()
-	a := adaptergpg.New()
+	signingKey := gpgkey.New(t)
+	armored := signingKey.ArmoredPrivateKey()
+	adapter := adaptergpg.New()
 	ctx := context.Background()
-	a.DeleteSecretKey(ctx, k.Fingerprint)
-	a.DeleteKey(ctx, k.Fingerprint)
+	adapter.DeleteSecretKey(ctx, signingKey.Fingerprint)
+	adapter.DeleteKey(ctx, signingKey.Fingerprint)
+
 	for i := range 2 {
 		sink := fakeoutputsink.New(t)
-		if _, err := apprelease.GPGImport(ctx, a, openpgp.ReadMetadata, nil, sink,
+		if _, err := apprelease.GPGImport(ctx, adapter, openpgp.ReadMetadata, nil, sink,
 			apprelease.GPGImportInput{PrivateKey: armored}, &bytes.Buffer{}); err != nil {
 			t.Fatalf("GPGImport run %d: %v", i+1, err)
 		}
-		if got := sink.Single("fingerprint"); got != k.Fingerprint {
-			t.Fatalf("run %d fingerprint = %q, want %q", i+1, got, k.Fingerprint)
+
+		if got := sink.Single("fingerprint"); got != signingKey.Fingerprint {
+			t.Fatalf("run %d fingerprint = %q, want %q", i+1, got, signingKey.Fingerprint)
 		}
 	}
 }
 
 func TestGPGCleanup_RemovesKeyAndIsIdempotent(t *testing.T) {
-	k := gpgkey.New(t)
-	a := adaptergpg.New()
+	signingKey := gpgkey.New(t)
+	adapter := adaptergpg.New()
 	ctx := context.Background()
 
 	var log bytes.Buffer
-	apprelease.GPGCleanup(ctx, a, k.Fingerprint, &log)
+	apprelease.GPGCleanup(ctx, adapter, signingKey.Fingerprint, &log)
 
 	if !strings.Contains(log.String(), "Removing GPG key") {
 		t.Errorf("log missing 'Removing GPG key': %q", log.String())
 	}
 	// ListKeygrips against a wiped fingerprint must return an error —
 	// gpg exits non-zero when --list-secret-keys can't find a match.
-	if grips, err := a.ListKeygrips(ctx, k.Fingerprint); err == nil {
+	if grips, err := adapter.ListKeygrips(ctx, signingKey.Fingerprint); err == nil {
 		t.Errorf("ListKeygrips after cleanup = %q, want error", grips)
 	}
 
@@ -334,9 +349,9 @@ func TestGPGCleanup_RemovesKeyAndIsIdempotent(t *testing.T) {
 	// returns nothing and only reports the adapter's errors, so "it did not blow
 	// up" is not evidence of anything -- the keyring is.
 	log.Reset()
-	apprelease.GPGCleanup(ctx, a, k.Fingerprint, &log)
+	apprelease.GPGCleanup(ctx, adapter, signingKey.Fingerprint, &log)
 
-	if grips, err := a.ListKeygrips(ctx, k.Fingerprint); err == nil {
+	if grips, err := adapter.ListKeygrips(ctx, signingKey.Fingerprint); err == nil {
 		t.Errorf("ListKeygrips after the repeated cleanup = %q, want the key still absent", grips)
 	}
 }
@@ -348,8 +363,10 @@ func TestGPGCleanup_NoOpOnEmptyFingerprint(t *testing.T) {
 	isolatedenv.Isolate(t)
 
 	a := adaptergpg.New()
+
 	var log bytes.Buffer
 	apprelease.GPGCleanup(context.Background(), a, "", &log)
+
 	if !strings.Contains(log.String(), "nothing to clean up") {
 		t.Errorf("log = %q, want 'nothing to clean up'", log.String())
 	}

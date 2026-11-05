@@ -53,7 +53,7 @@ func recoverGitLabConsumerAfterCandidate(t *testing.T, ctx context.Context, clie
 	project := livetest.RepoSlug(target, repo)
 	// ImageDigest fatals on an uncertain registry read; only a proven missing
 	// tag becomes Found=false. Capture presence independently of its digest.
-	latestDigest, latestFound := livetest.ImageDigest(t, target, publication, "latest")
+	latestDigest, latestFound := livetest.ImageDigestContext(ctx, t, target, publication, "latest")
 	initialLatest := livetest.GitLabRecoveryTagState{Digest: latestDigest, Found: latestFound}
 
 	var (
@@ -102,14 +102,16 @@ func recoverGitLabConsumerAfterCandidate(t *testing.T, ctx context.Context, clie
 			}
 
 			child = bridges[0].DownstreamPipeline.ID
+
 			owned, _, readErr := client.Pipelines.GetPipeline(project, child, gitlabapi.WithContext(ctx))
 			if readErr != nil || owned == nil || owned.SHA != requestSHA || owned.Ref != requestTag || owned.Source != "parent_pipeline" {
 				t.Fatalf("recovery child is not bound to the original request: %v", readErr)
 			}
+
 			t.Logf("consumer recovery: parent %d child %d; waiting for the candidate push", parent.ID, child)
 		}
 
-		jobs, _, err := client.Jobs.ListPipelineJobs(project, child, &gitlabapi.ListJobsOptions{ListOptions: gitlabapi.ListOptions{PerPage: 100}}, gitlabapi.WithContext(ctx))
+		jobs, _, err := client.Jobs.ListPipelineJobs(project, child, &gitlabapi.ListJobsOptions{PerPage: 100}, gitlabapi.WithContext(ctx))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -119,39 +121,48 @@ func recoverGitLabConsumerAfterCandidate(t *testing.T, ctx context.Context, clie
 				preparedJobs[job.Name] = job.ID
 			}
 		}
+
 		publisher, checkpoint, err = livetest.GitLabRecoveryObservation(jobs)
 		if err != nil {
 			t.Log(gitlabTrialTrace(t, ctx, client, project, child))
 			t.Fatal(err)
 		}
+
 		if checkpoint == 0 {
 			return false
 		}
+
 		trace, _, err := client.Jobs.GetTraceFile(project, checkpoint, gitlabapi.WithContext(ctx))
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		body, err := io.ReadAll(io.LimitReader(trace, 1<<20))
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		return gitlabRecoveryCheckpointReady(string(body))
 	})
 
 	receiptURL := fmt.Sprintf("%s/api/v4/projects/%s/jobs/%d/artifacts/_release-images/dist/release-images.json", target.BaseURL(), url.PathEscape(project), publisher)
-	receipt := livetest.Download(t, target, receiptURL, 1<<20)
+	receipt := livetest.DownloadContext(ctx, t, target, receiptURL, 1<<20)
+
 	registry, err := livetest.RegistryHost(target)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	candidate, err := livetest.GitLabRecoveryCandidate(receipt, registry+"/"+strings.ToLower(project), finalTag)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	candidateDigest = candidate.Digest
 	if digest, found := livetest.ImageDigest(t, target, repo, "staging-"+finalTag); !found || digest != candidateDigest { //nolint:contextcheck // bounded by test owner.
 		t.Fatal("published staging tag does not match the immutable policy receipt")
 	}
+
 	if _, found := livetest.ImageDigest(t, target, repo, finalTag); found { //nolint:contextcheck // bounded by test owner.
 		t.Fatal("source registry contains a final tag before policy promotion")
 	}
@@ -162,6 +173,7 @@ func recoverGitLabConsumerAfterCandidate(t *testing.T, ctx context.Context, clie
 	}
 
 	preparedSHA := prepared.Commit.ID
+
 	preparedBranch, _, err := client.Branches.GetBranch(project, "main", gitlabapi.WithContext(ctx))
 	if err != nil || preparedBranch == nil || preparedBranch.Commit == nil || preparedBranch.Commit.ID != preparedSHA {
 		t.Fatalf("prepared release commit is not the release branch head: %v", err)
@@ -181,6 +193,7 @@ func recoverGitLabConsumerAfterCandidate(t *testing.T, ctx context.Context, clie
 
 		return run.Status == "canceled"
 	})
+
 	stopped, _, err := client.Jobs.GetJob(project, checkpoint, gitlabapi.WithContext(ctx))
 	if err != nil || stopped == nil || stopped.Status != "canceled" {
 		t.Fatalf("owned checkpoint did not cancel with the original child: %v", err)
@@ -194,11 +207,13 @@ func recoverGitLabConsumerAfterCandidate(t *testing.T, ctx context.Context, clie
 	if digest, found := livetest.ImageDigest(t, target, repo, "staging-"+finalTag); !found || digest != candidateDigest { //nolint:contextcheck // registry helper derives a bounded context from the test owner.
 		t.Fatal("cancellation did not retain the pushed candidate digest")
 	}
+
 	if _, found := livetest.ImageDigest(t, target, publication, finalTag); found { //nolint:contextcheck // bounded by test owner.
 		t.Fatal("interrupted consumer published the new final tag")
 	}
 
 	prior := map[string]livetest.GitLabRecoveryTagState{"latest": initialLatest, "v0.0.0": {Digest: previousDigest, Found: true}}
+
 	for _, tag := range []string{"latest", "v0.0.0"} {
 		digest, found := livetest.ImageDigest(t, target, publication, tag) //nolint:contextcheck // registry helper derives a bounded context from the test owner.
 		if err := livetest.CheckGitLabRecoveryTag(tag, livetest.GitLabRecoveryTagState{Digest: digest, Found: found}, prior[tag], nil); err != nil {
@@ -221,6 +236,7 @@ func recoverGitLabConsumerAfterCandidate(t *testing.T, ctx context.Context, clie
 		if pollErr != nil {
 			t.Fatal(pollErr)
 		}
+
 		if run.SHA != requestSHA || run.Ref != requestTag || run.Source != "parent_pipeline" {
 			t.Fatal("retry changed the original child's request identity")
 		}
@@ -238,12 +254,13 @@ func recoverGitLabConsumerAfterCandidate(t *testing.T, ctx context.Context, clie
 	if err != nil || after == nil || after.Commit == nil || after.Commit.ID != preparedSHA {
 		t.Fatalf("retry changed the prepared release tag: %v", err)
 	}
+
 	afterBranch, _, err := client.Branches.GetBranch(project, "main", gitlabapi.WithContext(ctx))
 	if err != nil || afterBranch == nil || afterBranch.Commit == nil || afterBranch.Commit.ID != preparedSHA {
 		t.Fatalf("retry duplicated or changed the prepared release commit: %v", err)
 	}
 
-	jobs, _, err := client.Jobs.ListPipelineJobs(project, child, &gitlabapi.ListJobsOptions{ListOptions: gitlabapi.ListOptions{PerPage: 100}}, gitlabapi.WithContext(ctx))
+	jobs, _, err := client.Jobs.ListPipelineJobs(project, child, &gitlabapi.ListJobsOptions{PerPage: 100}, gitlabapi.WithContext(ctx))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,14 +275,17 @@ func recoverGitLabConsumerAfterCandidate(t *testing.T, ctx context.Context, clie
 			t.Fatalf("retry reran or lost successful preparation job %s", name)
 		}
 	}
+
 	checkpointRetried := false
 	for _, job := range jobs {
 		checkpointRetried = checkpointRetried || (job.Name == livetest.GitLabRecoveryCheckpoint && job.ID != checkpoint && job.Status == "success")
 	}
+
 	if !checkpointRetried {
 		t.Fatal("same-child retry did not clear and complete a new checkpoint attempt")
 	}
-	if !bytes.Equal(receipt, livetest.Download(t, target, receiptURL, 1<<20)) {
+
+	if !bytes.Equal(receipt, livetest.DownloadContext(ctx, t, target, receiptURL, 1<<20)) {
 		t.Fatal("retry changed the original policy candidate receipt")
 	}
 

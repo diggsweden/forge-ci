@@ -55,7 +55,10 @@ func TestGitHubRelease_PrereleaseAPI(t *testing.T) {
 	api, owner := client.API(), document.Organization.Login
 
 	runPrereleaseAPICases(t, func(t *testing.T, visibility livetest.ConsumerVisibility) {
+		t.Helper()
+
 		private := visibility.Private
+
 		ctx, cancel := context.WithTimeout(livetest.Context(t), 3*time.Minute)
 		defer cancel()
 
@@ -207,12 +210,17 @@ func TestPrereleaseAPIVisibilitySelection(t *testing.T) {
 			t.Setenv("FORGE_CI_LIVE_CONSUMER_VISIBILITY", test.selector)
 
 			var dispatched []livetest.ConsumerVisibility
+
 			runPrereleaseAPICases(t, func(t *testing.T, visibility livetest.ConsumerVisibility) {
+				t.Helper()
+
 				if !strings.HasSuffix(t.Name(), "/"+visibility.Name) {
 					t.Errorf("case name does not match visibility: %s", t.Name())
 				}
+
 				dispatched = append(dispatched, visibility)
 			})
+
 			if !reflect.DeepEqual(dispatched, test.want) {
 				t.Fatalf("dispatched cases = %v, want %v", dispatched, test.want)
 			}

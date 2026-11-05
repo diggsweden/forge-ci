@@ -38,27 +38,33 @@ func TestGitHubReleaseCredential(t *testing.T) {
 			if err := os.WriteFile(path, []byte(tc.contents), tc.mode); err != nil {
 				t.Fatal(err)
 			}
+
 			token, err := GitHubReleaseToken(path)
 			if (err == nil) != tc.wantOK {
 				t.Fatalf("admission success=%v, want %v", err == nil, tc.wantOK)
 			}
+
 			if tc.wantOK && token != strings.TrimSpace(tc.contents) {
 				t.Fatal("release credential was not independently selected")
 			}
+
 			if err != nil && (token != "" || strings.Contains(err.Error(), "private-sentinel") || strings.Contains(err.Error(), path)) {
 				t.Fatal("private input leaked")
 			}
 		})
 	}
+
 	for _, path := range []string{"", filepath.Join(dir, "missing-private-sentinel"), dir} {
 		if token, err := GitHubReleaseToken(path); err == nil || token != "" || strings.Contains(err.Error(), "private-sentinel") {
 			t.Fatal("absent or invalid file must refuse without private diagnostics")
 		}
 	}
+
 	link := filepath.Join(dir, "link")
 	if err := os.Symlink(filepath.Join(dir, "fine-grained"), link); err != nil {
 		t.Fatal(err)
 	}
+
 	if _, err := GitHubReleaseToken(link); err == nil {
 		t.Fatal("symlink admitted")
 	}
@@ -66,45 +72,58 @@ func TestGitHubReleaseCredential(t *testing.T) {
 
 func TestGitHubReleaseSecretErrorRedaction(t *testing.T) {
 	const release = "github_pat_inert-private-release-sentinel"
+
 	public, private, err := box.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	puts := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet {
-			_ = json.NewEncoder(w).Encode(map[string]string{"key_id": "inert", "key": base64.StdEncoding.EncodeToString(public[:])})
+
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, httpRequest *http.Request) {
+		if httpRequest.Method == http.MethodGet {
+			_ = json.NewEncoder(writer).Encode(map[string]string{"key_id": "inert", "key": base64.StdEncoding.EncodeToString(public[:])})
+
 			return
 		}
+
 		puts++
-		if r.Method != http.MethodPut || r.URL.Path != "/repos/fixture/fc-scratch/actions/secrets/RELEASE_TOKEN" {
+
+		if httpRequest.Method != http.MethodPut || httpRequest.URL.Path != "/repos/fixture/fc-scratch/actions/secrets/RELEASE_TOKEN" {
 			t.Error("unexpected secret destination")
 		}
+
 		var request struct {
 			EncryptedValue string `json:"encrypted_value"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		if err := json.NewDecoder(httpRequest.Body).Decode(&request); err != nil {
 			t.Error("invalid secret request")
 		}
+
 		sealed, err := base64.StdEncoding.DecodeString(request.EncryptedValue)
 		if err != nil {
 			t.Error("invalid sealed value")
 		}
+
 		plain, ok := box.OpenAnonymous(nil, sealed, public, private)
 		if !ok || string(plain) != release {
 			t.Error("uploaded credential must be the explicit release role, not the classic session role")
 		}
-		w.WriteHeader(http.StatusForbidden)
-		_ = json.NewEncoder(w).Encode(map[string]string{"message": release})
+
+		writer.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(writer).Encode(map[string]string{"message": release})
 	}))
 	defer server.Close()
+
 	api, err := github.NewClient(github.WithHTTPClient(server.Client()), github.WithURLs(new(server.URL+"/"), nil))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	tb := &recordingTB{}
 	trial := GitHubTrial{tb: tb, api: api, org: "fixture", token: "ghp_inert-management"}
 	trial.SetSecret("fc-scratch", "RELEASE_TOKEN", release)
+
 	if puts != 1 || tb.fatal == "" || strings.Contains(tb.fatal, release) || !strings.Contains(tb.fatal, "[redacted]") {
 		t.Fatal("secret API errors must preserve refusal without leaking the release credential")
 	}
@@ -115,14 +134,17 @@ func TestGitHubConsumerReleaseCredentialWiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	source := string(raw)
 	if !strings.Contains(source, `"RELEASE_TOKEN":           releaseToken,`) || strings.Contains(source, "trial.Token()") {
 		t.Fatal("RELEASE_TOKEN must use the explicit release credential, never the session token")
 	}
+
 	admission := strings.Index(source, "releaseToken, err = livetest.GitHubReleaseToken(")
 	if admission < 0 || admission > strings.Index(source, "trial := livetest.OpenGitHubTrial(") {
 		t.Fatal("release file must be admitted before any hosted trial")
 	}
+
 	if !strings.Contains(source, `settings.Event == livetest.TrialRelease && os.Getenv("FORGE_CI_LIVE_ENGINE_MODE") != "prepare"`) {
 		t.Fatal("non-release and SDK-only preparation must not require release authority")
 	}

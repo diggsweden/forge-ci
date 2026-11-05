@@ -319,9 +319,16 @@ func Releases(tb TB, target Target, repo string) []Release {
 // points elsewhere fails here and is not followed.
 func Download(tb TB, target Target, address string, limit int64) []byte {
 	tb.Helper()
+
+	return DownloadContext(Context(tb), tb, target, address, limit)
+}
+
+// DownloadContext downloads evidence within the caller's operation deadline.
+func DownloadContext(ctx context.Context, tb TB, target Target, address string, limit int64) []byte {
+	tb.Helper()
 	requireAccepted(tb, target)
 
-	ctx, cancel := context.WithTimeout(Context(tb), timeoutAPI)
+	ctx, cancel := context.WithTimeout(ctx, timeoutAPI)
 	defer cancel()
 
 	body, err := fetch(ctx, target, address, limit)

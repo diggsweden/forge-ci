@@ -43,7 +43,6 @@ func signingRepo(t *testing.T) (*isolatedgit.Repo, string) {
 	repo := isolatedgit.NewRepo(t)
 	keyPath := filepath.Join(repo.Home, "signing_key")
 
-	//nolint:gosec // fixed arguments, test-owned paths.
 	out, err := exec.CommandContext(t.Context(), "ssh-keygen",
 		"-t", "ed25519", "-N", "", "-C", "bot@example.invalid", "-f", keyPath).CombinedOutput()
 	if err != nil {
@@ -107,7 +106,6 @@ func TestVerifyTagSSHAgainstAllowedSigners_SignerNotAllowListed(t *testing.T) {
 	// A different key entirely: valid file, valid principal, wrong key.
 	otherKey := filepath.Join(repo.Home, "other_key")
 
-	//nolint:gosec // fixed arguments, test-owned paths.
 	if out, err := exec.CommandContext(t.Context(), "ssh-keygen",
 		"-t", "ed25519", "-N", "", "-C", "other@example.invalid", "-f", otherKey).CombinedOutput(); err != nil {
 		t.Fatalf("ssh-keygen: %v\n%s", err, out)
@@ -156,6 +154,8 @@ func TestVerifyTagSSHAgainstAllowedSigners_BrokenSetupIsNotADenial(t *testing.T)
 		{name: "tag does not exist", tag: "v4.0.0", signers: allowed},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			ok, out, err := adapter.VerifyTagSSHAgainstAllowedSigners(context.Background(), tc.tag, tc.signers)
 			if ok || err == nil {
 				t.Fatalf("got (ok=%v, err=%v), want a refusal\n%s", ok, err, out)

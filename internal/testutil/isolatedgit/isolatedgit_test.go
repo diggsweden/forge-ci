@@ -15,6 +15,7 @@ func TestRepos_AreIsolatedFromEachOther(t *testing.T) {
 	t.Parallel()
 
 	a := isolatedgit.NewRepo(t)
+
 	b := isolatedgit.NewRepo(t)
 	if a.Dir == b.Dir {
 		t.Errorf("two NewRepo() calls returned the same directory: %q", a.Dir)

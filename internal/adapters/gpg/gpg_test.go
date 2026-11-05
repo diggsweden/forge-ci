@@ -25,36 +25,39 @@ import (
 // the parsing-only `--list-secret-keys` shellout has been retired in
 // favour of in-process metadata extraction via adapters/openpgp.
 func TestImportKey_RoundTripWithRealGPG(t *testing.T) {
-	k := gpgkey.New(t)
-	armored := k.ArmoredPrivateKey()
+	signingKey := gpgkey.New(t)
+	armored := signingKey.ArmoredPrivateKey()
 
-	a := adaptergpg.New()
+	adapter := adaptergpg.New()
 	ctx := context.Background()
 
-	a.DeleteSecretKey(ctx, k.Fingerprint)
-	a.DeleteKey(ctx, k.Fingerprint)
+	adapter.DeleteSecretKey(ctx, signingKey.Fingerprint)
+	adapter.DeleteKey(ctx, signingKey.Fingerprint)
 
-	if err := a.ImportKey(ctx, []byte(armored)); err != nil {
+	if err := adapter.ImportKey(ctx, []byte(armored)); err != nil {
 		t.Fatalf("ImportKey: %v", err)
 	}
-	grips, err := a.ListKeygrips(ctx, k.Fingerprint)
+
+	grips, err := adapter.ListKeygrips(ctx, signingKey.Fingerprint)
 	if err != nil || !strings.Contains(grips, "grp:") {
 		t.Errorf("post-import ListKeygrips = %q, err = %v; want non-empty grp lines", grips, err)
 	}
 }
 
 func TestListKeygrips_NonEmpty(t *testing.T) {
-	k := gpgkey.New(t)
-	a := adaptergpg.New()
+	signingKey := gpgkey.New(t)
+	adapter := adaptergpg.New()
 
-	out, err := a.ListKeygrips(context.Background(), k.Fingerprint)
+	out, err := adapter.ListKeygrips(context.Background(), signingKey.Fingerprint)
 	if err != nil {
 		t.Fatalf("ListKeygrips: %v", err)
 	}
+
 	grips := domaingpg.ParseKeygrips(out)
 	if len(grips) == 0 {
 		t.Fatal("expected at least one keygrip")
 	}
+
 	for _, g := range grips {
 		if len(g) != 40 || !isHex(g) {
 			t.Errorf("keygrip %q is not a 40-char hex string", g)
@@ -63,17 +66,20 @@ func TestListKeygrips_NonEmpty(t *testing.T) {
 }
 
 func TestConfigureAgent_WritesConfFile(t *testing.T) {
-	k := gpgkey.New(t)
-	a := adaptergpg.New()
+	signingKey := gpgkey.New(t)
+	adapter := adaptergpg.New()
 
-	if err := a.ConfigureAgent(context.Background()); err != nil {
+	if err := adapter.ConfigureAgent(context.Background()); err != nil {
 		t.Fatalf("ConfigureAgent: %v", err)
 	}
-	confPath := filepath.Join(k.GNUPGHOME, "gpg-agent.conf")
+
+	confPath := filepath.Join(signingKey.GNUPGHOME, "gpg-agent.conf")
+
 	data, err := os.ReadFile(confPath)
 	if err != nil {
 		t.Fatalf("read gpg-agent.conf: %v", err)
 	}
+
 	for _, want := range []string{"default-cache-ttl 21600", "max-cache-ttl 31536000", "allow-preset-passphrase"} {
 		if !strings.Contains(string(data), want) {
 			t.Errorf("gpg-agent.conf missing %q\nfull:\n%s", want, data)
@@ -88,8 +94,8 @@ func TestConfigureAgent_WritesConfFile(t *testing.T) {
 func TestPresetPassphrase_UnlocksSigningWithoutPinentry(t *testing.T) {
 	const passphrase = "correct horse battery staple"
 
-	k := gpgkey.NewProtected(t, passphrase)
-	a := adaptergpg.New()
+	signingKey := gpgkey.NewProtected(t, passphrase)
+	adapter := adaptergpg.New()
 
 	payload := filepath.Join(t.TempDir(), "payload")
 	if err := os.WriteFile(payload, []byte("release"), 0o600); err != nil {
@@ -97,13 +103,12 @@ func TestPresetPassphrase_UnlocksSigningWithoutPinentry(t *testing.T) {
 	}
 
 	sign := func() ([]byte, error) {
-		//nolint:gosec // test infra; GNUPGHOME and payload are t.TempDir().
-		return exec.CommandContext(t.Context(), "gpg", "--homedir", k.GNUPGHOME, "--batch", "--yes",
-			"--pinentry-mode", "error", "--local-user", k.Fingerprint,
+		return exec.CommandContext(t.Context(), "gpg", "--homedir", signingKey.GNUPGHOME, "--batch", "--yes",
+			"--pinentry-mode", "error", "--local-user", signingKey.Fingerprint,
 			"--output", payload+".sig", "--detach-sign", payload).CombinedOutput()
 	}
 
-	if err := a.ConfigureAgent(t.Context()); err != nil {
+	if err := adapter.ConfigureAgent(t.Context()); err != nil {
 		t.Fatalf("ConfigureAgent: %v", err)
 	}
 
@@ -111,13 +116,13 @@ func TestPresetPassphrase_UnlocksSigningWithoutPinentry(t *testing.T) {
 		t.Fatalf("the protected key signed before any preset, so this test proves nothing:\n%s", out)
 	}
 
-	out, err := a.ListKeygrips(t.Context(), k.Fingerprint)
+	out, err := adapter.ListKeygrips(t.Context(), signingKey.Fingerprint)
 	if err != nil {
 		t.Fatalf("ListKeygrips: %v", err)
 	}
 
 	for _, grip := range domaingpg.ParseKeygrips(out) {
-		if err := a.PresetPassphrase(t.Context(), grip, passphrase); err != nil {
+		if err := adapter.PresetPassphrase(t.Context(), grip, passphrase); err != nil {
 			t.Fatalf("PresetPassphrase(%s): %v", grip, err)
 		}
 	}
@@ -133,35 +138,35 @@ func TestPresetPassphrase_UnlocksSigningWithoutPinentry(t *testing.T) {
 // actually gone afterwards, and that a second pass over an already-empty
 // keyring still leaves it that way.
 func TestDelete_RemovesTheKeyAndRepeatsHarmlessly(t *testing.T) {
-	k := gpgkey.New(t)
-	a := adaptergpg.New()
+	signingKey := gpgkey.New(t)
+	adapter := adaptergpg.New()
 	ctx := context.Background()
 
 	// The key is there to begin with, or nothing below is a deletion.
-	before, err := a.ListKeygrips(ctx, k.Fingerprint)
+	before, err := adapter.ListKeygrips(ctx, signingKey.Fingerprint)
 	if err != nil || len(domaingpg.ParseKeygrips(before)) == 0 {
 		t.Fatalf("fixture key is not in the keyring: grips=%q err=%v", before, err)
 	}
 
 	// First round removes the throwaway key.
-	a.DeleteSecretKey(ctx, k.Fingerprint)
-	a.DeleteKey(ctx, k.Fingerprint)
+	adapter.DeleteSecretKey(ctx, signingKey.Fingerprint)
+	adapter.DeleteKey(ctx, signingKey.Fingerprint)
 
-	assertNoKeygrips(t, a, k.Fingerprint, "after the first delete")
+	assertNoKeygrips(t, adapter, signingKey.Fingerprint, "after the first delete")
 
 	// Second round: keys are gone — the repeat must not resurrect or
 	// error out, which for a void, best-effort call means the
 	// keyring has to still be empty.
-	a.DeleteSecretKey(ctx, k.Fingerprint)
-	a.DeleteKey(ctx, k.Fingerprint)
+	adapter.DeleteSecretKey(ctx, signingKey.Fingerprint)
+	adapter.DeleteKey(ctx, signingKey.Fingerprint)
 
-	assertNoKeygrips(t, a, k.Fingerprint, "after the repeated delete")
+	assertNoKeygrips(t, adapter, signingKey.Fingerprint, "after the repeated delete")
 
 	// Never-existed fingerprint.
-	a.DeleteSecretKey(ctx, "0000000000000000000000000000000000000000")
-	a.DeleteKey(ctx, "0000000000000000000000000000000000000000")
+	adapter.DeleteSecretKey(ctx, "0000000000000000000000000000000000000000")
+	adapter.DeleteKey(ctx, "0000000000000000000000000000000000000000")
 
-	assertNoKeygrips(t, a, k.Fingerprint, "after deleting an unrelated fingerprint")
+	assertNoKeygrips(t, adapter, signingKey.Fingerprint, "after deleting an unrelated fingerprint")
 }
 
 // assertNoKeygrips fails unless the fingerprint resolves to no keygrips.

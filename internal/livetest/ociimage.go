@@ -615,6 +615,13 @@ func RegistrySnapshot(tb TB, target Target, repo string) map[string]string {
 func ImageDigest(tb TB, target Target, repo, tag string) (string, bool) {
 	tb.Helper()
 
+	return ImageDigestContext(Context(tb), tb, target, repo, tag)
+}
+
+// ImageDigestContext observes a tag within the caller's operation deadline.
+func ImageDigestContext(ctx context.Context, tb TB, target Target, repo, tag string) (string, bool) {
+	tb.Helper()
+
 	host, err := RegistryHost(target)
 	if err != nil {
 		tb.Fatalf("livetest: %v", err)
@@ -630,7 +637,7 @@ func ImageDigest(tb TB, target Target, repo, tag string) (string, bool) {
 		tb.Fatalf("livetest: constrain registry transport: %v", err)
 	}
 
-	remoteOptions = append(remoteOptions, remote.WithContext(Context(tb)))
+	remoteOptions = append(remoteOptions, remote.WithContext(ctx))
 
 	descriptor, err := remote.Head(reference, remoteOptions...)
 	if err != nil {

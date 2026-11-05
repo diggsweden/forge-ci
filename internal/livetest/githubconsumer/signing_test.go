@@ -21,6 +21,7 @@ import (
 
 func TestReleaseSigningAndroidNonRelease(t *testing.T) {
 	root := filepath.Join(reporoot.Path(t), "test/live/demos/hello-android/consumer")
+
 	fixtures := "test/live/github"
 	if _, err := os.Stat(filepath.Join(root, fixtures, "workflows/release.yml")); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("Android regression requires the real PR/build-only fixture: %v", err)
@@ -76,6 +77,7 @@ func TestReleaseSigningSelectedWorkflow(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
+
 			workflows := filepath.Join(root, "fixtures/workflows")
 			if err := os.MkdirAll(workflows, 0o700); err != nil {
 				t.Fatal(err)
@@ -85,6 +87,7 @@ func TestReleaseSigningSelectedWorkflow(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(workflows, "release.yml"), signingWorkflow(t, "*", true, false), 0o600); err != nil {
 				t.Fatal(err)
 			}
+
 			if err := os.WriteFile(filepath.Join(workflows, "stable.yaml"), signingWorkflow(t, tc.email, tc.ssh, tc.key), 0o600); err != nil {
 				t.Fatal(err)
 			}
@@ -93,11 +96,13 @@ func TestReleaseSigningSelectedWorkflow(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			key, principal, err := releaseSigning(root, "fixtures", settings)
 			if tc.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantError) {
 					t.Fatalf("want %q, got %v", tc.wantError, err)
 				}
+
 				return
 			}
 
@@ -110,21 +115,27 @@ func TestReleaseSigningSelectedWorkflow(t *testing.T) {
 
 func signingWorkflow(t *testing.T, email any, ssh, key bool) []byte {
 	t.Helper()
+
 	with := map[string]any{}
 	secrets := map[string]string{}
+
 	if email != nil {
 		with["bot-email"] = email
 	}
+
 	if key {
 		with["cosign-public-key-sha256"] = "digest"
 	}
+
 	if ssh {
 		secrets["RELEASE_SSH_SIGNING_KEY"] = "${{ secrets.RELEASE_SSH_SIGNING_KEY }}"
 	}
+
 	body, err := yaml.Marshal(map[string]any{"jobs": map[string]any{"release": map[string]any{"with": with, "secrets": secrets}}})
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	return body
 }
 
@@ -133,11 +144,14 @@ func TestReleaseSigningReadErrorsRemainFatal(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "fixtures/workflows/release.yml"), 0o700); err != nil {
 		t.Fatal(err)
 	}
+
 	settings, err := livetest.ParseGitHubTrialSettings(livetest.TrialRelease, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	_, _, err = releaseSigning(root, "fixtures", settings)
+
 	var pathError *fs.PathError
 	if !errors.As(err, &pathError) || errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("non-ENOENT read error must be preserved: %v", err)
@@ -151,10 +165,12 @@ func TestReleaseSigningShippedReleaseFixtures(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := filepath.Join(reporoot.Path(t), "test/live/demos", tc.name, "consumer")
+
 			settings, err := livetest.ParseGitHubTrialSettings(livetest.TrialRelease, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			key, principal, err := releaseSigning(root, "test/live/github", settings)
 			if err != nil || key || principal != tc.principal {
 				t.Fatalf("shipped signing = %v, %q, %v; want keyless Cosign, SSH principal %q", key, principal, err, tc.principal)
@@ -284,16 +300,20 @@ func TestReleaseSigningAliases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	for _, tc := range signingAliasCases {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
+
 			workflows := filepath.Join(root, "fixtures/workflows")
 			if err := os.MkdirAll(workflows, 0o700); err != nil {
 				t.Fatal(err)
 			}
+
 			if err := os.WriteFile(filepath.Join(workflows, "release.yml"), []byte(tc.body), 0o600); err != nil {
 				t.Fatal(err)
 			}
+
 			key, principal, err := releaseSigning(root, "fixtures", settings)
 			if tc.failure != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.failure) {

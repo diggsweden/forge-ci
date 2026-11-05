@@ -33,9 +33,11 @@ func sourceImageFlavor(flavor string) (string, error) {
 	if flavor == "" {
 		flavor = "rust"
 	}
+
 	if flavor != "rust" && flavor != "go" {
 		return "", errors.New("source image flavor must be rust or go")
 	}
+
 	return flavor, nil
 }
 
@@ -43,9 +45,11 @@ func sourceImageBatchRetention(phase, acknowledgement string) (bool, error) {
 	if acknowledgement == "" {
 		return false, nil
 	}
+
 	if phase != "resume" || acknowledgement != "retain-exact-restored-package-until-batch-end" {
 		return false, errors.New("batch retention requires resume and explicit exact-package acknowledgement")
 	}
+
 	return true, nil
 }
 
@@ -55,6 +59,7 @@ func TestSourceImageFlavorAdmission(t *testing.T) {
 			t.Fatalf("flavor %q: got %q, %v; want %q", input, got, err, want)
 		}
 	}
+
 	for _, bad := range []string{"core", "java", "GO", "go/rust", "../go"} {
 		if _, err := sourceImageFlavor(bad); err == nil {
 			t.Fatalf("unsupported flavor %q accepted", bad)
@@ -64,15 +69,18 @@ func TestSourceImageFlavorAdmission(t *testing.T) {
 
 func TestSourceImageBatchRetentionRequiresResumeAcknowledgement(t *testing.T) {
 	const ack = "retain-exact-restored-package-until-batch-end"
+
 	for _, phase := range []string{"run", "publish-retain", "resume", "cleanup"} {
 		if retain, err := sourceImageBatchRetention(phase, ""); err != nil || retain {
 			t.Fatal("default cleanup changed")
 		}
+
 		retain, err := sourceImageBatchRetention(phase, ack)
 		if (phase == "resume") != (err == nil && retain) {
 			t.Fatalf("unexpected batch retention admission for %s", phase)
 		}
 	}
+
 	if _, err := sourceImageBatchRetention("resume", "true"); err == nil {
 		t.Fatal("implicit retention accepted")
 	}

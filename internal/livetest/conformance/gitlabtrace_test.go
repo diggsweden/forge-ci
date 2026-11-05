@@ -25,6 +25,7 @@ func gitlabRecoveryCheckpointReady(trace string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -52,8 +53,11 @@ func gitlabTraceEnd(trace string) string {
 }
 
 func TestGitLabTraceEndRetainsErrorBeforeTimestampedBlankLines(t *testing.T) {
-	const prefix = "2026-11-04T08:48:02.284379Z 01O "
-	const message = "ERROR: candidate publication failed"
+	const (
+		prefix  = "2026-11-04T08:48:02.284379Z 01O "
+		message = "ERROR: candidate publication failed"
+	)
+
 	for _, tc := range []struct{ name, ending string }{{"LF", "\n"}, {"CRLF", "\r\n"}} {
 		t.Run(tc.name, func(t *testing.T) {
 			trace := prefix + message + tc.ending + strings.Repeat(prefix+tc.ending, 45)
@@ -65,9 +69,11 @@ func TestGitLabTraceEndRetainsErrorBeforeTimestampedBlankLines(t *testing.T) {
 }
 
 func TestGitLabRecoveryCheckpointTrace(t *testing.T) {
-	const marker = "fci-live-candidate-checkpoint-ready"
-	const prefix = "2026-11-04T08:48:02.284379Z 01O "
-	const continuation = "2026-11-04T08:48:02.284379Z 01O+"
+	const (
+		marker       = "fci-live-candidate-checkpoint-ready"
+		prefix       = "2026-11-04T08:48:02.284379Z 01O "
+		continuation = "2026-11-04T08:48:02.284379Z 01O+"
+	)
 	for _, tc := range []struct {
 		name, trace string
 		want        bool

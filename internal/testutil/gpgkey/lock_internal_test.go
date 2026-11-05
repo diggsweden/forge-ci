@@ -31,6 +31,7 @@ func TestOpenLockNoFollow_RefusesAPlantedSymlink(t *testing.T) {
 	file, err := openLockNoFollow(link)
 	if err == nil {
 		_ = file.Close()
+
 		t.Fatal("a symlinked lock path was opened; the flock would have been taken on another file")
 	}
 
@@ -75,6 +76,7 @@ func TestOpenLockNoFollow_RefusesANonRegularPath(t *testing.T) {
 			file, err := openLockNoFollow(path)
 			if err == nil {
 				_ = file.Close()
+
 				t.Fatalf("%s was accepted as the lock file: %s", tc.name, tc.why)
 			}
 		})

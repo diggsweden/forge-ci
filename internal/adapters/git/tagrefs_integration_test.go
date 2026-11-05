@@ -59,6 +59,8 @@ func TestRevParse_AgreesWithGitOnTagRefs(t *testing.T) {
 		"HEAD",
 	} {
 		t.Run(ref, func(t *testing.T) {
+			t.Parallel()
+
 			want := ig.Git("rev-parse", ref)
 
 			got, err := repo.RevParse(ctx, ref)
@@ -92,6 +94,8 @@ func TestCatFileType_AgreesWithGitOnTagRefs(t *testing.T) {
 		"lightweight-1.2.3",
 	} {
 		t.Run(ref, func(t *testing.T) {
+			t.Parallel()
+
 			want := ig.Git("cat-file", "-t", ref)
 
 			got, err := repo.CatFileType(ctx, ref)

@@ -84,13 +84,15 @@ func readTokenFile(path string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("read the token file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }() // Read-only descriptor; reads report failures.
 
 	const maxTokenBytes = 4096
+
 	raw, err := io.ReadAll(io.LimitReader(file, maxTokenBytes+1))
 	if err != nil {
 		return "", fmt.Errorf("read the token file: %w", err)
 	}
+
 	if len(raw) > maxTokenBytes {
 		return "", fmt.Errorf("token file exceeds size limit: %w", errs.ErrUsage)
 	}

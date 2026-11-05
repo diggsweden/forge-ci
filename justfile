@@ -365,11 +365,16 @@ lint-go-golangci *args: _lint-linux-platform
 # The reference platform's build-tagged files must not disappear from depguard
 # when a contributor lints on macOS/BSD. This is analysis, not guest execution.
 [private]
-_lint-linux-platform:
+_lint-linux-platform: _lint-darwin-platform
     @if [[ "$(go env GOOS)" != linux ]]; then \
         "{{ just_executable() }}" --justfile "{{ justfile() }}" _require-tool golangci-lint "Install: just install-dev-tools"; \
         GOOS=linux nanolinter lint go-golangci; \
     fi
+
+# Check non-Linux path handling even on Linux hosts; no foreign binary runs.
+[private]
+_lint-darwin-platform:
+    @GOOS=darwin GOARCH=arm64 golangci-lint run --config development/golangci-lint/golangci.yml ./internal/pathsafe/...
 
 # Functions no build of the tree reaches, tests and every build tag included.
 # Not a nanolinter check: the pinned deadcode, built with the pinned Go.

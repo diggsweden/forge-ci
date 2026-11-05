@@ -27,6 +27,7 @@ func TestCreateTag_ARejectedRecreationLeavesTheOriginalTagIntact(t *testing.T) {
 	ctx := context.Background()
 
 	original := isolated.HeadSHA()
+
 	require.NoError(t, repo.CreateTag(ctx, "v1.2.3", "HEAD", false))
 
 	// Everything about the tag as it exists now: the tag object itself, the

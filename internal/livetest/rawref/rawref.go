@@ -220,13 +220,22 @@ func (r Reader) gitLabAssetURL(repo, source string) (string, error) {
 	}
 
 	project := r.Owner + "/" + repo
+
 	upload, found := strings.CutPrefix(remote.Path, "/"+project+"/uploads/")
 	if !found {
 		// full_path returned by GitLab uses the numeric project ID.
 		path, numeric := strings.CutPrefix(remote.Path, "/-/project/")
-		id, rest, uploaded := strings.Cut(path, "/uploads/")
-		if _, parseErr := strconv.ParseUint(id, 10, 64); !numeric || !uploaded || parseErr != nil {
+		if !numeric {
 			return source, nil
+		}
+
+		id, rest, uploaded := strings.Cut(path, "/uploads/")
+		if !uploaded {
+			return source, nil
+		}
+
+		if _, parseErr := strconv.ParseUint(id, 10, 64); parseErr != nil {
+			return "", fmt.Errorf("rawref: malformed GitLab project upload URL: %w", ErrForge)
 		}
 
 		project, upload = id, rest
@@ -320,6 +329,7 @@ func (r Reader) do(ctx context.Context, endpoint string) (*http.Response, error)
 		if !r.allowedURL(next.URL) || len(via) >= 10 {
 			return ErrForge
 		}
+
 		if checkRedirect != nil {
 			return checkRedirect(next, via)
 		}

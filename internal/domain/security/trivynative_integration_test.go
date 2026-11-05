@@ -111,9 +111,11 @@ func runNativeTrivy(t *testing.T) []byte {
 	cmd := exec.CommandContext(context.Background(), binary,
 		"fs", "--format", "json", "--scanners", "secret", "--cache-dir", t.TempDir(),
 		"--skip-db-update", "--skip-java-db-update", "--offline-scan", "--quiet", dir)
+
 	cmd.Env = append(os.Environ(), "TRIVY_DISABLE_VEX_NOTICE=1")
 
 	var stderr strings.Builder
+
 	cmd.Stderr = &stderr
 
 	out, err := cmd.Output()

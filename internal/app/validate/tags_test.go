@@ -33,13 +33,16 @@ func TestTagUniqueness_PassesWhenSingleTag(t *testing.T) {
 	ig.AddTag("v1.0.0", "release v1.0.0")
 
 	var buf bytes.Buffer
+
 	err := appvalidate.TagUniqueness(context.Background(), gitr, &buf, appvalidate.TagUniquenessInput{Tag: "v1.0.0"})
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if !strings.Contains(buf.String(), "points to a unique commit") {
 		t.Errorf("output = %s", buf.String())
 	}
+
 	if !strings.Contains(buf.String(), ig.HeadSHA()) {
 		t.Errorf("output should include commit hash: %s", buf.String())
 	}
@@ -56,9 +59,11 @@ func TestTagUniqueness_FailsWhenCollisions(t *testing.T) {
 	if !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("err = %v, want ErrValidation", err)
 	}
+
 	if !strings.Contains(err.Error(), "v1.0.1") {
 		t.Errorf("error should list other tag: %v", err)
 	}
+
 	if !strings.Contains(err.Error(), "git-cliff/issues/1036") {
 		t.Errorf("error should mention git-cliff issue: %v", err)
 	}
@@ -79,6 +84,7 @@ func TestTagUniqueness_IgnoreTagDoesNotHideOtherCollisions(t *testing.T) {
 	if !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("err = %v, want ErrValidation", err)
 	}
+
 	if !strings.Contains(err.Error(), "v0.9.9") {
 		t.Errorf("error should list unexpected tag: %v", err)
 	}
@@ -114,10 +120,12 @@ func TestTagUniqueness_EmptyTagUsage(t *testing.T) {
 	t.Parallel()
 
 	gitr, _ := newRealGit(t)
+
 	err := appvalidate.TagUniqueness(context.Background(), gitr, &bytes.Buffer{}, appvalidate.TagUniquenessInput{})
 	if !errors.Is(err, errs.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
+
 	if !strings.Contains(err.Error(), "usage") {
 		t.Errorf("err = %v, want a usage line", err)
 	}
@@ -146,10 +154,12 @@ func TestTagCommit_AtHeadIdeal(t *testing.T) {
 	ig.AddTag("v1.0.0", "rel")
 
 	var buf bytes.Buffer
+
 	err := appvalidate.TagCommit(context.Background(), gitr, &buf, appvalidate.TagCommitInput{Tag: "v1.0.0", Branch: "main"})
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if !strings.Contains(buf.String(), "points to branch HEAD (ideal)") {
 		t.Errorf("output = %s", buf.String())
 	}
@@ -167,10 +177,12 @@ func TestTagCommit_AncestorIsOK(t *testing.T) {
 	ig.Git("push", "-q", "origin", "main")
 
 	var buf bytes.Buffer
+
 	err := appvalidate.TagCommit(context.Background(), gitr, &buf, appvalidate.TagCommitInput{Tag: "v1.0.0"})
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if !strings.Contains(buf.String(), "ancestor of branch HEAD") {
 		t.Errorf("output = %s", buf.String())
 	}
@@ -189,6 +201,7 @@ func TestTagCommit_AheadFails(t *testing.T) {
 	if !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("err = %v, want ErrValidation", err)
 	}
+
 	for _, want := range []string{"AHEAD of branch HEAD", "git push origin main", "git push origin v1.0.0"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("missing %q in:\n%s", want, err.Error())
@@ -206,6 +219,7 @@ func TestTagSignature_LightweightTagFails(t *testing.T) {
 	if !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("err = %v, want ErrValidation", err)
 	}
+
 	if !strings.Contains(err.Error(), "lightweight tag") {
 		t.Errorf("err = %v, want it to name the tag kind", err)
 	}
@@ -218,6 +232,7 @@ func TestTagSignature_AnnotatedUnsignedFails(t *testing.T) {
 	ig.AddTag("v1.0.0", "annotated, unsigned")
 
 	var buf bytes.Buffer
+
 	err := appvalidate.TagSignature(context.Background(), gitr, &buf, output.NewAnnotator(&buf, output.FormatGitHub), appvalidate.TagSignatureInput{Tag: "v1.0.0"})
 	if !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("err = %v, want ErrValidation", err)
@@ -243,10 +258,12 @@ func TestTagSignature_EmptyTagUsage(t *testing.T) {
 	t.Parallel()
 
 	gitr, _ := newRealGit(t)
+
 	err := appvalidate.TagSignature(context.Background(), gitr, &bytes.Buffer{}, output.NewAnnotator(&bytes.Buffer{}, output.FormatGitHub), appvalidate.TagSignatureInput{})
 	if !errors.Is(err, errs.ErrUsage) {
 		t.Fatalf("err = %v, want ErrUsage", err)
 	}
+
 	if !strings.Contains(err.Error(), "usage") {
 		t.Errorf("err = %v, want a usage line", err)
 	}
@@ -254,15 +271,18 @@ func TestTagSignature_EmptyTagUsage(t *testing.T) {
 
 func TestGPGPublicKey_Empty(t *testing.T) {
 	t.Parallel()
+
 	err := appvalidate.GPGPublicKey(&bytes.Buffer{}, "")
 	// An absent secret is a credential problem (exit 77), so the operator is
 	// pointed at repository settings rather than at their command line.
 	if !errors.Is(err, errs.ErrPermissionDenied) {
 		t.Fatalf("err = %v, want ErrPermissionDenied", err)
 	}
+
 	if !strings.Contains(err.Error(), "missing RELEASE_GPG_PUBLIC_KEY") {
 		t.Errorf("err = %v, want it to name the secret", err)
 	}
+
 	for _, want := range []string{"Settings", "Actions"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("missing %q in %v", want, err)
@@ -272,10 +292,12 @@ func TestGPGPublicKey_Empty(t *testing.T) {
 
 func TestGPGPublicKey_Set(t *testing.T) {
 	t.Parallel()
+
 	var buf bytes.Buffer
 	if err := appvalidate.GPGPublicKey(&buf, "ARMORED KEY DATA"); err != nil {
 		t.Fatal(err)
 	}
+
 	if !strings.Contains(buf.String(), "GPG public key configured") {
 		t.Errorf("output = %s", buf.String())
 	}
