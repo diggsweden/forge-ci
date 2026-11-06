@@ -5,20 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.93.2] - 2026-11-06
 
-### Added
+### Changed
 
-- Add read-only `doctor --requirements` setup guidance for GitHub, GitLab and
-  Forgejo release entry points, with caller mappings and explicit coverage limits.
+- Clarify native adapter scope and evidence
+- Satisfy maintained source-check lint rules
+- Satisfy cross-platform native release lint
+- Explain release setup requirements
 
 ### Fixed
 
-- Run GitHub self-release binary publication after a successful release even
-  when optional ancestor gates are skipped; retain failure/cancellation refusal.
-- Explicitly sign GitHub CLI checksum manifests after unsigned packaging and
-  before artifact/release uploads, preserving stable-release rebuild verification.
-
+- Check pristine Go source before native releases
+- Use the maintained Go source lint recipe
+- Reuse installed Buildah in native CLI jobs
+- Fix credential fixtures under private umask
+- Isolate CI context and recognize exited descendants
+- Sign CLI assets before release publication
 ## [0.93.1] - 2026-11-06
 
 ### Added
@@ -328,6 +331,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial commit
 
+[0.93.2]: https://github.com/diggsweden/forge-ci/compare/v0.93.1..v0.93.2
 [0.93.1]: https://github.com/diggsweden/forge-ci/compare/v0.93.0..v0.93.1
 [0.93.0]: https://github.com/diggsweden/forge-ci/compare/v0.91.13..v0.93.0
 [0.91.13]: https://github.com/diggsweden/forge-ci/compare/v0.91.10..v0.91.13
