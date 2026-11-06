@@ -61,6 +61,9 @@ type BaseInput struct {
 
 // BaseImageVerifyExistingInput drives VerifyExistingBaseImages.
 type BaseImageVerifyExistingInput struct {
+	// Authenticated distinguishes an explicit credential refusal from an
+	// anonymous GHCR miss. Authentication failures must never trigger rebuilds.
+	Authenticated      bool
 	Flavors            []string
 	BaseInputs         []BaseInput
 	BaseInputID        string

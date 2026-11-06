@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: CC0-1.0
 
+# workflow-call-secrets-contract: RELEASE_REGISTRY_TOKEN
+
 name: Verify base container images (reusable)
 
 on:
@@ -51,6 +53,11 @@ on:
       repository-suffix:
         description: >-
           Optional suffix appended to the caller repository package name, for example -base for forge.example/owner/repo-base. Must be empty or match -[A-Za-z0-9][A-Za-z0-9._-]*.
+        type: string
+        required: false
+        default: ''
+      registry-user:
+        description: Registry user for RELEASE_REGISTRY_TOKEN. Required for authenticated reads from an external registry. Without a token verification is anonymous; a supplied user without a token refuses.
         type: string
         required: false
         default: ''
@@ -283,10 +290,11 @@ jobs:
           EXPECTED_WORKFLOW: ${{ inputs.caller-workflow }}
           TRUSTED_KEY_INPUT: ${{ inputs['cosign-public-key'] }}
           TRUSTED_KEY_SHA256_INPUT: ${{ inputs['cosign-public-key-sha256'] }}
+          REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
+          REGISTRY_USER: ${{ inputs['registry-user'] || vars.RELEASE_REGISTRY_USER }}
         run: |
           set -euo pipefail
           cd "${CONSUMER_WORKSPACE:?}"
-          echo "Checking existing base images anonymously; cache misses are non-fatal."
           # The caller supplies the trust root; the layer ships none. The
           # engine refuses an empty key, an empty digest and a mismatch.
           trusted_key="${SIGNER_WORKSPACE:?}/cosign.pub"
@@ -305,7 +313,22 @@ jobs:
           export COSIGN_PUBLIC_KEY_PATH COSIGN_PUBLIC_KEY_SHA256
           # shellcheck source=.engine/bin/lib-forge-ci.sh
           source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
-          FORGE_CI_PROVIDER=forgejo run_forge_ci container base-images validate
+          auth=()
+          registry_token=${REGISTRY_TOKEN:-}
+          export -n registry_token
+          unset REGISTRY_TOKEN
+          if [ -n "${registry_token}" ]; then
+            auth_file="${SIGNER_WORKSPACE:?}/registry-auth.json"
+            printf '%s' "${registry_token}" | FORGE_CI_PROVIDER=forgejo run_forge_ci container login \
+              --registry "${EXPECTED_REPOSITORY}" --server-url "${FORGEJO_SERVER}" --repository "${FORGEJO_REPO}" \
+              --registry-username "${REGISTRY_USER:-}" --registry-password-file - --auth-file "${auth_file}"
+            auth=(--auth-file "${auth_file}")
+          elif [ -n "${REGISTRY_USER:-}" ]; then
+            echo 'ERROR: registry-user requires RELEASE_REGISTRY_TOKEN' >&2
+            exit 1
+          fi
+          unset registry_token REGISTRY_USER
+          FORGE_CI_PROVIDER=forgejo run_forge_ci container base-images validate "${auth[@]}"
 
       - name: Cleanup signer workspace
         if: always()

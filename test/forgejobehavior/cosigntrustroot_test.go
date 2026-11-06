@@ -130,7 +130,8 @@ func seenTrustRoot(t *testing.T, run, keyInput, digestInput string) (string, str
 		"CONSUMER_WORKSPACE="+filepath.Join(box.root, "consumer"), "SEEN_TRUST_ROOT="+seen,
 		"TRUSTED_KEY_INPUT="+keyInput, "TRUSTED_KEY_SHA256_INPUT="+digestInput,
 		"COSIGN_KEY=fixture-key", "COSIGN_PASSWORD=fixture-password",
-		"REGISTRY_TOKEN=fixture-token", "REGISTRY_USER=owner", "BASE_IMAGE_REPOSITORY=")
+		"REGISTRY_TOKEN=fixture-token", "REGISTRY_USER=owner", "BASE_IMAGE_REPOSITORY=",
+		"EXPECTED_REPOSITORY=registry.example/owner/base", "FORGEJO_SERVER=https://forge.example", "FORGEJO_REPO=owner/app")
 	if got.status != 0 {
 		t.Fatalf("workflow shell failed: %s", got.stderr)
 	}

@@ -878,6 +878,7 @@ validate existing immutable final base-image tags and report missing flavors
 | `--registry` | the forge's own registry host, when it is not the host of --server-url (GitLab's $CI_REGISTRY); the login goes to the image repository's host, and a repository on any other host has its tags deleted through that registry | string | `""` | `$CONTAINER_REGISTRY` |
 | `--cosign-public-key-path` | relative path to the trusted Cosign public key in the consumer checkout | string | `""` | `$COSIGN_PUBLIC_KEY_PATH` |
 | `--cosign-public-key-sha256` | expected sha256 digest of the trusted Cosign public key | string | `""` | `$COSIGN_PUBLIC_KEY_SHA256` |
+| `--auth-file` | explicit registry auth file for digest, signature and attestation reads; omitted uses isolated anonymous access | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
 | `--base-input-id` | optional single sha256 base input ID expected for every flavor | string | `""` | `$BASE_INPUT_ID` |
 | `--base-inputs-json` | JSON array mapping flavors to sha256 base input IDs | string | `"[]"` | `$BASE_INPUTS_JSON` |
 | `--flavors-file` | newline-delimited flavor list in the consumer checkout (required: the engine does not assume a repository layout) | string | `""` | `$FLAVORS_FILE` |

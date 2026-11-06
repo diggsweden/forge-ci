@@ -61,8 +61,8 @@ func TestVerifyExistingBaseImages_ReportsVerifiedAndMissing(t *testing.T) {
 }
 
 // GHCR answers an anonymous read of a package that does not exist yet, or is
-// private, with DENIED. The check is anonymous by design, so that is a miss
-// the first release builds, with a note naming what to make public; a real
+// private, with DENIED. With no credentials that is a miss
+// the first release builds, with a note naming the explicit auth option; a real
 // failure, such as an unreachable registry, still stops the check.
 func TestVerifyExistingBaseImages_AnAnonymousRefusalIsAMiss(t *testing.T) {
 	t.Parallel()
@@ -88,8 +88,8 @@ func TestVerifyExistingBaseImages_AnAnonymousRefusalIsAMiss(t *testing.T) {
 		t.Fatalf("result = %+v, err = %v; want go reported missing", result, err)
 	}
 
-	if !strings.Contains(out.String(), "make this package public") || !strings.Contains(out.String(), repo) {
-		t.Errorf("the note does not say what to make public:\n%s", out.String())
+	if !strings.Contains(out.String(), "--auth-file") || !strings.Contains(out.String(), repo) {
+		t.Errorf("the note does not explain private registry authentication:\n%s", out.String())
 	}
 
 	unavailable := &fakeBaseImageRegistry{resolveErr: map[string]error{tag: fmt.Errorf("connection refused: %w", errs.ErrDependencyUnavailable)}}

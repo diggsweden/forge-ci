@@ -83,6 +83,46 @@ func TestBaseVerificationBoundary_AllFlavorsAndIDsPreflight(t *testing.T) {
 	}
 }
 
+func TestAuthenticatedBaseVerificationRefusesDeniedInsteadOfRebuilding(t *testing.T) {
+	t.Parallel()
+
+	for _, authenticated := range []bool{false, true} {
+		in := BaseImageVerifyExistingInput{Authenticated: authenticated, Flavors: []string{"rust"}, BaseInputID: promoteInput, ExpectedRepository: promoteRepo, ExpectedSource: "https://source.example/repo", ExpectedWorkflow: "base.yml", CosignPublicKey: "fixture.pub"}
+		tag := promoteRepo + ":" + promoteInput + "-rust"
+		registry := &fakeBaseImageRegistry{resolveErr: map[string]error{tag: errs.ErrPermissionDenied}}
+		verifier := &boundaryVerifier{fakeBaseImageVerifier: &fakeBaseImageVerifier{}}
+
+		var out bytes.Buffer
+
+		result, err := VerifyExistingBaseImages(t.Context(), registry, verifier, &out, in)
+		if authenticated {
+			if !errors.Is(err, errs.ErrPermissionDenied) || out.Len() != 0 || result.MissingFlavorsJSON != "" {
+				t.Fatalf("authenticated refusal must not become a cache miss: result=%+v err=%v out=%s", result, err, &out)
+			}
+		} else if err != nil || result.MissingFlavorsJSON != `["rust"]` {
+			t.Fatalf("anonymous miss: result=%+v err=%v", result, err)
+		}
+
+		if len(verifier.refs) != 0 {
+			t.Fatal("denied resolution must not verify evidence")
+		}
+	}
+}
+
+func TestAuthenticatedBaseVerificationReusesOnlyVerifiedEvidence(t *testing.T) {
+	t.Parallel()
+
+	in := BaseImageVerifyExistingInput{Authenticated: true, Flavors: []string{"rust"}, BaseInputID: promoteInput, ExpectedRepository: promoteRepo, ExpectedSource: "https://source.example/repo", ExpectedWorkflow: "base.yml", CosignPublicKey: "fixture.pub"}
+	tag := promoteRepo + ":" + promoteInput + "-rust"
+	registry := &fakeBaseImageRegistry{digests: map[string]string{tag: promoteDigest}}
+	verifier := &boundaryVerifier{fakeBaseImageVerifier: &fakeBaseImageVerifier{payload: baseLineagePayload(t, lineageFields{source: in.ExpectedSource, workflow: in.ExpectedWorkflow, flavor: "rust", baseInputID: promoteInput})}}
+
+	result, err := VerifyExistingBaseImages(t.Context(), registry, verifier, &bytes.Buffer{}, in)
+	if err != nil || !result.AllFound || result.MissingFlavorsJSON != `[]` || len(verifier.refs) != 1 || !strings.Contains(result.AllImagesJSON, promoteDigest) {
+		t.Fatalf("verified reuse: result=%+v err=%v refs=%v", result, err, verifier.refs)
+	}
+}
+
 func TestCandidatePairBoundary_RejectsIncompleteLaterEntry(t *testing.T) {
 	t.Parallel()
 

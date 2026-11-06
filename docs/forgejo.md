@@ -302,7 +302,7 @@ the caller passes them by name. Never use `secrets: inherit`.
 | `prepare-release.yml` | Checks that every secret the release will need is configured, before any checkout; guards the request tag; requires the request at the head of the release branch; renders the changelog; with `version-bump`, bumps the project files in a key-free job and verifies that bump; makes the signed release commit and the final tag once. Outputs `release-tag` and `release-sha`. | `RELEASE_SSH_SIGNING_KEY`; presence only of the others; none in the version-bump job |
 | `sign-and-publish-release.yml` | Four separately privileged jobs after a secret-free preflight: `sign` (checksums, SBOMs, provenance, images, distro packages), `promote` (final image tags), `publish` (the Forgejo release), `cleanup` (candidate tags). | Cosign, GPG, `RELEASE_TOKEN`, `RELEASE_REGISTRY_TOKEN`, each only in the job that needs it |
 | `sign-container-images.yml` | Signs and attests a base-image ledger in one engine call. | Cosign, `RELEASE_REGISTRY_TOKEN` |
-| `verify-base-container-images.yml` | Verifies existing base images against the trusted key, anonymously; a miss is not an error. | none |
+| `verify-base-container-images.yml` | Verifies existing base images against the trusted key; optional explicit registry authentication supports private bases. Only missing images (or anonymous access refusal) are cache misses. | optional `RELEASE_REGISTRY_TOKEN`, `registry-user` for external registries |
 | `promote-base-container-images.yml` | Verifies base-image signatures, then moves the final tags. | `RELEASE_REGISTRY_TOKEN` |
 | `release-images.yml` | Builds the release images `artifacts.yml` declares, one native job per container and architecture, with the organization's image builder; scans each, publishes it under its staging tag and records it for the signer. See [Release images](#release-images). | `RELEASE_REGISTRY_TOKEN`, in the publish job only |
 
@@ -355,6 +355,16 @@ passed to the engine as flags. They are the administrator's only in a
 protected, code-owner-reviewed workflow file, written out as literals, which
 `check-l3-isolation` requires; the actions never read them from a variable or
 the environment.
+
+Base verification uses `container base-images validate --auth-file <path>` for
+private digest and Cosign signature/SBOM/SLSA reads. The reusable verifier writes
+an isolated auth file using `RELEASE_REGISTRY_TOKEN` and `registry-user`, and
+removes it with its private workspace. Without explicit auth it remains
+anonymous; it never adopts ambient Docker credentials. A refused authenticated
+read, unreadable auth file or invalid evidence fails rather than triggering a
+rebuild. Use the same authenticated path in early discovery and final-parent
+checks. Reuse still requires the exact source, workflow, flavor, input ID and
+trusted signing key; auth changes do not relax those checks.
 
 `registry-login` and `release-images.yml` name the registry user by one rule:
 the user given (`username`, `registry-user` or the `RELEASE_REGISTRY_USER`

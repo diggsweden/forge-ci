@@ -15,6 +15,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
 	appbaseimages "github.com/diggsweden/forge-ci/internal/app/baseimages"
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
+	"github.com/diggsweden/forge-ci/internal/cli/regflags"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/pathsafe"
 )
@@ -24,6 +25,7 @@ func baseImagesVerifyCmd() *cli.Command {
 		Name:  subCmdValidate,
 		Usage: "validate existing immutable final base-image tags and report missing flavors",
 		Flags: append(baseImagesCommonFlags(),
+			regflags.AuthFile(regflags.AuthFileOpts{Usage: "explicit registry auth file for digest, signature and attestation reads; omitted uses isolated anonymous access"}),
 			&cli.StringFlag{Name: flagBaseInputID, Sources: cli.EnvVars("BASE_INPUT_ID"), Usage: "optional single sha256 base input ID expected for every flavor"},
 			&cli.StringFlag{Name: flagBaseInputsJSON, Value: "[]", Sources: cli.EnvVars("BASE_INPUTS_JSON"), Usage: "JSON array mapping flavors to sha256 base input IDs"},
 			&cli.StringFlag{Name: "flavors-file", Sources: cli.EnvVars("FLAVORS_FILE"), Usage: "newline-delimited flavor list in the consumer checkout (required: the engine does not assume a repository layout)"},
@@ -50,11 +52,19 @@ func baseImagesVerifyCmd() *cli.Command {
 
 			return deps.FromCmd(ctx, cmd, func(dep *deps.Deps) error {
 				return withBaseImagesDockerConfig(func(authFile string) error {
+					explicitAuth := cmd.String(flagAuthFile)
+					if explicitAuth != "" {
+						authFile = explicitAuth
+					}
+
+					verifier := cosign.NewIsolated("DOCKER_CONFIG")
+					verifier.AuthFile = authFile
 					result, err := appbaseimages.VerifyExistingBaseImages(ctx,
 						ociregistry.WithAuthFile(authFile),
-						cosign.NewIsolated("DOCKER_CONFIG"),
+						verifier,
 						os.Stderr,
 						appbaseimages.BaseImageVerifyExistingInput{
+							Authenticated:      explicitAuth != "",
 							Flavors:            flavors,
 							BaseInputs:         baseInputs,
 							BaseInputID:        cmd.String(flagBaseInputID),

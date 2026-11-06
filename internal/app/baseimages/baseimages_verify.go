@@ -62,7 +62,9 @@ func VerifyExistingBaseImages(ctx context.Context, resolver baseImageRegistry, v
 		tag := fmt.Sprintf("%s:%s-%s", in.ExpectedRepository, baseInputID, flavor)
 
 		digest, resolveErr := resolver.ResolveDigest(ctx, tag)
-		if errors.Is(resolveErr, errs.ErrMissingInput) {
+		// A missing local dependency (for example an explicit auth file) can
+		// carry both causes. Only remote absence is a cache miss.
+		if errors.Is(resolveErr, errs.ErrMissingInput) && !errors.Is(resolveErr, errs.ErrDependencyUnavailable) {
 			missing = append(missing, flavor)
 
 			fmt.Fprintf(&progress, "Base image missing and will be built if needed: %s\n", tag)
@@ -70,18 +72,15 @@ func VerifyExistingBaseImages(ctx context.Context, resolver baseImageRegistry, v
 			continue
 		}
 
-		// The check is anonymous by design: only a base anyone can pull is
-		// reused. GHCR answers an anonymous read of a package that does not
-		// exist yet, or is private, with DENIED rather than not-found, so a
-		// refusal here is a miss too. A private package stays a miss on every
-		// release, which the note says, rather than a rebuild nobody notices.
-		if errors.Is(resolveErr, errs.ErrPermissionDenied) {
+		// GHCR cannot distinguish absent from private during anonymous
+		// discovery. An explicit credential refusal, however, is a failure,
+		// never an invitation to rebuild or change package visibility.
+		if errors.Is(resolveErr, errs.ErrPermissionDenied) && !in.Authenticated {
 			missing = append(missing, flavor)
 
 			fmt.Fprintf(&progress, "Base image not readable anonymously and will be built if needed: %s\n"+
 				"    The registry refused an anonymous read: the package %s does not exist yet or is private.\n"+
-				"    Bases are reused only when public. GHCR creates every new package private, whatever the\n"+
-				"    organization allows: make this package public once in its package settings.\n", tag, in.ExpectedRepository)
+				"    For private bases, supply --auth-file so digest and signed-evidence reads authenticate.\n", tag, in.ExpectedRepository)
 
 			continue
 		}
