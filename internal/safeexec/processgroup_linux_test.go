@@ -58,6 +58,7 @@ func TestCommand_CancellationKillsTheProcessGroup(t *testing.T) {
 	_ = cmd.Wait()
 
 	deadline := time.Now().Add(5 * time.Second)
+
 	for {
 		running, err := processExecuting(grandchild)
 		if err != nil {
@@ -93,6 +94,7 @@ func processExecuting(pid int) (bool, error) {
 
 	_, rest, found := strings.Cut(string(body), ") ")
 	fields := strings.Fields(rest)
+
 	if !found || len(fields) == 0 {
 		return false, fmt.Errorf("invalid process state for %d", pid)
 	}

@@ -534,6 +534,7 @@ func TestGenericGoConsumerPreservesApplicationAndOriginalSource(t *testing.T) {
 	} {
 		writeLayerFile(t, root, path, content)
 	}
+
 	mustLayerGit(t, git, root, "add", "--all")
 	mustLayerGit(t, git, root, "commit", "--quiet", "--message", "test: generic source fixture")
 
@@ -560,6 +561,7 @@ func TestGenericGoConsumerPreservesApplicationAndOriginalSource(t *testing.T) {
 	for _, path := range []string{"application_test.go", "policy/pin.sh", ".gitlab/generic-cli-source.json", ".gitlab/generic-cli-original-source"} {
 		before := mustLayerGit(t, git, consumer.stage, "rev-parse", consumer.Commit+":"+path)
 		after := mustLayerGit(t, git, consumer.stage, "rev-parse", commit+":"+path)
+
 		if before != after {
 			t.Fatalf("renderer modified original source at %s", path)
 		}

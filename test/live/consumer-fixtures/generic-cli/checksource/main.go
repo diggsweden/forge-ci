@@ -15,9 +15,11 @@ import (
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
+	err := genericCLIChecks(ctx)
 
-	if err := genericCLIChecks(ctx); err != nil {
+	cancel()
+
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "generic CLI source checks: %v\n", err)
 		os.Exit(1)
 	}

@@ -129,6 +129,7 @@ func TestGoAdapterDelegatesOriginalSourceChecks(t *testing.T) {
 
 	root := t.TempDir()
 	bin := filepath.Join(root, "bin")
+
 	for _, dir := range []string{bin, filepath.Join(root, ".gitlab")} {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			t.Fatal(err)
@@ -146,8 +147,10 @@ func TestGoAdapterDelegatesOriginalSourceChecks(t *testing.T) {
 
 	calls := filepath.Join(root, "calls")
 	cmd := exec.CommandContext(t.Context(), "bash", adapter)
+
 	cmd.Dir, cmd.Env = root, append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "CHECK_CALLS="+calls)
 	out, err := cmd.CombinedOutput()
+
 	var exit *exec.ExitError
 	if !errors.As(err, &exit) || exit.ExitCode() != 42 {
 		t.Fatalf("source check status was not propagated: %v\n%s", err, out)

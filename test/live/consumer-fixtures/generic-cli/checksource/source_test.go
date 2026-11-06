@@ -17,10 +17,10 @@ import (
 	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
 )
 
-type sourceCheckExit int
+type sourceCheckError int
 
-func (e sourceCheckExit) Error() string { return fmt.Sprintf("inert exit %d", e) }
-func (e sourceCheckExit) ExitCode() int { return int(e) }
+func (e sourceCheckError) Error() string { return fmt.Sprintf("inert exit %d", e) }
+func (e sourceCheckError) ExitCode() int { return int(e) }
 
 func TestGenericCLIOriginalGates(t *testing.T) {
 	for _, tc := range []struct {
@@ -42,11 +42,13 @@ func TestGenericCLIOriginalGates(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var calls []string
+
 			err := genericCLISteps(func(name string, args ...string) error {
 				call := strings.Join(append([]string{name}, args...), " ")
 				calls = append(calls, call)
+
 				if call == tc.fail {
-					return sourceCheckExit(tc.status)
+					return sourceCheckError(tc.status)
 				}
 
 				return nil
@@ -59,6 +61,7 @@ func TestGenericCLIOriginalGates(t *testing.T) {
 
 	t.Run("execution failure is not a diagnostic", func(t *testing.T) {
 		failure := errors.New("inert execution failure")
+
 		err := genericCLISteps(func(string, ...string) error { return failure })
 		if !errors.Is(err, failure) {
 			t.Fatalf("lost blocking execution error: %v", err)
@@ -74,6 +77,7 @@ func TestGenericCLIOriginalTreeGate(t *testing.T) {
 			t.Chdir(root)
 			source := filepath.Join(root, ".gitlab/generic-cli-original-source")
 			workflow := filepath.Join(source, ".forgejo/workflows/prepare-release.yml")
+
 			if err := os.MkdirAll(filepath.Dir(workflow), 0o700); err != nil {
 				t.Fatal(err)
 			}
@@ -85,6 +89,7 @@ func TestGenericCLIOriginalTreeGate(t *testing.T) {
 			git := func(args ...string) string {
 				t.Helper()
 				cmd := exec.CommandContext(t.Context(), "git", append([]string{"-C", source}, args...)...)
+
 				out, err := cmd.CombinedOutput()
 				if err != nil {
 					t.Fatalf("git: %v\n%s", err, out)
@@ -95,6 +100,7 @@ func TestGenericCLIOriginalTreeGate(t *testing.T) {
 			git("init", "--quiet", "--object-format=sha1")
 			git("add", "--all")
 			tree := git("write-tree")
+
 			if err := os.RemoveAll(filepath.Join(source, ".git")); err != nil {
 				t.Fatal(err)
 			}
@@ -117,12 +123,14 @@ func TestGenericCLIOriginalTreeGate(t *testing.T) {
 			}
 
 			calls := filepath.Join(root, "calls")
+
 			for _, name := range []string{"just", "go", "nanolinter"} {
 				body := "#!/bin/sh\nset -eu\ntest -f .forgejo/workflows/prepare-release.yml\nprintf '%s %s\\n' \"${0##*/}\" \"$*\" >>\"$CHECK_CALLS\"\n"
 				if err := os.WriteFile(filepath.Join(bin, name), []byte(body), 0o700); err != nil {
 					t.Fatal(err)
 				}
 			}
+
 			t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 			t.Setenv("CHECK_CALLS", calls)
 

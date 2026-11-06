@@ -244,3 +244,8 @@ provide the full reviewed clean source commit and disposable checkout, and run
 the guarded live acceptance above. GitLab must support the source's object
 format (Nano's SHA-256); no SHA-1 conversion is performed. Status remains
 **prepared, live acceptance unproven** until that run passes.
+
+Before freezing a changed Go adapter, run the source's
+`just _lint-release-platforms` and `nanolinter lint go-golangci` prerequisites.
+A bare `golangci-lint run` uses different defaults and does not establish that
+the Nanolinter-generated CI rules pass. Keep this check before live dispatch.

@@ -16,31 +16,49 @@ import (
 	"github.com/diggsweden/forge-ci/internal/safeexec"
 )
 
-// genericCLIChecks runs the original Go repository gate, not the disposable CI
-// overlay. Preparation carries the original Git tree as data; the signed request
-// binds its tree identity. No original history, provider call or key is needed.
-func genericCLIChecks(ctx context.Context) error {
+var (
+	errSourceIdentity = errors.New("invalid original source identity or diagnostic policy")
+	errSourceGitState = errors.New("original source already has Git state")
+	errSourceTree     = errors.New("captured original source differs from the signed tree identity")
+)
+
+type sourceIdentity struct {
+	Commit       string   `json:"commit"`
+	Tree         string   `json:"tree"`
+	ObjectFormat string   `json:"objectFormat"`
+	LintPolicy   string   `json:"lintPolicy"`
+	Excluded     []string `json:"excludedChecks"`
+}
+
+func readSourceIdentity() (sourceIdentity, error) {
+	var identity sourceIdentity
+
 	body, err := os.ReadFile(".gitlab/generic-cli-source.json")
 	if err != nil {
-		return err
+		return identity, err
 	}
 
-	var identity struct {
-		Commit       string   `json:"commit"`
-		Tree         string   `json:"tree"`
-		ObjectFormat string   `json:"objectFormat"`
-		LintPolicy   string   `json:"lintPolicy"`
-		Excluded     []string `json:"excludedChecks"`
-	}
 	if err := json.Unmarshal(body, &identity); err != nil {
-		return err
+		return identity, err
 	}
 
 	length := map[string]int{"sha1": 40, "sha256": 64}[identity.ObjectFormat]
 	if length == 0 || len(identity.Commit) != length || len(identity.Tree) != length ||
 		strings.Trim(identity.Commit+identity.Tree, "0123456789abcdef") != "" ||
 		identity.LintPolicy != "informational" || identity.Excluded == nil || len(identity.Excluded) != 0 {
-		return errors.New("invalid original source identity or diagnostic policy")
+		return identity, errSourceIdentity
+	}
+
+	return identity, nil
+}
+
+// genericCLIChecks runs the original Go repository gate, not the disposable CI
+// overlay. Preparation carries the original Git tree as data; the signed request
+// binds its tree identity. No original history, provider call or key is needed.
+func genericCLIChecks(ctx context.Context) error {
+	identity, err := readSourceIdentity()
+	if err != nil {
+		return err
 	}
 
 	source, err := filepath.Abs(".gitlab/generic-cli-original-source")
@@ -49,7 +67,7 @@ func genericCLIChecks(ctx context.Context) error {
 	}
 
 	if _, err := os.Lstat(filepath.Join(source, ".git")); !os.IsNotExist(err) {
-		return errors.New("original source already has Git state")
+		return errSourceGitState
 	}
 
 	// Keep GPG test-agent sockets below Unix path limits even when the runner's
@@ -62,11 +80,13 @@ func genericCLIChecks(ctx context.Context) error {
 	defer func() { _ = os.RemoveAll(temp) }()
 
 	var env []string
+
 	for _, value := range os.Environ() {
 		if !strings.HasPrefix(value, "GIT_") && !strings.HasPrefix(value, "TMPDIR=") && !strings.HasPrefix(value, "GOMAXPROCS=") {
 			env = append(env, value)
 		}
 	}
+
 	env = append(env, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "TMPDIR="+temp, "GOMAXPROCS=2")
 	command := func(name string, args ...string) *exec.Cmd {
 		cmd := safeexec.Command(ctx, name, args...)
@@ -85,6 +105,7 @@ func genericCLIChecks(ctx context.Context) error {
 	if err := run("git", "-c", "core.hooksPath=/dev/null", "init", "--quiet", "--object-format="+identity.ObjectFormat); err != nil {
 		return err
 	}
+
 	defer func() { _ = os.RemoveAll(filepath.Join(source, ".git")) }()
 
 	if err := run("git", "add", "--force", "--all"); err != nil {
@@ -97,7 +118,7 @@ func genericCLIChecks(ctx context.Context) error {
 	}
 
 	if strings.TrimSpace(string(tree)) != identity.Tree {
-		return errors.New("captured original source differs from the signed tree identity")
+		return errSourceTree
 	}
 
 	if err := run("git", "-c", "core.hooksPath=/dev/null", "-c", "user.name=CLI fixture", "-c", "user.email=fixture@localhost",
@@ -123,7 +144,9 @@ func genericCLISteps(run func(string, ...string) error) error {
 	}
 
 	fmt.Println("ACCEPTANCE POLICY: full original-source Nanolinter plan runs informationally; no exclusions; not a full just verify pass.")
+
 	lintStatus := 0
+
 	if err := run("nanolinter", "verify"); err != nil {
 		var exit interface{ ExitCode() int }
 		if !errors.As(err, &exit) || exit.ExitCode() != 1 {
@@ -132,6 +155,7 @@ func genericCLISteps(run func(string, ...string) error) error {
 
 		lintStatus = 1
 	}
+
 	fmt.Printf("NANOLINTER_DIAGNOSTIC exit=%d policy=informational excludedChecks=[]; full output/summary above retained in job log\n", lintStatus)
 
 	return run("just", "test")

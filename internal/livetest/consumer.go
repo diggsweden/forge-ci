@@ -933,6 +933,7 @@ func (consumer Consumer) commitSnapshot(ctx context.Context) (string, error) {
 // a parent, so the forge receives no history.
 func (consumer Consumer) commitRendered(ctx context.Context, plan ConsumerPlan) (string, error) {
 	git, stage := consumer.git, consumer.stage
+
 	pristineGo, err := consumer.gitlabChecksNeedBuildah(ctx)
 	if err != nil {
 		return "", err
