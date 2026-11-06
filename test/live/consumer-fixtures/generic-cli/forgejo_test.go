@@ -41,6 +41,7 @@ func TestForgejoNativeGraphAndSDKPin(t *testing.T) {
 				Run  string            `yaml:"run"`
 				Uses string            `yaml:"uses"`
 				Env  map[string]string `yaml:"env"`
+				With map[string]string `yaml:"with"`
 			} `yaml:"steps"`
 			Container struct {
 				Image string `yaml:"image"`
@@ -63,6 +64,25 @@ func TestForgejoNativeGraphAndSDKPin(t *testing.T) {
 	for _, name := range []string{"authorize", "checks", "build"} {
 		if len(jobs[name].Secrets) != 0 {
 			t.Fatalf("source job %s receives signing secrets", name)
+		}
+	}
+
+	for _, name := range []string{"checks", "build"} {
+		setups := 0
+		for _, step := range jobs[name].Steps {
+			if !strings.Contains(step.Uses, "/actions/setup-buildah@") {
+				continue
+			}
+			setups++
+			if step.With["install-packages"] != "false" {
+				t.Fatalf("%s must configure the reviewed non-root image's installed Buildah without apt", name)
+			}
+			if step.With["probe-build"] == "false" {
+				t.Fatalf("%s must retain the Buildah capability probe", name)
+			}
+		}
+		if setups != 1 {
+			t.Fatalf("%s must have exactly one Buildah setup, got %d", name, setups)
 		}
 	}
 

@@ -47,6 +47,8 @@ jobs:
           forge-ci release validate-request --release-request "$REQUEST" --tag "${REQUEST#release-request/}" --expected-commit "$EXPECTED" --allowed-signers-file .forgejo/release-allowed-signers
       - if: IS_GO
         uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/setup-buildah@ENGINE_SHA
+        with:
+          install-packages: 'false'
       - name: Full original-source application checks
         run: bash .gitlab/check-release.sh
   prepare:
@@ -107,6 +109,8 @@ jobs:
           forge-ci release validate-tag --tag "$RELEASE_TAG" --release-sha "$RELEASE_SHA" --expected-parent "$EXPECTED" --changelog-only "${args[@]}"
       - if: IS_GO
         uses: https://forge.example/examplescope/forge-ci/.forgejo/actions/setup-buildah@ENGINE_SHA
+        with:
+          install-packages: 'false'
       - name: Prepared-release tests and native binary producer
         env:
           RELEASE_TAG: ${{ needs.prepare.outputs.release-tag }}

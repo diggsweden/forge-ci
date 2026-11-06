@@ -21,6 +21,12 @@ source job receives signing secrets. The shared release-Git helper detects the
 same `.gitlab/` metadata and runs the existing downloaded executable/identity
 oracle on Forgejo as well.
 
+The reviewed Go job image already contains Buildah and runs as UID 65532.
+Both native source jobs configure its installed Buildah with
+`install-packages: 'false'`; storage selection and the scratch-build capability
+probe remain enabled. These jobs must not invoke apt or switch to root merely
+to reinstall image prerequisites.
+
 Operator: prepare a new clean checkout with the normal four arguments plus
 `forgejo`, then use `FORGE_CI_LIVE_CONSUMER_VISIBILITY=public just
 test-live-forgejo-consumer /absolute/prepared-checkout release version=0.8.6
