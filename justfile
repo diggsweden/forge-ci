@@ -1184,6 +1184,14 @@ test-live-github-minimal organization_id packages_token_file:
 test-live-github-release-api organization_id:
     FORGE_CI_LIVE_GITHUB_ORG_ID="$1" GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go test -tags=live -count=1 -timeout=10m -v -run='^TestGitHubRelease_PrereleaseAPI$' ./internal/livetest/githubconsumer/
 
+# Real scheduling semantics plus the actual CLI binary-publication workflow.
+# Uses separate disposable repositories; no engine image build is needed.
+[arg('organization_id', help='Numeric GitHub organization ID explicitly authorized by the Forge Lab session')]
+[doc('Live; self-release scheduling and signed CLI asset acceptance')]
+[group('live')]
+test-live-github-self-release organization_id:
+    FORGE_CI_LIVE_GITHUB_ORG_ID="$1" GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go test -tags=live -count=1 -parallel=2 -buildvcs=false -timeout=75m -v -run='^TestGitHubSelfRelease_Binary(Scheduling|Assets)$' ./internal/livetest/
+
 # Run a clean consumer's own GitLab MR gate with a prebuilt Docker image archive.
 # Uses the same lab preflight, serial lock, redacted evidence and scratch cleanup.
 [arg('checkout', help='Absolute path to a clean consumer checkout')]

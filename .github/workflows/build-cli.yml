@@ -78,7 +78,7 @@ jobs:
           go-version-file: go.mod
           check-latest: true
       - name: Install forge-ci signing CLI
-        # GoReleaser uses this checkout's signing adapter for checksums.txt.
+        # The explicit checksum-signing step uses this checkout's signing adapter.
         # The distributed binaries are still built by GoReleaser below.
         if: ${{ inputs.sign }}
         run: |
@@ -103,7 +103,7 @@ jobs:
         # sign=true is only valid for the rolling pre-release channel (-pre tag).
         # Version-tag releases use release-binary.yml, which creates the
         # FORGE_CI_RELEASE_REFERENCE that sign-reproducible-release.sh requires.
-        # Fail early with a clear message instead of deep in the GoReleaser hook.
+        # Fail early with a clear message before packaging and signing.
         if: ${{ inputs.sign }}
         env:
           TAG: ${{ inputs.version-tag }}
@@ -123,8 +123,10 @@ jobs:
         #   publishes the rolling pre-release. Tagged releases use release-binary.yml.
         # skip=validate: pre-release runs have no real git tag on HEAD; the version is
         #   forced via GORELEASER_CURRENT_TAG instead.
-        # Build-only runs (sign=false, e.g. PRs) additionally skip sign+sbom, so
-        # no cosign/syft/OIDC is needed. Both branches of the expression are
+        # Signing belongs to the explicit step below, not the shared GoReleaser
+        # config (also used by key-based release boundaries). Build-only runs
+        # additionally skip SBOMs, so no cosign/syft/OIDC is needed.
+        # Both branches of the expression are
         # non-empty on purpose: an empty string is falsy in GitHub Actions, so
         # `sign && '' || ...` would wrongly take the fallback and skip signing.
         uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
@@ -134,10 +136,17 @@ jobs:
           # GoReleaser, and a range makes the action resolve it through
           # goreleaser.com, which the release job's egress allowlist refuses.
           version: 'v2.18.2'
-          args: release --clean --skip=${{ inputs.sign && 'publish,validate' || 'publish,validate,sign,sbom' }}
+          args: release --clean --skip=${{ inputs.sign && 'publish,validate,sign' || 'publish,validate,sign,sbom' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_CURRENT_TAG: ${{ inputs.version-tag }}
+      - name: Verify payload and sign checksum manifest
+        # GoReleaser intentionally produces unsigned archives. The GitHub
+        # boundary owns keyless signing; the handoff must include this bundle.
+        if: ${{ inputs.sign }}
+        env:
+          GORELEASER_CURRENT_TAG: ${{ inputs.version-tag }}
+        run: bash scripts/ci/sign-reproducible-release.sh release sign --method=sigstore --no-checksums-file --no-release-artifacts-dir --file dist/checksums.txt
       - name: Generate + sign SLSA provenance (cosign sign-blob, keyless)
         # Portable, forge-neutral replacement for actions/attest-build-provenance
         # (see release-binary.yml for the full rationale + verify recipe).

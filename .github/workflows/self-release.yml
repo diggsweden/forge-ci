@@ -315,6 +315,10 @@ jobs:
     # GitHub Release exist. Called rather than chained with workflow_run, which
     # only fires from the default branch.
     needs: release
+    # Optional integration gates can be skipped transitively. Override GitHub's
+    # implicit success() gate, but never publish after a failed/skipped release
+    # or cancellation.
+    if: ${{ !cancelled() && needs.release.result == 'success' }}
     uses: ./.github/workflows/release-binary.yml
     permissions:
       contents: write

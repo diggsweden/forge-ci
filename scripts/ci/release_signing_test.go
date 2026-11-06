@@ -142,7 +142,7 @@ func TestReleaseWorkflowPreparesReferenceBeforeSigning(t *testing.T) {
 	}
 	require.NoError(t, yaml.Unmarshal(body, &workflow))
 
-	prepared, signed, provenance := false, false, false
+	prepared, packaged, signed, provenance := false, false, false, false
 
 	var installedVersion string
 
@@ -164,9 +164,18 @@ func TestReleaseWorkflowPreparesReferenceBeforeSigning(t *testing.T) {
 		if step.Name == "Run goreleaser" {
 			require.Equal(t, installedVersion, step.With["version"], "reference and published archives must use the same GoReleaser version")
 			require.True(t, prepared, "a final-tag rebuild must precede publication")
-			require.Equal(t, "release --clean", step.With["args"], "signing must not be skipped")
+			require.Equal(t, "release --clean --skip=publish,sign", step.With["args"], "packaging must stay unsigned until explicit verification")
 			require.Equal(t, "${{ runner.temp }}/forge-ci-release-reference", step.Env["FORGE_CI_RELEASE_REFERENCE"])
 			require.Equal(t, "${{ runner.temp }}/forge-ci-release-build-cache", step.Env["GOCACHE"])
+
+			packaged = true
+		}
+
+		if step.Name == "Verify payload and sign checksum manifest" {
+			require.True(t, packaged, "unsigned packaging must precede the signing boundary")
+			require.Contains(t, step.Run, "scripts/ci/sign-reproducible-release.sh release sign --method=sigstore --no-checksums-file --no-release-artifacts-dir --file dist/checksums.txt")
+			require.Equal(t, "${{ steps.release-context.outputs.release-tag }}", step.Env["GORELEASER_CURRENT_TAG"])
+			require.Equal(t, "${{ runner.temp }}/forge-ci-release-reference", step.Env["FORGE_CI_RELEASE_REFERENCE"])
 
 			signed = true
 		}
@@ -176,12 +185,13 @@ func TestReleaseWorkflowPreparesReferenceBeforeSigning(t *testing.T) {
 			require.Equal(t, "${{ steps.release-context.outputs.release-tag }}", step.Env["RELEASE_TAG"])
 			require.Contains(t, step.Run, `source_sha="$(git rev-parse HEAD)"`)
 			require.Contains(t, step.Run, `--ref-name "$RELEASE_TAG" --source-sha "$source_sha"`)
+			require.Contains(t, step.Run, "dist/forge-ci_*.tar.gz,dist/forge-ci_*.tar.gz.cdx.sbom.json,dist/checksums.txt,dist/checksums.txt.bundle,")
 
 			provenance = true
 		}
 	}
 
-	require.True(t, prepared && signed && provenance)
+	require.True(t, prepared && packaged && signed && provenance)
 }
 
 // Exercise the checkout/cache/tag plumbing with inert packager output. Git

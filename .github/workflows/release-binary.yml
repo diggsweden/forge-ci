@@ -181,7 +181,9 @@ jobs:
           # GoReleaser, and a range makes the action resolve it through
           # goreleaser.com, which the release job's egress allowlist refuses.
           version: 'v2.18.2'
-          args: release --clean
+          # Package only: the GitHub boundary verifies and signs the payload
+          # explicitly before any release asset is uploaded.
+          args: release --clean --skip=publish,sign
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_CURRENT_TAG: ${{ steps.release-context.outputs.release-tag }}
@@ -189,6 +191,11 @@ jobs:
           GOCACHE: ${{ runner.temp }}/forge-ci-release-build-cache
           GOPROXY: "off"
           GOSUMDB: "off"
+      - name: Verify payload and sign checksum manifest
+        env:
+          GORELEASER_CURRENT_TAG: ${{ steps.release-context.outputs.release-tag }}
+          FORGE_CI_RELEASE_REFERENCE: ${{ runner.temp }}/forge-ci-release-reference
+        run: bash scripts/ci/sign-reproducible-release.sh release sign --method=sigstore --no-checksums-file --no-release-artifacts-dir --file dist/checksums.txt
       - name: Generate + sign SLSA provenance (cosign sign-blob, keyless)
         # Portable, forge-neutral replacement for actions/attest-build-provenance.
         # forge-ci generates the in-toto / SLSA-v1.0 statement from goreleaser's
@@ -200,7 +207,7 @@ jobs:
         #     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
         #     forge-ci.intoto.json
         # Uses the binary goreleaser just built (self-consistent), then attaches
-        # the statement + bundle to the release.
+        # the complete signed asset set to the already-created release.
         env:
           SIGN_METHOD: sigstore
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -217,4 +224,4 @@ jobs:
             --bundle dist/forge-ci.intoto.jsonl
           "$RUNNER_TEMP/forge-ci" release attachments upload \
             --tag "$RELEASE_TAG" \
-            --pattern "dist/forge-ci.intoto.json,dist/forge-ci.intoto.jsonl"
+            --pattern "dist/forge-ci_*.tar.gz,dist/forge-ci_*.tar.gz.cdx.sbom.json,dist/checksums.txt,dist/checksums.txt.bundle,dist/forge-ci.intoto.json,dist/forge-ci.intoto.jsonl"

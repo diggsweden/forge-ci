@@ -3,11 +3,12 @@
 # SPDX-License-Identifier: CC0-1.0
 set -euo pipefail
 
-# GoReleaser invokes this only after archives, SBOMs and checksums exist, but
-# before signing or upload. Compare the actual payload about to be signed.
+# GitHub's release workflows invoke this after GoReleaser has produced unsigned
+# archives, SBOMs and checksums, but before signing or upload. Compare the actual
+# payload about to be signed.
 [[ $# == 7 && $1 == release && $2 == sign && $3 == --method=sigstore &&
 	$4 == --no-checksums-file && $5 == --no-release-artifacts-dir && $6 == --file ]] || {
-	printf 'Expected the GoReleaser checksum-only signing arguments.\n' >&2
+	printf 'Expected checksum-only signing arguments.\n' >&2
 	exit 2
 }
 manifest=$7

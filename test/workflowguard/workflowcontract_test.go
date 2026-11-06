@@ -455,6 +455,12 @@ func TestReleaseGateRunsTheStrictIntegrationTier(t *testing.T) {
 	}
 
 	release := load("self-release.yml")
+	binary := release.Jobs["binary"]
+	require.Equal(t, []string{"release"}, jobNeeds(binary))
+	require.Equal(t, "./.github/workflows/release-binary.yml", binary.Uses)
+	require.Equal(t, "${{ github.ref_name }}", scalarChild(&binary.With, "release-ref"))
+	require.Equal(t, "${{ !cancelled() && needs.release.result == 'success' }}", binary.If,
+		"binary publication must survive skipped optional ancestors, but require a successful release and no cancellation")
 
 	gates := jobsRunning(release, strictRecipe)
 	if len(gates) == 0 {

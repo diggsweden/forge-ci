@@ -1380,6 +1380,26 @@ container-publication, recovery or multi-platform trial.
 
 #### Trying a consumer on GitHub
 
+Forge CI's own self-release wrapper has a separate hosted scheduling regression:
+run `just test-live-github-self-release <org-id>` inside the same guarded
+Forge Lab `github run --fixtures none` session. It projects the candidate's
+actual `self-release.yml` dependency graph and conditions onto inert job effects.
+GitHub must execute binary publication after a successful release with optional
+gates skipped or enabled, and skip it after a failed release. A negative control
+removes only the explicit binary status gate and must reproduce the historical
+green workflow with skipped binary publication. Exact-ID scratch cleanup is
+required. This scheduling projection does not claim to build real binaries.
+The same recipe also runs the actual candidate `release-binary.yml` in a separate
+disposable repository, with an initially empty release and test-owned request/final
+tags. It requires exactly 12 nonempty uploaded assets: four platform archives,
+four SBOMs, checksums and their bundle, and provenance and its bundle. It downloads
+all eight payloads, matches the signed checksums, and verifies both signatures
+against the exact workflow/request-tag identity. GitHub-generated source archive
+links are not uploaded assets and do not count. Native execution of cross-built
+macOS/arm64 archives is not claimed. Scheduling and binary publication run
+independently with a concurrency limit of two; no SDK/runtime-image rebuild is
+needed. No production repository or release is modified.
+
 See [Validation invariants from native consumer trials](validation-invariants.md)
 for the invariants behind source preservation, parallel isolation, revision
 forwarding, toolchain diagnosis and artifact/package acceptance.

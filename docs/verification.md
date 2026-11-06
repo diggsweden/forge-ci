@@ -9,6 +9,19 @@ matching guarantees are generated on the producing side.
 > assets and runtime images before adoption. For unreleased changes, follow
 > [Branch Testing](runtime-images.md#branch-testing).
 
+## GitHub CLI signing boundary
+
+The shared GoReleaser configuration packages unsigned CLI archives and SBOMs.
+GitHub's `build-cli.yml` and `release-binary.yml` explicitly verify the payload
+and sign `checksums.txt`, producing `checksums.txt.bundle`, before uploading
+the artifact handoff or release assets. Signed stable builds first compare the
+archives against an independent final-tag rebuild. Unsigned pull-request builds
+do not request OIDC signing.
+
+The rolling CLI publisher requires the checksum bundle and provenance files;
+their absence is a failed build, not a reason to bypass signature verification.
+Key-based Forgejo/GitLab release boundaries keep their own signing contracts.
+
 ## Code Quality Verification
 
 ### Linting

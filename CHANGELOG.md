@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Add read-only `doctor --requirements` setup guidance for GitHub, GitLab and
+  Forgejo release entry points, with caller mappings and explicit coverage limits.
+
+### Fixed
+
+- Run GitHub self-release binary publication after a successful release even
+  when optional ancestor gates are skipped; retain failure/cancellation refusal.
+- Explicitly sign GitHub CLI checksum manifests after unsigned packaging and
+  before artifact/release uploads, preserving stable-release rebuild verification.
+
 ## [0.93.1] - 2026-11-06
 
 ### Added
@@ -18,11 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update forge-lab-contract to v0.93.0
 - Restore clean lint baseline
 
-### Added
-
-- Add read-only `doctor --requirements` setup guidance for GitHub, GitLab and
-  Forgejo release entry points, with caller mappings and explicit coverage limits.
-
 ### Fixed
 
 - Authenticate private base verification
@@ -32,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reconcile Darwin portability with main
 - Resolve static checks and extend image readiness wait
 - Stabilize GPG agent cleanup
+
 ## [0.93.0] - 2026-11-05
 
 ### Added
