@@ -86,6 +86,7 @@ for the manifest assembly job. --arch must be the host's own architecture: each
 architecture builds on a native runner, never under CPU emulation.`,
 		Flags: append(append(append(signerImageCommonFlags(), multiarchImageParamFlags()...), imageBuilderFlags()...),
 			&cli.BoolFlag{Name: "stage", Usage: "retain the OCI layout with architecture metadata; defer ALL uploads to assemble --from-layouts after every build job succeeds"},
+			&cli.BoolFlag{Name: "cache-only", Usage: "with --stage and --cache-tag: fetch a matching cache layout only; never execute the builder or fall back to a build on a miss"},
 			&cli.StringFlag{Name: flagArch, Sources: cli.EnvVars("IMAGE_ARCH"), Usage: "target architecture: amd64 or arm64"},
 			&cli.StringFlag{Name: flagContainerfile, Value: "Containerfile", Sources: cli.EnvVars("CONTAINERFILE"), Usage: "Containerfile to build"},
 			&cli.StringFlag{Name: flagContext, Value: ".", Sources: cli.EnvVars("BUILD_CONTEXT"), Usage: "directory for the build context"},
@@ -93,7 +94,7 @@ architecture builds on a native runner, never under CPU emulation.`,
 			&cli.StringFlag{Name: "target", Usage: "multi-stage target stage to build; default the final stage"},
 			&cli.StringSliceFlag{Name: "build-arg", Usage: "KEY=VALUE build argument (repeatable)"},
 			&cli.StringSliceFlag{Name: flagLabel, Usage: "key=value image label beside the source, revision and title labels (repeatable)"},
-			&cli.StringFlag{Name: "cache-tag", Usage: "with --stage: reuse a bounded architecture slot in the image repository after checking its platform, revision and --require-label values; reads anonymously"},
+			&cli.StringFlag{Name: "cache-tag", Usage: "with --stage: reuse a bounded architecture slot in the image repository after checking its platform, revision and --require-label values; uses --auth-file when supplied, otherwise reads anonymously"},
 			&cli.StringSliceFlag{Name: flagRequireLabel, Usage: "required cache child config label as key=value (repeatable)"},
 			&cli.StringFlag{Name: flagMetadataDir, Sources: cli.EnvVars("IMAGE_METADATA_DIR"), Usage: "directory for <name>-<arch>.json (default <name>-arch-<arch>)"},
 		),
@@ -131,8 +132,22 @@ architecture builds on a native runner, never under CPU emulation.`,
 				return fmt.Errorf("--cache-tag requires --stage: %w", errs.ErrUsage)
 			}
 
+			if cmd.Bool("cache-only") && (!cmd.Bool("stage") || input.CacheTag == "") {
+				return fmt.Errorf("--cache-only requires --stage and --cache-tag: %w", errs.ErrUsage)
+			}
 			if cmd.Bool("stage") {
-				_, err = appcontainer.StageSignerImageArch(ctx, signerImageTool{builder}, ociregistry.NewAnonymous(), os.Stderr, input)
+				registry := ociregistry.NewAnonymous()
+				if input.AuthFile != "" {
+					registry = ociregistry.WithAuthFile(input.AuthFile)
+				}
+
+				if cmd.Bool("cache-only") {
+					_, err = appcontainer.StageCachedSignerImageArch(ctx, registry, os.Stderr, input)
+
+					return err
+				}
+
+				_, err = appcontainer.StageSignerImageArch(ctx, signerImageTool{builder}, registry, os.Stderr, input)
 
 				return err
 			}

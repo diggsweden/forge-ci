@@ -27,6 +27,32 @@ type ArchitectureCache interface {
 
 var errArchitectureCacheMiss = errors.New("architecture cache miss")
 
+// StageCachedSignerImageArch fetches a verified architecture cache layout without
+// ever executing a builder or the consumer's source. Authenticated callers can
+// run this in a credential-isolated job and hand the layout to later jobs.
+// A cache miss is explicit; it never falls back to building beside credentials.
+func StageCachedSignerImageArch(ctx context.Context, registry ArchitectureCache, out io.Writer, in SignerImageBuildArchInput) (*SignerImageArchMetadata, error) {
+	if registry == nil || in.CacheTag == "" {
+		return nil, fmt.Errorf("cache-only staging requires a registry and cache tag: %w", errs.ErrUsage)
+	}
+
+	derived, err := deriveSignerImageArch(in, false)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = recreateSignerMetadataDir(derived.MetadataDir); err != nil {
+		return nil, err
+	}
+
+	metadata, err := stageCachedArchitecture(ctx, registry, out, in, derived)
+	if errors.Is(err, errArchitectureCacheMiss) {
+		return nil, fmt.Errorf("no matching architecture cache: %w", errs.ErrMissingInput)
+	}
+
+	return metadata, err
+}
+
 func validateArchitectureCachePublication(in SignerImageAssembleInput, derived signerImageManifestDerived) error {
 	if in.CacheTagPrefix == "" {
 		return nil

@@ -1092,14 +1092,30 @@ signing contract described above.
 
 A resolved base may supply a stable content `revision` and `cache-tag-prefix`,
 with matching per-build `revision`, `cache-tag` and `required-labels`. Each native
-build must also carry `builder-material-id`. The build reads the public slot
-anonymously, resolves it once to a digest, checks platform/revision/labels, and
-stages those exact bytes without running the builder on a hit. Missing or stale
-slots build normally; transport/authentication failures stop the job. Every
+build must also carry `builder-material-id`. A separate registry-input job uses
+the registry credential to resolve the slot once to a digest, check
+platform/revision/labels, and retain those exact bytes as a current-run artifact.
+It never checks out or executes the consumer. The secret-free native build
+verifies that artifact and stages it without running the builder on a hit.
+Missing or stale slots build normally; transport/authentication failures stop
+the fetch job. Every
 cached child still passes the complete-set scan and SBOM gates. Only the
 publisher refreshes `<cache-tag-prefix>-<arch>` slots, after successful assembly.
 Labels prevent stale reuse, not malicious registry writes; keep cache writers
-restricted. Private cache reads are not supported by this secret-free build path.
+restricted. Private cache reads use this isolated fetch path; no registry token
+or authentication file enters the consumer build job.
+
+Private parent images must be declared explicitly in each resolved build's
+`registry-inputs` map, for example `{"BASE_IMAGE":"ghcr.io/owner/base@sha256:..."}`.
+Each key must match an existing build argument with that exact digest-pinned
+value. Fetching does not parse a Containerfile or execute dependency discovery.
+The fetch artifact retains the original source manifest, so the native build
+can verify both its digest and the selected architecture child's membership
+offline. With Buildah, verified layouts are imported under digest-derived local
+names and substituted only for those declared arguments. Prepared private
+parents currently require Buildah; Kaniko import is explicitly refused. Public
+parents need not be declared. Signing, scanning and publication barriers are
+unchanged.
 
 GHCR keeps the per-architecture `staging-<final tag>-<arch>` tags it cannot
 delete through the registry; `forge-ci container package-retention` removes

@@ -6,34 +6,100 @@ package container
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"time"
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/diggsweden/forge-ci/internal/adapters/buildah"
 	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
 	"github.com/diggsweden/forge-ci/internal/cli/regflags"
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/listval"
 )
 
-const flagImageRef = "image-ref"
+const (
+	flagImageRef  = "image-ref"
+	flagLayoutDir = "layout-dir"
+)
 
 func layoutGroup() *cli.Command {
-	return &cli.Command{Name: "layout", Usage: "record and publish OCI artifacts across a build/scan job barrier", Commands: []*cli.Command{layoutRecordCmd(), layoutPublishCmd(), layoutExtractFilesCmd()}}
+	return &cli.Command{Name: "layout", Usage: "record and publish OCI artifacts across a build/scan job barrier", Commands: []*cli.Command{layoutRecordCmd(), layoutPublishCmd(), layoutExtractFilesCmd(), layoutFetchInputCmd(), layoutVerifyInputCmd(), layoutImportInputCmd()}}
+}
+
+func layoutImportInputCmd() *cli.Command {
+	return &cli.Command{
+		Name: "import-input", Usage: "verify and import a retained parent into native Buildah storage without registry credentials",
+		Flags: append(layoutRegistryInputFlags(), imageBuilderFlags()...),
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			builder, err := imageBuilderFromCmd(cmd)
+			if err != nil {
+				return err
+			}
+
+			loader, ok := builder.(*buildah.Adapter)
+			if !ok {
+				return fmt.Errorf("input layout import requires Buildah: %w", errs.ErrUsage)
+			}
+
+			local, err := appcontainer.ImportRegistryInput(ctx, ociregistry.NewAnonymous(), loader, os.Stderr, cmd.String(flagImageRef), cmd.String(flagPlatform), cmd.String(flagLayoutDir))
+			if err != nil {
+				return err
+			}
+
+			return deps.FromCmd(ctx, cmd, func(dep *deps.Deps) error { return dep.OutputSink.Set(ctx, "image-ref", local) })
+		},
+	}
+}
+
+func layoutRegistryInputFlags() []cli.Flag {
+	return []cli.Flag{
+		&cli.StringFlag{Name: flagImageRef, Required: true, Usage: "digest-pinned parent image from the admitted build policy"},
+		&cli.StringFlag{Name: flagPlatform, Required: true, Usage: "linux/amd64 or linux/arm64"},
+		&cli.StringFlag{Name: flagLayoutDir, Required: true, Usage: "single-platform input layout directory"},
+	}
+}
+
+func layoutFetchInputCmd() *cli.Command {
+	return &cli.Command{
+		Name: "fetch-input", Usage: "fetch a pinned private parent into a run-scoped artifact without running consumer code",
+		Flags: append(layoutRegistryInputFlags(), regflags.AuthFile(regflags.AuthFileOpts{})),
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			registry := ociregistry.NewAnonymous()
+			if authFile := cmd.String(flagAuthFile); authFile != "" {
+				registry = ociregistry.WithAuthFile(authFile)
+			}
+
+			return appcontainer.FetchRegistryInput(ctx, registry, cmd.String(flagImageRef), cmd.String(flagPlatform), cmd.String(flagLayoutDir))
+		},
+	}
+}
+
+func layoutVerifyInputCmd() *cli.Command {
+	return &cli.Command{
+		Name: "verify-input", Usage: "verify downloaded parent bytes against independently pinned source and platform, offline",
+		Flags: layoutRegistryInputFlags(),
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			_, err := appcontainer.VerifyRegistryInput(ctx, ociregistry.NewAnonymous(), cmd.String(flagImageRef), cmd.String(flagPlatform), cmd.String(flagLayoutDir))
+
+			return err
+		},
+	}
 }
 
 func layoutExtractFilesCmd() *cli.Command {
 	return &cli.Command{
 		Name: "extract-files", Usage: "copy selected executables from the retained image filesystem without rebuilding",
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "layout-dir", Required: true, Usage: "verified single-image OCI layout directory"},
+			&cli.StringFlag{Name: flagLayoutDir, Required: true, Usage: "verified single-image OCI layout directory"},
 			&cli.StringFlag{Name: flagOutputDir, Required: true, Usage: "directory receiving unique executable basenames; existing files are never overwritten"},
 			&cli.StringFlag{Name: "paths", Required: true, Sources: cli.EnvVars("EXTRACT_BINARY_PATHS"), Usage: "comma/space-separated regular-file paths inside the image"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			return appcontainer.ExtractLayoutFiles(ctx, ociregistry.NewAnonymous(), os.Stderr, cmd.String("layout-dir"), cmd.String(flagOutputDir), listval.Tokens(cmd.String("paths")))
+			return appcontainer.ExtractLayoutFiles(ctx, ociregistry.NewAnonymous(), os.Stderr, cmd.String(flagLayoutDir), cmd.String(flagOutputDir), listval.Tokens(cmd.String("paths")))
 		},
 	}
 }
@@ -50,12 +116,12 @@ func layoutRecordCmd() *cli.Command {
 		Name: "record", Usage: "verify a built/scanned layout and record its digest, platform, source and destination",
 		Description: "Run after the configured build/scan succeeds, then upload the complete directory as one run-scoped artifact. Verifies local blobs without pulling or publishing. Uses artifact limits: 5 GiB per file, 10 GiB and 10,000 files per layout. Download limits also apply across the complete selected set; the instance may impose smaller limits.",
 		Flags: append(layoutIdentityFlags(),
-			&cli.StringFlag{Name: "layout-dir", Required: true, Usage: "directory produced by container build --mode oci"},
+			&cli.StringFlag{Name: flagLayoutDir, Required: true, Usage: "directory produced by container build --mode oci"},
 			&cli.StringFlag{Name: flagPlatform, Required: true, Sources: cli.EnvVars("PLATFORM"), Usage: "expected linux/amd64 or linux/arm64"}),
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return deps.FromCmd(ctx, cmd, func(dep *deps.Deps) error {
 				record, err := appcontainer.RecordImageLayout(ctx, ociregistry.NewAnonymous(), appcontainer.LayoutRecordInput{
-					Directory: cmd.String("layout-dir"), ImageRef: cmd.String("image-ref"), SourceSHA: cmd.String(flagSourceSHA), Platform: cmd.String(flagPlatform),
+					Directory: cmd.String(flagLayoutDir), ImageRef: cmd.String(flagImageRef), SourceSHA: cmd.String(flagSourceSHA), Platform: cmd.String(flagPlatform),
 				})
 				if err != nil {
 					return err

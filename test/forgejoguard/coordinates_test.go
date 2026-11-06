@@ -53,7 +53,7 @@ func coordinateWorkflows() map[string]coordinateContract {
 		".forgejo/workflows/sign-container-images.yml":         {"forge-ci-sha", 1, false},
 		".forgejo/workflows/promote-base-container-images.yml": {"forge-ci-sha", 1, false},
 		".forgejo/workflows/verify-base-container-images.yml":  {"forge-ci-sha", 1, false},
-		".forgejo/workflows/release-images.yml":                {"forge-ci-sha", 4, true},
+		".forgejo/workflows/release-images.yml":                {"forge-ci-sha", 5, true},
 		".forgejo/workflows/snapshot-images.yml":               {"forge-ci-sha", 6, true},
 	}
 }

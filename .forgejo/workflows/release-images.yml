@@ -321,9 +321,87 @@ jobs:
           echo "ERROR: a container builds linux/arm64, so pass runner-label-arm64, the labels of a native arm64 runner; or narrow release-platforms to linux/amd64" >&2
           exit 1
 
+  fetch-inputs:
+    name: "Fetch registry inputs: ${{ matrix.build.name }} (${{ matrix.build.arch }})"
+    needs: [coordinates, plan]
+    runs-on: ${{ fromJSON(matrix.build.arch == 'arm64' && inputs['runner-label-arm64'] || inputs['runner-label']) }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: true
+      # Forgejo v3 artifact finalization walks every temporary chunk in a run.
+      # Concurrent finalizers can delete a chunk while another walks it (500).
+      # Serialize credential-only input uploads, not the subsequent builds.
+      max-parallel: 1
+      matrix:
+        build: ${{ fromJSON(needs.plan.outputs.builds) }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      FORGE_CI_REPOSITORY_URL: ${{ needs.coordinates.outputs.helpers_repository }}
+    steps:
+      # No consumer checkout, Containerfile, build script or signing key enters
+      # this credential-holding job. Its only outputs are verified OCI bytes.
+      - name: Checkout pinned layer helpers
+        env:
+          EXPECTED_HELPERS_SHA: ${{ inputs['forge-ci-sha'] }}
+        run: |
+          set -euo pipefail
+          [[ "${EXPECTED_HELPERS_SHA}" =~ ^([0123456789abcdef]{40}|[0123456789abcdef]{64})$ ]]
+          helpers_dir="${GITHUB_WORKSPACE:?}/forge-ci-layer"
+          echo "HELPERS_DIR=${helpers_dir}" >>"${FORGEJO_ENV}"
+          git init --quiet "${helpers_dir}"
+          git -C "${helpers_dir}" remote add origin "${FORGE_CI_REPOSITORY_URL:?}"
+          if ! GIT_TERMINAL_PROMPT=0 git -C "${helpers_dir}" fetch --quiet --no-tags --depth=1 origin "${EXPECTED_HELPERS_SHA}"; then
+            GIT_TERMINAL_PROMPT=0 git -C "${helpers_dir}" fetch --quiet origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*'
+          fi
+          git -C "${helpers_dir}" checkout --quiet --detach "${EXPECTED_HELPERS_SHA}"
+          [[ $(git -C "${helpers_dir}" rev-parse HEAD) == "${EXPECTED_HELPERS_SHA}" ]]
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${helpers_dir}/.engine/bin/lib-forge-ci.sh"
+          fetch_forge_ci
+      - name: Fetch admitted cache and parent layouts
+        env:
+          BUILD_JSON: ${{ toJSON(matrix.build) }}
+          IMAGE_REPOSITORY: ${{ matrix.build['image-repository'] }}
+          RELEASE_SHA: ${{ inputs['release-sha'] }}
+          REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
+          REGISTRY_USER: ${{ needs.plan.outputs['registry-user'] }}
+        run: |
+          set -euo pipefail
+          registry_token="${REGISTRY_TOKEN:?}"
+          unset REGISTRY_TOKEN
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          auth_file=$(mktemp "${RUNNER_TEMP:?}/registry-input-auth.XXXXXX")
+          trap 'rm -f -- "${auth_file}"' EXIT
+          printf '%s' "${registry_token}" | run_forge_ci container login \
+            --registry "${IMAGE_REPOSITORY%%/*}" \
+            --registry-username "${REGISTRY_USER:?}" \
+            --registry-password-file - --auth-file "${auth_file}"
+          unset registry_token
+          run_forge_ci container release-images fetch-build-inputs \
+            --build-json "${BUILD_JSON:?}" --release-sha "${RELEASE_SHA:?}" \
+            --server-url "${FORGEJO_SERVER:?}" --repository "${FORGEJO_REPO:?}" \
+            --inputs-dir registry-inputs --auth-file "${auth_file}"
+      - name: Upload registry input layouts
+        env:
+          IMAGE_ARTIFACT_NAMESPACE: ${{ inputs['artifact-name'] }}
+          IMAGE_NAME: ${{ matrix.build.name }}
+          IMAGE_ARCH: ${{ matrix.build.arch }}
+        run: |
+          set -euo pipefail
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          run_forge_ci artifact upload \
+            --name "${IMAGE_ARTIFACT_NAMESPACE:?}-inputs-${IMAGE_NAME:?}-${IMAGE_ARCH:?}" \
+            --dir "${GITHUB_WORKSPACE:?}/registry-inputs/" \
+            --blob-store "${IMAGE_ARTIFACT_NAMESPACE}-input-blob" \
+            --retention-days 1 --if-no-files error --include-hidden
+
   build:
     name: "Build: ${{ matrix.build.name }} (${{ matrix.build.arch }})"
-    needs: [coordinates, plan]
+    needs: [coordinates, plan, fetch-inputs]
     # Each architecture builds on a runner of its own architecture: a build
     # runs the Containerfile's steps, and none may rely on CPU emulation.
     runs-on: ${{ fromJSON(matrix.build.arch == 'arm64' && inputs['runner-label-arm64'] || inputs['runner-label']) }}
@@ -416,6 +494,7 @@ jobs:
         uses: ./forge-ci-layer/.forgejo/actions/setup-image-builder
 
       - name: Build ${{ matrix.build.arch }} layout
+        if: ${{ matrix.build['cache-tag'] == '' && !matrix.build['registry-inputs'] }}
         env:
           IMAGE_NAME: ${{ matrix.build.name }}
           IMAGE_ARCH: ${{ matrix.build.arch }}
@@ -488,6 +567,45 @@ jobs:
             --label "org.opencontainers.image.version=${RELEASE_TAG:?}" \
             --metadata-dir "staged/${IMAGE_NAME}-arch-${IMAGE_ARCH}" \
             "${args[@]}"
+
+      - name: Download prepared registry inputs
+        if: ${{ matrix.build['cache-tag'] != '' || matrix.build['registry-inputs'] }}
+        env:
+          IMAGE_ARTIFACT_NAMESPACE: ${{ inputs['artifact-name'] }}
+          IMAGE_NAME: ${{ matrix.build.name }}
+          IMAGE_ARCH: ${{ matrix.build.arch }}
+        run: |
+          set -euo pipefail
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          run_forge_ci artifact download \
+            --name "${IMAGE_ARTIFACT_NAMESPACE:?}-inputs-${IMAGE_NAME:?}-${IMAGE_ARCH:?}" \
+            --dir "${GITHUB_WORKSPACE:?}/registry-inputs" \
+            --blob-store "${IMAGE_ARTIFACT_NAMESPACE}-input-blob"
+      - name: Build with secret-free prepared inputs
+        if: ${{ matrix.build['cache-tag'] != '' || matrix.build['registry-inputs'] }}
+        env:
+          BUILD_JSON: ${{ toJSON(matrix.build) }}
+          RELEASE_TAG: ${{ inputs['release-tag'] }}
+          RELEASE_SHA: ${{ inputs['release-sha'] }}
+          EXPECTED_BUILDER_MATERIAL_ID: ${{ matrix.build['builder-material-id'] }}
+        run: |
+          set -euo pipefail
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          if [ -n "${EXPECTED_BUILDER_MATERIAL_ID:-}" ]; then
+            actual_builder_material_id=$(run_forge_ci container builder-identity)
+            if [ "${actual_builder_material_id}" != "${EXPECTED_BUILDER_MATERIAL_ID}" ]; then
+              echo "ERROR: selected builder material differs from the planned native identity" >&2
+              exit 1
+            fi
+          fi
+          created=$(TZ=UTC0 git -C "${GITHUB_WORKSPACE:?}/source" show -s --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd HEAD)
+          run_forge_ci container release-images build-prepared \
+            --build-json "${BUILD_JSON:?}" --inputs-dir registry-inputs \
+            --release-sha "${RELEASE_SHA:?}" --release-tag "${RELEASE_TAG:?}" \
+            --created "${created}" --source-dir source --metadata-dir staged \
+            --server-url "${FORGEJO_SERVER:?}" --repository "${FORGEJO_REPO:?}"
 
       - name: Upload ${{ matrix.build.arch }} layout
         env:

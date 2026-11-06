@@ -54,10 +54,11 @@ func TestReleaseImageStageMatchesTheForgejoWorkflow(t *testing.T) {
 	forgejo := forgejoReleaseImagesJobs(t)
 
 	wantForgejo := map[string][]string{
-		"plan":    {"coordinates"},
-		"build":   {"coordinates", "plan"},
-		"publish": {"coordinates", "plan", "build"},
-		"collect": {"coordinates", "plan", "publish"},
+		"plan":         {"coordinates"},
+		"fetch-inputs": {"coordinates", "plan"},
+		"build":        {"coordinates", "plan", "fetch-inputs"},
+		"publish":      {"coordinates", "plan", "build"},
+		"collect":      {"coordinates", "plan", "publish"},
 	}
 	for name, needs := range wantForgejo {
 		if !reflect.DeepEqual(forgejo.needs[name], needs) {

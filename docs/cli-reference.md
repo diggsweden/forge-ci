@@ -1141,6 +1141,29 @@ copy selected executables from the retained image filesystem without rebuilding
 | `--output-dir` | directory receiving unique executable basenames; existing files are never overwritten (required) | string | `""` | n/a |
 | `--paths` | comma/space-separated regular-file paths inside the image (required) | string | `""` | `$EXTRACT_BINARY_PATHS` |
 
+#### `forge-ci container layout fetch-input`
+
+fetch a pinned private parent into a run-scoped artifact without running consumer code
+
+| Flag | Description | Type | Default | Env vars |
+|------|-------------|------|---------|----------|
+| `--image-ref` | digest-pinned parent image from the admitted build policy (required) | string | `""` | n/a |
+| `--platform` | linux/amd64 or linux/arm64 (required) | string | `""` | n/a |
+| `--layout-dir` | single-platform input layout directory (required) | string | `""` | n/a |
+| `--auth-file` | Sets auth file. | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
+
+#### `forge-ci container layout import-input`
+
+verify and import a retained parent into native Buildah storage without registry credentials
+
+| Flag | Description | Type | Default | Env vars |
+|------|-------------|------|---------|----------|
+| `--image-ref` | digest-pinned parent image from the admitted build policy (required) | string | `""` | n/a |
+| `--platform` | linux/amd64 or linux/arm64 (required) | string | `""` | n/a |
+| `--layout-dir` | single-platform input layout directory (required) | string | `""` | n/a |
+| `--image-builder` | image builder type: buildah (default; rootless, needs user namespaces) or kaniko (for a pool that denies them; runs as root in the job image CI_IMAGE_BUILDER_JOB_IMAGE names, builds to a layout, exports a stage's files in local mode, no load mode, no build secrets). Set CI_IMAGE_BUILDER on the repository to select it. | string | `"buildah"` | `$CI_IMAGE_BUILDER` |
+| `--kaniko-executor` | path of the kaniko executor (default /kaniko/executor) | string | `""` | `$KANIKO_EXECUTOR` |
+
 #### `forge-ci container layout publish`
 
 verify the complete staged platform set before uploading any image
@@ -1174,6 +1197,16 @@ Run after the configured build/scan succeeds, then upload the complete directory
 | `--source-sha` | full source commit; must match the OCI revision label (required) | string | `""` | `$SOURCE_SHA` |
 | `--layout-dir` | directory produced by container build --mode oci (required) | string | `""` | n/a |
 | `--platform` | expected linux/amd64 or linux/arm64 (required) | string | `""` | `$PLATFORM` |
+
+#### `forge-ci container layout verify-input`
+
+verify downloaded parent bytes against independently pinned source and platform, offline
+
+| Flag | Description | Type | Default | Env vars |
+|------|-------------|------|---------|----------|
+| `--image-ref` | digest-pinned parent image from the admitted build policy (required) | string | `""` | n/a |
+| `--platform` | linux/amd64 or linux/arm64 (required) | string | `""` | n/a |
+| `--layout-dir` | single-platform input layout directory (required) | string | `""` | n/a |
 
 ### `forge-ci container ledger`
 
@@ -1618,6 +1651,7 @@ architecture builds on a native runner, never under CPU emulation.
 | `--image-builder` | image builder type: buildah (default; rootless, needs user namespaces) or kaniko (for a pool that denies them; runs as root in the job image CI_IMAGE_BUILDER_JOB_IMAGE names, builds to a layout, exports a stage's files in local mode, no load mode, no build secrets). Set CI_IMAGE_BUILDER on the repository to select it. | string | `"buildah"` | `$CI_IMAGE_BUILDER` |
 | `--kaniko-executor` | path of the kaniko executor (default /kaniko/executor) | string | `""` | `$KANIKO_EXECUTOR` |
 | `--stage` | retain the OCI layout with architecture metadata; defer ALL uploads to assemble --from-layouts after every build job succeeds | bool | `false` | n/a |
+| `--cache-only` | with --stage and --cache-tag: fetch a matching cache layout only; never execute the builder or fall back to a build on a miss | bool | `false` | n/a |
 | `--arch` | target architecture: amd64 or arm64 | string | `""` | `$IMAGE_ARCH` |
 | `--containerfile` | Containerfile to build | string | `"Containerfile"` | `$CONTAINERFILE` |
 | `--context` | directory for the build context | string | `"."` | `$BUILD_CONTEXT` |
@@ -1625,7 +1659,7 @@ architecture builds on a native runner, never under CPU emulation.
 | `--target` | multi-stage target stage to build; default the final stage | string | `""` | n/a |
 | `--build-arg` | KEY=VALUE build argument (repeatable) | string | `""` | n/a |
 | `--label` | key=value image label beside the source, revision and title labels (repeatable) | string | `""` | n/a |
-| `--cache-tag` | with --stage: reuse a bounded architecture slot in the image repository after checking its platform, revision and --require-label values; reads anonymously | string | `""` | n/a |
+| `--cache-tag` | with --stage: reuse a bounded architecture slot in the image repository after checking its platform, revision and --require-label values; uses --auth-file when supplied, otherwise reads anonymously | string | `""` | n/a |
 | `--require-label` | required cache child config label as key=value (repeatable) | string | `""` | n/a |
 | `--metadata-dir` | directory for <name>-<arch>.json (default <name>-arch-<arch>) | string | `""` | `$IMAGE_METADATA_DIR` |
 
@@ -1842,6 +1876,24 @@ EXAMPLE:
 | `--image-builder` | image builder type: buildah (default; rootless, needs user namespaces) or kaniko (for a pool that denies them; runs as root in the job image CI_IMAGE_BUILDER_JOB_IMAGE names, builds to a layout, exports a stage's files in local mode, no load mode, no build secrets). Set CI_IMAGE_BUILDER on the repository to select it. | string | `"buildah"` | `$CI_IMAGE_BUILDER` |
 | `--kaniko-executor` | path of the kaniko executor (default /kaniko/executor) | string | `""` | `$KANIKO_EXECUTOR` |
 
+#### `forge-ci container release-images build-prepared`
+
+import verified parents and build using only secret-free prepared registry inputs
+
+| Flag | Description | Type | Default | Env vars |
+|------|-------------|------|---------|----------|
+| `--build-json` | one build entry from the admitted release image plan (required) | string | `""` | n/a |
+| `--release-sha` | prepared release source commit (required) | string | `""` | n/a |
+| `--server-url` | source forge URL (required) | string | `""` | n/a |
+| `--repository` | source owner/repository (required) | string | `""` | n/a |
+| `--inputs-dir` | relative run-scoped directory holding only fetched build inputs (required) | string | `""` | n/a |
+| `--image-builder` | image builder type: buildah (default; rootless, needs user namespaces) or kaniko (for a pool that denies them; runs as root in the job image CI_IMAGE_BUILDER_JOB_IMAGE names, builds to a layout, exports a stage's files in local mode, no load mode, no build secrets). Set CI_IMAGE_BUILDER on the repository to select it. | string | `"buildah"` | `$CI_IMAGE_BUILDER` |
+| `--kaniko-executor` | path of the kaniko executor (default /kaniko/executor) | string | `""` | `$KANIKO_EXECUTOR` |
+| `--release-tag` | prepared release tag (required) | string | `""` | n/a |
+| `--created` | source commit timestamp (required) | string | `""` | n/a |
+| `--source-dir` | consumer checkout | string | `"source"` | n/a |
+| `--metadata-dir` | relative architecture layout parent directory | string | `"."` | n/a |
+
 #### `forge-ci container release-images cleanup`
 
 delete release candidate tags after verified final/moving promotion
@@ -1861,6 +1913,19 @@ delete release candidate tags after verified final/moving promotion
 | `--allow-missing-ledger` | accept a release without images: when the default ledger <dist-dir>/release-images.json does not exist, say so and exit 0 before any credential read or registry login. The dist directory must exist, a ledger that exists is held to every rule, and a ledger named with --ledger must exist | bool | `false` | n/a |
 | `--provider-token-file` | file containing the provider/package-API token ("-" reads stdin); defaults to $FORGE_CI_PACKAGE_API_TOKEN, then the detected forge's own token variable ($FORGEJO_TOKEN or $GITEA_TOKEN on Forgejo, $GITLAB_TOKEN on GitLab); another forge's token is never used. The token never appears in argv. | string | `""` | n/a |
 | `--dry-run` | preview registry mutations (copies/deletes) without performing them | bool | `false` | n/a |
+
+#### `forge-ci container release-images fetch-build-inputs`
+
+fetch planned cache and pinned parents without running consumer code
+
+| Flag | Description | Type | Default | Env vars |
+|------|-------------|------|---------|----------|
+| `--build-json` | one build entry from the admitted release image plan (required) | string | `""` | n/a |
+| `--release-sha` | prepared release source commit (required) | string | `""` | n/a |
+| `--server-url` | source forge URL (required) | string | `""` | n/a |
+| `--repository` | source owner/repository (required) | string | `""` | n/a |
+| `--inputs-dir` | relative run-scoped directory holding only fetched build inputs (required) | string | `""` | n/a |
+| `--auth-file` | Sets auth file. | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
 
 #### `forge-ci container release-images import`
 

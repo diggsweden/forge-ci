@@ -34,6 +34,30 @@ func resolvedBasePlan() pipeline.ReleaseImagesPlan {
 	}
 }
 
+func TestRegistryInputsRequirePinnedMatchingBuildArguments(t *testing.T) {
+	ref := "ghcr.io/acme/private@sha256:" + strings.Repeat("a", 64)
+	for _, tc := range []struct {
+		name, key, argument, input string
+		valid                      bool
+	}{
+		{"pinned", "BASE_IMAGE", ref, ref, true},
+		{"mutable", "BASE_IMAGE", "ghcr.io/acme/private:latest", "ghcr.io/acme/private:latest", false},
+		{"different input", "BASE_IMAGE", ref, "ghcr.io/other/private@sha256:" + strings.Repeat("b", 64), false},
+		{"path traversal", "../BASE", ref, ref, false},
+		{"cache collision", "cache", ref, ref, false},
+		{"shell key", "$(command)", ref, ref, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := pipeline.ValidateRegistryInputs(pipeline.ReleaseImageBuild{BuildArgs: tc.key + "=" + tc.argument, RegistryInputs: map[string]string{tc.key: tc.input}})
+			if tc.valid {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, errs.ErrInvalidConfig)
+			}
+		})
+	}
+}
+
 func TestReadImageBuildPlan_PreservesConsumerPolicyWithoutBackendKnowledge(t *testing.T) {
 	t.Parallel()
 

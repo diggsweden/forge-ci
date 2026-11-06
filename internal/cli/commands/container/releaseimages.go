@@ -64,6 +64,8 @@ available for custom workflows; reusable workflows should use this group.`,
 		Commands: []*cli.Command{
 			releaseImagesPlanCmd(),
 			releaseImagesBuildCmd(),
+			releaseImagesFetchBuildInputsCmd(),
+			releaseImagesBuildPreparedCmd(),
 			releaseImagesPublishCmd(),
 			releaseImagesImportCmd(),
 			releaseImagesSignCmd(),

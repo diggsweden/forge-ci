@@ -270,9 +270,55 @@ func (index *imagePlanIndex) claimBuild(build ReleaseImageBuild, repository stri
 		return err
 	}
 
+	if err := ValidateRegistryInputs(build); err != nil {
+		return err
+	}
+
 	delete(index.pending, key)
 
 	return nil
+}
+
+// ValidateRegistryInputs binds every private parent to an existing image build
+// argument. Fetching never evaluates a Containerfile or discovers dependencies
+// from consumer code while credentials are present.
+func ValidateRegistryInputs(build ReleaseImageBuild) error {
+	arguments := map[string]string{}
+
+	for _, argument := range imagePlanLines(build.BuildArgs) {
+		key, value, _ := strings.Cut(argument, "=")
+		arguments[key] = value
+	}
+
+	for key, ref := range build.RegistryInputs {
+		if key == "" || key == "cache" || strings.ContainsAny(key, "/\\.\n\r=") || arguments[key] != ref {
+			return fmt.Errorf("registry input must match a named image build argument: %w", errs.ErrInvalidConfig)
+		}
+
+		if !validRegistryInputArgument(key) {
+			return fmt.Errorf("registry input argument name is invalid: %w", errs.ErrInvalidConfig)
+		}
+
+		repository, digest, ok := strings.Cut(ref, "@")
+		if !ok || !domaincontainer.ValidRepositoryName(repository) || !domaincontainer.ValidDigest(digest) {
+			return fmt.Errorf("registry input must name a digest-pinned parent image: %w", errs.ErrInvalidConfig)
+		}
+	}
+
+	return nil
+}
+
+func validRegistryInputArgument(key string) bool {
+	for _, character := range key {
+		if character >= 'A' && character <= 'Z' || character >= 'a' && character <= 'z' ||
+			character >= '0' && character <= '9' || character == '_' {
+			continue
+		}
+
+		return false
+	}
+
+	return true
 }
 
 func validateImageBuilderMaterial(id string, cache bool) error {

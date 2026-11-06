@@ -35,20 +35,21 @@ type ReleaseImagesInput struct {
 
 // ReleaseImageBuild is one native architecture build of one container.
 type ReleaseImageBuild struct {
-	Name              string `json:"name"`
-	Arch              string `json:"arch"`
-	Platform          string `json:"platform"`
-	ContainerFile     string `json:"container-file"`
-	Context           string `json:"context"`
-	Target            string `json:"target"`
-	BuildArgs         string `json:"build-args"`                    // newline-separated KEY=VALUE, sorted
-	Labels            string `json:"labels,omitempty"`              // per-image public labels, before workflow-wide labels
-	BuilderMaterialID string `json:"builder-material-id,omitempty"` // optional opaque identity captured on this native runner
-	Revision          string `json:"revision,omitempty"`            // content revision for reusable bases; empty uses the release commit
-	CacheTag          string `json:"cache-tag,omitempty"`           // bounded architecture slot in the admitted repository
-	RequiredLabels    string `json:"required-labels,omitempty"`
-	ImageRepository   string `json:"image-repository"`
-	CandidateTag      string `json:"candidate-tag"`
+	Name              string            `json:"name"`
+	Arch              string            `json:"arch"`
+	Platform          string            `json:"platform"`
+	ContainerFile     string            `json:"container-file"`
+	Context           string            `json:"context"`
+	Target            string            `json:"target"`
+	BuildArgs         string            `json:"build-args"`                    // newline-separated KEY=VALUE, sorted
+	RegistryInputs    map[string]string `json:"registry-inputs,omitempty"`     // build argument -> pinned parent fetched in a separate credential-isolated job
+	Labels            string            `json:"labels,omitempty"`              // per-image public labels, before workflow-wide labels
+	BuilderMaterialID string            `json:"builder-material-id,omitempty"` // optional opaque identity captured on this native runner
+	Revision          string            `json:"revision,omitempty"`            // content revision for reusable bases; empty uses the release commit
+	CacheTag          string            `json:"cache-tag,omitempty"`           // bounded architecture slot in the admitted repository
+	RequiredLabels    string            `json:"required-labels,omitempty"`
+	ImageRepository   string            `json:"image-repository"`
+	CandidateTag      string            `json:"candidate-tag"`
 	// FinalTagName is the tag the signer promotes the image to, which the
 	// build records as its org.opencontainers.image.ref.name label.
 	FinalTagName string `json:"final-tag-name"`
