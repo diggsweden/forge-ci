@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
 func TestLintDiagnosticAndApplicationGates(t *testing.T) {
@@ -50,7 +52,7 @@ func TestLintDiagnosticAndApplicationGates(t *testing.T) {
 				write(filepath.Join(root, ".gitlab/generic-cli-source.json"), `{"lintPolicy":"informational","excludedChecks":[]}`)
 				write(filepath.Join(bin, "rustc"), "#!/bin/sh\nprintf 'rustc 1.99.1 (fixture)\\n'\n")
 				write(filepath.Join(bin, "go"), "#!/bin/sh\nif [ \"$1\" = env ]; then printf 'go1.27.3\\n'; else printf 'go %s\\n' \"$*\" >> \"$TEST_CALLS\"; fi\n")
-				write(filepath.Join(bin, "just"), "#!/bin/sh\nprintf 'just %s\\n' \"$*\" >> \"$TEST_CALLS\"\ncase \"$1:$FAIL_GROUP\" in _build-verify-binary:setup|_lint-linux-platform:setup|--fmt:--fmt|test:test) exit 23;; esac\nif [ \"$1\" = _build-verify-binary ] && [ \"$FAIL_GROUP\" = tools ]; then exit 23; fi\n")
+				write(filepath.Join(bin, "just"), "#!/bin/sh\nprintf 'just %s\\n' \"$*\" >> \"$TEST_CALLS\"\ncase \"$1:$FAIL_GROUP\" in _build-verify-binary:setup|_lint-release-platforms:setup|--fmt:--fmt|test:test) exit 23;; esac\nif [ \"$1\" = _build-verify-binary ] && [ \"$FAIL_GROUP\" = tools ]; then exit 23; fi\n")
 
 				nano := "#!/bin/sh\nprintf 'nano %s\\n' \"$*\" >> \"$TEST_CALLS\"\nif [ \"$1\" = check-tools ]; then if [ \"$FAIL_GROUP\" = tools ]; then exit 23; fi; exit 0; fi\nprintf 'SUMMARY: KICS 64 findings; other checks executed\\n'\nexit \"$LINT_EXIT\"\n"
 				write(filepath.Join(bin, "nanolinter"), nano)
@@ -92,5 +94,29 @@ func TestLintDiagnosticAndApplicationGates(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// Inspect the real recipe without executing tools, analysis or provider effects.
+// The execution stubs above cannot establish that a source recipe exists.
+func TestGoAdapterUsesExistingPlatformLintRecipe(t *testing.T) {
+	body, err := os.ReadFile("check-release.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const recipe = "_lint-release-platforms"
+	if !strings.Contains(string(body), "just "+recipe+"\n") {
+		t.Fatal("Go adapter must retain the source's cross-platform lint prerequisite")
+	}
+
+	just, err := exec.LookPath("just")
+	if err != nil {
+		t.Skip("just is required to inspect the real source recipe")
+	}
+
+	cmd := exec.CommandContext(t.Context(), just, "--justfile", filepath.Join(reporoot.Path(t), "justfile"), "--show", recipe)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("source recipe %s is unavailable: %v\n%s", recipe, err, output)
 	}
 }

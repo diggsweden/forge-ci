@@ -9,7 +9,7 @@ case "${kind}" in
 go)
 	export GOTOOLCHAIN=local
 	test "$(go env GOVERSION)" = go1.27.3
-	just _lint-linux-platform
+	just _lint-release-platforms
 	just --fmt --check
 	go mod tidy -diff
 	nano=nanolinter

@@ -102,7 +102,7 @@ place: they retain their old policy and require a new preparation/run.
 
 The adapter separates each source's original `just verify` groups rather than
 ignoring its exit status. Nano builds its source binary and runs original
-`check-tools`; Go retains `_lint-linux-platform` and blocking `go mod tidy -diff`
+`check-tools`; Go retains `_lint-release-platforms` and blocking `go mod tidy -diff`
 and independently requires `nanolinter check-tools`. Both retain the justfile
 format check, directly invoke the same full `nanolinter verify`, record its
 status, and then run original `just test`. Direct invocation preserves
