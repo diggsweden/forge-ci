@@ -2465,6 +2465,7 @@ Exit codes:
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
+| `--requirements` | show local release setup guidance for GitHub, GitLab and Forgejo; unverified workflow contracts are labelled | bool | `false` | n/a |
 | `--root` | repository root to inspect (default: cwd) | string | `""` | `$FORGE_CI_DOCTOR_ROOT` |
 | `--artifacts-file` | path to the artifacts.yml to inspect (default: <root>/.forge-ci/artifacts.yml) | string | `""` | `$FORGE_CI_DOCTOR_ARTIFACTS` |
 | `--forge-ci-repository` | owner/repo this binary belongs to, for the workflow-pin check (default: derived from the binary's own module path) | string | `""` | `$FORGE_CI_REPO_SLUG` |

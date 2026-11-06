@@ -174,6 +174,10 @@ func report(out io.Writer, example string, result appinit.Result) {
 	}
 
 	_, _ = fmt.Fprintln(out, "\nLinter configuration: no Nanolinter or MegaLinter configuration is generated.")
+	if !result.DryRun {
+		_, _ = fmt.Fprintln(out, "Release setup: run forge-ci doctor --requirements for setup guidance; remote secrets and permissions are not checked.")
+	}
+
 	if result.DryRun {
 		_, _ = fmt.Fprintln(out, "\nNo project files were written. Templates were fetched into temporary storage.")
 		if len(result.Conflicts) > 0 {

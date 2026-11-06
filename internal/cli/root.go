@@ -413,7 +413,7 @@ func newRoot(info BuildInfo, versionString string) *cli.Command {
 		Commands: slices.Concat(
 			cmdmeta.WithCategory(categoryRepository,
 				cmdconfig.New(),
-				cmddoctor.New(),
+				cmddoctor.New(info.Commit),
 				cmdinit.New(),
 			),
 			cmdmeta.WithCategory(categoryWorkflow,

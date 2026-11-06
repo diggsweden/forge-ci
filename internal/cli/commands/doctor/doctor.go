@@ -25,7 +25,7 @@ import (
 )
 
 // New returns the `doctor` top-level subcommand.
-func New() *cli.Command {
+func New(commit string) *cli.Command {
 	return &cli.Command{
 		Name:  "doctor",
 		Usage: "check local repository configuration for forge-ci",
@@ -46,6 +46,7 @@ Exit codes:
    0   — all checks pass or are warnings
    1   — at least one FAIL check (ExitCodeValidation)`,
 		Flags: []cli.Flag{
+			&cli.BoolFlag{Name: "requirements", Usage: "show local release setup guidance for GitHub, GitLab and Forgejo; unverified workflow contracts are labelled"},
 			&cli.StringFlag{
 				Name:    "root",
 				Sources: cli.EnvVars("FORGE_CI_DOCTOR_ROOT"),
@@ -79,6 +80,13 @@ Exit codes:
 
 			failures := appdoctor.CountFailures(checks)
 
+			var requirements *appdoctor.RequirementsReport
+
+			if cmd.Bool("requirements") {
+				report := appdoctor.Requirements(cmd.String("root"), cmd.String("forge-ci-repository"), commit)
+				requirements = &report
+			}
+
 			// Honour the global --json / --format=json: doctor's checks are
 			// structured data, so a machine-readable form lets a CI gate
 			// parse setup status instead of scraping the human text.
@@ -89,14 +97,19 @@ Exit codes:
 
 			if format == output.FormatJSON {
 				if err := appdoctor.FormatJSON(os.Stdout, appdoctor.Report{
-					Environment: env,
-					Checks:      checks,
-					Failures:    failures,
+					Environment:  env,
+					Checks:       checks,
+					Failures:     failures,
+					Requirements: requirements,
 				}); err != nil {
 					return err
 				}
 			} else {
 				writeTextReport(os.Stdout, env, checks, failures)
+
+				if requirements != nil {
+					appdoctor.FormatRequirements(os.Stdout, *requirements)
+				}
 			}
 
 			if failures > 0 {

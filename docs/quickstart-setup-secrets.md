@@ -17,6 +17,8 @@ workflow declares.
 
 This guide creates keys locally. It does not grant repository permissions,
 configure a runner, publish a release, or create API/registry tokens.
+For a local inventory of release credential names and caller mappings, run
+`forge-ci doctor --requirements`; see [coverage and limitations](setup-requirements.md).
 
 ## Prefer non-exportable keys or short-lived signing identities
 

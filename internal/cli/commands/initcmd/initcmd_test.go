@@ -87,6 +87,10 @@ func TestInitCommandDryRun(t *testing.T) {
 				}
 			}
 
+			if strings.Contains(output.String(), "Release setup: run forge-ci doctor --requirements") {
+				t.Fatalf("preview must not imply initialization is complete: %s", output.String())
+			}
+
 			if conflict {
 				if !strings.Contains(output.String(), "generation blocked") || !strings.Contains(output.String(), "Other proposed files") || strings.Contains(output.String(), "repeat the command") {
 					t.Fatalf("misleading conflict output: %s", output.String())
@@ -132,6 +136,8 @@ func TestInitCommandWithoutDryRunCreatesFiles(t *testing.T) {
 	for _, expected := range []string{
 		"Getting started section of https://github.com/fixture/forge-ci/blob/v1.2.3/docs/github.md",
 		"then run forge-ci doctor in your project",
+		"Release setup: run forge-ci doctor --requirements",
+		"remote secrets and permissions are not checked",
 	} {
 		if !strings.Contains(output.String(), expected) {
 			t.Errorf("missing documentation handoff %q: %s", expected, output.String())

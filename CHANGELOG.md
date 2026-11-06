@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update forge-lab-contract to v0.93.0
 - Restore clean lint baseline
 
+### Added
+
+- Add read-only `doctor --requirements` setup guidance for GitHub, GitLab and
+  Forgejo release entry points, with caller mappings and explicit coverage limits.
+
 ### Fixed
 
 - Authenticate private base verification

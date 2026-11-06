@@ -295,9 +295,10 @@ func requiresPGPSignature(artifacts []config.Artifact) bool {
 // a failure count, so a CI gate can parse "is this repo set up correctly?"
 // programmatically instead of scraping the human text.
 type Report struct {
-	Environment Environment `json:"environment"`
-	Checks      []Check     `json:"checks"`
-	Failures    int         `json:"failures"`
+	Environment  Environment         `json:"environment"`
+	Checks       []Check             `json:"checks"`
+	Failures     int                 `json:"failures"`
+	Requirements *RequirementsReport `json:"requirements,omitempty"`
 }
 
 // FormatJSON writes the report as indented JSON (one document, trailing
