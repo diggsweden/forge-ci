@@ -1,7 +1,7 @@
 <!-- SPDX-FileCopyrightText: The Forge CI Authors -->
 <!-- SPDX-License-Identifier: CC0-1.0 -->
 
-# Generic CLI GitLab stable adapter — preparation checkpoint
+# Generic CLI native stable-release adapter
 
 ## Native Forgejo stable transport
 
@@ -141,8 +141,9 @@ the reviewed v3 job/build archives and reviewed signer archive, and settings
 `version=0.8.6 version-bump=cargo`; filter `^TestGitLabRelease_ConsumerTrial$`.
 
 Uses the existing `TestGitLabRelease_ConsumerTrial` and `templates/release*.yml`
-policy. This fixture has unit verification, but has not run against GitLab.
-No release acceptance is claimed.
+policy. Unit verification alone does not establish live acceptance. Read each
+campaign's retained verdict and job evidence for its exact source, image and
+provider scope; one successful lane does not establish another lane's outcome.
 
 ## Operator preparation
 
@@ -151,8 +152,11 @@ using this directory's absolute script path. Supply the full reviewed commit,
 not the abbreviated `9d10` or `cfc3` identifier. The source must be clean.
 Preparation writes only a disposable clone's objects, index and checkout;
 the clone borrows source objects and must be retained alongside its source.
-Only `.gitlab/` and `.chglog/` entries are overlaid. Application source and
-Cargo versions are not edited. The later SDK Cargo preparation job owns its bump.
+The shared overlay adds `.gitlab/` and `.chglog/` entries; the Go adapter also
+carries the pristine source tree beneath `.gitlab/`. Selecting Forgejo replaces
+workflow entries only beneath `.forgejo/workflows/` in the disposable clone.
+Original application source and Cargo versions are not edited. The later SDK
+Cargo preparation job owns its bump.
 This preparer makes an unsigned scratch snapshot, never a release request tag.
 The destination must be new, have an existing parent, and resolve outside the
 source checkout. The preparer preserves the Git object format and source entry
@@ -242,8 +246,8 @@ release-Git acceptance; no parallel signing implementation was introduced.
 Remaining operator prerequisites: independently establish archive capabilities,
 provide the full reviewed clean source commit and disposable checkout, and run
 the guarded live acceptance above. GitLab must support the source's object
-format (Nano's SHA-256); no SHA-1 conversion is performed. Status remains
-**prepared, live acceptance unproven** until that run passes.
+format (Nano's SHA-256); no SHA-1 conversion is performed. Treat each prepared
+snapshot as **live acceptance unproven** until its own guarded run passes.
 
 Before freezing a changed Go adapter, run the source's
 `just _lint-release-platforms` and `nanolinter lint go-golangci` prerequisites.
