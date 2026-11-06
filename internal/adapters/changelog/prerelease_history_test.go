@@ -22,7 +22,10 @@ import (
 func TestPrereleaseAndFinalNotesUsePreviousStableBoundary(t *testing.T) {
 	for _, backend := range []string{"git-cliff", "git-chglog"} {
 		t.Run(backend, func(t *testing.T) {
-			binary := evidence.RequireWorkingTool(t, backend, "--version")
+			// git-chglog builds without version metadata can treat --version
+			// as a render request before the fixture config exists. The real
+			// rendering assertions below still verify backend behavior.
+			binary := evidence.RequireWorkingTool(t, backend, "--help")
 
 			root := t.TempDir()
 			t.Chdir(root)
