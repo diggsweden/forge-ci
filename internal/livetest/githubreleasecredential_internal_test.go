@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -36,6 +37,12 @@ func TestGitHubReleaseCredential(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(dir, tc.name)
 			if err := os.WriteFile(path, []byte(tc.contents), tc.mode); err != nil {
+				t.Fatal(err)
+			}
+
+			// CI's private umask must not silently turn the public-file refusal
+			// fixture into an admissible private file.
+			if err := os.Chmod(path, tc.mode); err != nil {
 				t.Fatal(err)
 			}
 
@@ -67,6 +74,22 @@ func TestGitHubReleaseCredential(t *testing.T) {
 
 	if _, err := GitHubReleaseToken(link); err == nil {
 		t.Fatal("symlink admitted")
+	}
+}
+
+func TestGitHubReleaseCredentialUnderPrivateUmask(t *testing.T) {
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A child owns the umask change; do not mutate the test process's global
+	// umask or depend on the invoking developer/runner's shell configuration.
+	cmd := exec.CommandContext(t.Context(), "sh", "-c",
+		`umask 077; exec "$1" -test.run '^TestGitHubReleaseCredential$' -test.count=1`,
+		"credential-umask-fixture", binary)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("credential admission under private CI umask: %v\n%s", err, output)
 	}
 }
 
