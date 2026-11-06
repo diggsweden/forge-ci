@@ -59,6 +59,7 @@ func baseImagesVerifyCmd() *cli.Command {
 
 					verifier := cosign.NewIsolated("DOCKER_CONFIG")
 					verifier.AuthFile = authFile
+
 					result, err := appbaseimages.VerifyExistingBaseImages(ctx,
 						ociregistry.WithAuthFile(authFile),
 						verifier,

@@ -135,6 +135,7 @@ architecture builds on a native runner, never under CPU emulation.`,
 			if cmd.Bool("cache-only") && (!cmd.Bool("stage") || input.CacheTag == "") {
 				return fmt.Errorf("--cache-only requires --stage and --cache-tag: %w", errs.ErrUsage)
 			}
+
 			if cmd.Bool("stage") {
 				registry := ociregistry.NewAnonymous()
 				if input.AuthFile != "" {

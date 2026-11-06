@@ -69,18 +69,23 @@ func TestForgejoNativeGraphAndSDKPin(t *testing.T) {
 
 	for _, name := range []string{"checks", "build"} {
 		setups := 0
+
 		for _, step := range jobs[name].Steps {
 			if !strings.Contains(step.Uses, "/actions/setup-buildah@") {
 				continue
 			}
+
 			setups++
+
 			if step.With["install-packages"] != "false" {
 				t.Fatalf("%s must configure the reviewed non-root image's installed Buildah without apt", name)
 			}
+
 			if step.With["probe-build"] == "false" {
 				t.Fatalf("%s must retain the Buildah capability probe", name)
 			}
 		}
+
 		if setups != 1 {
 			t.Fatalf("%s must have exactly one Buildah setup, got %d", name, setups)
 		}
