@@ -12,6 +12,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/runcontext"
 	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
 )
 
@@ -79,7 +80,7 @@ func TestReleaseImagesPlan_ImageRepositoryDefaultsToTheForgesRegistry(t *testing
 		{name: "no forge", args: []string{"--repository", "acme/app"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			for _, variable := range []string{"IMAGE_REPOSITORY", "GITHUB_SERVER_URL", "CI_SERVER_URL", "FORGEJO_SERVER_URL", "SERVER_URL"} {
+			for _, variable := range append(runcontext.ServerURL().Keys(), "IMAGE_REPOSITORY") {
 				t.Setenv(variable, "")
 			}
 

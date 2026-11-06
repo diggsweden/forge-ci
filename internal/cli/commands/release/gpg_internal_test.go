@@ -13,6 +13,7 @@ import (
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/testutil/mockbinary"
+	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
 )
 
 var errFromCallback = errors.New("callback failed")
@@ -30,6 +31,7 @@ var errFromCallback = errors.New("callback failed")
 // not run against the test's temporary home.
 func standInAgent(t *testing.T) func() []string {
 	t.Helper()
+	testenv.New(t)
 
 	log := filepath.Join(t.TempDir(), "agent-calls")
 	mock := mockbinary.New(t)

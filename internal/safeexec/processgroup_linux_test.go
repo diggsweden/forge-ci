@@ -8,7 +8,8 @@ package safeexec_test
 import (
 	"bufio"
 	"context"
-	"errors"
+	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"syscall"
@@ -48,12 +49,25 @@ func TestCommand_CancellationKillsTheProcessGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if running, err := processExecuting(grandchild); err != nil || !running {
+		t.Fatalf("grandchild was not running before cancellation: %v", err)
+	}
+
 	cancel()
 
 	_ = cmd.Wait()
 
 	deadline := time.Now().Add(5 * time.Second)
-	for !errors.Is(syscall.Kill(grandchild, 0), syscall.ESRCH) {
+	for {
+		running, err := processExecuting(grandchild)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !running {
+			break
+		}
+
 		if time.Now().After(deadline) {
 			_ = syscall.Kill(grandchild, syscall.SIGKILL)
 
@@ -61,6 +75,34 @@ func TestCommand_CancellationKillsTheProcessGroup(t *testing.T) {
 		}
 
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// kill(pid, 0) still succeeds for a zombie until the container's PID 1 reaps
+// it. A zombie cannot execute; cancellation must stop execution, not depend on
+// an unrelated init's reaping schedule. Unknown proc state remains an error.
+func processExecuting(pid int) (bool, error) {
+	body, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	_, rest, found := strings.Cut(string(body), ") ")
+	fields := strings.Fields(rest)
+	if !found || len(fields) == 0 {
+		return false, fmt.Errorf("invalid process state for %d", pid)
+	}
+
+	return fields[0] != "Z" && fields[0] != "X", nil
+}
+
+func TestProcessExecutingRecognizesLiveProcess(t *testing.T) {
+	if running, err := processExecuting(os.Getpid()); err != nil || !running {
+		t.Fatalf("current process must still execute: running=%t err=%v", running, err)
 	}
 }
 
