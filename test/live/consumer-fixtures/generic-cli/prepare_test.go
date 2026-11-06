@@ -137,12 +137,17 @@ func TestPrepareMaterializesPrivateSnapshot(t *testing.T) {
 
 			var decoded struct {
 				Commit     string   `json:"commit"`
+				Tree       string   `json:"tree"`
 				Format     string   `json:"objectFormat"`
 				LintPolicy string   `json:"lintPolicy"`
 				Excluded   []string `json:"excludedChecks"`
 			}
-			if err := json.Unmarshal(identity, &decoded); err != nil || decoded.Commit != commit || decoded.Format != format || decoded.LintPolicy != "informational" || decoded.Excluded == nil || len(decoded.Excluded) != 0 {
+			if err := json.Unmarshal(identity, &decoded); err != nil || decoded.Commit != commit || decoded.Tree != tree || decoded.Format != format || decoded.LintPolicy != "informational" || decoded.Excluded == nil || len(decoded.Excluded) != 0 {
 				t.Fatalf("machine-readable identity changed: %s %v", identity, err)
+			}
+
+			if kind == "go" && run("", "-C", destination, "rev-parse", "HEAD:.gitlab/generic-cli-original-source") != tree {
+				t.Fatal("captured original source tree changed during preparation")
 			}
 
 			for _, file := range []string{".gitlab/generic-cli-kind.license", ".gitlab/generic-cli-source.json.license", ".chglog/CHANGELOG-keepachangelog.tpl.license", ".chglog/CHANGELOG-minimal.tpl.license"} {

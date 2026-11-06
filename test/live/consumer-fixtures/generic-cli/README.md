@@ -27,6 +27,17 @@ Both native source jobs configure its installed Buildah with
 probe remain enabled. These jobs must not invoke apt or switch to root merely
 to reinstall image prerequisites.
 
+For Go, preparation also carries the exact original Git tree beneath
+`.gitlab/generic-cli-original-source/`, with its tree ID in the signed source
+metadata. The adapter's `checksource` command initializes a local repository there,
+requires the staged tree to match that ID, and runs the original checks and full
+`just test` in that pristine tree. This keeps workflow-contract tests meaningful:
+the trial's CI overlay is not the application's original workflow collection.
+The Forgejo renderer leaves this source tree and Go application/test files
+unchanged, including constants that happen to equal fixture pin placeholders.
+No original history or source archive is published. GPG test scratch uses a short
+private temporary root so Unix socket limits do not depend on Buildah path depth.
+
 Operator: prepare a new clean checkout with the normal four arguments plus
 `forgejo`, then use `FORGE_CI_LIVE_CONSUMER_VISIBILITY=public just
 test-live-forgejo-consumer /absolute/prepared-checkout release version=0.8.6
@@ -83,6 +94,11 @@ in the job log. Prior findings, including the 64 KICS findings, remain unresolve
 Missing tools, setup/build failures, invocation/configuration errors and
 cancellation remain blocking. Original application tests, release builds,
 signing/publication and downloaded-payload verification remain blocking.
+
+Go's prepared release runs native compilation, not a second repository-wide
+test suite against the synthetic CI overlay. Its full original-source suite has
+already passed before preparation; the existing prepared-tag check independently
+requires Go preparation to be changelog-only. Cargo keeps its post-bump tests.
 
 Prepare a **new snapshot** with four arguments and no exclusion flag:
 

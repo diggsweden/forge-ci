@@ -16,7 +16,9 @@ case "${kind}" in
 go)
 	export GOTOOLCHAIN=local GOOS=linux GOARCH=amd64
 	test "$(go env GOVERSION)" = go1.27.3
-	GOTOOLCHAIN=local go test ./...
+	# The full original-source gate already passed before preparation. The Go
+	# preparation is changelog-only (independently checked by validate-tag);
+	# repository contract tests must not run against this synthetic CI overlay.
 	epoch=$(git show -s --format=%ct HEAD)
 	build_date=$(date -u -d "@${epoch}" +%Y-%m-%dT%H:%M:%SZ)
 	SOURCE_DATE_EPOCH="${epoch}" GOTOOLCHAIN=local go build -trimpath -buildvcs=false \

@@ -933,6 +933,10 @@ func (consumer Consumer) commitSnapshot(ctx context.Context) (string, error) {
 // a parent, so the forge receives no history.
 func (consumer Consumer) commitRendered(ctx context.Context, plan ConsumerPlan) (string, error) {
 	git, stage := consumer.git, consumer.stage
+	pristineGo, err := consumer.gitlabChecksNeedBuildah(ctx)
+	if err != nil {
+		return "", err
+	}
 
 	// Only text files that hold something to replace are read. -I leaves out
 	// what git takes for binary.
@@ -948,6 +952,12 @@ func (consumer Consumer) commitRendered(ctx context.Context, plan ConsumerPlan) 
 
 	for path := range strings.SplitSeq(strings.TrimSuffix(string(matched), "\x00"), "\x00") {
 		path = strings.TrimPrefix(path, consumer.Commit+":")
+		// The generic Go adapter has all its bindings in its generated workflow.
+		// Do not rewrite application data, tests or signed source identity merely
+		// because their contents happen to match a pin/trust-digest sentinel.
+		if pristineGo && !strings.HasPrefix(path, consumerWorkflows+"/") {
+			continue
+		}
 
 		entry, entryErr := git.run(ctx, stage, "ls-tree", consumer.Commit, "--", path)
 		if entryErr != nil {

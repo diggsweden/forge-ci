@@ -56,11 +56,14 @@ stage .gitlab/build-release.sh <"${recipe}/build-release.sh"
 stage .gitlab/check-release.sh <"${recipe}/check-release.sh"
 printf '%s\n' "${kind}" | stage .gitlab/generic-cli-kind
 if [ "${kind}" = go ]; then
+	# Carry the exact original Git tree as data, not history or a source tar.
+	# The Go check owner verifies its tree identity before running its full gate.
+	git -C "${destination}" read-tree --prefix=.gitlab/generic-cli-original-source/ "${expected}"
 	printf '%s\n' buildah-integration | stage .gitlab/generic-cli-checks
 	stage_license .gitlab/generic-cli-checks 'The Forge CI Authors'
 fi
-jq -n --arg commit "${expected}" --arg objectFormat "$(git -C "${source_root}" rev-parse --show-object-format)" \
-	'{commit:$commit,objectFormat:$objectFormat,lintPolicy:"informational",excludedChecks:[],coverageLimitation:"Full Nanolinter plan runs diagnostically; its findings are not an acceptance gate. Prior findings, including 64 KICS findings, remain unresolved. Application tests/build/release/signatures/payload verification remain blocking; not a full original just verify pass."}' | stage .gitlab/generic-cli-source.json
+jq -n --arg commit "${expected}" --arg tree "$(git -C "${source_root}" rev-parse "${expected}^{tree}")" --arg objectFormat "$(git -C "${source_root}" rev-parse --show-object-format)" \
+	'{commit:$commit,tree:$tree,objectFormat:$objectFormat,lintPolicy:"informational",excludedChecks:[],coverageLimitation:"Full Nanolinter plan runs diagnostically; its findings are not an acceptance gate. Prior findings, including 64 KICS findings, remain unresolved. Application tests/build/release/signatures/payload verification remain blocking; not a full original just verify pass."}' | stage .gitlab/generic-cli-source.json
 for path in .gitlab/generic-cli-kind .gitlab/generic-cli-source.json; do
 	stage_license "${path}" 'The Forge CI Authors'
 done

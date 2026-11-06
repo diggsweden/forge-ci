@@ -20,7 +20,7 @@ func TestLintDiagnosticAndApplicationGates(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, kind := range []string{"cargo", "go"} {
+	for _, kind := range []string{"cargo"} {
 		for _, tc := range []struct {
 			name, fail, lint string
 			wantExit         int
@@ -100,13 +100,13 @@ func TestLintDiagnosticAndApplicationGates(t *testing.T) {
 // Inspect the real recipe without executing tools, analysis or provider effects.
 // The execution stubs above cannot establish that a source recipe exists.
 func TestGoAdapterUsesExistingPlatformLintRecipe(t *testing.T) {
-	body, err := os.ReadFile("check-release.sh")
+	body, err := os.ReadFile(filepath.Join(reporoot.Path(t), "test/live/consumer-fixtures/generic-cli/checksource/source.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	const recipe = "_lint-release-platforms"
-	if !strings.Contains(string(body), "just "+recipe+"\n") {
+	if !strings.Contains(string(body), `{"just", "`+recipe+`"}`) {
 		t.Fatal("Go adapter must retain the source's cross-platform lint prerequisite")
 	}
 
@@ -118,5 +118,43 @@ func TestGoAdapterUsesExistingPlatformLintRecipe(t *testing.T) {
 	cmd := exec.CommandContext(t.Context(), just, "--justfile", filepath.Join(reporoot.Path(t), "justfile"), "--show", recipe)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("source recipe %s is unavailable: %v\n%s", recipe, err, output)
+	}
+}
+
+func TestGoAdapterDelegatesOriginalSourceChecks(t *testing.T) {
+	adapter, err := filepath.Abs("check-release.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	root := t.TempDir()
+	bin := filepath.Join(root, "bin")
+	for _, dir := range []string{bin, filepath.Join(root, ".gitlab")} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := os.WriteFile(filepath.Join(root, ".gitlab/generic-cli-kind"), []byte("go\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	stub := "#!/bin/sh\nset -eu\nif [ \"$*\" = 'env GOVERSION' ]; then printf 'go1.27.3\\n'; exit 0; fi\nprintf '%s\\n' \"$*\" >\"$CHECK_CALLS\"\nexit 42\n"
+	if err := os.WriteFile(filepath.Join(bin, "go"), []byte(stub), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	calls := filepath.Join(root, "calls")
+	cmd := exec.CommandContext(t.Context(), "bash", adapter)
+	cmd.Dir, cmd.Env = root, append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "CHECK_CALLS="+calls)
+	out, err := cmd.CombinedOutput()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 42 {
+		t.Fatalf("source check status was not propagated: %v\n%s", err, out)
+	}
+
+	body, err := os.ReadFile(calls)
+	if err != nil || string(body) != "run ./test/live/consumer-fixtures/generic-cli/checksource\n" {
+		t.Fatalf("wrong source-check owner: %s %v", body, err)
 	}
 }

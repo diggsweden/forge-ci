@@ -521,6 +521,51 @@ const (
 	consumerSHA256 = "sha256"
 )
 
+func TestGenericGoConsumerPreservesApplicationAndOriginalSource(t *testing.T) {
+	t.Parallel()
+
+	git, root := newConsumerCheckout(t, consumerSHA1)
+	for path, content := range map[string]string{
+		".gitlab/generic-cli-checks":      "buildah-integration\n",
+		".gitlab/generic-cli-kind":        "go\n",
+		".gitlab/generic-cli-source.json": "{\"commit\":\"" + consumerPinned + "\"}\n",
+		"application_test.go":             "package app\nconst pin = \"" + consumerPinned + "\"\n",
+		".gitlab/generic-cli-original-source/.forgejo/workflows/release.yml": consumerPinned + "\n",
+	} {
+		writeLayerFile(t, root, path, content)
+	}
+	mustLayerGit(t, git, root, "add", "--all")
+	mustLayerGit(t, git, root, "commit", "--quiet", "--message", "test: generic source fixture")
+
+	consumer, err := openConsumer(t.Context(), git, root, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	workflows, err := consumer.workflows(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	plan, err := sampleLayer().PlanConsumer(workflows, ConsumerFacts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	commit, err := consumer.commitRendered(t.Context(), plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, path := range []string{"application_test.go", "policy/pin.sh", ".gitlab/generic-cli-source.json", ".gitlab/generic-cli-original-source"} {
+		before := mustLayerGit(t, git, consumer.stage, "rev-parse", consumer.Commit+":"+path)
+		after := mustLayerGit(t, git, consumer.stage, "rev-parse", commit+":"+path)
+		if before != after {
+			t.Fatalf("renderer modified original source at %s", path)
+		}
+	}
+}
+
 func TestConsumer_StagesTheRenderedTreeWithoutWritingToTheCheckout(t *testing.T) {
 	t.Parallel()
 

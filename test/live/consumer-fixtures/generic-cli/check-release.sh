@@ -9,11 +9,7 @@ case "${kind}" in
 go)
 	export GOTOOLCHAIN=local
 	test "$(go env GOVERSION)" = go1.27.3
-	just _lint-release-platforms
-	just --fmt --check
-	go mod tidy -diff
-	nano=nanolinter
-	"${nano}" check-tools
+	exec go run ./test/live/consumer-fixtures/generic-cli/checksource
 	;;
 cargo)
 	test "$(rustc --version | cut -d ' ' -f2)" = 1.99.1
