@@ -5,15 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.93.1] - 2026-11-06
+
+### Added
+
+- Support Linux and macOS hosts
+
+### Changed
+
+- Pin reviewed private-input black-box coverage
+- Refresh reviewed binary checksums
+- Update forge-lab-contract to v0.93.0
+- Restore clean lint baseline
 
 ### Fixed
 
-- Normalize Linux and macOS bootstrap platform names and use explicit GNU tools
-  in portable shell test fixtures. Analyze both release operating systems in Go
-  lint and dead-code checks.
-- Serialize private GPG test-agent cleanup and allow a bounded shutdown period.
-
+- Authenticate private base verification
+- Isolate private inputs from release builds
+- Exercise disposable consumer snapshot workflows
+- Probe backends without rendering notes
+- Reconcile Darwin portability with main
+- Resolve static checks and extend image readiness wait
+- Stabilize GPG agent cleanup
 ## [0.93.0] - 2026-11-05
 
 ### Added
@@ -221,6 +234,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remove unused publication and scorecard inputs
 - Remove the superseded consumer migration handoff
 - Remove ignored workflow permission declarations
+
 ## [0.91.13] - 2026-10-23
 
 ### Added
@@ -299,6 +313,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial commit
 
+[0.93.1]: https://github.com/diggsweden/forge-ci/compare/v0.93.0..v0.93.1
 [0.93.0]: https://github.com/diggsweden/forge-ci/compare/v0.91.13..v0.93.0
 [0.91.13]: https://github.com/diggsweden/forge-ci/compare/v0.91.10..v0.91.13
 [0.91.10]: https://github.com/diggsweden/forge-ci/compare/v0.91.9..v0.91.10
