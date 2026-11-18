@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+# SPDX-License-Identifier: CC0-1.0
+
+# Signed AAR files only. The default declaration still requests Maven publication.
+artifacts:
+  - name: hello-android-library
+    project-type: gradle-android
+    build-type: library
+    working-directory: .
+    sboms: build
+    config:
+      build-module: lib
+      gradle-version-file: gradle.properties
+sign:
+  method: gpg
+git-signing:
+  method: gpg

@@ -1,0 +1,269 @@
+// SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+// SPDX-License-Identifier: EUPL-1.2 OR GPL-3.0-or-later
+
+package container_test
+
+import (
+	"bytes"
+	"context"
+	"encoding/base64"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/diggsweden/forge-ci/internal/cli"
+	containercmd "github.com/diggsweden/forge-ci/internal/cli/commands/container"
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/testutil/ghaenv"
+	"github.com/diggsweden/forge-ci/internal/testutil/glabenv"
+	"github.com/diggsweden/forge-ci/internal/testutil/testfs"
+)
+
+func TestRefResolveCmd_WritesOutput(t *testing.T) {
+	env := ghaenv.Setup(t)
+	env.Setenv("CONTAINER_REGISTRY", "ghcr.io")
+	env.Setenv("REPOSITORY", "owner/repo")
+	env.Setenv("REPOSITORY_OWNER", "owner")
+
+	cmd := containercmd.New()
+	if err := cmd.Run(context.Background(), []string{"container", "ref", "resolve"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := env.Output("name"); got != "ghcr.io/owner/repo" {
+		t.Errorf("name = %q", got)
+	}
+}
+
+func TestValidateContainerfileCmd_WritesOutput(t *testing.T) {
+	env := ghaenv.Setup(t)
+	fsys := testfs.NewReal(t)
+	path := fsys.WriteFile("Containerfile", []byte("FROM alpine\n"))
+
+	cmd := containercmd.New()
+	if err := cmd.Run(context.Background(), []string{"container", "validate", "containerfile", "--path", path}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := env.Output("containerfile"); got != path {
+		t.Errorf("containerfile = %q", got)
+	}
+}
+
+// The check warns and the command still succeeds: the job stays green.
+func TestValidateRebuildsCmd_WarnsAndSucceeds(t *testing.T) {
+	env := ghaenv.Setup(t)
+	fsys := testfs.NewReal(t)
+	fsys.WriteFile(".forge-ci/artifacts.yml", []byte(
+		"artifacts:\n  - {name: api, project-type: maven}\ncontainers:\n  - {name: api, from: [api]}\n"))
+	fsys.WriteFile("Containerfile", []byte("FROM maven AS build\nRUN ./mvnw clean package\n"))
+	fsys.Chdir()
+
+	if err := containercmd.New().Run(context.Background(), []string{"container", "validate", "rebuilds"}); err != nil {
+		t.Fatalf("a rebuilding Containerfile failed the command: %v", err)
+	}
+
+	if want := "Container `api`: `Containerfile` line 2 runs `./mvnw clean package`"; !strings.Contains(env.Summary(), want) {
+		t.Errorf("job summary lacks %q:\n%s", want, env.Summary())
+	}
+}
+
+// A short image name is a warning too: the job stays green.
+func TestValidateImageNamesCmd_WarnsAndSucceeds(t *testing.T) {
+	env := ghaenv.Setup(t)
+	fsys := testfs.NewReal(t)
+	fsys.WriteFile(".forge-ci/artifacts.yml", []byte("containers:\n  - {name: api}\n"))
+	fsys.WriteFile("Containerfile", []byte("FROM eclipse-temurin:21\n"))
+	fsys.Chdir()
+
+	if err := containercmd.New().Run(context.Background(), []string{"container", "validate", "image-names"}); err != nil {
+		t.Fatalf("a short image name failed the command: %v", err)
+	}
+
+	if want := "`Containerfile` line 1 names the image `eclipse-temurin:21` without a registry"; !strings.Contains(env.Summary(), want) {
+		t.Errorf("job summary lacks %q:\n%s", want, env.Summary())
+	}
+}
+
+// TestCommands_RefuseWhatIsMissingWithItsExitClass pins the exit code the
+// shell sees for a refusal, through the same classification main uses, so a
+// refusal never reads as the unclassified 70 that says "file a bug". A missing
+// flag is the command line's fault and exits 2; a missing secret is the job's
+// and exits 77, as `validate auth registry` does.
+func TestCommands_RefuseWhatIsMissingWithItsExitClass(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+		exit errs.ExitCodeType
+	}{
+		{name: "validate_containerfile", args: []string{"container", "validate", "containerfile"}, want: `Required flag "path" not set`, exit: errs.ExitCodeUsage},
+		{name: "validate_artifacts_missing_artifact_dir", args: []string{"container", "validate", "artifacts", "--project-type", "maven"}, want: `Required flag "artifact-dir" not set`, exit: errs.ExitCodeUsage},
+		{name: "suffix_extracted_binaries_missing_arch", args: []string{"container", "suffix-extracted-binaries", "--binaries-dir", "./extracted"}, want: `Required flag "arch" not set`, exit: errs.ExitCodeUsage},
+		{name: "ledger_rollback_requires_journal", args: []string{"container", "ledger", "rollback"}, want: `--journal is required because rollback without pre-promotion state cannot prove tag ownership`, exit: errs.ExitCodeUsage},
+		{name: "login_without_a_password", args: []string{"container", "login", "--registry", "registry.example.com", "--registry-username", "ci"}, want: "the registry password is required", exit: errs.ExitCodeNoPerm},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			ghaenv.Setup(t).Setenv("FORGE_CI_PROVIDER", "local")
+
+			err := containercmd.New().Run(context.Background(), testCase.args)
+			if err == nil {
+				t.Fatal("expected a refusal")
+			}
+
+			if !strings.Contains(err.Error(), testCase.want) {
+				t.Errorf("err = %v, want substring %q", err, testCase.want)
+			}
+
+			if got := errs.ExitCodeFromError(cli.ClassifyError(err)); got != testCase.exit {
+				t.Errorf("exit code = %d, want %d", got, testCase.exit)
+			}
+		})
+	}
+}
+
+// Rollback deletes the tags its journal names, so a journal naming another
+// repository than the one the caller expects is refused before any registry
+// is asked. The refs point at a closed loopback port: were the journal let
+// through, the lookup would fail there as a dependency error instead.
+func TestLedgerRollbackCmd_RefusesAJournalOutsideTheExpectedRepository(t *testing.T) {
+	ghaenv.Setup(t)
+
+	const digest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+	journal := testfs.NewReal(t).WriteFile("promotion.jsonl", []byte(
+		`{"version":1,"source_ref":"127.0.0.1:1/other/repo:staging-v1.2.3@`+digest+`",`+
+			`"final_tag":"127.0.0.1:1/other/repo:v1.2.3","candidate_tag":"127.0.0.1:1/other/repo:staging-v1.2.3"}`+"\n"))
+
+	err := containercmd.New().Run(t.Context(), []string{
+		"container", "ledger", "rollback", "--dry-run", "--tag", "v1.2.3",
+		"--journal", journal, "--expected-image-repository", "127.0.0.1:1/owner/repo",
+	})
+	if !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "must be under 127.0.0.1:1/owner/repo") {
+		t.Fatalf("err = %v, want the repository refusal", err)
+	}
+}
+
+// A successful login must not be turned into a failure by the step-output
+// convenience that follows it.
+//
+// GitHub and Forgejo runners always provide an output file, so the unconditional
+// write there is invisible. GitLab provides none unless the pipeline nominates
+// one in $CI_OUTPUT. Returning that sink's error means the credential is
+// written, the login has genuinely succeeded, and the command still exits
+// non-zero. Found by PAR-REG-5 against a real runner; guarded here so it cannot
+// come back without the live tier being run.
+func TestLoginCmd_OnGitLabWithoutAnOutputFile_StillSucceeds(t *testing.T) {
+	env := glabenv.Setup(t)
+
+	// The pipeline nominated no dotenv report, which is the ordinary case: a job
+	// that only logs in has no reason to declare one.
+	env.Setenv("CI_OUTPUT", "")
+	env.Setenv("FORGE_CI_RUNNER", "gitlab")
+	env.Setenv("REGISTRY_TOKEN", "s3cret")
+
+	fsys := testfs.NewReal(t)
+	authFile := filepath.Join(filepath.Dir(fsys.WriteFile("anchor", nil)), "auth.json")
+
+	cmd := containercmd.New()
+
+	err := cmd.Run(context.Background(), []string{
+		"container", "login",
+		"--registry", "registry.example.com",
+		"--registry-username", "ci",
+		"--auth-file", authFile,
+	})
+	if err != nil {
+		t.Fatalf("login failed although the credential was the only thing asked for: %v", err)
+	}
+
+	// The credential still has to have been written: degrading the output must
+	// not degrade the login itself.
+	data, readErr := os.ReadFile(authFile)
+	if readErr != nil {
+		t.Fatalf("read auth file: %v", readErr)
+	}
+
+	want := base64.StdEncoding.EncodeToString([]byte("ci:s3cret"))
+	if !strings.Contains(string(data), want) {
+		t.Errorf("auth file does not carry the credential\ngot: %s", data)
+	}
+}
+
+// TestLedgerAddCmd_UnreadableLedgerIsNotOverwritten pins that `ledger add`
+// refuses a ledger it cannot read instead of treating it as empty: the
+// read-modify-write under the lock otherwise rewrote the file with the new
+// entry alone, silently dropping every image recorded before it.
+func TestLedgerAddCmd_UnreadableLedgerIsNotOverwritten(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a mode-0200 file regardless of its mode")
+	}
+
+	fsys := testfs.NewReal(t)
+	path := fsys.Path("release-images.json")
+
+	add := func(hex, suffix string) error {
+		return containercmd.New().Run(context.Background(), []string{
+			"container", "ledger", "add",
+			"--ledger", path, "--tag", "v1.2.3", "--role", "role-" + suffix,
+			"--ref", "registry.example/owner/app@sha256:" + hex, "--digest", "sha256:" + hex,
+			"--final-tag", "registry.example/owner/app:v1.2.3-" + suffix,
+		})
+	}
+
+	if err := add(strings.Repeat("a", 64), "a"); err != nil {
+		t.Fatalf("first add: %v", err)
+	}
+
+	before := fsys.ReadFile("release-images.json")
+
+	if err := os.Chmod(path, 0o200); err != nil {
+		t.Fatal(err)
+	}
+
+	err := add(strings.Repeat("b", 64), "b")
+
+	if chmodErr := os.Chmod(path, 0o600); chmodErr != nil {
+		t.Fatal(chmodErr)
+	}
+
+	if err == nil {
+		t.Fatal("ledger add succeeded against a ledger it could not read")
+	}
+
+	if got := fsys.ReadFile("release-images.json"); !bytes.Equal(got, before) {
+		t.Errorf("ledger was rewritten although the read failed\nbefore: %s\nafter:  %s", before, got)
+	}
+}
+
+// platform-plan admits the platforms it plans against the layer's runner
+// inputs: a label list with commas is one value, and an arm64 leg whose image
+// build runner input is empty is refused with no output.
+func TestPlatformPlanCmd_AdmitsAgainstTheRunnerInputs(t *testing.T) {
+	env := ghaenv.Setup(t)
+
+	plan := func(arm64 string) error {
+		return containercmd.New().Run(context.Background(), []string{"container", "platform-plan", "--platforms", "linux/amd64,linux/arm64",
+			"--runner-input", `build-runs-on-linux-amd64=["self-hosted", "x64"]`, "--runner-input", "build-runs-on-linux-arm64=" + arm64})
+	}
+
+	err := plan("")
+	if !errors.Is(err, errs.ErrUsage) || !strings.Contains(err.Error(), "build-runs-on-linux-arm64") {
+		t.Fatalf("an arm64 leg without an arm64 runner input: err = %v, want a usage error naming the input", err)
+	}
+
+	if got := env.Output("matrix-json"); got != "" {
+		t.Errorf("a refused plan emitted matrix-json = %s", got)
+	}
+
+	if err := plan(`["self-hosted", "arm64"]`); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := env.Output("platforms-json"); got != `["linux/amd64","linux/arm64"]` {
+		t.Errorf("platforms-json = %s", got)
+	}
+}

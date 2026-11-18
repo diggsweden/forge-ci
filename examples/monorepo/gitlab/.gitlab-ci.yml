@@ -1,0 +1,76 @@
+# SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+#
+# SPDX-License-Identifier: CC0-1.0
+#
+# Example: a monorepo's merge-request gate on GitLab CI/CD, from the
+# components under templates/
+# (https://gitlab.example.com/team/ci/forge-ci/-/blob/PIN_FORGE_CI_SHA/docs/gitlab.md).
+# Copy to the project's .gitlab-ci.yml and replace the placeholders, all
+# literal so that `git grep` finds them:
+#
+#   gitlab.example.com                        your instance
+#   team/ci/forge-ci (forge-ci-repository)    the project on it that serves
+#                                             forge-ci, including subgroups
+#   PIN_FORGE_CI_SHA                          the engine commit you authenticated:
+#                                             `check` is checksum-bound and must be
+#                                             included by full commit SHA
+#   PIN_DIGEST                                digest of the reviewed lint image
+#   PIN_JAVA_IMAGE_DIGEST                     digests of the reviewed Forge CI
+#   PIN_NODE_IMAGE_DIGEST                     runtime images, or of your mirror
+#
+# Releases run from a separate, pinned policy project that includes the
+# `release` component; see
+# https://gitlab.example.com/team/ci/forge-ci/-/blob/PIN_FORGE_CI_SHA/docs/gitlab.md#native-release-policy.
+# The policy plans this project's release from .forge-ci/artifacts.yml: a
+# version job and a build job for the java and the node family, the two
+# images and the frontend's package. Its `checks` and `build` inputs name
+# check-release.sh and build-release.sh beside this file, copied to .gitlab/.
+#
+# Once the release policy is the project's CI configuration path, GitLab runs
+# it instead of this file, so the policy includes this gate for merge
+# requests; see
+# https://gitlab.example.com/team/ci/forge-ci/-/blob/PIN_FORGE_CI_SHA/docs/gitlab.md#the-merge-request-gate-under-a-policy.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+stages:
+  - test
+
+include:
+  # The lint gate: the project's nanolinter.toml plan, with the secrets
+  # floor. The gate runs at the repository root, where a monorepo has no
+  # project manifest, so the plan lists only tree-wide checks and the core
+  # flavour carries them all; see nanolinter.toml.
+  - component: gitlab.example.com/team/ci/forge-ci/nanolinter@0.90.0
+    inputs:
+      forge-ci-repository: team/ci/forge-ci
+      server-url: https://gitlab.example.com
+      nanolinter-image: "ghcr.io/itiquette/nanolinter:core@sha256:PIN_DIGEST"
+
+  # The consumer's own checks at the pipeline commit, one job per part, each
+  # in the Forge CI runtime image of its toolchain, as the images' ordinary
+  # user nonroot (65532:65532).
+  # check is checksum-bound: include it by the engine commit, never a version;
+  # see Checksum-bound engine bootstrap in
+  # https://gitlab.example.com/team/ci/forge-ci/-/blob/PIN_FORGE_CI_SHA/docs/gitlab.md.
+  - component: gitlab.example.com/team/ci/forge-ci/check@PIN_FORGE_CI_SHA
+    inputs:
+      forge-ci-repository: team/ci/forge-ci
+      server-url: https://gitlab.example.com
+      job-name: check-backend
+      job-image: ghcr.io/diggsweden/forge-ci-runtime-java-25@sha256:PIN_JAVA_IMAGE_DIGEST
+      job-user: "65532:65532"
+      commands:
+        - mvn --batch-mode --no-transfer-progress --file services/backend/pom.xml verify
+  - component: gitlab.example.com/team/ci/forge-ci/check@PIN_FORGE_CI_SHA
+    inputs:
+      forge-ci-repository: team/ci/forge-ci
+      server-url: https://gitlab.example.com
+      job-name: check-frontend
+      job-image: ghcr.io/diggsweden/forge-ci-runtime-node-24@sha256:PIN_NODE_IMAGE_DIGEST
+      job-user: "65532:65532"
+      commands:
+        - npm --prefix packages/frontend ci
+        - npm --prefix packages/frontend test

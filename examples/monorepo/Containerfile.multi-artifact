@@ -1,0 +1,23 @@
+# Example Containerfile for the combined-app container.
+# It copies the artifacts the release built and compiles nothing: the jars
+# and the web files in the image are the ones forge-ci built, tested,
+# described in the SBOM and attached to the release.
+#
+# The release restores each artifact in the build context before the image
+# build: a Maven jar under <working-directory>/target, a Gradle jar under
+# <working-directory>/build/libs, and the npm package unpacked at the root of
+# the checkout. See "Use the built artifact in the image" in
+# docs/ecosystems.md, which also says how to build this image locally.
+
+FROM eclipse-temurin:25-jre-alpine
+WORKDIR /app
+
+COPY services/api/target/*.jar /app/api.jar
+COPY services/worker/build/libs/*.jar /app/worker.jar
+COPY dist/ /app/static/
+
+# Expose ports
+EXPOSE 8080
+
+# Run the main API service
+CMD ["java", "-jar", "/app/api.jar"]

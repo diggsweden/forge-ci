@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+# SPDX-License-Identifier: CC0-1.0
+name: Pull Request Workflow
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  pr-checks:
+    uses: diggsweden/forge-ci/.github/workflows/pullrequest-orchestrator.yml@v0.90.0
+    permissions:
+      actions: read
+      contents: read
+    with:
+      forge-ci-binary-ref: v0.90.0
+      project-type: xcode-ios
+      lint-engine: nanolinter
+      nanolinter-image: codefloe.com/itiquette/nanolinter:swift@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base:v0.90.0
+      canonical-builder-image: ghcr.io/diggsweden/forge-ci-runtime-go-1.27:v0.90.0

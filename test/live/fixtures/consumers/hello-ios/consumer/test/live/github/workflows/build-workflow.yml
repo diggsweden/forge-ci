@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+# SPDX-License-Identifier: CC0-1.0
+name: Build Workflow
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  # The reusable Xcode leaf refuses PR context, including unsigned builds.
+  build:
+    uses: diggsweden/forge-ci/.github/workflows/build-xcode-ios.yml@v0.90.0
+    with:
+      forge-ci-binary-ref: v0.90.0
+      xcode-version: "26.6"
+      runs-on-darwin-arm64: '["macos-26"]'
+      project: HelloTrial.xcodeproj
+      scheme: HelloTrial
+      use-xcodegen: true
+      destination: generic/platform=iOS
+      enable-code-signing: false
+      artifact-name: hello-ios-unsigned
+      include-tag: false

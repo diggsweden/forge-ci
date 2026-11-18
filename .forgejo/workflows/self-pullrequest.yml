@@ -1,0 +1,50 @@
+# SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+# SPDX-License-Identifier: CC0-1.0
+
+name: Self build
+on:
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  group: self-build-${{ forgejo.ref }}
+  cancel-in-progress: true
+jobs:
+  go:
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
+    timeout-minutes: 30
+    # Administrator-selected native Go runtime, pinned by digest; see docs/testing.md.
+    container:
+      image: ${{ vars.FORGE_CI_SELF_BUILD_IMAGE }}
+      options: --user 65532:65532
+    env:
+      FORGE_CI_PROVIDER: forgejo
+      FORGEJO_SERVER: ${{ forgejo.server_url }}
+      FORGEJO_REPO: ${{ forgejo.repository }}
+      GOTOOLCHAIN: local
+      GOMAXPROCS: '2'
+      GOFLAGS: -p=2
+      HOME: /home/nonroot
+    steps:
+      - name: Checkout the event commit
+        env:
+          FORGEJO_TOKEN: ${{ forgejo.token }}
+          CHECKOUT_REF: ${{ forgejo.sha }}
+        run: forge-ci platform checkout --ref "${CHECKOUT_REF}"
+      - name: Install pinned test tools
+        run: |
+          set -euo pipefail
+          mise trust .mise.toml
+          mise install aqua:casey/just aqua:koalaman/shellcheck
+          mise bin-paths aqua:casey/just aqua:koalaman/shellcheck >>"${GITHUB_PATH:?}"
+      - name: Build this checkout
+        run: just build
+      - name: Run unit tests
+        run: just test-unit -timeout 15m
+      - name: Run CLI smoke tests
+        run: just test-smoke
+      - name: Replay fuzz seed corpora
+        run: just test-fuzz
+      - name: Vet Go packages
+        run: go vet ./...
+      - name: Check the built binary
+        run: ./bin/forge-ci --version

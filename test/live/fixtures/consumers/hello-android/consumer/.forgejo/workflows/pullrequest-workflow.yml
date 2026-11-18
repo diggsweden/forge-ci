@@ -1,0 +1,60 @@
+# SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+# SPDX-License-Identifier: CC0-1.0
+name: Pull Request Workflow
+on:
+  pull_request:
+    branches: [main]
+env:
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: safe.directory
+  GIT_CONFIG_VALUE_0: ${{ forgejo.workspace }}
+jobs:
+  lint:
+    name: "Check: Kotlin lint"
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
+    container:
+      image: ${{ vars.CI_JOB_IMAGE }}
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/checkout-consumer@2f4e845cee96973d1082bf00a5a18689c1482148
+        with:
+          fetch-base: ${{ forgejo.base_ref }}
+      - name: Lint Kotlin and secrets
+        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/lint-nanolinter@2f4e845cee96973d1082bf00a5a18689c1482148
+  build:
+    name: "Check: Android build and test"
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
+    container:
+      image: ${{ vars.CI_JOB_IMAGE_ANDROID }}
+      options: --user 65532:65532
+    env:
+      GRADLE_USER_HOME: ${{ forgejo.workspace }}/.gradle
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/checkout-consumer@2f4e845cee96973d1082bf00a5a18689c1482148
+      - name: Test and build unsigned APKs and AAB
+        run: |
+          set -eu
+          ./gradlew --no-daemon app:test assembleDemoDebug assembleDemoRelease bundleDemoRelease
+  summary:
+    name: Summary
+    if: ${{ always() }}
+    needs: [lint, build]
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
+    timeout-minutes: 5
+    steps:
+      - name: Set up forge-ci
+        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-forge-ci@2f4e845cee96973d1082bf00a5a18689c1482148
+      - name: Write the pull request summary
+        env:
+          CI_RUN_URL: ${{ forgejo.server_url }}/${{ forgejo.repository }}/actions/runs/${{ forgejo.run_number }}
+          PROJECT_TYPE: gradle-android
+          CI_BRANCH: ${{ forgejo.head_ref }}
+          LINT_RESULT: ${{ needs.lint.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: |
+          forge-ci report pr \
+            --job "Check: Kotlin lint=${LINT_RESULT}" \
+            --job "Check: Android build and test=${BUILD_RESULT}"

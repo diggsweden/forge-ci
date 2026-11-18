@@ -1,0 +1,96 @@
+# SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+# SPDX-License-Identifier: CC0-1.0
+
+name: Build unsigned GoReleaser files
+description: >-
+  Package the prepared release without signing, publishing or announcements, then import its unsigned release manifest. Bring GoReleaser and syft in the job toolchain. Follow with upload-dist and pass its digest to the separate sign-and-publish workflow. Product configuration stays in the caller. With snapshot true it packages the checked-out commit the same way, as a dry run of the release under forge-ci's snapshot version, for a snapshot workflow, which signs and publishes nothing.
+inputs:
+  snapshot:
+    description: >-
+      true packages the checked-out commit under forge-ci's snapshot version, <base>-snapshot-<branch>-<short commit> as forge-ci version generate-snapshot prints it, and imports the manifest under that version; it takes no release-tag, release-sha or release-notes. false (the default) packages the prepared release.
+    default: 'false'
+  release-tag:
+    description: Final release tag emitted by prepare-release. Required unless snapshot is true.
+    default: ''
+  release-sha:
+    description: Exact prepared source commit that must already be checked out. Required unless snapshot is true.
+    default: ''
+  config:
+    description: Caller-owned GoReleaser configuration path.
+    default: .goreleaser.yml
+  release-notes:
+    description: Existing rendered release notes, outside the dist directory. Required unless snapshot is true.
+    default: ''
+  dist-directory:
+    description: Must match the dist directory in the GoReleaser configuration.
+    default: dist
+outputs:
+  version:
+    description: The version the files carry, the release tag or the snapshot version with a leading v.
+    value: ${{ steps.build.outputs.version }}
+  manifest:
+    description: Unsigned manifest path, relative to the caller's workspace.
+    value: ${{ inputs.dist-directory }}/release-files.json
+runs:
+  using: composite
+  steps:
+    - name: Build unsigned release files
+      id: build
+      shell: bash
+      env:
+        SNAPSHOT: ${{ inputs.snapshot }}
+        RELEASE_SHA: ${{ inputs.release-sha }}
+        GORELEASER_CURRENT_TAG: ${{ inputs.release-tag }}
+        GORELEASER_CONFIG: ${{ inputs.config }}
+        RELEASE_NOTES: ${{ inputs.release-notes }}
+        GITHUB_TOKEN: ''
+        GH_TOKEN: ''
+      run: |
+        set -euo pipefail
+        case "${SNAPSHOT:?}" in
+          true)
+            if [ -n "${RELEASE_SHA}${GORELEASER_CURRENT_TAG}${RELEASE_NOTES}" ]; then
+              echo "ERROR: a snapshot takes no release-tag, release-sha or release-notes" >&2
+              exit 1
+            fi
+            # forge-ci's snapshot version, as its snapshot files and packages
+            # spell it, is the tag. Tagged locally at HEAD, never pushed (the
+            # checkout keeps no credential), it lets GoReleaser validate the
+            # tree and find the previous tag as in the release.
+            # shellcheck source=.engine/bin/lib-forge-ci.sh
+            source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
+            snapshot_version=$(FORGE_CI_PROVIDER=forgejo run_forge_ci version generate-snapshot)
+            export GORELEASER_CURRENT_TAG="v${snapshot_version:?}"
+            git tag --no-sign "${GORELEASER_CURRENT_TAG}" HEAD
+            goreleaser release --clean --skip=publish,sign,announce \
+              --config "${GORELEASER_CONFIG:?}"
+            ;;
+          false)
+            : "${GORELEASER_CURRENT_TAG:?release-tag is required}"
+            test "$(git rev-parse HEAD)" = "${RELEASE_SHA:?release-sha is required}"
+            goreleaser release --clean --skip=publish,sign,announce \
+              --config "${GORELEASER_CONFIG:?}" --release-notes "${RELEASE_NOTES:?release-notes is required}"
+            ;;
+          *)
+            echo "ERROR: snapshot must be true or false, not ${SNAPSHOT}" >&2
+            exit 1
+            ;;
+        esac
+        printf 'version=%s\n' "${GORELEASER_CURRENT_TAG}" >>"${FORGEJO_OUTPUT:?}"
+    - name: Import unsigned release hand-off
+      shell: bash
+      env:
+        SNAPSHOT: ${{ inputs.snapshot }}
+        VERSION: ${{ steps.build.outputs.version }}
+        RELEASE_NOTES: ${{ inputs.release-notes }}
+        DIST_DIRECTORY: ${{ inputs.dist-directory }}
+      run: |
+        set -euo pipefail
+        if [ "${SNAPSHOT:?}" != true ]; then
+          cp -- "${RELEASE_NOTES:?}" "${DIST_DIRECTORY:?}/release-notes.md"
+        fi
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
+        FORGE_CI_PROVIDER=forgejo run_forge_ci release files import-goreleaser \
+          --dist-dir "$DIST_DIRECTORY" --manifest "$DIST_DIRECTORY/release-files.json" \
+          --version "${VERSION:?}"
