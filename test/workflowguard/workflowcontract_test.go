@@ -727,9 +727,22 @@ func TestProductionReleaseCeremonyUsesRequestThenFinalTag(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(string(runtimeWorkflow), `- "v*.*.*"`) {
-		t.Fatal("self-runtime-container must remain triggered by final release tags")
+	var runtime eventWorkflow
+	require.NoError(t, yaml.Unmarshal(runtimeWorkflow, &runtime))
+	var triggers map[string]yaml.Node
+	require.NoError(t, runtime.On.Decode(&triggers))
+	releaseTrigger, pushTrigger := triggers["release"], triggers["push"]
+	var releaseEvents map[string][]string
+	var pushFilters map[string]yaml.Node
+	require.NoError(t, releaseTrigger.Decode(&releaseEvents))
+	require.NoError(t, pushTrigger.Decode(&pushFilters))
+	require.Equal(t, []string{"published"}, releaseEvents["types"])
+	require.NotContains(t, pushFilters, "tags", "the release event replaces the final-tag push trigger")
+	require.Contains(t, pushFilters, "branches", "rolling publication must still run on branch pushes")
+	for _, name := range []string{"publish-arch", "publish-merge"} {
+		require.Contains(t, runtime.Jobs[name].If, "github.event_name == 'release'", name)
 	}
+	require.Contains(t, runtime.Jobs["image-coordinates"].If, "!endsWith(github.ref_name, '-pre')")
 
 	runtimeText := string(runtimeWorkflow)
 	if !strings.Contains(runtimeText, "sha256sum --check --strict checksums.sha256") ||

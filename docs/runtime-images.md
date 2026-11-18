@@ -430,12 +430,12 @@ wanted; see [release policy](workflows.md#stable-and-prerelease-policy).
 
 ## Releasing new image versions
 
-A forge-ci release tag `vX.Y.Z` starts `self-runtime-container.yml`, which
-builds the images from that commit natively for the platforms in the
-[roster](#image-roster) and tags them `:vX.Y.Z`, and for a stable version
-also `:vX.Y` and `:vX`. The tag push builds the images even when the tagged
-commit did not touch the runtime files. The CLI archives are published by a
-separate run, so check that both completed.
+Publishing the GitHub Release for `vX.Y.Z` starts `self-runtime-container.yml`.
+It builds the images from the final tagged commit natively for the platforms
+in the [roster](#image-roster) and tags them `:vX.Y.Z`, and for a stable version
+also `:vX.Y` and `:vX`. The release event works even when the generated release
+commit contains `[skip ci]`. The CLI archives are published separately; check
+that both the CLI and runtime publication jobs completed before updating pins.
 
 ## GitLab compatibility building blocks
 

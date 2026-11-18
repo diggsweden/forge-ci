@@ -12,7 +12,7 @@
 #   pull_request — verify only (build + smoke-test, no push)
 #   push         — to the pre-release branch (FORGE_CI_PRERELEASE_BRANCH,
 #                  default main): verify + publish; other branches skip
-#   tag v*       — verify + publish with semver tags
+#   release published — verify + publish the tagged commit with semver tags
 #   schedule     — weekly rebuild using the committed base/tool pins
 #   dispatch     — manual, opt-in publish via `publish` input
 #
@@ -56,15 +56,10 @@ on:
     # skips the whole run for pushes to any other branch.
     branches:
       - "**"
-    tags:
-      - "v*.*.*"
-      # Exclude the rolling CLI pre-release tag (v0.90.0-pre): it's created by this
-      # workflow's publish-cli job and must NOT re-trigger the release/tag path.
-      - "!v*-pre"
-      # No `paths:` filter on push: tag pushes routinely don't touch runtime
-      # files, but every release tag must produce a matching image so consumers
-      # can pin runtime-image to the version they're using. Branch pushes pay
-      # a ~3 min cached build cost on every main merge — acceptable.
+  release:
+    # The generated release commit has [skip ci], which can suppress a tag
+    # push run. The published GitHub Release supplies the final tag and SHA.
+    types: [published]
   schedule:
     - cron: "30 2 * * 1"
   workflow_dispatch:
@@ -82,6 +77,9 @@ jobs:
   # repository path cannot hold, and expressions cannot lowercase.
   image-coordinates:
     name: Resolve image coordinates
+    # Ignore the rolling CLI prerelease and unrelated releases.
+    if: >-
+      github.event_name != 'release' || (github.ref_type == 'tag' && startsWith(github.ref_name, 'v') && contains(github.ref_name, '.') && !endsWith(github.ref_name, '-pre'))
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions: {}
@@ -213,7 +211,7 @@ jobs:
           podman run --rm "localhost/$RUNTIME_TAG" forge-ci --version
   # Build canonical runtime CLIs and separately stamped release archives once.
   # publish-cli uploads only the latter to the rolling pre-release.
-  # version-tag: the real tag on a release push, else the rolling pre-release tag.
+  # version-tag: the real tag on a published release, else the rolling pre-release tag.
   build-cli:
     name: Build CLI
     # verify and the publish jobs all consume the single binary it builds, so a
@@ -229,7 +227,7 @@ jobs:
     with:
       version-tag: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.90.0-pre' }}
       artifact-name: cli-dist
-      # Tag pushes build the runtime images only; the signed CLI release is
+      # Published releases build the runtime images only; the signed CLI release is
       # release-binary.yml's job (it creates the reproducibility reference
       # that sign-reproducible-release.sh requires for non-pre tags).
       # The pre-release branch signs because its -pre tag skips the
@@ -280,7 +278,7 @@ jobs:
     name: Publish (${{ matrix.name }} - linux/${{ matrix.arch }})
     needs: [image-coordinates, verify, build-cli, platforms]
     if: >-
-      github.event_name == 'schedule' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)
+      github.event_name == 'schedule' || github.event_name == 'push' || github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.publish)
     # GitHub's hosted runner label for the leg's architecture.
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-26.04-arm' || 'ubuntu-26.04' }}
     strategy:
@@ -496,7 +494,7 @@ jobs:
     name: Publish Manifest (${{ matrix.name }})
     needs: [image-coordinates, publish-arch, build-cli, platforms]
     if: >-
-      github.event_name == 'schedule' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == format('refs/heads/{0}', vars.FORGE_CI_PRERELEASE_BRANCH || 'main'))
+      github.event_name == 'schedule' || github.event_name == 'push' || github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == format('refs/heads/{0}', vars.FORGE_CI_PRERELEASE_BRANCH || 'main'))
     runs-on: ubuntu-26.04
     strategy:
       fail-fast: false

@@ -514,12 +514,13 @@ are internal-use only.
 
    The tag must be signed with a key listed in `.forge-ci/allowed_signers`.
 
-3. **CI does the rest.** The tag push triggers `self-runtime-container.yml`
-   (builds runtime images, 30-60 min) and `self-release.yml` (runs black-box
-   tests, evidence gates, waits for images, creates the final `vX.Y.Z` tag,
-   builds signed CLI archives, publishes the GitHub release). The black-box
-   and evidence gates always run; a gate that fails skips the release, and
-   no repository variable waives one.
+3. **CI does the rest.** The request tag triggers `self-release.yml`, which
+   waits for the request commit's runtime images from the `main` push,
+   creates the final `vX.Y.Z` tag, and publishes the GitHub release and signed
+   CLI archives. Publishing the GitHub release triggers
+   `self-runtime-container.yml` to publish versioned images from the final
+   tag, even when its commit contains `[skip ci]`. Wait for both workflows
+   before updating consumer pins.
 
 For recovery from a failed release, see
 [Failed Release Recovery](failed-release-recovery.md).
