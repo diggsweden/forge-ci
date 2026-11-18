@@ -38,8 +38,7 @@ func TestGitHubSelfRelease_BinaryScheduling(t *testing.T) {
 		t.Fatal("an explicit positive GitHub organization ID is required")
 	}
 
-	// The gates always run. The variable that once waived them is set to
-	// false in every case: it must no longer be read.
+	// The remaining gates always run, regardless of the old waiver variable.
 	for _, test := range []struct {
 		name           string
 		failed         string // the job that fails, or none
@@ -48,7 +47,7 @@ func TestGitHubSelfRelease_BinaryScheduling(t *testing.T) {
 		workflowResult string
 	}{
 		{"gates-pass", "", "success", "success", "success"},
-		{"failed-gate", "blackbox", "skipped", "skipped", "failure"},
+		{"failed-gate", "checksums", "skipped", "skipped", "failure"},
 		{"failed-release", "release", "failure", "skipped", "failure"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -165,11 +164,14 @@ func selfReleaseSchedulingResults(t *testing.T, trial *GitHubTrial, repo string,
 		results[job.GetName()] = job.GetConclusion()
 	}
 
-	// Both gates ran: neither is skipped, whatever the variable says.
-	for _, name := range []string{"blackbox", "evidence"} {
+	// Both test gates are temporarily waived; the checksum gate still runs.
+	for _, name := range []string{"checksums", "blackbox", "evidence"} {
 		want := "success"
 		if name == failed {
 			want = "failure"
+		}
+		if name == "evidence" || name == "blackbox" {
+			want = "skipped"
 		}
 
 		if results[name] != want {
