@@ -754,6 +754,7 @@ func (layer Layer) PlanConsumer(workflows map[string]string, facts ConsumerFacts
 	plan.trustRoot = map[string]string{}
 	plan.publicKey = facts.Inputs[inputKey]
 
+	entryPoints := make(map[string]string, len(workflows))
 	for _, name := range sortedKeys(workflows) {
 		migrated, migrationErr := migratePublicationRepository(workflows[name])
 		if migrationErr != nil {
@@ -761,20 +762,25 @@ func (layer Layer) PlanConsumer(workflows map[string]string, facts ConsumerFacts
 		}
 
 		plan.workflowInputs[workflows[name]] = migrated
+		// An input forwarded inside a reusable workflow is not a repository
+		// setting. Bind facts at the entry point that supplies that input.
+		if callable, _ := WorkflowRunsOn(migrated, "workflow_call"); !callable {
+			entryPoints[name] = workflows[name]
+		}
 	}
 	// Establish base coordinates across all wrappers first. A shared image
 	// workflow may receive that same variable as image-repository; it is still
 	// the exact base destination, not the final release destination.
 	if base := facts.Inputs["base-repository"]; base != "" {
-		for _, name := range sortedKeys(workflows) {
-			if err = plan.bindInput(name, foldedExpression.ReplaceAllString(workflows[name], " }}"), "base-repository", base); err != nil {
+		for _, name := range sortedKeys(entryPoints) {
+			if err = plan.bindInput(name, foldedExpression.ReplaceAllString(entryPoints[name], " }}"), "base-repository", base); err != nil {
 				return ConsumerPlan{}, err
 			}
 		}
 	}
 
-	for _, name := range sortedKeys(workflows) {
-		if err = plan.bindWorkflowFacts(name, workflows[name], facts); err != nil {
+	for _, name := range sortedKeys(entryPoints) {
+		if err = plan.bindWorkflowFacts(name, entryPoints[name], facts); err != nil {
 			return ConsumerPlan{}, err
 		}
 	}

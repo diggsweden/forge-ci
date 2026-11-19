@@ -211,6 +211,7 @@ func runForgejoConsumerTrial(t *testing.T, root string, releaseCase forgejoRelea
 	if release {
 		keys = trialReleaseFacts(t, target, repoName, &facts)
 		requester = livetest.NewRequestSigner(t, t.TempDir())
+		consumer = consumer.WithRequestTrust(t, trialRequestSigners, requester.AllowedSigners)
 		useExternalRegistry(t, external, &facts)
 		useLabRegistry(t, target, repoName, external, &facts)
 	}
@@ -239,15 +240,6 @@ func runForgejoConsumerTrial(t *testing.T, root string, releaseCase forgejoRelea
 	pushed := consumer.Push(t, repo, plan)
 
 	main := pushed
-	if release {
-		// Install only the disposable requester's public trust material while
-		// Actions are still disabled. The private key stays on the host.
-		main = livetest.CommitFiles(t, target, repo, livetest.FileCommit{
-			Branch: layerMain, Message: "test: trust the disposable release requester",
-			Files: map[string]string{trialRequestSigners: requester.AllowedSigners},
-		})
-	}
-
 	requireObjectFormats(t, consumer.ObjectFormat, main, scenario.layer.Commit)
 
 	head := ""

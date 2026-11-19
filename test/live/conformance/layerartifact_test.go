@@ -34,7 +34,7 @@ var layerArtifactFixture string
 // successful on the contract's runner label; and its one artifact, named
 // for the run and not expired, holds exactly the tree the job uploaded.
 func TestForgejoLayer_ArtifactRoundTrip(t *testing.T) {
-	livetest.RegisterLiveScenario(t)
+	livetest.RegisterAdmittedScenario(t)
 
 	for _, visibility := range livetest.ConsumerVisibilities(t) {
 		t.Run(visibility.Name, func(t *testing.T) { runLayerArtifactRoundTrip(t, visibility.Private) })
@@ -46,7 +46,9 @@ func runLayerArtifactRoundTrip(t *testing.T, private bool) {
 
 	const workflow = "layer-artifact-roundtrip"
 
-	scenario := newLayerScenario(t, "layer-artifact", private, "sha1")
+	scenario := requireLayerRunner(t)
+	livetest.Admitted(t)
+	scenario = provisionLayerScenario(t, scenario, "layer-artifact", private, "sha1")
 	target, repo, label := scenario.target, scenario.repo, scenario.label
 
 	run := livetest.RunLayerWorkflow(t, target, repo, workflow, scenario.render(t, layerArtifactFixture))

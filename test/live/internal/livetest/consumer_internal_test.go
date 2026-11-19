@@ -327,15 +327,29 @@ func TestPlanConsumer_RendersAWholeRelease(t *testing.T) {
 
 	layer := sampleLayer()
 	source := consumerWorkflow(t, "hello-cli-release.yml")
+	const reusable = `on:
+  workflow_call:
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./prepare
+        with:
+          release-git-host-key-fingerprint: ${{ inputs['release-git-host-key-fingerprint'] }}
+`
 
 	plan, err := layer.PlanConsumer(map[string]string{
 		"pullrequest-workflow.yml": consumerWorkflow(t, "hello-cli-pullrequest.yml"), "release-workflow.yml": source,
+		"prepare-release.yml": reusable,
 	}, releaseFacts())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	rendered := plan.Render(source)
+	if got := plan.Render(reusable); got != reusable {
+		t.Errorf("the reusable workflow's forwarding was rewritten: %s", got)
+	}
 
 	if err := yaml.Unmarshal([]byte(rendered), new(map[string]any)); err != nil {
 		t.Fatalf("the rendering is not YAML: %v", err)

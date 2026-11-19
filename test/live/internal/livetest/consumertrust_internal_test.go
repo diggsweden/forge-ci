@@ -25,6 +25,10 @@ func TestConsumer_WithRequestTrustIsInTheBaseAndTheChange(t *testing.T) {
 	evidence.RequireTool(t, "ssh-keygen")
 
 	git, root := newConsumerCheckout(t, consumerSHA1)
+	const original = "maintainer ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
+	writeLayerFile(t, root, trustTestPath, original)
+	mustLayerGit(t, git, root, "add", trustTestPath)
+	mustLayerGit(t, git, root, "commit", "-m", "test: include an existing allowlist")
 	before := mustLayerGit(t, git, root, "rev-parse", "HEAD")
 
 	consumer, err := openConsumer(t.Context(), git, root, t.TempDir())
@@ -80,6 +84,9 @@ func TestConsumer_WithRequestTrustIsInTheBaseAndTheChange(t *testing.T) {
 
 	if after := mustLayerGit(t, git, root, "rev-parse", "HEAD"); after != before || consumer.Commit != before {
 		t.Errorf("the checkout moved from %s to %s, or the source consumer did (%s)", before, after, consumer.Commit)
+	}
+	if content := mustLayerGit(t, git, root, "cat-file", "-p", before+":"+trustTestPath); content+"\n" != original {
+		t.Errorf("the checkout's allowlist was rewritten: %q", content)
 	}
 }
 

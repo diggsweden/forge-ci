@@ -17,6 +17,8 @@ package conformance_test
 import (
 	"context"
 	"encoding/binary"
+	"errors"
+	"io"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
@@ -25,6 +27,9 @@ import (
 	"testing"
 	"time"
 
+	apprelease "github.com/diggsweden/forge-ci/internal/app/release"
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/output"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
 	"github.com/diggsweden/forge-ci/test/live/internal/livetest"
 	"github.com/diggsweden/forge-ci/test/live/internal/livetest/rawref"
@@ -235,8 +240,10 @@ func writeNotes(t *testing.T, body string) string {
 // not the same as working. PAR-REL-1 attaches assets through CreateRelease's
 // spec; this attaches one to a release that already exists, which is the path a
 // pipeline takes when it builds artifacts after cutting the release.
+// The shared release read-back must reject the missing planned asset before
+// upload and accept it after upload, without a provider-specific inventory.
 func TestRelease_UploadAssetToExistingRelease_ServesTheSameBytes(t *testing.T) {
-	livetest.RegisterLiveScenario(t)
+	livetest.RegisterAdmittedScenario(t)
 
 	const tag = "v0.0.2-rc-live"
 
@@ -245,6 +252,7 @@ func TestRelease_UploadAssetToExistingRelease_ServesTheSameBytes(t *testing.T) {
 			t.Parallel()
 
 			target := livetest.Accept(t, forge)
+			livetest.Admitted(t)
 			repo := livetest.NewScratchRepo(t, target, "release-upload")
 			livetest.PrepareTag(t, target, repo, tag)
 
@@ -280,8 +288,19 @@ func TestRelease_UploadAssetToExistingRelease_ServesTheSameBytes(t *testing.T) {
 				t.Fatal(err)
 			}
 
+			reader, ok := adapter.(provider.ReleaseReader)
+			if !ok {
+				t.Fatalf("%s does not implement ReleaseReader", forge)
+			}
+			plan := apprelease.ValidatePublishedInput{Tag: tag, Repository: livetest.RepoSlug(target, repo), Assets: []string{path}}
+			if err := apprelease.ValidatePublishedRelease(ctx, reader, io.Discard, output.Annotator{}, plan); !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "missing "+filepath.Base(path)) {
+				t.Fatalf("read-back before upload must name the missing planned asset, got %v", err)
+			}
 			if err := uploader.UploadReleaseAsset(ctx, tag, path); err != nil {
 				t.Fatalf("%s UploadReleaseAsset: %v", forge, err)
+			}
+			if err := apprelease.ValidatePublishedRelease(ctx, reader, io.Discard, output.Annotator{}, plan); err != nil {
+				t.Fatalf("read-back after upload: %v", err)
 			}
 
 			release := mustReadRelease(ctx, t, target, repo, tag)

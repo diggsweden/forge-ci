@@ -505,7 +505,8 @@ func trialCosignKey(t *testing.T, dir string) (string, string) {
 }
 
 // requireReleaseJobs holds the run to the two called workflows' jobs and the
-// consumer's build, each successful, under the two calling jobs. families are
+// consumer's build, under the two calling jobs. Package publication must be
+// skipped for this binary-only fixture. families are
 // those the release's plan bumps in, none for the bump's one empty row.
 func requireReleaseJobs(t *testing.T, jobs []livetest.RunJob, runID int64, label string, families []string) {
 	t.Helper()
@@ -524,8 +525,12 @@ func requireReleaseJobs(t *testing.T, jobs []livetest.RunJob, runID int64, label
 	}
 
 	for _, job := range jobs {
-		if job.Status != jobSuccess {
-			t.Errorf("job %q is %s in a successful run", job.Name, job.Status)
+		want := jobSuccess
+		if job.Name == "Publish: packages" {
+			want = "skipped"
+		}
+		if job.Status != want {
+			t.Errorf("job %q is %s, want %s", job.Name, job.Status, want)
 		}
 	}
 }

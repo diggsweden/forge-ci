@@ -17,9 +17,8 @@ import (
 // release workflow names as release-request-allowed-signers. The file goes
 // into the private index before Push, so the base commit and every change on
 // it carry it, and a release requested from a commit merged from such a change
-// finds the trust in place. A standalone release trial commits the same file
-// remotely after Push instead; a linked flow cannot, since the change under
-// review would then lack it and the merge would carry it away.
+// finds the trust in place. An existing production allowlist is replaced
+// only in the trial's staged tree.
 //
 // Only public material goes in: a line of a private key is refused.
 func (consumer Consumer) WithRequestTrust(tb TB, path, allowedSigners string) Consumer {

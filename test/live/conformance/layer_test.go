@@ -67,12 +67,24 @@ type layerScenario struct {
 func newLayerScenario(t *testing.T, name string, private bool, objectFormat string) layerScenario {
 	t.Helper()
 
+	return provisionLayerScenario(t, requireLayerRunner(t), name, private, objectFormat)
+}
+
+func requireLayerRunner(t *testing.T) layerScenario {
+	t.Helper()
+
 	target := livetest.Accept(t, provider.ForgeForgejo)
 	if !livetest.Requires(t, provider.ForgeForgejo, livetest.NeedsInRunner) {
 		t.Skip("no Forgejo runner in this environment, so the layer cannot run")
 	}
 
-	scenario := layerScenario{target: target, label: livetest.RunnerLabel(t, target)}
+	return layerScenario{target: target, label: livetest.RunnerLabel(t, target)}
+}
+
+func provisionLayerScenario(t *testing.T, scenario layerScenario, name string, private bool, objectFormat string) layerScenario {
+	t.Helper()
+
+	target := scenario.target
 	scenario.layer = livetest.PushLayer(t, target, livetest.NewPublicScratchRepo(t, target, livetest.LayerScenario(name), livetest.ReadLayerAnonymously))
 	scenario.repo = livetest.NewBareScratchRepo(t, target, name, objectFormat, private)
 	seed := livetest.CommitFiles(t, target, scenario.repo, livetest.FileCommit{

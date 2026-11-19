@@ -133,6 +133,7 @@ func releaseRunJobs(families []string) ([]string, []string) {
 		releaseCommitJob,
 		releaseVersionPlan,
 		"Publish: images",
+		"Publish: packages",
 		"Publish: release",
 		"Publish: tidy up",
 		"Sign: files and images",
@@ -394,7 +395,7 @@ func TestReleaseRunJobs(t *testing.T) {
 	plain := []string{
 		"Build minimal binary release", "Check: release settings", "Check: signing settings", "Prepare: changelog",
 		"Prepare: release commit and tag", "Prepare: version", "Prepare: version plan",
-		"Publish: images", "Publish: release", "Publish: tidy up", "Sign: files and images",
+		"Publish: images", "Publish: packages", "Publish: release", "Publish: tidy up", "Sign: files and images",
 	}
 	if jobs, versionJobs := releaseRunJobs(nil); !slices.Equal(jobs, plain) || !slices.Equal(versionJobs, []string{"Prepare: version"}) {
 		t.Errorf("a release without a family runs %v and bumps in %v, want %v", jobs, versionJobs, plain)
@@ -403,7 +404,7 @@ func TestReleaseRunJobs(t *testing.T) {
 	rust := []string{
 		"Build minimal binary release", "Check: release settings", "Check: signing settings", "Prepare: changelog",
 		"Prepare: release commit and tag", "Prepare: version (rust)", "Prepare: version plan",
-		"Publish: images", "Publish: release", "Publish: tidy up", "Sign: files and images",
+		"Publish: images", "Publish: packages", "Publish: release", "Publish: tidy up", "Sign: files and images",
 	}
 
 	jobs, versionJobs := releaseRunJobs([]string{"rust"})
