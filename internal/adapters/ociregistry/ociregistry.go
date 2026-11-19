@@ -261,6 +261,14 @@ func (a *Adapter) PushIndexLayout(ctx context.Context, layoutDir, imageRef strin
 func (a *Adapter) Manifest(ctx context.Context, ref string) ([]byte, error) {
 	raw, err := crane.Manifest(ref, a.craneOpts(ctx, ref)...)
 	if err != nil {
+		if errors.Is(classifyRegistryError(err), errs.ErrPermissionDenied) {
+			if a.anonymous {
+				return nil, fmt.Errorf("anonymous registry pull denied for %s; if this image is intended to be public, make the registry package public (a public source repository does not make its packages public); otherwise configure a separate repository-scoped pull-only credential (for parent builds: PARENT_REGISTRY_READ_TOKEN and the parent registry settings), never the publishing token: %w: %w", ref, err, errs.ErrPermissionDenied)
+			}
+			if a.pullAuth != nil {
+				return nil, fmt.Errorf("authenticated parent registry pull denied for %s; check that the separate pull-only credential is valid and can read this exact package, and that the parent registry user and repository settings match; do not substitute the publishing token: %w: %w", ref, err, errs.ErrPermissionDenied)
+			}
+		}
 		return nil, fmt.Errorf("fetch manifest for %s: %w: %w", ref, err, classifyRegistryError(err))
 	}
 
