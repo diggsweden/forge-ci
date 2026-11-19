@@ -70,14 +70,14 @@ func TestRuntimePromotionVerifiesAllEvidenceBeforeFreshnessAndCopy(t *testing.T)
 	source := runtimeBranchReader(func(_ context.Context, server, repository, branch string) (string, error) {
 		require.Equal(t, in.Manifest.ServerURL, server)
 		require.Equal(t, in.Manifest.Repository, repository)
-		require.Equal(t, "main", branch)
+		require.Equal(t, "master", branch)
 		require.Len(t, verifier.requests, 6, "all native signatures and attestations must precede the freshness check")
 		require.Empty(t, registry.copies)
 
 		return in.Manifest.SourceSHA, nil
 	})
 	ref, err := appcontainer.PromoteRuntimePublication(t.Context(), registry, verifier, source, io.Discard,
-		appcontainer.RuntimePublicationPromoteInput{Manifest: in.Manifest, PublicKey: "cosign.pub"})
+		appcontainer.RuntimePublicationPromoteInput{Manifest: in.Manifest, PublicKey: "cosign.pub", PublicationBranch: "master"})
 	require.NoError(t, err)
 
 	final := in.Manifest.ImageRepository + ":sha-" + in.Manifest.SourceSHA

@@ -21,9 +21,9 @@ import (
 
 func runtimePublicationPromoteCmd() *cli.Command {
 	return &cli.Command{
-		Name: "promote", Usage: "verify native signatures and current main before promoting the exact runtime index to its source tag",
+		Name: "promote", Usage: "verify native signatures and the publication branch head before promoting the exact runtime index",
 		Description: "Run from the downloaded evidence directory. Requires a provider with authenticated branch-head resolution (currently Forgejo). Writes published-ref.txt only after the destination serves the signed digest. No signing key is accepted.",
-		Flags:       append(append(append(signerImageSourceFlags(), multiarchImageParamFlags()...), baseImagesPublicKeyFlags()...), multiarchImageArchsFlag()),
+		Flags:       append(append(append(signerImageSourceFlags(), multiarchImageParamFlags()...), baseImagesPublicKeyFlags()...), multiarchImageArchsFlag(), runtimePublicationBranchFlag()),
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			if !domaincontainer.ValidSHA256Hex(cmd.String("cosign-public-key-sha256")) {
 				return fmt.Errorf("runtime promotion requires the reviewed Cosign public-key digest: %w", errs.ErrValidation)
@@ -42,7 +42,7 @@ func runtimePublicationPromoteCmd() *cli.Command {
 				return withReleaseImageDockerConfig(cmd.String(flagAuthFile), func() error {
 					ref, err := appcontainer.PromoteRuntimePublication(ctx,
 						ociregistry.WithAuthFile(cmd.String(flagAuthFile)), cosign.NewIsolated("DOCKER_CONFIG"), source, os.Stderr,
-						appcontainer.RuntimePublicationPromoteInput{Manifest: runtimeManifestInput(cmd), PublicKey: cmd.String("cosign-public-key-path")})
+						appcontainer.RuntimePublicationPromoteInput{Manifest: runtimeManifestInput(cmd), PublicKey: cmd.String("cosign-public-key-path"), PublicationBranch: cmd.String("publication-branch")})
 					if err != nil {
 						return err
 					}

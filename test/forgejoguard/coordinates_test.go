@@ -524,6 +524,8 @@ func runPreflightWithStderr(t *testing.T, script, repository, signer string, env
 		"GO_BUILD_IMAGE_INPUT=" + exampleSigner,
 		"PUBLIC_KEY_SHA256=" + strings.Repeat("a", 64),
 		"RUNTIME_ENGINE_SHA=" + strings.Repeat("b", 40),
+		"RUNTIME_PUBLICATION_BRANCH=main",
+		"PUBLICATION_REF=refs/heads/main",
 	}
 	command.Env = append(command.Env, env...)
 

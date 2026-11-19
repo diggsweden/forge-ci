@@ -123,8 +123,13 @@ func runtimePublicationFlags() []cli.Flag {
 		&cli.StringFlag{Name: flagSourceSHA, Required: true, Usage: "expected full product source commit"},
 		&cli.StringFlag{Name: "checked-out-sha", Required: true, Usage: "observed checkout commit"},
 		&cli.StringFlag{Name: "run-id", Required: true, Usage: "numeric run-attempt identity, for example 123-1"},
-		&cli.StringFlag{Name: "publication-ref", Required: true, Usage: "must be refs/heads/main"},
+		&cli.StringFlag{Name: "publication-ref", Required: true, Usage: "full ref of the source being built"},
+		runtimePublicationBranchFlag(),
 	}
+}
+
+func runtimePublicationBranchFlag() cli.Flag {
+	return &cli.StringFlag{Name: "publication-branch", Value: "main", Sources: cli.EnvVars("RUNTIME_PUBLICATION_BRANCH"), Usage: "protected publication branch selected by the reviewed caller"}
 }
 
 func runtimePublicationInput(cmd *cli.Command) appcontainer.RuntimePublicationInput {
@@ -132,6 +137,7 @@ func runtimePublicationInput(cmd *cli.Command) appcontainer.RuntimePublicationIn
 		RosterFile: cmd.String("roster"), PlatformMatrix: cmd.String("platform-matrix"),
 		Namespace: cmd.String("image-namespace"), SourceSHA: cmd.String(flagSourceSHA),
 		CheckedOutSHA: cmd.String("checked-out-sha"), RunID: cmd.String("run-id"), Ref: cmd.String("publication-ref"),
+		PublicationBranch: cmd.String("publication-branch"),
 	}
 }
 

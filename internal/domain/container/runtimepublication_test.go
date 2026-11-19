@@ -42,9 +42,14 @@ func TestRuntimePublicationPlanRefusesIncompleteOrAmbiguousAuthority(t *testing.
 	t.Parallel()
 
 	for name, mutate := range map[string]func(*container.RuntimePublicationInput){
-		"source mismatch":         func(in *container.RuntimePublicationInput) { in.CheckedOutSHA = strings.Repeat("b", 40) },
-		"short source":            func(in *container.RuntimePublicationInput) { in.SourceSHA = "abc" },
-		"not main":                func(in *container.RuntimePublicationInput) { in.Ref = "refs/heads/feature" },
+		"source mismatch":     func(in *container.RuntimePublicationInput) { in.CheckedOutSHA = strings.Repeat("b", 40) },
+		"short source":        func(in *container.RuntimePublicationInput) { in.SourceSHA = "abc" },
+		"not main":            func(in *container.RuntimePublicationInput) { in.Ref = "refs/heads/feature" },
+		"master not selected": func(in *container.RuntimePublicationInput) { in.Ref = "refs/heads/master" },
+		"invalid branch": func(in *container.RuntimePublicationInput) {
+			in.PublicationBranch, in.Ref = "topic..other", "refs/heads/topic..other"
+		},
+		"tag is not a branch":     func(in *container.RuntimePublicationInput) { in.Ref = "refs/tags/main" },
 		"invalid run":             func(in *container.RuntimePublicationInput) { in.RunID = "42\n2" },
 		"namespace credentials":   func(in *container.RuntimePublicationInput) { in.Namespace = "user:secret@registry.example/acme" },
 		"namespace traversal":     func(in *container.RuntimePublicationInput) { in.Namespace = "registry.example/acme/../other" },
@@ -76,5 +81,18 @@ func TestRuntimePublicationPlanRefusesIncompleteOrAmbiguousAuthority(t *testing.
 			require.Empty(t, plan.Builds)
 			require.Empty(t, plan.Images)
 		})
+	}
+}
+
+func TestRuntimePublicationPlanAcceptsSelectedBranch(t *testing.T) {
+	t.Parallel()
+	for _, branch := range []string{"main", "master", "release/stable", "Main"} {
+		in := runtimePlanInput()
+		in.PublicationBranch, in.Ref = branch, "refs/heads/"+branch
+		_, err := container.PlanRuntimePublication(in)
+		require.NoError(t, err)
+		in.Ref = "refs/tags/" + branch
+		_, err = container.PlanRuntimePublication(in)
+		require.Error(t, err)
 	}
 }

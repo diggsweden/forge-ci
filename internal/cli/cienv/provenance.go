@@ -89,6 +89,13 @@ func ProvenanceSource() (string, string, string) {
 	return repoURL, cmp.Or(ref.String(), get("CI_COMMIT_REF_NAME")), commit.String()
 }
 
+// ProvenanceFullRef returns the active runner's full Git ref, if provided.
+// A short ref cannot distinguish a branch from a tag with the same name.
+func ProvenanceFullRef() string {
+	ref, _ := runcontext.Ref().ResolveAttested(runcontext.ProvenanceEnv(os.Getenv))
+	return ref.String()
+}
+
 // ProvenanceInvocationID returns the run/job URL identifying this CI
 // invocation, forge-neutrally: the GitLab-native job URL when present, else
 // the GitHub/Forgejo Actions run URL (Forgejo's native $FORGEJO_* names

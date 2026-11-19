@@ -39,6 +39,7 @@ type RuntimePublicationInput struct {
 	Images                                          []RuntimeImage
 	Architectures                                   []string
 	Namespace, SourceSHA, CheckedOutSHA, RunID, Ref string
+	PublicationBranch                               string
 }
 
 var (
@@ -46,12 +47,27 @@ var (
 	runtimeRunID      = regexp.MustCompile(`^[0-9]+-[0-9]+$`)
 )
 
+// RuntimePublicationBranch resolves the one branch selected by publication policy.
+func RuntimePublicationBranch(branch string) (string, error) {
+	if branch == "" {
+		branch = "main"
+	}
+	if !gitdomain.ValidRefName("refs/heads/" + branch) {
+		return "", fmt.Errorf("runtime publication branch must be a valid Git branch name: %w", errs.ErrValidation)
+	}
+	return branch, nil
+}
+
 // PlanRuntimePublication admits the complete declaration before selecting any
 // work. Unselected rows are validated too, so an invalid roster cannot hide
 // behind a narrower architecture selection. Matrix order follows the product.
 func PlanRuntimePublication(in RuntimePublicationInput) (RuntimePublicationPlan, error) {
-	if in.Ref != "refs/heads/main" || !gitdomain.ValidCommitSHA(in.SourceSHA) || in.SourceSHA != in.CheckedOutSHA || !runtimeRunID.MatchString(in.RunID) {
-		return RuntimePublicationPlan{}, fmt.Errorf("runtime publication requires main, an exact source checkout and a numeric run-attempt identity: %w", errs.ErrValidation)
+	branch, err := RuntimePublicationBranch(in.PublicationBranch)
+	if err != nil {
+		return RuntimePublicationPlan{}, err
+	}
+	if in.Ref != "refs/heads/"+branch || !gitdomain.ValidCommitSHA(in.SourceSHA) || in.SourceSHA != in.CheckedOutSHA || !runtimeRunID.MatchString(in.RunID) {
+		return RuntimePublicationPlan{}, fmt.Errorf("runtime publication requires refs/heads/%s, an exact source checkout and a numeric run-attempt identity: %w", branch, errs.ErrValidation)
 	}
 
 	if !ValidRepositoryName(in.Namespace + "/runtime") {

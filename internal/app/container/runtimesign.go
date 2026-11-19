@@ -22,9 +22,10 @@ import (
 // index. Signing recursively covers its children; SBOMs are never regenerated
 // in this trusted job. Signing.Image and Signing.Recursive are derived here.
 type RuntimePublicationSignInput struct {
-	Manifest   SignerImageAssembleInput
-	Signing    SignImageInput
-	Provenance provenance.Input
+	PublicationBranch string
+	Manifest          SignerImageAssembleInput
+	Signing           SignImageInput
+	Provenance        provenance.Input
 }
 
 type runtimeSBOM struct {
@@ -43,8 +44,12 @@ func SignRuntimePublication(ctx context.Context, signer ledgerImageSigner, regis
 		return fmt.Errorf("runtime signing requires image signer and registry adapters: %w", errs.ErrUsage)
 	}
 
-	if in.Provenance.Ref != "refs/heads/main" {
-		return fmt.Errorf("runtime signing requires the main publication ref: %w", errs.ErrValidation)
+	branch, err := domaincontainer.RuntimePublicationBranch(in.PublicationBranch)
+	if err != nil {
+		return err
+	}
+	if in.Provenance.Ref != "refs/heads/"+branch {
+		return fmt.Errorf("runtime signing requires the %s publication ref (refs/heads/%s): %w", branch, branch, errs.ErrValidation)
 	}
 
 	manifest, source := runtimeSourceManifest(in.Manifest)

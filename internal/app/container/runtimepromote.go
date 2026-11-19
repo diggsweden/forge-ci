@@ -22,12 +22,13 @@ type runtimePromotionRegistry interface {
 // RuntimePublicationPromoteInput binds the verified index to its source commit
 // and trusted public key. Promotion creates only the same-repository sha tag.
 type RuntimePublicationPromoteInput struct {
-	Manifest  SignerImageAssembleInput
-	PublicKey string
+	PublicationBranch string
+	Manifest          SignerImageAssembleInput
+	PublicKey         string
 }
 
 // PromoteRuntimePublication verifies the native index and every signature and
-// attestation before checking current main immediately before the tag write.
+// attestation before checking the publication branch immediately before the tag write.
 // The sha tag remains the existing convenience pointer; the returned digest ref
 // is the immutable consumer pin. A copy failure is never blindly retried here.
 func PromoteRuntimePublication(ctx context.Context, registry runtimePromotionRegistry, verifier imageEvidenceVerifier, source provider.BranchHeadResolver, out io.Writer, in RuntimePublicationPromoteInput) (string, error) {
@@ -39,18 +40,23 @@ func PromoteRuntimePublication(ctx context.Context, registry runtimePromotionReg
 		return "", fmt.Errorf("runtime promotion requires registry, verifier, source reader and trusted key: %w", errs.ErrUsage)
 	}
 
+	branch, err := domaincontainer.RuntimePublicationBranch(in.PublicationBranch)
+	if err != nil {
+		return "", err
+	}
+
 	meta, final, err := verifyRuntimePromotionInput(ctx, registry, verifier, out, in)
 	if err != nil {
 		return "", err
 	}
 
-	head, err := source.BranchHead(ctx, in.Manifest.ServerURL, in.Manifest.Repository, "main")
+	head, err := source.BranchHead(ctx, in.Manifest.ServerURL, in.Manifest.Repository, branch)
 	if err != nil {
 		return "", err
 	}
 
 	if head != in.Manifest.SourceSHA {
-		return "", fmt.Errorf("refusing stale runtime publication: main no longer matches the source commit: %w", errs.ErrValidation)
+		return "", fmt.Errorf("refusing stale runtime publication: %s no longer matches the source commit: %w", branch, errs.ErrValidation)
 	}
 
 	if err := ctx.Err(); err != nil {

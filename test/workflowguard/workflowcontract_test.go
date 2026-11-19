@@ -24,6 +24,22 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func TestRuntimeArchitectureAndManifestPublicationShareBranchPolicy(t *testing.T) {
+	t.Parallel()
+	var workflow struct {
+		Jobs map[string]struct {
+			If string `yaml:"if"`
+		} `yaml:"jobs"`
+	}
+	require.NoError(t, yaml.Unmarshal(reporoot.ReadFile(t, ".github/workflows/self-runtime-container.yml"), &workflow))
+	const policy = "(github.event_name == 'release' && github.ref_type == 'tag') || " +
+		"(needs.image-coordinates.outputs.on-publication-branch == 'true' && " +
+		"(github.event_name == 'schedule' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)))"
+	for _, job := range []string{"publish-arch", "publish-merge"} {
+		require.Equal(t, policy, workflow.Jobs[job].If, job)
+	}
+}
+
 // Most guards in this package sweep `.github/workflows` for `.yml` only. A
 // `.yaml` workflow, which GitHub accepts equally, would pass all of them
 // unread, so the extension is part of the contract.

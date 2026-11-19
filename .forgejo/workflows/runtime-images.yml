@@ -7,6 +7,10 @@ name: Runtime images (reusable)
 on:
   workflow_call:
     inputs:
+      publication-branch:
+        description: One protected publication branch, selected in the reviewed caller.
+        type: string
+        default: main
       forge-ci-repository:
         description: Trusted layer repository, owner/repository on this forge or full HTTPS clone URL.
         type: string
@@ -80,6 +84,7 @@ env:
   FORGEJO_REPO: ${{ forgejo.repository }}
   SOURCE_SHA: ${{ forgejo.sha }}
   PUBLICATION_REF: ${{ forgejo.ref }}
+  RUNTIME_PUBLICATION_BRANCH: ${{ inputs['publication-branch'] }}
   RUNTIME_IMAGE_NAMESPACE: ${{ inputs['image-namespace'] }}
   RUNTIME_ENGINE_SHA: ${{ inputs['forge-ci-sha'] }}
   GIT_DEFAULT_HASH: sha1
@@ -107,6 +112,14 @@ jobs:
           TRANSPARENCY_LOG_INPUT: ${{ inputs['transparency-log'] }}
         run: |
           set -euo pipefail
+          if ! git check-ref-format "refs/heads/$RUNTIME_PUBLICATION_BRANCH"; then
+            echo 'ERROR: publication-branch must be a valid Git branch name' >&2
+            exit 1
+          fi
+          if [[ "$PUBLICATION_REF" != "refs/heads/$RUNTIME_PUBLICATION_BRANCH" ]]; then
+            printf 'ERROR: run publication from %s; this run uses %s\n' "$RUNTIME_PUBLICATION_BRANCH" "$PUBLICATION_REF" >&2
+            exit 1
+          fi
           repository=${HELPERS_REPOSITORY_INPUT:-}
           if [ -z "$repository" ]; then
             echo 'ERROR: name the forge-ci-repository input or FORGE_CI_REPOSITORY variable' >&2
@@ -153,7 +166,7 @@ jobs:
           printf 'signer_image=%s\ngo_build_image=%s\nbuilder=%s\nbuilder_job_image=%s\ntransparency_log=%s\n' "$SIGNER_IMAGE_INPUT" "$GO_BUILD_IMAGE_INPUT" "$builder" "$builder_job_image" "$TRANSPARENCY_LOG_INPUT" >>"${FORGEJO_OUTPUT:?}"
   plan:
     needs: coordinates
-    if: ${{ needs.coordinates.result == 'success' && forgejo.ref == 'refs/heads/main' }}
+    if: ${{ needs.coordinates.result == 'success' }}
     runs-on: ${{ fromJSON(inputs['runs-on']) }}
     container: ${{ needs.coordinates.outputs.signer_image }}
     timeout-minutes: 10
@@ -748,7 +761,7 @@ jobs:
           printf '%s' "$REGISTRY_TOKEN" | forge-ci container login \
             --registry "$RUNTIME_IMAGE_NAMESPACE" --registry-username "$REGISTRY_USER" \
             --registry-password-file - --create-auth-file --export-env
-      - name: Verify signatures and reject a stale main before promotion
+      - name: Verify signatures and confirm the publication branch head
         working-directory: evidence
         env:
           TRUSTED_KEY_INPUT: ${{ inputs['cosign-public-key'] }}

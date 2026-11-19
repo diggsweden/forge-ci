@@ -65,7 +65,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: "Publish runtime container images"
+        description: "Publish runtime images (only from the configured publication branch)"
         required: false
         default: false
         type: boolean
@@ -87,6 +87,7 @@ jobs:
       image-namespace: ${{ steps.coordinates.outputs.image-namespace }}
       build-cache-repo: ${{ steps.coordinates.outputs.build-cache-repo }}
       enforce-vulnerabilities: ${{ steps.vulnerabilities.outputs.enforce-vulnerabilities }}
+      on-publication-branch: ${{ steps.coordinates.outputs.on-publication-branch }}
     steps:
       - name: Validate the transparency setting
         # Every signing job waits for this one: a misspelt `none` must not
@@ -121,9 +122,16 @@ jobs:
         id: coordinates
         env:
           IMAGE_NAMESPACE: ${{ vars.FORGE_CI_IMAGE_NAMESPACE }}
+          PUBLICATION_BRANCH: ${{ vars.FORGE_CI_PRERELEASE_BRANCH || 'main' }}
         run: |
           set -euo pipefail
+          # Actions expressions compare strings case-insensitively; Git refs do not.
+          on_publication_branch=false
+          if [[ "$GITHUB_REF" == "refs/heads/$PUBLICATION_BRANCH" ]]; then
+            on_publication_branch=true
+          fi
           {
+            printf 'on-publication-branch=%s\n' "$on_publication_branch"
             printf 'image-namespace=%s\n' "${IMAGE_NAMESPACE:-ghcr.io/${GITHUB_REPOSITORY_OWNER,,}}"
             printf 'build-cache-repo=ghcr.io/%s-buildcache\n' "${GITHUB_REPOSITORY,,}"
           } >>"$GITHUB_OUTPUT"
@@ -219,7 +227,7 @@ jobs:
     # PRs build only (sign=false → no cosign/syft/OIDC).
     needs: [image-coordinates]
     if: >-
-      github.event_name != 'push' || github.ref_type == 'tag' || github.ref == format('refs/heads/{0}', vars.FORGE_CI_PRERELEASE_BRANCH || 'main')
+      github.event_name != 'push' || github.ref_type == 'tag' || needs.image-coordinates.outputs.on-publication-branch == 'true'
     permissions:
       contents: read
       id-token: write
@@ -232,7 +240,7 @@ jobs:
       # that sign-reproducible-release.sh requires for non-pre tags).
       # The pre-release branch signs because its -pre tag skips the
       # reproducibility comparison.
-      sign: ${{ github.event_name != 'pull_request' && github.ref_type != 'tag' && vars.FORGE_CI_COSIGN_TRANSPARENCY != 'none' }}
+      sign: ${{ needs.image-coordinates.outputs.on-publication-branch == 'true' && (github.event_name == 'schedule' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)) && vars.FORGE_CI_COSIGN_TRANSPARENCY != 'none' }}
 
   # The runtime images' platforms, declared once in RUNTIME_PLATFORMS and
   # selected by the RELEASE_PLATFORMS repository variable: unset builds both
@@ -278,7 +286,9 @@ jobs:
     name: Publish (${{ matrix.name }} - linux/${{ matrix.arch }})
     needs: [image-coordinates, verify, build-cli, platforms]
     if: >-
-      github.event_name == 'schedule' || github.event_name == 'push' || github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.publish)
+      (github.event_name == 'release' && github.ref_type == 'tag') ||
+      (needs.image-coordinates.outputs.on-publication-branch == 'true' &&
+      (github.event_name == 'schedule' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)))
     # GitHub's hosted runner label for the leg's architecture.
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-26.04-arm' || 'ubuntu-26.04' }}
     strategy:
@@ -494,7 +504,9 @@ jobs:
     name: Publish Manifest (${{ matrix.name }})
     needs: [image-coordinates, publish-arch, build-cli, platforms]
     if: >-
-      github.event_name == 'schedule' || github.event_name == 'push' || github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == format('refs/heads/{0}', vars.FORGE_CI_PRERELEASE_BRANCH || 'main'))
+      (github.event_name == 'release' && github.ref_type == 'tag') ||
+      (needs.image-coordinates.outputs.on-publication-branch == 'true' &&
+      (github.event_name == 'schedule' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)))
     runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
@@ -574,8 +586,8 @@ jobs:
           FLAVOR: latest=false
           TAG_RULES: |
             type=raw,value=weekly,enable=${{ github.event_name == 'schedule' }}
-            type=raw,value=v0.90.0-pre,enable=${{ (github.event_name == 'workflow_dispatch' && inputs.publish) || github.ref == format('refs/heads/{0}', vars.FORGE_CI_PRERELEASE_BRANCH || 'main') }}
-            type=raw,value=v0.90.0-pre-${{ steps.stamp.outputs.value }},enable=${{ (github.event_name == 'workflow_dispatch' && inputs.publish) || github.ref == format('refs/heads/{0}', vars.FORGE_CI_PRERELEASE_BRANCH || 'main') }}
+            type=raw,value=v0.90.0-pre,enable=${{ needs.image-coordinates.outputs.on-publication-branch == 'true' }}
+            type=raw,value=v0.90.0-pre-${{ steps.stamp.outputs.value }},enable=${{ needs.image-coordinates.outputs.on-publication-branch == 'true' }}
             type=ref,event=branch
             type=sha,prefix=sha-,enable=${{ github.event_name != 'schedule' && github.ref_type != 'tag' }}
             type=semver,pattern=v{{version}},enable=${{ github.ref_type == 'tag' }}
@@ -659,9 +671,9 @@ jobs:
   # channel serves people who download the CLI and verify it with cosign.
   publish-cli:
     name: Publish CLI (pre-release)
-    needs: [build-cli, publish-merge]
+    needs: [image-coordinates, build-cli, publish-merge]
     if: >-
-      vars.FORGE_CI_COSIGN_TRANSPARENCY != 'none' && github.ref == format('refs/heads/{0}', vars.FORGE_CI_PRERELEASE_BRANCH || 'main') && (github.event_name == 'schedule' || (github.event_name == 'push' && github.ref_type != 'tag') || (github.event_name == 'workflow_dispatch' && inputs.publish && github.ref_type != 'tag'))
+      vars.FORGE_CI_COSIGN_TRANSPARENCY != 'none' && needs.image-coordinates.outputs.on-publication-branch == 'true' && (github.event_name == 'schedule' || (github.event_name == 'push' && github.ref_type != 'tag') || (github.event_name == 'workflow_dispatch' && inputs.publish && github.ref_type != 'tag'))
     concurrency:
       group: self-runtime-cli-v0.90.0-pre
       cancel-in-progress: false

@@ -12,6 +12,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/adapters/cosign"
 	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
+	"github.com/diggsweden/forge-ci/internal/cli/cienv"
 	"github.com/diggsweden/forge-ci/internal/cli/signflags"
 	domainrelease "github.com/diggsweden/forge-ci/internal/domain/release"
 )
@@ -22,6 +23,7 @@ func runtimePublicationSignCmd() *cli.Command {
 		Description: "Run from the downloaded evidence directory containing image.json, sboms.sha256, sbom-<arch>.json and per-architecture metadata. All native SBOMs and the exact index are validated before the first signing mutation; no SBOM is generated here.",
 		Flags: append(append(append(signerImageSourceFlags(), multiarchImageParamFlags()...), signflags.Cosign(signflags.CosignOpts{MethodNote: cosignMethodNoteGPG})...),
 			multiarchImageArchsFlag(),
+			runtimePublicationBranchFlag(),
 			&cli.StringFlag{Name: flagFlavor, Required: true, Usage: "product runtime target recorded in the source provenance"},
 		),
 		Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -32,6 +34,7 @@ func runtimePublicationSignCmd() *cli.Command {
 
 			endpoints := signflags.ReadEndpoints(cmd)
 			prov := provenanceFromEnv("")
+			prov.Ref = cienv.ProvenanceFullRef()
 			prov.Flavor = cmd.String(flagFlavor)
 
 			return withReleaseImageDockerConfig(cmd.String(flagAuthFile), func() error {
@@ -39,7 +42,8 @@ func runtimePublicationSignCmd() *cli.Command {
 					cosign.ForKeyRef(cmd.String("key"), "DOCKER_CONFIG"),
 					ociregistry.WithAuthFile(cmd.String(flagAuthFile)), os.Stderr,
 					appcontainer.RuntimePublicationSignInput{
-						Manifest: runtimeManifestInput(cmd),
+						PublicationBranch: cmd.String("publication-branch"),
+						Manifest:          runtimeManifestInput(cmd),
 						Signing: appcontainer.SignImageInput{
 							Method: method, KeyRef: cmd.String("key"), OIDCIssuer: cmd.String("oidc-issuer"),
 							FulcioURL: endpoints.FulcioURL, RekorURL: endpoints.RekorURL, TrustedRootPath: endpoints.TrustedRootPath,

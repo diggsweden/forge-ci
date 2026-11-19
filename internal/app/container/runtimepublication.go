@@ -22,6 +22,7 @@ import (
 // RuntimePublicationInput binds a product roster file to source and CI coordinates.
 type RuntimePublicationInput struct {
 	RosterFile, PlatformMatrix, Namespace, SourceSHA, CheckedOutSHA, RunID, Ref string
+	PublicationBranch                                                           string
 }
 
 // PlanRuntimePublication owns bounded source reads, strict decoding and output
@@ -177,7 +178,7 @@ func loadRuntimePublicationPlan(ctx context.Context, in RuntimePublicationInput)
 
 	return domaincontainer.PlanRuntimePublication(domaincontainer.RuntimePublicationInput{
 		Images: images, Architectures: archs, Namespace: in.Namespace, SourceSHA: in.SourceSHA,
-		CheckedOutSHA: in.CheckedOutSHA, RunID: in.RunID, Ref: in.Ref,
+		CheckedOutSHA: in.CheckedOutSHA, RunID: in.RunID, Ref: in.Ref, PublicationBranch: in.PublicationBranch,
 	})
 }
 

@@ -34,7 +34,7 @@ func TestRuntimePublicationBarriersAndSigningBoundary(t *testing.T) {
 	require.Contains(t, jobNeeds(runtimeWorkflow.jobs["smoke"]), "request-smoke-runner")
 	require.Contains(t, jobNeeds(runtimeWorkflow.jobs["request-smoke-runner"]), "collect")
 
-	require.Equal(t, "${{ needs.coordinates.result == 'success' && forgejo.ref == 'refs/heads/main' }}", scalarString(mappingValue(runtimeWorkflow.jobs["plan"].node, "if")))
+	require.Equal(t, "${{ needs.coordinates.result == 'success' }}", scalarString(mappingValue(runtimeWorkflow.jobs["plan"].node, "if")))
 
 	for name, target := range runtimeWorkflow.jobs {
 		text := target.node.String()
@@ -144,11 +144,38 @@ func TestRuntimePublicationPreflightAdmitsOnlyPinnedBuildImages(t *testing.T) {
 	}
 }
 
+func TestRuntimePublicationPreflightExplainsBranchRefusals(t *testing.T) {
+	t.Parallel()
+	script := preflightScript(t, ".forgejo/workflows/runtime-images.yml")
+	for _, tc := range []struct{ branch, ref, message string }{
+		{"master", "refs/heads/master", ""},
+		{"master", "refs/heads/main", "run publication from master"},
+		{"main", "refs/tags/main", "run publication from main"},
+		{"main", "refs/heads/Main", "run publication from main"},
+		{"release/stable", "refs/heads/release/stable", ""},
+		{"topic..other", "refs/heads/topic..other", "publication-branch must be a valid Git branch name"},
+	} {
+		t.Run(tc.branch+"/"+tc.ref, func(t *testing.T) {
+			t.Parallel()
+			ok, output, stderr := runPreflightWithStderr(t, script, exampleRepository, exampleSigner,
+				"RUNTIME_PUBLICATION_BRANCH="+tc.branch, "PUBLICATION_REF="+tc.ref)
+			if tc.message == "" {
+				require.True(t, ok, stderr)
+				require.NotEmpty(t, output)
+				return
+			}
+			require.False(t, ok)
+			require.Empty(t, output)
+			require.Contains(t, stderr, tc.message)
+		})
+	}
+}
+
 func TestRuntimePublicationPromotionDelegatesCoordinatesAndStatus(t *testing.T) {
 	t.Parallel()
 
 	w := loadWorkflow(t, ".forgejo/workflows/runtime-images.yml")
-	step, ok := w.findStep("Verify signatures and reject a stale main before promotion")
+	step, ok := w.findStep("Verify signatures and confirm the publication branch head")
 	require.True(t, ok)
 	literal, ok := mappingValue(step, "run").(*ast.LiteralNode)
 	require.True(t, ok)

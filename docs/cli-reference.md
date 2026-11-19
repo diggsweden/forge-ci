@@ -2544,7 +2544,8 @@ download and validate native candidate metadata before emitting the smoke matrix
 | `--source-sha` | expected full product source commit (required) | string | `""` | n/a |
 | `--checked-out-sha` | observed checkout commit (required) | string | `""` | n/a |
 | `--run-id` | numeric run-attempt identity, for example 123-1 (required) | string | `""` | n/a |
-| `--publication-ref` | must be refs/heads/main (required) | string | `""` | n/a |
+| `--publication-ref` | full ref of the source being built (required) | string | `""` | n/a |
+| `--publication-branch` | protected publication branch selected by the reviewed caller | string | `"main"` | `$RUNTIME_PUBLICATION_BRANCH` |
 
 #### `forge-ci container runtime-publication download-digests`
 
@@ -2577,14 +2578,15 @@ validate the complete product roster and emit native build/image matrices
 | `--source-sha` | expected full product source commit (required) | string | `""` | n/a |
 | `--checked-out-sha` | observed checkout commit (required) | string | `""` | n/a |
 | `--run-id` | numeric run-attempt identity, for example 123-1 (required) | string | `""` | n/a |
-| `--publication-ref` | must be refs/heads/main (required) | string | `""` | n/a |
+| `--publication-ref` | full ref of the source being built (required) | string | `""` | n/a |
+| `--publication-branch` | protected publication branch selected by the reviewed caller | string | `"main"` | `$RUNTIME_PUBLICATION_BRANCH` |
 | `--target` | project one admitted target as JSON instead of emitting workflow matrices | string | `""` | n/a |
 | `--arch` | with target: require and select one declared native architecture | string | `""` | n/a |
 | `--metadata-root` | with target: validate all selected native metadata under this directory before emitting candidate refs | string | `""` | n/a |
 
 #### `forge-ci container runtime-publication promote`
 
-verify native signatures and current main before promoting the exact runtime index to its source tag
+verify native signatures and the publication branch head before promoting the exact runtime index
 
 ```
 Run from the downloaded evidence directory. Requires a provider with authenticated branch-head resolution (currently Forgejo). Writes published-ref.txt only after the destination serves the signed digest. No signing key is accepted.
@@ -2604,6 +2606,7 @@ Run from the downloaded evidence directory. Requires a provider with authenticat
 | `--cosign-public-key-path` | relative path to the trusted Cosign public key in the consumer checkout | string | `""` | `$COSIGN_PUBLIC_KEY_PATH` |
 | `--cosign-public-key-sha256` | expected sha256 digest of the trusted Cosign public key | string | `""` | `$COSIGN_PUBLIC_KEY_SHA256` |
 | `--archs` | newline-separated architectures to include | string | `"amd64\narm64"` | `$IMAGE_ARCHS` |
+| `--publication-branch` | protected publication branch selected by the reviewed caller | string | `"main"` | `$RUNTIME_PUBLICATION_BRANCH` |
 
 #### `forge-ci container runtime-publication sign`
 
@@ -2631,6 +2634,7 @@ Run from the downloaded evidence directory containing image.json, sboms.sha256, 
 | `--trusted-root` | trust material cosign verifies the new signature against, as produced by "cosign trusted-root create" (default: cosign's own). Required for a self-hosted CA: cosign verifies the certificate it was just issued and cannot learn a private root any other way. Forbidden for --method=kms. | string | `""` | `$SIGN_TRUSTED_ROOT` |
 | `--rekor-url` | transparency log for --method=sigstore (default: public Sigstore). Where to publish, not whether: see FORGE_CI_COSIGN_TRANSPARENCY for that. Forbidden for --method=kms. | string | `""` | `$SIGN_REKOR_URL` |
 | `--archs` | newline-separated architectures to include | string | `"amd64\narm64"` | `$IMAGE_ARCHS` |
+| `--publication-branch` | protected publication branch selected by the reviewed caller | string | `"main"` | `$RUNTIME_PUBLICATION_BRANCH` |
 | `--flavor` | product runtime target recorded in the source provenance (required) | string | `""` | n/a |
 
 #### `forge-ci container runtime-publication verify-cli`

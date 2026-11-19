@@ -13,6 +13,26 @@ it does not pin the runner environment or dependencies fetched during a job.
 Replace the pins in the snippets with the release you install, as
 [Which version to pin](README.md#documentation-index) describes.
 
+## Publication branch
+
+Test changes on a feature branch; publish from one reviewed, protected branch.
+The branch picker selects **what to run**, not **what is allowed to publish**.
+Configure credentials and branch protection in the forge: a workflow condition
+can reject a mistaken dispatch, but cannot protect credentials from someone
+who can change the workflow that receives them.
+
+| Forge | Where to set the branch | How to test without publishing |
+|---|---|---|
+| Forgejo | In the reviewed `runtime-images.yml` caller, set `with.publication-branch` to the protected branch, or omit it for `main`. Keep the caller's branch guard in sync. | Use a source build for CLI checks, or a disposable Forge Lab run for image testing. The runtime publisher is not a preview workflow. |
+| GitHub | Set the repository Actions variable `FORGE_CI_PRERELEASE_BRANCH` if the protected branch is not `main`. Published version releases remain a separate publication path. | Run **Self Runtime Container** from the branch with **Publish runtime container images** unchecked. |
+| GitLab | In the consuming release component, set `release-branch: master` to override the project's default branch. Releases still start from a protected release-request tag. | Use the project's merge-request or snapshot pipeline, not a release-request tag. |
+
+Forgejo rejects a wrong ref before planning, checks it again before signing,
+and verifies that the built commit is still the selected branch's head before
+promotion. These settings do not change which projects or languages can use
+the runtime images. A separate tooling publisher keeps its own reviewed
+publication branch and pinned Forge CI commit.
+
 ## Image roster
 
 Toolchain names identify their intended release line (e.g. `runtime-java-25`,
