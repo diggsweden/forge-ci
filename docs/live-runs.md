@@ -2569,6 +2569,15 @@ needed. No production repository or release is modified.
 
 ## Trying a consumer on GitHub
 
+For focused anonymous public-parent transport acceptance, run
+`just test-live-github-parent-pull <org-id>` inside Forge Lab's acknowledged
+hosted session with `--fixtures none`. It creates a public scratch repository,
+uses a checksum-pinned locally built CLI and the current parent-pull action,
+pulls a digest-pinned official BusyBox image, rejects a mismatched projection, and
+reads back the evidence artifact before exact-repository cleanup. This tests
+the action's transport contract, not producer-signature authentication or a
+complete base-image release. No registry credential is installed in the job.
+
 See [Invariants from native trials](#invariants-from-native-trials) for the
 rules behind source preservation, parallel isolation, revision forwarding
 and package acceptance.

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: CC0-1.0
 
-# workflow-call-secrets-contract: RELEASE_REGISTRY_TOKEN
+# workflow-call-secrets-contract: RELEASE_REGISTRY_TOKEN PARENT_REGISTRY_READ_TOKEN
 # (The platform rejects declared workflow_call.secrets, and test/forgejoguard
 #  holds this file to that. This comment is the authoritative,
 #  machine-readable owner instead; check-l3-isolation's sibling-mode
@@ -16,11 +16,9 @@
 #   plan          admits the caller's frozen plan as one cold root, or as
 #                 children that each build on parent-base-json and on nothing
 #                 else, before any build starts.
-#   fetch-inputs  children only: fetches the pinned parent with the registry
-#                 token, in a job that runs nothing of the caller's.
 #   build         one job per image and architecture, native to it. It builds
-#                 to an OCI layout, uploads nothing to a registry and holds no
-#                 secret.
+#                 to an OCI layout. Only the parent fetch step can read a
+#                 pull-only credential; no build job can publish or sign.
 #   publish       scans every architecture, refuses publication on a finding
 #                 the gate blocks, which enforce-vulnerabilities decides,
 #                 pushes the unsigned staging candidate and hands on the
@@ -86,6 +84,18 @@ on:
           Empty for a root. For a child stage, the one immediate parent of every image in it, as {"ref":"<digest-pinned ref>","input_id":"<ID>"}: the parent-base-json output of verify-base-container-images.yml called with expected-ref, never a value read from a build.
         type: string
         required: false
+        default: ''
+      parent-registry-repository:
+        description: Exact parent repository (host/path, without tag or digest) for authenticated pulls. Leave empty for anonymous pulls.
+        type: string
+        default: ''
+      parent-registry-user:
+        description: Username for PARENT_REGISTRY_READ_TOKEN. Use a short-lived credential scoped to pulling the parent repository, never the release publishing token.
+        type: string
+        default: ''
+      parent-registry-auth-origin:
+        description: Optional trusted HTTPS origin for a separate parent registry token service. Empty trusts only the parent registry origin.
+        type: string
         default: ''
       artifact-name:
         description: Namespace of this stage's artifacts. Use a distinct name for every stage of one run.
@@ -292,114 +302,10 @@ jobs:
   # Forgejo appends a row's values to the job's name, so "Build: base" reads
   # "Build: base (amd64, <image>)". Each reads the rest of its build from
   # builds-by-name.
-  fetch-inputs:
-    name: "Fetch: parent"
-    needs: [coordinates, plan]
-    if: ${{ needs.coordinates.result == 'success' && needs.plan.result == 'success' && inputs['parent-base-json'] != '' }}
-    runs-on: ${{ fromJSON(inputs[format('build-runs-on-linux-{0}', matrix.arch)]) }}
-    timeout-minutes: 45
-    strategy:
-      fail-fast: true
-      # Forgejo v3 artifact finalization walks every temporary chunk in a run.
-      # Concurrent finalizers can delete a chunk while another walks it (500).
-      max-parallel: 1
-      matrix: ${{ fromJSON(needs.plan.outputs.build-matrix) }}
-    defaults:
-      run:
-        shell: bash
-    env:
-      FORGE_CI_REPOSITORY_URL: ${{ needs.coordinates.outputs.helpers_repository }}
-    steps:
-      # No consumer checkout, Containerfile, build script or signing key enters
-      # this credential-holding job. Its only outputs are verified OCI bytes.
-      - name: Checkout layer helpers
-        env:
-          EXPECTED_HELPERS_SHA: ${{ inputs['forge-ci-sha'] }}
-        run: |
-          set -euo pipefail
-          if [[ ! "${EXPECTED_HELPERS_SHA}" =~ ^([0123456789abcdef]{40}|[0123456789abcdef]{64})$ ]]; then
-            echo "ERROR: forge-ci-sha must be a 40- or 64-character lowercase commit hex digest" >&2
-            exit 1
-          fi
-          # In the workspace, the one directory that survives a kaniko build,
-          # which replaces the job container's own filesystem.
-          helpers_dir="${GITHUB_WORKSPACE:?}/forge-ci-layer"
-          echo "HELPERS_DIR=${helpers_dir}" >>"${FORGEJO_ENV}"
-          git init --quiet "${helpers_dir}"
-          git -C "${helpers_dir}" remote add origin "${FORGE_CI_REPOSITORY_URL:?}"
-          # Direct unadvertised SHA fetches can be refused.
-          # Retry advertised branches/tags without assuming a default branch.
-          # Disable credential prompts, retain both failures for diagnostics,
-          # and verify the exact pin below with detach + rev-parse.
-          helpers_fetch_log=$(mktemp)
-          if ! GIT_TERMINAL_PROMPT=0 git -C "${helpers_dir}" -c protocol.version=2 fetch --quiet --no-tags --depth=1 --no-recurse-submodules origin "${EXPECTED_HELPERS_SHA}" 2>"${helpers_fetch_log}"; then
-            if ! GIT_TERMINAL_PROMPT=0 git -C "${helpers_dir}" -c protocol.version=2 fetch --quiet --no-recurse-submodules origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*' 2>>"${helpers_fetch_log}"; then
-              echo "ERROR: cannot fetch layer helpers ${EXPECTED_HELPERS_SHA} from $(git -C "${helpers_dir}" remote get-url origin)" >&2
-              echo "  (git may report 'could not read Username': this forge answers the same way for a repository that is absent and one this run cannot read, so it is not necessarily a missing credential)" >&2
-              cat -- "${helpers_fetch_log}" >&2
-              rm -f -- "${helpers_fetch_log}"
-              exit 1
-            fi
-          fi
-          rm -f -- "${helpers_fetch_log}"
-          git -C "${helpers_dir}" checkout --quiet --detach "${EXPECTED_HELPERS_SHA}"
-          actual_sha=$(git -C "${helpers_dir}" rev-parse HEAD)
-          if [ "${actual_sha}" != "${EXPECTED_HELPERS_SHA}" ]; then
-            echo "ERROR: helper checkout resolved to unexpected commit" >&2
-            echo "  expected: ${EXPECTED_HELPERS_SHA}" >&2
-            echo "  actual:   ${actual_sha}" >&2
-            exit 1
-          fi
-          # shellcheck source=.engine/bin/lib-forge-ci.sh
-          source "${helpers_dir}/.engine/bin/lib-forge-ci.sh"
-          fetch_forge_ci
-
-      - name: Fetch the pinned parent layout
-        env:
-          BUILD_JSON: ${{ toJSON(fromJSON(needs.plan.outputs.builds-by-name)[matrix.name][matrix.arch]) }}
-          IMAGE_NAME: ${{ matrix.name }}
-          IMAGE_ARCH: ${{ matrix.arch }}
-          IMAGE_REPOSITORY: ${{ inputs['image-repository'] }}
-          RELEASE_SHA: ${{ inputs['release-sha'] }}
-          REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
-          REGISTRY_USER: ${{ inputs['registry-user'] || vars.RELEASE_REGISTRY_USER }}
-        run: |
-          set -euo pipefail
-          registry_token="${REGISTRY_TOKEN:?the caller passes RELEASE_REGISTRY_TOKEN, which may read the parent}"
-          unset REGISTRY_TOKEN
-          # shellcheck source=.engine/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
-          cd "${GITHUB_WORKSPACE:?}"
-          auth_file=$(mktemp "${RUNNER_TEMP:?}/registry-input-auth.XXXXXX")
-          trap 'rm -f -- "${auth_file}"' EXIT
-          printf '%s' "${registry_token}" | run_forge_ci container login \
-            --registry "${IMAGE_REPOSITORY:?}" --server-url "${FORGEJO_SERVER:?}" --repository "${FORGEJO_REPO:?}" \
-            --registry-username "${REGISTRY_USER:-}" --registry-password-file - --auth-file "${auth_file}"
-          unset registry_token
-          run_forge_ci container release-images fetch-build-inputs \
-            --build-json "${BUILD_JSON:?}" --release-sha "${RELEASE_SHA:?}" \
-            --server-url "${FORGEJO_SERVER:?}" --repository "${FORGEJO_REPO:?}" \
-            --inputs-dir "registry-inputs/${IMAGE_NAME:?}-arch-${IMAGE_ARCH:?}" --auth-file "${auth_file}"
-
-      - name: Upload the parent layout
-        env:
-          BASE_ARTIFACT_NAMESPACE: ${{ inputs['artifact-name'] }}
-          IMAGE_NAME: ${{ matrix.name }}
-          IMAGE_ARCH: ${{ matrix.arch }}
-        run: |
-          set -euo pipefail
-          # shellcheck source=.engine/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
-          run_forge_ci artifact upload \
-            --name "${BASE_ARTIFACT_NAMESPACE:?}-inputs-${IMAGE_NAME:?}-${IMAGE_ARCH:?}" \
-            --dir "${GITHUB_WORKSPACE:?}/registry-inputs/" \
-            --retention-days 1 --if-no-files error --include-hidden
-
   build:
     name: "Build: base"
-    needs: [coordinates, plan, fetch-inputs]
-    # A root has no parent to fetch, so its fetch job is skipped.
-    if: ${{ always() && needs.coordinates.result == 'success' && needs.plan.result == 'success' && (needs.fetch-inputs.result == 'success' || (needs.fetch-inputs.result == 'skipped' && inputs['parent-base-json'] == '')) }}
+    needs: [coordinates, plan]
+    if: ${{ needs.coordinates.result == 'success' && needs.plan.result == 'success' }}
     # Each architecture builds on a runner of its own architecture: a build
     # runs the Containerfile's steps, and none may rely on CPU emulation.
     runs-on: ${{ fromJSON(inputs[format('build-runs-on-linux-{0}', matrix.arch)]) }}
@@ -460,6 +366,37 @@ jobs:
           source "${helpers_dir}/.engine/bin/lib-forge-ci.sh"
           fetch_forge_ci
 
+      # The builder is the organization's choice; this step prepares the one
+      # CI_IMAGE_BUILDER names, and admits the kaniko job image by its labels.
+      - name: Prepare the image builder
+        uses: ./forge-ci-layer/.forgejo/actions/setup-image-builder
+
+      - name: Fetch the parent by digest
+        if: ${{ inputs['parent-base-json'] != '' }}
+        env:
+          BUILD_JSON: ${{ toJSON(fromJSON(needs.plan.outputs.builds-by-name)[matrix.name][matrix.arch]) }}
+          PARENT_BASE_JSON: ${{ inputs['parent-base-json'] }}
+          IMAGE_NAME: ${{ matrix.name }}
+          IMAGE_ARCH: ${{ matrix.arch }}
+          RELEASE_SHA: ${{ inputs['release-sha'] }}
+          PARENT_REGISTRY_REPOSITORY: ${{ inputs['parent-registry-repository'] }}
+          PARENT_REGISTRY_USER: ${{ inputs['parent-registry-user'] }}
+          PARENT_REGISTRY_AUTH_ORIGIN: ${{ inputs['parent-registry-auth-origin'] }}
+          PARENT_REGISTRY_READ_TOKEN: ${{ secrets.PARENT_REGISTRY_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          cd "${GITHUB_WORKSPACE:?}"
+          token="${PARENT_REGISTRY_READ_TOKEN:-}"
+          unset PARENT_REGISTRY_READ_TOKEN
+          # shellcheck source=.engine/bin/lib-parent-pull.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-parent-pull.sh"
+          forge_ci_pull_parent "$token" run_forge_ci container release-images fetch-build-inputs \
+            --build-json "${BUILD_JSON:?}" --parent-base-json "${PARENT_BASE_JSON:?}" --release-sha "${RELEASE_SHA:?}" \
+            --server-url "${FORGEJO_SERVER:?}" --repository "${FORGEJO_REPO:?}" \
+            --inputs-dir "registry-inputs/${IMAGE_NAME:?}-arch-${IMAGE_ARCH:?}"
+
       - name: Checkout release commit
         env:
           CHECKOUT_REF: ${{ inputs['release-sha'] }}
@@ -474,25 +411,6 @@ jobs:
             --ref "${CHECKOUT_REF:?}" \
             --depth 1 \
             --path source
-
-      # The builder is the organization's choice; this step prepares the one
-      # CI_IMAGE_BUILDER names, and admits the kaniko job image by its labels.
-      - name: Prepare the image builder
-        uses: ./forge-ci-layer/.forgejo/actions/setup-image-builder
-
-      - name: Download the parent layout
-        if: ${{ inputs['parent-base-json'] != '' }}
-        env:
-          BASE_ARTIFACT_NAMESPACE: ${{ inputs['artifact-name'] }}
-          IMAGE_NAME: ${{ matrix.name }}
-          IMAGE_ARCH: ${{ matrix.arch }}
-        run: |
-          set -euo pipefail
-          # shellcheck source=.engine/bin/lib-forge-ci.sh
-          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
-          run_forge_ci artifact download \
-            --name "${BASE_ARTIFACT_NAMESPACE:?}-inputs-${IMAGE_NAME:?}-${IMAGE_ARCH:?}" \
-            --dir "${GITHUB_WORKSPACE:?}/registry-inputs"
 
       # No registry write and no secret: the layout waits for publish, which
       # uploads only after every architecture is built and scanned.

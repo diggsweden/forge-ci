@@ -55,7 +55,7 @@ func coordinateWorkflows() map[string]coordinateContract {
 		".forgejo/workflows/promote-base-container-images.yml": {"forge-ci-sha", 1, false},
 		".forgejo/workflows/verify-base-container-images.yml":  {"forge-ci-sha", 1, false},
 		".forgejo/workflows/release-images.yml":                {"forge-ci-sha", 5, true},
-		".forgejo/workflows/base-images.yml":                   {"forge-ci-sha", 4, true},
+		baseImagesWorkflow:                                     {"forge-ci-sha", 3, true},
 		".forgejo/workflows/snapshot-images.yml":               {"forge-ci-sha", 7, true},
 		".forgejo/workflows/runtime-images.yml":                {"forge-ci-sha", 9, false},
 	}
@@ -332,7 +332,8 @@ func assertCoordinateConsumerJob(t *testing.T, relative string, contract coordin
 	}
 
 	// A builder job runs the job image the coordinates job validated, and
-	// holds no secret: it runs the caller's Containerfile.
+	// holds no secret when it runs the caller's Containerfile. The separate
+	// base-image guard constrains the pull-only credential to the fetch step.
 	if contract.builder {
 		if snapshotToolchainJob(relative, name) {
 			assertSnapshotProducerImageLookup(t, target.containerImage())
@@ -340,7 +341,7 @@ func assertCoordinateConsumerJob(t *testing.T, relative string, contract coordin
 			t.Errorf("%s: job %s runs container %q, want the validated %q", relative, name, image, builderJobImage)
 		}
 
-		if anyString(target.node, secretsWord.MatchString) {
+		if relative != baseImagesWorkflow && anyString(target.node, secretsWord.MatchString) {
 			t.Errorf("%s: builder job %s mentions secrets", relative, name)
 		}
 

@@ -17,7 +17,6 @@ import (
 	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
 	appbaseimages "github.com/diggsweden/forge-ci/internal/app/baseimages"
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
-	"github.com/diggsweden/forge-ci/internal/cli/regflags"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
 )
@@ -49,7 +48,11 @@ func childBaseGroup() *cli.Command {
 }
 
 func parentBaseFlag() cli.Flag {
-	return &cli.StringFlag{Name: flagParentBaseJSON, Required: true, Usage: "explicit caller-verified immediate parent as {ref: digest-pinned-ref, input_id: opaque-sha256-ID}; not producer authentication"}
+	return parentBaseProjectionFlag(true)
+}
+
+func parentBaseProjectionFlag(required bool) cli.Flag {
+	return &cli.StringFlag{Name: flagParentBaseJSON, Required: required, Usage: "explicit caller-verified immediate parent as {ref: digest-pinned-ref, input_id: opaque-sha256-ID}; not producer authentication"}
 }
 
 func childBaseParent(cmd *cli.Command) (appbaseimages.BaseImageParent, error) {
@@ -81,8 +84,7 @@ func readChildBasePlanFile(cmd *cli.Command) (pipeline.ReleaseImagesPlan, error)
 }
 
 // childBaseFetchCmd fetches the parent of every build of the stage in one
-// call, for a layer that runs one credentialed job a stage instead of one a
-// build: release-images fetch-build-inputs once per planned build.
+// call, for layers that schedule a stage instead of one job per build.
 func childBaseFetchCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "fetch",
@@ -90,15 +92,18 @@ func childBaseFetchCmd() *cli.Command {
 		Description: `Admits the plan against --parent-base-json, then fetches each build's
 registry inputs into <inputs-dir>/<name>-arch-<arch>, the directory child-base
 build --inputs-dir reads. --inputs-dir must not hold a build's directory yet.`,
-		Flags: append(releaseImagesJobFlags(), parentBaseFlag(),
-			regflags.AuthFile(regflags.AuthFileOpts{Usage: "required explicit registry auth file that may read the parent"}),
+		Flags: append(append(releaseImagesJobFlags(), registryPullFlags()...), parentBaseFlag(),
 			&cli.StringFlag{Name: flagInputsDir, Required: true, Usage: "relative run-scoped directory the builds' inputs are fetched under"}),
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			if cmd.String(flagAuthFile) == "" || !filepath.IsLocal(cmd.String(flagInputsDir)) {
-				return fmt.Errorf("the parent fetch requires --auth-file and a safe relative --inputs-dir: %w", errs.ErrUsage)
+			if !filepath.IsLocal(cmd.String(flagInputsDir)) {
+				return fmt.Errorf("the parent fetch requires a safe relative --inputs-dir: %w", errs.ErrUsage)
 			}
 
 			plan, err := readChildBasePlanFile(cmd)
+			if err != nil {
+				return err
+			}
+			registry, err := registryForInputPull(cmd, plan.Builds)
 			if err != nil {
 				return err
 			}
@@ -108,7 +113,7 @@ build --inputs-dir reads. --inputs-dir must not hold a build's directory yet.`,
 				input.AuthFile = cmd.String(flagAuthFile)
 
 				directory := filepath.Join(cmd.String(flagInputsDir), build.Name+"-arch-"+build.Arch)
-				if err := appcontainer.FetchReleaseBuildInputs(ctx, ociregistry.WithAuthFile(input.AuthFile), os.Stderr, input, build.RegistryInputs, directory); err != nil {
+				if err := appcontainer.FetchReleaseBuildInputs(ctx, registry, os.Stderr, input, build.RegistryInputs, directory); err != nil {
 					return err
 				}
 			}

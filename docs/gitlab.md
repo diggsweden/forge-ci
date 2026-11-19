@@ -951,18 +951,34 @@ See the [base-images example](../examples/base-images/README.md).
 
 A release with `base-stages` needs `base-plan` and `builder-job-image`;
 `Check: release plan` refuses the release otherwise, before anything runs.
-Either image builder can build a child stage: its build job holds no
-registry credential and starts from the parent `Base: parent` verified,
-which Buildah imports into its store and kaniko reads from its base-image
-cache.
+Either image builder can build a child stage. The builder pulls the verified
+parent directly by digest before building; no OCI input layout travels as an
+artifact. Buildah imports the layout into its store and kaniko reads it from
+its base-image cache.
+
+Public parent pulls are anonymous. Before upgrading a private base graph,
+set `PARENT_REGISTRY_USER` and `PARENT_REGISTRY_READ_TOKEN` as protected
+project variables scoped exactly to `release/parent-pull`, not
+`release/registry/*`. Mask the token and use a short-lived registry credential
+with `read_registry` only, scoped to the publication project. Never use the
+publication token here. If the registry challenges at a separate token host,
+set `PARENT_REGISTRY_AUTH_ORIGIN` in that same environment to the verified
+HTTPS origin (for GitLab's registry this may be the GitLab web origin).
+The repository comes from the verified parent projection. The fetch requires
+verified HTTPS and fails without falling back to CI artifacts or another token.
+Use this only on trusted build runners with trusted release code. GitLab
+injects the pull token into the child build job; removing it from the build
+command's environment is not isolation from other code in that job. If the
+runner or release code cannot be trusted with a pull token, do not enable
+private parent pulls there.
 
 Each stage is these jobs, named after it, in the `build` stage:
 
 | Job | Image, runner | Holds | Does |
 |---|---|---|---|
 | `Base: plan <stage>` | job image, `runner-tags` | no release secret | Runs `base-plan` at the release commit and admits what it prints as one stage. A child's plan takes its parent from the hand-off of the parent's promotion. |
-| `Base: parent <stage>` (child only) | signer | `RELEASE_REGISTRY_TOKEN` | Verifies the promoted parent digest again against the pinned Cosign key, then fetches it for the build. Runs nothing of the project's. |
-| `Base: build <stage>` | `builder-job-image`, `build-runner-tags-linux-amd64` | no release secret | Builds every image of the stage to an OCI layout, a child from the bytes the parent job fetched. |
+| `Base: parent <stage>` (child only) | signer | `RELEASE_REGISTRY_TOKEN` | Verifies the promoted parent digest again against the pinned Cosign key. Hands off only the verified digest and input ID. |
+| `Base: build <stage>` | `builder-job-image`, `build-runner-tags-linux-amd64` | optional pull-only token, child only | Pulls the verified parent by digest before building, then produces OCI output layouts. |
 | `Base: publish <stage>` | job image, `signer-runner-tags` | `RELEASE_REGISTRY_TOKEN` | Scans the layouts and pushes unsigned `staging-` candidates. Runs nothing of the project's. The job image must carry Syft. |
 | `Base: sign and promote <stage>` | signer | the Cosign key, `RELEASE_REGISTRY_TOKEN` | Signs the candidates and their SBOM and provenance, verifies each against the pinned key and the declared inputs, then moves the final tags. Hands each flavor's `{"ref":...,"input_id":...}` on. |
 

@@ -26,8 +26,10 @@ import (
 	"maps"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/docker/cli/cli/config"
@@ -57,6 +59,7 @@ const unknownPlatform = "unknown"
 type Adapter struct {
 	AuthFile    string
 	boundAuth   authn.Authenticator
+	pullAuth    *repositoryPullAuth
 	anonymous   bool
 	insecure    bool
 	explicitTLS bool
@@ -73,6 +76,34 @@ func NewAnonymous() *Adapter { return &Adapter{anonymous: true} }
 // config file instead of the process-default keychain. An empty path is the
 // default keychain, so a caller passes its --auth-file value as it is.
 func WithAuthFile(path string) *Adapter { return &Adapter{AuthFile: path} }
+
+// WithRepositoryPullCredentials uses only the supplied credential, and only
+// for the exact parent repository. All requests require verified HTTPS;
+// credentials may reach only the registry and an explicitly trusted token
+// service. The registry must enforce pull-only scope.
+func WithRepositoryPullCredentials(repository, username, password, authOrigin string) (*Adapter, error) {
+	ref, err := name.NewRepository(repository, name.StrictValidation)
+	if err != nil {
+		return nil, fmt.Errorf("invalid parent-registry-repository: %w", errs.ErrInvalidConfig)
+	}
+
+	registryURL := &url.URL{Scheme: "https", Host: ref.RegistryStr()}
+	trusted := []string{httpsAuthority(registryURL)}
+	if authOrigin != "" {
+		u, err := url.Parse(authOrigin)
+		if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil ||
+			(u.Path != "" && u.EscapedPath() != "/") || u.ForceQuery || u.RawQuery != "" || strings.Contains(authOrigin, "#") {
+			return nil, fmt.Errorf("parent-registry-auth-origin must be an HTTPS origin without userinfo, path, query or fragment: %w", errs.ErrInvalidConfig)
+		}
+		trusted = append(trusted, httpsAuthority(u))
+	}
+
+	return &Adapter{explicitTLS: true, pullAuth: &repositoryPullAuth{
+		repository: ref.Name(),
+		auth:       &authn.Basic{Username: username, Password: password},
+		trusted:    trusted,
+	}}, nil
+}
 
 // ImagePublication binds one destination and resolves its credential before
 // a builder can replace the filesystem. Push and read-back never reopen the
@@ -667,11 +698,10 @@ func layoutImage(dir string) (v1.Image, error) {
 	return img, nil
 }
 
-// parse resolves a reference, marking it insecure (plain HTTP) when it targets
-// a loopback host (see the package doc).
+// parse allows HTTP for loopback only when verified TLS was not required.
 func (a *Adapter) parse(ref string) (name.Reference, error) {
 	var opts []name.Option
-	if a.insecure || loopbackRef(ref) {
+	if a.insecure || !a.explicitTLS && loopbackRef(ref) {
 		opts = append(opts, name.Insecure)
 	}
 
@@ -693,7 +723,11 @@ func (a *Adapter) craneOpts(ctx context.Context, refs ...string) []crane.Option 
 	}
 
 	if a.explicitTLS && !a.insecure {
-		opts = append(opts, crane.WithTransport(verifiedRegistryTransport{base: remote.DefaultTransport}))
+		verified := verifiedRegistryTransport{base: remote.DefaultTransport}
+		if a.pullAuth != nil {
+			verified.trustedAuth = a.pullAuth.trusted
+		}
+		opts = append(opts, crane.WithTransport(verified))
 	}
 
 	if a.insecure || !a.explicitTLS && allLoopback(refs) {
@@ -705,17 +739,40 @@ func (a *Adapter) craneOpts(ctx context.Context, refs ...string) []crane.Option 
 
 // The name library normally permits HTTP fallback for loopback registries.
 // An explicit --tls-verify=true must not inherit that compatibility exception.
-type verifiedRegistryTransport struct{ base http.RoundTripper }
+type verifiedRegistryTransport struct {
+	base        http.RoundTripper
+	trustedAuth []string // nil preserves the existing explicit-TLS-only policy
+}
 
 func (transport verifiedRegistryTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	if request.URL.Scheme != "https" {
 		return nil, fmt.Errorf("registry TLS verification forbids HTTP: %w", errs.ErrValidation)
 	}
+	// OAuth refresh can carry a credential in a POST body instead of a header.
+	read := request.Method == http.MethodGet || request.Method == http.MethodHead
+	if transport.trustedAuth != nil && (!read || len(request.Header.Values("Authorization")) != 0) {
+		authority := httpsAuthority(request.URL)
+		if !slices.Contains(transport.trustedAuth, authority) {
+			return nil, fmt.Errorf("refusing registry credentials for an untrusted HTTPS origin: %w", errs.ErrValidation)
+		}
+	}
 
 	return transport.base.RoundTrip(request)
 }
 
+func httpsAuthority(u *url.URL) string {
+	port := u.Port()
+	if port == "" {
+		port = "443"
+	}
+	return net.JoinHostPort(strings.ToLower(u.Hostname()), port)
+}
+
 func (a *Adapter) keychain() authn.Keychain {
+	if a.pullAuth != nil {
+		return a.pullAuth
+	}
+
 	if a.anonymous {
 		return authn.NewMultiKeychain()
 	}
@@ -725,6 +782,20 @@ func (a *Adapter) keychain() authn.Keychain {
 	}
 
 	return authFileKeychain{path: a.AuthFile}
+}
+
+type repositoryPullAuth struct {
+	repository string
+	auth       authn.Authenticator
+	trusted    []string
+}
+
+func (k *repositoryPullAuth) Resolve(target authn.Resource) (authn.Authenticator, error) {
+	if target.String() != k.repository {
+		return nil, fmt.Errorf("registry input does not match the configured parent repository: %w", errs.ErrInvalidConfig)
+	}
+
+	return k.auth, nil
 }
 
 type authFileKeychain struct {

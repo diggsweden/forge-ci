@@ -146,7 +146,11 @@ func addBaseJobs(jobs map[string]any, stages []BaseStage) {
 		}
 
 		jobs[jobBasePlan+name] = map[string]any{keyExtends: ".forge-ci-release-base-plan", keyNeeds: planNeeds, keyScript: []string{"rc_base_plan" + arguments}}
-		jobs[jobBaseBuild+name] = map[string]any{keyExtends: ".forge-ci-release-base-build", keyNeeds: buildNeeds, keyScript: []string{"rc_base_build" + arguments}}
+		build := map[string]any{keyExtends: ".forge-ci-release-base-build", keyNeeds: buildNeeds, keyScript: []string{"rc_base_build" + arguments}}
+		if stage.Parent != "" {
+			build[keyExtends] = ".forge-ci-release-base-child-build"
+		}
+		jobs[jobBaseBuild+name] = build
 		jobs[jobBasePublish+name] = map[string]any{keyExtends: ".forge-ci-release-base-publish", keyNeeds: publishNeeds, keyScript: []string{"rc_base_publish" + arguments}}
 		jobs[jobBasePromote+name] = map[string]any{
 			keyExtends: ".forge-ci-release-base-promote", keyNeeds: []any{plan, need(jobBasePublish+name, true)},

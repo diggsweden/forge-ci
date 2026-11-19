@@ -414,7 +414,8 @@ func requestRelease(t *testing.T, scenario layerScenario, requester livetest.Req
 	distro = publishedDistroPackages(t, target, repo, distro)
 
 	scenario.logJobs(t, livetest.RunJobs(t, target, repo, run.ID), secrets...)
-	logArtifacts(t, run, livetest.RunArtifacts(t, target, repo, run.ID))
+	artifacts := livetest.RunArtifacts(t, target, repo, run.ID)
+	logArtifacts(t, run, artifacts)
 
 	if settings.InterruptAfter != "" {
 		requireInterrupted(t, target, repo, run, finalTag)
@@ -422,6 +423,13 @@ func requestRelease(t *testing.T, scenario layerScenario, requester livetest.Req
 		return run, ""
 	}
 
+	if settings.Variables["REQUIRE_DIRECT_PARENT"] == "true" {
+		for _, artifact := range artifacts {
+			if strings.HasPrefix(artifact.Name, "flavors-stage-inputs-") {
+				t.Errorf("direct parent pull left an unexpected handoff artifact: %s", artifact.Name)
+			}
+		}
+	}
 	return run, requireReleased(t, scenario, keys, settings, external, request, run, packages, distro)
 }
 

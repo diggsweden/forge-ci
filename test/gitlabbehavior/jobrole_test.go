@@ -56,7 +56,7 @@ var releaseJobRoles = map[string]string{
 	"Base: sign and promote base":        "base-promote",
 	"Base: plan tools+debug":             "base-plan",
 	"Base: parent tools+debug":           "base-parent",
-	"Base: build tools+debug":            "base-build",
+	"Base: build tools+debug":            "base-child-build",
 	"Base: publish tools+debug":          "base-publish",
 	"Base: sign and promote tools+debug": "base-promote",
 	"Base: all promoted":                 "base-gate",
@@ -126,7 +126,7 @@ func TestReleaseJobStartFollowsItsRoleNotItsName(t *testing.T) {
 						t.Errorf("home in %s, want %s", home, want)
 					}
 
-					inProject := (role == "image-build" || role == "export" || role == "base-build") && builder == "kaniko"
+					inProject := (role == "image-build" || role == "export" || role == "base-build" || role == "base-child-build") && builder == "kaniko"
 					if want := map[bool]string{true: "project", false: "/tmp"}[inProject]; work != want {
 						t.Errorf("work in %s, want %s", work, want)
 					}

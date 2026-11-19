@@ -15,6 +15,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
 	"github.com/diggsweden/forge-ci/internal/cli/regflags"
+	domaincontainer "github.com/diggsweden/forge-ci/internal/domain/container"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
 	"github.com/urfave/cli/v3"
@@ -59,24 +60,96 @@ func releaseImagesFetchBuildInputsCmd() *cli.Command {
 	return &cli.Command{
 		Name: "fetch-build-inputs", Usage: "fetch planned cache and pinned parents without running consumer code",
 		Description: "--inputs-dir must not exist yet; its missing parents are created, so a build's inputs/<name>-arch-<arch> can be named directly.",
-		Flags:       append(releaseBuildInputFlags(), regflags.AuthFile(regflags.AuthFileOpts{})),
+		Flags:       append(append(releaseBuildInputFlags(), registryPullFlags()...), parentBaseProjectionFlag(false)),
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			build, err := releaseBuildFromJSON(cmd)
 			if err != nil {
 				return err
 			}
+			if cmd.IsSet(flagParentBaseJSON) {
+				if err := validateBuildParentProjection(cmd, build); err != nil {
+					return err
+				}
+			}
 
 			input := releaseImageBuildInput(cmd, build)
 			input.AuthFile = cmd.String(flagAuthFile)
 
-			registry := ociregistry.NewAnonymous()
-			if input.AuthFile != "" {
-				registry = ociregistry.WithAuthFile(input.AuthFile)
+			registry, err := registryForInputPull(cmd, []pipeline.ReleaseImageBuild{build})
+			if err != nil {
+				return err
 			}
 
 			return appcontainer.FetchReleaseBuildInputs(ctx, registry, os.Stderr, input, build.RegistryInputs, cmd.String(flagInputsDir))
 		},
 	}
+}
+
+func validateBuildParentProjection(cmd *cli.Command, build pipeline.ReleaseImageBuild) error {
+	parent, err := childBaseParent(cmd)
+	if err != nil {
+		return err
+	}
+	if !domaincontainer.ValidSHA256Hex(parent.InputID) || len(build.RegistryInputs) != 1 || build.CacheTag != "" {
+		return fmt.Errorf("parent-base-json requires a valid input_id, exactly one planned parent and no architecture cache: %w", errs.ErrInvalidConfig)
+	}
+	for _, ref := range build.RegistryInputs {
+		if ref != parent.Ref {
+			return fmt.Errorf("planned digest-pinned parent does not match parent-base-json: %w", errs.ErrInvalidConfig)
+		}
+	}
+	return nil
+}
+
+func registryPullFlags() []cli.Flag {
+	return []cli.Flag{
+		regflags.AuthFile(regflags.AuthFileOpts{}),
+		&cli.StringFlag{Name: "parent-registry-repository", Usage: "exact repository authorized for the pull-only credential"},
+		&cli.StringFlag{Name: "parent-registry-auth-origin", Usage: "optional trusted HTTPS origin for a separate registry token service"},
+		&cli.StringFlag{Name: "parent-registry-user", Usage: "username for the pull-only credential"},
+		&cli.StringFlag{Name: "parent-registry-password-file", Usage: "pull-only credential file; - reads stdin"},
+	}
+}
+
+func registryForInputPull(cmd *cli.Command, builds []pipeline.ReleaseImageBuild) (*ociregistry.Adapter, error) {
+	authFile := cmd.String(flagAuthFile)
+	if !cmd.IsSet("parent-registry-repository") && !cmd.IsSet("parent-registry-user") && !cmd.IsSet("parent-registry-password-file") && !cmd.IsSet("parent-registry-auth-origin") {
+		if authFile != "" {
+			return ociregistry.WithAuthFile(authFile), nil
+		}
+		return ociregistry.NewAnonymous(), nil
+	}
+
+	repository, username, path := cmd.String("parent-registry-repository"), strings.TrimSpace(cmd.String("parent-registry-user")), cmd.String("parent-registry-password-file")
+	for _, build := range builds {
+		if err := validateParentPullScope(build, repository, username, path, authFile); err != nil {
+			return nil, err
+		}
+	}
+	password, err := regflags.FileOrEnv(path)
+	if err != nil {
+		return nil, err
+	}
+	if password == "" {
+		return nil, fmt.Errorf("parent-registry-password-file must supply a pull credential: %w", errs.ErrUsage)
+	}
+	return ociregistry.WithRepositoryPullCredentials(repository, username, password, cmd.String("parent-registry-auth-origin"))
+}
+
+func validateParentPullScope(build pipeline.ReleaseImageBuild, repository, username, path, authFile string) error {
+	if !domaincontainer.ValidRepositoryName(repository) || username == "" || path == "" || authFile != "" {
+		return fmt.Errorf("authenticated parent pulls require parent-registry-repository, parent-registry-user and parent-registry-password-file, without auth-file: %w", errs.ErrUsage)
+	}
+	if len(build.RegistryInputs) != 1 || build.CacheTag != "" {
+		return fmt.Errorf("a scoped pull requires exactly one parent and no architecture cache: %w", errs.ErrInvalidConfig)
+	}
+	for _, ref := range build.RegistryInputs {
+		if parent, _, _ := strings.Cut(ref, "@"); parent != repository {
+			return fmt.Errorf("registry input does not match parent-registry-repository: %w", errs.ErrInvalidConfig)
+		}
+	}
+
+	return nil
 }
 
 func releaseImagesBuildPreparedCmd() *cli.Command {

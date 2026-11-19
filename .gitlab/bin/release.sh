@@ -53,7 +53,7 @@ rc_release_context() {
   local name allowed role=${rc_job_role:?}
   for name in RELEASE_SSH_SIGNING_KEY RELEASE_COSIGN_PRIVATE_KEY RELEASE_COSIGN_PASSPHRASE \
     RELEASE_GPG_PRIVATE_KEY RELEASE_GPG_PASSPHRASE RELEASE_TOKEN RELEASE_REGISTRY_TOKEN \
-    RELEASE_PACKAGE_TOKEN \
+    RELEASE_PACKAGE_TOKEN PARENT_REGISTRY_READ_TOKEN \
     SSH_SIGNING_KEY COSIGN_KEY COSIGN_PASSWORD GPG_SIGNING_KEY GPG_SIGNING_PASSWORD GITLAB_TOKEN; do
     allowed=false
     case "${role}:${name}" in
@@ -65,7 +65,7 @@ rc_release_context() {
       publish-preflight:RELEASE_TOKEN | registry-preflight:RELEASE_REGISTRY_TOKEN | \
       signing-preflight:RELEASE_REGISTRY_TOKEN | sign:RELEASE_REGISTRY_TOKEN | \
       promote:RELEASE_REGISTRY_TOKEN | cleanup:RELEASE_REGISTRY_TOKEN | \
-      packages:RELEASE_PACKAGE_TOKEN | \
+      packages:RELEASE_PACKAGE_TOKEN | base-child-build:PARENT_REGISTRY_READ_TOKEN | \
       base-parent:RELEASE_REGISTRY_TOKEN | base-publish:RELEASE_REGISTRY_TOKEN | \
       base-promote:RELEASE_REGISTRY_TOKEN | base-promote:RELEASE_COSIGN_PRIVATE_KEY | \
       base-promote:RELEASE_COSIGN_PASSPHRASE | base-promote:RELEASE_GPG_PRIVATE_KEY | \
@@ -939,8 +939,9 @@ rc_publication_scope() {
 # The base stage: the policy's base-stages, a root and then the children of
 # a promoted parent, one stage at a time, as Forgejo's base-images.yml and
 # the signer workflows run one. "Base: plan" runs the project's planner and
-# "Base: build" its Containerfiles; neither holds a release secret. "Base:
-# parent", "Base: publish" and "Base: sign and promote" run nothing of the
+# "Base: build" its Containerfiles; only a child build may receive a separate
+# pull-only credential. "Base: parent", "Base: publish" and
+# "Base: sign and promote" run nothing of the
 # project's. The candidates go to the publication project's bases repository
 # with the release's registry credential: the job token writes no image
 # there, since every job that runs the project's code holds one.
@@ -1068,16 +1069,14 @@ rc_base_plan() {
 }
 
 # rc_base_parent authenticates the promoted parent again, by its digest and
-# against the pinned key, and fetches it for every build of the stage with
-# the release's registry credential. It runs nothing of the project's; the
-# build starts from these bytes and from this job's copy of the projection.
+# against the pinned key. It runs nothing of the project's and hands off
+# only the verified projection, never an OCI layout.
 rc_base_parent() {
   local stage=$1 parent=$2 handoff="${CI_PROJECT_DIR}/_release-base-parent" auth="${RC_WORK:?}/registry-auth.json" verified
   rc_base_stage "${stage}" "${parent}" || return
   rc_base_projection "${CI_PROJECT_DIR}/_release-base-promote/${parent}.json" || return
   rc_public_key || return
   rc_release_checkout || return
-  rc_base_stage_args "${stage}"
   cd -- "${RC_WORK}" || return
   rc_base_login "${auth}" || return
   verified=$(rc_engine container base-images authenticate-parent --auth-file "${auth}" \
@@ -1090,31 +1089,46 @@ rc_base_parent() {
     echo "ERROR: the parent ${parent} verified as another projection than its promotion handed on." >&2
     return 1
   fi
-  rc_engine container base-images child-base fetch "${rc_base_args[@]}" --parent-base-json "${rc_parent_json}" \
-    --inputs-dir registry-inputs --auth-file "${auth}" || return
-  rm -f -- "${auth}"
+  rm -f -- "${auth}" || return
   rc_new_handoff "${handoff}" || return
-  cp -R -- registry-inputs "${handoff}/registry-inputs" || return
   printf '%s\n' "${rc_parent_json}" >"${handoff}/parent-base.json"
 }
 
 # rc_base_build builds every image of the stage to an OCI layout, natively,
-# with no registry write and no release secret. The builder's environment is
+# with no registry write or signing credential. The builder's environment is
 # without the job token, which a RUN step can still read from the job
-# shell's /proc environment, as in the image build jobs. A child builds from
-# the parent job's bytes, on the projection that job wrote.
+# shell's /proc environment, as in the image build jobs. A child fetches its
+# parent directly by the digest in the verified projection.
 rc_base_build() {
   local stage=$1 parent=$2 handoff="${CI_PROJECT_DIR}/_release-base-build" created
+  local pull_token="${PARENT_REGISTRY_READ_TOKEN:-}"
+  unset PARENT_REGISTRY_READ_TOKEN
   rc_base_stage "${stage}" "${parent}" || return
+  if [ -n "${parent}" ]; then
+    rc_base_projection "${CI_PROJECT_DIR}/_release-base-parent/parent-base.json" || return
+  fi
   export CI_IMAGE_BUILDER="${RC_IMAGE_BUILDER?}" CI_IMAGE_BUILDER_JOB_IMAGE="${RC_BUILDER_JOB_IMAGE?}"
   rc_image_builder || return
   rc_release_checkout || return
   rc_base_stage_args "${stage}"
   created=$(TZ=UTC0 git show -s --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd HEAD)
-  if [ -n "${parent}" ]; then
-    rc_base_projection "${CI_PROJECT_DIR}/_release-base-parent/parent-base.json" || return
-    cp -R -- "${CI_PROJECT_DIR}/_release-base-parent/registry-inputs" "${RC_WORK}/registry-inputs" || return
-  fi
+  (
+    cd -- "${RC_WORK}" || exit
+    unset CI_JOB_TOKEN CI_REGISTRY_PASSWORD CI_DEPLOY_PASSWORD CI_DEPENDENCY_PROXY_PASSWORD
+    if [ -n "${parent}" ]; then
+      # The admitted publication repository is the parent repository in
+      # GitLab; an ambient variable must not select another one.
+      PARENT_REGISTRY_REPOSITORY=''
+      if [[ -n "${pull_token}" || -n "${PARENT_REGISTRY_USER:-}" || -n "${PARENT_REGISTRY_AUTH_ORIGIN:-}" ]]; then
+        PARENT_REGISTRY_REPOSITORY="${rc_base_repository:?}"
+      fi
+      # shellcheck source=.engine/bin/lib-parent-pull.sh
+      source "${RC_HELPERS_DIR:?}/.engine/bin/lib-parent-pull.sh" || exit
+      forge_ci_pull_parent "${pull_token}" rc_engine container base-images child-base fetch "${rc_base_args[@]}" \
+        --parent-base-json "${rc_parent_json}" --inputs-dir registry-inputs
+    fi
+  ) || return
+  unset pull_token
   (
     cd -- "${RC_WORK}" || exit
     # As the image builds: the job token is not handed to the engine.

@@ -231,9 +231,13 @@ jobs:
       image-repository: ${{ vars.BASE_IMAGE_REPOSITORY }}
       image-plan-json: ${{ needs.flavors-plan.outputs.plan }}
       parent-base-json: ${{ needs.base-parent.outputs.parent-base-json }}
+      parent-registry-repository: ${{ vars.PARENT_REGISTRY_REPOSITORY }}
+      parent-registry-user: ${{ vars.PARENT_REGISTRY_USER }}
+      parent-registry-auth-origin: ${{ vars.PARENT_REGISTRY_AUTH_ORIGIN }}
       artifact-name: flavors-stage
     secrets:
       RELEASE_REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
+      PARENT_REGISTRY_READ_TOKEN: ${{ secrets.PARENT_REGISTRY_READ_TOKEN }}
   flavors-sign:
     name: "Flavors: sign"
     needs: [prepare, flavors]

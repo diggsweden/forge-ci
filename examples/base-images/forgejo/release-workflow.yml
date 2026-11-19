@@ -26,6 +26,13 @@
 # BASE_IMAGE_REPOSITORY, the one repository the base images live in (for
 # example FORGE_HOST/OWNER/REPOSITORY-base), and the secrets used below.
 # RELEASE_REGISTRY_TOKEN may write packages of the repository's owner.
+# For a private parent, set PARENT_REGISTRY_REPOSITORY to the exact parent
+# repository (host/path), PARENT_REGISTRY_USER, and PARENT_REGISTRY_READ_TOKEN
+# to a short-lived pull-only credential. Configure these before repinning an
+# existing private-parent workflow: there is no artifact fallback. Leave all
+# three unset for anonymous pulls. Authenticated pulls require HTTPS.
+# If the registry's token service is on a different origin, also set
+# PARENT_REGISTRY_AUTH_ORIGIN to that verified HTTPS origin (no token path).
 #
 # Requires Forgejo v16+ (reusable-workflow job expansion, forgejo#8780).
 #
@@ -33,7 +40,7 @@
 #           -> flavors -> sign -> promote -> inventory -> sign-and-publish
 #
 # The root is one stage and its flavors, siblings on the one parent, are
-# another: base-images.yml builds a stage without a registry token and stages
+# another: base-images.yml pulls the parent before the build and stages
 # unsigned candidates, sign-container-images.yml signs them in the one job
 # that holds the key, and promote-base-container-images.yml verifies each
 # signature and lineage before the content-addressed final tags move.
@@ -231,9 +238,13 @@ jobs:
       image-repository: ${{ vars.BASE_IMAGE_REPOSITORY }}
       image-plan-json: ${{ needs.flavors-plan.outputs.plan }}
       parent-base-json: ${{ needs.base-parent.outputs.parent-base-json }}
+      parent-registry-repository: ${{ vars.PARENT_REGISTRY_REPOSITORY }}
+      parent-registry-user: ${{ vars.PARENT_REGISTRY_USER }}
+      parent-registry-auth-origin: ${{ vars.PARENT_REGISTRY_AUTH_ORIGIN }}
       artifact-name: flavors-stage
     secrets:
       RELEASE_REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
+      PARENT_REGISTRY_READ_TOKEN: ${{ secrets.PARENT_REGISTRY_READ_TOKEN }}
   flavors-sign:
     name: "Flavors: sign"
     needs: [prepare, flavors]

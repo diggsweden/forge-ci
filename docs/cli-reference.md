@@ -772,8 +772,12 @@ build --inputs-dir reads. --inputs-dir must not hold a build's directory yet.
 | `--server-url` | forge server URL the source labels name | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
 | `--repository` | owner/repo the source labels name | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
 | `--retry-attempts` | registry attempts | int | `3` | n/a |
+| `--auth-file` | Sets auth file. | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
+| `--parent-registry-repository` | exact repository authorized for the pull-only credential | string | `""` | n/a |
+| `--parent-registry-auth-origin` | optional trusted HTTPS origin for a separate registry token service | string | `""` | n/a |
+| `--parent-registry-user` | username for the pull-only credential | string | `""` | n/a |
+| `--parent-registry-password-file` | pull-only credential file; - reads stdin | string | `""` | n/a |
 | `--parent-base-json` | explicit caller-verified immediate parent as {ref: digest-pinned-ref, input_id: opaque-sha256-ID}; not producer authentication (required) | string | `""` | n/a |
-| `--auth-file` | required explicit registry auth file that may read the parent | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
 | `--inputs-dir` | relative run-scoped directory the builds' inputs are fetched under (required) | string | `""` | n/a |
 | `--stage-flavors` | the stage's flavors, separated by commas; a plan with another set of flavors is refused | string | `""` | n/a |
 
@@ -2269,6 +2273,11 @@ fetch planned cache and pinned parents without running consumer code
 | `--repository` | source owner/repository (required) | string | `""` | n/a |
 | `--inputs-dir` | relative run-scoped directory holding only fetched build inputs (required) | string | `""` | n/a |
 | `--auth-file` | Sets auth file. | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
+| `--parent-registry-repository` | exact repository authorized for the pull-only credential | string | `""` | n/a |
+| `--parent-registry-auth-origin` | optional trusted HTTPS origin for a separate registry token service | string | `""` | n/a |
+| `--parent-registry-user` | username for the pull-only credential | string | `""` | n/a |
+| `--parent-registry-password-file` | pull-only credential file; - reads stdin | string | `""` | n/a |
+| `--parent-base-json` | explicit caller-verified immediate parent as {ref: digest-pinned-ref, input_id: opaque-sha256-ID}; not producer authentication | string | `""` | n/a |
 
 #### `forge-ci container release-images import`
 

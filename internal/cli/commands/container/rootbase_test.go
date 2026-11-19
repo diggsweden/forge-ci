@@ -10,10 +10,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/name"
@@ -49,10 +51,46 @@ func nativeBaseCLIJourney(t *testing.T, child bool) {
 	env := testenv.New(t)
 	t.Chdir(env.Temp)
 
-	server := httptest.NewServer(registry.New(registry.Logger(log.New(io.Discard, "", 0))))
-	t.Cleanup(server.Close)
+	storage := registry.New(registry.Logger(log.New(io.Discard, "", 0)))
+	var cleartextRequests atomic.Int32
+	cleartext := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		cleartextRequests.Add(1)
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	t.Cleanup(cleartext.Close)
 
-	host := strings.TrimPrefix(server.URL, "http://")
+	var privateParent atomic.Bool
+	var redirectParent atomic.Bool
+	var insecureTokenExchange atomic.Bool
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if redirectParent.Load() && strings.HasPrefix(r.URL.Path, "/v2/shared/parent/") {
+			http.Redirect(w, r, cleartext.URL, http.StatusTemporaryRedirect)
+			return
+		}
+		if insecureTokenExchange.Load() && r.URL.Path == "/v2/" {
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm=%q`, cleartext.URL+"/token"))
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if privateParent.Load() && (r.URL.Path == "/v2/" || strings.HasPrefix(r.URL.Path, "/v2/shared/parent/")) {
+			user, password, _ := r.BasicAuth()
+			if user != "fixture-reader" || password != "fixture-read-token" {
+				w.Header().Set("WWW-Authenticate", `Basic realm="fixture registry"`)
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+		}
+		storage.ServeHTTP(w, r)
+	})
+	server := httptest.NewTLSServer(handler)
+	t.Cleanup(server.Close)
+	// Neither journey runs in parallel. Trust only the fixture certificate
+	// while exercising the production client's HTTPS enforcement.
+	defaultTransport := remote.DefaultTransport
+	remote.DefaultTransport = server.Client().Transport
+	t.Cleanup(func() { remote.DefaultTransport = defaultTransport })
+
+	host := strings.TrimPrefix(server.URL, "https://")
 	source, destination := host+"/build/bases", host+"/publication/bases"
 
 	id, revision := strings.Repeat("a", 64), strings.Repeat("b", 40)
@@ -282,8 +320,57 @@ fi`, captured, captured+".sbom", captured))
 
 		buildJSON, encodeErr := json.Marshal(plan.Builds[0])
 		require.NoError(t, encodeErr)
-		run("container", "release-images", "fetch-build-inputs", "--build-json", string(buildJSON), "--release-sha", checkoutSHA,
-			"--server-url", "https://source.example", "--repository", "org/app", "--inputs-dir", "inputs/root-arch-amd64", "--auth-file", "auth.json")
+		projection, encodeErr := json.Marshal(parent)
+		require.NoError(t, encodeErr)
+		fetch := []string{"container", "release-images", "fetch-build-inputs", "--build-json", string(buildJSON), "--release-sha", checkoutSHA,
+			"--server-url", "https://source.example", "--repository", "org/app", "--parent-base-json", string(projection)}
+		privateParent.Store(true)
+		testFetch := func(directory string, options ...string) error {
+			t.Helper()
+			args := append([]string{"forge-ci", "--provider", "forgejo"}, fetch...)
+			args = append(args, "--inputs-dir", directory)
+			return rootcli.New(rootcli.BuildInfo{Version: "dev"}).Run(t.Context(), append(args, options...))
+		}
+		for _, tc := range []struct {
+			name string
+			edit func([]string)
+		}{
+			{"missing-planned-parent", func(args []string) { args[slices.Index(args, "--build-json")+1] = `{}` }},
+			{"mismatched-parent-digest", func(args []string) {
+				index := slices.Index(args, "--parent-base-json") + 1
+				args[index] = strings.Replace(args[index], parent.Ref, host+"/shared/parent@sha256:"+strings.Repeat("f", 64), 1)
+			}},
+			{"invalid-parent-input-id", func(args []string) {
+				index := slices.Index(args, "--parent-base-json") + 1
+				args[index] = strings.Replace(args[index], parent.InputID, "invalid", 1)
+			}},
+		} {
+			args := append([]string{"forge-ci", "--provider", "forgejo"}, fetch...)
+			tc.edit(args)
+			require.ErrorIs(t, rootcli.New(rootcli.BuildInfo{Version: "dev"}).Run(t.Context(), append(args, "--inputs-dir", tc.name)), errs.ErrInvalidConfig)
+			require.NoDirExists(t, tc.name)
+		}
+		require.Error(t, testFetch("anonymous-refused"))
+		require.NoFileExists(t, "anonymous-refused/inputs.json")
+		write("pull-token", []byte("fixture-read-token\n"))
+		write("wrong-token", []byte("wrong\n"))
+		pull := func(repository, file string) []string {
+			return []string{"--parent-registry-repository", repository, "--parent-registry-user", "fixture-reader", "--parent-registry-password-file", file}
+		}
+		require.Error(t, testFetch("wrong-token-refused", pull(host+"/shared/parent", "wrong-token")...))
+		require.NoFileExists(t, "wrong-token-refused/inputs.json")
+		require.ErrorIs(t, testFetch("wrong-repo-refused", pull(host+"/shared/other", "absent-file")...), errs.ErrInvalidConfig)
+		require.NoDirExists(t, "wrong-repo-refused")
+		credential := pull(host+"/shared/parent", "pull-token")
+		redirectParent.Store(true)
+		require.ErrorContains(t, testFetch("redirect-refused", credential...), "registry TLS verification forbids HTTP")
+		redirectParent.Store(false)
+		insecureTokenExchange.Store(true)
+		require.ErrorContains(t, testFetch("insecure-exchange-refused", credential...), "use https")
+		insecureTokenExchange.Store(false)
+		require.Zero(t, cleartextRequests.Load(), "no registry or token request may reach the HTTP server")
+		run(append(append(slices.Clone(fetch), "--inputs-dir", "inputs/root-arch-amd64"), credential...)...)
+		privateParent.Store(false)
 
 		staged, readErr := os.ReadFile("stage-inputs/root-arch-amd64/PARENT_IMAGE/forge-ci-source-manifest.json")
 		require.NoError(t, readErr)

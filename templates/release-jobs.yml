@@ -212,7 +212,7 @@ stages: [check, prepare, build, images, sign, publish]
         want_user= own_home=true
         if [ '$[[ inputs.image-builder ]]' = kaniko ]; then work_parent=${CI_PROJECT_DIR:?}; fi
         ;;
-      image-build | base-build)
+      image-build | base-build | base-child-build)
         want_user=
         if [ '$[[ inputs.image-builder ]]' = kaniko ]; then work_parent=${CI_PROJECT_DIR:?}; fi
         ;;
@@ -734,8 +734,8 @@ stages: [check, prepare, build, images, sign, publish]
 # "Check: release plan" from these hidden jobs with the stage and its parent as
 # literals, as it names the family jobs. A root is four jobs and a child
 # five. "Base: plan" runs the project's planner and "Base: build" its
-# Containerfiles; they hold no release secret. The others run nothing of the
-# project's: "Base: parent" and "Base: publish" hold the release's registry
+# Containerfiles; only a child build may read a pull-only credential. The
+# others run nothing of the project's: "Base: parent" and "Base: publish" hold the release's registry
 # credential, and "Base: sign and promote" alone the key. A child's plan
 # needs the promotion of its parent's stage, so no child is planned or built
 # before its parent is promoted and verified against the pinned key.
@@ -778,6 +778,13 @@ stages: [check, prepare, build, images, sign, publish]
   artifacts:
     expire_in: 1 day
     paths: [_release-base-build/]
+.forge-ci-release-base-child-build:
+  extends: .forge-ci-release-base-build
+  before_script: [readonly rc_job_role=base-child-build, *forge-ci-release-start]
+  # Deliberately outside release/registry/* (publication authority).
+  environment:
+    name: release/parent-pull
+    action: prepare
 # In job-image, which carries the scanners, on the signer's runner: the job
 # holds the registry credential and no key.
 .forge-ci-release-base-publish:

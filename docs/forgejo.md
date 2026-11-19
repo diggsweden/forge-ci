@@ -1012,10 +1012,29 @@ A child is the same four steps with `parent-base-json` passed to
 `base-images.yml`. Its plan must name that parent three times, and the layer
 refuses a plan that names anything else: the one registry input of every
 build, the build argument that carries it, and `parent_base` in the image's
-`provenance-json`. The parent is fetched by digest in a job that holds the
-registry token and runs nothing of yours, and the build job starts from
-those bytes. The child's signed lineage then names its parent's digest and
+`provenance-json`. Each native build job fetches the parent by digest before
+building. No parent layout is uploaded as an Actions artifact. The child's
+signed lineage then names its parent's digest and
 input ID, and promotion holds the image's own statement to it.
+
+Public pulls are anonymous. For a private parent, set
+`parent-registry-repository` to its exact OCI repository (without a tag or
+digest), set `parent-registry-user`, and map `PARENT_REGISTRY_READ_TOKEN`
+on the child call. Use a short-lived credential with pull-only access to
+that repository; the registry must enforce that scope. Authenticated pulls
+require verified HTTPS, including token exchanges and redirects. Credentials
+are sent only to the registry origin by default. If the registry uses a
+separate token service, verify its origin independently and set
+`parent-registry-auth-origin` to it (for example `https://tokens.example`,
+without the token URL path). Do not
+reuse `RELEASE_REGISTRY_TOKEN`. Existing private-parent callers must add
+the new inputs and secret mapping before repinning; the old artifact route
+is gone. See the [Forgejo example](../examples/base-images/forgejo/release-workflow.yml).
+The fetch step keeps the credential in memory,
+does not pass it to the build command, and fails without falling back to a
+tag, another credential, or an artifact. Step scoping is not isolation from
+an untrusted runner. The output layouts, SBOMs, and release files still use
+the artifact store.
 
 A child builds with either builder, from the parent layout verified against
 the pinned digest, in the job that runs your Containerfile without a

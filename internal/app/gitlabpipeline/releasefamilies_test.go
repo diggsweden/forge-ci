@@ -176,6 +176,7 @@ func TestBaseStages_OrderChildrenAfterTheirParentsPromotion(t *testing.T) {
 		"needs": []any{need("Base: plan extra", true), need("Base: sign and promote tools+debug", true)},
 	}, jobs["Base: parent extra"])
 	assert.Equal(t, []any{need("Base: plan extra", true), need("Base: parent extra", true)}, jobs["Base: build extra"].(map[string]any)["needs"])
+	assert.Equal(t, ".forge-ci-release-base-child-build", jobs["Base: build extra"].(map[string]any)["extends"])
 	assert.Equal(t, []any{need("Base: plan base", true)}, jobs["Base: build base"].(map[string]any)["needs"])
 	assert.Equal(t, []any{need("Base: plan extra", true), need("Base: build extra", true), need("Base: parent extra", true)}, jobs["Base: publish extra"].(map[string]any)["needs"])
 	assert.Equal(t, []any{need("Base: plan base", true), need("Base: publish base", true)}, jobs["Base: sign and promote base"].(map[string]any)["needs"])

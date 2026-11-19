@@ -13,7 +13,6 @@ import (
 // fetched layouts in the build job, and the build that consumes them.
 var registryInputWorkflows = []struct{ file, download, build string }{
 	{releaseImagesWorkflow, `-inputs-${IMAGE_NAME:?}-${IMAGE_ARCH:?}`, "release-images build-prepared"},
-	{baseImagesWorkflow, `-inputs-${IMAGE_NAME:?}-${IMAGE_ARCH:?}`, "container base-images child-base build"},
 }
 
 const (
@@ -106,15 +105,6 @@ func TestPrivateRegistryFetchIsSeparatedFromConsumerBuild(t *testing.T) {
 					t.Error("prepared builds must preserve native builder identity checks")
 				}
 
-				if tc.file == baseImagesWorkflow && !strings.Contains(run, "--inputs-dir registry-inputs") {
-					t.Error("a child base must build from the fetched parent layout")
-				}
-
-				// A stage of siblings is a build job for each: the job builds
-				// its matrix image alone, from that image's own fetched parent.
-				if tc.file == baseImagesWorkflow && !strings.Contains(run, `--image "${IMAGE_NAME:?}"`) {
-					t.Error("a base build job must build only its own image of the stage")
-				}
 			}
 		}
 
@@ -128,9 +118,8 @@ func TestPrivateRegistryFetchIsSeparatedFromConsumerBuild(t *testing.T) {
 	}
 }
 
-// A base stage holds the registry token in two jobs alone, the parent fetch
-// and the publication, and neither a failed plan nor a failed build reaches
-// the next job: a root skips its fetch, so both conditions are written out.
+// A base stage separates pull and publication authority, and neither a
+// failed plan nor a failed build reaches the next job.
 func TestBaseImagesStageKeepsItsTokenAndItsGates(t *testing.T) {
 	t.Parallel()
 
@@ -138,8 +127,11 @@ func TestBaseImagesStageKeepsItsTokenAndItsGates(t *testing.T) {
 
 	for name, job := range workflow.jobs {
 		holds := anyString(job.node, secretsWord.MatchString)
-		if may := name == "fetch-inputs" || name == "publish"; holds != may {
+		if may := name == "build" || name == "publish"; holds != may {
 			t.Errorf("job %s: reads a secret = %t, want %t", name, holds, may)
+		}
+		if anyString(job.node, func(value string) bool { return strings.Contains(value, "secrets.RELEASE_REGISTRY_TOKEN") }) != (name == "publish") {
+			t.Errorf("job %s: only publish may read RELEASE_REGISTRY_TOKEN", name)
 		}
 	}
 
@@ -150,13 +142,60 @@ func TestBaseImagesStageKeepsItsTokenAndItsGates(t *testing.T) {
 	}
 
 	for job, want := range map[string]string{
-		"fetch-inputs": "${{ needs.coordinates.result == 'success' && needs.plan.result == 'success' && inputs['parent-base-json'] != '' }}",
-		"build":        "${{ always() && needs.coordinates.result == 'success' && needs.plan.result == 'success' && (needs.fetch-inputs.result == 'success' || (needs.fetch-inputs.result == 'skipped' && inputs['parent-base-json'] == '')) }}",
-		"publish":      "${{ always() && needs.coordinates.result == 'success' && needs.plan.result == 'success' && needs.build.result == 'success' }}",
+		"build":   "${{ needs.coordinates.result == 'success' && needs.plan.result == 'success' }}",
+		"publish": "${{ always() && needs.coordinates.result == 'success' && needs.plan.result == 'success' && needs.build.result == 'success' }}",
 	} {
-		if got := scalarString(mappingValue(workflow.jobs[job].node, "if")); got != want {
+		if got := strings.Join(strings.Fields(scalarString(mappingValue(workflow.jobs[job].node, "if"))), " "); got != want {
 			t.Errorf("job %s runs if %q, want %q", job, got, want)
 		}
+	}
+}
+
+func TestBaseImagesPullsParentWithoutArtifactHandoff(t *testing.T) {
+	t.Parallel()
+
+	workflow := loadWorkflow(t, baseImagesWorkflow)
+	if _, exists := workflow.jobs["fetch-inputs"]; exists {
+		t.Fatal("parent layouts must not pass through an artifact job")
+	}
+
+	fetch, build, secretRefs := -1, -1, 0
+	anyString(workflow.jobs["build"].node, func(value string) bool {
+		if secretsWord.MatchString(value) {
+			secretRefs++
+		}
+		return false
+	})
+	if secretRefs != 1 {
+		t.Fatal("the build job may reference only one secret")
+	}
+	for i, step := range workflow.jobs["build"].steps() {
+		run := scalarString(mappingValue(step, "run"))
+		switch {
+		case strings.Contains(run, "release-images fetch-build-inputs"):
+			fetch = i
+			env := mappingValue(step, "env")
+			if scalarString(mappingValue(step, "if")) != "${{ inputs['parent-base-json'] != '' }}" ||
+				scalarString(mappingValue(env, "PARENT_REGISTRY_READ_TOKEN")) != "${{ secrets.PARENT_REGISTRY_READ_TOKEN }}" ||
+				!strings.Contains(run, "unset PARENT_REGISTRY_READ_TOKEN") ||
+				!strings.Contains(run, `.engine/bin/lib-parent-pull.sh"`) ||
+				!strings.Contains(run, `forge_ci_pull_parent "$token" run_forge_ci`) ||
+				!strings.Contains(run, `--parent-base-json "${PARENT_BASE_JSON:?}"`) ||
+				strings.Contains(run, "--auth-file") || mappingValue(step, "continue-on-error") != nil {
+				t.Fatal("the parent pull must be scoped, confined to this step and fail closed")
+			}
+		case strings.Contains(run, "artifact download"):
+			t.Fatal("a base build must not restore a parent artifact")
+		case strings.Contains(run, "container base-images child-base build"):
+			build = i
+			if !strings.Contains(run, "--inputs-dir registry-inputs") || !strings.Contains(run, `--image "${IMAGE_NAME:?}"`) {
+				t.Fatal("each matrix build must consume its own checked parent layout")
+			}
+		}
+	}
+
+	if fetch < 0 || build <= fetch {
+		t.Fatal("the parent fetch must precede the checked child build")
 	}
 }
 

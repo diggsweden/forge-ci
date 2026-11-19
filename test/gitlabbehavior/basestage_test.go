@@ -45,7 +45,8 @@ func TestBaseStageJobsHoldOnlyTheSecretsOfTheirRole(t *testing.T) {
 	}{
 		{"Base: plan tools+debug", jobImage, ordinary, "", nil},
 		{"Base: parent tools+debug", signerImage, signer, "release/registry/promote", []string{registryToken}},
-		{"Base: build tools+debug", builderImage, build, "", nil},
+		{"Base: build base", builderImage, build, "", nil},
+		{"Base: build tools+debug", builderImage, build, "release/parent-pull", []string{"PARENT_REGISTRY_READ_TOKEN"}},
 		{"Base: publish tools+debug", jobImage, signer, "release/registry/promote", []string{registryToken}},
 		{"Base: sign and promote tools+debug", signerImage, signer, "release/registry/signing", []string{
 			registryToken, "RELEASE_COSIGN_PRIVATE_KEY", "RELEASE_COSIGN_PASSPHRASE", "RELEASE_GPG_PRIVATE_KEY", "RELEASE_GPG_PASSPHRASE",
@@ -69,7 +70,7 @@ func TestBaseStageJobsHoldOnlyTheSecretsOfTheirRole(t *testing.T) {
 
 			for _, secret := range []string{
 				"RELEASE_SSH_SIGNING_KEY", "RELEASE_COSIGN_PRIVATE_KEY", "RELEASE_COSIGN_PASSPHRASE", "RELEASE_GPG_PRIVATE_KEY",
-				"RELEASE_GPG_PASSPHRASE", "RELEASE_TOKEN", registryToken, "RELEASE_PACKAGE_TOKEN", "COSIGN_KEY", "GITLAB_TOKEN",
+				"RELEASE_GPG_PASSPHRASE", "RELEASE_TOKEN", registryToken, "RELEASE_PACKAGE_TOKEN", "COSIGN_KEY", "GITLAB_TOKEN", "PARENT_REGISTRY_READ_TOKEN",
 			} {
 				command := exec.CommandContext(commandContext(t), componentBash(t), "--noprofile", "--norc", "-c",
 					`source "$1"; rc_engine() { :; }; rc_release_context`, "release-guard", script)
@@ -114,12 +115,30 @@ rc_engine() {
   *'base-images authenticate-parent '*) cat -- "${CI_PROJECT_DIR}/_release-base-promote/base.json" ;;
   *'base-images select-parent '*) cat parent-bases.json ;;
   *'release validate-dist '*) mkdir -p verified-payload/dist && : >verified-payload/dist/base-images.json ;;
-  *'child-base fetch '*) mkdir registry-inputs ;;
+  *'child-base fetch '*)
+    if [[ "$*" = *'--parent-registry-password-file -'* ]]; then
+      [ "$(cat)" = read-only-fixture ] || return 1
+      printf 'scoped pull received credential on stdin\n' >>"${ENGINE_LOG}"
+    fi
+    mkdir registry-inputs
+    ;;
   *' publish '*) mkdir "${RC_WORK}/base-payload" ;;
   *' build '*) mkdir -p "${RC_WORK}/staged/tools-arch-amd64" ;;
   esac
 }
 `
+
+func TestChildBasePullUsesOnlyReadCredential(t *testing.T) {
+	t.Parallel()
+	output, calls, _, err := runBaseJob(t, "rc_base_build 'tools+debug' 'base'",
+		map[string]string{"_release-base-parent/parent-base.json": baseProjection},
+		"PARENT_REGISTRY_READ_TOKEN=read-only-fixture", "PARENT_REGISTRY_USER=reader", "PARENT_REGISTRY_AUTH_ORIGIN=https://gitlab.invalid")
+	if err != nil || !strings.Contains(calls, "scoped pull received credential on stdin") ||
+		!strings.Contains(calls, "--parent-registry-repository "+baseRepository+" --parent-registry-user reader --parent-registry-auth-origin https://gitlab.invalid") ||
+		strings.Contains(calls+output, "read-only-fixture") {
+		t.Fatalf("child build did not use the scoped stdin-only pull: %v\n%s\n%s", err, output, calls)
+	}
+}
 
 // runBaseJob runs a base job's function with the stubs, in a policy of a
 // root and two siblings on it, and returns its output, the engine's calls
@@ -134,6 +153,11 @@ func runBaseJob(t *testing.T, call string, given map[string]string, env ...strin
 	// The signing preflight is the script's own; only the toolchain check it
 	// starts is empty here.
 	given[filepath.Join(dir, "helpers", ".forgejo", "scripts", "verify-signer-toolchain.sh")] = ""
+	pullWrapper, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".engine", "bin", "lib-parent-pull.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	given[filepath.Join(dir, "helpers", ".engine", "bin", "lib-parent-pull.sh")] = string(pullWrapper)
 
 	for name, content := range given {
 		if !filepath.IsAbs(name) {
@@ -234,12 +258,12 @@ func TestBaseChildIsPlannedAndBuiltOnlyOnItsVerifiedParent(t *testing.T) {
 				" --stage-flavors tools,debug ", amd64BaseRunner,
 			},
 		},
-		"plan of the root":                   {call: "rc_base_plan 'base' ''", calls: []string{"planner: base " + baseRepository + " token=unset", "container base-images root-base plan --plan ", " --stage-flavors base ", amd64BaseRunner}},
-		"build before the parent is fetched": {call: "rc_base_build 'tools+debug' 'base'", refused: "must be a regular file"},
-		"build on the fetched parent": {
+		"plan of the root":                    {call: "rc_base_plan 'base' ''", calls: []string{"planner: base " + baseRepository + " token=unset", "container base-images root-base plan --plan ", " --stage-flavors base ", amd64BaseRunner}},
+		"build before the parent is verified": {call: "rc_base_build 'tools+debug' 'base'", refused: "must be a regular file"},
+		"build pulls on the verified projection alone": {
 			call:  "rc_base_build 'tools+debug' 'base'",
-			given: map[string]string{"_release-base-parent/parent-base.json": baseProjection, "_release-base-parent/registry-inputs/tools-arch-amd64/x": ""},
-			calls: []string{"container base-images child-base build --parent-base-json " + baseProjection + " --inputs-dir registry-inputs --plan ", " --stage-flavors tools,debug "},
+			given: map[string]string{"_release-base-parent/parent-base.json": baseProjection},
+			calls: []string{"container base-images child-base fetch --plan ", " --parent-base-json " + baseProjection + " --inputs-dir registry-inputs", "container base-images child-base build --parent-base-json " + baseProjection + " --inputs-dir registry-inputs --plan ", " --stage-flavors tools,debug "},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

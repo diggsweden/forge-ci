@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+# SPDX-License-Identifier: CC0-1.0
+name: Fetch a verified OCI parent
+description: Materialize one planned build's digest-pinned parent on the native build runner.
+inputs:
+  engine:
+    description: Path to the Forge CI binary already verified by trusted bootstrap.
+    required: true
+  build-json:
+    description: One admitted build entry, bound by its plan to the independently verified parent.
+    required: true
+  parent-base-json:
+    description: Caller-verified parent projection with its digest-pinned ref and input ID.
+    required: true
+  release-sha:
+    description: Prepared source commit.
+    required: true
+  inputs-dir:
+    description: Fresh, safe relative destination for the prepared build input.
+    required: true
+  parent-registry-repository:
+    description: Exact parent OCI repository for authenticated pulls; empty for anonymous pulls.
+  parent-registry-user:
+    description: Username for the separate pull-only credential.
+  parent-registry-auth-origin:
+    description: Optional independently trusted HTTPS origin of a separate token service.
+  parent-registry-read-token:
+    description: Optional short-lived, repository-scoped pull-only credential, never a publish token.
+runs:
+  using: composite
+  steps:
+    - name: Fetch the parent by digest
+      shell: bash
+      env:
+        ENGINE: ${{ inputs.engine }}
+        BUILD_JSON: ${{ inputs.build-json }}
+        PARENT_BASE_JSON: ${{ inputs.parent-base-json }}
+        RELEASE_SHA: ${{ inputs.release-sha }}
+        INPUTS_DIR: ${{ inputs.inputs-dir }}
+        PARENT_REGISTRY_REPOSITORY: ${{ inputs.parent-registry-repository }}
+        PARENT_REGISTRY_USER: ${{ inputs.parent-registry-user }}
+        PARENT_REGISTRY_AUTH_ORIGIN: ${{ inputs.parent-registry-auth-origin }}
+        PARENT_REGISTRY_READ_TOKEN: ${{ inputs.parent-registry-read-token }}
+      run: |
+        set -euo pipefail
+        token="${PARENT_REGISTRY_READ_TOKEN:-}"
+        unset PARENT_REGISTRY_READ_TOKEN
+        # shellcheck source=.engine/bin/lib-parent-pull.sh
+        source "${GITHUB_ACTION_PATH:?}/../../../.engine/bin/lib-parent-pull.sh"
+        forge_ci_pull_parent "$token" "${ENGINE:?}" container release-images fetch-build-inputs \
+          --build-json "${BUILD_JSON:?}" --parent-base-json "${PARENT_BASE_JSON:?}" --release-sha "${RELEASE_SHA:?}" \
+          --server-url "${GITHUB_SERVER_URL:?}" --repository "${GITHUB_REPOSITORY:?}" --inputs-dir "${INPUTS_DIR:?}"

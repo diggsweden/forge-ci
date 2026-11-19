@@ -1413,6 +1413,18 @@ test-live-github-minimal org token_file:
 test-live-github-release-api org:
     FORGE_CI_LIVE_GITHUB_ORG_ID="$1" GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go test -tags=live -count=1 -timeout=10m -v -run='^TestGitHubRelease_PrereleaseAPI$' ./test/live/githubconsumer/
 
+# Public hosted action acceptance using a checksum-pinned locally built CLI.
+[group('live')]
+test-live-github-parent-pull org:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    state=$(mktemp -d "${TMPDIR:-/tmp}/forge-ci-parent-pull.XXXXXXXX")
+    trap 'rm -rf -- "$state"' EXIT
+    GOTOOLCHAIN=local CGO_ENABLED=0 go build -trimpath -buildvcs=false -o "$state/forge-ci" ./cmd/forge-ci
+    FORGE_CI_LIVE_GITHUB_ORG_ID="$1" FORGE_CI_LIVE_BIN="$state/forge-ci" \
+        GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go test -tags=live -count=1 -buildvcs=false -timeout=25m -v \
+        -run='^TestGitHubPublicParentPull$' ./test/live/internal/livetest/
+
 # Real scheduling semantics plus the actual CLI binary-publication workflow.
 # Uses separate disposable repositories; no engine image build is needed.
 [arg('org', help='Numeric GitHub organization ID explicitly authorized by the Forge Lab session')]

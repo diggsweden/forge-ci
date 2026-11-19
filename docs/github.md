@@ -247,6 +247,29 @@ mode and no build secrets, so a nonempty `build-secrets` is refused. Context
 and Containerfile paths must be relative to the checked-out source. Both
 builders scan, publish and sign the same way, natively per architecture.
 
+### Pulling an OCI parent in a custom release workflow
+
+Use `.github/actions/fetch-parent-image` from a pinned Forge CI commit in
+the native build job, after trusted CLI bootstrap and before running consumer
+code. Pass the verified binary path as `engine`, the admitted matrix entry
+as `build-json`, the caller-verified `parent-base-json`, the `release-sha`, and
+a fresh relative `inputs-dir`. The release caller must verify the signature
+and input ID and admit the plan first. The action rejects a missing parent,
+a mismatched digest, or an architecture cache before pulling. Pass the
+resulting local layout directly to the prepared build; do not upload it as
+an Actions artifact.
+
+Public parents are pulled anonymously. For private parents, set
+`parent-registry-repository`, `parent-registry-user`, and pass a short-lived,
+scoped read-only secret as `parent-registry-read-token` on this step alone.
+Do not reuse the publishing token. If needed, set `parent-registry-auth-origin`
+to the independently trusted HTTPS origin of a separate token issuer.
+Private pulls require trusted runners and trusted release code. Step-scoped
+environment variables and unsetting a token are not isolation from other
+code in the same job.
+The action is a pull step for custom workflows; it does not add a base-image
+graph to GitHub's release orchestrator.
+
 ## Pull-request gates and lint
 
 `pullrequest-orchestrator.yml` plans the quality stage from its inputs and
