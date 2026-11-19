@@ -626,8 +626,8 @@ func (p *Provider) doRuntimeRequest(req *http.Request, token string) (*http.Resp
 
 	// Forgejo's artifact service can transiently return 500 on reads even
 	// after acknowledging an upload. Reuse bounded safe-read retries. Of the
-	// mutations, only finalization opts in to a replay after HTTP 500 (see
-	// finalizeArtifact); container creation and file uploads are sent once.
+	// mutations, file uploads and finalization opt in after HTTP 500 (see
+	// finalizeArtifact and putFile); container creation is sent once.
 	client.Transport = httpretry.WithInternalServerErrorRetries(client.Transport)
 
 	if token == "" {
@@ -890,8 +890,19 @@ func (p *Provider) putFile(ctx context.Context, creds runtimeUploadCreds, contai
 	ctx, transfer := httpretry.StartTransfer(ctx, httpretry.ClientTimeout())
 	defer transfer.Stop()
 
-	resp, err := p.runtimeSend(ctx, http.MethodPut, putURL, creds.token, "application/octet-stream", file, item.entry.Size, headers)
+	// Forgejo saveUploadChunkBase (routers/api/actions/artifacts_chunks.go)
+	// replaces the chunk keyed by run, artifact ID and byte range; uploadArtifact
+	// creates or gets the same artifact and overwrites its size metadata. Repeating
+	// this whole-file range repairs a partial save or a failed metadata update.
+	// Keep the opened file alive and use independent bounded readers so closing
+	// an attempt cannot close the source or leave the next attempt at EOF.
+	body := io.NewSectionReader(file, 0, item.entry.Size)
+	resp, err := p.runtimeSend(httpretry.ReplayRefusedMutation(ctx), http.MethodPut, putURL, creds.token, "application/octet-stream", body, item.entry.Size, headers)
 	if err != nil {
+		if errors.Is(err, errs.ErrDependencyUnavailable) {
+			return fmt.Errorf("upload %q: HTTP 500, retry policy stopped: %w", item.itemPath, err)
+		}
+
 		return fmt.Errorf("upload %q: %w", item.itemPath, transfer.Err(err))
 	}
 
@@ -977,6 +988,13 @@ func (p *Provider) runtimeSend(ctx context.Context, method, rawURL, token, conte
 	}
 
 	req.ContentLength = contentLength
+	if section, ok := body.(*io.SectionReader); ok {
+		reader, offset, length := section.Outer()
+		req.GetBody = func() (io.ReadCloser, error) {
+			return io.NopCloser(io.NewSectionReader(reader, offset, length)), nil
+		}
+	}
+
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/json;api-version="+runArtifactAPIVersion)
 

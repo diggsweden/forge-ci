@@ -154,8 +154,9 @@ type replayRefusedKey struct{}
 // RetryInternalServerErrors replays after an HTTP 500 answer, within the same
 // attempt and delay bounds as a safe read. Every other status, and a transport
 // failure, which leaves the server's outcome unknown, still ends the request at
-// once. Mark only a mutation the server is known to apply idempotently and to
-// refuse with HTTP 500 before changing anything.
+// once. Mark only a mutation known to be safe to repeat after an HTTP 500,
+// including when the server applied part or all of it before answering.
+// HTTP 500 alone does not prove that nothing changed on the server.
 func ReplayRefusedMutation(ctx context.Context) context.Context {
 	return context.WithValue(ctx, replayRefusedKey{}, true)
 }
@@ -344,8 +345,8 @@ func safeMethod(req *http.Request) bool {
 func (t *Transport) retryDecision(req *http.Request, resp *http.Response, err error) string {
 	if !safeMethod(req) {
 		// A mutation reaches this decision only when marked with
-		// ReplayRefusedMutation, and only an answered HTTP 500 is a refusal
-		// the caller vouched for; anything else may have been applied.
+		// ReplayRefusedMutation: the caller vouched for safe replay after an
+		// answered HTTP 500. Other outcomes remain terminal.
 		if err == nil && resp != nil && resp.StatusCode == http.StatusInternalServerError {
 			return "500 Internal Server Error"
 		}
