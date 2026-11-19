@@ -100,6 +100,75 @@ func TestSelfBuildIsTheOnlyUnprivilegedLocalEntryPoint(t *testing.T) {
 	}
 }
 
+func TestSelfReleaseExampleSeparatesBuildFromPublication(t *testing.T) {
+	t.Parallel()
+	const file = "examples/forgejo/self-release.yml"
+	root := loadDocument(t, file)
+	events := mappingValue(root, "on")
+	tags := sequenceValues(mappingValue(mappingValue(events, "push"), "tags"))
+	if len(mappingEntries(events)) != 1 || len(tags) != 1 || scalarString(tags[0]) != "release-request/v*" {
+		t.Fatal("self-release starts only from signed release-request tags")
+	}
+	jobs := loadWorkflow(t, file).jobs
+	const releaseTools = "go aqua:goreleaser/goreleaser aqua:anchore/syft yq"
+	for _, name := range []string{"candidate", "build"} {
+		found := false
+		for _, step := range jobs[name].steps() {
+			if !strings.Contains(scalarString(mappingValue(step, "uses")), "/.forgejo/actions/setup-toolchain@") {
+				continue
+			}
+			with := mappingValue(step, "with")
+			if scalarString(mappingValue(with, "tools")) != releaseTools || scalarString(mappingValue(with, "mise-locked")) != "true" {
+				t.Fatalf("%s must validate the complete locked release toolchain", name)
+			}
+			found = true
+		}
+		if !found {
+			t.Fatalf("%s must install the release toolchain", name)
+		}
+	}
+	if len(jobs) != 4 {
+		t.Fatal("candidate, preparation, build and publication must remain separate")
+	}
+	for _, name := range []string{"candidate", "build"} {
+		if job := jobs[name]; job.node == nil || strings.Contains(job.node.String(), "secrets.") {
+			t.Fatalf("%s must not receive release secrets", name)
+		}
+	}
+	for name, workflow := range map[string]string{"prepare": "prepare-release.yml", "sign-and-publish": "sign-and-publish-release.yml"} {
+		job := jobs[name].node
+		with := mappingValue(job, "with")
+		pin := scalarString(mappingValue(with, "forge-ci-sha"))
+		if pin != "PIN_FORGE_CI_SHA" || !strings.HasSuffix(scalarString(mappingValue(job, "uses")), "/.forgejo/workflows/"+workflow+"@"+pin) {
+			t.Fatalf("%s must use the matching reviewed engine and workflow pin", name)
+		}
+	}
+	with := mappingValue(jobs["prepare"].node, "with")
+	if scalarString(mappingValue(with, "bot-name")) != "${{ vars.RELEASE_BOT_NAME }}" ||
+		scalarString(mappingValue(with, "bot-email")) != "${{ vars.RELEASE_BOT_EMAIL }}" {
+		t.Fatal("self-release must pass the host's configured author identity")
+	}
+	steps := jobs["candidate"].steps()
+	if len(steps) == 0 || scalarString(mappingValue(steps[0], "name")) != "Check required release variables" {
+		t.Fatal("check release settings before candidate checkout")
+	}
+	for _, field := range []string{"RELEASE_BOT_NAME", "RELEASE_BOT_EMAIL", "RELEASE_GIT_HOST_KEY_FINGERPRINT"} {
+		if scalarString(mappingValue(mappingValue(steps[0], "env"), field)) != "${{ vars."+field+" }}" ||
+			!strings.Contains(mappingValue(steps[0], "run").String(), field) {
+			t.Fatalf("preflight must require %s", field)
+		}
+	}
+	if scalarString(mappingValue(with, "verify-release-request-signature")) != "true" ||
+		scalarString(mappingValue(with, "publish-container-images")) != "false" {
+		t.Fatal("the CLI release must verify its request and publish no images")
+	}
+	body := string(reporoot.ReadFile(t, file))
+	if !strings.Contains(body, ".release.disable = true | .checksum.disable = true | del(.signs)") ||
+		!strings.Contains(body, "--object-format sha1 --fetch-all-refs") {
+		t.Fatal("build from the prepared tagged checkout and disable the independent GoReleaser publisher")
+	}
+}
+
 func TestCallableOnlyRejectsEveryOtherTrigger(t *testing.T) {
 	t.Parallel()
 

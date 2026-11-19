@@ -8,34 +8,47 @@ on:
 concurrency:
   group: self-build-${{ forgejo.ref }}
   cancel-in-progress: true
+defaults:
+  run:
+    shell: bash
 jobs:
   go:
     runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     timeout-minutes: 30
-    # Administrator-selected native Go runtime, pinned by digest; see docs/testing.md.
+    # Source bootstrap needs Node for checkout, not a previously released forge-ci.
+    # Administrators may override this with an approved digest-pinned image.
     container:
-      image: ${{ vars.FORGE_CI_SELF_BUILD_IMAGE }}
+      image: ${{ vars.FORGE_CI_SELF_BUILD_IMAGE || 'mcr.microsoft.com/devcontainers/javascript-node@sha256:375f1ba34dab874ae487acb0b2bb3e9fd1b67fe3ea6e80c16e35713487f47c6a' }}
       options: --user 65532:65532
     env:
-      FORGE_CI_PROVIDER: forgejo
-      FORGEJO_SERVER: ${{ forgejo.server_url }}
-      FORGEJO_REPO: ${{ forgejo.repository }}
       GOTOOLCHAIN: local
       GOMAXPROCS: '2'
       GOFLAGS: -p=2
-      HOME: /home/nonroot
     steps:
+      - name: Prepare a private build home
+        shell: bash
+        run: |
+          printf 'HOME=%s\nGOMODCACHE=%s\nGOCACHE=%s\n' \
+            "$(mktemp -d)" "${RUNNER_TEMP:?}/forge-ci-self-build/go-mod" \
+            "${RUNNER_TEMP:?}/forge-ci-self-build/go-build" >>"${GITHUB_ENV:?}"
       - name: Checkout the event commit
-        env:
-          FORGEJO_TOKEN: ${{ forgejo.token }}
-          CHECKOUT_REF: ${{ forgejo.sha }}
-        run: forge-ci platform checkout --ref "${CHECKOUT_REF}"
+        uses: https://code.forgejo.org/actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - name: Install pinned test tools
         run: |
           set -euo pipefail
+          source scripts/bootstrap/install-mise.sh
+          install_mise
           mise trust .mise.toml
-          mise install aqua:casey/just aqua:koalaman/shellcheck
-          mise bin-paths aqua:casey/just aqua:koalaman/shellcheck >>"${GITHUB_PATH:?}"
+          mise install go aqua:casey/just aqua:koalaman/shellcheck
+          mise bin-paths go aqua:casey/just aqua:koalaman/shellcheck >>"${GITHUB_PATH:?}"
+      - name: Check the system tools used by test fixtures
+        run: |
+          if ! PATH=/usr/bin:/bin command -v jq >/dev/null; then
+            echo 'Set FORGE_CI_SELF_BUILD_IMAGE to a digest-pinned image with system jq in /usr/bin or /bin.' >&2
+            exit 1
+          fi
       - name: Build this checkout
         run: just build
       - name: Run unit tests

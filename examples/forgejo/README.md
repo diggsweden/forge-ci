@@ -31,6 +31,43 @@ digest as described in [Runtime images](../../docs/runtime-images.md#configurati
 consumer-pin matrix using that namespace and registry account. It never applies
 deletion. Copy either example into `.forgejo/workflows/` only after configuration.
 
+## Releasing a Forge CI mirror
+
+[`self-release.yml`](self-release.yml) is an opt-in caller for publishing Forge
+CI's own CLI archives on Forgejo. It composes the existing preparation,
+unsigned GoReleaser build, and signing/publication workflows. It does not
+change the root GoReleaser configuration or publish runtime images.
+
+Before copying it to `.forgejo/workflows/self-release.yml`:
+
+- Replace `FORGE_HOST`, `OWNER` and every `PIN_*` with your reviewed server,
+  repository, immutable engine commit, signer digest and public-key checksum.
+  The pinned engine's bootstrap packages and matching signer must already
+  be published and verified; releasing CLI archives does not publish them.
+- Protect the release branch, `release-request/*` and final `v*` tags. Review
+  the authorized request keys in `.forge-ci/allowed_signers`. The candidate
+  and build jobs execute repository code and must have no release secrets.
+- Configure `CI_RUNNER_LABEL`, `RELEASE_BOT_NAME`, `RELEASE_BOT_EMAIL`,
+  `RELEASE_GIT_HOST_KEY_FINGERPRINT` and, if needed, `RELEASE_GIT_URL`.
+  Supply the signing and publication secrets named in the caller, and
+  `COSIGN_PUBLIC_KEY` matching the pinned checksum.
+- Run the full development gate and a disposable consumer trial before
+  enabling production release requests. The candidate job checks the
+  release path; it is not a substitute for the development gate.
+- Generate, review and commit `mise.lock` for the native platforms used by
+  the candidate and build runners. Upstream does not ship this host-specific
+  lockfile. It must cover Go, GoReleaser, syft and yq at the versions in
+  `.mise.toml`, including their download URLs and checksums. Both jobs keep
+  `mise-locked: 'true'`; the candidate installs the full build tool set before
+  preparation can create the final tag. Do not generate the lock during a
+  release request or switch to an unlocked install to bypass a missing lock.
+
+Push a signed annotated `release-request/vX.Y.Z` at the reviewed head of the
+configured release branch. The preparation workflow creates the final tag.
+Read back the release files and signatures. If publication fails after tagging,
+use [failed-release recovery](../../docs/failed-release-recovery.md); never
+move a published tag. GitHub and GitLab keep their existing release routes.
+
 ## Before it runs
 
 The file carries placeholders, all literal so that `git grep` finds them:

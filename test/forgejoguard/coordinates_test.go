@@ -733,9 +733,9 @@ func TestLayerPinsNoSignerImage(t *testing.T) {
 				return err
 			}
 
-			// The kaniko bootstrap pins kaniko's own debug image, the one image
-			// no kaniko job can build; it is not a signer image.
-			if filepath.ToSlash(relative) == kanikoJobImageExample {
+			// These source bootstraps pin ordinary build images, not signers.
+			// The self-build is separately held to a secret-free job contract.
+			if filepath.ToSlash(relative) == kanikoJobImageExample || filepath.ToSlash(relative) == selfBuildWorkflow {
 				return nil
 			}
 

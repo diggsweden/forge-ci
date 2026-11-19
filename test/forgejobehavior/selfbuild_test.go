@@ -87,6 +87,19 @@ func TestSelfBuildJobsUseTheSameExistingCommands(t *testing.T) {
 	}
 }
 
+func TestForgejoSelfBuildBootstrapsWithoutPublishedEngine(t *testing.T) {
+	t.Parallel()
+	body := string(reporoot.ReadFile(t, ".forgejo/workflows/self-pullrequest.yml"))
+	if strings.Contains(body, "run: forge-ci ") || strings.Contains(body, "secrets.") {
+		t.Fatal("source bootstrap must not require a published engine or release secrets")
+	}
+	for _, required := range []string{"persist-credentials: false", "source scripts/bootstrap/install-mise.sh", "mise install go ", "$(mktemp -d)", "PATH=/usr/bin:/bin command -v jq"} {
+		if !strings.Contains(body, required) {
+			t.Fatalf("source bootstrap is missing %q", required)
+		}
+	}
+}
+
 func TestSelfBuildDispatchDoesNotLaunchTheFullGitHubGate(t *testing.T) {
 	t.Parallel()
 	var workflow struct {

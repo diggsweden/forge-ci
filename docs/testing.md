@@ -83,14 +83,17 @@ start a branch pipeline through GitLab's UI/API. GitHub's manual dispatch
 skips the additional PR jobs. The native job has a 30-minute total limit;
 the unit-test invocation has a 15-minute per-package limit.
 
-Forgejo and GitLab administrators must set `FORGE_CI_SELF_BUILD_IMAGE` to an
-approved digest-pinned native Go runtime containing the Go version in `go.mod`,
-GCC/libc for race tests, Bash, Git, jq and mise. Forgejo also needs the bundled
-`forge-ci` checkout command and `CI_RUNNER_LABEL` as a JSON array of native
-runner labels. There is no upstream image default. Just and ShellCheck are installed
-from the repository's `.mise.toml`; the job does not install the full lint
-toolchain. Native Go jobs use the runtime's nonroot user (65532:65532), including
-its writable home and workspace; permission-sensitive tests require ordinary
+GitLab administrators must set `FORGE_CI_SELF_BUILD_IMAGE` to an approved
+digest-pinned native Go runtime containing the Go version in `go.mod`,
+GCC/libc for race tests, Bash, Git, jq and mise. Forgejo bootstraps from source:
+its pinned default image supplies Node for checkout and the system tools, and
+the checked-out bootstrap installs pinned mise and Go. It needs no previously
+published Forge CI binary. Set `CI_RUNNER_LABEL` as a JSON array of native
+runner labels; optionally override `FORGE_CI_SELF_BUILD_IMAGE` with a reviewed
+digest-pinned image that includes Node, GCC/libc, Bash, Git and system jq in
+`/usr/bin` or `/bin`. Just and ShellCheck come from `.mise.toml`; neither job
+installs the full lint toolchain. Native Go jobs run as user 65532:65532 with
+a writable home and workspace; permission-sensitive tests require ordinary
 user semantics. Run untrusted PR/MR code only on isolated disposable runners without
 protected signing, publication or deployment credentials. A workflow file or
 a local test pass is not live acceptance; retain the real job logs and exact
