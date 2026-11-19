@@ -81,10 +81,9 @@ func TestPrepareSignerImageAvailability(t *testing.T) {
 		index[step.Name] = idx
 	}
 
-	if index["Check required secrets"] >= index[probe.Name] ||
-		index["Fetch engine binary"] >= index[probe.Name] ||
+	if index["Fetch engine binary"] >= index[probe.Name] ||
 		index[probe.Name] >= index["Checkout consumer repository at release request tag"] {
-		t.Fatal("availability must follow presence/bootstrap checks and precede consumer checkout")
+		t.Fatal("availability must follow bootstrap checks and precede consumer checkout")
 	}
 
 	for _, value := range probe.Env {

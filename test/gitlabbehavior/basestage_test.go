@@ -407,6 +407,12 @@ func TestReleasePlanPassesOnlyTheFlagsOfItsCommand(t *testing.T) {
 		"image-builder":                 "kaniko",
 	}
 	script := fmt.Sprint(gitlabrender.Jobs(t, "templates/release.yml", given)["Check: release plan"]["script"])
+	verified := strings.Index(script, "SIGNER_STRICT=1 verify_forge_ci")
+	author := strings.Index(script, `"${engine}" validate release-author --require-ssh-host-pin`)
+	checkout := strings.Index(script, `"${engine}" platform checkout`)
+	if verified < 0 || author <= verified || checkout <= author {
+		t.Fatal("check release author after bootstrap verification and before consumer checkout in the parent pipeline")
+	}
 
 	defined := map[string]bool{}
 

@@ -414,7 +414,7 @@ func TestPrepareReleaseVerifiesTheSigningExecutable(t *testing.T) {
 	}
 }
 
-// The reusable workflow's first step refuses a release when a secret needed by
+// The reusable workflow's settings job refuses a release when a secret needed by
 // an enabled feature group is empty, and names exactly the missing ones.
 func TestPrepareReleaseSecretPreflight(t *testing.T) {
 	t.Parallel()
@@ -424,14 +424,14 @@ func TestPrepareReleaseSecretPreflight(t *testing.T) {
 
 	var preflight *step
 
-	for i, step := range workflow.Jobs["render"].Steps {
+	for i, step := range workflow.Jobs["coordinates"].Steps {
 		if step.Name == "Check required secrets" {
-			preflight = &workflow.Jobs["render"].Steps[i]
+			preflight = &workflow.Jobs["coordinates"].Steps[i]
 		}
 	}
 
 	if preflight == nil {
-		t.Fatal("the render job has no secret preflight")
+		t.Fatal("the settings job has no secret preflight")
 	}
 	// Each SECRET_* carries presence, not the secret: the workflow sets it
 	// from a "!= ''" expression, which answers false for an unset secret, so

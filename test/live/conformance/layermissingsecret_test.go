@@ -48,7 +48,7 @@ func runLayerMissingSecret(t *testing.T, private bool) {
 	const (
 		workflow     = "layer-missing-secret"
 		absentSecret = "RELEASE_REGISTRY_TOKEN"
-		prepareJob   = "Prepare: changelog"
+		settingsJob  = "Check: release settings"
 	)
 
 	scenario := newLayerScenario(t, "layer-missing-secret", private, "sha1")
@@ -64,8 +64,7 @@ func runLayerMissingSecret(t *testing.T, private bool) {
 	run := livetest.WaitForLayerRun(t, target, repo, workflow, "push")
 	jobs := scenario.requireStatus(t, run, jobFailure)
 
-	// The called workflow's two jobs ran on the runner; the calling job has
-	// none and ends blocked or failed with the workflow it called.
+	// Only the settings job needs a runner to refuse the missing secret.
 	statuses := make(map[string]string, len(jobs))
 
 	for _, job := range jobs {
@@ -74,46 +73,46 @@ func runLayerMissingSecret(t *testing.T, private bool) {
 		// A job the failure withholds is judged by no runner having taken
 		// it: Forgejo names its state skipped, blocked or cancelled from run
 		// to run, and the calling job's state follows the same bookkeeping.
-		if job.Name == "Prepare: release commit and tag" && job.Started() {
-			t.Error("the signing job reached a runner after a missing secret")
+		if (job.Name == "Prepare: version plan" || job.Name == "Prepare: changelog" || job.Name == "Prepare: release commit and tag") && job.Started() {
+			t.Errorf("%s reached a runner after a missing secret", job.Name)
 		}
 	}
 
 	onRunner, wrappers := requireJobsOnRunner(t, jobs, run.ID, scenario.label)
-	if !slices.Contains(onRunner, prepareJob) || !slices.Contains(onRunner, "Check: release settings") ||
+	if !slices.Equal(onRunner, []string{settingsJob}) ||
 		!slices.Contains(wrappers, "prepare-release-missing-secret") {
-		t.Fatalf("the run's jobs are %v on the runner and %v without one, want the render and coordinate jobs under one caller", onRunner, wrappers)
+		t.Fatalf("the run's jobs are %v on the runner and %v without one, want only the settings job on a runner", onRunner, wrappers)
 	}
 
-	if statuses["Check: release settings"] != jobSuccess || statuses[prepareJob] != jobFailure {
-		t.Errorf("job statuses are %v, want the coordinate job successful and the prepare job failed", statuses)
+	if statuses[settingsJob] != jobFailure {
+		t.Errorf("job statuses are %v, want the settings job to fail", statuses)
 	}
 
 	var log string
 
 	for _, job := range jobs {
-		if job.Name == prepareJob {
+		if job.Name == settingsJob {
 			log = livetest.JobLog(t, target, repo, job)
 		}
 	}
 
 	if !strings.Contains(log, "ERROR: missing required secrets:") || !strings.Contains(log, absentSecret) {
-		t.Errorf("the prepare job's log does not say that %s is missing", absentSecret)
+		t.Errorf("the settings job's log does not say that %s is missing", absentSecret)
 	}
 
 	if named := otherReleaseSecret.FindString(log); named != "" || strings.Contains(log, "All required secrets are configured.") {
-		t.Errorf("the prepare job's log reports a secret the fixture passes as missing, or none as missing: %q", named)
+		t.Errorf("the settings job's log reports a secret the fixture passes as missing, or none as missing: %q", named)
 	}
 
 	if strings.Contains(log, "acceptance-present-not-a-credential") {
-		t.Error("the prepare job's log holds the value of a secret")
+		t.Error("the settings job's log holds the value of a secret")
 	}
 
 	// The steps that follow the check: fetching the layer's files, and the
 	// consumer's. A name in the log means the step started.
 	for _, later := range []string{"Checkout layer helpers at the caller's pin", "Checkout consumer repository at release request tag"} {
 		if strings.Contains(log, later) {
-			t.Errorf("the prepare job went on to %q after the secret check failed", later)
+			t.Errorf("the settings job went on to %q after the secret check failed", later)
 		}
 	}
 

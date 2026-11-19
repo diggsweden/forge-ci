@@ -603,6 +603,8 @@ jobs:
       sign-artifacts: ${{ fromJson(needs.parse-config.outputs['release-plan-json']).policy.sign_artifacts }}
       require-allowlisted-signer: ${{ fromJson(needs.parse-config.outputs['release-plan-json']).policy.require_allowlisted_signer }}
       branch: ${{ inputs.branch }}
+      bot-name: ${{ inputs['bot-name'] }}
+      bot-email: ${{ inputs['bot-email'] }}
       authorized-source-sha: ${{ github.sha }}
       # Cargo prerequisite validation checks Cargo.lock and `cargo --version`,
       # so it runs in the Rust runtime whenever Cargo artifacts (either mode)

@@ -6283,6 +6283,17 @@ EXAMPLE:
 | `--has-cargo-target` | the plan targets crates.io (enables Cargo prerequisites check) | bool | `false` | `$HAS_CARGO_TARGET` |
 | `--has-jvm-target` | the plan includes a Maven/Gradle/Gradle-Android artifact (enables JVM reproducibility check) | bool | `false` | `$HAS_JVM_TARGET` |
 
+### `forge-ci validate release-author`
+
+validate the release commit identity and, when required, the SSH host key pin without printing values
+
+| Flag | Description | Type | Default | Env vars |
+|------|-------------|------|---------|----------|
+| `--author-name` | release commit author name | string | `""` | `$COMMIT_AUTHOR_NAME` |
+| `--author-email` | bare release commit author email address | string | `""` | `$COMMIT_AUTHOR_EMAIL` |
+| `--require-ssh-host-pin` | also validate RELEASE_GIT_HOST_KEY_FINGERPRINT for an SSH push | bool | `false` | n/a |
+| `--host-key-fingerprint` | pinned SSH host key fingerprint | string | `""` | `$RELEASE_GIT_HOST_KEY_FINGERPRINT` |
+
 ### `forge-ci validate release-provider`
 
 refuse release workflows on provider instances their pinned actions do not support

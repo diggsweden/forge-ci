@@ -312,6 +312,10 @@ spec:
       fetch_forge_ci
       SIGNER_STRICT=1 verify_forge_ci
       engine="${HELPERS_ENGINE_VERIFIED}"
+      COMMIT_AUTHOR_NAME='$[[ inputs.bot-name ]]' \
+        COMMIT_AUTHOR_EMAIL='$[[ inputs.bot-email ]]' \
+        RELEASE_GIT_HOST_KEY_FINGERPRINT='$[[ inputs.release-git-host-key-fingerprint ]]' \
+        "${engine}" validate release-author --require-ssh-host-pin
       consumer_format=sha1
       if [ "${#CI_COMMIT_SHA}" -eq 64 ]; then consumer_format=sha256; fi
       "${engine}" platform checkout --workspace "${work}/consumer" --server-url "${RC_SERVER_URL}" \

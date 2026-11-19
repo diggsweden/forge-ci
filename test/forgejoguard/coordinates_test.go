@@ -184,7 +184,7 @@ func TestNoUnlistedWorkflowTakesACoordinateInput(t *testing.T) {
 	}
 }
 
-// A secret-free, container-free coordinates job validates the raw inputs, and
+// A container-free coordinates job validates the raw inputs without receiving secret values, and
 // every other job reads only its outputs, after it: no job may consume a raw
 // coordinate, run a signer container from anything but the validated image, or
 // start before the preflight finished.
@@ -231,7 +231,7 @@ func TestCoordinatesArePreflightedBeforeUse(t *testing.T) {
 }
 
 // assertCoordinatesJob checks that the coordinates job validates the raw
-// inputs on the host, without secrets, and exposes them as outputs.
+// inputs on the host, without secret values, and exposes them as outputs.
 func assertCoordinatesJob(t *testing.T, relative string, contract coordinateContract, parsed workflow, coordinates job) {
 	t.Helper()
 
@@ -241,7 +241,15 @@ func assertCoordinatesJob(t *testing.T, relative string, contract coordinateCont
 
 	requireWalkReaches(t, coordinates.node, "HELPERS_REPOSITORY_INPUT", relative+" coordinates")
 
-	if anyString(coordinates.node, secretsWord.MatchString) {
+	secretUse := secretsWord.MatchString
+	if relative == ".forgejo/workflows/prepare-release.yml" {
+		// This settings job may read presence booleans, never the values.
+		presence := regexp.MustCompile(`^\$\{\{ secrets\.RELEASE_[A-Z0-9_]+ != '' \}\}$`)
+		secretUse = func(value string) bool {
+			return secretReference.MatchString(value) && !presence.MatchString(value)
+		}
+	}
+	if anyString(coordinates.node, secretUse) {
 		t.Errorf("%s: the coordinates job references secrets", relative)
 	}
 
@@ -591,6 +599,29 @@ func TestCoordinatePreflightResolvesTheHelperRepository(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestReleaseAuthorPreflightRunsBeforeConsumerCheckout(t *testing.T) {
+	t.Parallel()
+
+	w := loadWorkflow(t, ".forgejo/workflows/prepare-release.yml")
+	if got := scalarString(mappingValue(w.jobs["render"].node, "if")); !waitsFor(w, "render", "plan") ||
+		got != "${{ needs.coordinates.result == 'success' && needs.plan.result == 'success' }}" {
+		t.Fatal("changelog must wait for release author validation in the plan job")
+	}
+	validated := false
+	for _, step := range w.jobs["plan"].steps() {
+		switch scalarString(mappingValue(step, "name")) {
+		case "Validate release author and SSH host pin":
+			validated = strings.Contains(mappingValue(step, "run").String(), "run_forge_ci validate release-author --require-ssh-host-pin")
+		case "Checkout consumer repository at release request tag":
+			if !validated {
+				t.Fatal("run shared release author validation before consumer checkout")
+			}
+			return
+		}
+	}
+	t.Fatal("version plan must check out the consumer")
 }
 
 func TestTrailingSlashServerURLResolvesTheHelperRepository(t *testing.T) {

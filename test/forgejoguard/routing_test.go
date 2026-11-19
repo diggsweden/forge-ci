@@ -203,19 +203,19 @@ func TestConsumerReleaseTemplateSuppliesSetupToolchainInputs(t *testing.T) {
 func TestPrepareReleaseChecksEverySecretBeforeCheckout(t *testing.T) {
 	t.Parallel()
 
-	prepare, ok := loadWorkflow(t, ".forgejo/workflows/prepare-release.yml").jobs["render"]
+	prepare, ok := loadWorkflow(t, ".forgejo/workflows/prepare-release.yml").jobs["coordinates"]
 	if !ok {
-		t.Fatal("prepare-release has no render job")
+		t.Fatal("prepare-release has no settings job")
 	}
 
 	steps := prepare.steps()
-	if len(steps) == 0 || scalarString(mappingValue(steps[0], "name")) != "Check required secrets" {
-		t.Fatal("the render job does not open with the required-secret check")
+	if len(steps) == 0 || scalarString(mappingValue(steps[len(steps)-1], "name")) != "Check required secrets" {
+		t.Fatal("the settings job must check required secrets before starting the release plan")
 	}
 
 	var checked []string
 
-	for _, entry := range mappingEntries(mappingValue(steps[0], "env")) {
+	for _, entry := range mappingEntries(mappingValue(steps[len(steps)-1], "env")) {
 		if name, found := strings.CutPrefix(scalarString(entry.Key), "SECRET_"); found {
 			checked = append(checked, name)
 		}

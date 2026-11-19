@@ -3,10 +3,7 @@
 
 package forgejoguard
 
-import (
-	"strings"
-	"testing"
-)
+import "testing"
 
 // A config hook can persist across steps. Only the job boundary separates
 // project-controlled rendering from the job that later receives the SSH key.
@@ -19,16 +16,12 @@ func TestPrepareReleaseIsolatesRenderingFromTheSigningJob(t *testing.T) {
 	}
 
 	render := parsed.jobs["render"]
-	for _, step := range render.steps() {
-		anyString(step, func(value string) bool {
-			if secretReference.MatchString(value) && !strings.HasSuffix(value, " != '' }}") {
-				t.Errorf("render job receives a secret value: %s", value)
-			}
-
-			return false
-		})
-	}
-
+	anyString(render.node, func(value string) bool {
+		if secretReference.MatchString(value) {
+			t.Errorf("render job references a secret: %s", value)
+		}
+		return false
+	})
 	prepare := parsed.jobs["prepare"]
 	if mentions(prepare.node, "inputs['changelog-") || mentions(prepare.node, "inputs['commit-body-config']") {
 		t.Error("the signing job must never evaluate a renderer config")

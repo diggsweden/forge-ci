@@ -51,6 +51,14 @@ on:
         description: "Typed config-plan-json emitted by config parse-artifacts."
         required: true
         type: string
+      bot-name:
+        description: "Release commit author name for Git SSH signing."
+        type: string
+        required: false
+      bot-email:
+        description: "Release commit author email for Git SSH signing."
+        type: string
+        required: false
       has-cargo-publish-target:
         description: "Whether Cargo prerequisite checks should run. True when any cargo artefact is planned (either build-mode)."
         required: false
@@ -171,6 +179,12 @@ jobs:
       # run with PR-HEAD code. forge-ci is pre-baked.
       - name: Refuse PR-context trigger (publish/release secrets in scope)
         run: forge-ci validate event-context
+      - name: Validate release author for Git SSH signing
+        if: ${{ fromJSON(inputs['config-plan-json']).git_signing.method == 'ssh' }}
+        env:
+          COMMIT_AUTHOR_NAME: ${{ inputs['bot-name'] }}
+          COMMIT_AUTHOR_EMAIL: ${{ inputs['bot-email'] }}
+        run: forge-ci validate release-author
       - name: Checkout repository
         env:
           GITHUB_TOKEN: ${{ github.token }}
