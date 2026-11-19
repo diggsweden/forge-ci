@@ -226,7 +226,7 @@ jobs:
           # owner/repository names a repository on this instance.
           if [[ "${repository}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9_.-]+$ &&
             "/${repository}/" != *'/./'* && "/${repository}/" != *'/../'* ]]; then
-            repository="${SERVER_URL:?}/${repository}.git"
+            repository="${SERVER_URL%/}/${repository}.git"
           fi
           repository_rest=${repository#https://}
           repository_authority=${repository_rest%%/*}

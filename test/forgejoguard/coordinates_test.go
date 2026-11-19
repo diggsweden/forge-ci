@@ -593,6 +593,21 @@ func TestCoordinatePreflightResolvesTheHelperRepository(t *testing.T) {
 	}
 }
 
+func TestTrailingSlashServerURLResolvesTheHelperRepository(t *testing.T) {
+	t.Parallel()
+
+	for _, file := range []string{"prepare-release.yml", "runtime-images.yml", "sign-and-publish-release.yml"} {
+		t.Run(file, func(t *testing.T) {
+			t.Parallel()
+			script := preflightScript(t, ".forgejo/workflows/"+file)
+			ok, output, stderr := runPreflightWithStderr(t, script, "owner/delivery", exampleSigner, "SERVER_URL="+exampleServer+"/")
+			if !ok || !strings.Contains(output, "helpers_repository="+exampleRepository+"\n") {
+				t.Fatalf("trailing slash: accepted=%t output=%q stderr=%q", ok, output, stderr)
+			}
+		})
+	}
+}
+
 // Each preflight rejects credential-bearing, ambiguous, or mutable coordinates
 // and a missing signer image, without emitting anything.
 func TestCoordinatePreflightRejectsUnsafeCoordinates(t *testing.T) {

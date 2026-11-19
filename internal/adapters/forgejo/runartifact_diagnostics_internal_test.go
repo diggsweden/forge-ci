@@ -14,11 +14,40 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/diggsweden/forge-ci/internal/adapters/httpretry"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
+
+func TestFinalizeArtifact_ExtendsOnlyTheFinalizationBudget(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const ordinary = httpretry.DefaultClientTimeout
+		const finalization = 120 * time.Second
+
+		var calls int
+		client := &Provider{HTTPClient: httpretry.NewClient(ordinary, responseBoundaryTransport(func(req *http.Request) (*http.Response, error) {
+			calls++
+			<-req.Context().Done()
+
+			return nil, req.Context().Err()
+		}))}
+		creds := runtimeUploadCreds{url: "https://runtime.invalid", token: "test-token", runID: "7"}
+
+		started := time.Now()
+		err := client.finalizeArtifact(t.Context(), creds, "runtime-cli", 1234)
+		if !errors.Is(err, context.DeadlineExceeded) || time.Since(started) != finalization || calls != 1 {
+			t.Fatalf("finalization elapsed %v, calls %d, error %v; want %v, one call, and deadline exceeded", time.Since(started), calls, err, finalization)
+		}
+
+		started = time.Now()
+		_, err = client.runtimeSend(t.Context(), http.MethodGet, creds.url, creds.token, "", nil, 0, nil)
+		if !errors.Is(err, context.DeadlineExceeded) || time.Since(started) != ordinary {
+			t.Fatalf("ordinary request elapsed %v, error %v; want %v and deadline exceeded", time.Since(started), err, ordinary)
+		}
+	})
+}
 
 func TestFinalizeArtifact_DiagnosticsAndReplay(t *testing.T) {
 	// Capture debug logs too: credentials must not become visible with -v.

@@ -609,10 +609,21 @@ func isLoopbackHost(host string) bool {
 	return strings.EqualFold(host, "localhost") || (ip != nil && ip.IsLoopback())
 }
 
+const artifactFinalizeTimeout = 120 * time.Second
+
 // doRuntimeRequest sends req to the runtime service. A request made under
 // httpretry.StartTransfer is bounded by progress, not by the client's cap.
 func (p *Provider) doRuntimeRequest(req *http.Request, token string) (*http.Response, error) {
 	client := *p.httpClient()
+	// The artifact finalization PATCH sends only a size, but Forgejo may
+	// merge large uploaded chunks before answering. Give that request at least
+	// two minutes without changing upload or read timeouts.
+	if req.Method == http.MethodPatch {
+		if bounded, ok := client.Transport.(*httpretry.BoundedTransport); ok && bounded.Timeout() < artifactFinalizeTimeout {
+			client.Transport = httpretry.NewBoundedTransport(artifactFinalizeTimeout, bounded.Inner())
+		}
+	}
+
 	// Forgejo's artifact service can transiently return 500 on reads even
 	// after acknowledging an upload. Reuse bounded safe-read retries. Of the
 	// mutations, only finalization opts in to a replay after HTTP 500 (see
