@@ -47,6 +47,27 @@ type fakeSignerImageTool struct {
 
 var errSignerStep = errors.New("signer tool step failed")
 
+type fakeArchitecturePublication struct {
+	tool     *fakeSignerImageTool
+	authFile string
+	dest     string
+}
+
+func (f *fakeSignerImageTool) BindPublication(authFile, dest string) (appcontainer.ArchitecturePublication, error) {
+	if err := f.step("bind"); err != nil {
+		return nil, err
+	}
+	return fakeArchitecturePublication{tool: f, authFile: authFile, dest: dest}, nil
+}
+
+func (p fakeArchitecturePublication) PushLayout(ctx context.Context, layout string) (string, error) {
+	return p.tool.PushLayout(ctx, p.authFile, layout, p.dest)
+}
+
+func (p fakeArchitecturePublication) Manifest(ctx context.Context) ([]byte, error) {
+	return p.tool.RawManifest(ctx, p.authFile, p.dest, io.Discard)
+}
+
 func (f *fakeSignerImageTool) BuildSignerImage(_ context.Context, req domaincontainer.SignerImageBuildToolRequest, _ io.Writer) error {
 	f.buildReqs = append(f.buildReqs, req)
 
@@ -635,14 +656,15 @@ func TestSignerImage_EachFailureStopsEverythingAfterIt(t *testing.T) {
 		wantEvents []string
 		wantErr    error
 	}{
-		"build":         {failOn: "build", wantEvents: []string{"build"}, wantErr: errSignerStep},
-		"export":        {failOn: "export", wantEvents: []string{"build", "export"}, wantErr: errSignerStep},
-		"push":          {failOn: "push", wantEvents: []string{"build", "export", "push"}, wantErr: errSignerStep},
-		"raw manifest":  {failOn: "raw", wantEvents: []string{"build", "export", "push", "raw"}, wantErr: errSignerStep},
-		"empty body":    {raw: []byte{}, wantEvents: []string{"build", "export", "push", "raw"}, wantErr: errs.ErrMalformedInput},
-		"json null":     {raw: []byte("null"), wantEvents: []string{"build", "export", "push", "raw"}, wantErr: errs.ErrMalformedInput},
-		"not an object": {raw: []byte(`["manifest"]`), wantEvents: []string{"build", "export", "push", "raw"}, wantErr: errs.ErrMalformedInput},
-		"wrong digest":  {digest: "sha256:" + strings.Repeat("0", 64), wantEvents: []string{"build", "export", "push", "raw"}, wantErr: errs.ErrValidation},
+		"bind":          {failOn: "bind", wantEvents: []string{"bind"}, wantErr: errSignerStep},
+		"build":         {failOn: "build", wantEvents: []string{"bind", "build"}, wantErr: errSignerStep},
+		"export":        {failOn: "export", wantEvents: []string{"bind", "build", "export"}, wantErr: errSignerStep},
+		"push":          {failOn: "push", wantEvents: []string{"bind", "build", "export", "push"}, wantErr: errSignerStep},
+		"raw manifest":  {failOn: "raw", wantEvents: []string{"bind", "build", "export", "push", "raw"}, wantErr: errSignerStep},
+		"empty body":    {raw: []byte{}, wantEvents: []string{"bind", "build", "export", "push", "raw"}, wantErr: errs.ErrMalformedInput},
+		"json null":     {raw: []byte("null"), wantEvents: []string{"bind", "build", "export", "push", "raw"}, wantErr: errs.ErrMalformedInput},
+		"not an object": {raw: []byte(`["manifest"]`), wantEvents: []string{"bind", "build", "export", "push", "raw"}, wantErr: errs.ErrMalformedInput},
+		"wrong digest":  {digest: "sha256:" + strings.Repeat("0", 64), wantEvents: []string{"bind", "build", "export", "push", "raw"}, wantErr: errs.ErrValidation},
 	} {
 		t.Run("arch "+name, func(t *testing.T) {
 			t.Chdir(t.TempDir())
@@ -659,7 +681,12 @@ func TestSignerImage_EachFailureStopsEverythingAfterIt(t *testing.T) {
 				t.Errorf("events = %q, want %q", tool.events, tc.wantEvents)
 			}
 
-			if entries, readErr := os.ReadDir("signer-image-arch-amd64"); readErr != nil || len(entries) != 0 {
+			entries, readErr := os.ReadDir("signer-image-arch-amd64")
+			if tc.failOn == "bind" {
+				if !errors.Is(readErr, os.ErrNotExist) {
+					t.Errorf("metadata directory changed on bind failure: entries=%v err=%v", entries, readErr)
+				}
+			} else if readErr != nil || len(entries) != 0 {
 				t.Errorf("metadata dir = %v (err %v), want an empty directory", entries, readErr)
 			}
 

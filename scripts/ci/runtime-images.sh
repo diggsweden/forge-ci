@@ -66,7 +66,17 @@ build)
   repo=$(jq -er .repository <<<"$image")
   tag=$(jq -er .tag <<<"$image")
   created=$(git show -s --format=%cI "$SOURCE_SHA")
-  forge-ci container multiarch-image build-arch \
+  engine=$(type -P forge-ci)
+  if [[ "${CI_IMAGE_BUILDER:-}" == kaniko ]]; then
+    # The runner's temp directory can be on Kaniko's disposable rootfs.
+    # Its build context survives; keep the verified CLI in the checkout's
+    # private Git directory, separate from files the runtime image copies.
+    control_dir=$(mktemp -d "$PWD/.git/forge-ci-runtime.XXXXXXXX")
+    trap 'rm -rf -- "$control_dir"' EXIT
+    install -m 0700 "$engine" "$control_dir/forge-ci"
+    engine=$control_dir/forge-ci
+  fi
+  "$engine" container multiarch-image build-arch \
     --auth-file "${REGISTRY_AUTH_FILE:?}" --arch "$arch" \
     --source-sha "$SOURCE_SHA" --server-url "${FORGEJO_SERVER:?}" --repository "${FORGEJO_REPO:?}" \
     --image-repository "$repo" --tag "$tag" --name "runtime-$target" \
@@ -74,7 +84,7 @@ build)
     --label "org.opencontainers.image.url=$FORGEJO_SERVER/$FORGEJO_REPO" \
     --label "org.opencontainers.image.version=sha-$SOURCE_SHA" \
     --label "org.opencontainers.image.created=$created"
-  forge-ci artifact upload --name "runtime-$target-arch-$arch" --dir "runtime-$target-arch-$arch/" --retention-days 1 --if-no-files error
+  "$engine" artifact upload --name "runtime-$target-arch-$arch" --dir "runtime-$target-arch-$arch/" --retention-days 1 --if-no-files error
   ;;
 assemble)
   target=${2:?}

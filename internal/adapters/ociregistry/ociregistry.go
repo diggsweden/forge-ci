@@ -56,6 +56,7 @@ const unknownPlatform = "unknown"
 // surface in internal/app/container.
 type Adapter struct {
 	AuthFile    string
+	boundAuth   authn.Authenticator
 	anonymous   bool
 	insecure    bool
 	explicitTLS bool
@@ -72,6 +73,37 @@ func NewAnonymous() *Adapter { return &Adapter{anonymous: true} }
 // config file instead of the process-default keychain. An empty path is the
 // default keychain, so a caller passes its --auth-file value as it is.
 func WithAuthFile(path string) *Adapter { return &Adapter{AuthFile: path} }
+
+// ImagePublication binds one destination and resolves its credential before
+// a builder can replace the filesystem. Push and read-back never reopen the
+// auth file or rerun a credential helper.
+type ImagePublication struct {
+	registry *Adapter
+	imageRef string
+}
+
+func BindImagePublication(authFile, imageRef string) (*ImagePublication, error) {
+	source := WithAuthFile(authFile)
+	ref, err := source.parse(imageRef)
+	if err != nil {
+		return nil, fmt.Errorf("parse publication reference: %w: %w", err, errs.ErrUsage)
+	}
+
+	auth, err := source.keychain().Resolve(ref.Context())
+	if err != nil {
+		return nil, err
+	}
+
+	return &ImagePublication{registry: &Adapter{boundAuth: auth}, imageRef: imageRef}, nil
+}
+
+func (p *ImagePublication) PushLayout(ctx context.Context, layoutDir string) (string, error) {
+	return p.registry.PushLayout(ctx, layoutDir, p.imageRef)
+}
+
+func (p *ImagePublication) Manifest(ctx context.Context) ([]byte, error) {
+	return p.registry.Manifest(ctx, p.imageRef)
+}
 
 // WithAuthFileAndTLS preserves the push commands' explicit TLS choice for both
 // publication and read-back. Disabling verification also permits HTTP registries.
@@ -653,9 +685,11 @@ func (a *Adapter) remoteOpts(ctx context.Context) []remote.Option {
 // craneOpts builds crane options: cancellable context + keychain auth, plus
 // insecure transport when every ref targets a loopback host.
 func (a *Adapter) craneOpts(ctx context.Context, refs ...string) []crane.Option {
-	opts := []crane.Option{
-		crane.WithContext(ctx),
-		crane.WithAuthFromKeychain(a.keychain()),
+	opts := []crane.Option{crane.WithContext(ctx)}
+	if a.boundAuth != nil {
+		opts = append(opts, crane.WithAuth(a.boundAuth))
+	} else {
+		opts = append(opts, crane.WithAuthFromKeychain(a.keychain()))
 	}
 
 	if a.explicitTLS && !a.insecure {

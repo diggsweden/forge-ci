@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
+	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
 	appsnapshot "github.com/diggsweden/forge-ci/internal/app/snapshotimage"
 	"github.com/diggsweden/forge-ci/internal/domain/container"
 	"github.com/diggsweden/forge-ci/internal/domain/output"
@@ -33,11 +34,8 @@ func (b *countingBuilder) BuildSignerImage(context.Context, container.SignerImag
 func (*countingBuilder) ExportLocalImageToLayout(context.Context, string, string, io.Writer) error {
 	panic("unexpected export")
 }
-func (*countingBuilder) PushLayout(context.Context, string, string, string) (string, error) {
-	panic("unexpected upload")
-}
-func (*countingBuilder) RawManifest(context.Context, string, string, io.Writer) ([]byte, error) {
-	panic("unexpected registry read")
+func (*countingBuilder) BindPublication(string, string) (appcontainer.ArchitecturePublication, error) {
+	panic("unexpected publication")
 }
 
 func dependencyFixture(t *testing.T) (snapshotimage.Plan, appsnapshot.BuildInput) {

@@ -6,7 +6,6 @@ package container
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"runtime"
 	"strings"
@@ -271,17 +270,11 @@ func validateSignerAssemblyFlags(cmd *cli.Command) error {
 }
 
 // signerImageTool builds/exports with the selected image builder and
-// publishes/reads through the existing OCI registry adapter, using the same
-// explicit auth file.
+// publishes/reads through a destination-bound OCI registry adapter.
 type signerImageTool struct{ imageBuilder }
 
-func (signerImageTool) PushLayout(ctx context.Context, authFile, layoutDir, image string) (string, error) {
-	return ociregistry.WithAuthFile(authFile).PushLayout(ctx, layoutDir, image)
-}
-
-// RawManifest returns the manifest document the registry serves for image.
-func (signerImageTool) RawManifest(ctx context.Context, authFile, image string, _ io.Writer) ([]byte, error) {
-	return ociregistry.WithAuthFile(authFile).Manifest(ctx, image)
+func (signerImageTool) BindPublication(authFile, image string) (appcontainer.ArchitecturePublication, error) {
+	return ociregistry.BindImagePublication(authFile, image)
 }
 
 func signerImageCommonFlags() []cli.Flag {

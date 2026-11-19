@@ -42,8 +42,13 @@ const (
 type SignerImageTool interface {
 	BuildSignerImage(ctx context.Context, req domaincontainer.SignerImageBuildToolRequest, out io.Writer) error
 	ExportLocalImageToLayout(ctx context.Context, imageRef, layoutDir string, out io.Writer) error
-	PushLayout(ctx context.Context, authFile, layoutDir, dest string) (string, error)
-	RawManifest(ctx context.Context, authFile, image string, out io.Writer) ([]byte, error)
+	BindPublication(authFile, imageRef string) (ArchitecturePublication, error)
+}
+
+// ArchitecturePublication is a push and read-back bound to one image reference.
+type ArchitecturePublication interface {
+	PushLayout(ctx context.Context, layoutDir string) (string, error)
+	Manifest(ctx context.Context) ([]byte, error)
 }
 
 // SignerManifestRegistry checks the immutable image's platform before merging.
@@ -249,6 +254,15 @@ func buildSignerImageArch(ctx context.Context, tool SignerImageTool, inspector L
 		in.AuthFile = anonymous
 	}
 
+	var publication ArchitecturePublication
+	if inspector == nil {
+		// Resolve the credential before the builder replaces the filesystem.
+		publication, err = tool.BindPublication(in.AuthFile, derived.ImageTag)
+		if err != nil {
+			return nil, fmt.Errorf("bind architecture publication: %w", err)
+		}
+	}
+
 	if err = recreateSignerMetadataDir(derived.MetadataDir); err != nil {
 		return nil, err
 	}
@@ -276,7 +290,7 @@ func buildSignerImageArch(ctx context.Context, tool SignerImageTool, inspector L
 
 	var digest string
 	if inspector == nil {
-		digest, err = publishSignerArchitecture(ctx, tool, out, in, derived)
+		digest, err = publishSignerArchitecture(ctx, tool, publication, out, in, derived)
 	} else {
 		digest, err = stageSignerArchitecture(ctx, tool, inspector, out, in, derived)
 	}
@@ -565,7 +579,7 @@ func AssembleSignerImageManifest(ctx context.Context, registry SignerManifestReg
 
 // publishSignerArchitecture owns one export through all push attempts and the
 // served-digest check. Metadata is published only after this scope succeeds.
-func publishSignerArchitecture(ctx context.Context, tool SignerImageTool, out io.Writer, in SignerImageBuildArchInput, derived signerImageArchDerived) (string, error) {
+func publishSignerArchitecture(ctx context.Context, tool SignerImageTool, publication ArchitecturePublication, out io.Writer, in SignerImageBuildArchInput, derived signerImageArchDerived) (string, error) {
 	layoutDir, err := os.MkdirTemp("", "forge-ci-signer-layout-*")
 	if err != nil {
 		return "", fmt.Errorf("create signer image layout: %w", err)
@@ -577,13 +591,13 @@ func publishSignerArchitecture(ctx context.Context, tool SignerImageTool, out io
 	}
 
 	pushedDigest, err := retry.Do(ctx, out, retry.Attempts(in.RetryAttempts, defaultSignerImageAttempts), retry.Delay(in.RetryDelay, defaultSignerImageRetryDelay), func() (string, error) {
-		return tool.PushLayout(ctx, in.AuthFile, layoutDir, derived.ImageTag)
+		return publication.PushLayout(ctx, layoutDir)
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to push signer image architecture: %w", err)
 	}
 
-	raw, err := tool.RawManifest(ctx, in.AuthFile, derived.ImageTag, out)
+	raw, err := publication.Manifest(ctx)
 	if err != nil {
 		return "", err
 	}
