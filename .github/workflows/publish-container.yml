@@ -116,6 +116,14 @@ on:
         description: "Explicit branch, tag, or SHA whose image is built and published"
         required: true
         type: string
+      context-artifact:
+        description: "Optional original run-scoped build context artifact; requires context-digest. Each native builder verifies it before overlaying the source checkout."
+        type: string
+        default: ''
+      context-digest:
+        description: "Producer's lowercase SHA-256 from release dist-digest --manifest-root . over context-artifact. Required together."
+        type: string
+        default: ''
       release-tag:
         description: "Normalized final release tag used for OCI tags and promotion metadata"
         required: false
@@ -269,6 +277,11 @@ on:
         description: "Registry username (defaults to github.actor for GHCR)"
         required: false
         type: string
+      registry-read-username:
+        description: "Username for the separate external registry pull-only credential. Scope that credential to the required parent/cache repositories."
+        required: false
+        default: ""
+        type: string
       use-ci-token:
         description: "Use GITHUB_TOKEN for authentication (GHCR only)"
         required: false
@@ -352,7 +365,10 @@ on:
         type: string
     secrets:
       registry-password:
-        description: "Registry password/token (required when use-ci-token=false)"
+        description: "Publication password/token (required when use-ci-token=false); never passed to builders."
+        required: false
+      registry-read-password:
+        description: "Optional external registry pull-only token for builders. Never substitute registry-password; omit for anonymous pulls."
         required: false
       CODE_SCANNING_TOKEN:
         description: "Token with code_scanning_alerts:write for uploading SARIF to Code Scanning"
@@ -477,6 +493,11 @@ jobs:
             printf 'image-path extraction requires the retained OCI build and cannot also select an export target\n' >&2
             exit 78
           fi
+      - name: Admit verified release context
+        env:
+          CONTEXT_ARTIFACT: ${{ inputs['context-artifact'] }}
+          CONTEXT_DIGEST: ${{ inputs['context-digest'] }}
+        run: forge-ci container validate release-context
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -673,6 +694,19 @@ jobs:
           MAVEN_WORKING_DIRECTORY: ${{ inputs['maven-working-directory'] || '.' }}
           GRADLE_WORKING_DIRECTORY: ${{ inputs['gradle-working-directory'] || '.' }}
         run: forge-ci container validate containerfile --path "$CONTAINER_FILE" --context "$BUILD_CONTEXT" --source-dir "$MAVEN_WORKING_DIRECTORY" --source-dir "$GRADLE_WORKING_DIRECTORY"
+      - name: Verify and overlay release context
+        if: ${{ inputs['context-artifact'] != '' || inputs['context-digest'] != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CONTEXT_ARTIFACT: ${{ inputs['context-artifact'] }}
+          CONTEXT_DIGEST: ${{ inputs['context-digest'] }}
+        run: |
+          set -euo pipefail
+          context_dir=$(mktemp -d "${RUNNER_TEMP:?}/release-context.XXXXXXXX")
+          trap 'rm -rf -- "${context_dir}"' EXIT
+          forge-ci artifact download --name "${CONTEXT_ARTIFACT:?}" --dir "${context_dir}"
+          forge-ci release validate-dist --dist-dir "${context_dir}" --manifest-root . \
+            --expected-digest "${CONTEXT_DIGEST:?}" --overlay-dir .
       - name: Download Maven artifacts
         if: &if_has_maven_artifacts ${{ contains(fromJson(inputs['artifact-types-json']), 'maven') || contains(format(',{0},', inputs['artifact-types']), ',maven,') }}
         env:
@@ -737,27 +771,28 @@ jobs:
           CONTAINER_CONTEXT: ${{ inputs.context }}
         run: forge-ci container validate artifacts --project-type cargo --artifact-dir "$CONTAINER_CONTEXT/dist"
       - name: Admit image publication
-        if: ${{ inputs['push-image'] }}
-        run: forge-ci validate event-context
-      - name: Check registry authentication configuration
         if: &if_push_image ${{ inputs['push-image'] }}
+        run: forge-ci validate event-context
+      - name: Log in for registry reads
+        id: registry-login
+        if: ${{ inputs['push-image'] || inputs['registry-read-username'] != '' }}
+        # This job's GITHUB_TOKEN has packages:read. External pulls use a
+        # separately scoped read token; the publication password never enters it.
         env:
           USE_CI_TOKEN: ${{ inputs['use-ci-token'] }}
           REGISTRY: ${{ inputs.registry }}
           CI_REGISTRY: ghcr.io
-          REGISTRY_PASSWORD: ${{ secrets['registry-password'] }}
-        run: forge-ci validate auth registry
-      - name: Log in to Container Registry
-        id: registry-login
-        if: *if_push_image
-        # node-less, forge-neutral registry login (replaces docker/login-action):
-        # writes the shared {"auths":…} config Buildah and cosign read.
-        # Password rides REGISTRY_PASSWORD (a secret), never argv.
-        env:
           CONTAINER_REGISTRY: ${{ inputs.registry }}
-          REGISTRY_USER: ${{ inputs['registry-username'] || github.actor }}
-          REGISTRY_PASSWORD: ${{ inputs['use-ci-token'] && secrets.GITHUB_TOKEN || secrets['registry-password'] }}
-        run: forge-ci container login --auth-file "${REGISTRY_AUTH_FILE:-${DOCKER_CONFIG:-${HOME:?}/.docker}/config.json}"
+          REGISTRY_USER: ${{ inputs['use-ci-token'] && github.actor || inputs['registry-read-username'] }}
+          REGISTRY_PASSWORD: ${{ inputs['use-ci-token'] && secrets.GITHUB_TOKEN || secrets['registry-read-password'] }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${REGISTRY_PASSWORD}" && -z "${REGISTRY_USER}" ]]; then
+            exit 0 # public external parents and caches need no login
+          fi
+          forge-ci validate event-context
+          forge-ci validate auth registry
+          forge-ci container login --auth-file "${REGISTRY_AUTH_FILE:-${DOCKER_CONFIG:-${HOME:?}/.docker}/config.json}"
       # Unpacks the FORGE_CI_BUILD_SECRETS_JSON envelope into per-secret
       # mode-0600 tmpfiles under a unique private $RUNNER_TEMP directory and emits the
       # compact JSON array of path-only mount specs consumed by `container build`.
@@ -810,11 +845,10 @@ jobs:
           # Forge-neutral registry layer cache (replaces type=gha): a dedicated
           # buildcache package in the caller's namespace, shared by every
           # container and arch (Buildah keys layers by content and takes no
-          # tag). Gated on build-cache AND push-image — that path
-          # logs in (read-write creds) and is a trusted, non-fork context; a
-          # push-image=false PR build (or build-cache=false) builds from scratch.
+          # tag). Enabled for publication or explicit trusted build-only reads;
+          # anonymous PR builds (or build-cache=false) build from scratch.
           # Lowercased below: an OCI repository path cannot hold the owner's capitals.
-          BUILD_CACHE_REPO: ${{ inputs['push-image'] && inputs['build-cache'] && format('{0}/{1}/buildcache', inputs.registry, github.repository_owner) || '' }}
+          BUILD_CACHE_REPO: ${{ (inputs['push-image'] || inputs['registry-read-username'] != '') && inputs['build-cache'] && format('{0}/{1}/buildcache', inputs.registry, github.repository_owner) || '' }}
           BUILD_CACHE_PUSH: "false"
           # The build exports its layout unscanned: the scan-layouts job scans
           # every exported layout in the full runtime image before publication.
@@ -872,8 +906,8 @@ jobs:
         env:
           ADMIN_VULNERABILITIES: ${{ inputs['enforce-vulnerabilities'] }}
           CONTAINER_REGISTRY: ${{ inputs.registry }}
-          REGISTRY_USER: ${{ inputs['registry-username'] || github.actor }}
-          REGISTRY_PASSWORD: ${{ inputs['push-image'] && (inputs['use-ci-token'] && secrets.GITHUB_TOKEN || secrets['registry-password']) || '' }}
+          REGISTRY_USER: ${{ inputs['use-ci-token'] && github.actor || inputs['registry-read-username'] }}
+          REGISTRY_PASSWORD: ${{ (inputs['push-image'] || inputs['registry-read-username'] != '') && (inputs['use-ci-token'] && secrets.GITHUB_TOKEN || secrets['registry-read-password']) || '' }}
       - name: Restore host ownership of Kaniko layout
         if: ${{ always() && needs.prep.outputs.builder == 'kaniko' }}
         env:
@@ -957,8 +991,8 @@ jobs:
           SOURCE_DATE_EPOCH: ${{ needs.prep.outputs.source-date-epoch }}
           BUILD_ARGS: ${{ inputs['build-args'] }}
           CONTAINER_REGISTRY: ${{ inputs.registry }}
-          REGISTRY_USER: ${{ inputs['registry-username'] || github.actor }}
-          REGISTRY_PASSWORD: ${{ inputs['push-image'] && (inputs['use-ci-token'] && secrets.GITHUB_TOKEN || secrets['registry-password']) || '' }}
+          REGISTRY_USER: ${{ inputs['use-ci-token'] && github.actor || inputs['registry-read-username'] }}
+          REGISTRY_PASSWORD: ${{ (inputs['push-image'] || inputs['registry-read-username'] != '') && (inputs['use-ci-token'] && secrets.GITHUB_TOKEN || secrets['registry-read-password']) || '' }}
       - name: Restore host ownership of extracted Kaniko binaries
         if: ${{ always() && inputs['extract-binary-target'] != '' && needs.prep.outputs.builder == 'kaniko' }}
         env:

@@ -18,6 +18,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
 	"github.com/diggsweden/forge-ci/internal/cli/planfile"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
 )
 
 func prepareKanikoActionCmd() *cli.Command {
@@ -28,8 +29,16 @@ func prepareKanikoActionCmd() *cli.Command {
 			&cli.StringFlag{Name: "workspace", Sources: cienv.Workspace(), Required: true, Usage: "GitHub workspace containing source/"},
 			&cli.StringFlag{Name: flagPlan, Required: true, Usage: "frozen container-build or snapshot plan"},
 			&cli.BoolFlag{Name: "snapshot", Usage: "prepare a snapshot plan instead of a container-build plan"},
+			&cli.BoolFlag{Name: "base", Usage: "prepare an admitted root or child base plan"},
+			&cli.StringFlag{Name: flagImageRepository, Usage: "base image repository"},
+			&cli.StringFlag{Name: flagReleaseTag, Value: "v0.0.0", Usage: "base plan release tag"},
+			stageFlavorsFlag(),
+			parentBaseProjectionFlag(false),
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
+			if cmd.Bool("base") && cmd.Bool("snapshot") {
+				return fmt.Errorf("base and snapshot modes are mutually exclusive: %w", errs.ErrValidation)
+			}
 			workspace, err := filepath.Abs(cmd.String("workspace"))
 			if err != nil {
 				return err
@@ -41,7 +50,18 @@ func prepareKanikoActionCmd() *cli.Command {
 			}
 
 			in := appcontainer.GitHubKanikoAction{Workspace: workspace, JobImage: cmd.String("job-image"), Engine: engine, Snapshot: cmd.Bool("snapshot")}
-			if in.Snapshot {
+			if cmd.Bool("base") {
+				var plan pipeline.ReleaseImagesPlan
+				if cmd.String(flagParentBaseJSON) == "" {
+					plan, err = readRootBasePlanFile(cmd)
+				} else {
+					plan, err = readChildBasePlanFile(cmd)
+				}
+				if err != nil {
+					return err
+				}
+				in.Plan, err = json.Marshal(plan)
+			} else if in.Snapshot {
 				plan, readErr := appsnapshot.ReadPlan(cmd.String(flagPlan))
 				if readErr != nil {
 					return readErr

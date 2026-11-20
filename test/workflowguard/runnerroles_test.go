@@ -185,6 +185,7 @@ func TestForgejoRunnerInputsPerWorkflow(t *testing.T) {
 		"runtime-images.yml":                {"build-runs-on-linux-amd64", "build-runs-on-linux-arm64", "runs-on", "runs-on-linux-arm64", "signer-runs-on"},
 		"release-images.yml":                images,
 		"base-images.yml":                   images,
+		"base-image-lifecycle.yml":          {"build-runs-on-linux-amd64", "build-runs-on-linux-arm64", "runs-on", "signer-runs-on"},
 		"snapshot-images.yml":               images,
 		"sign-and-publish-release.yml":      signing,
 		"sign-container-images.yml":         signing,

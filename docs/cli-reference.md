@@ -2097,6 +2097,11 @@ prepare the GitHub workflows' isolated native Kaniko Docker action; no build or 
 | `--workspace` | GitHub workspace containing source/ (required) | string | `""` | `$CI_WORKSPACE`, `$FORGEJO_WORKSPACE`, `$GITHUB_WORKSPACE` |
 | `--plan` | frozen container-build or snapshot plan (required) | string | `""` | n/a |
 | `--snapshot` | prepare a snapshot plan instead of a container-build plan | bool | `false` | n/a |
+| `--base` | prepare an admitted root or child base plan | bool | `false` | n/a |
+| `--image-repository` | base image repository | string | `""` | n/a |
+| `--release-tag` | base plan release tag | string | `"v0.0.0"` | n/a |
+| `--stage-flavors` | the stage's flavors, separated by commas; a plan with another set of flavors is refused | string | `""` | n/a |
+| `--parent-base-json` | explicit caller-verified immediate parent as {ref: digest-pinned-ref, input_id: opaque-sha256-ID}; not producer authentication | string | `""` | n/a |
 
 ### `forge-ci container ref`
 
@@ -2356,6 +2361,8 @@ EXAMPLE:
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
+| `--context-artifact` | optional prebuilt context artifact; requires context-digest | string | `""` | `$CONTEXT_ARTIFACT` |
+| `--context-digest` | producer's release dist-digest with manifest-root .; requires context-artifact | string | `""` | `$CONTEXT_DIGEST` |
 | `--image-plan-json` | resolved consumer image policy as builds/images JSON; admitted against --image-repository instead of loading artifacts.yml; supports content-addressed base tags | string | `""` | `$IMAGE_PLAN_JSON` |
 | `--file` | path to the artifacts.yml file declaring the containers; without it and the default file, the root Containerfile is the repository's image | string | `".forge-ci/artifacts.yml"` | `$ARTIFACTS_CONFIG` |
 | `--image-repository` | the one repository the release's images publish to, e.g. ghcr.io/owner/app; empty is the forge's own registry, <server host>/<owner>/<repository> | string | `""` | `$IMAGE_REPOSITORY` |
@@ -3006,6 +3013,15 @@ EXAMPLE:
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
 | `--file` | path to the artifacts.yml that declares the containers | string | `".forge-ci/artifacts.yml"` | `$ARTIFACTS_CONFIG` |
+
+#### `forge-ci container validate release-context`
+
+admit an optional producer artifact/digest pair before image builds
+
+| Flag | Description | Type | Default | Env vars |
+|------|-------------|------|---------|----------|
+| `--context-artifact` | producer's run-scoped context artifact name | string | `""` | `$CONTEXT_ARTIFACT` |
+| `--context-digest` | producer's lowercase SHA-256 from release dist-digest --manifest-root . | string | `""` | `$CONTEXT_DIGEST` |
 
 ### `forge-ci container write-digest-marker`
 
@@ -4948,6 +4964,8 @@ algorithm is shared with release dist-digest.
 With --stage-dir, copy into private staging, verify those copied bytes and install
 them into a new destination only on success. --digest-file reads the producer's
 bare lowercase SHA-256 recording and is exclusive with --expected-digest.
+With --overlay-dir, verify privately staged bytes before merging them into an
+existing checkout. It is exclusive with --stage-dir and --canonical-payload.
 
 Set --manifest-root to override the path prefix written into the manifest during
 digest recomputation; use --manifest-root . for artifact contents that are
@@ -4964,6 +4982,7 @@ EXAMPLE:
 | `--expected-digest` | expected dist digest (from the build job) | string | `""` | `$EXPECTED_DIGEST`, `$DIST_DIGEST` |
 | `--digest-file` | regular producer digest recording; exclusive with --expected-digest | string | `""` | n/a |
 | `--stage-dir` | privately copy, verify staged bytes and install into this new directory before success | string | `""` | n/a |
+| `--overlay-dir` | privately copy, verify and safely overlay into an existing checkout | string | `""` | n/a |
 | `--manifest-root` | path prefix written into the sha256sum manifest during digest recomputation (defaults to --dist-dir) | string | `""` | n/a |
 
 ### `forge-ci release validate-published`

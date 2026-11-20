@@ -6,6 +6,7 @@ package container
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -52,6 +53,38 @@ func TestReleaseImagesPlan_AnEmptyFileNameNamesNoFile(t *testing.T) {
 				require.ErrorContains(t, err, "images.yml")
 			} else {
 				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestReleaseImagesPlanContextEnvironmentAdmission(t *testing.T) {
+	for _, tc := range []struct {
+		name, artifact, digest string
+		valid                  bool
+	}{
+		{"checkout", "", "", true},
+		{"pair", "context", strings.Repeat("a", 64), true},
+		{"artifact only", "context", "", false},
+		{"digest only", "", strings.Repeat("a", 64), false},
+		{"malformed", "context", "bad", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := testenv.New(t)
+			t.Chdir(env.Temp)
+			require.NoError(t, os.WriteFile("Containerfile", []byte("FROM scratch\n"), 0o600))
+			t.Setenv("ARTIFACTS_CONFIG", "")
+			t.Setenv("IMAGE_PLAN_JSON", "")
+			t.Setenv("CONTEXT_ARTIFACT", tc.artifact)
+			t.Setenv("CONTEXT_DIGEST", tc.digest)
+			err := releaseImagesPlanCmd().Run(t.Context(), []string{"plan", "--image-repository", "ghcr.io/acme/app", "--repository", "acme/app", "--registry-username", "acme", "--release-tag", "v1.2.3"})
+			contextErr := validateReleaseContextCmd().Run(t.Context(), []string{"release-context"})
+			if tc.valid {
+				require.NoError(t, err)
+				require.NoError(t, contextErr)
+			} else {
+				require.ErrorIs(t, err, errs.ErrValidation)
+				require.ErrorIs(t, contextErr, errs.ErrValidation)
 			}
 		})
 	}

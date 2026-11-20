@@ -4,8 +4,10 @@ This document defines the preferred structure for GitHub Actions workflows in th
 
 It does not apply to the Forgejo layer under `.forgejo/`, which is shaped by
 two different constraints and is deliberately flat. Forgejo resolves a nested
-relative `uses:` against the calling repository, so there are no orchestrators
-and no stage workflows there; and each privileged job repeats its own trust
+relative `uses:` against the calling repository, so shared workflows contain
+direct jobs rather than nested reusable-workflow calls. A cohesive lifecycle
+may own several direct jobs; consumer-specific graphs and reuse policy remain
+in the consumer. Each privileged job repeats its own trust
 establishment in plain sight, which the "move noisy logic out of YAML" goal
 below must not be read as a reason to hide. Its rules are in the
 [Forgejo guide](forgejo.md#signing-boundary) and are held by

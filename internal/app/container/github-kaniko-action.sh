@@ -15,7 +15,7 @@ if [[ "${1:-image}" == snapshot ]]; then output="$PWD/snapshot-layouts"; fi
 test ! -e "$output"
 
 auth_file=
-if [[ "${1:-image}" != snapshot && -n "${REGISTRY_PASSWORD:-}" ]]; then
+if [[ "${1:-image}" != snapshot && "${1:-image}" != base && -n "${REGISTRY_PASSWORD:-}" ]]; then
   auth_file=/kaniko/.docker/config.json
   printf '%s' "$REGISTRY_PASSWORD" | forge-ci container login --registry "$CONTAINER_REGISTRY" \
     --registry-username "$REGISTRY_USER" --registry-password-file - --auth-file "$auth_file"
@@ -41,6 +41,20 @@ snapshot)
     --plan /kaniko/tools/plan.json --dependencies-file snapshot-dependencies.json \
     --name "$IMAGE_NAME" --arch "$IMAGE_ARCH" --metadata-dir snapshot-layouts \
     --server-url "$GITHUB_SERVER_URL" --repository "$GITHUB_REPOSITORY"
+  ;;
+base)
+  cd "$GITHUB_WORKSPACE"
+  base_args=(--plan /kaniko/tools/plan.json --stage-flavors "${STAGE_FLAVOR:?}"
+    --image-repository "${IMAGE_REPOSITORY:?}" --release-tag v0.0.0
+    --release-sha "${RELEASE_SHA:?}" --server-url "$GITHUB_SERVER_URL"
+    --repository "$GITHUB_REPOSITORY" --image "${IMAGE_NAME:?}" --arch "${IMAGE_ARCH:?}"
+    --created "${IMAGE_CREATED:?}" --source-dir source --metadata-dir "$output" --image-builder kaniko)
+  if [[ -n "${PARENT_BASE_JSON:-}" ]]; then
+    exec forge-ci container base-images child-base build "${base_args[@]}" \
+      --parent-base-json "$PARENT_BASE_JSON" --inputs-dir registry-inputs
+  else
+    exec forge-ci container base-images root-base build "${base_args[@]}"
+  fi
   ;;
 *) exit 64 ;;
 esac

@@ -42,6 +42,18 @@ func (plan ReleaseImagesPlan) BuildMatrix() Matrix[BuildRow] {
 	return Matrix[BuildRow]{Include: rows}
 }
 
+// FetchMatrix contains only builds that require credential-isolated registry
+// preparation. Checkout-only builds have no input artifact to fetch or upload.
+func (plan ReleaseImagesPlan) FetchMatrix() Matrix[BuildRow] {
+	rows := make([]BuildRow, 0, len(plan.Builds))
+	for _, build := range plan.Builds {
+		if build.CacheTag != "" || len(build.RegistryInputs) > 0 {
+			rows = append(rows, BuildRow{Name: build.Name, Arch: build.Arch})
+		}
+	}
+	return Matrix[BuildRow]{Include: rows}
+}
+
 // ImageMatrix is the plan's images as matrix rows, in plan order.
 func (plan ReleaseImagesPlan) ImageMatrix() Matrix[ImageRow] {
 	rows := make([]ImageRow, 0, len(plan.Images))

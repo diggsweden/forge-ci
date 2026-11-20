@@ -115,7 +115,7 @@ description: Run the existing forge-ci build in an isolated Kaniko container.
 inputs:
   operation:
     default: image
-    description: image, extract or snapshot
+    description: image, extract, snapshot or base
 runs:
   using: docker
   image: Dockerfile

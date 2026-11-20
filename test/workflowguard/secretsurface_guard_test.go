@@ -83,11 +83,20 @@ func declaredJobSecretReferences() map[string]map[string][]string {
 		"publish-container.yml": {
 			"resolve-bootstrap": nil,
 			"prep":              {"secrets.RELEASE_COSIGN_PASSPHRASE", "secrets.RELEASE_COSIGN_PRIVATE_KEY"},
-			"build-arch":        {"github.token", "secrets.FORGE_CI_BUILD_SECRETS_JSON", "secrets.GITHUB_TOKEN", "secrets['registry-password']"},
+			"build-arch":        {"github.token", "secrets.FORGE_CI_BUILD_SECRETS_JSON", "secrets.GITHUB_TOKEN", "secrets['registry-read-password']"},
 			"scan-layouts":      {"github.token", "secrets.CODE_SCANNING_TOKEN"},
 			"publish-images":    {"github.token", "secrets.GITHUB_TOKEN", "secrets['registry-password']"},
 			"image-evidence":    {"secrets.GITHUB_TOKEN", "secrets.RELEASE_COSIGN_PASSPHRASE", "secrets.RELEASE_COSIGN_PRIVATE_KEY", "secrets['registry-password']"},
 			"merge":             {"github.token", "secrets.GITHUB_TOKEN", "secrets.RELEASE_COSIGN_PASSPHRASE", "secrets.RELEASE_COSIGN_PRIVATE_KEY", "secrets['registry-password']"},
+		},
+		"base-image-lifecycle.yml": {
+			"resolve-bootstrap": nil,
+			"plan":              nil,
+			"build":             {"github.token", "secrets.PARENT_REGISTRY_READ_TOKEN"},
+			"publish":           {"github.token", "secrets.RELEASE_REGISTRY_TOKEN"},
+			"sign":              {"github.token", "secrets.RELEASE_COSIGN_PASSPHRASE", "secrets.RELEASE_COSIGN_PRIVATE_KEY", "secrets.RELEASE_REGISTRY_TOKEN"},
+			"promote":           {"secrets.RELEASE_REGISTRY_TOKEN"},
+			"authenticate":      {"secrets.RELEASE_REGISTRY_TOKEN"},
 		},
 		"snapshot-images.yml": {
 			"resolve-bootstrap": nil,

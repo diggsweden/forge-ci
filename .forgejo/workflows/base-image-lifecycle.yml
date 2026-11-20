@@ -1,0 +1,1170 @@
+# SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+#
+# SPDX-License-Identifier: CC0-1.0
+
+# workflow-call-secrets-contract: RELEASE_REGISTRY_TOKEN PARENT_REGISTRY_READ_TOKEN RELEASE_COSIGN_PRIVATE_KEY RELEASE_COSIGN_PASSPHRASE
+# (The platform rejects declared workflow_call.secrets, and test/forgejoguard
+#  holds this file to that. This comment is the authoritative,
+#  machine-readable owner instead; check-l3-isolation's sibling-mode
+#  lockstep invariant parses it.)
+#
+# One cold flavor, executed as direct separately privileged jobs. The consumer
+# owns discovery, warm reuse, graph ordering, independent expected inputs and
+# candidate cleanup after authentication. No nested reusable workflow calls.
+name: Base image lifecycle (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: JSON array of runner labels for the plan and publication jobs, for example the calling repository's CI_RUNNER_LABEL variable.
+        type: string
+        required: true
+      build-runs-on-linux-amd64:
+        description: >-
+          JSON array of runner labels for the linux/amd64 build: a runner that permits image builds. Required when the plan builds linux/amd64; no other input stands in for it.
+        type: string
+        required: false
+        default: ''
+      build-runs-on-linux-arm64:
+        description: >-
+          JSON array of runner labels for the linux/arm64 build, which runs natively and never under CPU emulation. Required when the plan builds linux/arm64; no other input stands in for it.
+        type: string
+        required: false
+        default: ''
+      forge-ci-repository:
+        description: >-
+          Repository that serves this workflow, as owner/repository on this instance or as a full HTTPS Git URL. The owner/repository of this workflow's uses: line. Empty takes the FORGE_CI_REPOSITORY variable of the calling repository or its organization; with neither, the workflow fails.
+        type: string
+        required: false
+        default: ''
+      forge-ci-sha:
+        description: Exact forge-ci commit SHA to check the layer's helper files out at. Pass the same SHA used to pin this reusable workflow.
+        type: string
+        required: true
+      release-sha:
+        description: Commit the base is built from. The plan may name a content revision of its own for the image's revision label.
+        type: string
+        required: true
+      image-repository:
+        description: The one repository the base's staging candidate and final tag live in, for example forge.example/owner/app-base, the same value the signer and promotion workflows take as base-repository.
+        type: string
+        required: true
+      registry-user:
+        description: User the registry token logs in as. Empty takes the RELEASE_REGISTRY_USER variable, and with neither the owner of the calling repository on this forge's registry.
+        type: string
+        required: false
+        default: ''
+      image-plan-json:
+        description: >-
+          The frozen plan of exactly one flavor in the builds/images plan shape: image-kind base only, with no architecture cache, base-ref or moving tag. A root has no parent. Every native build of a child has exactly one registry input, the parent's digest-pinned ref, and its provenance-json names the same parent_base.
+        type: string
+        required: true
+      parent-base-json:
+        description: >-
+          Empty for a root. For a child stage, the one immediate parent of every image in it, as {"ref":"<digest-pinned ref>","input_id":"<ID>"}: the parent-base-json output of verify-base-container-images.yml called with expected-ref, never a value read from a build.
+        type: string
+        required: false
+        default: ''
+      parent-registry-repository:
+        description: Exact parent repository (host/path, without tag or digest) for authenticated pulls. Leave empty for anonymous pulls.
+        type: string
+        default: ''
+      parent-registry-user:
+        description: Username for PARENT_REGISTRY_READ_TOKEN. Use a short-lived credential scoped to pulling the parent repository, never the release publishing token.
+        type: string
+        default: ''
+      parent-registry-auth-origin:
+        description: Optional trusted HTTPS origin for a separate parent registry token service. Empty trusts only the parent registry origin.
+        type: string
+        default: ''
+      artifact-name:
+        description: Namespace of this stage's artifacts. Use a distinct name for every stage of one run.
+        type: string
+        required: false
+        default: base-images
+      enforce-vulnerabilities:
+        description: Enforcement setting; false lets publication report image vulnerability findings without failing. Every image is still scanned. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md.
+        type: boolean
+        default: false
+      signer-runs-on:
+        description: JSON array of labels of the runner the signing job runs on, the one job that holds the signing credentials; it falls back to no other input.
+        type: string
+        required: true
+      signer-image:
+        description: >-
+          Immutable digest-pinned signer image coordinate, for example forge.example/owner/forge-ci-signer@sha256:<digest>. The calling organization builds it from containers/signer/Containerfile of the forge-ci repository; no image is published upstream.
+        type: string
+        required: true
+      cosign-public-key:
+        description: >-
+          PEM text of the Cosign public key the calling organization trusts. A public key is not a secret, so it may come from a variable. The engine refuses an empty key.
+        type: string
+        required: true
+      cosign-public-key-sha256:
+        description: >-
+          SHA-256 of that key as a file ending in one newline, as `sha256sum cosign.pub` prints it. Written as a literal in the calling workflow, it binds a key read from a variable to reviewed code. The engine refuses an empty digest and a mismatch.
+        type: string
+        required: true
+      transparency-log:
+        description: >-
+          Whether Cosign signatures are also written to the public Sigstore transparency log. `none`, the default, writes no entry and contacts no Sigstore service: a signature is then verified against the key alone. `public` writes every signature to the public log, Rekor, permanently. Every workflow of one organization takes the same value, because a signature is verified the way it was made.
+        type: string
+        required: false
+        default: none
+      repository-suffix:
+        description: >-
+          Optional suffix appended to the caller repository package name, for example -base for forge.example/owner/repo-base. Must be empty or match -[A-Za-z0-9][A-Za-z0-9._-]*.
+        type: string
+        required: false
+        default: ''
+      caller-workflow:
+        description: >-
+          Consumer workflow file that produced the signed base images, for example container-bases.yml. Must be a relative path with no `..` step and no control character.
+        type: string
+        required: true
+      flavor:
+        description: The single flavor owned by this call; must match the admitted plan.
+        type: string
+        required: true
+      expected-inputs-json:
+        description: Consumer-calculated input and parent expectations, never the build's declared-inputs output.
+        type: string
+        required: true
+    outputs:
+      ledger-json:
+        description: Original candidate ledger, exposed only after successful authentication, for consumer completion and cleanup.
+        value: ${{ jobs.authenticate.outputs.ledger_json }}
+      parent-base-json:
+        description: Authenticated final digest and input identity for the next consumer-owned graph node.
+        value: ${{ jobs.authenticate.outputs.parent_base_json }}
+
+env:
+  FORGEJO_SERVER: ${{ forgejo.server_url }}
+  FORGEJO_REPO: ${{ forgejo.repository }}
+  FORGE_CI_PROVIDER: forgejo
+
+jobs:
+  coordinates:
+    name: "Check: layer and builder coordinates"
+    runs-on: ${{ fromJSON(inputs['runs-on']) }}
+    timeout-minutes: 5
+    outputs:
+      helpers_repository: ${{ steps.validate.outputs.helpers_repository }}
+      signer_image: ${{ steps.validate.outputs.signer_image }}
+      transparency_log: ${{ steps.validate.outputs.transparency_log }}
+      builder: ${{ steps.validate.outputs.builder }}
+      builder_job_image: ${{ steps.validate.outputs.builder_job_image }}
+    steps:
+      - name: Validate trust coordinates
+        id: validate
+        env:
+          # The caller names the repository the layer's files are fetched from:
+          # the input, or a variable. In a called workflow `vars` reads the
+          # CALLING repository and its organization. There is no third source:
+          # a default could only name one organization's repository.
+          HELPERS_REPOSITORY_INPUT: ${{ inputs['forge-ci-repository'] || vars.FORGE_CI_REPOSITORY }}
+          SERVER_URL: ${{ forgejo.server_url }}
+          # The image builder is the calling organization's, read the same way.
+          BUILDER_INPUT: ${{ vars.CI_IMAGE_BUILDER }}
+          BUILDER_JOB_IMAGE_INPUT: ${{ vars.CI_IMAGE_BUILDER_JOB_IMAGE }}
+          SIGNER_IMAGE_INPUT: ${{ inputs['signer-image'] }}
+          TRANSPARENCY_LOG_INPUT: ${{ inputs['transparency-log'] }}
+          FLAVOR_INPUT: ${{ inputs.flavor }}
+          ARTIFACT_NAME_INPUT: ${{ inputs['artifact-name'] }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${FLAVOR_INPUT}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+            echo 'ERROR: flavor must name exactly one base flavor' >&2
+            exit 1
+          fi
+          artifact_name=${ARTIFACT_NAME_INPUT-base-images}
+          if [[ ! "${artifact_name}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+            echo "ERROR: artifact-name must be a plain artifact namespace" >&2
+            exit 1
+          fi
+          export LC_ALL=C
+          repository=${HELPERS_REPOSITORY_INPUT:-}
+          if [[ -z "${repository}" ]]; then
+            echo "ERROR: no repository is named to fetch the layer's files from. Pass the forge-ci-repository input (the owner/repository of this workflow's uses: line), or set the FORGE_CI_REPOSITORY variable on the calling repository or its organization." >&2
+            exit 1
+          fi
+          # owner/repository names a repository on this instance.
+          if [[ "${repository}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9_.-]+$ &&
+            "/${repository}/" != *'/./'* && "/${repository}/" != *'/../'* ]]; then
+            repository="${SERVER_URL:?}/${repository}.git"
+          fi
+          repository_rest=${repository#https://}
+          repository_authority=${repository_rest%%/*}
+          repository_path=${repository_rest#*/}
+          repository_slug=${repository_path%.git}
+          repository_port=
+          repository_port_invalid=false
+          if [[ "${repository_authority}" =~ :([0-9]{1,5})$ ]]; then
+            repository_port=${BASH_REMATCH[1]}
+            if ((10#${repository_port} < 1 || 10#${repository_port} > 65535)); then
+              repository_port_invalid=true
+            fi
+          fi
+          if [[ "${repository}" != https://* || "${repository}" == *'?'* || "${repository}" == *'#'* ||
+            ! "${repository_slug}" =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+$ ||
+            "/${repository_slug}/" == *'/./'* || "/${repository_slug}/" == *'/../'* ||
+            "${repository_path}" == *\\* || ! "${repository}" =~ ^[[:graph:]]+$ ||
+            "${repository_rest}" != */* || -z "${repository_path}" || "${repository_authority}" == *@* ||
+            ! "${repository_authority}" =~ ^([A-Za-z0-9][A-Za-z0-9.-]*|\[[0-9A-Fa-f:.]+\])(:[0-9]{1,5})?$ ||
+            "${repository_port_invalid}" == true ]]; then
+            echo "ERROR: forge-ci-repository must be owner/repository or an HTTPS repository URL without credentials, query, or fragment: ${repository}" >&2
+            exit 1
+          fi
+          # The build jobs start in the builder's job image, so it is checked
+          # here, before any of them starts. Buildah runs in the runner's own
+          # environment; setup-image-builder admits the kaniko image by its
+          # labels once it runs.
+          builder=${BUILDER_INPUT:-buildah}
+          builder_job_image=
+          case "${builder}" in
+            buildah) ;;
+            kaniko)
+              builder_job_image=${BUILDER_JOB_IMAGE_INPUT}
+              if [[ ! "${builder_job_image}" =~ ^[a-z0-9]+([.-][a-z0-9]+)*(:[0-9]+)?/([a-z0-9]+(([._]|__|-+)[a-z0-9]+)*/)*[a-z0-9]+(([._]|__|-+)[a-z0-9]+)*(:[A-Za-z0-9_][A-Za-z0-9._-]{0,127})?@sha256:[0-9a-f]{64}$ ]]; then
+                echo "ERROR: CI_IMAGE_BUILDER=kaniko needs CI_IMAGE_BUILDER_JOB_IMAGE, the kaniko job image pinned by digest (<repository>@sha256:<64 hex>); got '${builder_job_image}'" >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "ERROR: CI_IMAGE_BUILDER must be buildah or kaniko, got '${builder}'" >&2
+              exit 1
+              ;;
+          esac
+          signer_image=${SIGNER_IMAGE_INPUT}
+          if [ -z "${signer_image}" ]; then
+            echo "ERROR: signer-image is required: build containers/signer/Containerfile of the forge-ci repository and pass the image by digest" >&2
+            exit 1
+          fi
+          if [[ ! "${signer_image}" =~ ^[a-z0-9]+([.-][a-z0-9]+)*(:[0-9]+)?/([a-z0-9]+(([._]|__|-+)[a-z0-9]+)*/)*[a-z0-9]+(([._]|__|-+)[a-z0-9]+)*(:[A-Za-z0-9_][A-Za-z0-9._-]{0,127})?@sha256:[0-9a-f]{64}$ ]]; then
+            echo "ERROR: signer-image must be a complete OCI repository coordinate pinned by sha256 digest: <registry>/<repository>[:<tag>]@sha256:<64 hex>" >&2
+            exit 1
+          fi
+          # One setting for signing and for verification. Anything but the two
+          # values would reach the CLI as "unset", which it reads as public.
+          transparency_log=${TRANSPARENCY_LOG_INPUT}
+          case "${transparency_log}" in
+            none | public) ;;
+            *)
+              echo "ERROR: transparency-log must be none or public: ${transparency_log}" >&2
+              exit 1
+              ;;
+          esac
+          {
+            printf 'helpers_repository=%s\n' "${repository}"
+            printf 'signer_image=%s\n' "${signer_image}"
+            printf 'builder=%s\n' "${builder}"
+            printf 'builder_job_image=%s\n' "${builder_job_image}"
+            printf 'transparency_log=%s\n' "${transparency_log}"
+          } >>"${FORGEJO_OUTPUT}"
+
+  plan:
+    name: "Check: base plan"
+    needs: coordinates
+    if: ${{ !cancelled() && needs.coordinates.result == 'success' }}
+    runs-on: ${{ fromJSON(inputs['runs-on']) }}
+    timeout-minutes: 10
+    outputs:
+      build-matrix: ${{ steps.plan.outputs.build-matrix }}
+      builds-by-name: ${{ steps.plan.outputs.builds-by-name }}
+      layouts: ${{ steps.plan.outputs.layouts }}
+    env:
+      STAGE_FLAVOR: ${{ inputs.flavor }}
+      FORGE_CI_REPOSITORY_URL: ${{ needs.coordinates.outputs.helpers_repository }}
+    steps:
+      - name: Checkout layer helpers
+        env:
+          EXPECTED_HELPERS_SHA: ${{ inputs['forge-ci-sha'] }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${EXPECTED_HELPERS_SHA}" =~ ^([0123456789abcdef]{40}|[0123456789abcdef]{64})$ ]]; then
+            echo "ERROR: forge-ci-sha must be a 40- or 64-character lowercase commit hex digest" >&2
+            exit 1
+          fi
+          # In the workspace, the one directory that survives a kaniko build,
+          # which replaces the job container's own filesystem.
+          helpers_dir="${GITHUB_WORKSPACE:?}/forge-ci-layer"
+          echo "HELPERS_DIR=${helpers_dir}" >>"${FORGEJO_ENV}"
+          git init --quiet "${helpers_dir}"
+          git -C "${helpers_dir}" remote add origin "${FORGE_CI_REPOSITORY_URL:?}"
+          # Direct unadvertised SHA fetches can be refused.
+          # Retry advertised branches/tags without assuming a default branch.
+          # Disable credential prompts, retain both failures for diagnostics,
+          # and verify the exact pin below with detach + rev-parse.
+          helpers_fetch_log=$(mktemp)
+          if ! GIT_TERMINAL_PROMPT=0 git -C "${helpers_dir}" -c protocol.version=2 fetch --quiet --no-tags --depth=1 --no-recurse-submodules origin "${EXPECTED_HELPERS_SHA}" 2>"${helpers_fetch_log}"; then
+            if ! GIT_TERMINAL_PROMPT=0 git -C "${helpers_dir}" -c protocol.version=2 fetch --quiet --no-recurse-submodules origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*' 2>>"${helpers_fetch_log}"; then
+              echo "ERROR: cannot fetch layer helpers ${EXPECTED_HELPERS_SHA} from $(git -C "${helpers_dir}" remote get-url origin)" >&2
+              echo "  (git may report 'could not read Username': this forge answers the same way for a repository that is absent and one this run cannot read, so it is not necessarily a missing credential)" >&2
+              cat -- "${helpers_fetch_log}" >&2
+              rm -f -- "${helpers_fetch_log}"
+              exit 1
+            fi
+          fi
+          rm -f -- "${helpers_fetch_log}"
+          git -C "${helpers_dir}" checkout --quiet --detach "${EXPECTED_HELPERS_SHA}"
+          actual_sha=$(git -C "${helpers_dir}" rev-parse HEAD)
+          if [ "${actual_sha}" != "${EXPECTED_HELPERS_SHA}" ]; then
+            echo "ERROR: helper checkout resolved to unexpected commit" >&2
+            echo "  expected: ${EXPECTED_HELPERS_SHA}" >&2
+            echo "  actual:   ${actual_sha}" >&2
+            exit 1
+          fi
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${helpers_dir}/.engine/bin/lib-forge-ci.sh"
+          fetch_forge_ci
+
+      - name: Admit the base plan
+        id: plan
+        env:
+          IMAGE_PLAN_JSON: ${{ inputs['image-plan-json'] }}
+          PARENT_BASE_JSON: ${{ inputs['parent-base-json'] }}
+          IMAGE_REPOSITORY: ${{ inputs['image-repository'] }}
+          RELEASE_SHA: ${{ inputs['release-sha'] }}
+          RUNS_ON: ${{ inputs['runs-on'] }}
+          BUILD_RUNS_ON_LINUX_AMD64: ${{ inputs['build-runs-on-linux-amd64'] }}
+          BUILD_RUNS_ON_LINUX_ARM64: ${{ inputs['build-runs-on-linux-arm64'] }}
+        run: |
+          set -euo pipefail
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          cd "${GITHUB_WORKSPACE:?}"
+          printf '%s' "${IMAGE_PLAN_JSON:?}" >base-plan.json
+          # Bases are content-addressed: the plan names their tags, so the
+          # release tag the image verbs require names no part of them.
+          stage_args=(--stage-flavors "${STAGE_FLAVOR:?}" --plan "${GITHUB_WORKSPACE}/base-plan.json" --image-repository "${IMAGE_REPOSITORY:?}"
+            --release-tag v0.0.0 --release-sha "${RELEASE_SHA:?}"
+            --server-url "${FORGEJO_SERVER:?}" --repository "${FORGEJO_REPO:?}")
+          # An architecture builds on its own input's runner or not at all:
+          # the engine refuses a plan that builds one whose input has no value.
+          admitted=(--output "${RUNNER_TEMP:?}/admitted-base-plan.json"
+            --runner-input "runs-on=${RUNS_ON}"
+            --runner-input "build-runs-on-linux-amd64=${BUILD_RUNS_ON_LINUX_AMD64}"
+            --runner-input "build-runs-on-linux-arm64=${BUILD_RUNS_ON_LINUX_ARM64}")
+          if [ -z "${PARENT_BASE_JSON}" ]; then
+            run_forge_ci container base-images root-base plan "${stage_args[@]}" "${admitted[@]}"
+          else
+            run_forge_ci container base-images child-base plan "${stage_args[@]}" "${admitted[@]}" \
+              --parent-base-json "${PARENT_BASE_JSON}"
+          fi
+
+  # The matrix jobs' rows hold only an image's name and architecture:
+  # Forgejo appends a row's values to the job's name, so "Build: base" reads
+  # "Build: base (amd64, <image>)". Each reads the rest of its build from
+  # builds-by-name.
+  build:
+    name: "Build: base"
+    needs: [coordinates, plan]
+    if: ${{ !cancelled() && needs.coordinates.result == 'success' && needs.plan.result == 'success' }}
+    # Each architecture builds on a runner of its own architecture: a build
+    # runs the Containerfile's steps, and none may rely on CPU emulation.
+    runs-on: ${{ fromJSON(inputs[format('build-runs-on-linux-{0}', matrix.arch)]) }}
+    # kaniko's job image, validated above; empty for Buildah, which runs in
+    # the runner's own environment.
+    container: ${{ needs.coordinates.outputs.builder_job_image }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: true
+      matrix: ${{ fromJSON(needs.plan.outputs.build-matrix) }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      STAGE_FLAVOR: ${{ inputs.flavor }}
+      FORGE_CI_REPOSITORY_URL: ${{ needs.coordinates.outputs.helpers_repository }}
+      CI_IMAGE_BUILDER: ${{ needs.coordinates.outputs.builder }}
+      CI_IMAGE_BUILDER_JOB_IMAGE: ${{ needs.coordinates.outputs.builder_job_image }}
+    steps:
+      - name: Checkout layer helpers
+        env:
+          EXPECTED_HELPERS_SHA: ${{ inputs['forge-ci-sha'] }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${EXPECTED_HELPERS_SHA}" =~ ^([0123456789abcdef]{40}|[0123456789abcdef]{64})$ ]]; then
+            echo "ERROR: forge-ci-sha must be a 40- or 64-character lowercase commit hex digest" >&2
+            exit 1
+          fi
+          # In the workspace, the one directory that survives a kaniko build,
+          # which replaces the job container's own filesystem.
+          helpers_dir="${GITHUB_WORKSPACE:?}/forge-ci-layer"
+          echo "HELPERS_DIR=${helpers_dir}" >>"${FORGEJO_ENV}"
+          git init --quiet "${helpers_dir}"
+          git -C "${helpers_dir}" remote add origin "${FORGE_CI_REPOSITORY_URL:?}"
+          # Direct unadvertised SHA fetches can be refused.
+          # Retry advertised branches/tags without assuming a default branch.
+          # Disable credential prompts, retain both failures for diagnostics,
+          # and verify the exact pin below with detach + rev-parse.
+          helpers_fetch_log=$(mktemp)
+          if ! GIT_TERMINAL_PROMPT=0 git -C "${helpers_dir}" -c protocol.version=2 fetch --quiet --no-tags --depth=1 --no-recurse-submodules origin "${EXPECTED_HELPERS_SHA}" 2>"${helpers_fetch_log}"; then
+            if ! GIT_TERMINAL_PROMPT=0 git -C "${helpers_dir}" -c protocol.version=2 fetch --quiet --no-recurse-submodules origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*' 2>>"${helpers_fetch_log}"; then
+              echo "ERROR: cannot fetch layer helpers ${EXPECTED_HELPERS_SHA} from $(git -C "${helpers_dir}" remote get-url origin)" >&2
+              echo "  (git may report 'could not read Username': this forge answers the same way for a repository that is absent and one this run cannot read, so it is not necessarily a missing credential)" >&2
+              cat -- "${helpers_fetch_log}" >&2
+              rm -f -- "${helpers_fetch_log}"
+              exit 1
+            fi
+          fi
+          rm -f -- "${helpers_fetch_log}"
+          git -C "${helpers_dir}" checkout --quiet --detach "${EXPECTED_HELPERS_SHA}"
+          actual_sha=$(git -C "${helpers_dir}" rev-parse HEAD)
+          if [ "${actual_sha}" != "${EXPECTED_HELPERS_SHA}" ]; then
+            echo "ERROR: helper checkout resolved to unexpected commit" >&2
+            echo "  expected: ${EXPECTED_HELPERS_SHA}" >&2
+            echo "  actual:   ${actual_sha}" >&2
+            exit 1
+          fi
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${helpers_dir}/.engine/bin/lib-forge-ci.sh"
+          fetch_forge_ci
+
+      # The builder is the organization's choice; this step prepares the one
+      # CI_IMAGE_BUILDER names, and admits the kaniko job image by its labels.
+      - name: Prepare the image builder
+        uses: ./forge-ci-layer/.forgejo/actions/setup-image-builder
+
+      - name: Fetch the parent by digest
+        if: ${{ inputs['parent-base-json'] != '' }}
+        env:
+          BUILD_JSON: ${{ toJSON(fromJSON(needs.plan.outputs.builds-by-name)[matrix.name][matrix.arch]) }}
+          PARENT_BASE_JSON: ${{ inputs['parent-base-json'] }}
+          IMAGE_NAME: ${{ matrix.name }}
+          IMAGE_ARCH: ${{ matrix.arch }}
+          RELEASE_SHA: ${{ inputs['release-sha'] }}
+          PARENT_REGISTRY_REPOSITORY: ${{ inputs['parent-registry-repository'] }}
+          PARENT_REGISTRY_USER: ${{ inputs['parent-registry-user'] }}
+          PARENT_REGISTRY_AUTH_ORIGIN: ${{ inputs['parent-registry-auth-origin'] }}
+          PARENT_REGISTRY_READ_TOKEN: ${{ secrets.PARENT_REGISTRY_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          cd "${GITHUB_WORKSPACE:?}"
+          token="${PARENT_REGISTRY_READ_TOKEN:-}"
+          unset PARENT_REGISTRY_READ_TOKEN
+          # shellcheck source=.engine/bin/lib-parent-pull.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-parent-pull.sh"
+          forge_ci_pull_parent "$token" run_forge_ci container release-images fetch-build-inputs \
+            --build-json "${BUILD_JSON:?}" --parent-base-json "${PARENT_BASE_JSON:?}" --release-sha "${RELEASE_SHA:?}" \
+            --server-url "${FORGEJO_SERVER:?}" --repository "${FORGEJO_REPO:?}" \
+            --inputs-dir "registry-inputs/${IMAGE_NAME:?}-arch-${IMAGE_ARCH:?}"
+
+      - name: Checkout release commit
+        env:
+          CHECKOUT_REF: ${{ inputs['release-sha'] }}
+          FORGEJO_TOKEN: ${{ forgejo.token }}
+        run: |
+          set -euo pipefail
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          run_forge_ci platform checkout \
+            --repository "${FORGEJO_REPO:?}" \
+            --server-url "${FORGEJO_SERVER:?}" \
+            --ref "${CHECKOUT_REF:?}" \
+            --depth 1 \
+            --path source
+
+      # No registry write and no secret: the layout waits for publish, which
+      # uploads only after every architecture is built and scanned.
+      # Stable API evidence name; the job matrix already identifies the architecture.
+      - name: Build native layout
+        env:
+          IMAGE_NAME: ${{ matrix.name }}
+          IMAGE_PLAN_JSON: ${{ inputs['image-plan-json'] }}
+          PARENT_BASE_JSON: ${{ inputs['parent-base-json'] }}
+          IMAGE_REPOSITORY: ${{ inputs['image-repository'] }}
+          RELEASE_SHA: ${{ inputs['release-sha'] }}
+          IMAGE_ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          cd "${GITHUB_WORKSPACE:?}"
+          printf '%s' "${IMAGE_PLAN_JSON:?}" >base-plan.json
+          # Bases are content-addressed: the plan names their tags, so the
+          # release tag the image verbs require names no part of them.
+          stage_args=(--stage-flavors "${STAGE_FLAVOR:?}" --plan "${GITHUB_WORKSPACE}/base-plan.json" --image-repository "${IMAGE_REPOSITORY:?}"
+            --release-tag v0.0.0 --release-sha "${RELEASE_SHA:?}"
+            --server-url "${FORGEJO_SERVER:?}" --repository "${FORGEJO_REPO:?}")
+          # The created time is the commit's, so it names the source, not
+          # the build.
+          created=$(TZ=UTC0 git -C source show -s --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd HEAD)
+          # Each matrix job builds this flavor on its selected native architecture.
+          build=(--arch "${IMAGE_ARCH:?}" --image "${IMAGE_NAME:?}" --created "${created}" --source-dir source --metadata-dir staged)
+          if [ -z "${PARENT_BASE_JSON}" ]; then
+            run_forge_ci container base-images root-base build "${stage_args[@]}" "${build[@]}"
+          else
+            run_forge_ci container base-images child-base build "${stage_args[@]}" "${build[@]}" \
+              --parent-base-json "${PARENT_BASE_JSON}" --inputs-dir registry-inputs
+          fi
+
+      - name: Upload ${{ matrix.arch }} layout
+        env:
+          BASE_ARTIFACT_NAMESPACE: ${{ inputs['artifact-name'] }}
+          IMAGE_NAME: ${{ matrix.name }}
+          IMAGE_ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          run_forge_ci artifact upload \
+            --name "${BASE_ARTIFACT_NAMESPACE:?}-layout-${IMAGE_NAME:?}-${IMAGE_ARCH:?}" \
+            --dir "${GITHUB_WORKSPACE:?}/staged/" \
+            --retention-days 1 --if-no-files error --include-hidden
+
+  publish:
+    name: "Publish: unsigned base candidate"
+    needs: [coordinates, plan, build]
+    if: ${{ !cancelled() && needs.coordinates.result == 'success' && needs.plan.result == 'success' && needs.build.result == 'success' }}
+    runs-on: ${{ fromJSON(inputs['runs-on']) }}
+    timeout-minutes: 45
+    outputs:
+      ledger_json: ${{ steps.publish.outputs.ledger-json }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      STAGE_FLAVOR: ${{ inputs.flavor }}
+      FORGE_CI_REPOSITORY_URL: ${{ needs.coordinates.outputs.helpers_repository }}
+    steps:
+      - name: Checkout layer helpers
+        env:
+          EXPECTED_HELPERS_SHA: ${{ inputs['forge-ci-sha'] }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${EXPECTED_HELPERS_SHA}" =~ ^([0123456789abcdef]{40}|[0123456789abcdef]{64})$ ]]; then
+            echo "ERROR: forge-ci-sha must be a 40- or 64-character lowercase commit hex digest" >&2
+            exit 1
+          fi
+          # In the workspace, the one directory that survives a kaniko build,
+          # which replaces the job container's own filesystem.
+          helpers_dir="${GITHUB_WORKSPACE:?}/forge-ci-layer"
+          echo "HELPERS_DIR=${helpers_dir}" >>"${FORGEJO_ENV}"
+          git init --quiet "${helpers_dir}"
+          git -C "${helpers_dir}" remote add origin "${FORGE_CI_REPOSITORY_URL:?}"
+          # Direct unadvertised SHA fetches can be refused.
+          # Retry advertised branches/tags without assuming a default branch.
+          # Disable credential prompts, retain both failures for diagnostics,
+          # and verify the exact pin below with detach + rev-parse.
+          helpers_fetch_log=$(mktemp)
+          if ! GIT_TERMINAL_PROMPT=0 git -C "${helpers_dir}" -c protocol.version=2 fetch --quiet --no-tags --depth=1 --no-recurse-submodules origin "${EXPECTED_HELPERS_SHA}" 2>"${helpers_fetch_log}"; then
+            if ! GIT_TERMINAL_PROMPT=0 git -C "${helpers_dir}" -c protocol.version=2 fetch --quiet --no-recurse-submodules origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*' 2>>"${helpers_fetch_log}"; then
+              echo "ERROR: cannot fetch layer helpers ${EXPECTED_HELPERS_SHA} from $(git -C "${helpers_dir}" remote get-url origin)" >&2
+              echo "  (git may report 'could not read Username': this forge answers the same way for a repository that is absent and one this run cannot read, so it is not necessarily a missing credential)" >&2
+              cat -- "${helpers_fetch_log}" >&2
+              rm -f -- "${helpers_fetch_log}"
+              exit 1
+            fi
+          fi
+          rm -f -- "${helpers_fetch_log}"
+          git -C "${helpers_dir}" checkout --quiet --detach "${EXPECTED_HELPERS_SHA}"
+          actual_sha=$(git -C "${helpers_dir}" rev-parse HEAD)
+          if [ "${actual_sha}" != "${EXPECTED_HELPERS_SHA}" ]; then
+            echo "ERROR: helper checkout resolved to unexpected commit" >&2
+            echo "  expected: ${EXPECTED_HELPERS_SHA}" >&2
+            echo "  actual:   ${actual_sha}" >&2
+            exit 1
+          fi
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${helpers_dir}/.engine/bin/lib-forge-ci.sh"
+          fetch_forge_ci
+
+      # The gate reads the repository's approved findings, .trivyignore.yaml,
+      # from the working directory: publication runs in the commit's top
+      # level, which a sparse checkout brings without the tree below it.
+      - name: Checkout release commit
+        env:
+          CHECKOUT_REF: ${{ inputs['release-sha'] }}
+          FORGEJO_TOKEN: ${{ forgejo.token }}
+        run: |
+          set -euo pipefail
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          run_forge_ci platform checkout \
+            --repository "${FORGEJO_REPO:?}" \
+            --server-url "${FORGEJO_SERVER:?}" \
+            --ref "${CHECKOUT_REF:?}" \
+            --depth 1 \
+            --sparse .forge-ci \
+            --path source
+
+      - name: Download the staged layouts
+        env:
+          BASE_ARTIFACT_NAMESPACE: ${{ inputs['artifact-name'] }}
+          IMAGE_LAYOUTS: ${{ needs.plan.outputs.layouts }}
+        run: |
+          set -euo pipefail
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          # One <name>-<arch> per planned build, on one line with a space
+          # between them, as the plan step printed them. read splits the
+          # line into words and expands nothing.
+          read -r -a layouts <<<"${IMAGE_LAYOUTS:?}"
+          for layout in "${layouts[@]}"; do
+            run_forge_ci artifact download \
+              --name "${BASE_ARTIFACT_NAMESPACE:?}-layout-${layout:?}" \
+              --dir "${GITHUB_WORKSPACE:?}/layouts"
+          done
+
+      # The scanners are the layer's, pinned by version and checksum in their
+      # install scripts; the gate's verdict does not depend on the caller's
+      # tool versions.
+      - name: Install Trivy
+        run: |
+          set -euo pipefail
+          export CI_TEMP_DIR="${RUNNER_TEMP:?}"
+          # shellcheck source=scripts/bootstrap/install-trivy.sh
+          source "${HELPERS_DIR:?}/scripts/bootstrap/install-trivy.sh"
+          install_trivy
+
+      - name: Install Syft for platform inventories
+        run: |
+          set -euo pipefail
+          export CI_TEMP_DIR="${RUNNER_TEMP:?}"
+          # shellcheck source=scripts/bootstrap/install-syft.sh
+          source "${HELPERS_DIR:?}/scripts/bootstrap/install-syft.sh"
+          install_syft
+
+      # The only step that holds the registry token. It runs nothing of the
+      # caller's: the layouts are data, admitted against the plan before the
+      # first upload, and the candidate it pushes is unsigned.
+      - name: Scan and publish the unsigned candidate
+        id: publish
+        env:
+          IMAGE_PLAN_JSON: ${{ inputs['image-plan-json'] }}
+          PARENT_BASE_JSON: ${{ inputs['parent-base-json'] }}
+          IMAGE_REPOSITORY: ${{ inputs['image-repository'] }}
+          RELEASE_SHA: ${{ inputs['release-sha'] }}
+          BASE_IMAGES_ADMIN_VULNERABILITIES: ${{ inputs['enforce-vulnerabilities'] }}
+          REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
+          REGISTRY_USER: ${{ inputs['registry-user'] || vars.RELEASE_REGISTRY_USER }}
+        run: |
+          set -euo pipefail
+          registry_token="${REGISTRY_TOKEN:?the caller passes RELEASE_REGISTRY_TOKEN, which may write the base repository}"
+          unset REGISTRY_TOKEN
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          cd "${GITHUB_WORKSPACE:?}"
+          printf '%s' "${IMAGE_PLAN_JSON:?}" >base-plan.json
+          # Bases are content-addressed: the plan names their tags, so the
+          # release tag the image verbs require names no part of them.
+          stage_args=(--stage-flavors "${STAGE_FLAVOR:?}" --plan "${GITHUB_WORKSPACE}/base-plan.json" --image-repository "${IMAGE_REPOSITORY:?}"
+            --release-tag v0.0.0 --release-sha "${RELEASE_SHA:?}"
+            --server-url "${FORGEJO_SERVER:?}" --repository "${FORGEJO_REPO:?}")
+          auth_file=$(mktemp "${RUNNER_TEMP:?}/registry-auth.XXXXXX")
+          trap 'rm -f -- "${auth_file}"' EXIT
+          printf '%s' "${registry_token}" | run_forge_ci container login \
+            --registry "${IMAGE_REPOSITORY}" --server-url "${FORGEJO_SERVER}" --repository "${FORGEJO_REPO}" \
+            --registry-username "${REGISTRY_USER:-}" --registry-password-file - --auth-file "${auth_file}"
+          unset registry_token
+          payload="${GITHUB_WORKSPACE}/payload"
+          # Every image is scanned; the administrator policy in the engine
+          # decides whether findings block, as for release images.
+          publish=(--enforce-vulnerabilities="${BASE_IMAGES_ADMIN_VULNERABILITIES:?}"
+            --layouts-dir "${GITHUB_WORKSPACE}/layouts" --output-dir "${payload}" --auth-file "${auth_file}")
+          cd source
+          if [ -z "${PARENT_BASE_JSON}" ]; then
+            run_forge_ci container base-images root-base publish "${stage_args[@]}" "${publish[@]}"
+          else
+            run_forge_ci container base-images child-base publish "${stage_args[@]}" "${publish[@]}" \
+              --parent-base-json "${PARENT_BASE_JSON}"
+          fi
+          rm -f -- "${auth_file}"
+          # JSON outputs are single-line, as `platform dependency` admits them;
+          # the indented ledger holds newlines only between tokens.
+          printf 'ledger-json=%s\n' "$(tr -d '\n' <"${payload}/dist/base-images.json")" >>"${FORGEJO_OUTPUT:?}"
+
+      - name: Upload the payload and its SBOMs
+        env:
+          BASE_ARTIFACT_NAMESPACE: ${{ inputs['artifact-name'] }}
+        run: |
+          set -euo pipefail
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          # The signer takes the SBOMs the ledger pins from an artifact of
+          # their own, scoped to this lifecycle's artifact namespace.
+          run_forge_ci artifact upload \
+            --name "${BASE_ARTIFACT_NAMESPACE:?}-sboms" \
+            --dir "${GITHUB_WORKSPACE:?}/payload/premade-sboms/" \
+            --retention-days 1 --if-no-files error
+          run_forge_ci artifact upload \
+            --name "${BASE_ARTIFACT_NAMESPACE}" \
+            --dir "${GITHUB_WORKSPACE}/payload/" \
+            --retention-days 1 --if-no-files error
+
+  sign:
+    name: Sign container images
+    needs: [coordinates, publish]
+    if: ${{ !cancelled() && needs.coordinates.result == 'success' && needs.publish.result == 'success' }}
+    runs-on: ${{ fromJSON(inputs['signer-runs-on']) }}
+    container:
+      image: ${{ needs.coordinates.outputs.signer_image }}
+    env:
+      SIGNER_STRICT: '1'
+      FORGE_CI_REPOSITORY_URL: ${{ needs.coordinates.outputs.helpers_repository }}
+      FORGE_CI_COSIGN_TRANSPARENCY: ${{ needs.coordinates.outputs.transparency_log }}
+    timeout-minutes: 45
+    steps:
+      - name: Checkout layer helpers
+        env:
+          EXPECTED_HELPERS_SHA: ${{ inputs['forge-ci-sha'] }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${EXPECTED_HELPERS_SHA}" =~ ^([0123456789abcdef]{40}|[0123456789abcdef]{64})$ ]]; then
+            echo "ERROR: forge-ci-sha must be a 40- or 64-character lowercase commit hex digest" >&2
+            exit 1
+          fi
+          signer_workspace=$(mktemp -d /tmp/forge-ci-signer.XXXXXX)
+          helpers_dir="${signer_workspace}/helpers"
+          work_dir="${signer_workspace}/work"
+          mkdir -p "${work_dir}"
+          {
+            echo "SIGNER_WORKSPACE=${signer_workspace}"
+            echo "HELPERS_DIR=${helpers_dir}"
+            echo "SIGNER_WORK_DIR=${work_dir}"
+          } >>"${FORGEJO_ENV}"
+          git init --quiet "${helpers_dir}"
+          git -C "${helpers_dir}" remote add origin "${FORGE_CI_REPOSITORY_URL:?}"
+          # Direct unadvertised SHA fetches can be refused.
+          # Retry advertised branches/tags without assuming a default branch.
+          # Disable credential prompts, retain both failures for diagnostics,
+          # and verify the exact pin below with detach + rev-parse.
+          helpers_fetch_log=$(mktemp)
+          if ! GIT_TERMINAL_PROMPT=0 git -C "${helpers_dir}" -c protocol.version=2 fetch --quiet --no-tags --depth=1 --no-recurse-submodules origin "${EXPECTED_HELPERS_SHA}" 2>"${helpers_fetch_log}"; then
+            if ! GIT_TERMINAL_PROMPT=0 git -C "${helpers_dir}" -c protocol.version=2 fetch --quiet --no-recurse-submodules origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*' 2>>"${helpers_fetch_log}"; then
+              echo "ERROR: cannot fetch layer helpers ${EXPECTED_HELPERS_SHA} from $(git -C "${helpers_dir}" remote get-url origin)" >&2
+              echo "  (git may report 'could not read Username': this forge answers the same way for a repository that is absent and one this run cannot read, so it is not necessarily a missing credential)" >&2
+              cat -- "${helpers_fetch_log}" >&2
+              rm -f -- "${helpers_fetch_log}"
+              exit 1
+            fi
+          fi
+          rm -f -- "${helpers_fetch_log}"
+          git -C "${helpers_dir}" checkout --quiet --detach "${EXPECTED_HELPERS_SHA}"
+
+      - name: Verify trusted helper checkout
+        env:
+          EXPECTED_HELPERS_SHA: ${{ inputs['forge-ci-sha'] }}
+        run: |
+          set -euo pipefail
+          # Input hex-validation happens once at the checkout step (workflow
+          # inputs are immutable between steps); this step verifies the LIVE
+          # checkout matches the pinned SHA, which subsumes the format check.
+          actual_sha=$(git -C "${HELPERS_DIR:?}" rev-parse HEAD)
+          if [ "${actual_sha}" != "${EXPECTED_HELPERS_SHA}" ]; then
+            echo "ERROR: helper checkout resolved to unexpected commit" >&2
+            echo "  expected: ${EXPECTED_HELPERS_SHA}" >&2
+            echo "  actual:   ${actual_sha}" >&2
+            exit 1
+          fi
+
+      # The checkout holds the binary's checksum and not the binary. It is
+      # downloaded here, by that checksum and without credentials, so that no
+      # later step, each of which may hold a key, has to reach the network
+      # for it. The toolchain check below refuses a job that skipped this.
+      - name: Fetch engine binary
+        run: |
+          set -euo pipefail
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          fetch_forge_ci
+
+      - name: Verify signer toolchain
+        run: |
+          set -euo pipefail
+          bash "${HELPERS_DIR:?}/.forgejo/scripts/verify-signer-toolchain.sh"
+
+      - name: Bind Cosign signing key to trusted public key
+        env:
+          COSIGN_KEY: ${{ secrets.RELEASE_COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.RELEASE_COSIGN_PASSPHRASE }}
+          TRUSTED_KEY_INPUT: ${{ inputs['cosign-public-key'] }}
+          TRUSTED_KEY_SHA256_INPUT: ${{ inputs['cosign-public-key-sha256'] }}
+        run: |
+          set -euo pipefail
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          # The caller supplies the trust root; the layer ships none. The
+          # engine refuses an empty key, an empty digest and a mismatch.
+          trusted_key="${SIGNER_WORKSPACE:?}/cosign.pub"
+          # $(...) drops the input's trailing newlines in any shell, so the
+          # file is the key and one newline, as `sha256sum cosign.pub` hashed it.
+          trusted_public_key=$(printf '%s' "${TRUSTED_KEY_INPUT}")
+          printf '%s\n' "${trusted_public_key}" >"${trusted_key}"
+          printf '%s\n' "${TRUSTED_KEY_SHA256_INPUT}" >"${trusted_key}.sha256"
+          run_forge_ci validate signing-key \
+            --key env://COSIGN_KEY \
+            --trusted-public-key "${trusted_key}" \
+            --trusted-public-key-digest "${trusted_key}.sha256"
+      - name: Sign and attest images
+        timeout-minutes: 30
+        env:
+          # `artifact download` reads this run's artifact through the Forgejo
+          # provider. The signing verb consults no provider: its registry and
+          # source come from the flags below.
+          FORGE_CI_PROVIDER: forgejo
+          LEDGER_JSON: ${{ needs.publish.outputs.ledger_json }}
+          REPOSITORY_SUFFIX: ${{ inputs.repository-suffix }}
+          BASE_IMAGE_REPOSITORY: ${{ inputs['image-repository'] }}
+          SOURCE_SHA: ${{ inputs['release-sha'] }}
+          CALLER_WORKFLOW: ${{ inputs.caller-workflow }}
+          SBOM_ARTIFACT: ${{ format('{0}-sboms', inputs['artifact-name']) }}
+          COSIGN_KEY: ${{ secrets.RELEASE_COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.RELEASE_COSIGN_PASSPHRASE }}
+          REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
+          REGISTRY_USER: ${{ inputs['registry-user'] || vars.RELEASE_REGISTRY_USER }}
+        run: |
+          set -euo pipefail
+          cd "${SIGNER_WORK_DIR:?}"
+          cosign_key="${COSIGN_KEY:?}"
+          cosign_password="${COSIGN_PASSWORD:?}"
+          registry_token="${REGISTRY_TOKEN:?}"
+          registry_user="${REGISTRY_USER}"
+          unset COSIGN_KEY COSIGN_PASSWORD REGISTRY_TOKEN REGISTRY_USER
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          # LEDGER CONTRACT: each entry's sbom path is rooted under
+          # premade-sboms/, so the premade SBOM artifact must land in exactly
+          # that directory under the signer work dir. Keep the path and the
+          # --sbom-path-pattern below in lockstep.
+          run_forge_ci artifact download \
+            --name "${SBOM_ARTIFACT:?}" \
+            --dir premade-sboms
+          printf '%s' "${LEDGER_JSON:?}" > base-images.ledger.json
+          # The step supplies its inputs as flags, the timestamp and, on stdin, the
+          # registry token; `container base-images sign --help` states the rules.
+          printf '%s' "${registry_token}" | COSIGN_KEY="${cosign_key}" COSIGN_PASSWORD="${cosign_password}" \
+            run_forge_ci container base-images sign \
+            --ledger base-images.ledger.json \
+            --server-url "${FORGEJO_SERVER:?}" \
+            --repository "${FORGEJO_REPO:?}" \
+            --repository-suffix "${REPOSITORY_SUFFIX}" \
+            --expected-repository "${BASE_IMAGE_REPOSITORY}" \
+            --workflow "${CALLER_WORKFLOW:?}" \
+            --source-sha "${SOURCE_SHA}" \
+            --started-on "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --registry-username "${registry_user}" \
+            --registry-password-file - \
+            --sbom-path-pattern '^premade-sboms/base-sbom-[A-Za-z0-9._-]+[.]cyclonedx[.]json$' \
+            --method kms \
+            --key env://COSIGN_KEY
+
+      - name: Cleanup signer workspace
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -n "${SIGNER_WORKSPACE:-}" ]; then
+            rm -rf "${SIGNER_WORKSPACE}"
+          fi
+
+  promote:
+    name: Promote base container images
+    needs: [coordinates, publish, sign]
+    if: ${{ !cancelled() && needs.coordinates.result == 'success' && needs.publish.result == 'success' && needs.sign.result == 'success' }}
+    runs-on: ${{ fromJSON(inputs['runs-on']) }}
+    container:
+      image: ${{ needs.coordinates.outputs.signer_image }}
+    env:
+      SIGNER_STRICT: '1'
+      FORGE_CI_REPOSITORY_URL: ${{ needs.coordinates.outputs.helpers_repository }}
+      FORGE_CI_COSIGN_TRANSPARENCY: ${{ needs.coordinates.outputs.transparency_log }}
+    timeout-minutes: 30
+    outputs:
+      base_images_json: ${{ steps.promote.outputs.base_images_json }}
+    steps:
+      - name: Checkout layer helpers
+        env:
+          EXPECTED_HELPERS_SHA: ${{ inputs['forge-ci-sha'] }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${EXPECTED_HELPERS_SHA}" =~ ^([0123456789abcdef]{40}|[0123456789abcdef]{64})$ ]]; then
+            echo "ERROR: forge-ci-sha must be a 40- or 64-character lowercase commit hex digest" >&2
+            exit 1
+          fi
+          signer_workspace=$(mktemp -d /tmp/forge-ci-signer.XXXXXX)
+          helpers_dir="${signer_workspace}/helpers"
+          consumer_dir="${signer_workspace}/consumer"
+          mkdir -p "${consumer_dir}"
+          {
+            echo "SIGNER_WORKSPACE=${signer_workspace}"
+            echo "HELPERS_DIR=${helpers_dir}"
+            echo "CONSUMER_WORKSPACE=${consumer_dir}"
+          } >>"${FORGEJO_ENV}"
+          git init --quiet "${helpers_dir}"
+          git -C "${helpers_dir}" remote add origin "${FORGE_CI_REPOSITORY_URL:?}"
+          # Direct unadvertised SHA fetches can be refused.
+          # Retry advertised branches/tags without assuming a default branch.
+          # Disable credential prompts, retain both failures for diagnostics,
+          # and verify the exact pin below with detach + rev-parse.
+          helpers_fetch_log=$(mktemp)
+          if ! GIT_TERMINAL_PROMPT=0 git -C "${helpers_dir}" -c protocol.version=2 fetch --quiet --no-tags --depth=1 --no-recurse-submodules origin "${EXPECTED_HELPERS_SHA}" 2>"${helpers_fetch_log}"; then
+            if ! GIT_TERMINAL_PROMPT=0 git -C "${helpers_dir}" -c protocol.version=2 fetch --quiet --no-recurse-submodules origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*' 2>>"${helpers_fetch_log}"; then
+              echo "ERROR: cannot fetch layer helpers ${EXPECTED_HELPERS_SHA} from $(git -C "${helpers_dir}" remote get-url origin)" >&2
+              echo "  (git may report 'could not read Username': this forge answers the same way for a repository that is absent and one this run cannot read, so it is not necessarily a missing credential)" >&2
+              cat -- "${helpers_fetch_log}" >&2
+              rm -f -- "${helpers_fetch_log}"
+              exit 1
+            fi
+          fi
+          rm -f -- "${helpers_fetch_log}"
+          git -C "${helpers_dir}" checkout --quiet --detach "${EXPECTED_HELPERS_SHA}"
+
+      - name: Verify trusted helper checkout
+        env:
+          EXPECTED_HELPERS_SHA: ${{ inputs['forge-ci-sha'] }}
+        run: |
+          set -euo pipefail
+          # Input hex-validation happens once at the checkout step (workflow
+          # inputs are immutable between steps); this step verifies the LIVE
+          # checkout matches the pinned SHA, which subsumes the format check.
+          actual_sha=$(git -C "${HELPERS_DIR:?}" rev-parse HEAD)
+          if [ "${actual_sha}" != "${EXPECTED_HELPERS_SHA}" ]; then
+            echo "ERROR: helper checkout resolved to unexpected commit" >&2
+            echo "  expected: ${EXPECTED_HELPERS_SHA}" >&2
+            echo "  actual:   ${actual_sha}" >&2
+            exit 1
+          fi
+
+      # The checkout holds the binary's checksum and not the binary. It is
+      # downloaded here, by that checksum and without credentials, so that no
+      # later step, each of which may hold a key, has to reach the network
+      # for it. The toolchain check below refuses a job that skipped this.
+      - name: Fetch engine binary
+        run: |
+          set -euo pipefail
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          fetch_forge_ci
+
+      - name: Verify signer toolchain
+        run: |
+          set -euo pipefail
+          bash "${HELPERS_DIR:?}/.forgejo/scripts/verify-signer-toolchain.sh"
+
+      - name: Checkout consumer at release SHA
+        env:
+          CHECKOUT_REF: ${{ inputs.release-sha }}
+        run: |
+          set -euo pipefail
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          FORGEJO_WORKSPACE="${CONSUMER_WORKSPACE:?}" \
+            FORGE_CI_PROVIDER=forgejo \
+            run_forge_ci platform checkout --ref "${CHECKOUT_REF}"
+
+      - name: Verify signatures and promote base tags
+        id: promote
+        env:
+          ALL_IMAGES_JSON: ''
+          LEDGER_JSON: ${{ needs.publish.outputs.ledger_json }}
+          REPOSITORY_SUFFIX: ${{ inputs.repository-suffix }}
+          BASE_IMAGE_REPOSITORY: ${{ inputs['image-repository'] }}
+          BASE_INPUT_ID: ''
+          BASE_INPUTS_JSON: ${{ inputs['expected-inputs-json'] }}
+          EXPECTED_WORKFLOW: ${{ inputs.caller-workflow }}
+          TRUSTED_KEY_INPUT: ${{ inputs['cosign-public-key'] }}
+          TRUSTED_KEY_SHA256_INPUT: ${{ inputs['cosign-public-key-sha256'] }}
+          REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
+          REGISTRY_USER: ${{ inputs['registry-user'] || vars.RELEASE_REGISTRY_USER }}
+        run: |
+          set -euo pipefail
+          cd "${CONSUMER_WORKSPACE:?}"
+          # The caller supplies the trust root; the layer ships none. The
+          # engine refuses an empty key, an empty digest and a mismatch.
+          trusted_key="${SIGNER_WORKSPACE:?}/cosign.pub"
+          # $(...) drops the input's trailing newlines in any shell, so the
+          # file is the key and one newline, as `sha256sum cosign.pub` hashed it.
+          trusted_public_key=$(printf '%s' "${TRUSTED_KEY_INPUT}")
+          printf '%s\n' "${trusted_public_key}" >"${trusted_key}"
+          printf '%s\n' "${TRUSTED_KEY_SHA256_INPUT}" >"${trusted_key}.sha256"
+          # Stage it into the workspace (the engine requires a relative,
+          # workspace-contained key path) and hand the engine its digest.
+          install -m 0644 "${trusted_key}" .forge-ci-cosign.pub
+          COSIGN_PUBLIC_KEY_PATH=.forge-ci-cosign.pub
+          # The digest input is a bare digest; read the first field so a
+          # value pasted in sha256sum format does not become the digest.
+          read -r COSIGN_PUBLIC_KEY_SHA256 _ <"${trusted_key}.sha256"
+          export COSIGN_PUBLIC_KEY_PATH COSIGN_PUBLIC_KEY_SHA256
+          registry_token="${REGISTRY_TOKEN:?}"
+          registry_user="${REGISTRY_USER}"
+          unset REGISTRY_TOKEN REGISTRY_USER
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          printf '%s' "${LEDGER_JSON:?publication must return its original ledger}" >"${SIGNER_WORKSPACE}/base-images.ledger.json"
+          unset LEDGER_JSON
+          # The token that pushed the bases also links their package to
+          # this repository once promoted, as release-images cleanup does.
+          printf '%s' "${registry_token}" | FORGE_CI_PACKAGE_API_TOKEN="${registry_token}" \
+            FORGE_CI_PROVIDER=forgejo run_forge_ci container base-images promote \
+            --ledger "${SIGNER_WORKSPACE}/base-images.ledger.json" \
+            --expected-repository "${BASE_IMAGE_REPOSITORY}" \
+            --registry-username "${registry_user}" \
+            --registry-password-file -
+
+      - name: Cleanup signer workspace
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -n "${SIGNER_WORKSPACE:-}" ]; then
+            rm -rf "${SIGNER_WORKSPACE}"
+          fi
+
+  authenticate:
+    name: Verify base container images
+    needs: [coordinates, publish, promote]
+    if: ${{ !cancelled() && needs.coordinates.result == 'success' && needs.publish.result == 'success' && needs.promote.result == 'success' }}
+    runs-on: ${{ fromJSON(inputs['runs-on']) }}
+    container:
+      image: ${{ needs.coordinates.outputs.signer_image }}
+    env:
+      SIGNER_STRICT: '1'
+      FORGE_CI_REPOSITORY_URL: ${{ needs.coordinates.outputs.helpers_repository }}
+      FORGE_CI_COSIGN_TRANSPARENCY: ${{ needs.coordinates.outputs.transparency_log }}
+    timeout-minutes: 15
+    outputs:
+      ledger_json: ${{ steps.verify.outputs.ledger_json }}
+      parent_base_json: ${{ steps.verify.outputs.parent_base_json }}
+    steps:
+      - name: Checkout layer helpers
+        env:
+          EXPECTED_HELPERS_SHA: ${{ inputs['forge-ci-sha'] }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${EXPECTED_HELPERS_SHA}" =~ ^([0123456789abcdef]{40}|[0123456789abcdef]{64})$ ]]; then
+            echo "ERROR: forge-ci-sha must be a 40- or 64-character lowercase commit hex digest" >&2
+            exit 1
+          fi
+          signer_workspace=$(mktemp -d /tmp/forge-ci-signer.XXXXXX)
+          helpers_dir="${signer_workspace}/helpers"
+          consumer_dir="${signer_workspace}/consumer"
+          mkdir -p "${consumer_dir}"
+          {
+            echo "SIGNER_WORKSPACE=${signer_workspace}"
+            echo "HELPERS_DIR=${helpers_dir}"
+            echo "CONSUMER_WORKSPACE=${consumer_dir}"
+          } >>"${FORGEJO_ENV}"
+          git init --quiet "${helpers_dir}"
+          git -C "${helpers_dir}" remote add origin "${FORGE_CI_REPOSITORY_URL:?}"
+          # Direct unadvertised SHA fetches can be refused.
+          # Retry advertised branches/tags without assuming a default branch.
+          # Disable credential prompts, retain both failures for diagnostics,
+          # and verify the exact pin below with detach + rev-parse.
+          helpers_fetch_log=$(mktemp)
+          if ! GIT_TERMINAL_PROMPT=0 git -C "${helpers_dir}" -c protocol.version=2 fetch --quiet --no-tags --depth=1 --no-recurse-submodules origin "${EXPECTED_HELPERS_SHA}" 2>"${helpers_fetch_log}"; then
+            if ! GIT_TERMINAL_PROMPT=0 git -C "${helpers_dir}" -c protocol.version=2 fetch --quiet --no-recurse-submodules origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*' 2>>"${helpers_fetch_log}"; then
+              echo "ERROR: cannot fetch layer helpers ${EXPECTED_HELPERS_SHA} from $(git -C "${helpers_dir}" remote get-url origin)" >&2
+              echo "  (git may report 'could not read Username': this forge answers the same way for a repository that is absent and one this run cannot read, so it is not necessarily a missing credential)" >&2
+              cat -- "${helpers_fetch_log}" >&2
+              rm -f -- "${helpers_fetch_log}"
+              exit 1
+            fi
+          fi
+          rm -f -- "${helpers_fetch_log}"
+          git -C "${helpers_dir}" checkout --quiet --detach "${EXPECTED_HELPERS_SHA}"
+
+      - name: Verify trusted helper checkout
+        env:
+          EXPECTED_HELPERS_SHA: ${{ inputs['forge-ci-sha'] }}
+        run: |
+          set -euo pipefail
+          # Input hex-validation happens once at the checkout step (workflow
+          # inputs are immutable between steps); this step verifies the LIVE
+          # checkout matches the pinned SHA, which subsumes the format check.
+          actual_sha=$(git -C "${HELPERS_DIR:?}" rev-parse HEAD)
+          if [ "${actual_sha}" != "${EXPECTED_HELPERS_SHA}" ]; then
+            echo "ERROR: helper checkout resolved to unexpected commit" >&2
+            echo "  expected: ${EXPECTED_HELPERS_SHA}" >&2
+            echo "  actual:   ${actual_sha}" >&2
+            exit 1
+          fi
+
+      # The checkout holds the binary's checksum and not the binary. It is
+      # downloaded here, by that checksum and without credentials, so that no
+      # later step, each of which may hold a key, has to reach the network
+      # for it. The toolchain check below refuses a job that skipped this.
+      - name: Fetch engine binary
+        run: |
+          set -euo pipefail
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          fetch_forge_ci
+
+      - name: Verify signer toolchain
+        run: |
+          set -euo pipefail
+          bash "${HELPERS_DIR:?}/.forgejo/scripts/verify-signer-toolchain.sh"
+
+      - name: Checkout consumer at release SHA
+        env:
+          CHECKOUT_REF: ${{ inputs.release-sha }}
+        run: |
+          set -euo pipefail
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          FORGEJO_WORKSPACE="${CONSUMER_WORKSPACE:?}" \
+            FORGE_CI_PROVIDER=forgejo \
+            run_forge_ci platform checkout --ref "${CHECKOUT_REF}"
+
+      - name: Authenticate promoted base
+        id: verify
+        env:
+          # Authenticate the promoted digest in the same explicit repository
+          # used for publication, against the consumer's independent expectations.
+          LEDGER_JSON: ${{ needs.publish.outputs.ledger_json }}
+          EXPECTED_REPOSITORY: ${{ inputs['image-repository'] }}
+          REPOSITORY_SUFFIX: ${{ inputs.repository-suffix }}
+          BASE_INPUTS_JSON: ${{ inputs['expected-inputs-json'] }}
+          EXPECTED_REF: ${{ fromJSON(needs.promote.outputs.base_images_json || '[{}]')[0].ref }}
+          EXPECTED_WORKFLOW: ${{ inputs.caller-workflow }}
+          TRUSTED_KEY_INPUT: ${{ inputs['cosign-public-key'] }}
+          TRUSTED_KEY_SHA256_INPUT: ${{ inputs['cosign-public-key-sha256'] }}
+          REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
+          REGISTRY_USER: ${{ inputs['registry-user'] || vars.RELEASE_REGISTRY_USER }}
+        run: |
+          set -euo pipefail
+          cd "${CONSUMER_WORKSPACE:?}"
+          # The caller supplies the trust root; the layer ships none. The
+          # engine refuses an empty key, an empty digest and a mismatch.
+          trusted_key="${SIGNER_WORKSPACE:?}/cosign.pub"
+          # $(...) drops the input's trailing newlines in any shell, so the
+          # file is the key and one newline, as `sha256sum cosign.pub` hashed it.
+          trusted_public_key=$(printf '%s' "${TRUSTED_KEY_INPUT}")
+          printf '%s\n' "${trusted_public_key}" >"${trusted_key}"
+          printf '%s\n' "${TRUSTED_KEY_SHA256_INPUT}" >"${trusted_key}.sha256"
+          # Stage it into the workspace (the engine requires a relative,
+          # workspace-contained key path) and hand the engine its digest.
+          install -m 0644 "${trusted_key}" .forge-ci-cosign.pub
+          COSIGN_PUBLIC_KEY_PATH=.forge-ci-cosign.pub
+          # The digest input is a bare digest; read the first field so a
+          # value pasted in sha256sum format does not become the digest.
+          read -r COSIGN_PUBLIC_KEY_SHA256 _ <"${trusted_key}.sha256"
+          export COSIGN_PUBLIC_KEY_PATH COSIGN_PUBLIC_KEY_SHA256
+          # shellcheck source=.engine/bin/lib-forge-ci.sh
+          source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
+          : "${EXPECTED_REF:?promotion must return an exact digest reference}"
+          : "${LEDGER_JSON:?publication must return its original ledger}"
+          registry_token=${REGISTRY_TOKEN:?authentication requires RELEASE_REGISTRY_TOKEN}
+          export -n registry_token
+          unset REGISTRY_TOKEN
+          auth_file="${SIGNER_WORKSPACE:?}/registry-auth.json"
+          printf '%s' "${registry_token}" | FORGE_CI_PROVIDER=forgejo run_forge_ci container login \
+            --registry "${EXPECTED_REPOSITORY}" --server-url "${FORGEJO_SERVER}" --repository "${FORGEJO_REPO}" \
+            --registry-username "${REGISTRY_USER:-}" --registry-password-file - --auth-file "${auth_file}"
+          unset registry_token REGISTRY_USER
+          # Authentication of one exact base, never discovery.
+          parent=$(FORGE_CI_PROVIDER=forgejo run_forge_ci container base-images authenticate-parent --auth-file "${auth_file}" \
+            --expected-ref "${EXPECTED_REF}" --base-inputs-json "${BASE_INPUTS_JSON}")
+          printf 'ledger_json=%s\n' "${LEDGER_JSON}" >>"${FORGEJO_OUTPUT:?}"
+          printf 'parent_base_json=%s\n' "${parent}" >>"${FORGEJO_OUTPUT:?}"
+
+      - name: Cleanup signer workspace
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -n "${SIGNER_WORKSPACE:-}" ]; then
+            rm -rf "${SIGNER_WORKSPACE}"
+          fi

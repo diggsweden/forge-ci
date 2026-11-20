@@ -2086,6 +2086,13 @@ report on this one.
   are the lab account's. Except for the narrow repository defaults described
   below, a fact passed in another form, a key written into the workflow or a
   fallback expression, is refused with the line.
+- Local reusable-workflow secret forwarding is traced back to the entry
+  workflow, including renamed secrets and `secrets: inherit`. For example,
+  a base stage's `RELEASE_REGISTRY_TOKEN` forwarded from the caller's
+  `BASE_IMAGE_REGISTRY_TOKEN` provisions that repository secret automatically.
+  Missing forwarding, unsupported expressions and local call cycles fail
+  during planning. This only binds known release credentials; a separate
+  parent pull-only credential still requires an explicit `secret-file=` setting.
 - The caller's settings, each `key=value`:
 
   | Setting | Meaning |

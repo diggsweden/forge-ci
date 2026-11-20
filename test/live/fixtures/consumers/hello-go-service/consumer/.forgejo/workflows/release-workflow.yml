@@ -136,6 +136,8 @@ jobs:
   # Runs on the pool, or on the container runner an installation names.
   # ===========================================================================
   build:
+    outputs:
+      context-digest: ${{ steps.context.outputs.digest }}
     name: "Build: release files"
     needs: prepare
     runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
@@ -195,10 +197,13 @@ jobs:
         with:
           version: ${{ needs.prepare.outputs.release-tag }}
       - name: Prepare the image context
+        id: context
         run: |
           set -euo pipefail
           mkdir -p image-context/dist
           cp -R dist/linux-amd64 dist/linux-arm64 image-context/dist/
+          digest=$(forge-ci release dist-digest --dist-dir image-context --manifest-root .)
+          printf 'digest=%s\n' "${digest}" >>"${FORGEJO_OUTPUT:?}"
           forge-ci artifact upload --name image-context --dir image-context --include-hidden --retention-days 1 --if-no-files error
       # The hand-off the signer takes: the public files, exactly one checksums
       # file covering them, release-notes.md for the release body, and
@@ -249,6 +254,7 @@ jobs:
       release-sha: ${{ needs.prepare.outputs.release-sha }}
       artifacts-config: .forge-ci/images.yml
       context-artifact: image-context
+      context-digest: ${{ needs.build.outputs.context-digest }}
       release-platforms: ${{ vars.RELEASE_PLATFORMS || 'linux/amd64' }}
     secrets:
       RELEASE_REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}

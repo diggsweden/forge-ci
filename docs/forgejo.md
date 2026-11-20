@@ -291,8 +291,9 @@ the caller passes them by name. Never use `secrets: inherit`.
 |---|---|---|
 | `prepare-release.yml` | Checks that every secret the release will need is configured, before its own checkout; guards the request tag; requires the request at the head of the release branch; renders the changelog; bumps the version files of the projects `artifacts.yml` plans, in one key-free job per toolchain family, and verifies that bump; makes the signed release commit and the final tag once. Outputs `release-tag`, `release-sha` and the `artifacts-config` it planned from. | `RELEASE_SSH_SIGNING_KEY`; presence only of the others; none in the version-plan and version jobs |
 | `sign-and-publish-release.yml` | Five separately privileged jobs after a secret-free preflight: `sign` (checksums, SBOMs, provenance, images, distro packages), `promote` (final image tags), `publish` (the Forgejo release), `packages` (distro packages to the owner's registries; it starts only when they are declared), `cleanup` (the images' link to the repository, candidate tags). | Cosign, GPG, `RELEASE_TOKEN`, `RELEASE_REGISTRY_TOKEN`, each only in the job that needs it |
-| `base-images.yml` | Builds one stage of the caller's own graph of base images, a root or the children of one authenticated parent, one child or all its siblings: one native job per image and architecture without a secret, then one job that scans every layout and stages the unsigned candidates. See [Base images](#base-images). | `RELEASE_REGISTRY_TOKEN`, in the parent fetch and publish jobs only |
+| `base-images.yml` | Builds one stage of the caller's graph: a root or children of one authenticated parent. Native jobs build layouts; a separate job scans and publishes unsigned candidates. See [Base images](#base-images). | `PARENT_REGISTRY_READ_TOKEN` in the parent-fetch step only; `RELEASE_REGISTRY_TOKEN` in publication only |
 | `sign-container-images.yml` | Signs and attests a base-image ledger in one engine call. | Cosign, `RELEASE_REGISTRY_TOKEN` |
+| `base-image-lifecycle.yml` | Executes one cold flavor through native build, scan/staging publication, signing, promotion and exact-reference authentication as direct jobs. The consumer owns reuse, graph ordering and candidate cleanup. | Pull-only token in parent fetch; registry token in publication/signing/promotion/authentication; Cosign key in signing only |
 | `verify-base-container-images.yml` | Verifies existing base images against the trusted key; optional explicit registry authentication supports private bases. Only missing images (or anonymous access refusal) are cache misses. With the token, `parent-bases-json` names every found base as a parent. With `expected-ref` it authenticates exactly one published base as a parent instead, and a missing base is a failure. | optional `RELEASE_REGISTRY_TOKEN`, `registry-user` for external registries; required with `expected-ref` |
 | `promote-base-container-images.yml` | Verifies base-image signatures, then moves the final tags. | `RELEASE_REGISTRY_TOKEN` |
 | `release-images.yml` | Builds the release images `artifacts.yml` declares, one native job per container and architecture, with the organization's image builder; scans each, publishes it under its staging tag and records it for the signer. See [Release images](#release-images). | `RELEASE_REGISTRY_TOKEN`, in the publish job only |
@@ -848,11 +849,23 @@ in `.forge-ci/artifacts.yml` for more images, other platforms or tag variants.
       release-tag: ${{ needs.prepare.outputs.release-tag }}
       release-sha: ${{ needs.prepare.outputs.release-sha }}
       context-artifact: image-context
+      context-digest: ${{ needs.build.outputs.context-digest }}
       # Empty publishes to this forge's own registry.
       image-repository: ghcr.io/OWNER/APP
     secrets:
       RELEASE_REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
 ```
+
+When supplying `context-artifact`, also supply `context-digest`. Compute it in
+the producer with `forge-ci release dist-digest --dist-dir image-context
+--manifest-root .` and expose it as a build-job output. Upload the same tree
+with `--include-hidden`. Each builder downloads the original artifact, copies
+it into private staging, verifies those bytes and safely overlays them onto
+the checkout before building. A missing or mismatched digest fails the build;
+no intermediate checked-context upload is needed. Omit both inputs to build
+from the checkout alone. When upgrading an existing caller, add the digest
+output and input together: artifact-only callers are now refused during planning,
+before registry-fetch or build jobs are scheduled.
 
 Buildah builds need user namespaces, so their runner labels follow the
 container runners where an installation names them. Kaniko builds use the
@@ -964,6 +977,82 @@ on it: Buildah imports the verified layout into its store, kaniko reads it
 from its base-image cache.
 
 ### Base images
+
+#### Single-flavor cold lifecycle
+
+`base-image-lifecycle.yml` combines the four leaf calls below into one reusable
+call with direct jobs: `coordinates → plan → build → publish → sign → promote
+→ authenticate`. It does not call another reusable workflow. The standalone
+leaves remain available for callers that compose other stage shapes.
+
+Pass the consumer's `image-plan-json`, one `flavor`, `parent-base-json` (empty
+for a root), native runner selections, distinct `artifact-name`, and the usual
+helper, signer and public-key coordinates. `expected-inputs-json` must come
+from the consumer's independent planner, never from the build's declared inputs.
+The single flavor is enforced again at planning, building and publication.
+
+For example, the consumer's cold call can be wired as follows. Replace
+`PIN_FORGE_CI_SHA` with the published immutable commit that contains the lifecycle;
+the matching binary checksums and signer image must be independently verified
+before adoption. `plan` below is consumer-owned and has already authenticated
+the immediate parent and calculated its input expectations.
+
+```yaml
+run-base-lifecycle:
+  needs: plan
+  if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.build-required == 'true' }}
+  uses: OWNER/forge-ci/.forgejo/workflows/base-image-lifecycle.yml@PIN_FORGE_CI_SHA
+  with:
+    runs-on: ${{ vars.CI_RUNNER_LABEL }}
+    signer-runs-on: ${{ vars.CI_SIGNER_RUNNER_LABEL }}
+    build-runs-on-linux-amd64: ${{ vars.CI_NATIVE_AMD64_RUNNER_LABEL }}
+    build-runs-on-linux-arm64: ${{ vars.CI_NATIVE_ARM64_RUNNER_LABEL }}
+    flavor: tools
+    release-sha: ${{ needs.plan.outputs.release-sha }}
+    image-plan-json: ${{ needs.plan.outputs.image-plan-json }}
+    expected-inputs-json: ${{ needs.plan.outputs.expected-inputs-json }}
+    parent-base-json: ${{ needs.plan.outputs.parent-base-json }}
+    artifact-name: bases-tools
+    image-repository: ${{ vars.BASE_IMAGE_REPOSITORY }}
+    registry-user: ${{ vars.RELEASE_REGISTRY_USER }}
+    caller-workflow: container-bases.yml
+    forge-ci-repository: OWNER/forge-ci
+    forge-ci-sha: PIN_FORGE_CI_SHA
+    signer-image: ${{ vars.CI_SIGNER_IMAGE }} # reviewed digest-pinned image
+    cosign-public-key: ${{ vars.COSIGN_PUBLIC_KEY }}
+    cosign-public-key-sha256: REVIEWED_PUBLIC_KEY_SHA256
+  secrets:
+    RELEASE_REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
+    RELEASE_COSIGN_PRIVATE_KEY: ${{ secrets.RELEASE_COSIGN_PRIVATE_KEY }}
+    RELEASE_COSIGN_PASSPHRASE: ${{ secrets.RELEASE_COSIGN_PASSPHRASE }}
+```
+
+This example pulls a public parent anonymously. Private parents additionally
+require the `parent-registry-repository`, `parent-registry-user` and optional
+`parent-registry-auth-origin` inputs plus `PARENT_REGISTRY_READ_TOKEN` mapped
+explicitly in `secrets`. Never substitute the publication token.
+
+The workflow exposes `ledger-json` and `parent-base-json` only through the final
+successful authentication job. Consumer completion must require lifecycle
+success and both outputs, match the expected flavor/input identity/digest, then
+clean candidate tags using the original ledger. Warm reuse skips the lifecycle
+and returns the separately authenticated discovery result. Graph edges, flavor
+selection and completeness remain consumer policy.
+
+Build jobs receive neither publication credentials nor signing keys. The parent
+fetch uses its dedicated repository-scoped read token. Signing, promotion and
+authentication each retain explicit trusted bootstrap in their own job; only
+signing receives the private key. Every dependent job requires successful
+prerequisites and rejects cancellation.
+
+For a downstream retry, retain the original run's ledger, SBOMs and layout
+artifacts and independent expectations. Retry the failed job and its dependants,
+not release preparation. Artifact expiry or missing evidence must fail closed.
+Candidate cleanup occurs only after authentication and consumer completion
+checks. Native cold/warm/mixed and downstream-retry live acceptance is required
+before a consumer adopts a published pin containing this workflow.
+
+#### Standalone stages
 
 A project that ships base images owns their graph: which image starts from
 which, what an image's input ID covers, and its content-addressed tags. The

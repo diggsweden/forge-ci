@@ -1,0 +1,527 @@
+# SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+# SPDX-License-Identifier: CC0-1.0
+
+# One cold base flavor. Discovery, graph ordering, warm reuse and cleanup belong
+# to the consumer. Only authenticated outputs may become a child's parent.
+name: Base image lifecycle
+on:
+  workflow_call:
+    inputs:
+      forge-ci-binary-ref: {type: string, required: true}
+      runtime-image: {type: string, required: true}
+      runtime-image-full: {type: string, required: true}
+      canonical-artifact-id: {type: string, required: true}
+      canonical-artifact-name: {type: string, required: true}
+      canonical-producer-run-id: {type: string, required: true}
+      canonical-producer-run-attempt: {type: string, required: true}
+      canonical-producer-engine-repository: {type: string, required: true}
+      canonical-producer-engine-commit: {type: string, required: true}
+      canonical-producer-result: {type: string, required: true}
+      runs-on: {type: string, default: '["ubuntu-26.04"]'}
+      build-runs-on-linux-amd64: {type: string, default: '["ubuntu-26.04"]'}
+      build-runs-on-linux-arm64: {type: string, default: '["ubuntu-26.04-arm"]'}
+      release-sha: {type: string, required: true}
+      flavor: {type: string, required: true}
+      image-builder:
+        description: Native buildah or kaniko; empty uses CI_IMAGE_BUILDER, then buildah.
+        type: string
+        default: ''
+      image-builder-job-image:
+        description: Approved digest-pinned Kaniko job image; empty uses CI_IMAGE_BUILDER_JOB_IMAGE.
+        type: string
+        default: ''
+      image-plan-json: {type: string, required: true}
+      expected-inputs-json:
+        description: Independent consumer expectations, never the build's declared inputs.
+        type: string
+        required: true
+      parent-base-json: {type: string, default: ''}
+      image-repository: {type: string, required: true}
+      registry-user: {type: string, required: true}
+      parent-registry-repository: {type: string, default: ''}
+      parent-registry-user: {type: string, default: ''}
+      parent-registry-auth-origin: {type: string, default: ''}
+      artifact-name:
+        description: Unique artifact namespace for this flavor within the run.
+        type: string
+        required: true
+      caller-workflow: {type: string, required: true}
+      cosign-public-key: {type: string, required: true}
+      cosign-public-key-sha256: {type: string, required: true}
+      transparency-log: {type: string, default: none}
+      enforce-vulnerabilities: {type: boolean, default: false}
+    secrets:
+      RELEASE_REGISTRY_TOKEN:
+        description: Publication authority for image-repository, never passed to builders.
+        required: true
+      PARENT_REGISTRY_READ_TOKEN:
+        description: Optional repository-scoped pull-only credential, never the publication token.
+        required: false
+      RELEASE_COSIGN_PRIVATE_KEY: {required: true}
+      RELEASE_COSIGN_PASSPHRASE: {required: false}
+    outputs:
+      ledger-json:
+        description: Original candidate ledger, released only after authentication, for completion and cleanup.
+        value: ${{ jobs.authenticate.outputs.ledger-json }}
+      parent-base-json:
+        description: Authenticated final digest and input identity.
+        value: ${{ jobs.authenticate.outputs.parent-base-json }}
+permissions:
+  contents: read
+env:
+  FORGE_CI_PROVIDER: github
+  FORGE_CI_COSIGN_TRANSPARENCY: ${{ inputs['transparency-log'] }}
+defaults:
+  run:
+    shell: bash
+jobs:
+  resolve-bootstrap:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/resolve-forge-ci-bootstrap.yml
+    with:
+      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      images: |
+        runtime-image=${{ inputs['runtime-image'] }}
+        runtime-image-full=${{ inputs['runtime-image-full'] }}
+  plan:
+    needs: [resolve-bootstrap]
+    if: ${{ !cancelled() && needs.resolve-bootstrap.result == 'success' }}
+    runs-on: ${{ fromJSON(inputs['runs-on']) }}
+    timeout-minutes: 10
+    container:
+      image: ${{ inputs['runtime-image'] }}
+    permissions:
+      contents: read
+    outputs:
+      builder: ${{ steps.plan.outputs.builder }}
+      builder-job-image: ${{ steps.plan.outputs.builder-job-image }}
+      build-matrix: ${{ steps.plan.outputs.build-matrix }}
+      builds-by-name: ${{ steps.plan.outputs.builds-by-name }}
+      layouts: ${{ steps.plan.outputs.layouts }}
+    steps:
+      - name: Refuse PR-context trigger
+        run: forge-ci validate event-context
+      - name: Validate signing privacy
+        env:
+          TRANSPARENCY_LOG: ${{ inputs['transparency-log'] }}
+        run: forge-ci validate signing-privacy
+      - name: Admit one native base stage
+        id: plan
+        env:
+          BUILDER: ${{ inputs['image-builder'] || vars.CI_IMAGE_BUILDER || 'buildah' }}
+          BUILDER_JOB_IMAGE: ${{ inputs['image-builder-job-image'] || vars.CI_IMAGE_BUILDER_JOB_IMAGE }}
+          STAGE_FLAVOR: ${{ inputs.flavor }}
+          IMAGE_PLAN_JSON: ${{ inputs['image-plan-json'] }}
+          PARENT_BASE_JSON: ${{ inputs['parent-base-json'] }}
+          IMAGE_REPOSITORY: ${{ inputs['image-repository'] }}
+          RELEASE_SHA: ${{ inputs['release-sha'] }}
+          RUNS_ON: ${{ inputs['runs-on'] }}
+          BUILD_RUNS_ON_LINUX_AMD64: ${{ inputs['build-runs-on-linux-amd64'] }}
+          BUILD_RUNS_ON_LINUX_ARM64: ${{ inputs['build-runs-on-linux-arm64'] }}
+        run: |
+          set -euo pipefail
+          case "$BUILDER" in
+            buildah) BUILDER_JOB_IMAGE= ;;
+            kaniko)
+              [[ "$BUILDER_JOB_IMAGE" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}$ ]] || {
+                echo 'ERROR: kaniko requires a digest-pinned image-builder-job-image' >&2
+                exit 1
+              }
+              ;;
+            *) echo 'ERROR: image-builder must be buildah or kaniko' >&2; exit 1 ;;
+          esac
+          printf 'builder=%s\nbuilder-job-image=%s\n' "$BUILDER" "$BUILDER_JOB_IMAGE" >>"$GITHUB_OUTPUT"
+          [[ "$STAGE_FLAVOR" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]
+          printf '%s' "${IMAGE_PLAN_JSON:?}" >base-plan.json
+          stage=root-base
+          parent=()
+          if [[ -n "$PARENT_BASE_JSON" ]]; then
+            stage=child-base
+            parent=(--parent-base-json "$PARENT_BASE_JSON")
+          fi
+          plan_args=(--plan base-plan.json \
+            --stage-flavors "${STAGE_FLAVOR:?}" --image-repository "${IMAGE_REPOSITORY:?}" \
+            --release-sha "${RELEASE_SHA:?}" --release-tag v0.0.0 \
+            --server-url "$GITHUB_SERVER_URL" --repository "$GITHUB_REPOSITORY" \
+            --runner-input "runs-on=$RUNS_ON" \
+            --runner-input "build-runs-on-linux-amd64=$BUILD_RUNS_ON_LINUX_AMD64" \
+            --runner-input "build-runs-on-linux-arm64=$BUILD_RUNS_ON_LINUX_ARM64" \
+            --output "$RUNNER_TEMP/admitted-base-plan.json" "${parent[@]}")
+          if [[ "$stage" == child-base ]]; then
+            forge-ci container base-images child-base plan "${plan_args[@]}"
+          else
+            forge-ci container base-images root-base plan "${plan_args[@]}"
+          fi
+  build:
+    name: Build base (${{ matrix.name }}, ${{ matrix.arch }})
+    needs: [resolve-bootstrap, plan]
+    if: ${{ !cancelled() && needs.resolve-bootstrap.result == 'success' && needs.plan.result == 'success' }}
+    runs-on: ${{ fromJSON(inputs[format('build-runs-on-linux-{0}', matrix.arch)]) }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.build-matrix) }}
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Require original canonical success and approved identity
+        shell: /bin/bash --noprofile --norc -peuo pipefail {0}
+        env:
+          ENGINE_REPOSITORY: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
+          ENGINE_COMMIT: ${{ inputs['forge-ci-binary-ref'] }}
+          ENGINE_ORIGIN: ${{ github.server_url }}/${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
+          RUNTIME_IMAGE: ${{ inputs['runtime-image'] }}
+          PRODUCER_ARTIFACT_ID: ${{ inputs['canonical-artifact-id'] }}
+          PRODUCER_ARTIFACT_NAME: ${{ inputs['canonical-artifact-name'] }}
+          PRODUCER_RUN_ID: ${{ inputs['canonical-producer-run-id'] }}
+          PRODUCER_RUN_ATTEMPT: ${{ inputs['canonical-producer-run-attempt'] }}
+          PRODUCER_ENGINE_REPOSITORY: ${{ inputs['canonical-producer-engine-repository'] }}
+          PRODUCER_ENGINE_COMMIT: ${{ inputs['canonical-producer-engine-commit'] }}
+          CANONICAL_PRODUCER_RESULT: ${{ inputs['canonical-producer-result'] }}
+        run: |
+          [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ && "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$CANONICAL_PRODUCER_RESULT" == success && "$PRODUCER_RUN_ID" == "$GITHUB_RUN_ID" && "$PRODUCER_RUN_ATTEMPT" == "$GITHUB_RUN_ATTEMPT" ]]
+          [[ "$ENGINE_REPOSITORY" =~ ^[A-Za-z0-9_-][A-Za-z0-9_.-]*/[A-Za-z0-9_-][A-Za-z0-9_.-]*$ && "$ENGINE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$PRODUCER_ENGINE_REPOSITORY" == "$ENGINE_REPOSITORY" && "$PRODUCER_ENGINE_COMMIT" == "$ENGINE_COMMIT" ]]
+          [[ "$PRODUCER_ARTIFACT_ID" =~ ^[1-9][0-9]*$ && "$PRODUCER_ARTIFACT_NAME" == "forge-ci-canonical-linux-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$ENGINE_COMMIT" ]]
+          [[ "$RUNTIME_IMAGE" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}$ ]]
+          [[ "$GITHUB_SERVER_URL" =~ ^https://[^/?#@[:space:]]+$ && "$ENGINE_ORIGIN" == "$GITHUB_SERVER_URL/$ENGINE_REPOSITORY" ]]
+          for variable in ENGINE_REPOSITORY ENGINE_COMMIT ENGINE_ORIGIN RUNTIME_IMAGE PRODUCER_ARTIFACT_ID PRODUCER_ARTIFACT_NAME PRODUCER_RUN_ID PRODUCER_RUN_ATTEMPT PRODUCER_ENGINE_REPOSITORY PRODUCER_ENGINE_COMMIT CANONICAL_PRODUCER_RESULT; do
+            printf '%s=%s\n' "$variable" "${!variable}" >>"$GITHUB_ENV"
+          done
+      - name: Checkout only the approved engine before consumer or private steps
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: ${{ env.ENGINE_REPOSITORY }}
+          ref: ${{ env.ENGINE_COMMIT }}
+          path: _forge_ci_bootstrap
+          persist-credentials: false
+          submodules: false
+          lfs: false
+      - name: Consume canonical CLI from the independently pinned engine checkout
+        id: canonical-bootstrap
+        uses: ./_forge_ci_bootstrap/.github/actions/consume-canonical-cli
+        with:
+          tool-profile: host
+      - name: Refuse PR-context trigger
+        run: forge-ci validate event-context
+      - name: Fetch verified parent
+        if: ${{ inputs['parent-base-json'] != '' }}
+        uses: ./_forge_ci_bootstrap/.github/actions/fetch-parent-image
+        with:
+          engine: forge-ci
+          build-json: ${{ toJSON(fromJSON(needs.plan.outputs.builds-by-name)[matrix.name][matrix.arch]) }}
+          parent-base-json: ${{ inputs['parent-base-json'] }}
+          release-sha: ${{ inputs['release-sha'] }}
+          inputs-dir: registry-inputs/${{ matrix.name }}-arch-${{ matrix.arch }}
+          parent-registry-repository: ${{ inputs['parent-registry-repository'] }}
+          parent-registry-user: ${{ inputs['parent-registry-user'] }}
+          parent-registry-auth-origin: ${{ inputs['parent-registry-auth-origin'] }}
+          parent-registry-read-token: ${{ secrets.PARENT_REGISTRY_READ_TOKEN }}
+      - name: Checkout source
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ inputs['release-sha'] }}
+          path: source
+          persist-credentials: false
+      - name: Prepare native Buildah
+        if: ${{ needs.plan.outputs.builder == 'buildah' }}
+        run: bash "$RUNNER_TEMP/forge-ci-approved-engine/scripts/bootstrap/install-buildah.sh"
+      - name: Build native layout
+        if: ${{ needs.plan.outputs.builder == 'buildah' }}
+        env:
+          STAGE_FLAVOR: ${{ inputs.flavor }}
+          IMAGE_PLAN_JSON: ${{ inputs['image-plan-json'] }}
+          PARENT_BASE_JSON: ${{ inputs['parent-base-json'] }}
+          IMAGE_REPOSITORY: ${{ inputs['image-repository'] }}
+          RELEASE_SHA: ${{ inputs['release-sha'] }}
+          IMAGE_NAME: ${{ matrix.name }}
+          IMAGE_ARCH: ${{ matrix.arch }}
+          CI_IMAGE_BUILDER: buildah
+        run: |
+          set -euo pipefail
+          printf '%s' "${IMAGE_PLAN_JSON:?}" >base-plan.json
+          stage=root-base
+          parent=()
+          if [[ -n "$PARENT_BASE_JSON" ]]; then
+            stage=child-base
+            parent=(--parent-base-json "$PARENT_BASE_JSON" --inputs-dir registry-inputs)
+          fi
+          created=$(TZ=UTC0 git -C source show -s --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd HEAD)
+          build_args=(--plan base-plan.json \
+            --stage-flavors "${STAGE_FLAVOR:?}" --image-repository "${IMAGE_REPOSITORY:?}" \
+            --release-sha "${RELEASE_SHA:?}" --release-tag v0.0.0 \
+            --server-url "$GITHUB_SERVER_URL" --repository "$GITHUB_REPOSITORY" \
+            --image "$IMAGE_NAME" --arch "$IMAGE_ARCH" --created "$created" \
+            --source-dir source --metadata-dir staged "${parent[@]}")
+          if [[ "$stage" == child-base ]]; then
+            forge-ci container base-images child-base build "${build_args[@]}"
+          else
+            forge-ci container base-images root-base build "${build_args[@]}"
+          fi
+      - name: Admit and prepare isolated native Kaniko action
+        id: kaniko-action
+        if: ${{ needs.plan.outputs.builder == 'kaniko' }}
+        env:
+          JOB_IMAGE: ${{ needs.plan.outputs.builder-job-image }}
+          ENGINE_REPOSITORY: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
+          IMAGE_ARCH: ${{ matrix.arch }}
+          STAGE_FLAVOR: ${{ inputs.flavor }}
+          IMAGE_PLAN_JSON: ${{ inputs['image-plan-json'] }}
+          IMAGE_REPOSITORY: ${{ inputs['image-repository'] }}
+          PARENT_BASE_JSON: ${{ inputs['parent-base-json'] }}
+        run: |
+          forge-ci container image usable-digest --ref "$JOB_IMAGE" --arch "$IMAGE_ARCH" \
+            --require-label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$ENGINE_REPOSITORY" \
+            --require-label 'org.opencontainers.image.title=forge-ci kaniko job image'
+          printf '%s' "${IMAGE_PLAN_JSON:?}" >base-plan.json
+          forge-ci container prepare-kaniko-action --base --job-image "$JOB_IMAGE" --plan base-plan.json \
+            --stage-flavors "$STAGE_FLAVOR" --image-repository "$IMAGE_REPOSITORY" \
+            --parent-base-json "$PARENT_BASE_JSON"
+          printf 'created=%s\n' "$(TZ=UTC0 git -C source show -s --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd HEAD)" >>"$GITHUB_OUTPUT"
+      - name: Build native base with Kaniko
+        if: ${{ needs.plan.outputs.builder == 'kaniko' }}
+        uses: ./.forge-ci-kaniko-action
+        with:
+          operation: base
+        env:
+          STAGE_FLAVOR: ${{ inputs.flavor }}
+          IMAGE_REPOSITORY: ${{ inputs['image-repository'] }}
+          PARENT_BASE_JSON: ${{ inputs['parent-base-json'] }}
+          RELEASE_SHA: ${{ inputs['release-sha'] }}
+          IMAGE_NAME: ${{ matrix.name }}
+          IMAGE_ARCH: ${{ matrix.arch }}
+          IMAGE_CREATED: ${{ steps.kaniko-action.outputs.created }}
+      - name: Restore host ownership of Kaniko layout
+        if: ${{ always() && needs.plan.outputs.builder == 'kaniko' }}
+        env:
+          STAGED_OUTPUT: ${{ steps.kaniko-action.outputs.output-dir }}
+        run: |
+          if [[ -e "$STAGED_OUTPUT" || -L "$STAGED_OUTPUT" ]]; then
+            sudo chown -hRP -- "$(id -u):$(id -g)" "$STAGED_OUTPUT"
+          fi
+      - name: Retain Kaniko layout on the host
+        if: ${{ needs.plan.outputs.builder == 'kaniko' }}
+        env:
+          STAGED_OUTPUT: ${{ steps.kaniko-action.outputs.output-dir }}
+        run: |
+          test ! -e staged
+          mv -T -- "$STAGED_OUTPUT" staged
+      - name: Upload native layout
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: ${{ inputs['artifact-name'] }}-layout-${{ matrix.name }}-${{ matrix.arch }}
+        run: forge-ci artifact upload --name "$ARTIFACT_NAME" --dir staged --include-hidden --if-no-files error --retention-days 2 --verify-readback
+  publish:
+    needs: [plan, build]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.build.result == 'success' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    container:
+      image: ${{ inputs['runtime-image-full'] }}
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+    outputs:
+      ledger-json: ${{ steps.publish.outputs.ledger-json }}
+    steps:
+      - name: Refuse PR-context trigger
+        run: forge-ci validate event-context
+      - name: Checkout scan policy
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ inputs['release-sha'] }}
+          path: source
+          persist-credentials: false
+      - name: Download every planned layout
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: ${{ inputs['artifact-name'] }}
+          IMAGE_LAYOUTS: ${{ needs.plan.outputs.layouts }}
+        run: |
+          set -euo pipefail
+          read -r -a layouts <<<"${IMAGE_LAYOUTS:?}"
+          for layout in "${layouts[@]}"; do
+            forge-ci artifact download --name "${ARTIFACT_NAME:?}-layout-$layout" --dir layouts
+          done
+      - name: Scan and publish candidate
+        id: publish
+        env:
+          STAGE_FLAVOR: ${{ inputs.flavor }}
+          IMAGE_PLAN_JSON: ${{ inputs['image-plan-json'] }}
+          PARENT_BASE_JSON: ${{ inputs['parent-base-json'] }}
+          IMAGE_REPOSITORY: ${{ inputs['image-repository'] }}
+          RELEASE_SHA: ${{ inputs['release-sha'] }}
+          ADMIN_VULNERABILITIES: ${{ inputs['enforce-vulnerabilities'] }}
+          REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
+          REGISTRY_USER: ${{ inputs['registry-user'] }}
+        run: |
+          set -euo pipefail
+          token="${REGISTRY_TOKEN:?}"
+          unset REGISTRY_TOKEN
+          printf '%s' "${IMAGE_PLAN_JSON:?}" >base-plan.json
+          auth_file=$(mktemp "$RUNNER_TEMP/registry-auth.XXXXXXXX")
+          trap 'rm -f -- "$auth_file"' EXIT
+          printf '%s' "$token" | forge-ci container login --registry "$IMAGE_REPOSITORY" \
+            --registry-username "$REGISTRY_USER" --registry-password-file - --auth-file "$auth_file"
+          unset token
+          stage=root-base
+          parent=()
+          if [[ -n "$PARENT_BASE_JSON" ]]; then
+            stage=child-base
+            parent=(--parent-base-json "$PARENT_BASE_JSON")
+          fi
+          cd source
+          publish_args=(--plan "$GITHUB_WORKSPACE/base-plan.json" \
+            --stage-flavors "${STAGE_FLAVOR:?}" --image-repository "${IMAGE_REPOSITORY:?}" \
+            --release-sha "${RELEASE_SHA:?}" --release-tag v0.0.0 \
+            --server-url "$GITHUB_SERVER_URL" --repository "$GITHUB_REPOSITORY" \
+            --layouts-dir "$GITHUB_WORKSPACE/layouts" --output-dir "$GITHUB_WORKSPACE/payload" \
+            --enforce-vulnerabilities="$ADMIN_VULNERABILITIES" --auth-file "$auth_file" "${parent[@]}")
+          if [[ "$stage" == child-base ]]; then
+            forge-ci container base-images child-base publish "${publish_args[@]}"
+          else
+            forge-ci container base-images root-base publish "${publish_args[@]}"
+          fi
+          printf 'ledger-json=%s\n' "$(tr -d '\n' <"$GITHUB_WORKSPACE/payload/dist/base-images.json")" >>"$GITHUB_OUTPUT"
+      - name: Retain signed evidence inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: ${{ inputs['artifact-name'] }}
+        run: forge-ci artifact upload --name "$ARTIFACT_NAME" --dir payload --if-no-files error --retention-days 2 --verify-readback
+  sign:
+    needs: [publish]
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 40
+    container:
+      image: ${{ inputs['runtime-image'] }}
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+    steps:
+      - name: Refuse PR-context trigger
+        run: forge-ci validate event-context
+      - name: Download evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: ${{ inputs['artifact-name'] }}
+        run: forge-ci artifact download --name "$ARTIFACT_NAME" --dir evidence
+      - name: Bind signing key and sign ledger
+        working-directory: evidence
+        env:
+          LEDGER_JSON: ${{ needs.publish.outputs.ledger-json }}
+          COSIGN_KEY: ${{ secrets.RELEASE_COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.RELEASE_COSIGN_PASSPHRASE }}
+          REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
+          REGISTRY_USER: ${{ inputs['registry-user'] }}
+          IMAGE_REPOSITORY: ${{ inputs['image-repository'] }}
+          RELEASE_SHA: ${{ inputs['release-sha'] }}
+          CALLER_WORKFLOW: ${{ inputs['caller-workflow'] }}
+          TRUSTED_KEY: ${{ inputs['cosign-public-key'] }}
+          TRUSTED_KEY_SHA256: ${{ inputs['cosign-public-key-sha256'] }}
+        run: |
+          set -euo pipefail
+          key=$(printf '%s' "$TRUSTED_KEY")
+          printf '%s\n' "$key" >cosign.pub
+          printf '%s\n' "$TRUSTED_KEY_SHA256" >cosign.pub.sha256
+          forge-ci validate signing-key --key env://COSIGN_KEY \
+            --trusted-public-key cosign.pub --trusted-public-key-digest cosign.pub.sha256
+          printf '%s' "${LEDGER_JSON:?}" >base-images.ledger.json
+          token="${REGISTRY_TOKEN:?}"
+          unset REGISTRY_TOKEN
+          printf '%s' "$token" | forge-ci container base-images sign --ledger base-images.ledger.json \
+            --server-url "$GITHUB_SERVER_URL" --repository "$GITHUB_REPOSITORY" \
+            --expected-repository "$IMAGE_REPOSITORY" --workflow "$CALLER_WORKFLOW" --source-sha "$RELEASE_SHA" \
+            --started-on "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --registry-username "$REGISTRY_USER" --registry-password-file - \
+            --sbom-path-pattern '^premade-sboms/base-sbom-[A-Za-z0-9._-]+[.]cyclonedx[.]json$' \
+            --method kms --key env://COSIGN_KEY
+  promote:
+    needs: [publish, sign]
+    if: ${{ !cancelled() && needs.publish.result == 'success' && needs.sign.result == 'success' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    container:
+      image: ${{ inputs['runtime-image'] }}
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      base-images-json: ${{ steps.promote.outputs.base_images_json }}
+    steps:
+      - name: Refuse PR-context trigger
+        run: forge-ci validate event-context
+      - name: Verify independent expectations and promote
+        id: promote
+        env:
+          LEDGER_JSON: ${{ needs.publish.outputs.ledger-json }}
+          BASE_INPUTS_JSON: ${{ inputs['expected-inputs-json'] }}
+          EXPECTED_REPOSITORY: ${{ inputs['image-repository'] }}
+          EXPECTED_WORKFLOW: ${{ inputs['caller-workflow'] }}
+          TRUSTED_KEY: ${{ inputs['cosign-public-key'] }}
+          TRUSTED_KEY_SHA256: ${{ inputs['cosign-public-key-sha256'] }}
+          REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
+          REGISTRY_USER: ${{ inputs['registry-user'] }}
+        run: |
+          set -euo pipefail
+          key=$(printf '%s' "$TRUSTED_KEY")
+          printf '%s\n' "$key" >cosign.pub
+          printf '%s' "${LEDGER_JSON:?}" >base-images.ledger.json
+          token="${REGISTRY_TOKEN:?}"
+          unset REGISTRY_TOKEN
+          printf '%s' "$token" | forge-ci container base-images promote --ledger base-images.ledger.json \
+            --server-url "$GITHUB_SERVER_URL" --repository "$GITHUB_REPOSITORY" \
+            --expected-repository "$EXPECTED_REPOSITORY" --expected-workflow "$EXPECTED_WORKFLOW" \
+            --cosign-public-key-path cosign.pub --cosign-public-key-sha256 "$TRUSTED_KEY_SHA256" \
+            --base-inputs-json "$BASE_INPUTS_JSON" --registry-username "$REGISTRY_USER" --registry-password-file -
+  authenticate:
+    needs: [publish, promote]
+    if: ${{ !cancelled() && needs.publish.result == 'success' && needs.promote.result == 'success' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    container:
+      image: ${{ inputs['runtime-image'] }}
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      ledger-json: ${{ steps.verify.outputs.ledger-json }}
+      parent-base-json: ${{ steps.verify.outputs.parent-base-json }}
+    steps:
+      - name: Refuse PR-context trigger
+        run: forge-ci validate event-context
+      - name: Authenticate exact promoted parent
+        id: verify
+        env:
+          LEDGER_JSON: ${{ needs.publish.outputs.ledger-json }}
+          EXPECTED_REF: ${{ fromJSON(needs.promote.outputs.base-images-json || '[{}]')[0].ref }}
+          BASE_INPUTS_JSON: ${{ inputs['expected-inputs-json'] }}
+          EXPECTED_REPOSITORY: ${{ inputs['image-repository'] }}
+          EXPECTED_WORKFLOW: ${{ inputs['caller-workflow'] }}
+          TRUSTED_KEY: ${{ inputs['cosign-public-key'] }}
+          TRUSTED_KEY_SHA256: ${{ inputs['cosign-public-key-sha256'] }}
+          REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
+          REGISTRY_USER: ${{ inputs['registry-user'] }}
+        run: |
+          set -euo pipefail
+          key=$(printf '%s' "$TRUSTED_KEY")
+          printf '%s\n' "$key" >cosign.pub
+          token="${REGISTRY_TOKEN:?}"
+          unset REGISTRY_TOKEN
+          auth_file=$(mktemp "$RUNNER_TEMP/registry-auth.XXXXXXXX")
+          trap 'rm -f -- "$auth_file"' EXIT
+          printf '%s' "$token" | forge-ci container login --registry "$EXPECTED_REPOSITORY" \
+            --registry-username "$REGISTRY_USER" --registry-password-file - --auth-file "$auth_file"
+          unset token
+          parent=$(forge-ci container base-images authenticate-parent --auth-file "$auth_file" \
+            --expected-ref "${EXPECTED_REF:?}" --base-inputs-json "$BASE_INPUTS_JSON" \
+            --server-url "$GITHUB_SERVER_URL" --repository "$GITHUB_REPOSITORY" \
+            --expected-repository "$EXPECTED_REPOSITORY" --expected-workflow "$EXPECTED_WORKFLOW" \
+            --cosign-public-key-path cosign.pub --cosign-public-key-sha256 "$TRUSTED_KEY_SHA256")
+          printf 'ledger-json=%s\n' "${LEDGER_JSON:?}" >>"$GITHUB_OUTPUT"
+          printf 'parent-base-json=%s\n' "$parent" >>"$GITHUB_OUTPUT"

@@ -263,6 +263,8 @@ jobs:
   # digest of the release files.
   # ===========================================================================
   build:
+    outputs:
+      context-digest: ${{ steps.context.outputs.digest }}
     name: "Build: release files"
     needs: [prepare, build-backend, build-frontend]
     runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
@@ -292,12 +294,15 @@ jobs:
       # body; without one the body is a stub naming the tag. Render it in the
       # checkout root and list it in .gitignore, so the checkout stays clean.
       - name: Join the parts and declare the release files
+        id: context
         env:
           RELEASE_TAG: ${{ needs.prepare.outputs.release-tag }}
           RELEASE_SHA: ${{ needs.prepare.outputs.release-sha }}
         run: |
           set -euo pipefail
           forge-ci artifact download --pattern 'release-part-*' --merge-multiple --dir parts
+          digest=$(forge-ci release dist-digest --dist-dir parts/image-context --manifest-root .)
+          printf 'digest=%s\n' "${digest}" >>"${FORGEJO_OUTPUT:?}"
           forge-ci artifact upload --name image-context --dir parts/image-context --include-hidden --retention-days 1 --if-no-files error
           mkdir -p dist
           cp -R -- parts/dist/. dist/
@@ -333,6 +338,7 @@ jobs:
       release-tag: ${{ needs.prepare.outputs.release-tag }}
       release-sha: ${{ needs.prepare.outputs.release-sha }}
       context-artifact: image-context
+      context-digest: ${{ needs.build.outputs.context-digest }}
       release-platforms: ${{ vars.RELEASE_PLATFORMS || 'linux/amd64' }}
     secrets:
       RELEASE_REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}

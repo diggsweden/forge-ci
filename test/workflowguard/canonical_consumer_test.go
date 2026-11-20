@@ -108,6 +108,7 @@ func TestCanonicalConsumerWorkflowGraph(t *testing.T) {
 		"release-prepare-stage.yml":         {"prepare-version-files", "version-bump", "summarize-prepare-stage"},
 		"release-create-github.yml":         {"sign-release-gpg", "create-release"},
 		"publish-container.yml":             {"build-arch"},
+		"base-image-lifecycle.yml":          {"build"},
 		"snapshot-images.yml":               {"build"},
 		"release-snapshot-orchestrator.yml": {"setup-snapshot", "snapshot-release-summary"},
 		"pullrequest-orchestrator.yml":      {"compose-pr-plan", "pr-summary"},

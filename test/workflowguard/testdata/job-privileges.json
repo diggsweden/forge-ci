@@ -1,4 +1,13 @@
 {
+  "base-image-lifecycle.yml jobs.promote": [
+    "packages: write"
+  ],
+  "base-image-lifecycle.yml jobs.publish": [
+    "packages: write"
+  ],
+  "base-image-lifecycle.yml jobs.sign": [
+    "packages: write"
+  ],
   "build-cli.yml jobs.build": [
     "id-token: write"
   ],

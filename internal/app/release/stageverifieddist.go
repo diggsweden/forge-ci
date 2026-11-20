@@ -49,12 +49,28 @@ func StageVerifiedDist(ctx context.Context, source, destination, expected, manif
 }
 
 func stageVerifiedDist(ctx context.Context, source, destination, expected, manifestRoot string, admit func(fs.FS) error) error {
+	return installVerifiedDist(ctx, source, destination, expected, manifestRoot, admit, false)
+}
+
+// OverlayVerifiedDist verifies privately staged context bytes before merging
+// them into an existing checkout using the artifact installer's safe overlay.
+func OverlayVerifiedDist(ctx context.Context, source, destination, expected, manifestRoot string) error {
+	info, err := os.Lstat(destination)
+	if err != nil || !info.IsDir() {
+		return fmt.Errorf("context overlay requires an existing directory: %w", errs.ErrValidation)
+	}
+	return installVerifiedDist(ctx, source, destination, expected, manifestRoot, domainrelease.WalkSafe, true)
+}
+
+func installVerifiedDist(ctx context.Context, source, destination, expected, manifestRoot string, admit func(fs.FS) error, overlay bool) error {
 	if expected == "" || source == "" || destination == "" {
 		return fmt.Errorf("source, destination and expected digest required: %w", errs.ErrUsage)
 	}
 
-	if _, err := os.Lstat(destination); !os.IsNotExist(err) {
-		return fmt.Errorf("handoff destination must not exist yet: %w", errs.ErrValidation)
+	if !overlay {
+		if _, err := os.Lstat(destination); !os.IsNotExist(err) {
+			return fmt.Errorf("handoff destination must not exist yet: %w", errs.ErrValidation)
+		}
 	}
 
 	stage, err := pathsafe.NewArtifactStaging(destination)
@@ -67,7 +83,7 @@ func stageVerifiedDist(ctx context.Context, source, destination, expected, manif
 	defer func() {
 		_ = stage.Close()
 
-		if !installed {
+		if !installed && !overlay {
 			_ = os.Remove(destination)
 		}
 	}()

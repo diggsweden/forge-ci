@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
 )
 
 func TestKanikoActionBuildPlanRemovesHostPathsAndRejectsUnsupportedInputs(t *testing.T) {
@@ -117,6 +118,60 @@ func TestPrepareKanikoActionNeedsNoTrivyAndAdmitsOnlyDeferringPlans(t *testing.T
 			dockerfile, err := os.ReadFile(filepath.Join(action, "Dockerfile"))
 			require.NoError(t, err)
 			require.NotContains(t, string(dockerfile), "trivy")
+		})
+	}
+}
+
+func TestPrepareKanikoBaseActionAdmitsRootAndChildPlans(t *testing.T) {
+	for _, mode := range []string{"root", "child", "wrong parent", "wrong flavor", "mixed modes"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Setenv("FORGE_CI_PROVIDER", "local")
+			t.Setenv("FORGE_CI_RUNNER", "github")
+			t.Setenv("GITHUB_OUTPUT", filepath.Join(t.TempDir(), "output"))
+			workspace := t.TempDir()
+			require.NoError(t, os.Mkdir(filepath.Join(workspace, "source"), 0o700))
+			id := strings.Repeat("a", 64)
+			repository := "registry.example/org/base"
+			plan := pipeline.ReleaseImagesPlan{
+				Images: []pipeline.ReleaseImage{{Name: "base", Role: "base", ImageKind: "base", Flavor: "go", BaseInputID: id, Scan: true,
+					ImageRepository: repository, Archs: "amd64", FinalTagName: id + "-go", CandidateTag: "staging-" + id + "-go"}},
+				Builds: []pipeline.ReleaseImageBuild{{Name: "base", Arch: "amd64", Platform: "linux/amd64", ContainerFile: "Containerfile", Context: ".",
+					ImageRepository: repository, FinalTagName: id + "-go", CandidateTag: "staging-" + id + "-go"}},
+			}
+			args := []string{"prepare-kaniko-action", "--base", "--workspace", workspace,
+				"--plan", filepath.Join(workspace, "plan.json"), "--image-repository", repository,
+				"--job-image", "registry.invalid/kaniko@sha256:" + strings.Repeat("d", 64)}
+			if mode == "child" || mode == "wrong parent" {
+				ref := "registry.example/parent@sha256:" + strings.Repeat("b", 64)
+				parent := `{"ref":"` + ref + `","input_id":"` + strings.Repeat("c", 64) + `"}`
+				plan.Images[0].ProvenanceJSON = `{"parent_base":` + parent + `}`
+				plan.Builds[0].BuildArgs = "PARENT=" + ref
+				plan.Builds[0].RegistryInputs = map[string]string{"PARENT": ref}
+				if mode == "wrong parent" {
+					parent = strings.ReplaceAll(parent, "/parent@", "/other@")
+				}
+				args = append(args, "--parent-base-json", parent)
+			}
+			if mode == "wrong flavor" {
+				args = append(args, "--stage-flavors", "java")
+			}
+			if mode == "mixed modes" {
+				args = append(args, "--snapshot")
+			}
+			body, err := json.Marshal(plan)
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(filepath.Join(workspace, "plan.json"), body, 0o600))
+			err = prepareKanikoActionCmd().Run(t.Context(), args)
+			action := filepath.Join(workspace, ".forge-ci-kaniko-action")
+			if mode != "root" && mode != "child" {
+				require.Error(t, err)
+				require.NoDirExists(t, action)
+				return
+			}
+			require.NoError(t, err)
+			frozen, err := os.ReadFile(filepath.Join(action, "plan.json"))
+			require.NoError(t, err)
+			require.JSONEq(t, string(body), string(frozen))
 		})
 	}
 }

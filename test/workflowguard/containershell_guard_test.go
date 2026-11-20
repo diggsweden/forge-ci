@@ -47,6 +47,11 @@ func TestContainerJobStepsArePOSIXShell(t *testing.T) {
 		require.NoError(t, err)
 
 		var workflow struct {
+			Defaults struct {
+				Run struct {
+					Shell string `yaml:"shell"`
+				} `yaml:"run"`
+			} `yaml:"defaults"`
 			Jobs map[string]struct {
 				Container any `yaml:"container"`
 				Defaults  struct {
@@ -64,7 +69,7 @@ func TestContainerJobStepsArePOSIXShell(t *testing.T) {
 		require.NoError(t, yaml.Unmarshal(body, &workflow), entry.Name())
 
 		for jobName, job := range workflow.Jobs {
-			if job.Container == nil || job.Defaults.Run.Shell != "" {
+			if job.Container == nil || job.Defaults.Run.Shell != "" || workflow.Defaults.Run.Shell != "" {
 				continue
 			}
 

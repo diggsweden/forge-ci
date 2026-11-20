@@ -31,8 +31,15 @@ func TestRegistryInputFetchSerializesArtifactFinalization(t *testing.T) {
 			t.Errorf("%s: registry input uploads must avoid concurrent Forgejo chunk finalization", tc.file)
 		}
 
-		if scalarString(mappingValue(strategy, "matrix")) != "${{ fromJSON(needs.plan.outputs.build-matrix) }}" {
-			t.Errorf("%s: serialized fetch must still cover every planned image and architecture", tc.file)
+		if scalarString(mappingValue(strategy, "matrix")) != `${{ fromJSON(needs.plan.outputs.fetch-required == 'true' && needs.plan.outputs.fetch-matrix || '{"include":[{"arch":""}]}') }}` {
+			t.Errorf("%s: fetch must use the filtered matrix when required and retain one skipped dependency row otherwise", tc.file)
+		}
+		if got := scalarString(mappingValue(workflow.jobs["fetch-inputs"].node, "if")); got != needsGate([]string{"coordinates", "plan"}, "!cancelled()", "needs.plan.outputs.fetch-required == 'true'") {
+			t.Errorf("%s: fetch must run only when the successful plan requires it: %s", tc.file, got)
+		}
+		const buildGate = "${{ !cancelled() && needs.coordinates.result == 'success' && needs.plan.result == 'success' && ((needs.plan.outputs.fetch-required == 'true' && needs.fetch-inputs.result == 'success') || (needs.plan.outputs.fetch-required == 'false' && (needs.fetch-inputs.result == 'skipped' || needs.fetch-inputs.result == 'success'))) }}"
+		if got := scalarString(mappingValue(workflow.jobs["build"].node, "if")); got != buildGate {
+			t.Errorf("%s: builds may accept skipped fetch only when the plan explicitly requires none; failures and cancellation must block: %s", tc.file, got)
 		}
 
 		buildStrategy := mappingValue(workflow.jobs["build"].node, "strategy")
@@ -153,8 +160,15 @@ func TestBaseImagesStageKeepsItsTokenAndItsGates(t *testing.T) {
 
 func TestBaseImagesPullsParentWithoutArtifactHandoff(t *testing.T) {
 	t.Parallel()
+	for _, file := range []string{baseImagesWorkflow, ".forgejo/workflows/base-image-lifecycle.yml"} {
+		t.Run(file, func(t *testing.T) { checkBaseParentPull(t, file) })
+	}
+}
 
-	workflow := loadWorkflow(t, baseImagesWorkflow)
+func checkBaseParentPull(t *testing.T, file string) {
+	t.Helper()
+
+	workflow := loadWorkflow(t, file)
 	if _, exists := workflow.jobs["fetch-inputs"]; exists {
 		t.Fatal("parent layouts must not pass through an artifact job")
 	}

@@ -27,8 +27,15 @@ const (
 // input reaches the engine's admission as the caller passed it, empty or not.
 func TestBaseImagesWorkflowPlansTheStageItsParentNames(t *testing.T) {
 	t.Parallel()
+	for _, file := range []string{"base-images.yml", "base-image-lifecycle.yml"} {
+		t.Run(file, func(t *testing.T) { checkBaseStagePlanning(t, file) })
+	}
+}
 
-	run := workflowStep(t, "base-images.yml", "plan", "Admit the base plan").Run
+func checkBaseStagePlanning(t *testing.T, file string) {
+	t.Helper()
+
+	run := workflowStep(t, file, "plan", "Admit the base plan").Run
 
 	for _, tc := range []struct {
 		name, parent, amd64, arm64, stage string
@@ -42,7 +49,7 @@ func TestBaseImagesWorkflowPlansTheStageItsParentNames(t *testing.T) {
 
 			box := newSandbox(t, "base-plan")
 			got := box.run(run, "HELPERS_DIR="+box.root, "GITHUB_WORKSPACE="+box.root, "RUNNER_TEMP="+box.root,
-				"IMAGE_PLAN_JSON={\"builds\":[]}", "PARENT_BASE_JSON="+tc.parent, "IMAGE_REPOSITORY=registry.example/owner/base",
+				"STAGE_FLAVOR=base", "IMAGE_PLAN_JSON={\"builds\":[]}", "PARENT_BASE_JSON="+tc.parent, "IMAGE_REPOSITORY=registry.example/owner/base",
 				"RELEASE_SHA=cccc", "FORGEJO_SERVER=https://forge.example", "FORGEJO_REPO=owner/app",
 				`RUNS_ON=["ordinary"]`, "BUILD_RUNS_ON_LINUX_AMD64="+tc.amd64, "BUILD_RUNS_ON_LINUX_ARM64="+tc.arm64)
 			argv := box.argv()
@@ -68,6 +75,12 @@ func TestBaseImagesWorkflowPlansTheStageItsParentNames(t *testing.T) {
 			if (at >= 0) != (tc.parent != "") || (at >= 0 && argv[at+1] != tc.parent) {
 				t.Fatalf("parent: argv=%v, want %q", argv, tc.parent)
 			}
+			if file == "base-image-lifecycle.yml" {
+				at := slices.Index(argv, "--stage-flavors")
+				if at < 0 || at+1 >= len(argv) || argv[at+1] != "base" {
+					t.Fatalf("lifecycle must admit only its selected flavor: %v", argv)
+				}
+			}
 		})
 	}
 }
@@ -77,6 +90,13 @@ func TestBaseImagesWorkflowPlansTheStageItsParentNames(t *testing.T) {
 // to the engine: without it the gate could only report.
 func TestBaseImagesWorkflowPassesTheVulnerabilitySettingToPublication(t *testing.T) {
 	t.Parallel()
+	for _, file := range []string{"base-images.yml", "base-image-lifecycle.yml"} {
+		t.Run(file, func(t *testing.T) { checkBaseStageScanGate(t, file) })
+	}
+}
+
+func checkBaseStageScanGate(t *testing.T, file string) {
+	t.Helper()
 
 	type inputs struct {
 		On struct {
@@ -88,15 +108,15 @@ func TestBaseImagesWorkflowPassesTheVulnerabilitySettingToPublication(t *testing
 
 	var base, release inputs
 
-	loadYAML(t, ".forgejo/workflows/base-images.yml", &base)
+	loadYAML(t, ".forgejo/workflows/"+file, &base)
 	loadYAML(t, ".forgejo/workflows/release-images.yml", &release)
 
 	const setting = "enforce-vulnerabilities"
 	if want, got := release.On.WorkflowCall.Inputs[setting], base.On.WorkflowCall.Inputs[setting]; want == nil || !reflect.DeepEqual(got, want) {
-		t.Fatalf("base-images.yml declares %s as %v, release-images.yml as %v", setting, got, want)
+		t.Fatalf("%s declares %s as %v, release-images.yml as %v", file, setting, got, want)
 	}
 
-	publish := workflowStep(t, "base-images.yml", "publish", "Scan and publish the unsigned candidate")
+	publish := workflowStep(t, file, "publish", "Scan and publish the unsigned candidate")
 	if publish.Env["BASE_IMAGES_ADMIN_VULNERABILITIES"] != "${{ inputs['enforce-vulnerabilities'] }}" {
 		t.Fatalf("the publication step does not read the input: %v", publish.Env)
 	}
@@ -123,6 +143,7 @@ esac
 			}
 
 			env := []string{
+				"STAGE_FLAVOR=base",
 				"HELPERS_DIR=" + box.root, "GITHUB_WORKSPACE=" + box.root, "RUNNER_TEMP=" + box.root,
 				"IMAGE_PLAN_JSON={}", "PARENT_BASE_JSON=" + parent, "IMAGE_REPOSITORY=registry.example/owner/base", "RELEASE_SHA=cccc",
 				"REGISTRY_TOKEN=fixture-token", "REGISTRY_USER=", "FORGEJO_SERVER=https://forge.example", "FORGEJO_REPO=owner/app",

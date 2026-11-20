@@ -101,7 +101,7 @@ func CheckIsolation(workflowYAML []byte, cfg IsolationConfig) ([]IsolationViolat
 // may go. test/forgejoguard holds the list to the workflows whose secrets
 // contract names one.
 var signerWorkflows = []string{
-	"prepare-release.yml", "sign-and-publish-release.yml", "sign-container-images.yml", "runtime-images.yml",
+	"prepare-release.yml", "sign-and-publish-release.yml", "sign-container-images.yml", "runtime-images.yml", "base-image-lifecycle.yml",
 }
 
 // SignerWorkflows returns the file names of the layer's workflows that take

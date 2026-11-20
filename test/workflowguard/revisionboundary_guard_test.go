@@ -95,6 +95,7 @@ func TestPublicWorkflowsDoNotDefaultBranchesToMain(t *testing.T) {
 // above says so instead of the list silently being the whole story.
 func declaredMutationWorkflows() map[string]string {
 	return map[string]string{
+		"base-image-lifecycle.yml":           "release-sha",
 		"publish-apple-appstore.yml":         "branch",
 		"publish-container.yml":              "branch",
 		"publish-google-play.yml":            "branch",

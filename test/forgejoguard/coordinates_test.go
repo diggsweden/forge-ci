@@ -49,6 +49,7 @@ const (
 // variables instead.
 func coordinateWorkflows() map[string]coordinateContract {
 	return map[string]coordinateContract{
+		".forgejo/workflows/base-image-lifecycle.yml":          {"forge-ci-sha", 6, false},
 		".forgejo/workflows/prepare-release.yml":               {"forge-ci-sha", 4, false},
 		".forgejo/workflows/sign-and-publish-release.yml":      {"forge-ci-sha", 5, false},
 		".forgejo/workflows/sign-container-images.yml":         {"forge-ci-sha", 1, false},
@@ -275,6 +276,11 @@ func assertCoordinatesJob(t *testing.T, relative string, contract coordinateCont
 
 		outputs = append(outputs, "transparency_log")
 	}
+	if relative == ".forgejo/workflows/base-image-lifecycle.yml" {
+		wiring["BUILDER_INPUT"] = "${{ vars.CI_IMAGE_BUILDER }}"
+		wiring["BUILDER_JOB_IMAGE_INPUT"] = "${{ vars.CI_IMAGE_BUILDER_JOB_IMAGE }}"
+		outputs = append(outputs, "builder", "builder_job_image")
+	}
 
 	env := mappingValue(validateStep(t, parsed, relative), "env")
 	for key, want := range wiring {
@@ -324,7 +330,7 @@ func assertCoordinateConsumerJob(t *testing.T, relative string, contract coordin
 	// from that checkout.
 	for _, step := range target.steps() {
 		uses := scalarString(mappingValue(step, "uses"))
-		ownAction := contract.builder && strings.HasPrefix(uses, builderActions) && !strings.Contains(uses, "..")
+		ownAction := (contract.builder || relative == ".forgejo/workflows/base-image-lifecycle.yml" && name == "build") && strings.HasPrefix(uses, builderActions) && !strings.Contains(uses, "..")
 
 		if uses != "" && !ownAction {
 			t.Errorf("%s: container job %s uses action %s", relative, name, uses)
@@ -334,14 +340,14 @@ func assertCoordinateConsumerJob(t *testing.T, relative string, contract coordin
 	// A builder job runs the job image the coordinates job validated, and
 	// holds no secret when it runs the caller's Containerfile. The separate
 	// base-image guard constrains the pull-only credential to the fetch step.
-	if contract.builder {
+	if contract.builder || relative == ".forgejo/workflows/base-image-lifecycle.yml" && name == "build" {
 		if snapshotToolchainJob(relative, name) {
 			assertSnapshotProducerImageLookup(t, target.containerImage())
 		} else if image := target.containerImage(); image != builderJobImage {
 			t.Errorf("%s: job %s runs container %q, want the validated %q", relative, name, image, builderJobImage)
 		}
 
-		if relative != baseImagesWorkflow && anyString(target.node, secretsWord.MatchString) {
+		if relative != baseImagesWorkflow && relative != ".forgejo/workflows/base-image-lifecycle.yml" && anyString(target.node, secretsWord.MatchString) {
 			t.Errorf("%s: builder job %s mentions secrets", relative, name)
 		}
 
@@ -522,6 +528,7 @@ func runPreflightWithStderr(t *testing.T, script, repository, signer string, env
 		"SIGNER_IMAGE_INPUT=" + signer,
 		"FORGEJO_OUTPUT=" + output,
 		"TRANSPARENCY_LOG_INPUT=none",
+		"FLAVOR_INPUT=base",
 		"GO_BUILD_IMAGE_INPUT=" + exampleSigner,
 		"PUBLIC_KEY_SHA256=" + strings.Repeat("a", 64),
 		"RUNTIME_ENGINE_SHA=" + strings.Repeat("b", 40),
@@ -583,6 +590,9 @@ func TestCoordinatePreflightResolvesTheHelperRepository(t *testing.T) {
 
 				if relative == ".forgejo/workflows/runtime-images.yml" {
 					wantOutput += "go_build_image=" + exampleSigner + "\nbuilder=buildah\nbuilder_job_image=\n"
+				}
+				if relative == ".forgejo/workflows/base-image-lifecycle.yml" {
+					wantOutput += "builder=buildah\nbuilder_job_image=\n"
 				}
 
 				if isSignerWorkflow(relative) {

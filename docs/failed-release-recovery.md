@@ -15,12 +15,20 @@ downstream publication have different recovery contracts:
 |---|---|
 | GitHub publication after successful signing | Retry the failed publisher with the original signed checkpoint, as described below. |
 | GitHub preparation/prerequisites with an existing final tag | Use the [exact-tag recovery criteria](#final-git-tag-exists); a matching tag name alone is insufficient. |
-| Forgejo preparation after pushing the final tag | Preparation refuses an existing final tag. Preserve successful handoffs for downstream jobs; if preparation itself cannot complete, use a new version and request. On Forgejo 17 or later, a run cancelled after the unsigned hand-off is finished in the same run by `POST /api/v1/repos/{owner}/{repo}/actions/jobs/{job}/rerun` on its first cancelled job, which reruns the jobs that need it with the earlier jobs' hand-off; held by `TestForgejoRelease_RerunAfterInterruption` (Forgejo 17 or later; not yet live-proven, see [Testing matrices](testing-matrices.md)). |
+| Forgejo preparation after pushing the final tag | Preparation refuses an existing final tag. Preserve successful handoffs for downstream jobs; if preparation itself cannot complete, use a new version and request. On Forgejo 17 or later, retry only the downstream failed/cancelled job and its dependants via `POST /api/v1/repos/{owner}/{repo}/actions/jobs/{job}/rerun`. The narrower interruption-after-unsigned-handoff case is held by `TestForgejoRelease_RerunAfterInterruption`; see the revision-specific evidence in [Testing matrices](testing-matrices.md). |
 | GitLab | Retry the failed job in the same pipeline; see [GitLab](#gitlab). |
 
 Releases start from the original release request, not a fresh event on the final
 tag. A retry is supported only while the required source identities, handoffs
 and destination state remain compatible with that operation.
+
+**Do not select “Re-run all jobs” after Forgejo preparation succeeded.** The
+release commit has advanced the branch beyond the request commit; rerunning
+preparation then fails the branch-head or existing-tag guard. A downstream
+retry must retain the successful preparation outputs and required artifacts.
+If a whole-run retry already invalidated those dependencies, inventory the
+attempts before choosing recovery; do not assume the old handoff is reusable.
+Never move the request or final tag to make the guard pass.
 
 For GitHub publication failures, retry the failed publisher job, preserving
 the successful signing job. Its `release-signed-<run>-<attempt>` checkpoint is

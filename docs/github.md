@@ -32,6 +32,108 @@ Leaf workflows can be called directly to compose your own pipeline; see
 orchestrators compose stages and leaves; [Workflow Architecture](workflows.md)
 describes how.
 
+## Consumer-owned base images
+
+`base-image-lifecycle.yml` executes one cold flavor through `plan → build →
+publish → sign → promote → authenticate`, after bootstrap admission. The consumer
+owns discovery, graph ordering and warm reuse. Use its independently calculated
+`expected-inputs-json`; never derive approval from the candidate ledger itself.
+
+This lifecycle supports native **Buildah and Kaniko**. Select `image-builder`
+or `CI_IMAGE_BUILDER` (default: Buildah). Kaniko also requires a reviewed
+digest-pinned `image-builder-job-image` or `CI_IMAGE_BUILDER_JOB_IMAGE`; the native
+builder verifies its architecture and engine source/title labels before use.
+The approved canonical CLI runs inside an isolated Docker action. Private parent
+inputs are fetched and verified on the host; no parent-read or publication token
+is passed to the Kaniko build. Layouts return to the host for verified upload.
+Each planned architecture needs its own native runner. Publication, signing,
+promotion and authentication use fixed GitHub-hosted runners and reviewed
+digest-pinned runtime images. Only `sign` receives the Cosign private key.
+
+A cold call receives the same canonical CLI outputs as the existing image
+publisher. For example, after the consumer's `plan` and `canonical-cli` jobs:
+
+```yaml
+base-go:
+  needs: [plan, canonical-cli]
+  if: ${{ !cancelled() && needs.plan.result == 'success' && needs.canonical-cli.result == 'success' && needs.plan.outputs.build-required == 'true' }}
+  uses: OWNER/forge-ci/.github/workflows/base-image-lifecycle.yml@PIN_FORGE_CI_SHA
+  permissions:
+    contents: read
+    actions: read
+    packages: write
+  with:
+    forge-ci-binary-ref: PIN_FORGE_CI_SHA
+    runtime-image: ghcr.io/OWNER/forge-ci-runtime-base@sha256:REVIEWED_DIGEST
+    runtime-image-full: ghcr.io/OWNER/forge-ci-runtime@sha256:REVIEWED_DIGEST
+    canonical-artifact-id: ${{ needs.canonical-cli.outputs.artifact-id }}
+    canonical-artifact-name: ${{ needs.canonical-cli.outputs.artifact-name }}
+    canonical-producer-run-id: ${{ needs.canonical-cli.outputs.producer-run-id }}
+    canonical-producer-run-attempt: ${{ needs.canonical-cli.outputs.producer-run-attempt }}
+    canonical-producer-engine-repository: ${{ needs.canonical-cli.outputs.engine-repository }}
+    canonical-producer-engine-commit: ${{ needs.canonical-cli.outputs.engine-commit }}
+    canonical-producer-result: ${{ needs.canonical-cli.result }}
+    release-sha: ${{ needs.plan.outputs.release-sha }}
+    flavor: go
+    image-plan-json: ${{ needs.plan.outputs.image-plan-json }}
+    expected-inputs-json: ${{ needs.plan.outputs.expected-inputs-json }}
+    parent-base-json: ${{ needs.plan.outputs.parent-base-json }}
+    image-repository: ghcr.io/OWNER/APP-base
+    registry-user: ${{ vars.BASE_REGISTRY_USER }}
+    artifact-name: base-go
+    caller-workflow: release.yml
+    cosign-public-key: ${{ vars.COSIGN_PUBLIC_KEY }}
+    cosign-public-key-sha256: REVIEWED_PUBLIC_KEY_SHA256
+  secrets:
+    RELEASE_REGISTRY_TOKEN: ${{ secrets.BASE_PUBLISH_TOKEN }}
+    RELEASE_COSIGN_PRIVATE_KEY: ${{ secrets.RELEASE_COSIGN_PRIVATE_KEY }}
+    RELEASE_COSIGN_PASSPHRASE: ${{ secrets.RELEASE_COSIGN_PASSPHRASE }}
+```
+
+The parent projection must already have been authenticated by the consumer;
+omit it for a root. Public parents are pulled anonymously. Private parents need
+`parent-registry-repository`, `parent-registry-user` and, when applicable,
+`parent-registry-auth-origin`, plus a separate repository-scoped pull-only
+`PARENT_REGISTRY_READ_TOKEN`. Never map the publication token to that secret.
+
+Only successful authentication exposes `parent-base-json` and the original
+`ledger-json`. Consumer completion checks both against its independent flavor,
+input identity and digest before returning a parent or cleaning candidate tags.
+Warm reuse returns the separately authenticated discovery result. Retain the
+original run's layout/evidence artifacts for downstream signing or promotion
+retries; their two-day retention bounds recovery. Retrying a build also requires
+canonical CLI production for that attempt, as on the generic publisher.
+Hosted cold/warm/mixed and retry acceptance remains required before adoption.
+
+The call must grant `packages: write`, as above, because a called workflow
+cannot elevate its caller's token permissions. Each lifecycle job narrows that
+ceiling to its own role. For GHCR under the caller repository, map
+`RELEASE_REGISTRY_TOKEN` to `secrets.GITHUB_TOKEN`, with `registry-user` set to
+`github.actor`. Only publication, signing and promotion jobs request package
+write permission; authentication requests read permission and builders have none.
+
+## Verified image contexts and registry reads
+
+A direct caller of `publish-container.yml` can pass `context-artifact` and
+`context-digest` together. The producer computes the digest using
+`forge-ci release dist-digest --dist-dir image-context --manifest-root .`, exposes
+it as a job output, then uploads the same tree with `--include-hidden` and
+`--verify-readback`. Use `artifact-types: ''` for this complete context route.
+Planning rejects an incomplete pair. Each native builder privately stages and
+verifies the original artifact before overlaying `source/`; there is no relay.
+
+For external registries, `registry-password` is publication-only. Private parent
+or cache reads additionally require `registry-read-username` and the separate
+pull-only `registry-read-password` secret, scoped to the required repositories.
+Omit both read credentials for public external inputs. Set `use-ci-token: false`
+for external registries. GHCR builds use their job's `packages: read` GitHub
+token; publication jobs retain their own write permission. This applies to
+Buildah, Kaniko and Kaniko binary extraction. Existing external-registry callers
+must add the read credential when upgrading if their builds require private reads.
+For a build-only invocation (`push-image: false`), set `use-ci-token: false`
+and pass both read credentials, including for GHCR. Private reads retain the
+trusted-event gate; anonymous pull-request builds receive no read credential.
+
 ## Requirements
 
 **Organization prerequisites:** allow the reviewed reusable workflows and their

@@ -60,6 +60,8 @@ jobs:
           forge-ci report release --job "Prepare: release=${PREPARE_RESULT}" --job "Build: release files=${BUILD_RESULT}" \
             --job "Build: release images=${IMAGES_RESULT}" --job "Build: release hand-off=${HANDOFF_RESULT}" --job "Sign and publish: release=${PUBLISH_RESULT}"
   build:
+    outputs:
+      context-digest: ${{ steps.context.outputs.digest }}
     name: 'Build: release files'
     needs: prepare
     runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
@@ -86,6 +88,7 @@ jobs:
           CYCLONEDX_VERSION: '6.0.1'
         run: forge-ci build npm run --expect-version "${RELEASE_TAG#v}"
       - name: Stage image context and release files
+        id: context
         env:
           RELEASE_TAG: ${{ needs.prepare.outputs.release-tag }}
           RELEASE_SHA: ${{ needs.prepare.outputs.release-sha }}
@@ -98,6 +101,8 @@ jobs:
           tar -xzf "${package}" --strip-components=1 -C image
           cp -R image/. image-context/
           forge-ci artifact upload --name image-context --dir image-context --include-hidden --retention-days 1 --if-no-files error
+          digest=$(forge-ci release dist-digest --dist-dir image-context --manifest-root .)
+          printf 'digest=%s\n' "${digest}" >>"${FORGEJO_OUTPUT:?}"
           cp -- "${package}" dist/
           cp -- bom.json "dist/${ARTIFACT_NAME}.cdx.json"
           forge-ci release notes --changelog-file CHANGELOG.md --stub-missing-section \
@@ -121,6 +126,7 @@ jobs:
       release-tag: ${{ needs.prepare.outputs.release-tag }}
       release-sha: ${{ needs.prepare.outputs.release-sha }}
       context-artifact: image-context
+      context-digest: ${{ needs.build.outputs.context-digest }}
       release-platforms: ${{ vars.RELEASE_PLATFORMS || 'linux/amd64' }}
     secrets:
       RELEASE_REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}

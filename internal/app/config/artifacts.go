@@ -111,7 +111,9 @@ func loadPlannableConfig(in EmitConfigPlanInput, annot output.Annotator) (*confi
 
 // EmitReleaseImagesPlanInput drives `container release-images plan`.
 type EmitReleaseImagesPlanInput struct {
-	Config EmitConfigPlanInput
+	Config          EmitConfigPlanInput
+	ContextArtifact string
+	ContextDigest   string
 	// DefaultWhenAbsent releases the default image when Config.Path does not
 	// exist: one container named after the repository, built from the root
 	// Containerfile with every default. A path the caller named must exist.
@@ -165,6 +167,9 @@ func ResolveReleaseImagesPlan(in EmitReleaseImagesPlanInput, annot output.Annota
 }
 
 func resolveReleaseImagesPlan(in EmitReleaseImagesPlanInput, annot output.Annotator) (pipeline.ReleaseImagesPlan, error) {
+	if err := pipeline.ValidateReleaseImageContext(in.ContextArtifact, in.ContextDigest); err != nil {
+		return pipeline.ReleaseImagesPlan{}, err
+	}
 	plan, err := planReleaseImages(in, annot)
 	if err != nil {
 		return pipeline.ReleaseImagesPlan{}, err
@@ -360,10 +365,18 @@ func emitImageMatrices(ctx context.Context, sink ci.OutputSink, plan pipeline.Re
 		return err
 	}
 
+	fetches := plan.FetchMatrix()
 	for _, output := range []struct {
 		key   string
 		value any
-	}{{"build-matrix", plan.BuildMatrix()}, {"builds-by-name", builds}, {"image-matrix", plan.ImageMatrix()}, {"images-by-name", images}} {
+	}{
+		{"build-matrix", plan.BuildMatrix()},
+		{"fetch-matrix", fetches},
+		{"fetch-required", len(fetches.Include) > 0},
+		{"builds-by-name", builds},
+		{"image-matrix", plan.ImageMatrix()},
+		{"images-by-name", images},
+	} {
 		if err := emitValueOutput(ctx, sink, output.key, output.value); err != nil {
 			return err
 		}

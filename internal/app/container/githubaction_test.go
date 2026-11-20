@@ -114,7 +114,7 @@ func TestGitHubKanikoActionRefusesUnsafeOrExistingCoordinates(t *testing.T) {
 func TestGitHubKanikoEntrypointPreservesGatesAndExitStatus(t *testing.T) {
 	t.Parallel()
 
-	for _, operation := range []string{"image", "extract", "snapshot"} {
+	for _, operation := range []string{"image", "extract", "snapshot", "base", "base-child"} {
 		for _, status := range []int{0, 7, 130} {
 			t.Run(fmt.Sprintf("%s/%d", operation, status), func(t *testing.T) {
 				t.Parallel()
@@ -133,7 +133,11 @@ func TestGitHubKanikoEntrypointPreservesGatesAndExitStatus(t *testing.T) {
 				script := filepath.Join(t.TempDir(), "entrypoint.sh")
 				require.NoError(t, os.WriteFile(script, []byte(strings.ReplaceAll(string(entrypoint), "/kaniko/tools", tools)), 0o600))
 				argsFile := filepath.Join(t.TempDir(), "args")
-				command := exec.CommandContext(t.Context(), "bash", script, operation)
+				actionOperation := operation
+				if operation == "base-child" {
+					actionOperation = "base"
+				}
+				command := exec.CommandContext(t.Context(), "bash", script, actionOperation)
 
 				command.Env = []string{
 					"PATH=" + tools + ":" + os.Getenv("PATH"), "HOME=" + t.TempDir(),
@@ -141,15 +145,19 @@ func TestGitHubKanikoEntrypointPreservesGatesAndExitStatus(t *testing.T) {
 					"REGISTRY_PASSWORD=fixture-password", "REGISTRY_TOKEN=unrelated-registry-token", "REGISTRY_USER=fixture", "CONTAINER_REGISTRY=registry.invalid",
 					"GITHUB_TOKEN=unrelated-token", "ACTIONS_RUNTIME_TOKEN=runtime-token", "ACTIONS_RESULTS_URL=https://runtime.invalid",
 					"ADMIN_VULNERABILITIES=false", "IMAGE_NAME=service", "IMAGE_ARCH=amd64",
+					"STAGE_FLAVOR=go", "IMAGE_REPOSITORY=registry.invalid/base", "RELEASE_SHA=approved-source", "IMAGE_CREATED=2026-01-02T03:04:05Z",
 					"FIXTURE_ARGS=" + argsFile, fmt.Sprintf("FIXTURE_STATUS=%d", status),
 				}
-				if operation == "snapshot" {
+				if operation == "snapshot" || actionOperation == "base" {
 					command.Env = append(command.Env, "FIXTURE_NO_LOGIN=true")
+				}
+				if operation == "base-child" {
+					command.Env = append(command.Env, `PARENT_BASE_JSON={"ref":"verified","input_id":"independent"}`)
 				}
 
 				// An image build without the administrator's setting stops
 				// before the engine builds anything; it never means false.
-				if operation != "snapshot" && status == 0 {
+				if (operation == "image" || operation == "extract") && status == 0 {
 					unset := exec.CommandContext(t.Context(), "bash", script, operation)
 					unset.Env = slices.DeleteFunc(slices.Clone(command.Env), func(entry string) bool { return strings.HasPrefix(entry, "ADMIN_VULNERABILITIES=") })
 					out, unsetErr := unset.CombinedOutput()
@@ -172,11 +180,21 @@ func TestGitHubKanikoEntrypointPreservesGatesAndExitStatus(t *testing.T) {
 				require.Contains(t, string(args), "--image-builder\nkaniko\n")
 				require.FileExists(t, filepath.Join(stagedOutput, "result"), "action and host must agree on the output coordinate")
 
-				if operation != "snapshot" {
+				if operation == "image" || operation == "extract" {
 					require.Contains(t, string(args), "--enforce-vulnerabilities=false")
 				}
 
-				info, statErr := os.Stat(filepath.Join(in.Workspace, "source", "trivy-results.sarif"))
+				scanDir := filepath.Join(in.Workspace, "source")
+				if actionOperation == "base" {
+					scanDir = in.Workspace
+					stage := "root-base"
+					if operation == "base-child" {
+						stage = "child-base"
+						require.Contains(t, string(args), "--inputs-dir\nregistry-inputs\n")
+					}
+					require.Contains(t, string(args), "container\nbase-images\n"+stage+"\nbuild\n")
+				}
+				info, statErr := os.Stat(filepath.Join(scanDir, "trivy-results.sarif"))
 				require.NoError(t, statErr)
 				require.Equal(t, os.FileMode(0o600), info.Mode().Perm(), "permission repair belongs to the host, not a signal-handling shell wrapper")
 			})

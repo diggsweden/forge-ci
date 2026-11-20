@@ -414,7 +414,8 @@ jobs:
 
       # No registry write and no secret: the layout waits for publish, which
       # uploads only after every architecture is built and scanned.
-      - name: Build ${{ matrix.arch }} layout
+      # Stable API evidence name; the job matrix already identifies the architecture.
+      - name: Build native layout
         env:
           IMAGE_NAME: ${{ matrix.name }}
           IMAGE_PLAN_JSON: ${{ inputs['image-plan-json'] }}

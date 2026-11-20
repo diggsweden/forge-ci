@@ -70,7 +70,13 @@ on:
         required: true
       context-artifact:
         description: >-
-          Name of an artifact of this run unpacked over the checkout before each build, for files the Containerfiles copy that are not in the repository, such as binaries built in an earlier job. Upload it with `forge-ci artifact upload --include-hidden`, so a hidden directory the Containerfiles copy is in it. Empty builds from the checkout alone.
+          Name of an artifact of this run verified against context-digest before being overlaid onto each build checkout. Upload with --include-hidden. Empty builds from the checkout alone.
+        type: string
+        required: false
+        default: ''
+      context-digest:
+        description: >-
+          Required with context-artifact: the producer's canonical digest from release dist-digest --manifest-root . over the uploaded context. Each builder verifies the staged bytes before installing them.
         type: string
         required: false
         default: ''
@@ -227,6 +233,8 @@ jobs:
     timeout-minutes: 10
     outputs:
       build-matrix: ${{ steps.plan.outputs.build-matrix }}
+      fetch-matrix: ${{ steps.plan.outputs.fetch-matrix }}
+      fetch-required: ${{ steps.plan.outputs.fetch-required }}
       builds-by-name: ${{ steps.plan.outputs.builds-by-name }}
       image-matrix: ${{ steps.plan.outputs.image-matrix }}
       images-by-name: ${{ steps.plan.outputs.images-by-name }}
@@ -301,6 +309,8 @@ jobs:
           RELEASE_TAG: ${{ inputs['release-tag'] }}
           RELEASE_PLATFORMS: ${{ inputs['release-platforms'] }}
           IMAGE_PLAN_JSON: ${{ inputs['image-plan-json'] }}
+          CONTEXT_ARTIFACT: ${{ inputs['context-artifact'] }}
+          CONTEXT_DIGEST: ${{ inputs['context-digest'] }}
           IMAGE_LABELS: ${{ inputs.labels }}
           RUNS_ON: ${{ inputs['runs-on'] }}
           BUILD_RUNS_ON_LINUX_AMD64: ${{ inputs['build-runs-on-linux-amd64'] }}
@@ -336,8 +346,8 @@ jobs:
   fetch-inputs:
     name: "Fetch: registry inputs"
     needs: [coordinates, plan]
-    if: ${{ needs.coordinates.result == 'success' && needs.plan.result == 'success' }}
-    runs-on: ${{ fromJSON(inputs[format('build-runs-on-linux-{0}', matrix.arch)]) }}
+    if: ${{ needs.coordinates.result == 'success' && needs.plan.result == 'success' && !cancelled() && needs.plan.outputs.fetch-required == 'true' }}
+    runs-on: ${{ fromJSON(inputs[format('build-runs-on-linux-{0}', matrix.arch)] || inputs['runs-on']) }}
     timeout-minutes: 45
     strategy:
       fail-fast: true
@@ -345,7 +355,11 @@ jobs:
       # Concurrent finalizers can delete a chunk while another walks it (500).
       # Serialize credential-only input uploads, not the subsequent builds.
       max-parallel: 1
-      matrix: ${{ fromJSON(needs.plan.outputs.build-matrix) }}
+      # Forgejo can remove an empty matrix job instead of recording it skipped,
+      # leaving build's needs unresolved. Keep one
+      # placeholder when no fetch is required; the job-level if skips it before
+      # any runner or registry credential is used, as in snapshot-images.yml.
+      matrix: ${{ fromJSON(needs.plan.outputs.fetch-required == 'true' && needs.plan.outputs.fetch-matrix || '{"include":[{"arch":""}]}') }}
     defaults:
       run:
         shell: bash
@@ -414,7 +428,7 @@ jobs:
   build:
     name: "Build: image"
     needs: [coordinates, plan, fetch-inputs]
-    if: ${{ needs.coordinates.result == 'success' && needs.plan.result == 'success' && needs.fetch-inputs.result == 'success' }}
+    if: ${{ !cancelled() && needs.coordinates.result == 'success' && needs.plan.result == 'success' && ((needs.plan.outputs.fetch-required == 'true' && needs.fetch-inputs.result == 'success') || (needs.plan.outputs.fetch-required == 'false' && (needs.fetch-inputs.result == 'skipped' || needs.fetch-inputs.result == 'success'))) }}
     # Each architecture builds on a runner of its own architecture: a build
     # runs the Containerfile's steps, and none may rely on CPU emulation.
     runs-on: ${{ fromJSON(inputs[format('build-runs-on-linux-{0}', matrix.arch)]) }}
@@ -490,15 +504,21 @@ jobs:
             --depth 1 \
             --path source
 
-      - name: Unpack the build context artifact
-        if: ${{ inputs['context-artifact'] != '' }}
+      - name: Verify and overlay the build context artifact
+        if: ${{ inputs['context-artifact'] != '' || inputs['context-digest'] != '' }}
         env:
           CONTEXT_ARTIFACT: ${{ inputs['context-artifact'] }}
+          CONTEXT_DIGEST: ${{ inputs['context-digest'] }}
         run: |
           set -euo pipefail
           # shellcheck source=.engine/bin/lib-forge-ci.sh
           source "${HELPERS_DIR:?}/.engine/bin/lib-forge-ci.sh"
-          run_forge_ci artifact download --name "${CONTEXT_ARTIFACT}" --dir "${GITHUB_WORKSPACE:?}/source"
+          context_dir=$(mktemp -d "${RUNNER_TEMP:?}/release-context.XXXXXXXX")
+          trap 'rm -rf -- "${context_dir}"' EXIT
+          run_forge_ci artifact download --name "${CONTEXT_ARTIFACT:?context-artifact is required}" --dir "${context_dir}"
+          run_forge_ci release validate-dist --dist-dir "${context_dir}" --manifest-root . \
+            --expected-digest "${CONTEXT_DIGEST:?context-digest is required}" \
+            --overlay-dir "${GITHUB_WORKSPACE:?}/source"
 
       # The builder is the organization's choice; this step prepares the one
       # CI_IMAGE_BUILDER names, and admits the kaniko job image by its labels.

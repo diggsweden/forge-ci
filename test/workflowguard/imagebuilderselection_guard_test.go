@@ -41,6 +41,7 @@ var buildahHardWired = regexp.MustCompile(`/setup-buildah@|/setup-buildah\b\s*$|
 var buildahAllowed = map[string]string{
 	".forgejo/actions/setup-buildah/action.yml":                   "the Buildah preparation itself",
 	".github/workflows/publish-container.yml":                     "the GitHub builder selection prepares Buildah only for its host branch",
+	".github/workflows/base-image-lifecycle.yml":                  "the native base lifecycle prepares Buildah only for its host branch",
 	".github/workflows/snapshot-images.yml":                       "the GitHub builder selection prepares Buildah only for its host branch",
 	".github/workflows/self-release.yml":                          "forge-ci's own release on GitHub's runners, no consumer workflow",
 	".github/workflows/self-runtime-container.yml":                "forge-ci's own runtime images on GitHub's runners, no consumer workflow",

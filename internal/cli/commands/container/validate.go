@@ -16,6 +16,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/cli/cienv"
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
 	domaincontainer "github.com/diggsweden/forge-ci/internal/domain/container"
+	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
 )
 
 // validateGroup wires `forge-ci container validate <verb>` —
@@ -31,6 +32,21 @@ func validateGroup() *cli.Command {
 			validateImageNamesCmd(),
 			validateContainerfileCmd(),
 			validateNamespaceCmd(),
+			validateReleaseContextCmd(),
+		},
+	}
+}
+
+func validateReleaseContextCmd() *cli.Command {
+	return &cli.Command{
+		Name:  "release-context",
+		Usage: "admit an optional producer artifact/digest pair before image builds",
+		Flags: []cli.Flag{
+			&cli.StringFlag{Name: "context-artifact", Sources: cli.EnvVars("CONTEXT_ARTIFACT"), Usage: "producer's run-scoped context artifact name"},
+			&cli.StringFlag{Name: "context-digest", Sources: cli.EnvVars("CONTEXT_DIGEST"), Usage: "producer's lowercase SHA-256 from release dist-digest --manifest-root ."},
+		},
+		Action: func(_ context.Context, cmd *cli.Command) error {
+			return pipeline.ValidateReleaseImageContext(cmd.String("context-artifact"), cmd.String("context-digest"))
 		},
 	}
 }

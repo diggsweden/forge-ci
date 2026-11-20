@@ -79,6 +79,8 @@ algorithm is shared with release dist-digest.
 With --stage-dir, copy into private staging, verify those copied bytes and install
 them into a new destination only on success. --digest-file reads the producer's
 bare lowercase SHA-256 recording and is exclusive with --expected-digest.
+With --overlay-dir, verify privately staged bytes before merging them into an
+existing checkout. It is exclusive with --stage-dir and --canonical-payload.
 
 Set --manifest-root to override the path prefix written into the manifest during
 digest recomputation; use --manifest-root . for artifact contents that are
@@ -92,6 +94,7 @@ EXAMPLE:
 			&cli.StringFlag{Name: "expected-digest", Sources: cli.EnvVars("EXPECTED_DIGEST", "DIST_DIGEST"), Usage: "expected dist digest (from the build job)"},
 			&cli.StringFlag{Name: "digest-file", Usage: "regular producer digest recording; exclusive with --expected-digest"},
 			&cli.StringFlag{Name: "stage-dir", Usage: "privately copy, verify staged bytes and install into this new directory before success"},
+			&cli.StringFlag{Name: "overlay-dir", Usage: "privately copy, verify and safely overlay into an existing checkout"},
 			&cli.StringFlag{Name: "manifest-root", Usage: "path prefix written into the sha256sum manifest during digest recomputation (defaults to --dist-dir)"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -118,7 +121,13 @@ EXAMPLE:
 			var err error
 
 			destination := cmd.String("stage-dir")
+			overlay := cmd.String("overlay-dir")
+			if overlay != "" && (destination != "" || cmd.Bool("canonical-payload")) {
+				return fmt.Errorf("--overlay-dir is exclusive with --stage-dir and --canonical-payload: %w", errs.ErrUsage)
+			}
 			switch {
+			case overlay != "":
+				err = apprelease.OverlayVerifiedDist(ctx, dir, overlay, digest, cmd.String("manifest-root"))
 			case destination != "" && cmd.Bool("canonical-payload"):
 				err = apprelease.StageVerifiedCanonicalPayload(ctx, dir, destination, digest)
 			case destination != "":

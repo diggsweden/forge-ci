@@ -115,6 +115,9 @@ func TestReusableWorkflowsRunOnTheCallersRunner(t *testing.T) {
 				t.Errorf("%s job %s runs on %q; a job runs on the signer input exactly when it reads a signing key", path, name, got)
 			case got == reusableRunner, got == signerRunner, slices.Contains(buildRunners, got):
 			case path == ".forgejo/workflows/runtime-images.yml" && name == "smoke" && got == runtimeSmokeRunner:
+			// An empty fetch matrix has no architecture. Forgejo can evaluate
+			// runs-on before skipping it; both choices remain caller-owned.
+			case path == releaseImagesWorkflow && name == "fetch-inputs" && got == "${{ fromJSON(inputs[format('build-runs-on-linux-{0}', matrix.arch)] || inputs['runs-on']) }}":
 			default:
 				t.Errorf("%s job %s runs on %q, which is no single runner input of the caller", path, name, got)
 			}

@@ -5,10 +5,12 @@ package workflowguard
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
+	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
 
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -22,6 +24,84 @@ func TestPublishContainerValidatesNamespaceForSelectedRegistry(t *testing.T) {
 	// The namespace is checked against the registry pushed to, always: an
 	// allowlist of registries let a push elsewhere skip the check.
 	require.NotContains(t, env, "ENFORCE_NAMESPACE_ON")
+}
+
+func TestPublishContainerUsesPullOnlyCredentialsForBothBuilders(t *testing.T) {
+	t.Parallel()
+	for _, name := range []string{"Log in for registry reads", "Build and retain layout with Kaniko", "Extract binaries with Kaniko"} {
+		env := workflowStepEnv(t, "publish-container.yml", "build-arch", name)
+		require.Contains(t, env["REGISTRY_PASSWORD"], "secrets['registry-read-password']", name)
+		require.NotContains(t, env["REGISTRY_PASSWORD"], "secrets['registry-password']", name)
+		require.Equal(t, "${{ inputs['use-ci-token'] && github.actor || inputs['registry-read-username'] }}", env["REGISTRY_USER"], name)
+	}
+	env := workflowStepEnv(t, "publish-container.yml", "build-arch", "Log in for registry reads")
+	require.Equal(t, "ghcr.io", env["CI_REGISTRY"], "the read-scoped GitHub token must not be sent to another registry")
+}
+
+func TestPublishContainerRequiresProducerContextDigest(t *testing.T) {
+	t.Parallel()
+	for _, binding := range []struct{ job, step string }{
+		{"prep", "Admit verified release context"},
+		{"build-arch", "Verify and overlay release context"},
+	} {
+		env := workflowStepEnv(t, "publish-container.yml", binding.job, binding.step)
+		require.Equal(t, "${{ inputs['context-artifact'] }}", env["CONTEXT_ARTIFACT"])
+		require.Equal(t, "${{ inputs['context-digest'] }}", env["CONTEXT_DIGEST"])
+	}
+}
+
+func TestPrivateBuildOnlyReadsRetainTheTrustedEventGate(t *testing.T) {
+	t.Parallel()
+	workflow := readCanonicalConsumerWorkflow(t, "publish-container.yml")
+	var login canonicalConsumerStep
+	for _, step := range workflow.Jobs["build-arch"].Steps {
+		switch step.Name {
+		case "Log in for registry reads":
+			login = step
+			require.Equal(t, "${{ inputs['push-image'] || inputs['registry-read-username'] != '' }}", step.If)
+		case "Build and retain layout with Kaniko", "Extract binaries with Kaniko":
+			require.Contains(t, step.Env["REGISTRY_PASSWORD"], "(inputs['push-image'] || inputs['registry-read-username'] != '')")
+		case "Write build plan", "Build and retain layout":
+			require.Contains(t, step.Env["BUILD_CACHE_REPO"], "(inputs['push-image'] || inputs['registry-read-username'] != '')")
+			require.Equal(t, "false", step.Env["BUILD_CACHE_PUSH"])
+		}
+	}
+	require.NotEmpty(t, login.Run)
+	for _, mode := range []string{"private", "anonymous", "untrusted", "invalid-auth"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			calls := filepath.Join(dir, "calls")
+			user, password := "reader", "fixture-read-token"
+			if mode == "anonymous" {
+				user, password = "", ""
+			}
+			stub := `forge-ci() {
+  case "$*" in
+    'validate event-context') test "$MODE" != untrusted ;;
+    'validate auth registry') test "$MODE" != invalid-auth ;;
+    'container login '*) printf '%s\n' login >>"$CALLS" ;;
+    *) return 99 ;;
+  esac
+}
+`
+			command := exec.CommandContext(t.Context(), testenv.GNUExecutable(t, "bash"), "-c", stub+login.Run)
+			command.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + dir, "CALLS=" + calls, "MODE=" + mode,
+				"REGISTRY_USER=" + user, "REGISTRY_PASSWORD=" + password}
+			out, err := command.CombinedOutput()
+			require.NotContains(t, string(out), "fixture-read-token")
+			if mode == "private" || mode == "anonymous" {
+				require.NoError(t, err, "%s", out)
+			} else {
+				require.Error(t, err)
+			}
+			if mode == "private" {
+				require.FileExists(t, calls)
+			} else {
+				require.NoFileExists(t, calls)
+			}
+		})
+	}
 }
 
 // The Maven and Gradle builds upload target/ and build/libs/ below the

@@ -119,8 +119,10 @@ func checkKeySecretJob(t *testing.T, where string, job keySecretJob) int {
 				// A fixed key-backed role can bind and sign in one fail-fast
 				// step. It has no alternative method or conditional skip.
 				fixedRole := step.If == "" &&
-					strings.Contains(step.Run, "forge-ci release sign --method kms --key env://COSIGN_KEY") &&
-					strings.Contains(step.Run, "--method kms --key env://COSIGN_KEY --bundle")
+					((strings.Contains(step.Run, "forge-ci release sign --method kms --key env://COSIGN_KEY") &&
+						strings.Contains(step.Run, "--method kms --key env://COSIGN_KEY --bundle")) ||
+						(strings.Contains(step.Run, "forge-ci container base-images sign --ledger") &&
+							strings.Contains(step.Run, "--method kms --key env://COSIGN_KEY")))
 				// The binding must run whenever the key is selected, and
 				// its refusal must stop the job: no alternative branch in
 				// its condition, and no continue-on-error.

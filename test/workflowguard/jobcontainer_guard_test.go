@@ -36,6 +36,9 @@ import (
 // short and stay written down.
 func declaredWritingContainerJobs() map[string]string {
 	return map[string]string{
+		"base-image-lifecycle.yml/publish":              "packages: write",
+		"base-image-lifecycle.yml/sign":                 "packages: write",
+		"base-image-lifecycle.yml/promote":              "packages: write",
 		"promote-stage.yml/promote":                     "packages: write",
 		"publish-container.yml/image-evidence":          "packages: write, id-token: write",
 		"publish-container.yml/merge":                   "packages: write, id-token: write",

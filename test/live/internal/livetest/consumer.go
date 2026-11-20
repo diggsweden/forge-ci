@@ -312,6 +312,9 @@ func (settings *TrialSettings) ResolvedVariables(layerCommit, requestCommit stri
 // combinationGap refuses settings that are each valid and do not go
 // together.
 func (settings *TrialSettings) combinationGap() error {
+	if _, err := settings.DirectParentBuilds(); err != nil {
+		return err
+	}
 	if settings.NextVersion != "" && (settings.InterruptAfter != "" || semver.Compare("v"+settings.NextVersion, "v"+settings.Version) <= 0) {
 		return fmt.Errorf("next-version requires an increasing release version and cannot accompany interrupt-after: %w", errs.ErrValidation)
 	}
@@ -784,6 +787,9 @@ func (layer Layer) PlanConsumer(workflows map[string]string, facts ConsumerFacts
 			return ConsumerPlan{}, err
 		}
 	}
+	if err := plan.bindWorkflowSecrets(workflows, entryPoints, facts.Secrets); err != nil {
+		return ConsumerPlan{}, err
+	}
 
 	renderedWorkflows := make(map[string]string, len(workflows))
 	for _, name := range sortedKeys(workflows) {
@@ -855,8 +861,8 @@ func (plan *ConsumerPlan) renderText(text string) string {
 	return strings.NewReplacer(plan.Replace...).Replace(text)
 }
 
-// bindWorkflowFacts binds every input except base-repository, and every
-// secret, the way one workflow passes them.
+// bindWorkflowFacts binds every input except base-repository. Secret forwarding
+// is resolved separately through the parsed call graph, never by matching text.
 func (plan *ConsumerPlan) bindWorkflowFacts(name, workflow string, facts ConsumerFacts) error {
 	text := foldedExpression.ReplaceAllString(plan.workflowInputs[workflow], " }}")
 
@@ -871,12 +877,6 @@ func (plan *ConsumerPlan) bindWorkflowFacts(name, workflow string, facts Consume
 		}
 
 		if err := plan.bindInput(name, text, input, facts.Inputs[input]); err != nil {
-			return err
-		}
-	}
-
-	for _, secret := range sortedKeys(facts.Secrets) {
-		if err := plan.bindSecret(text, secret, facts.Secrets[secret]); err != nil {
 			return err
 		}
 	}
@@ -949,20 +949,6 @@ func (plan *ConsumerPlan) bindInput(file, text, input, value string) error {
 			plan.replace(literal, value)
 		default:
 			plan.replace(key+written, key+value)
-		}
-	}
-
-	return nil
-}
-
-// bindSecret plans one of the layer's secrets for every call that passes it
-// from a secret of the consumer's own name.
-func (plan *ConsumerPlan) bindSecret(text, secret, value string) error {
-	from := regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(secret) + `:[ \t]*\$\{\{\s*secrets\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}[ \t]*$`)
-
-	for _, match := range from.FindAllStringSubmatch(text, -1) {
-		if err := bind(plan.Secrets, "secret", match[1], value); err != nil {
-			return err
 		}
 	}
 

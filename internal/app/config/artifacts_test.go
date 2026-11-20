@@ -182,6 +182,20 @@ func TestEmitReleaseImagesPlan_ScansEveryImageAndRefusesTheOptOut(t *testing.T) 
 	require.Empty(t, refused.Keys())
 }
 
+func TestEmitReleaseImagesPlanRefusesIncompleteContextBeforeReadingConfig(t *testing.T) {
+	t.Parallel()
+	for _, pair := range [][2]string{{"context", ""}, {"", strings.Repeat("a", 64)}, {"context", "bad"}} {
+		sink := fakeoutputsink.New(t)
+		_, err := appconfig.EmitReleaseImagesPlan(t.Context(), sink, output.Annotator{}, appconfig.EmitReleaseImagesPlanInput{
+			Config:          appconfig.EmitConfigPlanInput{Path: "absent.yml", FS: fstest.MapFS{}},
+			ContextArtifact: pair[0], ContextDigest: pair[1],
+		})
+		require.ErrorIs(t, err, errs.ErrValidation)
+		require.Contains(t, err.Error(), "context-")
+		require.Empty(t, sink.Keys(), "rejected context must not schedule any matrix")
+	}
+}
+
 func TestEmitReleaseImagesPlan_ResolvedPolicyUsesTheSameOutputContract(t *testing.T) {
 	t.Parallel()
 
@@ -204,6 +218,8 @@ func TestEmitReleaseImagesPlan_ResolvedPolicyUsesTheSameOutputContract(t *testin
 
 	// The matrix rows hold the keys alone, and the keyed outputs the rest.
 	require.JSONEq(t, `{"include":[{"name":"app","arch":"amd64"}]}`, sink.Single("build-matrix"))
+	require.JSONEq(t, `{"include":[]}`, sink.Single("fetch-matrix"))
+	require.Equal(t, "false", sink.Single("fetch-required"))
 	require.JSONEq(t, `{"include":[{"name":"app"}]}`, sink.Single("image-matrix"))
 
 	build, err := json.Marshal(map[string]map[string]pipeline.ReleaseImageBuild{"app": {"amd64": want.Builds[0]}})

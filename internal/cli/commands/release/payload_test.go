@@ -53,6 +53,27 @@ func TestCanonicalPayloadCLIStagesBothRootsAndKeepsLegacyDigest(t *testing.T) {
 	require.ErrorContains(t, releasecmd.New().Run(t.Context(), []string{"release", "dist-digest", "--dist-dir", source, "--canonical-payload"}), "reserved publication ledger")
 }
 
+func TestContextOverlayCLIRejectsConflictingModesBeforeCheckoutWrites(t *testing.T) {
+	t.Setenv("EXPECTED_DIGEST", "")
+	t.Setenv("DIST_DIGEST", "")
+	source, destination := t.TempDir(), t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(source, "binary"), []byte("verified"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(destination, "binary"), []byte("checkout"), 0o644))
+	digest := capturePayloadDigest(t, "--dist-dir", source, "--manifest-root", ".")
+	args := []string{"release", "validate-dist", "--dist-dir", source, "--expected-digest", digest, "--overlay-dir", destination}
+	for _, flags := range [][]string{{"--stage-dir", filepath.Join(t.TempDir(), "new")}, {"--canonical-payload"}} {
+		err := releasecmd.New().Run(t.Context(), append(append([]string{}, args...), flags...))
+		require.ErrorContains(t, err, "--overlay-dir is exclusive")
+		body, err := os.ReadFile(filepath.Join(destination, "binary"))
+		require.NoError(t, err)
+		require.Equal(t, "checkout", string(body))
+	}
+	require.NoError(t, releasecmd.New().Run(t.Context(), append(args, "--manifest-root", ".")))
+	body, err := os.ReadFile(filepath.Join(destination, "binary"))
+	require.NoError(t, err)
+	require.Equal(t, "verified", string(body))
+}
+
 func capturePayloadDigest(t *testing.T, flags ...string) string {
 	t.Helper()
 

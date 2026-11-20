@@ -80,6 +80,8 @@ EXAMPLE:
 		// A --label value may hold commas (a license expression, a text).
 		DisableSliceFlagSeparator: true,
 		Flags: []cli.Flag{
+			&cli.StringFlag{Name: "context-artifact", Sources: cli.EnvVars("CONTEXT_ARTIFACT"), Usage: "optional prebuilt context artifact; requires context-digest"},
+			&cli.StringFlag{Name: "context-digest", Sources: cli.EnvVars("CONTEXT_DIGEST"), Usage: "producer's release dist-digest with manifest-root .; requires context-artifact"},
 			&cli.StringFlag{Name: "image-plan-json", Sources: cli.EnvVars("IMAGE_PLAN_JSON"), Usage: "resolved consumer image policy as builds/images JSON; admitted against --image-repository instead of loading artifacts.yml; supports content-addressed base tags"},
 			&cli.StringFlag{Name: flagFile, Value: defaultArtifactsFile, Sources: cli.EnvVars("ARTIFACTS_CONFIG"), Usage: "path to the artifacts.yml file declaring the containers; without it and the default file, the root Containerfile is the repository's image"},
 			&cli.StringFlag{Name: flagImageRepository, Sources: cli.EnvVars("IMAGE_REPOSITORY"), Usage: "the one repository the release's images publish to, e.g. ghcr.io/owner/app; empty is the forge's own registry, <server host>/<owner>/<repository>"},
@@ -122,6 +124,8 @@ EXAMPLE:
 				}
 
 				input := appconfig.EmitReleaseImagesPlanInput{
+					ContextArtifact:   cmd.String("context-artifact"),
+					ContextDigest:     cmd.String("context-digest"),
 					Config:            appconfig.EmitConfigPlanInput{Path: cmp.Or(file, defaultArtifactsFile)},
 					DefaultWhenAbsent: !named,
 					ResolvedPlan:      resolved,
