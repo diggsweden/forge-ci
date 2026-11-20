@@ -5,11 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.94.3] - 2026-11-20
+
+### Changed
+
+- Consolidate verified native base lifecycles
+- Update gommitlint to 0.94.1
+- Bootstrap source builds and document opt-in self-release
+- Fetch verified parents directly on native builders
+
+### Fixed
+
+- Retry artifact file uploads with bounded backoff
+- Explain anonymous and scoped parent pull denials
+- Strengthen release read-back and scenario admission
+- Bind publication to reviewed full branch refs
+- Validate author settings before release side effects
+- Retain publication authority across builder cleanup
+- Normalize helper URLs and bound artifact finalization
 ## [0.94.2] - 2026-11-18
 
 ### Fixed
 
 - Publish runtime images on GitHub release publication
+
 ## [0.94.1] - 2026-11-18
 
 ### Changed
@@ -19,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial commit
 
 
+[0.94.3]: https://github.com/diggsweden/forge-ci/compare/v0.94.2..v0.94.3
 [0.94.2]: https://github.com/diggsweden/forge-ci/compare/v0.94.1..v0.94.2
 [0.94.1]: https://github.com/diggsweden/forge-ci/compare/v0.93.2..v0.94.1
 
