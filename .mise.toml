@@ -40,7 +40,7 @@ go = "1.27.4"
 # runs the configured checks. See nanolinter.toml for the plan.
 # Published binaries are Linux-only; on macOS/BSD build the pinned source
 # as described in docs/DEVELOPMENT.md instead of installing the source archive as a tool.
-"forgejo:itiquette/nanolinter" = { version = "0.8.6", os = ["linux"], api_url = "https://codefloe.com/api/v1" }
+"forgejo:itiquette/nanolinter" = { version = "0.94.13", os = ["linux"], api_url = "https://codefloe.com/api/v1" }
 
 # Per-check tools nanolinter delegates to. Inline comments name the
 # nanolinter check ID each tool backs.

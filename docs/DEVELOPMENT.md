@@ -205,15 +205,12 @@ configured golangci-lint cache. Just and the `.mise.toml` environment default
 that cache to `.golangci-lint-cache/` in each checkout so linked worktrees do not replay
 each other's diagnostic paths. `GOLANGCI_LINT_CACHE` overrides the location.
 
-### Known lint gaps
+### Nanolinter compatibility
 
-The pinned nanolinter 0.8.6 drives two tools with flags they no longer
-take, so both checks report rather than block:
-
-- Commits: it passes gommitlint `--gommitconfig`, which gommitlint 0.93
-  calls `--config`. Run `gommitlint validate --base-branch main` instead.
-- SAST: it passes opengrep `--no-secrets-validation`, which opengrep
-  removed in 1.27.1. Run `opengrep scan --config p/default .` instead.
+The toolchain pins Nanolinter 0.94.13 from Codefloe. It supports the pinned
+Gommitlint and OpenGrep CLIs. Commits and SAST remain advisory in the local
+lint plan; review their findings separately. Consumer CI applies its own
+required-check floor and enforcement policy.
 
 ## Local verification tools
 
