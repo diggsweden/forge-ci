@@ -143,11 +143,12 @@ before the job starts.
 
 ## Forgejo runtime publication
 
-[`examples/forgejo/runtime-images.yml`](../examples/forgejo/runtime-images.yml)
+[`examples/forgejo/self-runtime-images.yml`](../examples/forgejo/self-runtime-images.yml)
 publishes the runtime images from a Forge CI mirror on Forgejo, with the same
 Containerfile and smoke checks as the GitHub publisher. It is opt-in: copy it
-into the mirror's `.forgejo/workflows/`, and it runs on pushes to `main` that
-touch the image sources, weekly and by manual dispatch. It does not run on
+into the mirror's `.forgejo/workflows/` under the same name, and it runs by
+manual dispatch. Its header lists the triggers to add for publication on
+pushes to `main` that touch the image sources and weekly. It does not run on
 pull requests and publishes no CLI release.
 
 Static tests check the workflow, but no live test has run it yet, so keep a

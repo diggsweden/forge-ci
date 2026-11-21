@@ -4,23 +4,51 @@
 package forgejoguard
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/goccy/go-yaml/ast"
 
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
 const selfBuildWorkflow = ".forgejo/workflows/self-pullrequest.yml"
 
-// The repository's own gate is a consumer, not a callable layer component.
+// selfEntryPointExamples are the callers a mirror copies to .forgejo/workflows
+// to release Forge CI itself and publish its runtime images.
+var selfEntryPointExamples = []string{"examples/forgejo/self-release.yml", "examples/forgejo/self-runtime-images.yml"}
+
+// isSelfEntryPoint reports whether a repository-relative path is one of the
+// hosting repository's own entry points: a workflow the repository starts
+// itself and no consumer calls. They are exact names, never a pattern:
+// upstream ships the self-build, and a mirror adds the release and runtime
+// callers under the names of their examples. Such a file is a consumer of the
+// layer, so it may name its own organization and pin its own images.
+func isSelfEntryPoint(path string) bool {
+	path = filepath.ToSlash(path)
+	if path == selfBuildWorkflow {
+		return true
+	}
+
+	for _, example := range selfEntryPointExamples {
+		if path == ".forgejo/workflows/"+filepath.Base(example) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// The repository's own entry points are consumers, not callable layer components.
 func reusableWorkflows(t *testing.T) []string {
 	t.Helper()
 
 	var paths []string
 
 	for _, path := range allWorkflows(t) {
-		if path != selfBuildWorkflow {
+		if !isSelfEntryPoint(path) {
 			paths = append(paths, path)
 		}
 	}
@@ -107,11 +135,24 @@ func TestSelfBuildIsTheOnlyUnprivilegedLocalEntryPoint(t *testing.T) {
 	}
 }
 
-func TestSelfReleaseExampleSeparatesBuildFromPublication(t *testing.T) {
+// The example, and the copy a mirror installs from it, keep the same shape. The
+// example pins a placeholder; an installed copy pins a full commit.
+func TestSelfReleaseSeparatesBuildFromPublication(t *testing.T) {
 	t.Parallel()
 
-	const file = "examples/forgejo/self-release.yml"
+	const example = "examples/forgejo/self-release.yml"
+	checkSelfRelease(t, example, func(pin string) bool { return pin == "PIN_FORGE_CI_SHA" })
 
+	const installed = ".forgejo/workflows/self-release.yml"
+	if _, err := os.Stat(filepath.Join(reporoot.Path(t), installed)); err == nil {
+		checkSelfRelease(t, installed, func(pin string) bool {
+			return len(pin) == 40 && strings.Trim(pin, "0123456789abcdef") == ""
+		})
+	}
+}
+
+func checkSelfRelease(t *testing.T, file string, reviewedPin func(string) bool) {
+	t.Helper()
 	root := loadDocument(t, file)
 	events := mappingValue(root, "on")
 
@@ -160,7 +201,7 @@ func TestSelfReleaseExampleSeparatesBuildFromPublication(t *testing.T) {
 		with := mappingValue(job, "with")
 
 		pin := scalarString(mappingValue(with, "forge-ci-sha"))
-		if pin != "PIN_FORGE_CI_SHA" || !strings.HasSuffix(scalarString(mappingValue(job, "uses")), "/.forgejo/workflows/"+workflow+"@"+pin) {
+		if !reviewedPin(pin) || !strings.HasSuffix(scalarString(mappingValue(job, "uses")), "/.forgejo/workflows/"+workflow+"@"+pin) {
 			t.Fatalf("%s must use the matching reviewed engine and workflow pin", name)
 		}
 	}
@@ -192,6 +233,87 @@ func TestSelfReleaseExampleSeparatesBuildFromPublication(t *testing.T) {
 	if !strings.Contains(body, ".release.disable = true | .checksum.disable = true | del(.signs)") ||
 		!strings.Contains(body, "--object-format sha1 --fetch-all-refs") {
 		t.Fatal("build from the prepared tagged checkout and disable the independent GoReleaser publisher")
+	}
+}
+
+// enginePins returns every commit a workflow pins the layer at: the ref of
+// each reusable workflow and action it uses from a forge-ci repository, and
+// each forge-ci-sha input it passes.
+func enginePins(w workflow) []string {
+	var pins []string
+
+	add := func(node ast.Node) {
+		uses := scalarString(mappingValue(node, "uses"))
+		if _, ref, ok := strings.Cut(uses, "@"); ok && strings.Contains(uses, "/forge-ci/.forgejo/") {
+			pins = append(pins, ref)
+		}
+
+		if sha := mappingValue(mappingValue(node, "with"), "forge-ci-sha"); sha != nil {
+			pins = append(pins, scalarString(sha))
+		}
+	}
+	for _, job := range w.jobs {
+		add(job.node)
+
+		for _, step := range job.steps() {
+			add(step)
+		}
+	}
+
+	return pins
+}
+
+// A self entry point runs one reviewed engine: the workflows and actions it
+// uses and the engine commit it passes them are the same commit. A caller that
+// mixed two would run one commit's workflow with another commit's binary.
+func TestSelfEntryPointsPinOneEngineCommit(t *testing.T) {
+	t.Parallel()
+
+	files := append([]string(nil), selfEntryPointExamples...)
+
+	for _, path := range allWorkflows(t) {
+		if isSelfEntryPoint(path) {
+			files = append(files, path)
+		}
+	}
+
+	pinned := 0
+
+	for _, file := range files {
+		pins := enginePins(loadWorkflow(t, file))
+		if len(pins) > 0 {
+			pinned++
+		}
+
+		for _, pin := range pins {
+			if pin != pins[0] {
+				t.Errorf("%s pins the engine at both %s and %s", file, pins[0], pin)
+			}
+		}
+	}
+
+	if pinned == 0 {
+		t.Fatal("found no self entry point that pins the engine, so the check proves nothing")
+	}
+}
+
+func TestSelfEntryPointsAreExactNames(t *testing.T) {
+	t.Parallel()
+
+	for path, want := range map[string]bool{
+		".forgejo/workflows/self-pullrequest.yml":    true,
+		".forgejo/workflows/self-release.yml":        true,
+		".forgejo/workflows/self-runtime-images.yml": true,
+		".forgejo/workflows/self-anything.yml":       false,
+		".forgejo/workflows/prepare-release.yml":     false,
+		".forgejo/workflows/runtime-images.yml":      false,
+		".forgejo/actions/self-release/action.yml":   false,
+		"examples/forgejo/self-release.yml":          false,
+		".github/workflows/self-release.yml":         false,
+	} {
+		if isSelfEntryPoint(path) != want {
+			t.Errorf("isSelfEntryPoint(%q) = %t, want %t", path, !want, want)
+		}
 	}
 }
 

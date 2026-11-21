@@ -76,7 +76,7 @@ func layerActions(t *testing.T) []string {
 func TestLayerNamesNoOrganization(t *testing.T) {
 	t.Parallel()
 
-	for _, path := range append(allWorkflows(t), layerActions(t)...) {
+	for _, path := range append(reusableWorkflows(t), layerActions(t)...) {
 		for _, mention := range organizationMentions(loadDocument(t, path), nil) {
 			t.Errorf("%s names an organization at %s", path, strings.Join(mention, "."))
 		}
@@ -170,6 +170,10 @@ func TestLayerFilesNameNoOrganization(t *testing.T) {
 			// A downloaded or locally built binary, which Git ignores, embeds its
 			// module path.
 			if relative == filepath.Join(".engine", "bin", "forge-ci") {
+				return nil
+			}
+			// The repository's own entry points are not served to consumers.
+			if isSelfEntryPoint(relative) {
 				return nil
 			}
 

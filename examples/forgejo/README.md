@@ -20,8 +20,10 @@ it publishes the job image kaniko builds run in, from kaniko's own debug
 image, and prints the digest to pin as `CI_IMAGE_BUILDER_JOB_IMAGE` with
 `CI_IMAGE_BUILDER=kaniko`.
 
-[`runtime-images.yml`](runtime-images.yml) is an opt-in runtime publisher for
-a Forge CI mirror, sharing upstream's Containerfile and smoke checks. Replace
+[`self-runtime-images.yml`](self-runtime-images.yml) is an opt-in runtime
+publisher for a Forge CI mirror, sharing upstream's Containerfile and smoke
+checks. It starts by manual dispatch only; its header shows the push and
+weekly triggers to add. Replace
 its placeholders: `PIN_FORGE_CI_SHA` is the mirror's published immutable
 engine revision. Configure the image namespace, reviewed digest-pinned signer
 and Go build images, native runner pools, registry credentials and public-key

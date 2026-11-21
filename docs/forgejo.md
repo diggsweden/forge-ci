@@ -2055,15 +2055,48 @@ action from, and a workflow from the owner of the repository it cloned.
 
 ### Maintaining your own CI and release configuration
 
-Upstream `.forgejo/workflows` holds only the reusable layer, and
-`test/forgejoguard` treats every file there as a layer workflow: it must start
-only through `workflow_call` and name no organization. A fork that adds its own
-Forgejo workflows there exempts those exact files in its own copy of the
-guards, never a pattern or a layer path. Run them on
+Upstream `.forgejo/workflows` holds the reusable layer and one own entry
+point, `self-pullrequest.yml`. `test/forgejoguard` treats every other file
+there as a layer workflow: it must start only through `workflow_call` and name
+no organization. Three exact names are the repository's own entry points and
+may name your organization and pin your images:
+
+| File in `.forgejo/workflows/` | Source | Purpose |
+|---|---|---|
+| `self-pullrequest.yml` | shipped | builds and tests the checkout; optionally runs the [black-box suite](testing.md) |
+| `self-release.yml` | copy of [`examples/forgejo/self-release.yml`](../examples/forgejo/self-release.yml) | releases the CLI archives |
+| `self-runtime-images.yml` | copy of [`examples/forgejo/self-runtime-images.yml`](../examples/forgejo/self-runtime-images.yml) | publishes the runtime images |
+
+Copy the two examples under those names and fill in their placeholders; the
+[examples README](../examples/forgejo/README.md) lists them. The guards then
+hold the release copy to the example's shape and both copies to one engine
+commit, with no change to the tests. A workflow under any other name is still a layer
+workflow to the guards; exempt such a file by its exact path in your copy of
+the guards, never by a pattern. Run your own workflows on
 `${{ fromJSON(vars.CI_RUNNER_LABEL) }}`, or pass that variable as `runs-on` to
 a reusable workflow, and keep your organization's repository, signer-image and
 trust coordinates in those files only; the reusable layer stays
 organization-neutral.
+
+To stop one of these workflows for a while, disable it in the repository's
+Actions settings; there is no variable for it.
+
+#### Keeping a fork small
+
+A fork that only adds files rebases onto upstream without conflicts:
+
+- Change nothing under `cmd/`, `docs/`, `internal/`, `go.mod` or `go.sum`.
+  Those are the engine's build inputs, so the fork then builds the same
+  binary as upstream and keeps upstream's `.engine/bin/*.sha256` unchanged.
+  Put your own notes outside `docs/`.
+- Keep your values in files upstream does not have: the two callers above,
+  `.forge-ci/consumer-defaults.yml` for what `forge-ci init` hands your
+  consumers, and a `mise.lock` for your runners.
+- `.forge-ci/allowed_signers` is the one upstream file a fork edits: it
+  names who may request your releases.
+- `.goreleaser.yml` needs no edit; the release repository comes from the
+  `origin` remote.
+- Send everything else upstream.
 
 The actionlint configuration accepts Forgejo full-URL action references only
 in Forgejo workflow files. Use the consumer release examples for the build/sign

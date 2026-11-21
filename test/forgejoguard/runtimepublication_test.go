@@ -356,7 +356,7 @@ func TestRuntimeFlavoursMatchTheGitHubPublisherAndContainerfile(t *testing.T) {
 func TestRuntimeExampleRequiresExplicitPublicationPolicy(t *testing.T) {
 	t.Parallel()
 
-	for _, file := range []string{"runtime-images.yml"} {
+	for _, file := range []string{"self-runtime-images.yml"} {
 		body := string(reporoot.ReadFile(t, "examples/forgejo/"+file))
 		require.Contains(t, body, "vars.RUNTIME_IMAGE_NAMESPACE", file)
 		require.Contains(t, body, "cosign-public-key-sha256: PIN_COSIGN_PUBLIC_KEY_SHA256", file)

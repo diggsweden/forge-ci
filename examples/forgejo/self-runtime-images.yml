@@ -4,20 +4,23 @@
 # matching signer before replacing these immutable-pin placeholders.
 name: Runtime images
 on:
-  push:
-    branches: [main]
-    paths:
-      - "containers/runtime/**"
-      - "scripts/bootstrap/**"
-      - "templates/**"
-      - "cmd/**"
-      - "internal/**"
-      - "go.mod"
-      - "go.sum"
-      - ".engine/bin/*.sha256"
-      - ".forgejo/workflows/runtime-images.yml"
-  schedule:
-    - cron: "30 2 * * 1"
+  # Manual by default: publishing images is a deliberate step for a mirror.
+  # To publish on source changes and weekly as well, add these triggers:
+  #
+  #   push:
+  #     branches: [main]
+  #     paths:
+  #       - "containers/runtime/**"
+  #       - "scripts/bootstrap/**"
+  #       - "templates/**"
+  #       - "cmd/**"
+  #       - "internal/**"
+  #       - "go.mod"
+  #       - "go.sum"
+  #       - ".engine/bin/*.sha256"
+  #       - ".forgejo/workflows/self-runtime-images.yml"
+  #   schedule:
+  #     - cron: "30 2 * * 1"
   workflow_dispatch:
 concurrency:
   group: runtime-images-${{ forgejo.repository }}
