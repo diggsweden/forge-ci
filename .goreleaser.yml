@@ -131,9 +131,8 @@ snapshot:
   version_template: '{{ incpatch .Version }}-snapshot+{{ .ShortCommit }}'
 
 release:
-  github:
-    owner: diggsweden
-    name: forge-ci
+  # No owner or name: GoReleaser reads them from the origin remote, so a fork
+  # or mirror releases to itself without editing this file.
   draft: false
   prerelease: auto
 

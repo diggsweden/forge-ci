@@ -17,6 +17,23 @@ import (
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
+// A fork or mirror builds its own release from this file unchanged: the
+// repository comes from the origin remote, never from a name written here.
+func TestGoReleaserRootNamesNoRepository(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".goreleaser.yml"))
+	require.NoError(t, err)
+
+	var config struct {
+		Release map[string]any `yaml:"release"`
+	}
+	require.NoError(t, yaml.Unmarshal(body, &config))
+	require.NotEmpty(t, config.Release, "the release section is still read")
+
+	for _, forge := range []string{"github", "gitlab", "gitea"} {
+		require.NotContains(t, config.Release, forge, "release.%s pins the repository a release goes to", forge)
+	}
+}
+
 // Execute the signing arguments shipped to GoReleaser through the real CLI and
 // cosign adapter. The fixture signer has no network or real credentials. Nearby
 // files catch accidental broadening from one checksum manifest to the defaults.
