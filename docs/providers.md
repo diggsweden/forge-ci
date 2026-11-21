@@ -91,7 +91,7 @@ jobs of the release and snapshot routes receive the CLI that the run's
 request take it out of the pinned runtime image, checked against that commit,
 unless `forge-ci-source: build` asks for the build. macOS jobs build it from
 that commit themselves. Every
-workflow takes `forge-ci-binary-ref` as the full 40-hex engine commit; tags,
+workflow takes `forge-ci-sha` as the full 40-hex engine commit; tags,
 branches and short hashes are refused. [Engine delivery](engine-delivery.md)
 describes each path. A direct caller of a leaf workflow that needs the
 canonical CLI adds a `canonical-cli` job of its own, as the

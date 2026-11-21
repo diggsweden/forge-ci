@@ -81,8 +81,8 @@ func TestEveryContainerImageIsAdmittedByTheResolver(t *testing.T) {
 
 		require.NotContains(t, string(body), "needs.resolve-bootstrap.outputs['runtime-image",
 			"%s falls back to a resolved image; the caller passes its digest", name)
-		require.NotContains(t, string(body), "outputs.forge-ci-binary-ref",
-			"%s relays the engine commit; read inputs['forge-ci-binary-ref'], which the resolver admitted", name)
+		require.NotContains(t, string(body), "outputs.forge-ci-sha",
+			"%s relays the engine commit; read inputs['forge-ci-sha'], which the resolver admitted", name)
 
 		var workflow admissionWorkflow
 		require.NoError(t, yaml.Unmarshal(body, &workflow), name)

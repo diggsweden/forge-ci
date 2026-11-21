@@ -44,7 +44,7 @@ on:
         required: false
         default: '["ubuntu-26.04-arm"]'
         type: string
-      forge-ci-binary-ref:
+      forge-ci-sha:
         description: "Full engine commit (40 hex) the workflow ref names; a tag or branch is refused"
         required: true
         type: string
@@ -178,7 +178,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/resolve-forge-ci-bootstrap.yml
     with:
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       images: |
         runtime-image=${{ inputs['runtime-image'] }}
   # Cross-cutting publish jobs depend on the build stage as a whole.
@@ -205,7 +205,7 @@ jobs:
       # Exactly the family image of the package type, empty when it was not
       # passed: the callee's resolver refuses an empty image.
       runtime-image: ${{ matrix.artifact.project_type == 'npm' && inputs['runtime-image-node'] || matrix.artifact.project_type != 'npm' && inputs['runtime-image-java'] || '' }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       working-directory: ${{ matrix.artifact.working_directory }}
       branch: ${{ inputs.branch }}
       artifact-source: ${{ matrix.artifact.publication_artifact_name || matrix.artifact.build_artifact_name }}
@@ -237,7 +237,7 @@ jobs:
       RELEASE_GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
     uses: ./.github/workflows/publish-maven-central.yml
     with:
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       release-policy: ${{ inputs['release-policy'] }}
       working-directory: ${{ matrix.artifact.working_directory }}
       branch: ${{ inputs.branch }}
@@ -270,7 +270,7 @@ jobs:
       branch: ${{ inputs.branch }}
       submit-for-review: ${{ matrix.artifact.xcode_ios.submit_for_review || false }}
       skip-validation: ${{ matrix.artifact.xcode_ios.skip_validation || false }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
   google-play:
     needs: [resolve-bootstrap]
     name: "Publish: ${{ matrix.artifact.name }} to Google Play"
@@ -286,7 +286,7 @@ jobs:
       GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
     uses: ./.github/workflows/publish-google-play.yml
     with:
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       aab-artifact-name: ${{ matrix.artifact.name }}
       branch: ${{ inputs.branch }}
       package-name: ${{ matrix.artifact.gradle_android.package_name }}
@@ -371,7 +371,7 @@ jobs:
       # no build-secrets, in which case the materialize step is a no-op.
       build-secrets: ${{ matrix.container.build_secrets && join(matrix.container.build_secrets, ' ') || '' }}
       push-image: true
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       runtime-image: ${{ inputs['runtime-image'] }}
       runtime-image-full: ${{ inputs['runtime-image-full'] }}
       canonical-artifact-id: ${{ inputs['canonical-artifact-id'] }}
@@ -412,7 +412,7 @@ jobs:
     uses: ./.github/workflows/sbom-cargo.yml
     with:
       runs-on: ${{ inputs['runs-on'] }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       working-directory: ${{ matrix.artifact.working_directory }}
       branch: ${{ inputs.branch }}
       enable-build-sbom: ${{ contains(matrix.artifact.effective_sboms, 'build') }}
@@ -437,7 +437,7 @@ jobs:
     uses: ./.github/workflows/sbom-go.yml
     with:
       runs-on: ${{ inputs['runs-on'] }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       working-directory: ${{ matrix.artifact.working_directory }}
       branch: ${{ inputs.branch }}
       artifact-name: ${{ matrix.artifact.name }}

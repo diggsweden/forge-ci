@@ -11,7 +11,7 @@ name: Resolve forge-ci bootstrap revision
 on:
   workflow_call:
     inputs:
-      forge-ci-binary-ref:
+      forge-ci-sha:
         description: "Full engine commit (40 hex) the caller's workflow ref names"
         required: true
         type: string
@@ -61,12 +61,12 @@ jobs:
       - name: Admit the engine commit and runtime images
         id: admit
         env:
-          ENGINE_COMMIT: ${{ inputs['forge-ci-binary-ref'] }}
+          ENGINE_COMMIT: ${{ inputs['forge-ci-sha'] }}
           IMAGES: ${{ inputs.images }}
         run: |
           set -euo pipefail
           if [[ ! "$ENGINE_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
-            printf 'ERROR: forge-ci-binary-ref must be the full engine commit (40 hex) the workflow ref names, got %q\n' "$ENGINE_COMMIT" >&2
+            printf 'ERROR: forge-ci-sha must be the full engine commit (40 hex) the workflow ref names, got %q\n' "$ENGINE_COMMIT" >&2
             exit 1
           fi
           # The digest form canonical delivery's receivers admit.

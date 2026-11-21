@@ -65,12 +65,12 @@ on:
         required: false
         default: "nanolinter"
         type: string
-      linters.swiftformat:
+      linters-swiftformat:
         description: "Enable swift-format (Google Swift Style Guide) for iOS/macOS projects"
         required: false
         default: false
         type: boolean
-      linters.swiftlint:
+      linters-swiftlint:
         description: "Enable SwiftLint for iOS/macOS projects"
         required: false
         default: false
@@ -85,7 +85,7 @@ on:
         required: false
         default: '["macos-26"]'
         type: string
-      forge-ci-binary-ref:
+      forge-ci-sha:
         description: "Full approved engine commit (40 hex). Every control-plane job and lint job runs only the CLI this commit records; the stage pins its callees to it."
         required: true
         type: string
@@ -94,7 +94,7 @@ on:
         required: true
         type: string
       forge-ci-source:
-        description: "Where the jobs of this run get Forge CI: image, the CLI the pinned runtime image carries, or build, the CLI the run compiles from forge-ci-binary-ref. Either runs only when it matches the checksum that commit records."
+        description: "Where the jobs of this run get Forge CI: image, the CLI the pinned runtime image carries, or build, the CLI the run compiles from forge-ci-sha. Either runs only when it matches the checksum that commit records."
         required: false
         default: image
         type: string
@@ -137,7 +137,7 @@ jobs:
     uses: ./.github/workflows/resolve-forge-ci-bootstrap.yml
     with:
       job-name: "Setup: check pinned inputs"
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       images: |
         runtime-image=${{ inputs['runtime-image'] }}
   # Only when the run builds its own CLI. By default every job takes the CLI
@@ -154,7 +154,7 @@ jobs:
     uses: ./.github/workflows/canonical-cli-bootstrap.yml
     with:
       engine-repository: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
-      engine-commit: ${{ inputs['forge-ci-binary-ref'] }}
+      engine-commit: ${{ inputs['forge-ci-sha'] }}
       runtime-image: ${{ inputs['canonical-builder-image'] }}
       receive-runtime-image: ${{ inputs['runtime-image'] }}
 
@@ -179,7 +179,7 @@ jobs:
         shell: /bin/bash --noprofile --norc -peuo pipefail {0}
         env:
           ENGINE_REPOSITORY: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
-          ENGINE_COMMIT: ${{ inputs['forge-ci-binary-ref'] }}
+          ENGINE_COMMIT: ${{ inputs['forge-ci-sha'] }}
           ENGINE_ORIGIN: ${{ github.server_url }}/${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
           RUNTIME_IMAGE: ${{ inputs['runtime-image'] }}
           PRODUCER_ARTIFACT_ID: ${{ needs.canonical-cli.outputs.artifact-id }}
@@ -223,11 +223,11 @@ jobs:
         env:
           PROJECT_TYPE: ${{ inputs['project-type'] }}
           BASE_BRANCH: ${{ inputs['base-branch'] }}
-          FORGE_CI_BINARY_REF: ${{ inputs['forge-ci-binary-ref'] }}
+          FORGE_CI_SHA: ${{ inputs['forge-ci-sha'] }}
           LINT_ENGINE: ${{ inputs['lint-engine'] }}
           NANOLINTER_IMAGE: ${{ inputs['nanolinter-image'] }}
-          LINTER_SWIFTFORMAT: ${{ inputs['linters.swiftformat'] }}
-          LINTER_SWIFTLINT: ${{ inputs['linters.swiftlint'] }}
+          LINTER_SWIFTFORMAT: ${{ inputs['linters-swiftformat'] }}
+          LINTER_SWIFTLINT: ${{ inputs['linters-swiftlint'] }}
         run: forge-ci plan pr
 
   # ===== Stage 1: Quality =====
@@ -253,7 +253,7 @@ jobs:
       required-lints: ${{ inputs['required-lints'] }}
       disable-checks: ${{ inputs['disable-checks'] }}
       megalinter-image: ${{ inputs['megalinter-image'] }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       canonical-artifact-id: ${{ needs.canonical-cli.outputs.artifact-id }}
       canonical-artifact-name: ${{ needs.canonical-cli.outputs.artifact-name }}
       canonical-producer-run-id: ${{ needs.canonical-cli.outputs.producer-run-id }}

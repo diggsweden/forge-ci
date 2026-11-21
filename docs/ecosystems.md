@@ -70,7 +70,7 @@ Artifact-first ecosystems produce the artifact and its Build SBOM together in
 Container-first ecosystems have nothing to compile in the build stage, so their
 manifest/lockfile-derived Build SBOM (`sbom-cargo.yml`, `sbom-go.yml`) runs in
 `release-publish-stage` beside the container build. Those container-first SBOM
-jobs run only when both the artifact policy and the effective `release.sboms`
+jobs run only when both the artifact policy and the effective `release-sboms`
 policy include `build`. For pure Cargo/container-first Go projects,
 `release-build-stage` runs zero jobs by design.
 

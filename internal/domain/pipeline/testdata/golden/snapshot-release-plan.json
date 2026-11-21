@@ -11,7 +11,7 @@
     "node_version": "",
     "rust_toolchain": "stable",
     "registry": "ghcr.io",
-    "forge_ci_binary_ref": "v0.90.0",
+    "forge_ci_sha": "v0.90.0",
     "npm_registry": "https://npm.pkg.github.com",
     "package_scope": "@org"
   },

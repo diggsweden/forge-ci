@@ -83,14 +83,14 @@ func TestResolveForge(t *testing.T) {
 }
 
 // A GitHub example pins the engine by PIN_FORGE_CI_SHA, in its uses: refs
-// and forge-ci-binary-ref alike: init writes the commit of the release tag
+// and forge-ci-sha alike: init writes the commit of the release tag
 // and labels it with that release. Without a commit the placeholder stays,
 // and Remaining reports it.
 func TestReplacementsPinTheGitHubEngineCommit(t *testing.T) {
 	t.Parallel()
 
 	const example = "    uses: diggsweden/forge-ci/.github/workflows/release-orchestrator.yml@PIN_FORGE_CI_SHA # v0.90.0\n" +
-		"      forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0\n"
+		"      forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0\n"
 
 	commit := strings.Repeat("a", 40)
 
@@ -102,12 +102,12 @@ func TestReplacementsPinTheGitHubEngineCommit(t *testing.T) {
 		"release commit": {
 			src: consumerinit.Source{Repository: "fixture/delivery-engine", Tag: "v0.93.1", Commit: commit},
 			want: "    uses: fixture/delivery-engine/.github/workflows/release-orchestrator.yml@" + commit + " # v0.93.1\n" +
-				"      forge-ci-binary-ref: " + commit + " # v0.93.1\n",
+				"      forge-ci-sha: " + commit + " # v0.93.1\n",
 		},
 		"no commit": {
 			src: consumerinit.Source{Repository: "diggsweden/forge-ci", Tag: "v0.93.1"},
 			want: "    uses: diggsweden/forge-ci/.github/workflows/release-orchestrator.yml@PIN_FORGE_CI_SHA # v0.93.1\n" +
-				"      forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.93.1\n",
+				"      forge-ci-sha: PIN_FORGE_CI_SHA # v0.93.1\n",
 			remaining: 2,
 		},
 	} {

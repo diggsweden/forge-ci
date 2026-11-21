@@ -258,7 +258,7 @@ func TestPlanSnapshotRelease_EmitsTypedPlanOutputs(t *testing.T) {
 		ReleaseActor:      "octocat",
 		ReleaseRepository: "org/repo",
 		Registry:          "ghcr.io",
-		ForgeCIBinaryRef:  "v0.90.0",
+		ForgeCISHA:        "v0.90.0",
 		NPMRegistry:       "https://npm.pkg.github.com",
 		PackageScope:      "@org",
 		SBOMs:             "analyzed-artifact",

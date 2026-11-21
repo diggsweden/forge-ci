@@ -54,10 +54,10 @@ func (report *RequirementsReport) inspect(root, repo, commit, forge, file string
 	var requirements []release.SetupRequirement
 
 	if forge == setupGitHub {
-		if setupScalar(yamlChild(inputs, "forge-ci-binary-ref")) != revision {
+		if setupScalar(yamlChild(inputs, "forge-ci-sha")) != revision {
 			call.Contract = "reference guidance from this CLI; runtime engine override unverified"
 
-			report.unknown(where + ": forge-ci-binary-ref is absent or names another engine than this CLI's revision; its contract is not verified")
+			report.unknown(where + ": forge-ci-sha is absent or names another engine than this CLI's revision; its contract is not verified")
 		}
 
 		requirements = report.githubRequirements(root, inputs, &call)
@@ -67,7 +67,7 @@ func (report *RequirementsReport) inspect(root, repo, commit, forge, file string
 
 		images := release.SetupConditional // Sign/publish discovers images in a runtime ledger.
 		if name == setupPrepareWorkflow {
-			images = setupChoice(inputs, "publish-container-images", true)
+			images = setupChoice(inputs, "publish-containers", true)
 		}
 
 		if forge == setupGitLab {
@@ -106,7 +106,7 @@ func (report *RequirementsReport) keySettings(call *SetupCall, inputs *yaml.Node
 			report.unknown(call.Location + ": forge-ci-sha must match the literal uses revision")
 		}
 	} else {
-		for _, name := range []string{"forge-ci-repository", "server-url", "registry", "consumer-project", "publication-project", "publication-image-repository", "job-image", "request-allowed-signers"} {
+		for _, name := range []string{"forge-ci-repository", "server-url", "registry", "consumer-project", "publication-project", "publication-image-repository", "job-image", "release-request-allowed-signers"} {
 			report.setting(call, inputs, name, "Reviewed GitLab release input; see docs/gitlab.md")
 		}
 
@@ -274,7 +274,7 @@ func (report *RequirementsReport) githubConfigRequirements(cfg *config.Config, i
 	var gpg, gpgPublic, ssh, cosign, maven release.SetupState
 
 	plan := pipeline.NewConfigPlan(cfg)
-	artifactSigning := setupChoice(inputs, "release.signartifacts", true)
+	artifactSigning := setupChoice(inputs, "release-sign-artifacts", true)
 	maven = setupState(len(plan.Artifacts.MavenCentral) > 0)
 	ssh = setupState(plan.GitSigning.Method == config.GitSignSSH)
 	gpgPublic = setupGPGState(plan.GitSigning.ImportsGPGKey, plan.Sign.ImportsGPGKey, artifactSigning)

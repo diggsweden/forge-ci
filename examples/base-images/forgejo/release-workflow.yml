@@ -83,7 +83,7 @@ jobs:
       sign-distro-packages: "false"
       # The base images are staged, signed and promoted by the jobs below,
       # not by the release signer, so the release itself publishes no image.
-      publish-container-images: "false"
+      publish-containers: "false"
     secrets:
       RELEASE_SSH_SIGNING_KEY: ${{ secrets.RELEASE_SSH_SIGNING_KEY }}
       RELEASE_COSIGN_PRIVATE_KEY: ${{ secrets.RELEASE_COSIGN_PRIVATE_KEY }}

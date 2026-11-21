@@ -1,5 +1,1951 @@
 {
-  "pullrequest-orchestrator.yml": {
+  ".forgejo/actions/assemble-release-dist/action.yml": {
+    "inputs": {
+      "artifact-name": {
+        "required": false,
+        "type": "",
+        "default": "build-dist"
+      },
+      "artifact-names": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "artifact-transfer-plan-json": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "ledger-expected-count": {
+        "required": false,
+        "type": "",
+        "default": "0"
+      },
+      "ledger-files": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "path": {
+        "required": false,
+        "type": "",
+        "default": "dist/"
+      },
+      "prune-dirs": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      },
+      "release-images-path": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "retention-days": {
+        "required": false,
+        "type": "",
+        "default": "1"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {
+      "digest": "${{ steps.assemble.outputs.digest }}"
+    }
+  },
+  ".forgejo/actions/build-cargo/action.yml": {
+    "inputs": {
+      "artifact-name": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "binary-name": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "commit": {
+        "required": true,
+        "type": ""
+      },
+      "enable-build-sbom": {
+        "required": false,
+        "type": "",
+        "default": "true"
+      },
+      "enforce-application-tests": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      },
+      "platforms": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "skip-tests": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      },
+      "version": {
+        "required": true,
+        "type": ""
+      },
+      "working-directory": {
+        "required": false,
+        "type": "",
+        "default": "."
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  ".forgejo/actions/build-go/action.yml": {
+    "inputs": {
+      "artifact-name": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "binary-name": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "build-tags": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "commit": {
+        "required": true,
+        "type": ""
+      },
+      "enable-build-sbom": {
+        "required": false,
+        "type": "",
+        "default": "true"
+      },
+      "enforce-application-tests": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      },
+      "ldflags": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "main-package": {
+        "required": false,
+        "type": "",
+        "default": "."
+      },
+      "platforms": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "skip-tests": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      },
+      "source-date-epoch": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "version": {
+        "required": true,
+        "type": ""
+      },
+      "working-directory": {
+        "required": false,
+        "type": "",
+        "default": "."
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  ".forgejo/actions/build-goreleaser/action.yml": {
+    "inputs": {
+      "config": {
+        "required": false,
+        "type": "",
+        "default": ".goreleaser.yml"
+      },
+      "dist-directory": {
+        "required": false,
+        "type": "",
+        "default": "dist"
+      },
+      "release-notes": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "release-sha": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "release-tag": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "snapshot": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {
+      "manifest": "${{ inputs.dist-directory }}/release-files.json",
+      "version": "${{ steps.build.outputs.version }}"
+    }
+  },
+  ".forgejo/actions/build-maven/action.yml": {
+    "inputs": {
+      "artifact-name": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "build-type": {
+        "required": true,
+        "type": ""
+      },
+      "commit": {
+        "required": true,
+        "type": ""
+      },
+      "enable-build-sbom": {
+        "required": false,
+        "type": "",
+        "default": "true"
+      },
+      "enforce-application-tests": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      },
+      "private-dependencies": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      },
+      "profile": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "settings-path": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "skip-tests": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      },
+      "version": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "working-directory": {
+        "required": false,
+        "type": "",
+        "default": "."
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  ".forgejo/actions/check-l3-isolation/action.yml": {
+    "inputs": {
+      "build-job": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "dist-digest-output": {
+        "required": false,
+        "type": "",
+        "default": "dist-digest"
+      },
+      "prepare-job": {
+        "required": false,
+        "type": "",
+        "default": "prepare"
+      },
+      "sign-job": {
+        "required": false,
+        "type": "",
+        "default": "sign-and-publish"
+      },
+      "signing-secrets": {
+        "required": false,
+        "type": "",
+        "default": "RELEASE_COSIGN_PRIVATE_KEY RELEASE_COSIGN_PASSPHRASE RELEASE_GPG_PRIVATE_KEY RELEASE_GPG_PASSPHRASE RELEASE_GPG_FINGERPRINT"
+      },
+      "single-pin-subject": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "workflow": {
+        "required": false,
+        "type": "",
+        "default": ".forgejo/workflows/release-workflow.yml"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  ".forgejo/actions/checkout-consumer/action.yml": {
+    "inputs": {
+      "fetch-base": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "object-format": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "ref": {
+        "required": false,
+        "type": "",
+        "default": "${{ github.sha }}"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  ".forgejo/actions/generate-changelog/action.yml": {
+    "inputs": {
+      "changelog-config": {
+        "required": false,
+        "type": "",
+        "default": ".forge-ci/gitcliff/keepachangelog.toml"
+      },
+      "changelog-creator": {
+        "required": false,
+        "type": "",
+        "default": "git-cliff"
+      },
+      "commit-body-config": {
+        "required": false,
+        "type": "",
+        "default": ".forge-ci/gitcliff/minimal.toml"
+      },
+      "forgejo-ref-name": {
+        "required": true,
+        "type": ""
+      },
+      "release-branch": {
+        "required": true,
+        "type": ""
+      },
+      "repository-url": {
+        "required": true,
+        "type": ""
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  ".forgejo/actions/guard-release-tag/action.yml": {
+    "inputs": {
+      "pattern": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "tag": {
+        "required": false,
+        "type": "",
+        "default": "${{ github.ref_name }}"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {
+      "release-request": "${{ steps.guard.outputs.release-request }}",
+      "release-tag": "${{ steps.guard.outputs.release-tag }}"
+    }
+  },
+  ".forgejo/actions/lint-nanolinter/action.yml": {
+    "inputs": {
+      "disable-checks": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "enforce-lint": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      },
+      "enforce-vulnerabilities": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      },
+      "offline": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      },
+      "required-lints": {
+        "required": false,
+        "type": "",
+        "default": "secrets"
+      },
+      "write-step-summary": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  ".forgejo/actions/pr-check-results/action.yml": {
+    "inputs": {
+      "comment": {
+        "required": false,
+        "type": "",
+        "default": "true"
+      },
+      "jobs": {
+        "required": true,
+        "type": ""
+      },
+      "project-type": {
+        "required": false,
+        "type": "",
+        "default": ""
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  ".forgejo/actions/prepare-release/action.yml": {
+    "inputs": {
+      "bot-email": {
+        "required": true,
+        "type": ""
+      },
+      "bot-name": {
+        "required": true,
+        "type": ""
+      },
+      "forgejo-ref-name": {
+        "required": true,
+        "type": ""
+      },
+      "forgejo-repo": {
+        "required": true,
+        "type": ""
+      },
+      "include-paths-file": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "release-branch": {
+        "required": true,
+        "type": ""
+      },
+      "release-git-host-key-fingerprint": {
+        "required": true,
+        "type": ""
+      },
+      "release-git-url": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "release-request-allowed-signers": {
+        "required": false,
+        "type": "",
+        "default": ".forge-ci/allowed_signers"
+      },
+      "release-request-sha": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "ssh-signing-key": {
+        "required": true,
+        "type": ""
+      },
+      "verify-release-request-signature": {
+        "required": false,
+        "type": "",
+        "default": "true"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {
+      "release-request": "${{ steps.derive-release-context.outputs.release-request }}",
+      "release-sha": "${{ steps.validate-release.outputs.release-sha }}",
+      "release-tag": "${{ steps.derive-release-context.outputs.release-tag }}",
+      "version": "${{ steps.derive-release-context.outputs.version }}"
+    }
+  },
+  ".forgejo/actions/prune-base-images/action.yml": {
+    "inputs": {
+      "cosign-public-key-path": {
+        "required": true,
+        "type": ""
+      },
+      "dry-run": {
+        "required": false,
+        "type": "",
+        "default": "true"
+      },
+      "expected-repository": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "local-registry": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      },
+      "max-delete": {
+        "required": false,
+        "type": "",
+        "default": "20"
+      },
+      "release-images": {
+        "required": true,
+        "type": ""
+      },
+      "repository-suffix": {
+        "required": false,
+        "type": "",
+        "default": "-base"
+      },
+      "token": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "transparency-log": {
+        "required": false,
+        "type": "",
+        "default": "none"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {
+      "deleted-count": "${{ steps.prune.outputs.deleted_count }}",
+      "prunable-count": "${{ steps.prune.outputs.prunable_count }}"
+    }
+  },
+  ".forgejo/actions/publish-forge-packages/action.yml": {
+    "inputs": {
+      "artifact-name": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "from-build": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      },
+      "maven-cli-opts": {
+        "required": false,
+        "type": "",
+        "default": "--batch-mode --no-transfer-progress --errors --fail-at-end -Dstyle.color=always -Dgpg.skip=true"
+      },
+      "npm-tag": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "profile": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "project-type": {
+        "required": false,
+        "type": "",
+        "default": "maven"
+      },
+      "release-dist-digest": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "release-dist-directory": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "release-manifest": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "snapshot": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      },
+      "token": {
+        "required": true,
+        "type": ""
+      },
+      "version": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "working-directory": {
+        "required": false,
+        "type": "",
+        "default": "."
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  ".forgejo/actions/record-release-image/action.yml": {
+    "inputs": {
+      "base-input-id": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "base-ref": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "candidate": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      },
+      "candidate-tag": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "digest": {
+        "required": true,
+        "type": ""
+      },
+      "flavor": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "image": {
+        "required": true,
+        "type": ""
+      },
+      "ledger": {
+        "required": false,
+        "type": "",
+        "default": "dist/release-images.json"
+      },
+      "moving-tag": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "platform": {
+        "required": false,
+        "type": "",
+        "default": "linux/amd64"
+      },
+      "release-tag": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "role": {
+        "required": true,
+        "type": ""
+      },
+      "sbom": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "tag": {
+        "required": true,
+        "type": ""
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  ".forgejo/actions/registry-login/action.yml": {
+    "inputs": {
+      "auth-file": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "create-auth-file": {
+        "required": false,
+        "type": "",
+        "default": "true"
+      },
+      "export-env": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      },
+      "registry": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "token": {
+        "required": true,
+        "type": ""
+      },
+      "tool": {
+        "required": false,
+        "type": "",
+        "default": "buildah"
+      },
+      "username": {
+        "required": false,
+        "type": "",
+        "default": ""
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {
+      "auth-file": "${{ steps.login.outputs.auth-file }}"
+    }
+  },
+  ".forgejo/actions/sbom-cargo/action.yml": {
+    "inputs": {
+      "artifacts-config": {
+        "required": false,
+        "type": "",
+        "default": ".forge-ci/artifacts.yml"
+      },
+      "output-dir": {
+        "required": false,
+        "type": "",
+        "default": "dist/sboms"
+      },
+      "version": {
+        "required": true,
+        "type": ""
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  ".forgejo/actions/sbom-go/action.yml": {
+    "inputs": {
+      "artifacts-config": {
+        "required": false,
+        "type": "",
+        "default": ".forge-ci/artifacts.yml"
+      },
+      "output-dir": {
+        "required": false,
+        "type": "",
+        "default": "dist/sboms"
+      },
+      "version": {
+        "required": true,
+        "type": ""
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  ".forgejo/actions/setup-buildah/action.yml": {
+    "inputs": {
+      "extra-packages": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "install-packages": {
+        "required": false,
+        "type": "",
+        "default": "true"
+      },
+      "print-store": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      },
+      "probe-build": {
+        "required": false,
+        "type": "",
+        "default": "true"
+      },
+      "summary": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  ".forgejo/actions/setup-forge-ci/action.yml": {
+    "inputs": {
+      "add-to-path": {
+        "required": false,
+        "type": "",
+        "default": "true"
+      },
+      "expected-sha256": {
+        "required": false,
+        "type": "",
+        "default": ""
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {
+      "binary-path": "${{ steps.setup.outputs.binary-path }}",
+      "sha256": "${{ steps.setup.outputs.sha256 }}",
+      "version": "${{ steps.setup.outputs.version }}"
+    }
+  },
+  ".forgejo/actions/setup-image-builder/action.yml": {
+    "inputs": {
+      "extra-packages": {
+        "required": false,
+        "type": "",
+        "default": ""
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  ".forgejo/actions/setup-toolchain/action.yml": {
+    "inputs": {
+      "cache": {
+        "required": false,
+        "type": "",
+        "default": "true"
+      },
+      "cache-key-suffix": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "extra-cache-paths": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "install-dev-tools": {
+        "required": false,
+        "type": "",
+        "default": "true"
+      },
+      "mise-forgejo-token": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "mise-github-token": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "mise-http-timeout-seconds": {
+        "required": false,
+        "type": "",
+        "default": "120"
+      },
+      "mise-locked": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      },
+      "tools": {
+        "required": false,
+        "type": "",
+        "default": ""
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  ".forgejo/actions/upload-dist/action.yml": {
+    "inputs": {
+      "artifact-name": {
+        "required": false,
+        "type": "",
+        "default": "build-dist"
+      },
+      "path": {
+        "required": false,
+        "type": "",
+        "default": "dist/"
+      },
+      "prune-dirs": {
+        "required": false,
+        "type": "",
+        "default": "false"
+      },
+      "retention-days": {
+        "required": false,
+        "type": "",
+        "default": "1"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {
+      "digest": "${{ steps.handoff.outputs.digest }}"
+    }
+  },
+  ".forgejo/actions/verify-forgejo-token/action.yml": {
+    "inputs": {
+      "repository": {
+        "required": false,
+        "type": "",
+        "default": "${{ github.repository }}"
+      },
+      "server-url": {
+        "required": false,
+        "type": "",
+        "default": "${{ github.server_url }}"
+      },
+      "token": {
+        "required": true,
+        "type": ""
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  ".forgejo/workflows/base-image-lifecycle.yml": {
+    "inputs": {
+      "artifact-name": {
+        "required": false,
+        "type": "string",
+        "default": "base-images"
+      },
+      "build-runs-on-linux-amd64": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "build-runs-on-linux-arm64": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "caller-workflow": {
+        "required": true,
+        "type": "string"
+      },
+      "cosign-public-key": {
+        "required": true,
+        "type": "string"
+      },
+      "cosign-public-key-sha256": {
+        "required": true,
+        "type": "string"
+      },
+      "enforce-vulnerabilities": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "expected-inputs-json": {
+        "required": true,
+        "type": "string"
+      },
+      "flavor": {
+        "required": true,
+        "type": "string"
+      },
+      "forge-ci-repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "forge-ci-sha": {
+        "required": true,
+        "type": "string"
+      },
+      "image-plan-json": {
+        "required": true,
+        "type": "string"
+      },
+      "image-repository": {
+        "required": true,
+        "type": "string"
+      },
+      "parent-base-json": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "parent-registry-auth-origin": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "parent-registry-repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "parent-registry-user": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "registry-user": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "release-sha": {
+        "required": true,
+        "type": "string"
+      },
+      "repository-suffix": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "runs-on": {
+        "required": true,
+        "type": "string"
+      },
+      "signer-image": {
+        "required": true,
+        "type": "string"
+      },
+      "signer-runs-on": {
+        "required": true,
+        "type": "string"
+      },
+      "transparency-log": {
+        "required": false,
+        "type": "string",
+        "default": "none"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {
+      "ledger-json": "${{ jobs.authenticate.outputs.ledger_json }}",
+      "parent-base-json": "${{ jobs.authenticate.outputs.parent_base_json }}"
+    }
+  },
+  ".forgejo/workflows/base-images.yml": {
+    "inputs": {
+      "artifact-name": {
+        "required": false,
+        "type": "string",
+        "default": "base-images"
+      },
+      "build-runs-on-linux-amd64": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "build-runs-on-linux-arm64": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "enforce-vulnerabilities": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "forge-ci-repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "forge-ci-sha": {
+        "required": true,
+        "type": "string"
+      },
+      "image-plan-json": {
+        "required": true,
+        "type": "string"
+      },
+      "image-repository": {
+        "required": true,
+        "type": "string"
+      },
+      "parent-base-json": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "parent-registry-auth-origin": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "parent-registry-repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "parent-registry-user": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "registry-user": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "release-sha": {
+        "required": true,
+        "type": "string"
+      },
+      "runs-on": {
+        "required": true,
+        "type": "string"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {
+      "base-inputs-json": "${{ jobs.publish.outputs.base_inputs_json }}",
+      "ledger-json": "${{ jobs.publish.outputs.ledger_json }}"
+    }
+  },
+  ".forgejo/workflows/package-retention.yml": {
+    "inputs": {
+      "engine-sha256": {
+        "required": true,
+        "type": "string"
+      },
+      "job-image": {
+        "required": true,
+        "type": "string"
+      },
+      "max-delete": {
+        "required": false,
+        "type": "number",
+        "default": 100
+      },
+      "packages-json": {
+        "required": true,
+        "type": "string"
+      },
+      "recent-count": {
+        "required": false,
+        "type": "number",
+        "default": 10
+      },
+      "registry-user": {
+        "required": true,
+        "type": "string"
+      },
+      "runs-on": {
+        "required": true,
+        "type": "string"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  ".forgejo/workflows/prepare-release.yml": {
+    "inputs": {
+      "artifacts-config": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "bot-email": {
+        "required": true,
+        "type": "string"
+      },
+      "bot-name": {
+        "required": true,
+        "type": "string"
+      },
+      "changelog-config": {
+        "required": false,
+        "type": "string",
+        "default": ".forge-ci/gitcliff/keepachangelog.toml"
+      },
+      "changelog-creator": {
+        "required": false,
+        "type": "string",
+        "default": "git-cliff"
+      },
+      "commit-body-config": {
+        "required": false,
+        "type": "string",
+        "default": ".forge-ci/gitcliff/minimal.toml"
+      },
+      "forge-ci-repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "forge-ci-sha": {
+        "required": true,
+        "type": "string"
+      },
+      "publish-containers": {
+        "required": false,
+        "type": "string",
+        "default": "true"
+      },
+      "release-branch": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "release-git-host-key-fingerprint": {
+        "required": true,
+        "type": "string"
+      },
+      "release-git-url": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "release-policy": {
+        "required": false,
+        "type": "string",
+        "default": "stable"
+      },
+      "release-request-allowed-signers": {
+        "required": false,
+        "type": "string",
+        "default": ".forge-ci/allowed_signers"
+      },
+      "runs-on": {
+        "required": true,
+        "type": "string"
+      },
+      "runtime-image-java": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "runtime-image-node": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "runtime-image-rust": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "sign-distro-packages": {
+        "required": false,
+        "type": "string",
+        "default": "true"
+      },
+      "signer-image": {
+        "required": true,
+        "type": "string"
+      },
+      "skip-signer-image-check": {
+        "required": false,
+        "type": "string",
+        "default": "false"
+      },
+      "verify-release-request-signature": {
+        "required": false,
+        "type": "string",
+        "default": "true"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {
+      "artifacts-config": "${{ jobs.coordinates.outputs.artifacts_config }}",
+      "release-sha": "${{ jobs.prepare.outputs.release-sha }}",
+      "release-tag": "${{ jobs.prepare.outputs.release-tag }}"
+    }
+  },
+  ".forgejo/workflows/promote-base-container-images.yml": {
+    "inputs": {
+      "all-images-json": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "base-input-id": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "base-inputs-json": {
+        "required": true,
+        "type": "string"
+      },
+      "base-repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "caller-workflow": {
+        "required": true,
+        "type": "string"
+      },
+      "cosign-public-key": {
+        "required": true,
+        "type": "string"
+      },
+      "cosign-public-key-sha256": {
+        "required": true,
+        "type": "string"
+      },
+      "forge-ci-repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "forge-ci-sha": {
+        "required": true,
+        "type": "string"
+      },
+      "ledger-json": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "registry-user": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "release-sha": {
+        "required": true,
+        "type": "string"
+      },
+      "repository-suffix": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "runs-on": {
+        "required": true,
+        "type": "string"
+      },
+      "signer-image": {
+        "required": true,
+        "type": "string"
+      },
+      "transparency-log": {
+        "required": false,
+        "type": "string",
+        "default": "none"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {
+      "base-images-json": "${{ jobs.promote-base-container-images.outputs.base_images_json }}",
+      "base-input-id": "${{ jobs.promote-base-container-images.outputs.base_input_id }}",
+      "base-inputs-json": "${{ jobs.promote-base-container-images.outputs.base_input_ids_json }}"
+    }
+  },
+  ".forgejo/workflows/release-images.yml": {
+    "inputs": {
+      "artifact-name": {
+        "required": false,
+        "type": "string",
+        "default": "release-images"
+      },
+      "artifacts-config": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "build-runs-on-linux-amd64": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "build-runs-on-linux-arm64": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "context-artifact": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "context-digest": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "enforce-vulnerabilities": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "forge-ci-repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "forge-ci-sha": {
+        "required": true,
+        "type": "string"
+      },
+      "image-plan-json": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "image-repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "labels": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "registry-user": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "release-platforms": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "release-sha": {
+        "required": true,
+        "type": "string"
+      },
+      "release-tag": {
+        "required": true,
+        "type": "string"
+      },
+      "runs-on": {
+        "required": true,
+        "type": "string"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {
+      "ledger-json": "${{ jobs.collect.outputs.ledger_json }}"
+    }
+  },
+  ".forgejo/workflows/runtime-images.yml": {
+    "inputs": {
+      "build-runs-on-linux-amd64": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "build-runs-on-linux-arm64": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "cosign-public-key": {
+        "required": true,
+        "type": "string"
+      },
+      "cosign-public-key-sha256": {
+        "required": true,
+        "type": "string"
+      },
+      "enforce-vulnerabilities": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "forge-ci-repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "forge-ci-sha": {
+        "required": true,
+        "type": "string"
+      },
+      "go-build-image": {
+        "required": true,
+        "type": "string"
+      },
+      "image-namespace": {
+        "required": true,
+        "type": "string"
+      },
+      "publication-branch": {
+        "required": false,
+        "type": "string",
+        "default": "main"
+      },
+      "registry-user": {
+        "required": true,
+        "type": "string"
+      },
+      "release-platforms": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "runs-on": {
+        "required": true,
+        "type": "string"
+      },
+      "runs-on-linux-arm64": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "signer-image": {
+        "required": true,
+        "type": "string"
+      },
+      "signer-runs-on": {
+        "required": true,
+        "type": "string"
+      },
+      "transparency-log": {
+        "required": false,
+        "type": "string",
+        "default": "none"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  ".forgejo/workflows/sign-and-publish-release.yml": {
+    "inputs": {
+      "artifact-name": {
+        "required": false,
+        "type": "string",
+        "default": "build-dist"
+      },
+      "artifact-path": {
+        "required": false,
+        "type": "string",
+        "default": "dist/"
+      },
+      "artifacts-config": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "base-repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "caller-workflow": {
+        "required": true,
+        "type": "string"
+      },
+      "cosign-public-key": {
+        "required": true,
+        "type": "string"
+      },
+      "cosign-public-key-sha256": {
+        "required": true,
+        "type": "string"
+      },
+      "dist-digest": {
+        "required": true,
+        "type": "string"
+      },
+      "forge-ci-repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "forge-ci-sha": {
+        "required": true,
+        "type": "string"
+      },
+      "image-repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "registry-user": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "release-asset-retention": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "release-draft": {
+        "required": false,
+        "type": "string",
+        "default": "false"
+      },
+      "release-images-path": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "release-policy": {
+        "required": false,
+        "type": "string",
+        "default": "stable"
+      },
+      "release-request-sha": {
+        "required": true,
+        "type": "string"
+      },
+      "release-sha": {
+        "required": true,
+        "type": "string"
+      },
+      "release-tag": {
+        "required": true,
+        "type": "string"
+      },
+      "runs-on": {
+        "required": true,
+        "type": "string"
+      },
+      "sign-distro-packages": {
+        "required": false,
+        "type": "string",
+        "default": "true"
+      },
+      "signer-image": {
+        "required": true,
+        "type": "string"
+      },
+      "signer-runs-on": {
+        "required": true,
+        "type": "string"
+      },
+      "transparency-log": {
+        "required": false,
+        "type": "string",
+        "default": "none"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  ".forgejo/workflows/sign-container-images.yml": {
+    "inputs": {
+      "base-repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "caller-workflow": {
+        "required": true,
+        "type": "string"
+      },
+      "cosign-public-key": {
+        "required": true,
+        "type": "string"
+      },
+      "cosign-public-key-sha256": {
+        "required": true,
+        "type": "string"
+      },
+      "forge-ci-repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "forge-ci-sha": {
+        "required": true,
+        "type": "string"
+      },
+      "ledger-json": {
+        "required": true,
+        "type": "string"
+      },
+      "registry-user": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "repository-suffix": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "runs-on": {
+        "required": true,
+        "type": "string"
+      },
+      "sbom-artifact": {
+        "required": true,
+        "type": "string"
+      },
+      "signer-image": {
+        "required": true,
+        "type": "string"
+      },
+      "signer-runs-on": {
+        "required": true,
+        "type": "string"
+      },
+      "source-sha": {
+        "required": true,
+        "type": "string"
+      },
+      "transparency-log": {
+        "required": false,
+        "type": "string",
+        "default": "none"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  ".forgejo/workflows/snapshot-images.yml": {
+    "inputs": {
+      "artifact-job-image-go": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "artifact-job-image-java": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "artifact-job-image-node": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "artifact-job-image-rust": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "artifact-name": {
+        "required": false,
+        "type": "string",
+        "default": "snapshot-images"
+      },
+      "artifacts-config": {
+        "required": false,
+        "type": "string",
+        "default": ".forge-ci/artifacts.yml"
+      },
+      "branch": {
+        "required": true,
+        "type": "string"
+      },
+      "build-runs-on-linux-amd64": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "build-runs-on-linux-arm64": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "context-artifact": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "enforce-application-tests": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "enforce-vulnerabilities": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "forge-ci-repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "forge-ci-sha": {
+        "required": true,
+        "type": "string"
+      },
+      "image-repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "publish-containers": {
+        "required": false,
+        "type": "boolean",
+        "default": true
+      },
+      "publish-files": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "registry-user": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "runs-on": {
+        "required": true,
+        "type": "string"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {
+      "container-images-json": "${{ jobs.collect.outputs.container-images-json }}",
+      "source-sha": "${{ jobs.plan.outputs.source-sha }}"
+    }
+  },
+  ".forgejo/workflows/verify-base-container-images.yml": {
+    "inputs": {
+      "base-input-id": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "base-inputs-json": {
+        "required": false,
+        "type": "string",
+        "default": "[]"
+      },
+      "base-repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "caller-workflow": {
+        "required": true,
+        "type": "string"
+      },
+      "cosign-public-key": {
+        "required": true,
+        "type": "string"
+      },
+      "cosign-public-key-sha256": {
+        "required": true,
+        "type": "string"
+      },
+      "expected-ref": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "flavors-file": {
+        "required": false,
+        "type": "string",
+        "default": "packaging/container/flavors.list"
+      },
+      "forge-ci-repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "forge-ci-sha": {
+        "required": true,
+        "type": "string"
+      },
+      "registry-user": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "release-sha": {
+        "required": true,
+        "type": "string"
+      },
+      "repository-suffix": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "runs-on": {
+        "required": true,
+        "type": "string"
+      },
+      "signer-image": {
+        "required": true,
+        "type": "string"
+      },
+      "transparency-log": {
+        "required": false,
+        "type": "string",
+        "default": "none"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {
+      "all-found": "${{ jobs.verify-base-container-images.outputs.all_found }}",
+      "all-images-json": "${{ jobs.verify-base-container-images.outputs.all_images_json }}",
+      "missing-flavors-json": "${{ jobs.verify-base-container-images.outputs.missing_flavors_json }}",
+      "parent-base-json": "${{ jobs.verify-base-container-images.outputs.parent_base_json }}",
+      "parent-bases-json": "${{ jobs.verify-base-container-images.outputs.parent_bases_json }}"
+    }
+  },
+  ".github/workflows/pullrequest-orchestrator.yml": {
     "inputs": {
       "base-branch": {
         "required": false,
@@ -26,7 +1972,7 @@
         "type": "boolean",
         "default": false
       },
-      "forge-ci-binary-ref": {
+      "forge-ci-sha": {
         "required": true,
         "type": "string"
       },
@@ -40,12 +1986,12 @@
         "type": "string",
         "default": "nanolinter"
       },
-      "linters.swiftformat": {
+      "linters-swiftformat": {
         "required": false,
         "type": "boolean",
         "default": false
       },
-      "linters.swiftlint": {
+      "linters-swiftlint": {
         "required": false,
         "type": "boolean",
         "default": false
@@ -90,7 +2036,7 @@
     "required_secrets": [],
     "outputs": {}
   },
-  "release-orchestrator.yml": {
+  ".github/workflows/release-orchestrator.yml": {
     "inputs": {
       "artifacts-config": {
         "required": false,
@@ -130,17 +2076,17 @@
         "type": "string",
         "default": ""
       },
+      "changelog-config": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
       "changelog-creator": {
         "required": false,
         "type": "string",
         "default": "git-cliff"
       },
-      "changelog.config": {
-        "required": false,
-        "type": "string",
-        "default": ""
-      },
-      "changelog.skipversionbump": {
+      "changelog-skip-version-bump": {
         "required": false,
         "type": "boolean",
         "default": false
@@ -180,7 +2126,7 @@
         "type": "string",
         "default": ""
       },
-      "forge-ci-binary-ref": {
+      "forge-ci-sha": {
         "required": true,
         "type": "string"
       },
@@ -199,11 +2145,6 @@
         "type": "string",
         "default": ""
       },
-      "promote-release-registry-username": {
-        "required": false,
-        "type": "string",
-        "default": ""
-      },
       "promote-release-repo": {
         "required": false,
         "type": "string",
@@ -214,10 +2155,25 @@
         "type": "string",
         "default": "staging"
       },
+      "registry-user": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
       "release-asset-retention": {
         "required": false,
         "type": "string",
         "default": ""
+      },
+      "release-attach-artifacts": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
+      "release-draft": {
+        "required": false,
+        "type": "boolean",
+        "default": false
       },
       "release-policy": {
         "required": false,
@@ -228,27 +2184,17 @@
         "required": false,
         "type": "string"
       },
-      "release.attachartifacts": {
-        "required": false,
-        "type": "string",
-        "default": ""
-      },
-      "release.draft": {
+      "release-require-allowlisted-signer": {
         "required": false,
         "type": "boolean",
         "default": false
       },
-      "release.requireallowlistedsigner": {
-        "required": false,
-        "type": "boolean",
-        "default": false
-      },
-      "release.sboms": {
+      "release-sboms": {
         "required": false,
         "type": "string",
         "default": "all"
       },
-      "release.signartifacts": {
+      "release-sign-artifacts": {
         "required": false,
         "type": "boolean",
         "default": true
@@ -339,7 +2285,7 @@
     "required_secrets": [],
     "outputs": {}
   },
-  "release-snapshot-orchestrator.yml": {
+  ".github/workflows/release-snapshot-orchestrator.yml": {
     "inputs": {
       "artifacts-config": {
         "required": false,
@@ -364,16 +2310,6 @@
         "required": true,
         "type": "string"
       },
-      "container-image-repository": {
-        "required": false,
-        "type": "string",
-        "default": ""
-      },
-      "container-registry-user": {
-        "required": false,
-        "type": "string",
-        "default": ""
-      },
       "enforce-application-tests": {
         "required": false,
         "type": "boolean",
@@ -389,9 +2325,14 @@
         "type": "boolean",
         "default": false
       },
-      "forge-ci-binary-ref": {
+      "forge-ci-sha": {
         "required": true,
         "type": "string"
+      },
+      "image-repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
       },
       "java-version": {
         "required": false,
@@ -442,6 +2383,11 @@
         "required": false,
         "type": "string",
         "default": "ghcr.io"
+      },
+      "registry-user": {
+        "required": false,
+        "type": "string",
+        "default": ""
       },
       "runs-on": {
         "required": false,
@@ -533,5 +2479,1463 @@
       "npm-package-name": "${{ fromJson(jobs.execute-snapshot-publish-stage.outputs['artifacts-json'] || '{}').npm_package_name }}",
       "npm-package-version": "${{ fromJson(jobs.execute-snapshot-publish-stage.outputs['artifacts-json'] || '{}').npm_package_version }}"
     }
+  },
+  "templates/build-cargo.yml": {
+    "inputs": {
+      "artifact-name": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "enable-build-sbom": {
+        "required": false,
+        "type": "boolean",
+        "default": true
+      },
+      "enforce-application-tests": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "job-name": {
+        "required": false,
+        "type": "",
+        "default": "build-cargo"
+      },
+      "platforms": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "runner-tags": {
+        "required": false,
+        "type": "array",
+        "default": []
+      },
+      "runtime-image": {
+        "required": true,
+        "type": ""
+      },
+      "skip-tests": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "stage": {
+        "required": false,
+        "type": "",
+        "default": "build"
+      },
+      "version": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "working-directory": {
+        "required": false,
+        "type": "",
+        "default": "."
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  "templates/build-go.yml": {
+    "inputs": {
+      "artifact-name": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "enable-build-sbom": {
+        "required": false,
+        "type": "boolean",
+        "default": true
+      },
+      "enforce-application-tests": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "job-name": {
+        "required": false,
+        "type": "",
+        "default": "build-go"
+      },
+      "main-package": {
+        "required": false,
+        "type": "",
+        "default": "."
+      },
+      "platforms": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "runner-tags": {
+        "required": false,
+        "type": "array",
+        "default": []
+      },
+      "runtime-image": {
+        "required": true,
+        "type": ""
+      },
+      "skip-tests": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "stage": {
+        "required": false,
+        "type": "",
+        "default": "build"
+      },
+      "version": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "working-directory": {
+        "required": false,
+        "type": "",
+        "default": "."
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  "templates/build-gradle-android.yml": {
+    "inputs": {
+      "build-module": {
+        "required": false,
+        "type": "",
+        "default": "app"
+      },
+      "build-types": {
+        "required": false,
+        "type": "",
+        "default": "debug,release"
+      },
+      "central-publication": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "enable-build-sbom": {
+        "required": false,
+        "type": "boolean",
+        "default": true
+      },
+      "enable-signing": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "enforce-application-tests": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "export-publications": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "gradle-tasks": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "include-aab": {
+        "required": false,
+        "type": "boolean",
+        "default": true
+      },
+      "job-name": {
+        "required": false,
+        "type": "",
+        "default": "build-gradle-android"
+      },
+      "library": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "product-flavor": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "runner-tags": {
+        "required": false,
+        "type": "array",
+        "default": []
+      },
+      "runtime-image": {
+        "required": true,
+        "type": ""
+      },
+      "sbom-tool-version": {
+        "required": false,
+        "type": "",
+        "default": "3.5.1"
+      },
+      "skip-tests": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "snapshot-publication": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "stage": {
+        "required": false,
+        "type": "",
+        "default": "build"
+      },
+      "version": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "working-directory": {
+        "required": false,
+        "type": "",
+        "default": "."
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  "templates/build-gradle.yml": {
+    "inputs": {
+      "central-publication": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "enable-build-sbom": {
+        "required": false,
+        "type": "boolean",
+        "default": true
+      },
+      "enforce-application-tests": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "export-publications": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "gradle-tasks": {
+        "required": false,
+        "type": "",
+        "default": "assemble"
+      },
+      "java-version": {
+        "required": false,
+        "type": "",
+        "default": "25"
+      },
+      "job-name": {
+        "required": false,
+        "type": "",
+        "default": "build-gradle"
+      },
+      "private-dependencies": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "runner-tags": {
+        "required": false,
+        "type": "array",
+        "default": []
+      },
+      "runtime-image": {
+        "required": true,
+        "type": ""
+      },
+      "sbom-tool-version": {
+        "required": false,
+        "type": "",
+        "default": "3.5.1"
+      },
+      "skip-tests": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "snapshot-publication": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "stage": {
+        "required": false,
+        "type": "",
+        "default": "build"
+      },
+      "version": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "working-directory": {
+        "required": false,
+        "type": "",
+        "default": "."
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  "templates/build-maven.yml": {
+    "inputs": {
+      "build-type": {
+        "required": false,
+        "type": "",
+        "default": "app"
+      },
+      "enable-build-sbom": {
+        "required": false,
+        "type": "boolean",
+        "default": true
+      },
+      "enforce-application-tests": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "java-version": {
+        "required": false,
+        "type": "",
+        "default": "25"
+      },
+      "job-name": {
+        "required": false,
+        "type": "",
+        "default": "build-maven"
+      },
+      "maven-cli-opts": {
+        "required": false,
+        "type": "",
+        "default": "--batch-mode --no-transfer-progress --errors --fail-at-end -Dstyle.color=always"
+      },
+      "private-dependencies": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "profile": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "runner-tags": {
+        "required": false,
+        "type": "array",
+        "default": []
+      },
+      "runtime-image": {
+        "required": true,
+        "type": ""
+      },
+      "sbom-tool-version": {
+        "required": false,
+        "type": "",
+        "default": "2.9.3"
+      },
+      "settings-path": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "skip-tests": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "stage": {
+        "required": false,
+        "type": "",
+        "default": "build"
+      },
+      "working-directory": {
+        "required": false,
+        "type": "",
+        "default": "."
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  "templates/build-npm.yml": {
+    "inputs": {
+      "dependency-registry": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "enable-build-sbom": {
+        "required": false,
+        "type": "boolean",
+        "default": true
+      },
+      "enforce-application-tests": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "job-name": {
+        "required": false,
+        "type": "",
+        "default": "build-npm"
+      },
+      "node-version": {
+        "required": false,
+        "type": "",
+        "default": "24"
+      },
+      "private-dependencies": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "runner-tags": {
+        "required": false,
+        "type": "array",
+        "default": []
+      },
+      "runtime-image": {
+        "required": true,
+        "type": ""
+      },
+      "sbom-tool-version": {
+        "required": false,
+        "type": "",
+        "default": "6.0.1"
+      },
+      "scope": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "skip-tests": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "stage": {
+        "required": false,
+        "type": "",
+        "default": "build"
+      },
+      "working-directory": {
+        "required": false,
+        "type": "",
+        "default": "."
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  "templates/check.yml": {
+    "inputs": {
+      "commands": {
+        "required": true,
+        "type": "array"
+      },
+      "enforce-application-tests": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "enforce-lint": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "enforce-reproducible-builds": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "enforce-vulnerabilities": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "forge-ci-repository": {
+        "required": true,
+        "type": ""
+      },
+      "job-image": {
+        "required": true,
+        "type": ""
+      },
+      "job-name": {
+        "required": false,
+        "type": "",
+        "default": "check"
+      },
+      "job-user": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "runner-tags": {
+        "required": false,
+        "type": "array",
+        "default": []
+      },
+      "server-url": {
+        "required": true,
+        "type": ""
+      },
+      "stage": {
+        "required": false,
+        "type": "",
+        "default": "test"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  "templates/megalinter.yml": {
+    "inputs": {
+      "enable-gitlab-sast": {
+        "required": false,
+        "type": "boolean",
+        "default": true
+      },
+      "forge-ci-repository": {
+        "required": true,
+        "type": ""
+      },
+      "job-name": {
+        "required": false,
+        "type": "",
+        "default": "megalinter"
+      },
+      "megalinter-image": {
+        "required": true,
+        "type": ""
+      },
+      "runner-tags": {
+        "required": false,
+        "type": "array",
+        "default": []
+      },
+      "server-url": {
+        "required": true,
+        "type": ""
+      },
+      "stage": {
+        "required": false,
+        "type": "",
+        "default": "test"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  "templates/nanolinter.yml": {
+    "inputs": {
+      "disable-checks": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "enable-gitlab-sast": {
+        "required": false,
+        "type": "boolean",
+        "default": true
+      },
+      "enforce-lint": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "enforce-vulnerabilities": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "forge-ci-repository": {
+        "required": true,
+        "type": ""
+      },
+      "job-name": {
+        "required": false,
+        "type": "",
+        "default": "nanolinter"
+      },
+      "nanolinter-image": {
+        "required": true,
+        "type": ""
+      },
+      "pr-comment": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "pr-comment-job-name": {
+        "required": false,
+        "type": "",
+        "default": "PR check results"
+      },
+      "required-lints": {
+        "required": false,
+        "type": "",
+        "default": "secrets"
+      },
+      "runner-tags": {
+        "required": false,
+        "type": "array",
+        "default": []
+      },
+      "server-url": {
+        "required": true,
+        "type": ""
+      },
+      "stage": {
+        "required": false,
+        "type": "",
+        "default": "test"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  "templates/publish-apple-appstore.yml": {
+    "inputs": {
+      "job-name": {
+        "required": false,
+        "type": "",
+        "default": "publish-apple-appstore"
+      },
+      "macos-image": {
+        "required": false,
+        "type": "",
+        "default": "macos-15-xcode-16"
+      },
+      "platform": {
+        "required": false,
+        "type": "",
+        "default": "ios"
+      },
+      "runner-tags-darwin-arm64": {
+        "required": false,
+        "type": "array",
+        "default": [
+          "saas-macos-medium-m1"
+        ]
+      },
+      "skip-validation": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "stage": {
+        "required": false,
+        "type": "",
+        "default": "publish"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  "templates/publish-forge-packages.yml": {
+    "inputs": {
+      "job-name": {
+        "required": false,
+        "type": "",
+        "default": "publish-forge-packages"
+      },
+      "maven-cli-opts": {
+        "required": false,
+        "type": "",
+        "default": "--batch-mode --no-transfer-progress --errors --fail-at-end -Dstyle.color=always"
+      },
+      "npm-tag": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "project-type": {
+        "required": false,
+        "type": "",
+        "default": "maven"
+      },
+      "release-dist-digest": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "release-dist-directory": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "release-manifest": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "runner-tags": {
+        "required": false,
+        "type": "array",
+        "default": []
+      },
+      "runtime-image": {
+        "required": true,
+        "type": ""
+      },
+      "snapshot": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "stage": {
+        "required": false,
+        "type": "",
+        "default": "publish"
+      },
+      "version": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "working-directory": {
+        "required": false,
+        "type": "",
+        "default": "."
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  "templates/publish-maven-central.yml": {
+    "inputs": {
+      "job-name": {
+        "required": false,
+        "type": "",
+        "default": "publish-maven-central"
+      },
+      "maven-cli-opts": {
+        "required": false,
+        "type": "",
+        "default": "--batch-mode --no-transfer-progress --errors --fail-at-end -Dstyle.color=always"
+      },
+      "private-dependencies": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "profile": {
+        "required": false,
+        "type": "",
+        "default": "central-release"
+      },
+      "project-type": {
+        "required": false,
+        "type": "",
+        "default": "maven"
+      },
+      "publication-directory": {
+        "required": false,
+        "type": "",
+        "default": ".forge-ci/maven-publication"
+      },
+      "release-policy": {
+        "required": false,
+        "type": "",
+        "default": "stable"
+      },
+      "release-request-tag": {
+        "required": false,
+        "type": "",
+        "default": "$CI_COMMIT_TAG"
+      },
+      "release-sha": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "runner-tags": {
+        "required": false,
+        "type": "array",
+        "default": []
+      },
+      "runtime-image": {
+        "required": true,
+        "type": ""
+      },
+      "settings-path": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "snapshot": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "stage": {
+        "required": false,
+        "type": "",
+        "default": "publish"
+      },
+      "version": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "working-directory": {
+        "required": false,
+        "type": "",
+        "default": "."
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  "templates/release-jobs.yml": {
+    "inputs": {
+      "artifacts-config": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "base-plan": {
+        "required": true,
+        "type": ""
+      },
+      "base-stages": {
+        "required": true,
+        "type": ""
+      },
+      "bot-email": {
+        "required": true,
+        "type": ""
+      },
+      "bot-name": {
+        "required": true,
+        "type": ""
+      },
+      "build": {
+        "required": true,
+        "type": "array"
+      },
+      "build-runner-tags-linux-amd64": {
+        "required": true,
+        "type": "array"
+      },
+      "build-runner-tags-linux-arm64": {
+        "required": true,
+        "type": "array"
+      },
+      "builder-job-image": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "changelog-config": {
+        "required": true,
+        "type": ""
+      },
+      "changelog-creator": {
+        "required": true,
+        "type": ""
+      },
+      "checks": {
+        "required": true,
+        "type": "array"
+      },
+      "commit-body-config": {
+        "required": true,
+        "type": ""
+      },
+      "consumer-project": {
+        "required": true,
+        "type": ""
+      },
+      "cosign-public-key-sha256": {
+        "required": true,
+        "type": ""
+      },
+      "enforce-application-tests": {
+        "required": true,
+        "type": "boolean"
+      },
+      "enforce-lint": {
+        "required": true,
+        "type": "boolean"
+      },
+      "enforce-reproducible-builds": {
+        "required": true,
+        "type": "boolean"
+      },
+      "enforce-vulnerabilities": {
+        "required": true,
+        "type": "boolean"
+      },
+      "engine-reference": {
+        "required": true,
+        "type": "string"
+      },
+      "engine-sha": {
+        "required": true,
+        "type": ""
+      },
+      "export": {
+        "required": false,
+        "type": "array",
+        "default": []
+      },
+      "export-files": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "forge-ci-repository": {
+        "required": true,
+        "type": ""
+      },
+      "image-builder": {
+        "required": false,
+        "type": "",
+        "default": "buildah"
+      },
+      "job-image": {
+        "required": true,
+        "type": ""
+      },
+      "job-user": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "labels": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "publication-image-repository": {
+        "required": true,
+        "type": ""
+      },
+      "publication-project": {
+        "required": true,
+        "type": ""
+      },
+      "registry": {
+        "required": true,
+        "type": ""
+      },
+      "release-asset-retention": {
+        "required": true,
+        "type": ""
+      },
+      "release-branch": {
+        "required": true,
+        "type": ""
+      },
+      "release-git-host-key-fingerprint": {
+        "required": true,
+        "type": ""
+      },
+      "release-git-url": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "release-images": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "release-platforms": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "release-policy": {
+        "required": false,
+        "type": "",
+        "default": "stable"
+      },
+      "release-request-allowed-signers": {
+        "required": true,
+        "type": ""
+      },
+      "runner-tags": {
+        "required": false,
+        "type": "array",
+        "default": []
+      },
+      "runtime-image-android": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "runtime-image-go": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "runtime-image-java": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "runtime-image-node": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "runtime-image-rust": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "server-url": {
+        "required": true,
+        "type": ""
+      },
+      "sign-distro-packages": {
+        "required": true,
+        "type": "boolean"
+      },
+      "signer-image": {
+        "required": true,
+        "type": ""
+      },
+      "signer-runner-tags": {
+        "required": false,
+        "type": "array",
+        "default": []
+      },
+      "transparency-log": {
+        "required": true,
+        "type": ""
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  "templates/release.yml": {
+    "inputs": {
+      "artifacts-config": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "base-plan": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "base-stages": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "bot-email": {
+        "required": true,
+        "type": ""
+      },
+      "bot-name": {
+        "required": true,
+        "type": ""
+      },
+      "build": {
+        "required": true,
+        "type": "array"
+      },
+      "build-runner-tags-linux-amd64": {
+        "required": true,
+        "type": "array"
+      },
+      "build-runner-tags-linux-arm64": {
+        "required": true,
+        "type": "array"
+      },
+      "builder-job-image": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "changelog-config": {
+        "required": false,
+        "type": "",
+        "default": ".forge-ci/gitcliff/keepachangelog.toml"
+      },
+      "changelog-creator": {
+        "required": false,
+        "type": "",
+        "default": "git-cliff"
+      },
+      "checks": {
+        "required": true,
+        "type": "array"
+      },
+      "commit-body-config": {
+        "required": false,
+        "type": "",
+        "default": ".forge-ci/gitcliff/minimal.toml"
+      },
+      "consumer-project": {
+        "required": true,
+        "type": ""
+      },
+      "cosign-public-key-sha256": {
+        "required": true,
+        "type": ""
+      },
+      "enforce-application-tests": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "enforce-lint": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "enforce-reproducible-builds": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "enforce-vulnerabilities": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "export": {
+        "required": false,
+        "type": "array",
+        "default": []
+      },
+      "export-files": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "forge-ci-repository": {
+        "required": true,
+        "type": ""
+      },
+      "image-builder": {
+        "required": false,
+        "type": "",
+        "default": "buildah"
+      },
+      "job-image": {
+        "required": true,
+        "type": ""
+      },
+      "job-user": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "labels": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "publication-image-repository": {
+        "required": true,
+        "type": ""
+      },
+      "publication-project": {
+        "required": true,
+        "type": ""
+      },
+      "registry": {
+        "required": true,
+        "type": ""
+      },
+      "release-asset-retention": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "release-branch": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "release-git-host-key-fingerprint": {
+        "required": true,
+        "type": ""
+      },
+      "release-git-url": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "release-images": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "release-platforms": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "release-policy": {
+        "required": false,
+        "type": "",
+        "default": "stable"
+      },
+      "release-request-allowed-signers": {
+        "required": true,
+        "type": ""
+      },
+      "runner-tags": {
+        "required": false,
+        "type": "array",
+        "default": []
+      },
+      "runtime-image-android": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "runtime-image-go": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "runtime-image-java": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "runtime-image-node": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "runtime-image-rust": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "server-url": {
+        "required": true,
+        "type": ""
+      },
+      "sign-distro-packages": {
+        "required": false,
+        "type": "boolean",
+        "default": true
+      },
+      "signer-image": {
+        "required": true,
+        "type": ""
+      },
+      "signer-runner-tags": {
+        "required": false,
+        "type": "array",
+        "default": []
+      },
+      "transparency-log": {
+        "required": false,
+        "type": "",
+        "default": "none"
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  "templates/snapshot-image-jobs.yml": {
+    "inputs": {
+      "build-image": {
+        "required": true,
+        "type": ""
+      },
+      "builder-job-image": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "enforce-application-tests": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "enforce-vulnerabilities": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "engine-sha": {
+        "required": true,
+        "type": ""
+      },
+      "forge-ci-repository": {
+        "required": true,
+        "type": ""
+      },
+      "image-builder": {
+        "required": false,
+        "type": "",
+        "default": "buildah"
+      },
+      "job-image": {
+        "required": true,
+        "type": ""
+      },
+      "registry": {
+        "required": true,
+        "type": ""
+      },
+      "runner-tags": {
+        "required": false,
+        "type": "array",
+        "default": []
+      },
+      "server-url": {
+        "required": true,
+        "type": ""
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
+  },
+  "templates/snapshot-images.yml": {
+    "inputs": {
+      "artifact-job-image-go": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "artifact-job-image-java": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "artifact-job-image-node": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "artifact-job-image-rust": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "artifacts-config": {
+        "required": false,
+        "type": "",
+        "default": ".forge-ci/artifacts.yml"
+      },
+      "branch": {
+        "required": true,
+        "type": ""
+      },
+      "build-image": {
+        "required": true,
+        "type": ""
+      },
+      "build-runner-tags-linux-amd64": {
+        "required": true,
+        "type": "array"
+      },
+      "build-runner-tags-linux-arm64": {
+        "required": true,
+        "type": "array"
+      },
+      "builder-job-image": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "context-job": {
+        "required": false,
+        "type": "",
+        "default": "Check: snapshot plan"
+      },
+      "enforce-application-tests": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "enforce-vulnerabilities": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "forge-ci-repository": {
+        "required": true,
+        "type": ""
+      },
+      "image-builder": {
+        "required": false,
+        "type": "",
+        "default": "buildah"
+      },
+      "image-repository": {
+        "required": false,
+        "type": "",
+        "default": ""
+      },
+      "job-image": {
+        "required": true,
+        "type": ""
+      },
+      "publish-containers": {
+        "required": false,
+        "type": "boolean",
+        "default": true
+      },
+      "publish-files": {
+        "required": false,
+        "type": "boolean",
+        "default": false
+      },
+      "registry": {
+        "required": true,
+        "type": ""
+      },
+      "runner-tags": {
+        "required": false,
+        "type": "array",
+        "default": []
+      },
+      "server-url": {
+        "required": true,
+        "type": ""
+      }
+    },
+    "secrets": [],
+    "required_secrets": [],
+    "outputs": {}
   }
 }

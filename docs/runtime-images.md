@@ -139,7 +139,7 @@ before the job starts.
 | `snapshot-images` | `runtime-base` (plan, prepare-context, collect), `runtime` full (publish: Trivy and syft), the toolchain image of each producer's project type; host build legs | The same shape as `publish-container`: the Buildah legs receive the canonical CLI of the run (`consume-canonical-cli`, profile `host`), every other job runs the forge-ci baked into its image |
 | `security-openssf-scorecard` | host + third-party Docker action (analysis); `runtime-base` (publish-sarif) | The Scorecard action needs a hosted runner; the SARIF upload runs in the admitted base image with its baked forge-ci |
 | `slsa-attestor` | `runtime-base` | forge-ci and the pinned cosign are baked in; the caller-selected runner must run job containers |
-| `lint-swift`, `build-xcode-ios`, `publish-apple-appstore` | macOS host; forge-ci built from the engine checkout | Canonical delivery builds Linux files in a Linux builder image with Linux tool profiles, so it serves no darwin job. Each macOS job checks the engine out at the full commit `forge-ci-binary-ref` names and runs `.github/actions/build-darwin-cli` from that checkout: the Go toolchain `go.mod` names through setup-go, then `go build ./cmd/forge-ci`. Nothing else is installed |
+| `lint-swift`, `build-xcode-ios`, `publish-apple-appstore` | macOS host; forge-ci built from the engine checkout | Canonical delivery builds Linux files in a Linux builder image with Linux tool profiles, so it serves no darwin job. Each macOS job checks the engine out at the full commit `forge-ci-sha` names and runs `.github/actions/build-darwin-cli` from that checkout: the Go toolchain `go.mod` names through setup-go, then `go build ./cmd/forge-ci`. Nothing else is installed |
 
 ## Forgejo runtime publication
 
@@ -166,7 +166,7 @@ organization's public key file. Then set:
 
 | Setting | Purpose |
 |---|---|
-| `RUNTIME_IMAGE_NAMESPACE` | Destination, for example `ghcr.io/owner` |
+| `FORGE_CI_IMAGE_NAMESPACE` | Destination, for example `ghcr.io/owner`; the same variable GitHub's publisher reads |
 | `CI_RUNNER_LABEL` | JSON labels for ordinary jobs, the signer and the amd64 smoke test |
 | `CI_RUNNER_LABEL_ARM64` | The arm64 pool for the arm64 smoke test; without it the smoke test runs on `CI_RUNNER_LABEL_CONTAINER_ARM64` |
 | `CI_RUNNER_LABEL_CONTAINER`, `CI_RUNNER_LABEL_CONTAINER_ARM64` | Optional build runners per architecture; otherwise the pools build |
@@ -265,7 +265,7 @@ a runtime image bundles many differently-licensed tools.
 
 Jobs never install a published CLI archive. Container jobs use the binary
 baked into their image, Linux plain-runner jobs receive the CLI their run
-builds from `forge-ci-binary-ref` ([engine delivery](engine-delivery.md)),
+builds from `forge-ci-sha` ([engine delivery](engine-delivery.md)),
 and macOS jobs build it from a checkout of that commit. The archives are for
 people who download the CLI:
 
@@ -287,7 +287,7 @@ There is no darwin/amd64 CLI.
 
 After the required images have been published, pin a release caller. The
 release orchestrator requires three of its inputs as exact IDs and admits them
-in its first job, before any image starts: `forge-ci-binary-ref` is the full
+in its first job, before any image starts: `forge-ci-sha` is the full
 engine commit the run builds its canonical CLI from, and `runtime-image` and
 `canonical-builder-image` are `@sha256:` digests (a tag is refused). Every
 other `runtime-image*` input is a digest too, admitted by the workflow that
@@ -311,7 +311,7 @@ jobs:
       branch: main
       artifacts-config: .forge-ci/artifacts.yml
       # The same full commit the workflow ref names: required.
-      forge-ci-binary-ref: <full-commit>
+      forge-ci-sha: <full-commit>
       # Admitted by digest before any job runs: required.
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:<digest>
       canonical-builder-image: ghcr.io/diggsweden/forge-ci-runtime-go-1.27@sha256:<digest>
@@ -334,10 +334,10 @@ once the images exist and passes `github.sha` as the engine commit.
 
 A workflow called on its own takes one `runtime-image:` input: the digest of
 the matching family from the [roster](#image-roster), with the same
-`forge-ci-binary-ref`. For example, a Java job passes:
+`forge-ci-sha`. For example, a Java job passes:
 
 ```yaml
-forge-ci-binary-ref: <full-commit>
+forge-ci-sha: <full-commit>
 runtime-image: ghcr.io/diggsweden/forge-ci-runtime-java-25@sha256:<digest>
 ```
 
@@ -361,7 +361,7 @@ using Renovate can pick up image bumps automatically. Example `renovate.json`:
 }
 ```
 
-Move the workflow commit, `forge-ci-binary-ref` and the image digests in the
+Move the workflow commit, `forge-ci-sha` and the image digests in the
 same pull request.
 
 ## Branch Testing
@@ -377,7 +377,7 @@ three matching selections:
 
 1. A reviewed workflow commit (`uses: diggsweden/forge-ci/.github/workflows/...@<sha>`).
 2. The runtime images published for that commit, by digest.
-3. The same full commit as `forge-ci-binary-ref`.
+3. The same full commit as `forge-ci-sha`.
 
 Read the digest each tag serves:
 
@@ -386,7 +386,7 @@ docker buildx imagetools inspect ghcr.io/diggsweden/forge-ci-runtime-base:sha-ab
 ```
 
 Then pass them as in the [Advanced Pinning Recipe](#advanced-pinning-recipe),
-with that commit as the workflow ref and `forge-ci-binary-ref`. A rerun can
+with that commit as the workflow ref and `forge-ci-sha`. A rerun can
 move a `sha-<short>` tag; the digest is the content pin.
 
 ## Testing consumer configuration
@@ -413,7 +413,7 @@ jobs:
       branch: ${{ github.ref_name }}
       # The full commit the workflow ref above names; the snapshot route runs
       # the CLI built in this run from exactly this commit.
-      forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+      forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
       # Pinned by digest and admitted before any job runs; fill in
       # the digests of the release you call (docs/runtime-images.md).
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:PIN_BASE_IMAGE_DIGEST # v0.90.0 digest

@@ -108,7 +108,7 @@ func TestPrepareReleaseInputWiring(t *testing.T) {
 		{"request SHA bound to the event commit", call.With["release-request-sha"], "${{ forgejo.sha }}"},
 		{"changelog links bound to the trusted repository", workflowStep(t, "prepare-release.yml", "render", "Render project-controlled changelog configuration").With["repository-url"], "${{ forgejo.server_url }}/${{ forgejo.repository }}"},
 		{"template disables distro-package secrets", templateCall.With["sign-distro-packages"], "false"},
-		{"template disables container secrets", templateCall.With["publish-container-images"], "false"},
+		{"template disables container secrets", templateCall.With["publish-containers"], "false"},
 		{"template exposes signature verification", templateCall.With["verify-release-request-signature"], "false"},
 		{"template keeps the allowed signers default", templateCall.With["release-request-allowed-signers"], nil},
 		{"template disables distro-package signing", template.Jobs["sign-and-publish"].With["sign-distro-packages"], "false"},

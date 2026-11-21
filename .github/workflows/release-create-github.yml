@@ -157,7 +157,7 @@ on:
         required: false
         default: '["ubuntu-26.04"]'
         type: string
-      forge-ci-binary-ref:
+      forge-ci-sha:
         description: "Full approved engine commit the canonical CLI was built from; every plain-runner job receives exactly that build."
         required: true
         type: string
@@ -194,7 +194,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/resolve-forge-ci-bootstrap.yml
     with:
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       images: |
         runtime-image-full=${{ inputs['runtime-image-full'] }}
         runtime-image=${{ inputs['runtime-image'] }}
@@ -206,7 +206,7 @@ jobs:
     uses: ./.github/workflows/generate-changelog.yml
     with:
       runs-on: ${{ inputs['runs-on'] }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       release-policy: ${{ inputs['release-policy'] }}
       branch: ${{ inputs['checkout-ref'] }}
       runtime-image: ${{ inputs['runtime-image'] }}
@@ -358,7 +358,7 @@ jobs:
         shell: /bin/bash --noprofile --norc -peuo pipefail {0}
         env:
           ENGINE_REPOSITORY: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
-          ENGINE_COMMIT: ${{ inputs['forge-ci-binary-ref'] }}
+          ENGINE_COMMIT: ${{ inputs['forge-ci-sha'] }}
           ENGINE_ORIGIN: ${{ github.server_url }}/${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
           RUNTIME_IMAGE: ${{ inputs['runtime-image'] }}
           PRODUCER_ARTIFACT_ID: ${{ inputs['canonical-artifact-id'] }}

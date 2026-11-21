@@ -101,7 +101,7 @@ on:
         description: "forge-ci runtime image., pinned by digest (image@sha256:<64 hex>); the resolver refuses anything else before the job container starts. (publish-google-play only needs base — the upload action is a JS action that doesn't need Android tooling.)"
         required: true
         type: string
-      forge-ci-binary-ref:
+      forge-ci-sha:
         description: "Full engine commit (40 hex) the workflow ref names; a tag or branch is refused"
         required: true
         type: string
@@ -118,7 +118,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/resolve-forge-ci-bootstrap.yml
     with:
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       images: |
         runtime-image=${{ inputs['runtime-image'] }}
   publish:

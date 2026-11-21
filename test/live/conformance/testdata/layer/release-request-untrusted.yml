@@ -39,7 +39,7 @@ jobs:
       release-git-url: RENDER_RELEASE_GIT_URL
       release-git-host-key-fingerprint: RENDER_RELEASE_GIT_HOST_KEY_FINGERPRINT
       sign-distro-packages: 'false'
-      publish-container-images: 'false'
+      publish-containers: 'false'
       # The layer admits the request only when .forge-ci/allowed_signers
       # of the requested commit names the key that signed the tag. The test
       # commits a file that names another key, or no file.

@@ -306,7 +306,7 @@ on:
         required: false
         default: '["ubuntu-26.04-arm"]'
         type: string
-      forge-ci-binary-ref:
+      forge-ci-sha:
         description: "Full approved engine commit the canonical CLI was built from; the host build legs receive exactly that build"
         required: true
         type: string
@@ -414,7 +414,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/resolve-forge-ci-bootstrap.yml
     with:
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       images: |
         runtime-image=${{ inputs['runtime-image'] }}
         runtime-image-full=${{ inputs['runtime-image-full'] }}
@@ -639,7 +639,7 @@ jobs:
         shell: /bin/bash --noprofile --norc -peuo pipefail {0}
         env:
           ENGINE_REPOSITORY: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
-          ENGINE_COMMIT: ${{ inputs['forge-ci-binary-ref'] }}
+          ENGINE_COMMIT: ${{ inputs['forge-ci-sha'] }}
           ENGINE_ORIGIN: ${{ github.server_url }}/${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
           RUNTIME_IMAGE: ${{ inputs['runtime-image'] }}
           PRODUCER_ARTIFACT_ID: ${{ inputs['canonical-artifact-id'] }}

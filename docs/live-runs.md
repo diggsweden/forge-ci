@@ -2699,14 +2699,14 @@ prove, against its own Fulcio: `TestInRunner_KeylessSigningAgainstTheLabCA`
 runs when the lab's opt-in `sigstore` profile is up and its contract names
 that Fulcio, and reports itself not covered otherwise.
 
-- `release.sboms: none` (`github-no-sboms`): the release must offer no
+- `release-sboms: none` (`github-no-sboms`): the release must offer no
   `*-sboms.tar.gz`. Every other release whose policy and artifacts share a Build
   or analyzed-artifact layer must offer exactly one.
 - An empty `changelog-creator` (`github-no-changelog`), or
-  `changelog.skipversionbump: true`: the release prepares no commit, so `main`
+  `changelog-skip-version-bump: true`: the release prepares no commit, so `main`
   must stay at the pushed commit, with no changelog or project file touched,
   and the final tag must name it.
-- `release.draft: true` (`github-draft`): the release stays a draft, which
+- `release-draft: true` (`github-draft`): the release stays a draft, which
   GitHub offers under no tag address, so it is found in the release list;
   the signed final tag exists as for a published release.
 - `history=<commits>` (releases only, at most 2000): the trial puts that
@@ -2739,7 +2739,7 @@ What it does, in order:
    the consumer's `HEAD`, with `.github/workflows` replaced by its fixtures
    (`test/live/github/workflows` or `tests/live/github/workflows`, or
    `fixtures=<dir>`, naming the root above `workflows/`). Rendering pins every
-   `diggsweden/forge-ci` reusable workflow to the engine at its commit, `forge-ci-binary-ref` to
+   `diggsweden/forge-ci` reusable workflow to the engine at its commit, `forge-ci-sha` to
    `v0.90.0-pre`, and `ghcr.io/diggsweden/forge-ci-runtime*` images to the
    organization's `sha-<commit>` tag; a workflow that still calls another engine
    is refused. Only an image a fixture names can be rewritten, so a fixture
@@ -3342,7 +3342,7 @@ regression test.
 - Pass required CLI values through their declared flags or environment
   variables, and run the real workflow step through the real CLI where you
   can. A list of flag names cannot catch a stray positional argument.
-- Forward `forge-ci-binary-ref` through every reusable workflow, so a
+- Forward `forge-ci-sha` through every reusable workflow, so a
   branch or fork test uses the engine the outer workflow selected.
 - GitLab dotenv outputs use upper-case keys (`IMAGE=`, `DIGEST=`). Test
   hand-off scripts with bytes from the real provider output.

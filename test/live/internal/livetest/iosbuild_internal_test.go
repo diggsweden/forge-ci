@@ -48,7 +48,7 @@ func TestIOSConsumerUsesReusableNativeBuildWithoutSimulator(t *testing.T) {
 	require.True(t, pinned)
 	require.Equal(t, "diggsweden/forge-ci/.github/workflows/build-xcode-ios.yml", workflow)
 	require.NotEmpty(t, ref)
-	require.Equal(t, ref, archive.With["forge-ci-binary-ref"])
+	require.Equal(t, ref, archive.With["forge-ci-sha"])
 	require.Equal(t, true, archive.With["use-xcodegen"])
 	require.Equal(t, "generic/platform=iOS", archive.With["destination"])
 	require.Equal(t, false, archive.With["enable-code-signing"])

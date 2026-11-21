@@ -35,7 +35,7 @@ jobs:
       actions: read
       contents: read
     with:
-      forge-ci-binary-ref: 2f4e845cee96973d1082bf00a5a18689c1482148 # v0.90.0
+      forge-ci-sha: 2f4e845cee96973d1082bf00a5a18689c1482148 # v0.90.0
       project-type: meta
       lint-engine: nanolinter
       # The lint image of the core flavour, pinned by digest: the plan job

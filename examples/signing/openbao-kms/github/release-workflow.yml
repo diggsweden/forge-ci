@@ -35,7 +35,7 @@ jobs:
       branch: main
       # The full commit the workflow ref above names. Every plain-runner job
       # runs the CLI built in this run from exactly this commit.
-      forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+      forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
       # Every runtime image is pinned by digest: the workflow that runs it
       # refuses anything else before its job starts. Fill in
       # the digests of the release you call; see
@@ -47,7 +47,7 @@ jobs:
       artifacts-config: .forge-ci/artifacts.yml
       changelog-creator: git-cliff
       release-publisher: github-cli
-      release.attachartifacts: target/*.jar
+      release-attach-artifacts: target/*.jar
     # This generic orchestrator does not perform the OpenBao JWT exchange and a
     # `uses:` job cannot receive `env:` from this caller. Before adopting this
     # example, use an organization-owned wrapper/fork that authenticates to

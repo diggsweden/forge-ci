@@ -6,7 +6,7 @@
 # Actions upload/download pair, never a forge-ci command or curl fallback.
 set -euo pipefail
 export PATH=/usr/bin:/bin
-unset FORGE_CI_BIN FORGE_CI_PATH FORGE_CI_BINARY_REF FORGE_CI_PLAN
+unset FORGE_CI_BIN FORGE_CI_PATH FORGE_CI_SHA FORGE_CI_PLAN
 fail() {
   printf 'canonical-cli-delivery: %s\n' "$1" >&2
   exit 78

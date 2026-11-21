@@ -37,7 +37,7 @@ jobs:
       actions: read
       contents: read
     with:
-      forge-ci-binary-ref: v0.90.0
+      forge-ci-sha: v0.90.0
       project-type: maven
       lint-engine: nanolinter
       # The trial names a mirror of the Java flavour here.

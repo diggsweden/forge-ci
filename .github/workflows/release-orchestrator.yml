@@ -94,12 +94,12 @@ on:
         required: false
         default: "git-cliff"
         type: string
-      changelog.config:
+      changelog-config:
         description: "git-cliff configuration for the release notes. Empty uses generate-changelog's bundled default."
         required: false
         default: ""
         type: string
-      changelog.skipversionbump:
+      changelog-skip-version-bump:
         description: "Skip version bump (default: false)"
         required: false
         default: false
@@ -109,27 +109,27 @@ on:
         description: "Release publisher type (github-cli). Leave empty to skip GitHub release"
         required: false
         type: string
-      release.sboms:
+      release-sboms:
         description: "SBOMs to generate for the release: all | none | comma-list of build,analyzed-artifact,analyzed-container (default: all). Intersected with per-artefact `sboms` to compute the effective set."
         required: false
         default: "all"
         type: string
-      release.attachartifacts:
+      release-attach-artifacts:
         description: "Glob patterns for artifacts to attach to GitHub release (comma/newline separated)"
         required: false
         default: ""
         type: string
-      release.signartifacts:
+      release-sign-artifacts:
         description: "Sign release artifacts with the configured backend (default: true)"
         required: false
         default: true
         type: boolean
-      release.requireallowlistedsigner:
+      release-require-allowlisted-signer:
         description: "Require the tag signer to be allowlisted: .forge-ci/allowed_signers (SSH) or .forge-ci/allowed_gpg_keys.asc (GPG). Org policy sets this true in the shared release-workflow template; the engine default stays false as an auditable per-repo escape hatch for genuinely-private repos."
         required: false
         default: false
         type: boolean
-      release.draft:
+      release-draft:
         description: "Create as draft release (default: false)"
         required: false
         default: false
@@ -181,7 +181,7 @@ on:
         required: false
         default: '["ubuntu-26.04-arm"]'
         type: string
-      forge-ci-binary-ref:
+      forge-ci-sha:
         description: "Full approved engine commit (40 hex). The canonical CLI every hosted and container control-plane job runs is built from exactly this commit; publish lanes still pin their own callees to it."
         required: true
         type: string
@@ -252,7 +252,7 @@ on:
         required: false
         default: ""
         type: string
-      promote-release-registry-username:
+      registry-user:
         description: "Username for the destination registry login (sovereignty release promotion)."
         required: false
         default: ""
@@ -402,7 +402,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/resolve-forge-ci-bootstrap.yml
     with:
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       images: |
         runtime-image=${{ inputs['runtime-image'] }}
   # ===== Stage 0: Configuration And Policy =====
@@ -416,7 +416,7 @@ jobs:
     uses: ./.github/workflows/canonical-cli-bootstrap.yml
     with:
       engine-repository: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
-      engine-commit: ${{ inputs['forge-ci-binary-ref'] }}
+      engine-commit: ${{ inputs['forge-ci-sha'] }}
       runtime-image: ${{ inputs['canonical-builder-image'] }}
       receive-runtime-image: ${{ inputs['runtime-image'] }}
   parse-config:
@@ -459,7 +459,7 @@ jobs:
         shell: /bin/bash --noprofile --norc -peuo pipefail {0}
         env:
           ENGINE_REPOSITORY: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
-          ENGINE_COMMIT: ${{ inputs['forge-ci-binary-ref'] }}
+          ENGINE_COMMIT: ${{ inputs['forge-ci-sha'] }}
           ENGINE_ORIGIN: ${{ github.server_url }}/${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
           RUNTIME_IMAGE: ${{ inputs['runtime-image'] }}
           PRODUCER_ARTIFACT_ID: ${{ needs.canonical-cli.outputs.artifact-id }}
@@ -548,13 +548,13 @@ jobs:
           FILE_PATTERN: ${{ inputs['file-pattern'] }}
           RELEASE_POLICY: ${{ inputs['release-policy'] }}
           RELEASE_PUBLISHER: ${{ inputs['release-publisher'] }}
-          RELEASE_REQUIRE_ALLOWLISTED_SIGNER: ${{ inputs['release.requireallowlistedsigner'] }}
-          RELEASE_DRAFT: ${{ inputs['release.draft'] }}
-          RELEASE_SBOMS: ${{ inputs['release.sboms'] }}
-          RELEASE_SIGN_ARTIFACTS: ${{ inputs['release.signartifacts'] }}
+          RELEASE_REQUIRE_ALLOWLISTED_SIGNER: ${{ inputs['release-require-allowlisted-signer'] }}
+          RELEASE_DRAFT: ${{ inputs['release-draft'] }}
+          RELEASE_SBOMS: ${{ inputs['release-sboms'] }}
+          RELEASE_SIGN_ARTIFACTS: ${{ inputs['release-sign-artifacts'] }}
           REPOSITORY_VISIBILITY: ${{ toJSON(github.event.repository.private) == 'true' && 'private' || (toJSON(github.event.repository.private) == 'false' && 'public' || 'unknown') }}
           CHANGELOG_CREATOR: ${{ inputs['changelog-creator'] }}
-          CHANGELOG_SKIP_VERSION_BUMP: ${{ inputs['changelog.skipversionbump'] }}
+          CHANGELOG_SKIP_VERSION_BUMP: ${{ inputs['changelog-skip-version-bump'] }}
           # The platforms publish-container builds, so the publish stage
           # expects only their per-architecture artifacts.
           RELEASE_PLATFORMS: ${{ vars.RELEASE_PLATFORMS }}
@@ -591,7 +591,7 @@ jobs:
     uses: ./.github/workflows/validate-release-prerequisites.yml
     with:
       enforce-reproducible-builds: ${{ inputs['enforce-reproducible-builds'] }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       config-plan-json: ${{ needs.parse-config.outputs.config-plan-json }}
       has-cargo-publish-target: ${{ fromJson(needs.parse-config.outputs['publish-stage-plan-json']).targets.cargo_container_first.runs || fromJson(needs.parse-config.outputs['build-stage-plan-json']).targets.cargo.runs }}
       publish-stage-plan-json: ${{ needs.parse-config.outputs.publish-stage-plan-json }}
@@ -641,7 +641,7 @@ jobs:
       authorized-source-sha: ${{ github.sha }}
       existing-release-sha: ${{ needs.validate-prerequisites.outputs.existing-release-sha }}
       prepare-stage-plan-json: ${{ needs.parse-config.outputs.prepare-stage-plan-json }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       # git_signing.method comes from artifacts.yml via the parsed config plan;
       # defaults to gpg, so repos that never set git-signing are unchanged.
       git-signing-method: ${{ fromJson(needs.parse-config.outputs.config-plan-json).git_signing.method }}
@@ -723,7 +723,7 @@ jobs:
       release-sha: ${{ needs.execute-prepare-stage.outputs.release-sha }}
       source-date-epoch: ${{ needs.execute-prepare-stage.outputs.source-date-epoch }}
       build-stage-plan-json: ${{ needs.parse-config.outputs.build-stage-plan-json }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       runtime-image: ${{ inputs['runtime-image'] }}
       runtime-image-java: ${{ inputs['runtime-image-java'] }}
       runtime-image-node: ${{ inputs['runtime-image-node'] }}
@@ -772,7 +772,7 @@ jobs:
       release-sha: ${{ needs.execute-prepare-stage.outputs.release-sha }}
       source-date-epoch: ${{ needs.execute-prepare-stage.outputs.source-date-epoch }}
       publish-stage-plan-json: ${{ needs.parse-config.outputs.publish-stage-plan-json }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       canonical-artifact-id: ${{ needs.canonical-cli.outputs.artifact-id }}
       canonical-artifact-name: ${{ needs.canonical-cli.outputs.artifact-name }}
       canonical-producer-run-id: ${{ needs.canonical-cli.outputs.producer-run-id }}
@@ -814,7 +814,7 @@ jobs:
       packages: write
     uses: ./.github/workflows/promote-stage.yml
     with:
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       stage: dev
       runtime-image: ${{ inputs['runtime-image'] }}
       release-tag: ${{ needs.parse-config.outputs.release-tag }}
@@ -828,7 +828,7 @@ jobs:
       packages: write
     uses: ./.github/workflows/promote-stage.yml
     with:
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       stage: staging
       runtime-image: ${{ inputs['runtime-image'] }}
       environment: ${{ inputs['promote-staging-environment'] }}
@@ -843,7 +843,7 @@ jobs:
       packages: write
     uses: ./.github/workflows/promote-stage.yml
     with:
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       stage: release
       runtime-image: ${{ inputs['runtime-image'] }}
       environment: ${{ inputs['promote-release-environment'] }}
@@ -852,7 +852,7 @@ jobs:
       # build registry (same-registry tag-move, no cosign/dest login).
       stage-repo: ${{ inputs['promote-release-repo'] }}
       stage-registry: ${{ inputs['promote-release-registry'] }}
-      stage-registry-username: ${{ inputs['promote-release-registry-username'] }}
+      stage-registry-username: ${{ inputs['registry-user'] }}
     secrets:
       stage-registry-password: ${{ secrets.PROMOTE_RELEASE_REGISTRY_PASSWORD }}
   # ===== Stage 5: Release =====
@@ -890,20 +890,20 @@ jobs:
       release-policy: ${{ inputs['release-policy'] }}
       release-name: "${{ needs.parse-config.outputs.release-tag }}"
       checkout-ref: ${{ needs.execute-prepare-stage.outputs.release-sha }}
-      attach-artifacts: ${{ inputs['release.attachartifacts'] }}
+      attach-artifacts: ${{ inputs['release-attach-artifacts'] }}
       sboms: ${{ fromJson(needs.parse-config.outputs['release-plan-json']).policy.sboms }}
       sign-artifacts: ${{ fromJson(needs.parse-config.outputs['release-plan-json']).policy.sign_artifacts }}
       draft: ${{ fromJson(needs.parse-config.outputs['release-plan-json']).policy.create_draft_release }}
       config-plan-json: ${{ needs.parse-config.outputs.config-plan-json }}
       artifact-transfer-plan-json: ${{ needs.parse-config.outputs.artifact-transfer-plan-json }}
-      changelog-config: ${{ inputs['changelog.config'] }}
+      changelog-config: ${{ inputs['changelog-config'] }}
       make-latest: ${{ fromJson(needs.parse-config.outputs['release-plan-json']).policy.make_latest }}
       runtime-image: ${{ inputs['runtime-image'] }}
       runtime-image-full: ${{ inputs['runtime-image-full'] }}
       cosign-public-key: ${{ inputs['cosign-public-key'] }}
       cosign-public-key-sha256: ${{ inputs['cosign-public-key-sha256'] }}
       release-asset-retention: ${{ inputs['release-asset-retention'] }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
   # ===== Stage 6: Summary =====
   release-summary:
     name: Summary

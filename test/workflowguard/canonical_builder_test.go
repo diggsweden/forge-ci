@@ -21,7 +21,7 @@ func TestCanonicalBuilderProfileGraph(t *testing.T) {
 	require.Equal(t, "${{ inputs['canonical-builder-image'] }}", call.With["runtime-image"], "never fall back to a possibly Rust-only product runtime")
 	require.Equal(t, "${{ inputs['runtime-image'] }}", call.With["receive-runtime-image"])
 	require.Empty(t, call.If, "canonical delivery runs on every release route")
-	require.Equal(t, "${{ inputs['forge-ci-binary-ref'] }}", call.With["engine-commit"])
+	require.Equal(t, "${{ inputs['forge-ci-sha'] }}", call.With["engine-commit"])
 	require.NotContains(t, root.Jobs["validate-prerequisites"].With["runtime-image"], "canonical-builder-image")
 
 	var workflow struct {

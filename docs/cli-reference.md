@@ -3365,7 +3365,7 @@ EXAMPLE:
 |------|-------------|------|---------|----------|
 | `--project-type` | primary ecosystem of the project (maven/npm/go/cargo/…) | string | `""` | `$PROJECT_TYPE` |
 | `--base-branch` | base branch the PR targets (used for diff-mode scans) | string | `""` | `$BASE_BRANCH` |
-| `--forge-ci-binary-ref` | git ref of the forge-ci binary used in the plan (pinned for reproducibility) | string | `""` | `$FORGE_CI_BINARY_REF` |
+| `--forge-ci-sha` | commit of the forge-ci engine the plan pins | string | `""` | `$FORGE_CI_SHA` |
 | `--lint-engine` | general lint engine to run: nanolinter, megalinter, or none (default none; mutually exclusive) | string | `""` | `$LINT_ENGINE` |
 | `--nanolinter-image` | image the nanolinter job runs in, pinned by digest; required with --lint-engine nanolinter | string | `""` | `$NANOLINTER_IMAGE` |
 | `--linter-swiftformat` | include the swift-format lint gate in the plan | bool | `false` | `$LINTER_SWIFTFORMAT` |
@@ -3524,7 +3524,7 @@ The plan refuses a planned image or Xcode platform without its own runner.
 | `--node-version` | Node.js version installed by the publish job (npm path) | string | `""` | `$NODE_VERSION` |
 | `--rust-toolchain` | Rust toolchain installed by the publish job (cargo path) | string | `"stable"` | `$RUST_TOOLCHAIN` |
 | `--registry` | registry forwarded to the snapshot plan context | string | `""` | `$REGISTRY` |
-| `--forge-ci-binary-ref` | git ref of the forge-ci binary used in the plan | string | `""` | `$FORGE_CI_BINARY_REF` |
+| `--forge-ci-sha` | commit of the forge-ci engine the plan pins | string | `""` | `$FORGE_CI_SHA` |
 | `--npm-registry` | npm registry URL the dev tarball is published to | string | `""` | `$NPM_REGISTRY` |
 | `--scope` | npm package scope (e.g. @examplescope) routed to the registry | string | `""` | `$SCOPE`, `$PACKAGE_SCOPE` |
 | `--sboms` | sboms enum gating which CISA layers the snapshot-release produces | string | `"none"` | `$SBOMS` |
@@ -5788,7 +5788,7 @@ RELEASE_SSH_SIGNING_KEY) with the bot-email of the release workflow as its
 principal. Commit the file; the release reads it from the default branch.
 
 The file is .forge-ci/allowed_signers, which the GitHub and Forgejo releases
-read. GitLab takes the text as the request-allowed-signers input: use --dry-run and
+read. GitLab takes the text as the release-request-allowed-signers input: use --dry-run and
 paste the line.
 
 To make a key for the release bot:

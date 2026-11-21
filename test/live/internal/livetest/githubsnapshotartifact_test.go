@@ -126,7 +126,7 @@ jobs:
     uses: ENGINE_REPOSITORY/.github/workflows/snapshot-images.yml@ENGINE_SHA
     with:
       branch: feature/artifact-source
-      forge-ci-binary-ref: ENGINE_SHA
+      forge-ci-sha: ENGINE_SHA
       runtime-image: BASE_IMAGE
       runtime-image-full: FULL_IMAGE
       runtime-image-go: GO_IMAGE

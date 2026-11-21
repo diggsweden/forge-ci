@@ -758,7 +758,7 @@ jobs:
       actions: read
     with:
       branch: main
-      forge-ci-binary-ref: <full-engine-commit>
+      forge-ci-sha: <full-engine-commit>
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:<digest>
       runtime-image-full: ghcr.io/diggsweden/forge-ci-runtime@sha256:<digest>
       canonical-artifact-id: ${{ needs.canonical-cli.outputs.artifact-id }}

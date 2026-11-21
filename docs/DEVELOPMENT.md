@@ -55,7 +55,7 @@ follow [Branch Testing](runtime-images.md#branch-testing) with the reviewed
 pre-release images, rather than substituting a moving ref into production.
 
 The GitHub workflows build the engine from the full 40-character commit in
-`forge-ci-binary-ref`; [Engine delivery](engine-delivery.md) describes how.
+`forge-ci-sha`; [Engine delivery](engine-delivery.md) describes how.
 
 ## Prerequisites - Linux
 

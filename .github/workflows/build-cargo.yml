@@ -82,7 +82,7 @@ on:
         required: false
         default: '["ubuntu-26.04"]'
         type: string
-      forge-ci-binary-ref:
+      forge-ci-sha:
         description: "Full engine commit (40 hex) the workflow ref names; a tag or branch is refused"
         required: true
         type: string
@@ -94,7 +94,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/resolve-forge-ci-bootstrap.yml
     with:
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       images: |
         runtime-image=${{ inputs['runtime-image'] }}
   build-cargo:
@@ -148,7 +148,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
-          ref: ${{ inputs['forge-ci-binary-ref'] }}
+          ref: ${{ inputs['forge-ci-sha'] }}
           path: .forge-ci-contract-engine
           sparse-checkout: .engine
           persist-credentials: false

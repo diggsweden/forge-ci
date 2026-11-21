@@ -149,7 +149,7 @@ func TestAndroidDemosBindBothJobsToPreparedEngine(t *testing.T) {
 				call, ok := workflow.Jobs[job]
 				require.True(t, ok, job)
 				require.Equal(t, trialEngine.Owner+"/"+trialEngine.Repository+"/.github/workflows/"+leaf+"@"+trialEngine.Commit, call.Uses)
-				require.Equal(t, trialEngine.Commit, call.With["forge-ci-binary-ref"], "missing binary ref would resolve latest stable instead of the prepared engine")
+				require.Equal(t, trialEngine.Commit, call.With["forge-ci-sha"], "missing binary ref would resolve latest stable instead of the prepared engine")
 			}
 
 			build := workflow.Jobs["build"]

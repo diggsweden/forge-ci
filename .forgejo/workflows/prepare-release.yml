@@ -107,7 +107,7 @@ on:
         type: string
         required: false
         default: "true"
-      publish-container-images:
+      publish-containers:
         description: Require the package-registry token during prepare because the signer will publish container images.
         type: string
         required: false
@@ -279,7 +279,7 @@ jobs:
           SECRET_RELEASE_COSIGN_PASSPHRASE: ${{ secrets.RELEASE_COSIGN_PASSPHRASE != '' }}
           SECRET_RELEASE_SSH_SIGNING_KEY: ${{ secrets.RELEASE_SSH_SIGNING_KEY != '' }}
           SIGN_DISTRO_PACKAGES: ${{ inputs['sign-distro-packages'] }}
-          PUBLISH_CONTAINER_IMAGES: ${{ inputs['publish-container-images'] }}
+          PUBLISH_CONTAINER_IMAGES: ${{ inputs['publish-containers'] }}
         run: |
           set -euo pipefail
           case "${SIGN_DISTRO_PACKAGES}" in
@@ -288,7 +288,7 @@ jobs:
           esac
           case "${PUBLISH_CONTAINER_IMAGES}" in
             true|false) ;;
-            *) echo "ERROR: publish-container-images must be true or false" >&2; exit 1 ;;
+            *) echo "ERROR: publish-containers must be true or false" >&2; exit 1 ;;
           esac
           required=(
             SECRET_RELEASE_TOKEN

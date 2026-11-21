@@ -174,10 +174,10 @@ func TestRuntimeImageTagGuardFindsPins(t *testing.T) {
 // binaryRefInput is the workflow input that names the full engine commit a
 // workflow belongs to: canonical delivery builds the CLI from it, and the
 // macOS lanes build it from a checkout of it.
-const binaryRefInput = "forge-ci-binary-ref"
+const binaryRefInput = "forge-ci-sha"
 
 // TestReleaseRevisionIsOneModeledVersion keeps one graph on one revision.
-// forge-ci-binary-ref is the full engine commit the caller's workflow ref
+// forge-ci-sha is the full engine commit the caller's workflow ref
 // names, required everywhere and admitted by the resolver; a default would
 // name a revision the caller did not ask for. A runtime image default is
 // refused too: the caller passes the digest of the release it calls.
@@ -257,7 +257,7 @@ func TestReleaseRevisionGuardCatchesDrift(t *testing.T) {
 on:
   workflow_call:
     inputs:
-      forge-ci-binary-ref:
+      forge-ci-sha:
         type: string
         default: "v2.9.0"
       base-image:
@@ -287,7 +287,7 @@ on:
 	}, sites, "expression fallbacks and concurrency keys count; prose does not")
 }
 
-// collectReleaseRevisions records every forge-ci-binary-ref default as
+// collectReleaseRevisions records every forge-ci-sha default as
 // "rel:line" under its value, and every digest-pinned runtime image default.
 func collectReleaseRevisions(t *testing.T, rel string, content []byte, refs map[string][]string, digests *[]string) {
 	t.Helper()

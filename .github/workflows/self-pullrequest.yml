@@ -63,7 +63,7 @@ jobs:
       project-type: npm
       # The PR head commit is reachable in this repository even for a PR from a
       # fork (refs/pull/*), unlike the head branch name.
-      forge-ci-binary-ref: ${{ github.event.pull_request.head.sha }}
+      forge-ci-sha: ${{ github.event.pull_request.head.sha }}
       # No runtime image carries the build of a commit under review.
       forge-ci-source: build
       # Released 0.90.0 images do not exist before the first release; use the

@@ -54,7 +54,7 @@ func TestMacOSLanesBuildTheEngineFromItsApprovedCheckout(t *testing.T) {
 
 			lanes++
 
-			require.True(t, workflow.On.Call.Inputs["forge-ci-binary-ref"].Required, "%s: a macOS lane takes the full engine commit", path)
+			require.True(t, workflow.On.Call.Inputs["forge-ci-sha"].Required, "%s: a macOS lane takes the full engine commit", path)
 
 			built := false
 
@@ -120,6 +120,6 @@ func TestMacOSLanesBuildTheEngineFromItsApprovedCheckout(t *testing.T) {
 	require.Contains(t, build.Run, `>>"$GITHUB_PATH"`)
 }
 
-// approvedEngineCommit is the raw forge-ci-binary-ref input, which the
+// approvedEngineCommit is the raw forge-ci-sha input, which the
 // resolver admits only as a full commit before a macOS job starts.
-const approvedEngineCommit = "${{ inputs['forge-ci-binary-ref'] }}"
+const approvedEngineCommit = "${{ inputs['forge-ci-sha'] }}"

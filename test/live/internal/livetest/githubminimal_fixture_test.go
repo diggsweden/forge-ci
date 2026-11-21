@@ -43,7 +43,7 @@ func minimalPreparationWorkflow(t *testing.T, engine, commit string, multi bool)
 
 	// The scratch engine has no stable release. Bootstrap from the same immutable
 	// snapshot as the called workflows, including their checksum-pinned CLI install.
-	with += "      forge-ci-binary-ref: " + commit + "\n"
+	with += "      forge-ci-sha: " + commit + "\n"
 
 	workflow := `name: Minimal version preparation
 on:
@@ -103,7 +103,7 @@ func TestMinimalPreparationWorkflowPinsBootstrapToEngineSnapshot(t *testing.T) {
 				t.Fatalf("consumer must call the immutable fixture engine snapshot: %s", call.Uses)
 			}
 
-			if ref := call.With["forge-ci-binary-ref"]; ref != commit {
+			if ref := call.With["forge-ci-sha"]; ref != commit {
 				t.Errorf("bootstrap ref = %q, want fixture engine commit %s; an empty ref selects a stable release absent from the scratch engine", ref, commit)
 			}
 

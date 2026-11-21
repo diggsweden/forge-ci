@@ -208,7 +208,7 @@ func TestCanonicalConsumerWorkflowGraph(t *testing.T) {
 		require.Equal(t, "${{ needs.canonical-cli.result }}", root.Jobs[caller].With["canonical-producer-result"])
 	}
 
-	for _, input := range []string{"runtime-image", "canonical-builder-image", "forge-ci-binary-ref"} {
+	for _, input := range []string{"runtime-image", "canonical-builder-image", "forge-ci-sha"} {
 		spec, _ := root.On.Call.Inputs[input].(map[string]any)
 		require.Equal(t, true, spec["required"], "%s is an administrator pin the route admits, not a resolved default", input)
 	}
@@ -220,7 +220,7 @@ func TestCanonicalConsumerWorkflowGraph(t *testing.T) {
 	require.Equal(t, "${{ needs.canonical-cli.result }}", snapshot.Jobs["execute-snapshot-images"].With["canonical-producer-result"])
 	require.Equal(t, "${{ needs.canonical-cli.outputs.artifact-id }}", snapshot.Jobs["execute-snapshot-images"].With["canonical-artifact-id"])
 
-	for _, input := range []string{"runtime-image", "canonical-builder-image", "forge-ci-binary-ref"} {
+	for _, input := range []string{"runtime-image", "canonical-builder-image", "forge-ci-sha"} {
 		spec, _ := snapshot.On.Call.Inputs[input].(map[string]any)
 		require.Equal(t, true, spec["required"], "snapshot route: %s is an administrator pin", input)
 	}
@@ -232,7 +232,7 @@ func TestCanonicalConsumerWorkflowGraph(t *testing.T) {
 	require.Equal(t, "${{ needs.canonical-cli.result }}", pr.Jobs["execute-quality-stage"].With["canonical-producer-result"])
 	require.Equal(t, "${{ needs.canonical-cli.outputs.artifact-id }}", pr.Jobs["execute-quality-stage"].With["canonical-artifact-id"])
 
-	for _, input := range []string{"runtime-image", "forge-ci-binary-ref"} {
+	for _, input := range []string{"runtime-image", "forge-ci-sha"} {
 		spec, _ := pr.On.Call.Inputs[input].(map[string]any)
 		require.Equal(t, true, spec["required"], "pull-request route: %s is an administrator pin", input)
 	}

@@ -34,7 +34,7 @@ jobs:
       packages: write
     with:
       branch: ${{ inputs.source-branch || github.ref_name }}
-      forge-ci-binary-ref: v0.90.0
+      forge-ci-sha: v0.90.0
       # The service snapshot's declaration the trial stages: the demo's
       # release declaration overlaid unsigned and native linux/amd64, since
       # snapshot images are unsigned and this artifacts.yml signs its

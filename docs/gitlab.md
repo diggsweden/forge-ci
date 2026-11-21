@@ -79,7 +79,7 @@ Preview the files with `forge-ci init <mirror URL> --dry-run`.
 
 Then run `forge-ci setup status`: it lists the steps from here to a first
 release, marks the ones the repository shows are done, and names the command
-for each. GitLab takes the allowed signers as the `request-allowed-signers`
+for each. GitLab takes the allowed signers as the `release-request-allowed-signers`
 input, so run `forge-ci setup signer --dry-run` and paste the line it prints.
 
 The organization's mirror can make `forge-ci init <mirror URL>` write a
@@ -179,7 +179,7 @@ images and pins, a validating regex. The inputs that are not obvious:
 | | `publication-project`, `publication-image-repository` | The separate project that owns final images, and the exact registry repository in it. |
 | | `cosign-public-key-sha256` | SHA-256 of your Cosign public key, written out. |
 | | `release-git-url`, `release-git-host-key-fingerprint` | The SSH write URL for the release commit and tag, and its independently supplied host key fingerprint, `SHA256:<base64>` alone. An empty URL is this project on the GitLab web host, port 22. |
-| | `request-allowed-signers` | OpenSSH allowed-signers text for the people who may sign a request tag. |
+| | `release-request-allowed-signers` | OpenSSH allowed-signers text for the people who may sign a request tag. |
 | | `bot-name`, `bot-email` | The release bot identity; no default. |
 | | `checks`, `build` | Consumer commands: checks on the request commit, and the build that writes `dist/release-files.json` and `release-notes.md`. |
 | | `build-runner-tags-linux-amd64` | Required, never empty: runner tags of the consumer checks, family builds, release files and amd64 image and export jobs, whichever the image builder. Name a runner's own tags, such as `[privileged]` for a self-managed runner that permits user namespaces, or a `saas-linux-*` tag on GitLab.com. An untagged job could land on a runner of any platform, so there is no default. |
@@ -573,7 +573,7 @@ include:
       cosign-public-key-sha256: PIN_COSIGN_PUBLIC_KEY_SHA256
       release-git-url: ssh://git@gitlab.example.com/team/app.git
       release-git-host-key-fingerprint: PIN_HOST_KEY_FINGERPRINT
-      request-allowed-signers: |
+      release-request-allowed-signers: |
         PIN_ALLOWED_SIGNERS
       bot-name: FIXME
       bot-email: FIXME
@@ -1225,7 +1225,7 @@ trusted registry jobs receive credentials for the publication project.
 | Checksums, release files and SLSA provenance | Cosign key pair, or OpenPGP when `artifacts.yml` says `sign.method: gpg` or `sign.files-method: gpg` | `RELEASE_COSIGN_PRIVATE_KEY`, `RELEASE_COSIGN_PASSPHRASE`; with `gpg`, `RELEASE_GPG_PRIVATE_KEY`, `RELEASE_GPG_PASSPHRASE`, `RELEASE_GPG_FINGERPRINT` |
 | Evidence, images and their attestations | Cosign key pair | `RELEASE_COSIGN_PRIVATE_KEY`, `RELEASE_COSIGN_PASSPHRASE`, checked against `COSIGN_PUBLIC_KEY` and `cosign-public-key-sha256` |
 | `.deb`, `.rpm`, `.apk` packages | OpenPGP | `RELEASE_GPG_PRIVATE_KEY`, `RELEASE_GPG_PASSPHRASE`, `RELEASE_GPG_FINGERPRINT` |
-| Request tag (verified, not made) | The signer's SSH key | `request-allowed-signers` |
+| Request tag (verified, not made) | The signer's SSH key | `release-request-allowed-signers` |
 
 The signing preflight passes only when the private key derives the trusted
 public key whose digest the policy writes out, so a replaced key signs

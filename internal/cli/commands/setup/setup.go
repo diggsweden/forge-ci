@@ -85,7 +85,7 @@ RELEASE_SSH_SIGNING_KEY) with the bot-email of the release workflow as its
 principal. Commit the file; the release reads it from the default branch.
 
 The file is .forge-ci/allowed_signers, which the GitHub and Forgejo releases
-read. GitLab takes the text as the request-allowed-signers input: use --dry-run and
+read. GitLab takes the text as the release-request-allowed-signers input: use --dry-run and
 paste the line.
 
 To make a key for the release bot:

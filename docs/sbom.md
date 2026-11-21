@@ -23,15 +23,15 @@ What each one controls:
   Build SBOM job (`enable-build-sbom`), the analyzed-artifact SBOM, and the
   analyzed-container SBOM attested on each image built from the artifact.
   `sboms: none` skips all of them for that artifact.
-- **`release.sboms`** on the release orchestrator is intersected with what the
+- **`release-sboms`** on the release orchestrator is intersected with what the
   artifacts produce. It selects what goes into the release's SBOM bundle, and
   it gates the container-first Go and Cargo Build SBOM jobs. It does not turn
   off artifact-first Build SBOM jobs or the image SBOM attestations, so
-  `release.sboms: none` is not a general off switch.
+  `release-sboms: none` is not a general off switch.
 - **The snapshot orchestrator's `sboms`** (default `none`) selects the
   snapshot's package SBOM layers.
 
-The input is `release.sboms` on the release orchestrator, whose inputs carry a
+The input is `release-sboms` on the release orchestrator, whose inputs carry a
 `release.` prefix, and `sboms` on the snapshot orchestrator.
 
 ### Accepted values
@@ -52,7 +52,7 @@ The input is `release.sboms` on the release orchestrator, whose inputs carry a
 | Where | Default | Why |
 |---|---|---|
 | Per-artifact (`artifacts.yml`) | `all` for `maven`, `npm`, `gradle`, `cargo` and `go`; `build,analyzed-container` for a `gradle-android` application and `build` for a `gradle-android` library; `none` for `xcode-ios` and `meta` | Every layer there is for the type |
-| Release orchestrator (`release.sboms`) | `all` | Runs once per release; SBOMs are expected for compliance |
+| Release orchestrator (`release-sboms`) | `all` | Runs once per release; SBOMs are expected for compliance |
 | Snapshot orchestrator (`sboms`) | `none` | Runs on every push; most reviews don't need SBOMs |
 
 There is no `analyzed-artifact` SBOM for an Android artifact. The Android
@@ -102,7 +102,7 @@ jobs:
       # Engine commit and image digests: see the Advanced Pinning Recipe.
       branch: main
       artifacts-config: .forge-ci/artifacts.yml
-      release.sboms: build      # release-orchestrator dot-prefix convention
+      release-sboms: build
 ```
 
 ```yaml
@@ -291,7 +291,7 @@ set of the SBOM layers selected by policy.
 To skip a layer, leave it out of the artifact's `sboms`, or pass
 `enable-build-sbom: false` to a directly called builder, whose step summary
 then records the Build SBOM as skipped. See [The `sboms` field](#the-sboms-field)
-for what `release.sboms` does and does not control.
+for what `release-sboms` does and does not control.
 
 ## Verifying a Build SBOM was produced
 
@@ -313,7 +313,7 @@ jq '.metadata.component.name, (.components | length)' bom.json
 
 Release SBOMs have two delivery paths:
 
-- The build and analyzed SBOMs selected by effective `release.sboms` policy are packaged in a signed
+- The build and analyzed SBOMs selected by effective `release-sboms` policy are packaged in a signed
   `*-sboms.tar.gz` GitHub Release asset, a gzip-compressed tar. The release
   checksum manifest covers the bundle and the other release assets.
 - A Forgejo or GitLab release publishes the same bundle,

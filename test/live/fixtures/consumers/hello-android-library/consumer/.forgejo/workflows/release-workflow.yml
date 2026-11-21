@@ -21,7 +21,7 @@ jobs:
       release-git-host-key-fingerprint: ${{ vars.RELEASE_GIT_HOST_KEY_FINGERPRINT }}
       verify-release-request-signature: 'true'
       sign-distro-packages: 'false'
-      publish-container-images: 'false'
+      publish-containers: 'false'
       artifacts-config: ${{ vars.CI_ARTIFACTS_CONFIG || 'test/live/aar-files/.forge-ci/artifacts.yml' }}
     secrets:
       RELEASE_SSH_SIGNING_KEY: ${{ secrets.RELEASE_SSH_SIGNING_KEY }}

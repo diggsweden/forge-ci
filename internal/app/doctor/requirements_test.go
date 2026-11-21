@@ -59,7 +59,7 @@ func TestSetupAllThreeDeliveryLayers(t *testing.T) {
 			case "gitlab":
 				setupFile(t, root, ".gitlab-ci.yml", "include:\n  - component: gitlab.example/owner/engine/release@"+setupCommit+"\n    inputs:\n      sign-distro-packages: false\n")
 			case "forgejo":
-				setupFile(t, root, ".forgejo/workflows/release.yml", "jobs:\n  prepare:\n    uses: owner/engine/.forgejo/workflows/prepare-release.yml@"+setupCommit+"\n    with:\n      forge-ci-sha: "+setupCommit+"\n      sign-distro-packages: false\n      publish-container-images: false\n    secrets:\n      RELEASE_TOKEN: ${{ secrets.MY_RELEASE_TOKEN }}\n")
+				setupFile(t, root, ".forgejo/workflows/release.yml", "jobs:\n  prepare:\n    uses: owner/engine/.forgejo/workflows/prepare-release.yml@"+setupCommit+"\n    with:\n      forge-ci-sha: "+setupCommit+"\n      sign-distro-packages: false\n      publish-containers: false\n    secrets:\n      RELEASE_TOKEN: ${{ secrets.MY_RELEASE_TOKEN }}\n")
 			case "github":
 				setupFile(t, root, ".github/workflows/release.yml", "jobs:\n  release:\n    uses: owner/engine/.github/workflows/release-orchestrator.yml@"+setupCommit+"\n    secrets:\n      RELEASE_TOKEN: ${{ secrets.MY_RELEASE_TOKEN }}\n")
 				setupFile(t, root, ".forge-ci/artifacts.yml", "artifacts:\n  - name: app\n    project-type: meta\nsign:\n  method: sigstore\ngit-signing:\n  method: ssh\n")
@@ -258,7 +258,7 @@ func TestSetupConditionalInputsAndRuntimeLedger(t *testing.T) {
 		t.Run(workflow, func(t *testing.T) {
 			t.Parallel()
 			root := t.TempDir()
-			setupFile(t, root, ".forgejo/workflows/release.yml", fmt.Sprintf("jobs:\n  release:\n    uses: owner/engine/.forgejo/workflows/%s@%s\n    with:\n      sign-distro-packages: ${{ vars.SIGN_PACKAGES }}\n      publish-container-images: ${{ vars.IMAGES }}\n", workflow, setupCommit))
+			setupFile(t, root, ".forgejo/workflows/release.yml", fmt.Sprintf("jobs:\n  release:\n    uses: owner/engine/.forgejo/workflows/%s@%s\n    with:\n      sign-distro-packages: ${{ vars.SIGN_PACKAGES }}\n      publish-containers: ${{ vars.IMAGES }}\n", workflow, setupCommit))
 
 			report := doctor.Requirements(root, "owner/engine", setupCommit)
 			for _, name := range []string{"RELEASE_GPG_PRIVATE_KEY", "RELEASE_REGISTRY_TOKEN"} {
@@ -428,7 +428,7 @@ func TestSetupGitHubRuntimeOverrideInvalidatesMatchedContract(t *testing.T) {
 		t.Run(override, func(t *testing.T) {
 			t.Parallel()
 			root := t.TempDir()
-			body := "jobs:\n  release:\n    uses: owner/engine/.github/workflows/release-orchestrator.yml@" + setupCommit + "\n    with:\n      forge-ci-binary-ref: '" + override + "'\n"
+			body := "jobs:\n  release:\n    uses: owner/engine/.github/workflows/release-orchestrator.yml@" + setupCommit + "\n    with:\n      forge-ci-sha: '" + override + "'\n"
 			setupFile(t, root, ".github/workflows/release.yml", body)
 
 			report := doctor.Requirements(root, "owner/engine", setupCommit)
@@ -459,7 +459,7 @@ func TestSetupGitHubContainerBuildSecretEnvelope(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			root := t.TempDir()
-			setupFile(t, root, ".github/workflows/release.yml", "jobs:\n  release:\n    uses: owner/engine/.github/workflows/release-orchestrator.yml@"+setupCommit+"\n    with:\n      forge-ci-binary-ref: "+setupCommit+"\n    secrets:\n      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}\n      RELEASE_SSH_SIGNING_KEY: ${{ secrets.RELEASE_SSH_SIGNING_KEY }}\n"+tc.mapping)
+			setupFile(t, root, ".github/workflows/release.yml", "jobs:\n  release:\n    uses: owner/engine/.github/workflows/release-orchestrator.yml@"+setupCommit+"\n    with:\n      forge-ci-sha: "+setupCommit+"\n    secrets:\n      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}\n      RELEASE_SSH_SIGNING_KEY: ${{ secrets.RELEASE_SSH_SIGNING_KEY }}\n"+tc.mapping)
 			setupFile(t, root, ".forge-ci/artifacts.yml", "artifacts:\n  - name: app\n    project-type: meta\nsign:\n  method: sigstore\ngit-signing:\n  method: ssh\n"+tc.containers)
 
 			report := doctor.Requirements(root, "owner/engine", setupCommit)

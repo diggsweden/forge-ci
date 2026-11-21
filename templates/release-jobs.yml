@@ -56,7 +56,7 @@ spec:
     release-git-host-key-fingerprint:
       description: Independently supplied SSH host key fingerprint, SHA256:<base64> alone.
       regex: '^SHA256:[A-Za-z0-9+/]{43}=?$'
-    request-allowed-signers:
+    release-request-allowed-signers:
       description: Trusted OpenSSH allowed-signers text for human release-request tags; supplied by the external policy.
       regex: '\A[^'']+\z'
     bot-name:
@@ -275,7 +275,7 @@ stages: [check, prepare, build, images, sign, publish]
       RC_PUBLIC_KEY_SHA256='$[[ inputs.cosign-public-key-sha256 ]]' \
       RC_GIT_URL='$[[ inputs.release-git-url ]]' \
       RC_GIT_HOST_KEY='$[[ inputs.release-git-host-key-fingerprint ]]' \
-      RC_REQUEST_ALLOWED_SIGNERS='$[[ inputs.request-allowed-signers ]]' \
+      RC_REQUEST_ALLOWED_SIGNERS='$[[ inputs.release-request-allowed-signers ]]' \
       RC_BOT_NAME='$[[ inputs.bot-name ]]' \
       RC_BOT_EMAIL='$[[ inputs.bot-email ]]' \
       RC_CHANGELOG_CREATOR='$[[ inputs.changelog-creator ]]' \

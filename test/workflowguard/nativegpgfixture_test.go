@@ -57,8 +57,8 @@ func TestNativeGPGFixtureUsesRealGoAndOrdinaryReleaseOwner(t *testing.T) {
 	require.NotContains(t, job, "steps")
 	inputs := job["with"].(map[string]any)
 	require.Equal(t, ".forge-ci/artifacts-gpg.yml", inputs["artifacts-config"])
-	require.Equal(t, true, inputs["release.signartifacts"])
-	require.Equal(t, "release-artifacts/*/my-cli-*", inputs["release.attachartifacts"])
+	require.Equal(t, true, inputs["release-sign-artifacts"])
+	require.Equal(t, "release-artifacts/*/my-cli-*", inputs["release-attach-artifacts"])
 	require.Equal(t, "github-cli", inputs["release-publisher"])
 
 	secrets := job["secrets"].(map[string]any)

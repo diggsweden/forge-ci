@@ -28,7 +28,7 @@ jobs:
     with:
       # The full commit the uses: ref above names; every job of the route runs
       # only the CLI this commit records.
-      forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+      forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
       # The first artifact's type; the lint gate runs over the whole tree.
       project-type: maven
       # The lint image, pinned by digest: the plan job refuses a tag. The

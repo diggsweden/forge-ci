@@ -66,7 +66,7 @@ spec:
       type: boolean
       default: false
       description: Publish only snapshots using ordinary CI credentials; signed release request and GPG key are not required.
-    request-tag:
+    release-request-tag:
       default: "$CI_COMMIT_TAG"
       description: Signed human release-request/vMAJOR.MINOR.PATCH tag.
     profile:
@@ -103,7 +103,7 @@ spec:
     MAVEN_PROFILE: "$[[ inputs.profile ]]"
     SETTINGS_PATH: "$[[ inputs.settings-path ]]"
     PRIVATE_DEPENDENCIES: "$[[ inputs.private-dependencies ]]"
-    RELEASE_REQUEST_TAG: "$[[ inputs.request-tag ]]"
+    RELEASE_REQUEST_TAG: "$[[ inputs.release-request-tag ]]"
     RELEASE_SHA: "$[[ inputs.release-sha ]]"
     MAVEN_SNAPSHOT: "$[[ inputs.snapshot ]]"
     FORGE_CI_AUTHORIZATION_DIR: "$CI_PROJECT_DIR"

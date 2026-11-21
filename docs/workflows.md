@@ -36,6 +36,43 @@ One set of names holds on GitHub, Forgejo and GitLab.
   the jobs of its snapshot child pipeline (`Snapshot: …`) are named for their
   group.
 
+### Names that changed
+
+A caller written for an earlier release renames these when it moves its pin.
+GitHub and GitLab refuse an unknown input. A forge that does not would
+leave an old name silently at its default: check a Forgejo caller by hand.
+
+| Forge | Old name | New name |
+| --- | --- | --- |
+| GitHub | `forge-ci-binary-ref` | `forge-ci-sha` |
+| GitHub | `container-image-repository` | `image-repository` |
+| GitHub | `container-registry-user` | `registry-user` |
+| GitHub | `promote-release-registry-username` | `registry-user` |
+| GitHub | `changelog.config` | `changelog-config` |
+| GitHub | `changelog.skipversionbump` | `changelog-skip-version-bump` |
+| GitHub | `release.draft` | `release-draft` |
+| GitHub | `release.attachartifacts` | `release-attach-artifacts` |
+| GitHub | `release.requireallowlistedsigner` | `release-require-allowlisted-signer` |
+| GitHub | `release.sboms` | `release-sboms` |
+| GitHub | `release.signartifacts` | `release-sign-artifacts` |
+| GitHub | `linters.swiftformat` | `linters-swiftformat` |
+| GitHub | `linters.swiftlint` | `linters-swiftlint` |
+| Forgejo | `publish-container-images` | `publish-containers` |
+| GitLab | `request-allowed-signers` | `release-request-allowed-signers` |
+| GitLab | `request-tag` (`publish-maven-central`) | `release-request-tag` |
+| CLI | `--forge-ci-binary-ref`, `FORGE_CI_BINARY_REF` | `--forge-ci-sha`, `FORGE_CI_SHA` |
+| A mirror's own pipeline | variable `RUNTIME_IMAGE_NAMESPACE` | `FORGE_CI_IMAGE_NAMESPACE` |
+
+Names that stay apart, on purpose: `runs-on` on GitHub and Forgejo and
+`runner-tags` on GitLab are each forge's own word for its own mechanism.
+GitHub's `release-sboms` and `release-sign-artifacts` belong to that
+workflow's `release-` group; a build's `enable-build-sbom` and Android's
+`enable-signing` switch other things. Forgejo's `dist-digest` is the unsigned
+hand-off digest, `release-dist-digest` the signed one.
+
+A mirror's `self-release.yml` now reads the release branch from the
+`RELEASE_BRANCH` variable; unset, it is the default branch.
+
 ## Pull Request Workflow Architecture
 
 Primary high-level entry point: `pullrequest-orchestrator.yml`
@@ -488,8 +525,8 @@ the same run's uploads. Its snapshot inputs:
 | --- | --- |
 | `publish-containers` | Boolean, default `true`; `false` opts out |
 | `publish-files` | Boolean, default `false`; `true` keeps [snapshot files](#snapshot-files), built by their own job |
-| `container-image-repository` | Optional base OCI repository; defaults to `<registry>/<owner>/<repository>` |
-| `container-registry-user` | Optional registry username; defaults to the GitHub actor |
+| `image-repository` | Optional base OCI repository; defaults to `<registry>/<owner>/<repository>` |
+| `registry-user` | Optional registry username; defaults to the GitHub actor |
 | secret `container-registry-password` | Optional OCI credential; GHCR uses the GitHub token when omitted |
 | output `container-images-json` | The collected image inventory, with source, platforms and digest refs |
 

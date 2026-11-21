@@ -63,7 +63,7 @@ base-go:
     actions: read
     packages: write
   with:
-    forge-ci-binary-ref: PIN_FORGE_CI_SHA
+    forge-ci-sha: PIN_FORGE_CI_SHA
     runtime-image: ghcr.io/OWNER/forge-ci-runtime-base@sha256:REVIEWED_DIGEST
     runtime-image-full: ghcr.io/OWNER/forge-ci-runtime@sha256:REVIEWED_DIGEST
     canonical-artifact-id: ${{ needs.canonical-cli.outputs.artifact-id }}
@@ -192,7 +192,7 @@ By hand:
    `v0.90.0` with the commit and tag of the release you install (the commit
    is `git rev-parse vX.Y.Z^{commit}`, not the tag object):
    `forge-ci init` does this for you. The `uses: ...@<commit>` ref,
-   `forge-ci-binary-ref` (the same full commit), the `runtime-image` and
+   `forge-ci-sha` (the same full commit), the `runtime-image` and
    `canonical-builder-image` digests and any other `runtime-image*` override
    move together; see
    [Advanced Pinning Recipe](runtime-images.md#advanced-pinning-recipe).
@@ -246,15 +246,15 @@ carries a description. The orchestrator inputs most callers set:
 | `release-policy` | release | `stable` (default) or `stable-prerelease`; the signed tag determines classification. |
 | `artifacts-config` | release, snapshot | Path to `artifacts.yml`, default `.forge-ci/artifacts.yml`. |
 | `release-publisher` | release | `github-cli` creates the GitHub release; empty skips it. |
-| `changelog-creator`, `changelog.config` | release | `git-cliff` (the default) or empty, which skips the changelog and the version bump; any other value is refused. git-cliff runs offline, so remote metadata such as pull-request numbers is not available, and it reads only stable `vX.Y.Z` tags. |
-| `release.sboms`, `release.signartifacts`, `release.requireallowlistedsigner`, `release.draft` | release | SBOM selection, artifact signing, the signer allowlist and draft releases. |
+| `changelog-creator`, `changelog-config` | release | `git-cliff` (the default) or empty, which skips the changelog and the version bump; any other value is refused. git-cliff runs offline, so remote metadata such as pull-request numbers is not available, and it reads only stable `vX.Y.Z` tags. |
+| `release-sboms`, `release-sign-artifacts`, `release-require-allowlisted-signer`, `release-draft` | release | SBOM selection, artifact signing, the signer allowlist and draft releases. |
 | `release-asset-retention` | release | How many of the newest releases keep every file; older ones keep their checksums and signatures. Empty, the default, deletes nothing. See [Old releases' files](#old-releases-files). |
 | `promote-staging-environment`, `promote-release-environment`, `promote-release-*` | release | The GitHub Environments that gate the promotion ladder, and an optional separate release registry. |
 | `enforce-lint`, `enforce-vulnerabilities`, `enforce-application-tests`, `enforce-reproducible-builds` | PR, release, snapshot | [Check enforcement](admin-policy.md), default `false`, forwarded to every gate. Checks run and report findings; explicit `true` makes recognized findings block. Organisation-mandated values belong in its ruleset-required workflow. No workflow reads them from `vars` or the environment. |
-| `forge-ci-binary-ref` | all | Required: the full engine commit whose recorded build every plain-runner job of the PR, snapshot and release routes runs. The snapshot and release routes build it in the run; the PR route takes it from `runtime-image` unless `forge-ci-source` says `build`. The macOS lanes build the engine from a checkout of the same commit. |
+| `forge-ci-sha` | all | Required: the full engine commit whose recorded build every plain-runner job of the PR, snapshot and release routes runs. The snapshot and release routes build it in the run; the PR route takes it from `runtime-image` unless `forge-ci-source` says `build`. The macOS lanes build the engine from a checkout of the same commit. |
 | `runtime-image*` | all | The runtime image of each toolchain family. `runtime-image` is required on every orchestrator and admitted only as an `@sha256:` digest; it is the control-plane, release-notes, SARIF-upload and cosign signing container. |
 | `canonical-builder-image` | all | The Go runtime image digest the canonical CLI is built in. Required on the release and snapshot routes, and on the PR route with `forge-ci-source: build`. |
-| `forge-ci-source` | PR | Where the jobs get Forge CI: `image`, the default, takes the CLI the pinned `runtime-image` carries; `build` compiles it in the run from `forge-ci-binary-ref`. Either runs only when it matches the checksum that commit records. Use `build` to try a commit no runtime image has been published for. |
+| `forge-ci-source` | PR | Where the jobs get Forge CI: `image`, the default, takes the CLI the pinned `runtime-image` carries; `build` compiles it in the run from `forge-ci-sha`. Either runs only when it matches the checksum that commit records. Use `build` to try a commit no runtime image has been published for. |
 | `runs-on`, `runs-on-darwin-arm64` | PR, release, snapshot | JSON arrays of runner labels for the ordinary jobs, default `["ubuntu-26.04"]`, and the Xcode builds, signed or not, and the Swift jobs, default `["macos-26"]`; a signed Android build stays on a hosted runner. See [GitHub runners](runners.md#github-runners). |
 | `enforce-signer-runs-on-darwin-arm64` | release, snapshot | Administrator setting: a JSON array of the runner labels the signed Xcode build may run on, default `[]`, which lets the caller choose. With a list, a `runs-on-darwin-arm64` that names any other label is refused before the build starts. Set it in the entry point the consumer cannot change. See [GitHub runners](runners.md#github-runners). |
 | `xcode-version` | release, snapshot | The Xcode version of the Xcode builds, for a caller that keeps it outside the repository: `xcode-version: ${{ vars.XCODE_VERSION }}` follows a repository variable without a commit. Empty uses `config.xcode-version` of the declaration, which stays required and is the version a build falls back to. |
@@ -316,24 +316,24 @@ names.
 Containerized jobs run in the runtime images, which carry the `forge-ci`
 binary and the toolchain of one family (base, full, Java, Node, Rust, Go,
 Android; Android is linux/amd64 only). Every orchestrator requires
-`forge-ci-binary-ref` as the full engine commit and `runtime-image` as an
+`forge-ci-sha` as the full engine commit and `runtime-image` as an
 `@sha256:` digest; the release and snapshot routes require
 `canonical-builder-image` the same way. `runtime-image-full` and the
 family images (`-java`, `-node`, `-go`, `-rust`, `-android`) are digests too:
 pass the ones your artifacts use, and a native release always needs
 `runtime-image-full`. A workflow refuses a tag or an empty image it needs
 before its job starts, and none picks an image for its caller. Keep the
-workflow ref, `forge-ci-binary-ref` and the image digests on one release; the
+workflow ref, `forge-ci-sha` and the image digests on one release; the
 [Advanced Pinning Recipe](runtime-images.md#advanced-pinning-recipe) shows how
 to read them. A leaf workflow called on its own takes the same
-`forge-ci-binary-ref` and one `runtime-image` digest.
+`forge-ci-sha` and one `runtime-image` digest.
 
 On the release and snapshot routes the first job builds the CLI from
-`forge-ci-binary-ref` in the builder image. Linux jobs on a plain runner, and
+`forge-ci-sha` in the builder image. Linux jobs on a plain runner, and
 the planning jobs, receive that exact build and check it before they run it.
 A pull request skips the build: its jobs take the CLI out of the pinned
 `runtime-image` and run it only when it matches the checksum
-`forge-ci-binary-ref` records, so the image and the commit must come from the
+`forge-ci-sha` records, so the image and the commit must come from the
 same release; `forge-ci-source: build` brings the build back. Other container
 jobs, such as the product builds, use the CLI baked into their image, and
 macOS jobs build it from a checkout of the same commit. No workflow downloads
@@ -400,7 +400,7 @@ runs one general lint engine, chosen with `lint-engine`:
   image against `.mega-linter.yml`. There is no default image.
 - **none**: no general engine.
 
-Swift checks (`linters.swiftlint`, `linters.swiftformat`) run separately on
+Swift checks (`linters-swiftlint`, `linters-swiftformat`) run separately on
 macOS, because nanolinter has no macOS binary. The orchestrator writes one
 aggregated step summary. Project tests are not run by it: wire them, and any other
 [check of your own](workflows.md#checks-of-your-own), in your own workflow beside it. [Lint
@@ -529,7 +529,7 @@ missing or has another size or SHA-256 digest, and when the tag has no
 release, or two. A file the plan does not name is only a warning.
 
 The step reads with the job's own `contents: read` token, or with
-`RELEASE_TOKEN` for a draft (`release.draft: true`), which that token cannot
+`RELEASE_TOKEN` for a draft (`release-draft: true`), which that token cannot
 see otherwise.
 
 ### Old releases' files
@@ -615,7 +615,7 @@ jobs:
       branch: ${{ github.ref_name }}
       # The full commit the workflow ref above names; the snapshot route runs
       # the CLI built in this run from exactly this commit.
-      forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+      forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
       # Pinned by digest and admitted before any job runs; fill in
       # the digests of the release you call (docs/runtime-images.md).
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:PIN_BASE_IMAGE_DIGEST # v0.90.0 digest
@@ -778,8 +778,8 @@ maintainer side.
 | Findings missing from Code Scanning | No `CODE_SCANNING_TOKEN` passed, or `upload-sarif: false`. The gate itself still ran. |
 | A build succeeds but nothing is published | See [Configuration troubleshooting](artifacts-reference.md#configuration-troubleshooting). |
 | A release failed after the final tag was pushed | Re-run forward; see [Failed Release Recovery](failed-release-recovery.md). |
-| A run stops in `canonical-cli` or before it | `forge-ci-binary-ref` is not a full 40-hex commit, or `runtime-image` / `canonical-builder-image` is a tag rather than an `@sha256:` digest; see [Advanced Pinning Recipe](runtime-images.md#advanced-pinning-recipe). |
-| A pull request job stops with "the runtime image does not carry the Forge CI build that commit … records" | `runtime-image` and `forge-ci-binary-ref` name different releases. Pin the image of the same release, or set `forge-ci-source: build` and pass `canonical-builder-image`. |
+| A run stops in `canonical-cli` or before it | `forge-ci-sha` is not a full 40-hex commit, or `runtime-image` / `canonical-builder-image` is a tag rather than an `@sha256:` digest; see [Advanced Pinning Recipe](runtime-images.md#advanced-pinning-recipe). |
+| A pull request job stops with "the runtime image does not carry the Forge CI build that commit … records" | `runtime-image` and `forge-ci-sha` name different releases. Pin the image of the same release, or set `forge-ci-source: build` and pass `canonical-builder-image`. |
 
 `forge-ci doctor` in a job prints the detected forge, its capabilities and what
 to do where it degrades.

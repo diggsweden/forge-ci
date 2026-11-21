@@ -146,7 +146,7 @@ func TestPackagePublisherRunsInTheToolchainImageOfItsPackageType(t *testing.T) {
 	}
 
 	resolver := workflow.Jobs["resolve-bootstrap"]
-	if resolver.Uses != "./.github/workflows/resolve-forge-ci-bootstrap.yml" || resolver.With["forge-ci-binary-ref"] != "${{ inputs['forge-ci-binary-ref'] }}" {
+	if resolver.Uses != "./.github/workflows/resolve-forge-ci-bootstrap.yml" || resolver.With["forge-ci-sha"] != "${{ inputs['forge-ci-sha'] }}" {
 		t.Fatalf("bootstrap must freeze the caller's selected engine revision: %+v", resolver)
 	}
 
@@ -154,7 +154,7 @@ func TestPackagePublisherRunsInTheToolchainImageOfItsPackageType(t *testing.T) {
 		t.Fatal("package publisher must wait for the frozen bootstrap revision")
 	}
 
-	if publisher.With["forge-ci-binary-ref"] != "${{ inputs['forge-ci-binary-ref'] }}" {
+	if publisher.With["forge-ci-sha"] != "${{ inputs['forge-ci-sha'] }}" {
 		t.Fatal("package publisher admits its runtime image itself, so it takes the caller's engine commit")
 	}
 

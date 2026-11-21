@@ -30,7 +30,7 @@ jobs:
       # job image, which carries Node and npm.
       runtime-image-node: ${{ vars.CI_JOB_IMAGE }}
       sign-distro-packages: 'false'
-      publish-container-images: 'true'
+      publish-containers: 'true'
     secrets:
       RELEASE_SSH_SIGNING_KEY: ${{ secrets.RELEASE_SSH_SIGNING_KEY }}
       RELEASE_COSIGN_PRIVATE_KEY: ${{ secrets.RELEASE_COSIGN_PRIVATE_KEY }}

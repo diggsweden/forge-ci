@@ -191,7 +191,7 @@ func versionPatchFindings(families []string, trees map[string]map[string][]byte)
 // has one of the lines stops the witness.
 func releaseWorkflowForCargo(rendered, image string) (string, error) {
 	for _, change := range [][2]string{
-		{"      publish-container-images: 'false'\n", "      runtime-image-rust: " + image + "\n      publish-container-images: 'false'\n"},
+		{"      publish-containers: 'false'\n", "      runtime-image-rust: " + image + "\n      publish-containers: 'false'\n"},
 		{"      image: " + goModuleConsumerImage + "\n", "      image: " + image + "\n"},
 		{"      - name: Validate the prepared changelog-only commit\n", "      - name: Validate the prepared release commit\n"},
 		{" \\\n            --changelog-only\n", "\n"},

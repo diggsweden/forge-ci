@@ -44,10 +44,9 @@ func TestChangelogConfigDefaultsOnlyWhereGitCliffRuns(t *testing.T) {
 			t.Fatalf("%s: %v", entry.Name(), err)
 		}
 
-		for _, name := range []string{"changelog-config", "changelog.config"} {
-			if input, ok := workflow.On.WorkflowCall.Inputs[name]; ok && input.Default != "" {
-				t.Errorf("%s input %s defaults to %q; leave it empty so generate-changelog's default applies", entry.Name(), name, input.Default)
-			}
+		const name = "changelog-config"
+		if input, ok := workflow.On.WorkflowCall.Inputs[name]; ok && input.Default != "" {
+			t.Errorf("%s input %s defaults to %q; leave it empty so generate-changelog's default applies", entry.Name(), name, input.Default)
 		}
 	}
 

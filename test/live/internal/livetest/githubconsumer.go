@@ -85,7 +85,7 @@ func (engine GitHubEngine) KeylessIdentityRegexp() string {
 
 var (
 	githubWorkflowUse = regexp.MustCompile(`(uses:[ \t]*['"]?)[A-Za-z0-9_.-]+/forge-ci(/\.github/workflows/[^@\s'"]+)@[^\s'"#]+`)
-	githubBinaryRef   = regexp.MustCompile(`(?m)^([ \t]*forge-ci-binary-ref:[ \t]*).*$`)
+	githubBinaryRef   = regexp.MustCompile(`(?m)^([ \t]*forge-ci-sha:[ \t]*).*$`)
 	githubRuntimeRef  = regexp.MustCompile(`ghcr\.io/[A-Za-z0-9_.-]+/(forge-ci-runtime[a-z0-9.-]*)(?::[A-Za-z0-9._-]+|@sha256:[0-9a-f]{64})`)
 	githubLeftover    = regexp.MustCompile(`uses:[ \t]*['"]?([^\s'"#]+/\.github/workflows/[^\s'"#]+)`)
 )

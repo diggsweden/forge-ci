@@ -70,7 +70,7 @@ const gitlabMainPushRule = `$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_REF_NAME
 //     one release and the bot's deploy key, and nothing else.
 //
 // Each phase ends the lifecycle when it fails, and says which phase it was.
-// The release requester's trust is the policy's request-allowed-signers input,
+// The release requester's trust is the policy's release-request-allowed-signers input,
 // not a file of the consumer's, so nothing is staged for it. The credentials
 // are protected variables, which reach only the pipelines of protected refs,
 // main and the request tag, each scoped to the environment of the jobs that

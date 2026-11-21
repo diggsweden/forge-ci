@@ -71,7 +71,7 @@ spec:
     release-git-host-key-fingerprint:
       description: The SSH host key fingerprint of release-git-url's host, SHA256:<base64> alone.
       regex: '^SHA256:[A-Za-z0-9+/]{43}=?$'
-    request-allowed-signers:
+    release-request-allowed-signers:
       description: OpenSSH allowed-signers text of the people who may sign a release request, without a single quote, since the jobs quote it in their script.
       regex: '\A[^'']+\z'
     bot-name:
@@ -390,7 +390,7 @@ release:
           cosign-public-key-sha256: $[[ inputs.cosign-public-key-sha256 ]]
           release-git-url: $[[ inputs.release-git-url ]]
           release-git-host-key-fingerprint: $[[ inputs.release-git-host-key-fingerprint ]]
-          request-allowed-signers: $[[ inputs.request-allowed-signers ]]
+          release-request-allowed-signers: $[[ inputs.release-request-allowed-signers ]]
           bot-name: $[[ inputs.bot-name ]]
           bot-email: $[[ inputs.bot-email ]]
           checks: $[[ inputs.checks ]]

@@ -49,7 +49,7 @@ func prCmd() *cli.Command {
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "project-type", Sources: cli.EnvVars("PROJECT_TYPE"), Usage: "primary ecosystem of the project (maven/npm/go/cargo/…)"},
 			&cli.StringFlag{Name: "base-branch", Sources: cli.EnvVars("BASE_BRANCH"), Usage: "base branch the PR targets (used for diff-mode scans)"},
-			&cli.StringFlag{Name: "forge-ci-binary-ref", Sources: cli.EnvVars("FORGE_CI_BINARY_REF"), Usage: "git ref of the forge-ci binary used in the plan (pinned for reproducibility)"},
+			&cli.StringFlag{Name: "forge-ci-sha", Sources: cli.EnvVars("FORGE_CI_SHA"), Usage: "commit of the forge-ci engine the plan pins"},
 			&cli.StringFlag{Name: "lint-engine", Sources: cli.EnvVars("LINT_ENGINE"), Usage: "general lint engine to run: nanolinter, megalinter, or none (default none; mutually exclusive)"},
 			&cli.StringFlag{Name: "nanolinter-image", Sources: cli.EnvVars("NANOLINTER_IMAGE"), Usage: "image the nanolinter job runs in, pinned by digest; required with --lint-engine nanolinter"},
 			&cli.BoolFlag{Name: "linter-swiftformat", Sources: cli.EnvVars("LINTER_SWIFTFORMAT"), Usage: "include the swift-format lint gate in the plan"},
@@ -58,13 +58,13 @@ func prCmd() *cli.Command {
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error {
 				_, err := appplan.PR(ctx, d.OutputSink, appplan.PRInput{
-					ProjectType:      cmd.String("project-type"),
-					BaseBranch:       cmd.String("base-branch"),
-					ForgeCIBinaryRef: cmd.String("forge-ci-binary-ref"),
-					LintEngine:       cmd.String("lint-engine"),
-					NanolinterImage:  cmd.String("nanolinter-image"),
-					SwiftFormat:      cmd.Bool("linter-swiftformat"),
-					SwiftLint:        cmd.Bool("linter-swiftlint"),
+					ProjectType:     cmd.String("project-type"),
+					BaseBranch:      cmd.String("base-branch"),
+					ForgeCISHA:      cmd.String("forge-ci-sha"),
+					LintEngine:      cmd.String("lint-engine"),
+					NanolinterImage: cmd.String("nanolinter-image"),
+					SwiftFormat:     cmd.Bool("linter-swiftformat"),
+					SwiftLint:       cmd.Bool("linter-swiftlint"),
 				})
 
 				return err
@@ -173,7 +173,7 @@ The plan refuses a planned image or Xcode platform without its own runner.`,
 			&cli.StringFlag{Name: "node-version", Sources: cli.EnvVars("NODE_VERSION"), Usage: "Node.js version installed by the publish job (npm path)"},
 			&cli.StringFlag{Name: "rust-toolchain", Value: "stable", Sources: cli.EnvVars("RUST_TOOLCHAIN"), Usage: "Rust toolchain installed by the publish job (cargo path)"},
 			&cli.StringFlag{Name: "registry", Sources: cli.EnvVars("REGISTRY"), Usage: "registry forwarded to the snapshot plan context"},
-			&cli.StringFlag{Name: "forge-ci-binary-ref", Sources: cli.EnvVars("FORGE_CI_BINARY_REF"), Usage: "git ref of the forge-ci binary used in the plan"},
+			&cli.StringFlag{Name: "forge-ci-sha", Sources: cli.EnvVars("FORGE_CI_SHA"), Usage: "commit of the forge-ci engine the plan pins"},
 			&cli.StringFlag{Name: "npm-registry", Sources: cli.EnvVars("NPM_REGISTRY"), Usage: "npm registry URL the dev tarball is published to"},
 			&cli.StringFlag{Name: "scope", Sources: cli.EnvVars("SCOPE", "PACKAGE_SCOPE"), Usage: "npm package scope (e.g. @examplescope) routed to the registry"},
 			&cli.StringFlag{Name: "sboms", Value: "none", Sources: cli.EnvVars("SBOMS"), Usage: "sboms enum gating which CISA layers the snapshot-release produces"},
@@ -202,7 +202,7 @@ The plan refuses a planned image or Xcode platform without its own runner.`,
 					NodeVersion:           cmd.String("node-version"),
 					RustToolchain:         cmd.String("rust-toolchain"),
 					Registry:              cmd.String("registry"),
-					ForgeCIBinaryRef:      cmd.String("forge-ci-binary-ref"),
+					ForgeCISHA:            cmd.String("forge-ci-sha"),
 					NPMRegistry:           cmd.String("npm-registry"),
 					PackageScope:          cmd.String("scope"),
 					SBOMs:                 cmd.String("sboms"),

@@ -142,7 +142,7 @@ func signerStep(root string, checks []appdoctor.Check) Step {
 		!dirExists(filepath.Join(root, ".forgejo", "workflows")) {
 		return Step{
 			Title: title, State: StepManual,
-			Detail:  "GitLab reads the request-allowed-signers input; paste the line this prints into it",
+			Detail:  "GitLab reads the release-request-allowed-signers input; paste the line this prints into it",
 			Command: "forge-ci setup signer --dry-run --principal <your email> --public-key ~/.ssh/id_ed25519.pub",
 		}
 	}

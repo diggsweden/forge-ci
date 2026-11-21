@@ -24,7 +24,7 @@ The release differs between the forges, because their layers do:
 
 | Forge | Release commit | Final tag | Files the release offers |
 |---|---|---|---|
-| GitHub | None: `changelog.skipversionbump: true` leaves `main` where it was | On the requested commit | None: the release is the signed tag and its notes |
+| GitHub | None: `changelog-skip-version-bump: true` leaves `main` where it was | On the requested commit | None: the release is the signed tag and its notes |
 | GitLab | The changelog alone | On the release commit | What the policy's build commands hand over: at least one file |
 | Forgejo | The changelog alone | On the release commit | What the `build` job hands over: at least one file |
 

@@ -18,8 +18,8 @@ workflow's selected branch. The `container-images-json` output lists each
 image's source, platforms and digest.
 
 Set `publish-containers: false` under `with:` to turn publishing off. For
-another registry, set `container-image-repository` (for example
-`registry.example.com/example-org/hello`), `container-registry-user`, and secret
+another registry, set `image-repository` (for example
+`registry.example.com/example-org/hello`), `registry-user`, and secret
 `container-registry-password`.
 
 ## Forgejo and GitLab

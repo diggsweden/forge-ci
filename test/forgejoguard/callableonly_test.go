@@ -238,7 +238,7 @@ func checkSelfRelease(t *testing.T, file string, reviewedPin func(string) bool) 
 	}
 
 	if scalarString(mappingValue(with, "verify-release-request-signature")) != "true" ||
-		scalarString(mappingValue(with, "publish-container-images")) != "false" {
+		scalarString(mappingValue(with, "publish-containers")) != "false" {
 		t.Fatal("the CLI release must verify its request and publish no images")
 	}
 

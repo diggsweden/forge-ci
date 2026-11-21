@@ -38,7 +38,7 @@ one run's release and changelog steps: draft or not, which SBOM layers,
 signing on or off, the signer allowlist, attach patterns, the changelog
 configuration and whether to bump. Hyphenated inputs wire the pipeline:
 images, refs, environments and promotion targets. What is built, signed and
-published is declared in `.forge-ci/artifacts.yml`; `release.sboms` caps the
+published is declared in `.forge-ci/artifacts.yml`; `release-sboms` caps the
 per-artifact `sboms` there, and the plan reports a cap with no overlap.
 
 ### Trigger policy
@@ -73,7 +73,7 @@ with:
   branch: main
   # The full commit the workflow ref above names; every plain-runner job
   # runs the CLI built in this run from exactly this commit.
-  forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+  forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
   # Pinned by digest and admitted before any job runs; fill in
   # the digests of the release you call (runtime-images.md).
   runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:PIN_BASE_IMAGE_DIGEST # v0.90.0 digest
@@ -89,7 +89,7 @@ jobs:
   build-npm:
     uses: diggsweden/forge-ci/.github/workflows/build-npm.yml@PIN_FORGE_CI_SHA # v0.90.0
     with:
-      forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+      forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-node-24@sha256:PIN_NODE_IMAGE_DIGEST # v0.90.0 digest
       working-directory: .
 
@@ -101,7 +101,7 @@ jobs:
       contents: read
       packages: write
     with:
-      forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+      forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
       branch: main
       package-type: npm
       npm-tag: release-{version}
@@ -125,7 +125,7 @@ jobs:
       # The canonical CLI of this run: a full engine commit, the admitted
       # image digests and the canonical-* outputs of a canonical-cli-bootstrap.yml
       # job in the same run (see publish-container.yml below).
-      forge-ci-binary-ref: <full-engine-commit>
+      forge-ci-sha: <full-engine-commit>
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:<digest>
       runtime-image-full: ghcr.io/diggsweden/forge-ci-runtime@sha256:<digest>
       container-file: Containerfile
@@ -148,7 +148,7 @@ Builds Maven projects (apps or libraries).
 ```yaml
 uses: diggsweden/forge-ci/.github/workflows/build-maven.yml@PIN_FORGE_CI_SHA # v0.90.0
 with:
-  forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+  forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
   runtime-image: ghcr.io/diggsweden/forge-ci-runtime-java-25@sha256:PIN_JAVA_IMAGE_DIGEST # v0.90.0 digest
   build-type: app           # "app" or "lib"
   working-directory: "."    # Path to pom.xml
@@ -164,7 +164,7 @@ Builds NPM projects.
 ```yaml
 uses: diggsweden/forge-ci/.github/workflows/build-npm.yml@PIN_FORGE_CI_SHA # v0.90.0
 with:
-  forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+  forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
   runtime-image: ghcr.io/diggsweden/forge-ci-runtime-node-24@sha256:PIN_NODE_IMAGE_DIGEST # v0.90.0 digest
   working-directory: "."    # Path to package.json
 ```
@@ -175,7 +175,7 @@ Builds artifact-first Go binaries, generates a native CycloneDX Build SBOM with
 ```yaml
 uses: diggsweden/forge-ci/.github/workflows/build-go.yml@PIN_FORGE_CI_SHA # v0.90.0
 with:
-  forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+  forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
   runtime-image: ghcr.io/diggsweden/forge-ci-runtime-go-1.27@sha256:PIN_GO_IMAGE_DIGEST # v0.90.0 digest
   working-directory: "."
   main-package: ./cmd/my-cli
@@ -190,7 +190,7 @@ Generates the native CycloneDX Build SBOM for container-first Go projects with
 ```yaml
 uses: diggsweden/forge-ci/.github/workflows/sbom-go.yml@PIN_FORGE_CI_SHA # v0.90.0
 with:
-  forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+  forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
   runtime-image: ghcr.io/diggsweden/forge-ci-runtime-go-1.27@sha256:PIN_GO_IMAGE_DIGEST # v0.90.0 digest
   working-directory: "."
 ```
@@ -204,7 +204,7 @@ artifact-first`. Container-first cargo continues to use `sbom-cargo.yml`.
 ```yaml
 uses: diggsweden/forge-ci/.github/workflows/build-cargo.yml@PIN_FORGE_CI_SHA # v0.90.0
 with:
-  forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+  forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
   runtime-image: ghcr.io/diggsweden/forge-ci-runtime-rust-stable@sha256:PIN_RUST_IMAGE_DIGEST # v0.90.0 digest
   working-directory: "."
   binary-name: my-cli
@@ -218,7 +218,7 @@ Containerfile owns `cargo build`.
 ```yaml
 uses: diggsweden/forge-ci/.github/workflows/sbom-cargo.yml@PIN_FORGE_CI_SHA # v0.90.0
 with:
-  forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+  forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
   runtime-image: ghcr.io/diggsweden/forge-ci-runtime-rust-stable@sha256:PIN_RUST_IMAGE_DIGEST # v0.90.0 digest
   working-directory: "."
 ```
@@ -228,7 +228,7 @@ Builds Gradle JVM projects (libraries, applications, plugins) and uploads their 
 ```yaml
 uses: diggsweden/forge-ci/.github/workflows/build-gradle-app.yml@PIN_FORGE_CI_SHA # v0.90.0
 with:
-  forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+  forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
   runtime-image: ghcr.io/diggsweden/forge-ci-runtime-java-25@sha256:PIN_JAVA_IMAGE_DIGEST # v0.90.0 digest
   working-directory: "."       # Path to build.gradle
   gradle-tasks: "build"        # Gradle tasks to run
@@ -241,7 +241,7 @@ Builds Android applications with multiple product flavors and build types. Sole 
 ```yaml
 uses: diggsweden/forge-ci/.github/workflows/build-gradle-android.yml@PIN_FORGE_CI_SHA # v0.90.0
 with:
-  forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+  forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
   runtime-image: ghcr.io/diggsweden/forge-ci-runtime-android-35@sha256:PIN_ANDROID_IMAGE_DIGEST # v0.90.0 digest
   build-module: "app"             # Gradle module
   product-flavor: "demo"          # Product flavor (demo, prod, etc.)
@@ -273,7 +273,7 @@ Direct-call input defaults are maintained here rather than in each example:
 | `enforce-application-tests` | No | `false` | Administrator setting; see [check enforcement](admin-policy.md) |
 | `enable-build-sbom` | No | `true` | Run Build SBOM generation |
 | `runtime-image` | Yes | | The Android runtime image, by digest (`image@sha256:<64 hex>`) |
-| `forge-ci-binary-ref` | Yes | | The full engine commit (40 hex) the workflow ref names |
+| `forge-ci-sha` | Yes | | The full engine commit (40 hex) the workflow ref names |
 
 APK outputs are found under `app/build/outputs/apk/**/debug/*.apk` and
 `app/build/outputs/apk/**/release/*.apk`; AABs are under
@@ -303,7 +303,7 @@ to GitHub Packages. npm requires an explicit `npm-tag`; Gradle requires
 ```yaml
 uses: diggsweden/forge-ci/.github/workflows/publish-maven-github.yml@PIN_FORGE_CI_SHA # v0.90.0
 with:
-  forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+  forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
   branch: main
   package-type: maven          # maven, npm, or gradle
   artifact-source: maven-build-artifacts  # Name of workflow artifact
@@ -322,7 +322,7 @@ jobs do not import release signing keys or require signed release-request tags.
 ```yaml
 uses: diggsweden/forge-ci/.github/workflows/publish-maven-central.yml@<reviewed-ref>
 with:
-  forge-ci-binary-ref: <reviewed-ref>
+  forge-ci-sha: <reviewed-ref>
   runtime-image: ghcr.io/diggsweden/forge-ci-runtime-java-25@sha256:PIN_JAVA_IMAGE_DIGEST # v0.90.0 digest
   branch: <full-prepared-release-sha>
   artifact-source: maven-build-artifacts  # Name of workflow artifact
@@ -339,14 +339,14 @@ attestation) run in `runtime-image`, the per-platform SBOM evidence in
 `runtime-image-full`; the Buildah build legs are host jobs that receive the
 canonical CLI of the run. A direct caller therefore runs
 `canonical-cli-bootstrap.yml` first and forwards its outputs as the
-`canonical-*` inputs, with `forge-ci-binary-ref` as the full engine commit and
+`canonical-*` inputs, with `forge-ci-sha` as the full engine commit and
 `runtime-image` as the admitted base image digest, exactly as
 `release-publish-stage.yml` does.
 ```yaml
 uses: diggsweden/forge-ci/.github/workflows/publish-container.yml@PIN_FORGE_CI_SHA # v0.90.0
 with:
   branch: main
-  forge-ci-binary-ref: <full-engine-commit>
+  forge-ci-sha: <full-engine-commit>
   runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:<digest>
   runtime-image-full: ghcr.io/diggsweden/forge-ci-runtime@sha256:<digest>
   canonical-artifact-id: ${{ needs.canonical-cli.outputs.artifact-id }}
@@ -375,7 +375,7 @@ which pushes the bump commit, and a commit signing key:
 ```yaml
 uses: diggsweden/forge-ci/.github/workflows/version-bump.yml@PIN_FORGE_CI_SHA # v0.90.0
 with:
-  forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+  forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
   runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:PIN_BASE_IMAGE_DIGEST # v0.90.0 digest
   project-type: maven      # Determines version file (pom.xml vs package.json)
   branch: main             # Branch to check out, update and push
@@ -387,7 +387,7 @@ Generates changelog from git commits.
 ```yaml
 uses: diggsweden/forge-ci/.github/workflows/generate-changelog.yml@PIN_FORGE_CI_SHA # v0.90.0
 with:
-  forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+  forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
   runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:PIN_BASE_IMAGE_DIGEST # v0.90.0 digest
   branch: main             # Base branch for changelog comparison
   changelog-config: ""     # Optional: custom git-cliff config
@@ -402,7 +402,7 @@ it. Secrets: `RELEASE_TOKEN`, and the signing credentials of the
 A direct caller supplies:
 
 - the `canonical-*` inputs of a `canonical-cli-bootstrap.yml` job in the same
-  run, with `forge-ci-binary-ref` as the full engine commit and
+  run, with `forge-ci-sha` as the full engine commit and
   `runtime-image` as the admitted base image digest;
 - `authorized-source-sha`, the commit of the signed request, apart from the
   prepared `checkout-ref`;
@@ -429,7 +429,7 @@ Orchestrates all quality checks for pull requests. Composes a control-plane inte
 ```yaml
 uses: diggsweden/forge-ci/.github/workflows/pullrequest-orchestrator.yml@PIN_FORGE_CI_SHA # v0.90.0
 with:
-  forge-ci-binary-ref: PIN_FORGE_CI_SHA # the full commit the uses: ref names; every job runs only the CLI it records
+  forge-ci-sha: PIN_FORGE_CI_SHA # the full commit the uses: ref names; every job runs only the CLI it records
   runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:PIN_BASE_IMAGE_DIGEST # v0.90.0 digest: control-plane and summary jobs
   project-type: maven              # Required: maven, npm, gradle, gradle-android, xcode-ios, cargo, or go
   base-branch: ""                  # Optional: auto-detects PR target
@@ -437,8 +437,8 @@ with:
   required-lints: secrets     # Caller-selected floor; the project's nanolinter.toml cannot remove it
   nanolinter-image: ghcr.io/itiquette/nanolinter:java@sha256:PIN_DIGEST  # Required for nanolinter: the flavour for project-type, pinned by digest
   megalinter-image: ""             # Required for megalinter; see the digest-pinned example below
-  linters.swiftformat: false       # Swift format for iOS/macOS (separate macOS job, orthogonal to the engine)
-  linters.swiftlint: false         # SwiftLint for iOS/macOS
+  linters-swiftformat: false       # Swift format for iOS/macOS (separate macOS job, orthogonal to the engine)
+  linters-swiftlint: false         # SwiftLint for iOS/macOS
 ```
 
 The quality stage's result follows the
@@ -467,14 +467,14 @@ jobs:
   resolve-bootstrap:
     uses: diggsweden/forge-ci/.github/workflows/resolve-forge-ci-bootstrap.yml@PIN_FORGE_CI_SHA # v0.90.0
     with:
-      forge-ci-binary-ref: PIN_FORGE_CI_SHA
+      forge-ci-sha: PIN_FORGE_CI_SHA
 
   lint:
     needs: [resolve-bootstrap]
     uses: diggsweden/forge-ci/.github/workflows/lint-nanolinter.yml@PIN_FORGE_CI_SHA # v0.90.0
     with:
       nanolinter-image: ghcr.io/itiquette/nanolinter:java@sha256:PIN_DIGEST
-      forge-ci-binary-ref: PIN_FORGE_CI_SHA
+      forge-ci-sha: PIN_FORGE_CI_SHA
       forge-ci-repository: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:PIN_BASE_IMAGE_DIGEST # v0.90.0 digest
       # The CLI the runtime image carries, checked against the commit above.
@@ -483,12 +483,12 @@ jobs:
 
 A direct call names the engine repository itself: a `resolve-bootstrap` job
 in your workflow calls `resolve-forge-ci-bootstrap.yml` with the same
-`forge-ci-binary-ref` and passes its `forge-ci-repository` output, as the
+`forge-ci-sha` and passes its `forge-ci-repository` output, as the
 pull request stage does. The lint workflows have no setup job of their own.
 
 With `forge-ci-source: image`, as above, a direct call needs none of the
 `canonical-*` inputs: the lint job takes the CLI out of `runtime-image` and
-checks it against `forge-ci-binary-ref`. Without it, the default,
+checks it against `forge-ci-sha`. Without it, the default,
 a direct call is a canonical receiver like `publish-container.yml`: a
 `canonical-cli` job in your workflow builds the CLI of the run from the engine
 commit (`canonical-cli-bootstrap.yml`), and the lint job receives it before
@@ -562,7 +562,7 @@ digest's 64 lowercase hexadecimal characters:
 uses: diggsweden/forge-ci/.github/workflows/lint-megalinter.yml@PIN_FORGE_CI_SHA # v0.90.0
 with:
   megalinter-image: oxsecurity/megalinter@sha256:REVIEWED_SHA256
-  forge-ci-binary-ref: PIN_FORGE_CI_SHA
+  forge-ci-sha: PIN_FORGE_CI_SHA
   # From a resolve-bootstrap job of your own, as in the lint-nanolinter.yml example.
   forge-ci-repository: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
   runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:PIN_BASE_IMAGE_DIGEST # v0.90.0 digest
@@ -587,7 +587,7 @@ from your caller workflow and define `on.schedule` there for scheduled analysis.
 ```yaml
 uses: diggsweden/forge-ci/.github/workflows/security-openssf-scorecard.yml@PIN_FORGE_CI_SHA # v0.90.0
 with:
-  forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+  forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
   # The SARIF upload job runs in this image with its baked forge-ci.
   runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:PIN_BASE_IMAGE_DIGEST # v0.90.0 digest
 ```

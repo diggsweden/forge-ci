@@ -54,11 +54,16 @@ type consumerContract struct {
 }
 
 // TestConsumerContractSnapshot pins the consumer-facing API of this
-// repository — the `on.workflow_call.inputs` (names + required + types)
-// and secret names of every *-orchestrator.yml — to a checked-in
-// snapshot. Renaming an input, flipping required, or dropping a secret
-// breaks every consuming repository on their NEXT tag bump with no
-// signal here; this test turns that silent break into a reviewed diff.
+// repository on all three forges to a checked-in snapshot: the
+// `on.workflow_call` inputs (names + required + types) and secret names
+// of every GitHub *-orchestrator.yml and every reusable Forgejo
+// workflow, the inputs and outputs of every Forgejo action, and the
+// `spec.inputs` of every GitLab component. Renaming an input, flipping
+// required, or dropping a secret breaks every consuming repository on
+// their NEXT tag bump with no signal here, and Forgejo does not refuse an
+// input it does not know; this test turns that silent break into a
+// reviewed diff. It compares each file with its own past, not the forges
+// with each other.
 //
 // To change the contract deliberately, regenerate the snapshot and
 // commit both sides:
@@ -68,15 +73,36 @@ func TestConsumerContractSnapshot(t *testing.T) {
 	t.Parallel()
 
 	root := reporoot.Path(t)
+	contracts := map[string]consumerContract{}
 
-	pattern := filepath.Join(root, ".github", "workflows", "*-orchestrator.yml")
-	files, err := filepath.Glob(pattern)
-	require.NoError(t, err)
-	require.NotEmptyf(t, files, "no consumer-facing orchestrators matched %s", pattern)
+	for _, surface := range []struct {
+		pattern string
+		parse   func(*testing.T, string) (consumerContract, bool)
+	}{
+		{".github/workflows/*-orchestrator.yml", parseCallableContract},
+		{".forgejo/workflows/*.yml", parseCallableContract},
+		{".forgejo/actions/*/action.yml", parseActionContract},
+		{"templates/*.yml", parseComponentContract},
+	} {
+		files, err := filepath.Glob(filepath.Join(root, filepath.FromSlash(surface.pattern)))
+		require.NoError(t, err)
 
-	contracts := make(map[string]consumerContract, len(files))
-	for _, path := range files {
-		contracts[filepath.Base(path)] = parseConsumerContract(t, path)
+		found := 0
+
+		for _, path := range files {
+			contract, ok := surface.parse(t, path)
+			if !ok {
+				continue
+			}
+
+			relative, err := filepath.Rel(root, path)
+			require.NoError(t, err)
+
+			contracts[filepath.ToSlash(relative)] = contract
+			found++
+		}
+
+		require.NotZerof(t, found, "no consumer-facing file matched %s", surface.pattern)
 	}
 
 	blob, err := json.MarshalIndent(contracts, "", "  ")
@@ -102,8 +128,8 @@ func TestConsumerContractSnapshot(t *testing.T) {
 			regenerateContractsEnv+"=1 go test ./test/workflowguard -run TestConsumerContractSnapshot")
 
 	require.Equalf(t, string(want), got,
-		"the consumer contract changed: the orchestrators' on.workflow_call inputs/secrets "+
-			"are the public API every consuming repository's caller workflow codes against. "+
+		"the consumer contract changed: the inputs, secrets and outputs of the workflows, "+
+			"actions and components are the public API every consuming repository codes against. "+
 			"If the change is deliberate, regenerate the snapshot and commit it: "+
 			regenerateContractsEnv+"=1 go test ./test/workflowguard -run TestConsumerContractSnapshot")
 }
@@ -114,14 +140,41 @@ func TestConsumerContractSnapshot(t *testing.T) {
 func parseConsumerContract(t *testing.T, path string) consumerContract {
 	t.Helper()
 
+	contract, ok := parseCallableContract(t, path)
+	require.Truef(t, ok, "%s: no on.workflow_call block — not a consumer-facing reusable workflow", path)
+
+	return contract
+}
+
+// parseCallableContract does the same for any workflow file. One without
+// on.workflow_call is the repository's own entry point, which no consumer
+// calls, and is reported as not part of the contract.
+func parseCallableContract(t *testing.T, path string) (consumerContract, bool) {
+	t.Helper()
+
 	body, err := os.ReadFile(path)
 	require.NoErrorf(t, err, "read %s", path)
 
 	doc, err := effectiveWorkflow(body)
 	require.NoErrorf(t, err, "parse %s", path)
 
-	call := mappingChild(mappingChild(doc, "on"), "workflow_call")
-	require.NotNilf(t, call, "%s: no on.workflow_call block — not a consumer-facing reusable workflow", path)
+	on := mappingChild(doc, "on")
+	if on == nil || on.Kind != yaml.MappingNode {
+		return consumerContract{}, false
+	}
+
+	call := mappingChild(on, "workflow_call")
+	if call == nil {
+		for index := 0; index < len(on.Content); index += 2 {
+			if on.Content[index].Value == "workflow_call" {
+				call = on.Content[index+1] // declared with no inputs
+			}
+		}
+
+		if call == nil {
+			return consumerContract{}, false
+		}
+	}
 
 	contract := consumerContract{
 		Inputs:          map[string]consumerInput{},
@@ -164,7 +217,94 @@ func parseConsumerContract(t *testing.T, path string) consumerContract {
 		}
 	}
 
-	return contract
+	return contract, true
+}
+
+// parseActionContract extracts the inputs and outputs of one Forgejo action,
+// which a consumer's own job calls step by step. An action input has no type.
+func parseActionContract(t *testing.T, path string) (consumerContract, bool) {
+	t.Helper()
+
+	body, err := os.ReadFile(path)
+	require.NoErrorf(t, err, "read %s", path)
+
+	var action yaml.Node
+	require.NoErrorf(t, yaml.Unmarshal(body, &action), "parse %s", path)
+
+	if len(action.Content) == 0 {
+		return consumerContract{}, false
+	}
+
+	contract := consumerContract{
+		Inputs:          map[string]consumerInput{},
+		Secrets:         []string{},
+		RequiredSecrets: []string{},
+		Outputs:         map[string]string{},
+	}
+
+	if inputs := mappingChild(action.Content[0], "inputs"); inputs != nil {
+		for index := 0; index+1 < len(inputs.Content); index += 2 {
+			spec := inputs.Content[index+1]
+			input := consumerInput{Required: scalarChild(spec, "required") == "true"}
+
+			if value := mappingChild(spec, "default"); value != nil {
+				require.NoError(t, value.Decode(&input.Default))
+			}
+
+			contract.Inputs[inputs.Content[index].Value] = input
+		}
+	}
+
+	if outputs := mappingChild(action.Content[0], "outputs"); outputs != nil {
+		for index := 0; index+1 < len(outputs.Content); index += 2 {
+			contract.Outputs[outputs.Content[index].Value] = scalarChild(outputs.Content[index+1], "value")
+		}
+	}
+
+	return contract, true
+}
+
+// parseComponentContract extracts the spec.inputs of one GitLab component:
+// its header document. An input without a default is required.
+func parseComponentContract(t *testing.T, path string) (consumerContract, bool) {
+	t.Helper()
+
+	body, err := os.ReadFile(path)
+	require.NoErrorf(t, err, "read %s", path)
+
+	var header yaml.Node
+	require.NoErrorf(t, yaml.Unmarshal(body, &header), "parse %s", path)
+
+	if len(header.Content) == 0 {
+		return consumerContract{}, false
+	}
+
+	inputs := mappingChild(mappingChild(header.Content[0], "spec"), "inputs")
+	if inputs == nil || inputs.Kind != yaml.MappingNode {
+		return consumerContract{}, false
+	}
+
+	contract := consumerContract{
+		Inputs:          map[string]consumerInput{},
+		Secrets:         []string{},
+		RequiredSecrets: []string{},
+		Outputs:         map[string]string{},
+	}
+
+	for index := 0; index < len(inputs.Content); index += 2 {
+		spec := inputs.Content[index+1]
+		input := consumerInput{Type: scalarChild(spec, "type")}
+
+		if value := mappingChild(spec, "default"); value != nil {
+			require.NoError(t, value.Decode(&input.Default))
+		} else {
+			input.Required = true
+		}
+
+		contract.Inputs[inputs.Content[index].Value] = input
+	}
+
+	return contract, true
 }
 
 // mappingChild returns the value node of key inside a mapping node, or

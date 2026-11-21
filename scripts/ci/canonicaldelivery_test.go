@@ -76,7 +76,7 @@ func newCanonicalFixture(t *testing.T) *canonicalFixture {
 
 	fixture.marker = filepath.Join(fixture.root, "cli-processes")
 	fixture.helperMarker = filepath.Join(fixture.root, "helper-processes")
-	fixture.cli = "#!/bin/bash\nset -eu\nprintf 'canonical:%s:%s:%s:%s:%s\\n' \"$1\" \"${FORGE_CI_BIN-unset}\" \"${FORGE_CI_PATH-unset}\" \"${FORGE_CI_BINARY_REF-unset}\" \"${FORGE_CI_PLAN-unset}\" >>\"$PROCESS_MARKER\"\n"
+	fixture.cli = "#!/bin/bash\nset -eu\nprintf 'canonical:%s:%s:%s:%s:%s\\n' \"$1\" \"${FORGE_CI_BIN-unset}\" \"${FORGE_CI_PATH-unset}\" \"${FORGE_CI_SHA-unset}\" \"${FORGE_CI_PLAN-unset}\" >>\"$PROCESS_MARKER\"\n"
 	canonicalWrite(t, filepath.Join(fixture.engine, "actual-trusted-bootstrap.sh"), string(helper), 0o600)
 	// Test-only invocation marker delegates to the UNCHANGED reviewed helper.
 	canonicalWrite(t, filepath.Join(fixture.engine, "scripts/ci/trusted-bootstrap.sh"), "#!/bin/bash\nprintf helper >>\"$HELPER_MARKER\"\nexec /bin/bash '"+filepath.Join(fixture.engine, "actual-trusted-bootstrap.sh")+"' \"$@\"\n", 0o600)
@@ -132,7 +132,7 @@ func newCanonicalFixture(t *testing.T) *canonicalFixture {
 		"PRODUCER_ARTIFACT_ID": "300", "PRODUCER_ARTIFACT_NAME": "forge-ci-canonical-linux-100-2-" + commit,
 		"PRODUCER_RUN_ID": "100", "PRODUCER_RUN_ATTEMPT": "2", "PRODUCER_ENGINE_REPOSITORY": "admin/engine", "PRODUCER_ENGINE_COMMIT": commit,
 		"ARTIFACT_METADATA": fixture.metadata, "PROCESS_MARKER": fixture.marker, "HELPER_MARKER": fixture.helperMarker, "FORGE_CI_BIN": filepath.Join(hostile, "forge-ci"),
-		"FORGE_CI_PLAN": "/consumer/plan", "FORGE_CI_PATH": hostile, "FORGE_CI_BINARY_REF": "older-sdk", "SIGNER_STRICT": "0",
+		"FORGE_CI_PLAN": "/consumer/plan", "FORGE_CI_PATH": hostile, "FORGE_CI_SHA": "older-sdk", "SIGNER_STRICT": "0",
 		"GITHUB_OUTPUT": filepath.Join(fixture.root, "outputs"), "TOOL_PROFILE": "runtime",
 	}
 	fixture.writeMetadata(t, nil)

@@ -66,7 +66,7 @@ jobs:
       forge-ci-sha: PIN_FORGE_CI_SHA
       runs-on: ${{ vars.CI_RUNNER_LABEL }}
       signer-image: FORGE_HOST/OWNER/forge-ci-signer@sha256:PIN_SIGNER_IMAGE_DIGEST
-      release-branch: main
+      release-branch: ${{ vars.RELEASE_BRANCH }}
       bot-name: ${{ vars.RELEASE_BOT_NAME }}
       bot-email: ${{ vars.RELEASE_BOT_EMAIL }}
       release-git-url: ${{ vars.RELEASE_GIT_URL }}
@@ -76,7 +76,7 @@ jobs:
       artifacts-config: .forge-ci/artifacts.yml
       verify-release-request-signature: 'true'
       sign-distro-packages: 'false'
-      publish-container-images: 'false'
+      publish-containers: 'false'
     secrets:
       RELEASE_SSH_SIGNING_KEY: ${{ secrets.RELEASE_SSH_SIGNING_KEY }}
       RELEASE_COSIGN_PRIVATE_KEY: ${{ secrets.RELEASE_COSIGN_PRIVATE_KEY }}

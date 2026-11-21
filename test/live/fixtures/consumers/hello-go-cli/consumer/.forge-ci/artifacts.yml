@@ -6,7 +6,7 @@
 #
 # artifact-first: build-go.yml compiles dist/<goos>-<goarch>/<binary>-<goos>-<goarch> and
 # uploads those files as <name>-go-build-artifacts. The GitHub release step can
-# attach them via release.attachartifacts.
+# attach them via release-attach-artifacts.
 artifacts:
   - name: my-cli
     project-type: go

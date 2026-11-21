@@ -308,7 +308,7 @@ const fixturePullRequest = `jobs:
   pr-checks:
     uses: diggsweden/forge-ci/.github/workflows/pullrequest-orchestrator.yml@v0.90.0
     with:
-      forge-ci-binary-ref: v0.90.0
+      forge-ci-sha: v0.90.0
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base:v0.90.0
       canonical-builder-image: ghcr.io/diggsweden/forge-ci-runtime-go-1.27:v0.90.0
       runtime-image-go: "ghcr.io/diggsweden/forge-ci-runtime-go-1.27:v0.90.0"
@@ -332,7 +332,7 @@ func TestRenderGitHubConsumer_PinsTheEngineUnderTest(t *testing.T) {
 
 	for _, want := range []string{
 		"uses: Example-Org/fc-forge-ci/.github/workflows/pullrequest-orchestrator.yml@" + trialEngine.Commit,
-		"forge-ci-binary-ref: " + trialEngine.Commit,
+		"forge-ci-sha: " + trialEngine.Commit,
 		"runtime-image: ghcr.io/example-org/forge-ci-runtime-base@sha256:" + strings.Repeat("b", 64),
 		"canonical-builder-image: ghcr.io/example-org/forge-ci-runtime-go-1.27@sha256:" + strings.Repeat("c", 64),
 		`"ghcr.io/example-org/forge-ci-runtime-go-1.27@sha256:` + strings.Repeat("c", 64) + `"`,
@@ -384,7 +384,7 @@ func TestRenderGitHubConsumer_CargoLintImageOverride(t *testing.T) {
   pr-checks:
     uses: diggsweden/forge-ci/.github/workflows/pullrequest-orchestrator.yml@v0.90.0
     with:
-      forge-ci-binary-ref: v0.90.0
+      forge-ci-sha: v0.90.0
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base:v0.90.0
       canonical-builder-image: ghcr.io/diggsweden/forge-ci-runtime-go-1.27:v0.90.0
       project-type: cargo
@@ -847,7 +847,7 @@ func TestRenderGitHubConsumer_ReleaseCallPinsTheEngineCommitAndDigests(t *testin
 		"  release:",
 		"    uses: diggsweden/forge-ci/.github/workflows/release-orchestrator.yml@PIN_FORGE_CI_SHA # v0.90.0",
 		"    with:",
-		"      forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0",
+		"      forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0",
 		"      runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:" + strings.Repeat("0", 64) + " # FIXME",
 		"      canonical-builder-image: ghcr.io/diggsweden/forge-ci-runtime-go-1.27@sha256:" + strings.Repeat("0", 64),
 		"      runtime-image-full: ghcr.io/diggsweden/forge-ci-runtime:v0.90.0",
@@ -861,7 +861,7 @@ func TestRenderGitHubConsumer_ReleaseCallPinsTheEngineCommitAndDigests(t *testin
 
 	for _, want := range []string{
 		"uses: Example-Org/fc-forge-ci/.github/workflows/release-orchestrator.yml@" + engine.Commit + " # v0.90.0",
-		"forge-ci-binary-ref: " + engine.Commit + "\n",
+		"forge-ci-sha: " + engine.Commit + "\n",
 		"runtime-image: ghcr.io/example-org/forge-ci-runtime-base@sha256:" + strings.Repeat("b", 64) + " # FIXME",
 		"canonical-builder-image: ghcr.io/example-org/forge-ci-runtime-go-1.27@sha256:" + strings.Repeat("c", 64),
 		"runtime-image-full: ghcr.io/example-org/forge-ci-runtime@sha256:" + strings.Repeat("d", 64),

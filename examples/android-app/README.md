@@ -47,7 +47,7 @@ jobs:
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
     with:
-      forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+      forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-android-35@sha256:PIN_ANDROID_IMAGE_DIGEST # v0.90.0 digest
       build-module: "app"
       product-flavor: "prod"
@@ -141,7 +141,7 @@ jobs:
   build:
     uses: diggsweden/forge-ci/.github/workflows/build-gradle-android.yml@PIN_FORGE_CI_SHA # v0.90.0
     with:
-      forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+      forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-android-35@sha256:PIN_ANDROID_IMAGE_DIGEST # v0.90.0 digest
       library: true
       build-module: "lib"

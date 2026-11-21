@@ -112,7 +112,7 @@ on:
         description: "Administrator-pinned forge-ci base runtime image@sha256 digest the promotion runs in (forge-ci and cosign baked in). The resolver refuses anything else before the job container starts."
         required: true
         type: string
-      forge-ci-binary-ref:
+      forge-ci-sha:
         description: "Full engine commit (40 hex) the workflow ref names; a tag or branch is refused"
         required: true
         type: string
@@ -139,7 +139,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/resolve-forge-ci-bootstrap.yml
     with:
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       images: |
         runtime-image=${{ inputs['runtime-image'] }}
   promote:

@@ -38,7 +38,7 @@ var requiredInputFixtures = map[string]any{
 	"publication-image-repository":     "registry.invalid/team/publication/app",
 	"cosign-public-key-sha256":         strings.Repeat("4", 64),
 	"release-git-host-key-fingerprint": "SHA256:" + strings.Repeat("A", 43),
-	"request-allowed-signers":          "release@team.invalid ssh-ed25519 AAAA",
+	"release-request-allowed-signers":  "release@team.invalid ssh-ed25519 AAAA",
 	"bot-name":                         "Release Bot",
 	"bot-email":                        "release@team.invalid",
 	"checks":                           []any{"make check"},

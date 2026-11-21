@@ -40,7 +40,7 @@ func TestPlanContracts_Golden(t *testing.T) {
 		ReleaseActor:      "octocat",
 		ReleaseRepository: "org/repo",
 		Registry:          "ghcr.io",
-		ForgeCIBinaryRef:  "v0.90.0",
+		ForgeCISHA:        "v0.90.0",
 		NPMRegistry:       "https://npm.pkg.github.com",
 		PackageScope:      "@org",
 		SBOMs:             "build",
@@ -52,11 +52,11 @@ func TestPlanContracts_Golden(t *testing.T) {
 	}
 
 	prPlan := pipeline.NewPRPlan(pipeline.PRPlanInput{
-		ProjectType:      projecttype.Go,
-		BaseBranch:       "main",
-		ForgeCIBinaryRef: "v0.90.0",
-		Engine:           pipeline.LintEngineNanolinter,
-		NanolinterImage:  "ghcr.io/itiquette/nanolinter:go@sha256:" + strings.Repeat("0", 64),
+		ProjectType:     projecttype.Go,
+		BaseBranch:      "main",
+		ForgeCISHA:      "v0.90.0",
+		Engine:          pipeline.LintEngineNanolinter,
+		NanolinterImage: "ghcr.io/itiquette/nanolinter:go@sha256:" + strings.Repeat("0", 64),
 	})
 
 	for _, tc := range []struct {

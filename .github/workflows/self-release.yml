@@ -332,9 +332,9 @@ jobs:
       runtime-image-go: ${{ needs.resolve-branch.outputs.image-namespace }}/forge-ci-runtime-go-1.27@${{ needs.wait-for-images.outputs.go-digest }}
       runtime-image-android: ${{ needs.resolve-branch.outputs.image-namespace }}/forge-ci-runtime-android-35@${{ needs.wait-for-images.outputs.android-digest }}
       artifacts-config: .forge-ci/artifacts.yml
-      forge-ci-binary-ref: ${{ github.sha }}
+      forge-ci-sha: ${{ github.sha }}
       changelog-creator: git-cliff
-      changelog.config: templates/gitcliff/default.toml
+      changelog-config: templates/gitcliff/default.toml
       release-publisher: github-cli
 
   binary:

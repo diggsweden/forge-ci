@@ -59,7 +59,7 @@ func TestTrustedBootstrap(t *testing.T) {
 			toolHelper := filepath.Join(engine, "scripts/ci/trusted-runtime-tools.sh")
 			write(toolHelper, string(tools), 0o600)
 
-			body := "#!/bin/bash\nset -eu\nprintf 'verified:%s:%s:%s:%s:%s\\n' \"$1\" \"${FORGE_CI_BIN-unset}\" \"${FORGE_CI_PATH-unset}\" \"${FORGE_CI_BINARY_REF-unset}\" \"${FORGE_CI_PLAN-unset}\" >>\"$PROCESS_MARKER\"\nprintf '%s\\n' \"$ADMIN_INPUT\"\n"
+			body := "#!/bin/bash\nset -eu\nprintf 'verified:%s:%s:%s:%s:%s\\n' \"$1\" \"${FORGE_CI_BIN-unset}\" \"${FORGE_CI_PATH-unset}\" \"${FORGE_CI_SHA-unset}\" \"${FORGE_CI_PLAN-unset}\" >>\"$PROCESS_MARKER\"\nprintf '%s\\n' \"$ADMIN_INPUT\"\n"
 			if scenario == "verified-new-file" {
 				// Map the actual helper's fixed PATH into a disposable image-layout
 				// fixture. No host /usr writes, containers or production lookup seam.
@@ -213,7 +213,7 @@ func TestTrustedBootstrap(t *testing.T) {
 			}
 
 			cmd := exec.CommandContext(t.Context(), "/bin/bash", "--noprofile", "--norc", helper, engine, origin, commit, binary, "runtime", "--", "--version")
-			cmd.Env = []string{"PATH=" + hostile, "HOME=" + root, "PROCESS_MARKER=" + marker, "ADMIN_INPUT=retained", "FORGE_CI_BIN=" + filepath.Join(hostile, "forge-ci"), "FORGE_CI_PATH=" + hostile, "FORGE_CI_BINARY_REF=old-sdk", "FORGE_CI_PLAN=/consumer/plan.json", "HELPERS_ENGINE_VERIFIED=" + binary, "SIGNER_STRICT=0", "GIT_DIR=/consumer/git", "GIT_WORK_TREE=/consumer", "GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=remote.origin.url", "GIT_CONFIG_VALUE_0=https://hostile.invalid/engine", "TEST_IMAGE_ROOT=" + filepath.Join(root, "image"), "TOOL_MARKER=" + filepath.Join(root, "tools"), "CARGO_HOME=/consumer/cache", "RUSTUP_HOME=/consumer/toolchain", "TRUSTED_TOOL_PATH=" + hostile}
+			cmd.Env = []string{"PATH=" + hostile, "HOME=" + root, "PROCESS_MARKER=" + marker, "ADMIN_INPUT=retained", "FORGE_CI_BIN=" + filepath.Join(hostile, "forge-ci"), "FORGE_CI_PATH=" + hostile, "FORGE_CI_SHA=old-sdk", "FORGE_CI_PLAN=/consumer/plan.json", "HELPERS_ENGINE_VERIFIED=" + binary, "SIGNER_STRICT=0", "GIT_DIR=/consumer/git", "GIT_WORK_TREE=/consumer", "GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=remote.origin.url", "GIT_CONFIG_VALUE_0=https://hostile.invalid/engine", "TEST_IMAGE_ROOT=" + filepath.Join(root, "image"), "TOOL_MARKER=" + filepath.Join(root, "tools"), "CARGO_HOME=/consumer/cache", "RUSTUP_HOME=/consumer/toolchain", "TRUSTED_TOOL_PATH=" + hostile}
 
 			out, runErr := cmd.CombinedOutput()
 			if invoked, err := os.ReadFile(gitMarker); !os.IsNotExist(err) {

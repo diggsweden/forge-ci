@@ -358,7 +358,7 @@ func TestRuntimeExampleRequiresExplicitPublicationPolicy(t *testing.T) {
 
 	for _, file := range []string{"self-runtime-images.yml"} {
 		body := string(reporoot.ReadFile(t, "examples/forgejo/"+file))
-		require.Contains(t, body, "vars.RUNTIME_IMAGE_NAMESPACE", file)
+		require.Contains(t, body, "vars.FORGE_CI_IMAGE_NAMESPACE", file)
 		require.Contains(t, body, "cosign-public-key-sha256: PIN_COSIGN_PUBLIC_KEY_SHA256", file)
 		require.Contains(t, body, ".forgejo/workflows/runtime-images.yml@PIN_FORGE_CI_SHA", file)
 		require.NotContains(t, body, "runtime-images.sh", file)

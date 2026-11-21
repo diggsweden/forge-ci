@@ -52,7 +52,7 @@ func TestSetupMatchesForgejoPresencePreflight(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, name := range []string{"sign-distro-packages", "publish-container-images"} {
+	for _, name := range []string{"sign-distro-packages", "publish-containers"} {
 		if workflow.On.Call.Inputs[name].Default != "true" {
 			t.Fatalf("review setup default: %s", name)
 		}

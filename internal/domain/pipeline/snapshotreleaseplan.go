@@ -31,7 +31,7 @@ type SnapshotReleasePlanInput struct {
 	NodeVersion           string
 	RustToolchain         string
 	Registry              string
-	ForgeCIBinaryRef      string
+	ForgeCISHA            string
 	NPMRegistry           string
 	PackageScope          string
 	SBOMs                 string
@@ -61,7 +61,7 @@ type SnapshotReleaseContext struct {
 	NodeVersion       string           `json:"node_version"`
 	RustToolchain     string           `json:"rust_toolchain"`
 	Registry          string           `json:"registry"`
-	ForgeCIBinaryRef  string           `json:"forge_ci_binary_ref"`
+	ForgeCISHA        string           `json:"forge_ci_sha"`
 	NPMRegistry       string           `json:"npm_registry"`
 	PackageScope      string           `json:"package_scope"`
 }
@@ -177,7 +177,7 @@ func NewSnapshotReleasePlan(in SnapshotReleasePlanInput) (SnapshotReleasePlan, e
 		NodeVersion:       in.NodeVersion,
 		RustToolchain:     cmp.Or(in.RustToolchain, "stable"),
 		Registry:          in.Registry,
-		ForgeCIBinaryRef:  in.ForgeCIBinaryRef,
+		ForgeCISHA:        in.ForgeCISHA,
 		NPMRegistry:       in.NPMRegistry,
 		PackageScope:      in.PackageScope,
 	}

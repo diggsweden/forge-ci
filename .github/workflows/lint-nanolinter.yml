@@ -63,7 +63,7 @@ on:
         required: false
         default: '["ubuntu-26.04"]'
         type: string
-      forge-ci-binary-ref:
+      forge-ci-sha:
         description: "Full approved engine commit the canonical CLI of this run was built from; the lint job receives exactly that build for its checkout, policy and SARIF commands"
         required: true
         type: string
@@ -86,7 +86,7 @@ on:
         required: true
         type: string
       forge-ci-source:
-        description: "Where the jobs of this run get Forge CI: image, the CLI the pinned runtime image carries, or build, the CLI the run compiles from forge-ci-binary-ref. Either runs only when it matches the checksum that commit records."
+        description: "Where the jobs of this run get Forge CI: image, the CLI the pinned runtime image carries, or build, the CLI the run compiles from forge-ci-sha. Either runs only when it matches the checksum that commit records."
         required: false
         default: build
         type: string
@@ -139,7 +139,7 @@ jobs:
         shell: /bin/bash --noprofile --norc -peuo pipefail {0}
         env:
           ENGINE_REPOSITORY: ${{ inputs['forge-ci-repository'] }}
-          ENGINE_COMMIT: ${{ inputs['forge-ci-binary-ref'] }}
+          ENGINE_COMMIT: ${{ inputs['forge-ci-sha'] }}
           ENGINE_ORIGIN: ${{ github.server_url }}/${{ inputs['forge-ci-repository'] }}
           RUNTIME_IMAGE: ${{ inputs['runtime-image'] }}
           PRODUCER_ARTIFACT_ID: ${{ inputs['canonical-artifact-id'] }}

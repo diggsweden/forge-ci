@@ -29,7 +29,7 @@ jobs:
       # A Gradle version is text: the signing job writes it into
       # gradle.properties, and no version job runs a build tool.
       sign-distro-packages: 'false'
-      publish-container-images: 'true'
+      publish-containers: 'true'
     secrets:
       RELEASE_SSH_SIGNING_KEY: ${{ secrets.RELEASE_SSH_SIGNING_KEY }}
       RELEASE_COSIGN_PRIVATE_KEY: ${{ secrets.RELEASE_COSIGN_PRIVATE_KEY }}

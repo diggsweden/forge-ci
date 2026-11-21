@@ -12,7 +12,7 @@ The project declares `project-type: meta`, so no forge builds or bumps
 anything. What a release is differs with the layer:
 
 - **GitHub** renders the notes with `git-cliff` and sets
-  `changelog.skipversionbump: true`, so main and the signed final tag stay at
+  `changelog-skip-version-bump: true`, so main and the signed final tag stay at
   the requested commit, with every file as it was. Nothing of the checkout is
   attached to the release, so it offers no file: with nothing to checksum
   there is nothing to sign, and the release is the signed tag and its notes.

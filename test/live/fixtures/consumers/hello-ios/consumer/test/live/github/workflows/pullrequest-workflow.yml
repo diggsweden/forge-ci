@@ -16,7 +16,7 @@ jobs:
       actions: read
       contents: read
     with:
-      forge-ci-binary-ref: v0.90.0
+      forge-ci-sha: v0.90.0
       project-type: xcode-ios
       lint-engine: nanolinter
       nanolinter-image: codefloe.com/itiquette/nanolinter:swift@sha256:0000000000000000000000000000000000000000000000000000000000000000

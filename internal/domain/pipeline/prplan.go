@@ -13,13 +13,13 @@ const PRPlanVersion = 1
 // PRPlanInput contains workflow inputs for PR quality planning. NanolinterImage
 // is the admitted image of the nanolinter job; see NanolinterImage.
 type PRPlanInput struct {
-	ProjectType      projecttype.Type
-	BaseBranch       string
-	ForgeCIBinaryRef string
-	Engine           LintEngine
-	NanolinterImage  string
-	SwiftFormat      bool
-	SwiftLint        bool
+	ProjectType     projecttype.Type
+	BaseBranch      string
+	ForgeCISHA      string
+	Engine          LintEngine
+	NanolinterImage string
+	SwiftFormat     bool
+	SwiftLint       bool
 }
 
 // PRPlan is the top-level typed contract for PR quality workflows.
@@ -32,9 +32,9 @@ type PRPlan struct {
 
 // PRContext is workflow context consumed by PR quality jobs.
 type PRContext struct {
-	ProjectType      projecttype.Type `json:"project_type"`
-	BaseBranch       string           `json:"base_branch"`
-	ForgeCIBinaryRef string           `json:"forge_ci_binary_ref"`
+	ProjectType projecttype.Type `json:"project_type"`
+	BaseBranch  string           `json:"base_branch"`
+	ForgeCISHA  string           `json:"forge_ci_sha"`
 }
 
 // PRPolicy is the pull-request quality gate policy. Engine selects the single
@@ -92,9 +92,9 @@ func NewPRPlan(in PRPlanInput) PRPlan {
 	return PRPlan{
 		Version: PRPlanVersion,
 		Context: PRContext{
-			ProjectType:      in.ProjectType,
-			BaseBranch:       in.BaseBranch,
-			ForgeCIBinaryRef: in.ForgeCIBinaryRef,
+			ProjectType: in.ProjectType,
+			BaseBranch:  in.BaseBranch,
+			ForgeCISHA:  in.ForgeCISHA,
 		},
 		Policy: policy,
 		Stages: PRStagePlans{Quality: quality},

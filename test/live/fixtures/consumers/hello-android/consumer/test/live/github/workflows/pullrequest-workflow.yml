@@ -29,7 +29,7 @@ jobs:
       actions: read
       contents: read
     with:
-      forge-ci-binary-ref: v0.90.0
+      forge-ci-sha: v0.90.0
       project-type: gradle-android
       lint-engine: nanolinter
       nanolinter-image: codefloe.com/itiquette/nanolinter:kotlin@sha256:0000000000000000000000000000000000000000000000000000000000000000
@@ -44,7 +44,7 @@ jobs:
     permissions:
       contents: read
     with:
-      forge-ci-binary-ref: v0.90.0
+      forge-ci-sha: v0.90.0
       build-module: app
       product-flavor: demo
       build-types: debug,release

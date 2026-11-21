@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   test and PR check results on every forge, and the GitHub orchestrator's
   Summary job is gone. Update the required checks of your branch
   protection when you move your pin.
+- Consumer inputs take one name across forges; see "Names that changed" in
+  docs/workflows.md for the old and new names.
 
 ## [0.94.3] - 2026-11-20
 

@@ -307,7 +307,7 @@ requirements and incompatible fields.
   sboms: none
   ```
 - **Formats produced:** See [SBOM formats and schema versions](sbom.md#consuming-sboms); versions depend on the generator and its configuration.
-- **Release policy:** The production `release.sboms` input (default `all`) is intersected with the pipeline-wide union. It selects release-bundle layers and gates container-first Go/Cargo Build SBOM jobs. It does not rewrite per-artifact `effective-sboms`, disable artifact-first Build SBOM jobs, or disable container SBOM attestations. The snapshot `sboms` input (default `none`) has separate workflow-wide generation gates.
+- **Release policy:** The production `release-sboms` input (default `all`) is intersected with the pipeline-wide union. It selects release-bundle layers and gates container-first Go/Cargo Build SBOM jobs. It does not rewrite per-artifact `effective-sboms`, disable artifact-first Build SBOM jobs, or disable container SBOM attestations. The snapshot `sboms` input (default `none`) has separate workflow-wide generation gates.
 - **What it controls:** Build-time artifact-first Build SBOM execution, container SBOM generation, and per-artifact release inclusion. Direct build workflow calls still default their Build SBOM input to `true` unless explicitly disabled. See [docs/sbom.md](sbom.md) for the full semantics.
 - **Note:** `analyzed-*` scans use [Syft](https://github.com/anchore/syft); ecosystem coverage varies. There is no analyzed-artifact SBOM for a Gradle Android artifact: its default leaves the layer out, and a declaration that asks for it is refused when it is read. The `build` layer uses ecosystem-native CycloneDX tooling; see [Cargo SBOM scope](sbom.md#cargo-sbom-scope) for target/feature limits.
 
@@ -1021,7 +1021,7 @@ containers:
 ##### Output
 
 - GHA artifacts `${container.name}-binaries-${arch}` for each platform leg (for example, `my-service-binaries-amd64` and `my-service-binaries-arm64`).
-- Automatically included in the GitHub Release when extraction produced files; callers can still add their own `release.attachartifacts` globs for other assets.
+- Automatically included in the GitHub Release when extraction produced files; callers can still add their own `release-attach-artifacts` globs for other assets.
 
 #### `build-args`
 
@@ -1050,7 +1050,7 @@ containers:
     branch: main
     # plus runtime-image, runtime-image-full and the canonical-* inputs of a
     # canonical-cli-bootstrap.yml job in the same run; see publishing.md
-    forge-ci-binary-ref: <full-engine-commit>
+    forge-ci-sha: <full-engine-commit>
     artifact-types: cargo
     build-args: |
       RUST_VERSION=1.94
@@ -1256,7 +1256,7 @@ jobs:
       branch: main
       # The full commit the workflow ref above names; every plain-runner job
       # runs the CLI built in this run from exactly this commit.
-      forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+      forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
       # Pinned by digest and admitted before any job runs; fill in
       # the digests of the release you call (runtime-images.md).
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:PIN_BASE_IMAGE_DIGEST # v0.90.0 digest
@@ -1578,7 +1578,7 @@ jobs:
       branch: main
       # The full commit the workflow ref above names; every plain-runner job
       # runs the CLI built in this run from exactly this commit.
-      forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+      forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
       # Pinned by digest and admitted before any job runs; fill in
       # the digests of the release you call (runtime-images.md).
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:PIN_BASE_IMAGE_DIGEST # v0.90.0 digest

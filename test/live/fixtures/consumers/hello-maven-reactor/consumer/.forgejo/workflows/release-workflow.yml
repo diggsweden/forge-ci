@@ -41,7 +41,7 @@ jobs:
       # job checks and applies its patch.
       runtime-image-java: docker.io/library/maven@sha256:96f175708f766ea049ab6c794a85335d238894c75f8eb364bddd98086a5b7cfd
       sign-distro-packages: 'false'
-      publish-container-images: 'false'
+      publish-containers: 'false'
     secrets:
       RELEASE_SSH_SIGNING_KEY: ${{ secrets.RELEASE_SSH_SIGNING_KEY }}
       RELEASE_COSIGN_PRIVATE_KEY: ${{ secrets.RELEASE_COSIGN_PRIVATE_KEY }}

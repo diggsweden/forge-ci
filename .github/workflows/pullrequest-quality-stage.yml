@@ -50,7 +50,7 @@ on:
         required: false
         default: '["macos-26"]'
         type: string
-      forge-ci-binary-ref:
+      forge-ci-sha:
         description: "Full approved engine commit the canonical CLI of this run was built from; the lint jobs receive that build"
         required: true
         type: string
@@ -64,7 +64,7 @@ on:
       canonical-producer-engine-commit: {type: string, required: false, default: ""}
       canonical-producer-result: {type: string, required: false, default: ""}
       forge-ci-source:
-        description: "Where the jobs of this run get Forge CI: image, the CLI the pinned runtime image carries, or build, the CLI the run compiles from forge-ci-binary-ref. Either runs only when it matches the checksum that commit records."
+        description: "Where the jobs of this run get Forge CI: image, the CLI the pinned runtime image carries, or build, the CLI the run compiles from forge-ci-sha. Either runs only when it matches the checksum that commit records."
         required: false
         default: build
         type: string
@@ -84,7 +84,7 @@ jobs:
     uses: ./.github/workflows/resolve-forge-ci-bootstrap.yml
     with:
       job-name: "Setup: check quality stage pins"
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       images: |
         runtime-image=${{ inputs['runtime-image'] }}
   nanolinter:
@@ -106,7 +106,7 @@ jobs:
       nanolinter-image: ${{ fromJson(inputs['pr-plan-json']).policy.nanolinter_image }}
       required-lints: ${{ inputs['required-lints'] }}
       disable-checks: ${{ inputs['disable-checks'] }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       # Resolved once, by this stage's first job.
       forge-ci-repository: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
       runtime-image: ${{ inputs['runtime-image'] }}
@@ -131,7 +131,7 @@ jobs:
     with:
       runs-on: ${{ inputs['runs-on'] }}
       megalinter-image: ${{ inputs['megalinter-image'] }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       # Resolved once, by this stage's first job.
       forge-ci-repository: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
       runtime-image: ${{ inputs['runtime-image'] }}
@@ -154,7 +154,7 @@ jobs:
       runs-on: ${{ inputs['runs-on'] }}
       runs-on-darwin-arm64: ${{ inputs['runs-on-darwin-arm64'] }}
       enforce-lint: ${{ inputs['enforce-lint'] }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       enable-swiftformat: ${{ fromJson(inputs['pr-plan-json']).policy.swift_format }}
       enable-swiftlint: ${{ fromJson(inputs['pr-plan-json']).policy.swift_lint }}
       runtime-image: ${{ inputs['runtime-image'] }}
@@ -173,7 +173,7 @@ jobs:
         shell: /bin/bash --noprofile --norc -peuo pipefail {0}
         env:
           ENGINE_REPOSITORY: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
-          ENGINE_COMMIT: ${{ inputs['forge-ci-binary-ref'] }}
+          ENGINE_COMMIT: ${{ inputs['forge-ci-sha'] }}
           ENGINE_ORIGIN: ${{ github.server_url }}/${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
           RUNTIME_IMAGE: ${{ inputs['runtime-image'] }}
           PRODUCER_ARTIFACT_ID: ${{ inputs['canonical-artifact-id'] }}

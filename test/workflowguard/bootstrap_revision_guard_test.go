@@ -175,7 +175,7 @@ func TestPRQualityForwardsTheSelectedBinaryToEveryLinter(t *testing.T) {
 
 	workflow := readBootstrapWorkflow(t, filepath.Join(reporoot.Path(t), ".github", "workflows", "pullrequest-quality-stage.yml"))
 	for _, job := range []string{"nanolinter", "megalinter", "swift"} {
-		require.Equal(t, engineCommitInput, workflow.Jobs[job].With["forge-ci-binary-ref"], job)
+		require.Equal(t, engineCommitInput, workflow.Jobs[job].With["forge-ci-sha"], job)
 	}
 }
 
@@ -195,7 +195,7 @@ func bootstrapSelectionScript(t *testing.T, workflow bootstrapWorkflow, id strin
 
 // engineCommitInput is how a workflow names its engine: the caller's full
 // commit, admitted by the resolver, never an output relayed from a job.
-const engineCommitInput = "${{ inputs['forge-ci-binary-ref'] }}"
+const engineCommitInput = "${{ inputs['forge-ci-sha'] }}"
 
 type reusableWorkflow struct {
 	On struct {

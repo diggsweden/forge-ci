@@ -3,7 +3,7 @@
   "context": {
     "project_type": "go",
     "base_branch": "main",
-    "forge_ci_binary_ref": "v0.90.0"
+    "forge_ci_sha": "v0.90.0"
   },
   "policy": {
     "engine": "nanolinter",

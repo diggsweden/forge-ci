@@ -41,7 +41,7 @@ jobs:
       signer-runs-on: ${{ vars.CI_RUNNER_LABEL }}
       signer-image: FORGE_HOST/OWNER/forge-ci-signer@sha256:PIN_SIGNER_IMAGE_DIGEST
       go-build-image: REGISTRY/OWNER/go-build@sha256:PIN_GO_BUILD_DIGEST
-      image-namespace: ${{ vars.RUNTIME_IMAGE_NAMESPACE }}
+      image-namespace: ${{ vars.FORGE_CI_IMAGE_NAMESPACE }}
       registry-user: ${{ vars.RELEASE_REGISTRY_USER }}
       cosign-public-key: ${{ vars.COSIGN_PUBLIC_KEY }}
       cosign-public-key-sha256: PIN_COSIGN_PUBLIC_KEY_SHA256

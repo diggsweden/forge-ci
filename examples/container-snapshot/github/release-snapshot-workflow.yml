@@ -22,7 +22,7 @@ jobs:
       branch: ${{ inputs.source-branch || github.ref_name }}
       # The full commit the workflow ref above names; the snapshot route runs
       # the CLI built in this run from exactly this commit.
-      forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+      forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
       # Pinned by digest and admitted before any job runs; fill in
       # the digests of the release you call (docs/runtime-images.md).
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:PIN_BASE_IMAGE_DIGEST # v0.90.0 digest

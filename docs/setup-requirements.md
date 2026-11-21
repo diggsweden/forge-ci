@@ -28,7 +28,7 @@ see [publishing](publishing.md) and
 The rules come from the CLI you run. When the CLI's own commit matches the
 workflow's pin, the report calls them revision-matched; otherwise they are
 reference guidance, marked unverified, and you check the pinned release's
-documentation. On GitHub `forge-ci-binary-ref` must equal the orchestrator
+documentation. On GitHub `forge-ci-sha` must equal the orchestrator
 pin too, and on Forgejo `forge-ci-sha` must equal the workflow pin;
 otherwise the contract is marked unverified.
 

@@ -981,7 +981,7 @@ The signed request tag stays in the repo as the cryptographic anchor of who auth
 
 ### Org policy: allowlisting is on by default at the caller layer
 
-The engine input `release.requireallowlistedsigner` defaults to **false** so the tool stays usable in any repo. An organisation turns it on in its shared release-workflow template, so every release is signed by an allowlisted maintainer. A caller wires it like this:
+The engine input `release-require-allowlisted-signer` defaults to **false** so the tool stays usable in any repo. An organisation turns it on in its shared release-workflow template, so every release is signed by an allowlisted maintainer. A caller wires it like this:
 
 ```yaml
 # .github/workflows/release-workflow.yml
@@ -991,7 +991,7 @@ jobs:
     with:
       # Engine commit and image digests: see the Advanced Pinning Recipe.
       branch: main
-      release.requireallowlistedsigner: true   # org default; override only for private repos
+      release-require-allowlisted-signer: true   # org default; override only for private repos
 ```
 
 Setting it at the caller layer, rather than hardcoding it non-overridable in the engine, leaves a genuinely-private repo an **auditable** escape hatch. Dropping the line to `false` is a visible change in the repo's own workflow, reviewed like any other.
@@ -1001,7 +1001,7 @@ Setting it at the caller layer, rather than hardcoding it non-overridable in the
 Two switches enable it:
 
 - **Per-artifact**: `require-authorization: true` on any artifact in `artifacts.yml`. Use this when a *specific* deliverable (e.g. a public library) needs the gate; other artifacts in the same repo aren't gated.
-- **Per-release**: `release.requireallowlistedsigner: true` on `release-orchestrator.yml` (the org default). Use this when *every* release of the repo must pass the gate.
+- **Per-release**: `release-require-allowlisted-signer: true` on `release-orchestrator.yml` (the org default). Use this when *every* release of the repo must pass the gate.
 
 If either is true, the gate runs. Behaviour when the gate is on:
 
@@ -1059,7 +1059,7 @@ never be read in part.
 -----END PGP PUBLIC KEY BLOCK-----
 ```
 
-Because the signer's public key travels with the repo, the in-process verifier can actually check the signature. So `release.requireallowlistedsigner: true` genuinely enforces. A missing or empty allowlist fails closed, and so does a signature that can't be verified against any committed key. Neither is waved through. (There is no separate fingerprints-only file. A fingerprint with no key material can't be verified, which was the gap this design removes.)
+Because the signer's public key travels with the repo, the in-process verifier can actually check the signature. So `release-require-allowlisted-signer: true` genuinely enforces. A missing or empty allowlist fails closed, and so does a signature that can't be verified against any committed key. Neither is waved through. (There is no separate fingerprints-only file. A fingerprint with no key material can't be verified, which was the gap this design removes.)
 
 All allowlist files are reviewed via the same PR process that protects `main`. Adding or removing a signer is a commit; the audit trail is `git log`.
 
@@ -1100,7 +1100,7 @@ git cat-file tag v1.2.3 | gpg --status-fd 1 --verify 2>/dev/null | grep VALIDSIG
 - **Snapshots do not enter this gate.** The production orchestrator accepts only signed `release-request/vX.Y.Z` refs and creates only stable `vX.Y.Z` tags. Branch snapshots use the separate unsigned snapshot orchestrator.
 - **Multi-module Maven**: the gate is per-release-tag, not per-module. One tag, one signer, one allowlist check.
 - **Key rotation**: add the new entry, leave the old entry until everyone's switched, then remove it in a PR. `valid-before` lets you pre-stage a removal date.
-- **The allowlist is missing but the gate is off**: tolerated, but **loudly**. A `::warning::` annotation and a summary callout flag that the release ran with no allowlist. The project hasn't opted in; turn on `require-authorization: true` or `release.requireallowlistedsigner: true` (the org default) to enforce.
+- **The allowlist is missing but the gate is off**: tolerated, but **loudly**. A `::warning::` annotation and a summary callout flag that the release ran with no allowlist. The project hasn't opted in; turn on `require-authorization: true` or `release-require-allowlisted-signer: true` (the org default) to enforce.
 - **Fingerprints-only list, signer's key not available**: with the gate **on**, a signature that can't be verified against any allowed key fails closed (exit 77). Commit the signer's public key to `allowed_gpg_keys.asc`. With the gate **off**, it's a loud warning, not a failure.
 - **The GPG allowlist is present but is not a key bundle**: refused as malformed input (exit 65) before any signature is checked, with the gate on or off. A truncated or hand-edited bundle is a broken policy file, not an unverifiable signature.
 
@@ -1428,7 +1428,7 @@ who owns them, and migration from legacy consumer opt-outs.
 | **Artifact-presence verification** in publish-container | Required | Drop the `from:` entry in artifacts.yml so the verify step is skipped |
 | **JVM reproducibility settings** (Maven `outputTimestamp`, Gradle archive task settings, checked statically) | Required invocation, report-only findings by default | Explicit `enforce-reproducible-builds: true` blocks missing settings; there is no per-artifact execution opt-out |
 | **Cargo lockfile + toolchain pin** | Required | None. `Cargo.lock` and either `rust-toolchain.toml` or `rust-toolchain` are mandatory for every Cargo artifact |
-| **Published release readback** (`release validate-published`, the last step of each forge's `Publish: release` job) | Required for a published and for a draft release. A published release is read with the run's read-only token. A draft, which a forge hides from that token, is read with `RELEASE_TOKEN`, which created it (GitHub `release.draft: true`, Forgejo any `release-draft` but `false`; GitLab has no drafts) | None. A release that is not visible, a planned release file missing from the forge, or one of another size where the forge reports one (GitHub and Forgejo; GitLab reports none, so the name alone is compared), or of another SHA-256 digest where the forge reports one (GitHub alone: the release APIs of Forgejo and GitLab report no digest, so a file of the same size with other bytes is not found there), or a file GitHub reports without a SHA-256 digest, fails the run |
+| **Published release readback** (`release validate-published`, the last step of each forge's `Publish: release` job) | Required for a published and for a draft release. A published release is read with the run's read-only token. A draft, which a forge hides from that token, is read with `RELEASE_TOKEN`, which created it (GitHub `release-draft: true`, Forgejo any `release-draft` but `false`; GitLab has no drafts) | None. A release that is not visible, a planned release file missing from the forge, or one of another size where the forge reports one (GitHub and Forgejo; GitLab reports none, so the name alone is compared), or of another SHA-256 digest where the forge reports one (GitHub alone: the release APIs of Forgejo and GitLab report no digest, so a file of the same size with other bytes is not found there), or a file GitHub reports without a SHA-256 digest, fails the run |
 
 A passing pipeline must be read alongside its selected checks, native execution
 reports and administrator-policy decisions. A report-only pass can retain real

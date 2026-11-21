@@ -7,7 +7,7 @@
 # See docs/engine-delivery.md for tool placement and runner prerequisites.
 set -euo pipefail
 export PATH=/usr/bin:/bin
-unset FORGE_CI_BIN FORGE_CI_PATH FORGE_CI_BINARY_REF FORGE_CI_PLAN
+unset FORGE_CI_BIN FORGE_CI_PATH FORGE_CI_SHA FORGE_CI_PLAN
 
 fail() {
   printf 'trusted-bootstrap: %s\n' "$1" >&2

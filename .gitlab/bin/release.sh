@@ -105,9 +105,9 @@ rc_checkout() {
 
 rc_request_checkout() {
   rc_checkout "${RELEASE_REQUEST_SHA}"
-  printf '%s\n' "${RC_REQUEST_ALLOWED_SIGNERS:?}" >"${RC_WORK}/request-allowed-signers"
+  printf '%s\n' "${RC_REQUEST_ALLOWED_SIGNERS:?}" >"${RC_WORK}/release-request-allowed-signers"
   rc_engine release validate-request --release-request "${CI_COMMIT_TAG}" --tag "${RELEASE_TAG}" \
-    --expected-commit "${RELEASE_REQUEST_SHA}" --allowed-signers-file "${RC_WORK}/request-allowed-signers"
+    --expected-commit "${RELEASE_REQUEST_SHA}" --allowed-signers-file "${RC_WORK}/release-request-allowed-signers"
   rc_engine validate tag commit --tag "${CI_COMMIT_TAG}" --branch "${RC_RELEASE_BRANCH}" --require-head
 }
 

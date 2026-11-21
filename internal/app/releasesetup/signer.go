@@ -27,7 +27,7 @@ import (
 // SignersFile is the allowed-signers file every forge's release reads: the
 // GitHub release and git-signing checks, and the Forgejo
 // release-request-allowed-signers default. GitLab takes the text as the
-// request-allowed-signers input, so there is no file.
+// release-request-allowed-signers input, so there is no file.
 const SignersFile = ".forge-ci/allowed_signers"
 
 const signersHeader = "# Who may sign Forge CI release requests and release commits.\n" +

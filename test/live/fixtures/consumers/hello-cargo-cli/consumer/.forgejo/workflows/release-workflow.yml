@@ -39,7 +39,7 @@ jobs:
       # a key-free job edits Cargo.toml and refreshes Cargo.lock in this image.
       runtime-image-rust: ${{ vars.CI_JOB_IMAGE }}
       sign-distro-packages: 'false'
-      publish-container-images: 'false'
+      publish-containers: 'false'
     secrets:
       RELEASE_SSH_SIGNING_KEY: ${{ secrets.RELEASE_SSH_SIGNING_KEY }}
       RELEASE_COSIGN_PRIVATE_KEY: ${{ secrets.RELEASE_COSIGN_PRIVATE_KEY }}

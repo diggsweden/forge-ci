@@ -31,7 +31,7 @@ const (
 	// sbomBundleOffered: the release policy and the artifacts share a layer
 	// every artifact produces.
 	sbomBundleOffered
-	// sbomBundleWithheld: release.sboms and the artifacts share no layer.
+	// sbomBundleWithheld: release-sboms and the artifacts share no layer.
 	sbomBundleWithheld
 )
 
@@ -39,11 +39,11 @@ const sbomBundleSuffix = "-sboms.tar.gz"
 
 // The release orchestrator inputs the profile reads, and their defaults.
 const (
-	inputSBOMs            = "release.sboms"
+	inputSBOMs            = "release-sboms"
 	inputChangelogCreator = "changelog-creator"
-	inputSkipVersionBump  = "changelog.skipversionbump"
-	inputAttach           = "release.attachartifacts"
-	inputDraft            = "release.draft"
+	inputSkipVersionBump  = "changelog-skip-version-bump"
+	inputAttach           = "release-attach-artifacts"
+	inputDraft            = "release-draft"
 	inputSBOMsDefault     = "all"
 	inputGitCliff         = "git-cliff"
 )
@@ -117,7 +117,7 @@ func githubReleaseProfileOf(dir, workflow string) (githubReleaseProfile, error) 
 	return profile, nil
 }
 
-// releaseSBOMBundle intersects the workflow's release.sboms with the layers
+// releaseSBOMBundle intersects the workflow's release-sboms with the layers
 // the declared artifacts request, as the release plan does.
 func releaseSBOMBundle(releaseSBOMs string, declared *config.Config) (sbomBundle, error) {
 	release, err := config.ExpandSBOMs(releaseSBOMs)

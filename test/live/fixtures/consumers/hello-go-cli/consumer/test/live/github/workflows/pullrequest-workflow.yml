@@ -31,7 +31,7 @@ jobs:
     with:
       # The full commit the uses: ref above names; every job of the route runs
       # only the CLI this commit records.
-      forge-ci-binary-ref: 2f4e845cee96973d1082bf00a5a18689c1482148 # v0.90.0
+      forge-ci-sha: 2f4e845cee96973d1082bf00a5a18689c1482148 # v0.90.0
       project-type: go
       # The lint image, pinned by digest: the plan job refuses a tag.
       nanolinter-image: codefloe.com/itiquette/nanolinter:go@sha256:0000000000000000000000000000000000000000000000000000000000000000

@@ -12,7 +12,7 @@ binary baked into that image instead; see
 `canonical-cli-bootstrap.yml` is a reusable workflow with read-only
 permissions and no signing or publishing credential. Each orchestrator calls
 it once with four pinned inputs: the engine repository, the full engine
-commit (`forge-ci-binary-ref`), a Go builder image and a receiver image, both
+commit (`forge-ci-sha`), a Go builder image and a receiver image, both
 by `@sha256:` digest. It has three jobs:
 
 1. `canonical-admit` checks the input formats before any image starts.
@@ -76,7 +76,7 @@ anything from the checkout it:
   it was given;
 - compares `.engine/bin/lib-forge-ci.sh`, the two `.sha256` records and
   `scripts/ci/trusted-runtime-tools.sh` byte for byte with the commit;
-- clears `FORGE_CI_BIN`, `FORGE_CI_PATH`, `FORGE_CI_BINARY_REF` and
+- clears `FORGE_CI_BIN`, `FORGE_CI_PATH`, `FORGE_CI_SHA` and
   `FORGE_CI_PLAN`, and verifies the binary's SHA-256 strictly against the
   record.
 

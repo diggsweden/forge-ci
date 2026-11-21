@@ -22,7 +22,7 @@ jobs:
       contents: read
       packages: read
     with:
-      forge-ci-binary-ref: v0.90.0
+      forge-ci-sha: v0.90.0
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-node-24:v0.90.0
       private-dependencies: true
       dependency-registry: https://npm.pkg.github.com

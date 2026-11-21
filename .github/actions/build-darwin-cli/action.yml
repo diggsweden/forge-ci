@@ -16,12 +16,12 @@
 #   - uses: actions/checkout@<pin>
 #     with:
 #       repository: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
-#       ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
+#       ref: ${{ needs.resolve-bootstrap.outputs.forge-ci-sha }}
 #       path: _forge_ci_engine
 #       persist-credentials: false
 #   - uses: ./_forge_ci_engine/.github/actions/build-darwin-cli
 #     with:
-#       engine-commit: ${{ needs.resolve-bootstrap.outputs.forge-ci-binary-ref }}
+#       engine-commit: ${{ needs.resolve-bootstrap.outputs.forge-ci-sha }}
 name: Build forge-ci for macOS
 description: "Build forge-ci on a macOS runner from the approved engine checkout this action runs from; canonical delivery serves Linux only."
 inputs:

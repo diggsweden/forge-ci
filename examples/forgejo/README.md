@@ -50,7 +50,8 @@ Before copying it to `.forgejo/workflows/self-release.yml`:
   the authorized request keys in `.forge-ci/allowed_signers`. The candidate
   and build jobs execute repository code and must have no release secrets.
 - Configure `CI_RUNNER_LABEL`, `RELEASE_BOT_NAME`, `RELEASE_BOT_EMAIL`,
-  `RELEASE_GIT_HOST_KEY_FINGERPRINT` and, if needed, `RELEASE_GIT_URL`.
+  `RELEASE_GIT_HOST_KEY_FINGERPRINT` and, if needed, `RELEASE_GIT_URL` and
+  `RELEASE_BRANCH` (the release branch when it is not the default branch).
   Supply the signing and publication secrets named in the caller, and
   `COSIGN_PUBLIC_KEY` matching the pinned checksum.
 - Run the full development gate and a disposable consumer trial before

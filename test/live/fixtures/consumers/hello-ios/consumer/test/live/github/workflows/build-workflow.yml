@@ -13,7 +13,7 @@ jobs:
   build:
     uses: diggsweden/forge-ci/.github/workflows/build-xcode-ios.yml@v0.90.0
     with:
-      forge-ci-binary-ref: v0.90.0
+      forge-ci-sha: v0.90.0
       xcode-version: "26.6"
       runs-on-darwin-arm64: '["macos-26"]'
       project: HelloTrial.xcodeproj

@@ -28,7 +28,7 @@ jobs:
     with:
       # The full commit the uses: ref above names; every job of the route runs
       # only the CLI this commit records.
-      forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
+      forge-ci-sha: PIN_FORGE_CI_SHA # v0.90.0
       project-type: gradle
       # The lint image, pinned by digest: the plan job refuses a tag.
       nanolinter-image: ghcr.io/itiquette/nanolinter:kotlin@sha256:PIN_DIGEST

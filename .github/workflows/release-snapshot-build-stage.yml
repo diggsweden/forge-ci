@@ -36,7 +36,7 @@ on:
         required: false
         default: ""
         type: string
-      forge-ci-binary-ref:
+      forge-ci-sha:
         required: true
         type: string
       runtime-image:
@@ -122,7 +122,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/resolve-forge-ci-bootstrap.yml
     with:
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       images: |
         runtime-image=${{ inputs['runtime-image'] }}
   admit-signer-runner:
@@ -164,7 +164,7 @@ jobs:
     with:
       runs-on: ${{ inputs['runs-on'] }}
       enforce-application-tests: ${{ inputs['enforce-application-tests'] }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       working-directory: ${{ matrix.artifact.working_directory }}
       private-dependencies: ${{ matrix.artifact.maven.private_dependencies || false }}
       settings-path: ${{ matrix.artifact.maven.settings_path || '' }}
@@ -190,7 +190,7 @@ jobs:
     with:
       runs-on: ${{ inputs['runs-on'] }}
       enforce-application-tests: ${{ inputs['enforce-application-tests'] }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       working-directory: ${{ matrix.artifact.working_directory }}
       private-dependencies: ${{ matrix.artifact.npm.private_dependencies || false }}
       dependency-registry: ${{ matrix.artifact.npm.dependency_registry || '' }}
@@ -215,7 +215,7 @@ jobs:
     with:
       runs-on: ${{ inputs['runs-on'] }}
       enforce-application-tests: ${{ inputs['enforce-application-tests'] }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       publication-artifact-name: ${{ fromJson(inputs['snapshot-build-stage-plan-json']).export_publications && matrix.artifact.publication_artifact_name || '' }}
       snapshot-publication: true
       working-directory: ${{ matrix.artifact.working_directory }}
@@ -240,7 +240,7 @@ jobs:
     with:
       runs-on: ${{ inputs['runs-on'] }}
       enforce-application-tests: ${{ inputs['enforce-application-tests'] }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       commit: ${{ fromJson(inputs['snapshot-release-plan-json']).context.release_sha }}
       working-directory: ${{ matrix.artifact.working_directory }}
       branch: ${{ fromJson(inputs['snapshot-release-plan-json']).context.release_sha }}
@@ -273,7 +273,7 @@ jobs:
     with:
       runs-on: ${{ inputs['runs-on'] }}
       enforce-application-tests: ${{ inputs['enforce-application-tests'] }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       library: ${{ matrix.artifact.build_type == 'library' }}
       publication-artifact-name: ${{ fromJson(inputs['snapshot-build-stage-plan-json']).export_publications && matrix.artifact.publication_artifact_name || '' }}
       snapshot-publication: true
@@ -319,7 +319,7 @@ jobs:
       include-tag: false
       build-number: ${{ matrix.artifact.xcode_ios.build_number }}
       working-directory: ${{ matrix.artifact.working_directory }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
   cargo:
     needs: [resolve-bootstrap]
     name: "Build: ${{ matrix.artifact.name }} (Cargo)"
@@ -335,7 +335,7 @@ jobs:
     with:
       runs-on: ${{ inputs['runs-on'] }}
       enforce-application-tests: ${{ inputs['enforce-application-tests'] }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       commit: ${{ fromJson(inputs['snapshot-release-plan-json']).context.release_sha }}
       working-directory: ${{ matrix.artifact.working_directory }}
       branch: ${{ fromJson(inputs['snapshot-release-plan-json']).context.release_sha }}

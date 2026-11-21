@@ -39,7 +39,7 @@ jobs:
       # The test creates its request tag unsigned through the forge's API.
       verify-release-request-signature: 'false'
       sign-distro-packages: 'false'
-      publish-container-images: 'false'
+      publish-containers: 'false'
     secrets:
       RELEASE_SSH_SIGNING_KEY: ${{ secrets.RELEASE_SSH_SIGNING_KEY }}
       RELEASE_COSIGN_PRIVATE_KEY: ${{ secrets.RELEASE_COSIGN_PRIVATE_KEY }}

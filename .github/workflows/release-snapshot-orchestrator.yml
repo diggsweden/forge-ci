@@ -85,11 +85,11 @@ on:
         description: "Keep the built files of every declared artifact its ecosystem builds outside an image (go, cargo, maven, gradle, npm) as unsigned workflow artifacts, named <artifact>-<snapshot version> and kept for 7 days. See docs/workflows.md, Snapshot files."
         default: false
         type: boolean
-      container-image-repository:
+      image-repository:
         description: "Base image repository override; empty uses <registry>/<owner>/<repository>"
         default: ""
         type: string
-      container-registry-user:
+      registry-user:
         default: ""
         type: string
       working-directory:
@@ -167,7 +167,7 @@ on:
         required: false
         default: '["ubuntu-26.04-arm"]'
         type: string
-      forge-ci-binary-ref:
+      forge-ci-sha:
         description: "Full approved engine commit (40 hex). The canonical CLI every control-plane job and host build leg runs is built from exactly this commit; the stages pin their callees to it."
         required: true
         type: string
@@ -274,7 +274,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/resolve-forge-ci-bootstrap.yml
     with:
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       images: |
         runtime-image=${{ inputs['runtime-image'] }}
   canonical-cli:
@@ -287,7 +287,7 @@ jobs:
     uses: ./.github/workflows/canonical-cli-bootstrap.yml
     with:
       engine-repository: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
-      engine-commit: ${{ inputs['forge-ci-binary-ref'] }}
+      engine-commit: ${{ inputs['forge-ci-sha'] }}
       runtime-image: ${{ inputs['canonical-builder-image'] }}
       receive-runtime-image: ${{ inputs['runtime-image'] }}
 
@@ -318,7 +318,7 @@ jobs:
         shell: /bin/bash --noprofile --norc -peuo pipefail {0}
         env:
           ENGINE_REPOSITORY: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
-          ENGINE_COMMIT: ${{ inputs['forge-ci-binary-ref'] }}
+          ENGINE_COMMIT: ${{ inputs['forge-ci-sha'] }}
           ENGINE_ORIGIN: ${{ github.server_url }}/${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
           RUNTIME_IMAGE: ${{ inputs['runtime-image'] }}
           PRODUCER_ARTIFACT_ID: ${{ needs.canonical-cli.outputs.artifact-id }}
@@ -390,7 +390,7 @@ jobs:
           NODE_VERSION: ${{ inputs['node-version'] }}
           RUST_TOOLCHAIN: ${{ inputs['rust-toolchain'] }}
           REGISTRY: ${{ inputs.registry }}
-          FORGE_CI_BINARY_REF: ${{ inputs['forge-ci-binary-ref'] }}
+          FORGE_CI_SHA: ${{ inputs['forge-ci-sha'] }}
           NPM_REGISTRY: ${{ inputs['npm-registry'] }}
           PACKAGE_SCOPE: ${{ inputs['package-scope'] }}
           SBOMS: ${{ inputs.sboms }}
@@ -431,7 +431,7 @@ jobs:
       enforce-application-tests: ${{ inputs['enforce-application-tests'] }}
       snapshot-release-plan-json: ${{ needs.setup-snapshot.outputs.snapshot-release-plan-json }}
       snapshot-build-stage-plan-json: ${{ needs.setup-snapshot.outputs.snapshot-build-stage-plan-json }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       runtime-image: ${{ inputs['runtime-image'] }}
       runtime-image-java: ${{ inputs['runtime-image-java'] }}
       runtime-image-node: ${{ inputs['runtime-image-node'] }}
@@ -462,7 +462,7 @@ jobs:
     with:
       runs-on: ${{ inputs['runs-on'] }}
       snapshot-release-plan-json: ${{ needs.setup-snapshot.outputs.snapshot-release-plan-json }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       runtime-image: ${{ inputs['runtime-image-full'] }}
       runtime-image-java: ${{ inputs['runtime-image-java'] }}
       runtime-image-node: ${{ inputs['runtime-image-node'] }}
@@ -493,10 +493,10 @@ jobs:
       artifacts-config: ${{ inputs['artifacts-config'] }}
       publish-containers: ${{ inputs['publish-containers'] }}
       publish-files: ${{ inputs['publish-files'] }}
-      image-repository: ${{ inputs['container-image-repository'] }}
+      image-repository: ${{ inputs['image-repository'] }}
       registry: ${{ inputs.registry }}
-      registry-user: ${{ inputs['container-registry-user'] }}
-      forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      registry-user: ${{ inputs['registry-user'] }}
+      forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       runtime-image: ${{ inputs['runtime-image'] }}
       runtime-image-full: ${{ inputs['runtime-image-full'] }}
       canonical-artifact-id: ${{ needs.canonical-cli.outputs.artifact-id }}

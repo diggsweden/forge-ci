@@ -133,7 +133,7 @@ type SnapshotReleaseInput struct {
 	NodeVersion           string
 	RustToolchain         string
 	Registry              string
-	ForgeCIBinaryRef      string
+	ForgeCISHA            string
 	NPMRegistry           string
 	PackageScope          string
 	SBOMs                 string
@@ -166,7 +166,7 @@ func SnapshotRelease(ctx context.Context, sink ci.OutputSink, in SnapshotRelease
 		NodeVersion:           in.NodeVersion,
 		RustToolchain:         in.RustToolchain,
 		Registry:              in.Registry,
-		ForgeCIBinaryRef:      in.ForgeCIBinaryRef,
+		ForgeCISHA:            in.ForgeCISHA,
 		NPMRegistry:           in.NPMRegistry,
 		PackageScope:          in.PackageScope,
 		SBOMs:                 in.SBOMs,
@@ -208,13 +208,13 @@ func emitJSONOutput[T any](ctx context.Context, sink ci.OutputSink, key string, 
 
 // PRInput drives `plan pr`.
 type PRInput struct {
-	ProjectType      string
-	BaseBranch       string
-	ForgeCIBinaryRef string
-	LintEngine       string
-	NanolinterImage  string
-	SwiftFormat      bool
-	SwiftLint        bool
+	ProjectType     string
+	BaseBranch      string
+	ForgeCISHA      string
+	LintEngine      string
+	NanolinterImage string
+	SwiftFormat     bool
+	SwiftLint       bool
 }
 
 // PR composes typed pull-request quality plan outputs.
@@ -247,13 +247,13 @@ func PR(ctx context.Context, sink ci.OutputSink, in PRInput) (*pipeline.PRPlan, 
 	}
 
 	plan := pipeline.NewPRPlan(pipeline.PRPlanInput{
-		ProjectType:      pt,
-		BaseBranch:       in.BaseBranch,
-		ForgeCIBinaryRef: in.ForgeCIBinaryRef,
-		Engine:           engine,
-		NanolinterImage:  nanolinterImage,
-		SwiftFormat:      in.SwiftFormat,
-		SwiftLint:        in.SwiftLint,
+		ProjectType:     pt,
+		BaseBranch:      in.BaseBranch,
+		ForgeCISHA:      in.ForgeCISHA,
+		Engine:          engine,
+		NanolinterImage: nanolinterImage,
+		SwiftFormat:     in.SwiftFormat,
+		SwiftLint:       in.SwiftLint,
 	})
 	if err := emitJSONOutput(ctx, sink, "pr-plan-json", plan); err != nil {
 		return nil, err

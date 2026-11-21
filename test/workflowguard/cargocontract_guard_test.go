@@ -40,7 +40,7 @@ func TestSelectedCargoContractsReceiveOnlyTheVerifiedEnginePath(t *testing.T) {
 			require.Equal(t, "${{ inputs['test-selection-json'] != '' }}", step.If)
 			require.Equal(t, "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10", step.Uses)
 			require.Equal(t, "${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}", step.With["repository"])
-			require.Equal(t, "${{ inputs['forge-ci-binary-ref'] }}", step.With["ref"])
+			require.Equal(t, "${{ inputs['forge-ci-sha'] }}", step.With["ref"])
 			require.Equal(t, ".engine", step.With["sparse-checkout"])
 			require.Equal(t, "false", step.With["persist-credentials"])
 		case step.ID == "contract-engine":
