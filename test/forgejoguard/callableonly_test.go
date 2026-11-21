@@ -130,8 +130,21 @@ func TestSelfBuildIsTheOnlyUnprivilegedLocalEntryPoint(t *testing.T) {
 	}
 
 	jobs := loadWorkflow(t, selfBuildWorkflow).jobs
-	if len(jobs) != 1 || jobs["go"].runsOn() != "${{ fromJSON(vars.CI_RUNNER_LABEL) }}" {
+
+	const runner = "${{ fromJSON(vars.CI_RUNNER_LABEL) }}"
+	if len(jobs) != 2 || jobs["go"].runsOn() != runner || jobs["blackbox"].runsOn() != runner {
 		t.Fatal("self-build must use the administrator's ordinary native runner")
+	}
+	// The suite is optional and named by the administrator alone: a pull
+	// request cannot choose the repository, the commit or the image.
+	blackbox := jobs["blackbox"]
+	if scalarString(mappingValue(blackbox.node, "if")) != "forgejo.event_name == 'pull_request' && vars.FORGE_CI_TESTSUITE_REPOSITORY != '' && vars.FORGE_CI_TESTSUITE_IMAGE != ''" ||
+		blackbox.containerImage() != "${{ vars.FORGE_CI_TESTSUITE_IMAGE }}" {
+		t.Fatal("the black-box job must run for pull requests only, where an administrator configured the suite and its image")
+	}
+
+	if mentions(blackbox.node, "forgejo.event.") || mentions(blackbox.node, "inputs.") {
+		t.Fatal("the black-box job must not read its coordinates from the event")
 	}
 }
 

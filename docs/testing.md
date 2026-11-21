@@ -75,13 +75,29 @@ go vet ./...
 This builds and exercises the checked-out source, not the binary bundled in
 the job image. It does not publish images, install the CLI locally, sign a
 release, or launch live tests. The full GitHub PR gate additionally runs its
-lint, integration, checksum and external black-box checks; those additional
-jobs are not claimed as cross-forge parity.
+lint, integration, checksum and external black-box checks; apart from the
+black-box suite below, those additional jobs are not claimed as cross-forge
+parity.
 
 For a Go-only trial, dispatch `self-pullrequest.yml` on GitHub or Forgejo, or
-start a branch pipeline through GitLab's UI/API. GitHub's manual dispatch
-skips the additional PR jobs. The native job has a 30-minute total limit;
+start a branch pipeline through GitLab's UI/API. A manual dispatch skips the
+additional PR jobs on both forges. The native job has a 30-minute total limit;
 the unit-test invocation has a 15-minute per-package limit.
+
+The external black-box suite runs for pull requests on GitHub and, where an
+administrator configures it, on Forgejo. The variables have the same names on
+both; GitLab's own pipeline has no black-box job.
+
+| Variable | GitHub | Forgejo |
+|---|---|---|
+| `FORGE_CI_TESTSUITE_REPOSITORY` | optional; defaults to the upstream suite | the suite's `owner/name` on the same forge; the job is skipped while it is unset |
+| `FORGE_CI_TESTSUITE_SHA` | not read; the workflow pins the commit | required: the full commit of the reviewed suite |
+| `FORGE_CI_TESTSUITE_IMAGE` | not read; the job runs on the hosted runner | required: a digest-pinned image with mise, Git, GnuPG and working Buildah; the job is skipped while it is unset. The job runs a pull request's code, a fork's too: do not make its runner privileged for Buildah's sake |
+
+The Forgejo job checks the repository name and the commit before it fetches
+anything, reads nothing from the pull request but the checked-out source, and
+is given no release credentials. It fetches the suite without a token, so
+the suite repository must be readable without one.
 
 GitLab administrators must set `FORGE_CI_SELF_BUILD_IMAGE` to an approved
 digest-pinned native Go runtime containing the Go version in `go.mod`,

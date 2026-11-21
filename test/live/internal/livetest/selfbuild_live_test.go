@@ -90,13 +90,25 @@ func TestForgeCI_SelfBuild(t *testing.T) {
 	SetRepoVariable(t, target, repo, "FORGE_CI_SELF_BUILD_IMAGE", image)
 	DispatchConsumerWorkflow(t, target, repo, "self-pullrequest.yml", "main")
 	run := waitForRunOf(t, target, repo, "self-pullrequest.yml", "workflow_dispatch", 35*time.Minute, "", 0)
-
 	jobs := RunJobs(t, target, repo, run.ID)
+	// A dispatch runs the Go gate alone; the optional black-box job is skipped.
+	executed := 0
+
 	for _, job := range jobs {
+		if job.Status == "skipped" {
+			continue
+		}
+
+		executed++
+
 		t.Log(RetainJobLog(t, target, repo, job))
+
+		if job.Name != "go" || job.Status != "success" || !job.Started() {
+			t.Errorf("unexpected self-build job: %+v", job)
+		}
 	}
 
-	if Branches(t, target, repo)["main"] != head || run.Status != "success" || len(jobs) != 1 || jobs[0].Status != "success" || !jobs[0].Started() {
+	if Branches(t, target, repo)["main"] != head || run.Status != "success" || executed != 1 {
 		t.Fatalf("self-build %s at %s: run %+v, jobs %+v", repo, head, run, jobs)
 	}
 }

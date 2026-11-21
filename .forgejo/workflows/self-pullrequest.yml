@@ -61,3 +61,56 @@ jobs:
         run: go vet ./...
       - name: Check the built binary
         run: ./bin/forge-ci --version
+  blackbox:
+    # The external black-box suite, as on GitHub: pull requests only, and only
+    # where an administrator names the suite. FORGE_CI_TESTSUITE_REPOSITORY is
+    # its owner/name on this forge, FORGE_CI_TESTSUITE_SHA the reviewed commit,
+    # FORGE_CI_TESTSUITE_IMAGE a digest-pinned image with mise, Git, GnuPG and
+    # working Buildah. The job is given no release credentials, and without
+    # the image it does not run: the change's code never runs on the bare
+    # runner.
+    if: forgejo.event_name == 'pull_request' && vars.FORGE_CI_TESTSUITE_REPOSITORY != '' && vars.FORGE_CI_TESTSUITE_IMAGE != ''
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
+    timeout-minutes: 80
+    container:
+      image: ${{ vars.FORGE_CI_TESTSUITE_IMAGE }}
+    steps:
+      - name: Checkout the engine candidate
+        uses: https://code.forgejo.org/actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Fetch the pinned suite
+        env:
+          SERVER_URL: ${{ forgejo.server_url }}
+          SUITE_REPOSITORY: ${{ vars.FORGE_CI_TESTSUITE_REPOSITORY }}
+          SUITE_SHA: ${{ vars.FORGE_CI_TESTSUITE_SHA }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$SUITE_REPOSITORY" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*/[A-Za-z0-9_][A-Za-z0-9._-]*$ ]]; then
+            echo 'FORGE_CI_TESTSUITE_REPOSITORY must be the owner/name of the suite on this forge.' >&2
+            exit 2
+          fi
+          if [[ ! "$SUITE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'Set FORGE_CI_TESTSUITE_SHA to the full commit SHA of the reviewed suite.' >&2
+            exit 2
+          fi
+          suite="${RUNNER_TEMP:?}/forge-ci-blackbox-tests"
+          git init --quiet "$suite"
+          git -C "$suite" fetch --quiet --depth=1 "${SERVER_URL%/}/${SUITE_REPOSITORY}.git" "$SUITE_SHA"
+          git -C "$suite" checkout --quiet --detach "$SUITE_SHA"
+      - name: Run the strict black-box suite
+        timeout-minutes: 65
+        env:
+          FORGE_CI_TEST_SOURCE: ${{ forgejo.workspace }}
+          FORGE_CI_BLACKBOX_PROFILE: strict
+          FORGE_CI_PROC_SWAPS: /dev/null
+          TMPDIR: ${{ runner.temp }}
+          GOTOOLCHAIN: auto
+        run: |
+          set -euo pipefail
+          cd "${RUNNER_TEMP:?}/forge-ci-blackbox-tests"
+          mise trust
+          mise install --locked go java rust
+          mise exec --no-deps go java rust -- mise install --locked
+          mise exec -- ./scripts/validate-strict-profile-contract.sh
+          mise exec -- go test -tags=blackbox -count=1 -timeout 35m ./tests/blackbox/...

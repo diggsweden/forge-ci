@@ -6,6 +6,10 @@
 package forgejobehavior
 
 import (
+	"maps"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -108,6 +112,69 @@ func TestForgejoSelfBuildBootstrapsWithoutPublishedEngine(t *testing.T) {
 		if !strings.Contains(body, required) {
 			t.Fatalf("source bootstrap is missing %q", required)
 		}
+	}
+}
+
+// The suite coordinates are administrator variables, but they reach git. A
+// value that is not an owner/name on this forge, or not a full commit, stops
+// the job before anything is fetched.
+func TestForgejoBlackboxFetchRejectsUnreviewedCoordinates(t *testing.T) {
+	t.Parallel()
+
+	fetch := workflowStep(t, "self-pullrequest.yml", "blackbox", "Fetch the pinned suite")
+	if !maps.Equal(fetch.Env, map[string]string{
+		"SERVER_URL":       "${{ forgejo.server_url }}",
+		"SUITE_REPOSITORY": "${{ vars.FORGE_CI_TESTSUITE_REPOSITORY }}",
+		"SUITE_SHA":        "${{ vars.FORGE_CI_TESTSUITE_SHA }}",
+	}) || strings.Contains(fetch.Run, "${{") {
+		t.Fatalf("the fetch script must read its coordinates from its environment only: %q", fetch.Env)
+	}
+
+	sha := strings.Repeat("a", 40)
+	for name, testCase := range map[string]struct {
+		repository, sha string
+		fetched         bool
+	}{
+		"reviewed coordinates": {"acme/forge-ci-blackbox-tests", sha, true},
+		"another host":         {"https://other.example/acme/suite", sha, false},
+		"transport helper":     {"ext::sh -c id", sha, false},
+		"parent directory":     {"../suite", sha, false},
+		"nested path":          {"acme/team/suite", sha, false},
+		"no repository":        {"", sha, false},
+		"branch name":          {"acme/suite", "main", false},
+		"short commit":         {"acme/suite", sha[:12], false},
+		"no commit":            {"acme/suite", "", false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+
+			record := filepath.Join(dir, "git.log")
+			if err := os.WriteFile(filepath.Join(dir, "git"), []byte("#!/bin/sh\nprintf '%s\\n' \"$*\" >>\"$GIT_RECORD\"\n"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+
+			cmd := exec.CommandContext(t.Context(), "bash", "-c", fetch.Run)
+			cmd.Env = []string{
+				"PATH=" + dir + ":/usr/bin:/bin", "RUNNER_TEMP=" + dir, "GIT_RECORD=" + record,
+				"SERVER_URL=https://forge.example/", "SUITE_REPOSITORY=" + testCase.repository, "SUITE_SHA=" + testCase.sha,
+			}
+			output, err := cmd.CombinedOutput()
+			calls, _ := os.ReadFile(record)
+
+			if !testCase.fetched {
+				if err == nil || len(calls) != 0 {
+					t.Fatalf("accepted %q at %q: err=%v git=%q output=%q", testCase.repository, testCase.sha, err, calls, output)
+				}
+
+				return
+			}
+
+			if err != nil || !strings.Contains(string(calls), "fetch --quiet --depth=1 https://forge.example/"+testCase.repository+".git "+testCase.sha) {
+				t.Fatalf("reviewed coordinates were not fetched from this forge: err=%v git=%q output=%q", err, calls, output)
+			}
+		})
 	}
 }
 
