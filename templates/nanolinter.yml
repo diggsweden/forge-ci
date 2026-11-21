@@ -112,6 +112,14 @@ spec:
     GIT_CHECKOUT: "true"
     # The whole history, for the comparison with the merge request's target.
     GIT_DEPTH: "0"
+    # The Docker and Kubernetes executors otherwise check every file out
+    # world-writable, and a check that refuses such a configuration file,
+    # as gommitlint does, fails on GitLab alone. The runner hands the
+    # checkout to the image's user instead; the script below then closes
+    # the modes a job before this one left behind. A runner whose own
+    # configuration sets these flags wins over the job.
+    FF_DISABLE_UMASK_FOR_DOCKER_EXECUTOR: "true"
+    FF_DISABLE_UMASK_FOR_KUBERNETES_EXECUTOR: "true"
     RC_FORGE_CI_REPOSITORY: "$[[ inputs.forge-ci-repository ]]"
     SARIF_FILE: nanolinter-security.sarif
     GL_SAST_FILE: gl-sast-report.json
@@ -148,6 +156,13 @@ spec:
       # checked. Do not upload a checked-in report if bootstrap or lint aborts.
       readonly summary_file=forge-ci-pr-check-results.md
       rm -f -- "$summary_file" || exit 1
+
+      # A build directory an earlier job filled keeps that job's modes: the
+      # fetch rewrites only changed files. This job's user owns the tree
+      # under the flags above, so it can close them.
+      if ! chmod -R go-w -- "${CI_PROJECT_DIR:?}" 2>/dev/null; then
+        echo "WARNING: could not remove group and world write access from the checkout; a check that refuses a world-writable configuration file may fail." >&2
+      fi
 
       # opengrep (inside nanolinter) hardcodes paths under the image's home; the
       # flavour image's /home/nanolinter is writable, so cosign's sigstore cache

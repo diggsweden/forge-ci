@@ -193,6 +193,10 @@ func TestLintCheckoutHoldsThePullRequestBaseline(t *testing.T) {
 	gitlab := read("templates/nanolinter.yml")
 	require.Contains(t, gitlab, `"+refs/heads/${target}:refs/remotes/origin/${target}"`)
 	require.Contains(t, gitlab, `GIT_DEPTH: "0"`)
+	// The checkout is not world-writable: a check may refuse such a config.
+	require.Contains(t, gitlab, `FF_DISABLE_UMASK_FOR_DOCKER_EXECUTOR: "true"`)
+	require.Contains(t, gitlab, `FF_DISABLE_UMASK_FOR_KUBERNETES_EXECUTOR: "true"`)
+	require.Contains(t, gitlab, `chmod -R go-w -- "${CI_PROJECT_DIR:?}"`)
 
 	for file, body := range map[string]string{
 		".github/workflows/lint-nanolinter.yml":       github,
