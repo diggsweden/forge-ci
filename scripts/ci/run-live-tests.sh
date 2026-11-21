@@ -258,6 +258,8 @@ trap 'rm -rf -- "$state"' EXIT
     -o "$state/credential-proxy" ./test/live/internal/livetest/credentialproxy
   CGO_ENABLED=0 GOOS=linux GOARCH="$runner_arch" "$go_bin" build -trimpath -buildvcs=false \
     -o "$state/probe-json" ./test/live/internal/livetest/probejson
+  CGO_ENABLED=0 GOOS=linux GOARCH="$runner_arch" "$go_bin" build -trimpath -buildvcs=false \
+    -ldflags='-s -w' -o "$state/cargo-cache-probe" ./test/live/internal/livetest/cargocacheprobe
   # The Forgejo layer's binary, as its jobs download it: the build of the
   # runners' architecture that the tree's checksum names, which the layer
   # scenarios publish to the lab.
@@ -277,6 +279,7 @@ export FORGE_CI_LIVE_RUNNER_SHA256
 FORGE_CI_LIVE_RUNNER_SHA256=$(sha256sum "$state/forge-ci-runner" | cut -d' ' -f1)
 export FORGE_CI_LIVE_CREDENTIAL_PROXY_BIN="$state/credential-proxy"
 export FORGE_CI_LIVE_PROBE_JSON_BIN="$state/probe-json"
+export FORGE_CI_LIVE_CARGO_CACHE_PROBE_BIN="$state/cargo-cache-probe"
 export FORGE_CI_LIVE_LAYER_BIN="$state/forge-ci-layer"
 
 started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)

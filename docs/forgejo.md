@@ -822,6 +822,50 @@ named `<project>-<version>-sboms.tar.gz`, after the repository and that tag. A c
 locked dependencies with retries, without compiling, through
 `build cargo fetch --attempts 5 --retry-delay 10s`.
 
+`build cargo fetch --cache` opts into the Forgejo runner's Actions cache v1
+service through `ACTIONS_CACHE_URL` and `ACTIONS_RUNTIME_TOKEN`, without a
+Node action. The default remains uncached. Only compressed crates.io `.crate`
+archives named and checksum-verified by `Cargo.lock` are transferred. Registry
+indexes, extracted sources, Git dependencies, credentials, tools and compiled
+outputs are excluded. Custom registries use ordinary Cargo fetching.
+
+Missing or invalid runner cache configuration skips cache initialization before
+workspace discovery or archive creation. A runner advertising Actions cache v2
+also falls back to ordinary fetching: this transport supports v1 only. GitHub's
+v2 service needs a separate adapter and live acceptance before adoption; GitLab
+native job caching is not wired to this flag.
+
+Diagnostics distinguish a miss, a verified restore, unavailable/rejected data,
+and failed saving. Successful transfers report archive bytes and elapsed time;
+downloads are labelled pending verification until crate checks complete. A
+reservation conflict reports a skipped save. URLs and tokens are not logged.
+
+The exact cache key hashes the sorted crate names, versions and checksums,
+so a workspace-only version bump can reuse downloads. Every restored crate is
+verified before Cargo sees it; `cargo fetch --locked` still runs on a hit.
+Empty or incomplete archives are rejected as cache hits, retaining only verified
+downloads for the locked fetch. Uploads require every cacheable locked crate.
+The v2 key namespace avoids older entries that could contain partial downloads.
+Crates are read from and restored to the download directory of Cargo 1.85
+and later under the sparse protocol, its default; another Cargo fetches as if
+there were no cache.
+Cargo's workspace discovery selects the lockfile even when the working directory
+is a workspace member.
+Missing or corrupt cache data and service failures warn and fall back to the
+normal locked fetch. Fetch failure still fails the command. Restore and save
+each have a two-minute budget, with a 512 MiB archive and 64 MiB per-crate cap.
+Independent reproducibility builds should keep using their fresh, uncached
+dependency acquisition.
+
+No Forge CI action passes `--cache` yet: `build-cargo` fetches uncached, and a
+job that wants the cache calls `build cargo fetch --cache` itself before it.
+
+Cache entries are immutable and their key follows from `Cargo.lock`. An entry
+that fails verification is never used, but it cannot be replaced either: jobs
+with that lockfile then download it, reject it and fetch normally until the
+runner evicts it. A runner can accept two competing uploads; either is
+verified on restore.
+
 ## Releases and promotion
 
 A release starts when an immutable `release-request/vX.Y.Z` tag is pushed.

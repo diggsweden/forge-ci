@@ -4,17 +4,24 @@
 package build
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/diggsweden/forge-ci/internal/adapters/actionscache"
 	"github.com/diggsweden/forge-ci/internal/adapters/cargo"
+	"github.com/diggsweden/forge-ci/internal/adapters/cargocache"
 	appbuild "github.com/diggsweden/forge-ci/internal/app/build"
 	"github.com/diggsweden/forge-ci/internal/cli/cienv"
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
 	"github.com/diggsweden/forge-ci/internal/domain/build"
+	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
 func cargoCmd() *cli.Command {
@@ -36,11 +43,55 @@ func cargoFetchCmd() *cli.Command {
 			&cli.StringFlag{Name: flagWorkingDir, Value: ".", Sources: cli.EnvVars("WORKING_DIRECTORY"), Usage: usageCargoDirectory},
 			&cli.IntFlag{Name: "attempts", Value: 1, Usage: "dependency fetch attempts (1–10)"},
 			&cli.DurationFlag{Name: "retry-delay", Value: 2 * time.Second, Usage: "linear retry delay (0–1m)"},
+			&cli.BoolFlag{Name: "cache", Usage: "reuse checksum-verified crates.io downloads via the Forgejo Actions v1 cache (best effort, no Node)"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			return appbuild.CargoFetchWithRetry(ctx, cargo.New(), os.Stderr, os.Stderr, appbuild.CargoFetchInput{Dir: cmd.String(flagWorkingDir), Attempts: cmd.Int("attempts"), RetryDelay: cmd.Duration("retry-delay")})
+			in := appbuild.CargoFetchInput{Dir: cmd.String(flagWorkingDir), Attempts: cmd.Int("attempts"), RetryDelay: cmd.Duration("retry-delay")}
+			if cmd.Bool("cache") {
+				cache, err := cargoFetchCache(ctx, in.Dir, cargo.New())
+				if err != nil {
+					_, _ = fmt.Fprintln(os.Stderr, "warning: Cargo download cache unavailable; using locked fetch")
+				} else {
+					in.Cache = cache
+				}
+			}
+
+			return appbuild.CargoFetchWithRetry(ctx, cargo.New(), os.Stderr, os.Stderr, in)
 		},
 	}
+}
+
+func cargoFetchCache(ctx context.Context, dir string, tool appbuild.CargoTool) (*cargocache.Cache, error) {
+	// The v1 transport must not guess at GitHub's separate v2 service protocol.
+	if os.Getenv("ACTIONS_CACHE_SERVICE_V2") != "" && os.Getenv("ACTIONS_CACHE_SERVICE_V2") != "false" {
+		return nil, fmt.Errorf("%w: Actions cache v2 is not supported by this transport", errs.ErrInvalidConfig)
+	}
+
+	transport := actionscache.Client{URL: os.Getenv("ACTIONS_CACHE_URL"), Token: os.Getenv("ACTIONS_RUNTIME_TOKEN"), Log: os.Stderr}
+	if err := transport.Validate(); err != nil {
+		return nil, err
+	}
+
+	home := os.Getenv("CARGO_HOME")
+	if home == "" {
+		userHome, err := os.UserHomeDir()
+		if err != nil {
+			return nil, err
+		}
+
+		home = filepath.Join(userHome, ".cargo")
+	} else if !filepath.IsAbs(home) {
+		home = filepath.Join(dir, home)
+	}
+
+	var manifest bytes.Buffer
+	if err := tool.Run(ctx, appbuild.CargoRunInput{Dir: dir, Args: []string{"locate-project", "--workspace", "--message-format", "plain"}, Stdout: &manifest, Stderr: os.Stderr}); err != nil {
+		return nil, err
+	}
+
+	lockfile := filepath.Join(filepath.Dir(strings.TrimSpace(manifest.String())), "Cargo.lock")
+
+	return cargocache.New(lockfile, home, transport)
 }
 
 // cargoRunCmd runs the whole Cargo release build in one step (the Cargo sibling

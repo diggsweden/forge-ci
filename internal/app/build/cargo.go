@@ -81,18 +81,69 @@ type CargoFetchInput struct {
 	Dir        string
 	Attempts   int
 	RetryDelay time.Duration
+	Cache      CargoDownloadCache
+}
+
+// CargoDownloadCache restores authenticated crate downloads, never build output.
+type CargoDownloadCache interface {
+	Restore(ctx context.Context) (bool, error)
+	Save(ctx context.Context) error
 }
 
 // CargoFetchWithRetry retries dependency reads only, and only a transport
 // failure, with cancellation-aware waits.
-func CargoFetchWithRetry(ctx context.Context, tool CargoTool, w, stderr io.Writer, in CargoFetchInput) error {
+func CargoFetchWithRetry(ctx context.Context, tool CargoTool, out, stderr io.Writer, in CargoFetchInput) error {
 	if in.Attempts < 1 || in.Attempts > 10 || in.RetryDelay < 0 || in.RetryDelay > time.Minute {
 		return fmt.Errorf("cargo fetch requires 1–10 attempts and a retry delay between 0 and 1m: %w", errs.ErrUsage)
 	}
 
-	return retryDependencyRead(ctx, stderr, in.Attempts, in.RetryDelay, errs.CargoReport, func(stderr io.Writer) error {
-		return tool.Run(ctx, CargoRunInput{Dir: defaultCargoDir(in.Dir), Args: []string{"fetch", flagCargoLocked}, Stdout: w, Stderr: stderr})
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	hit := false
+
+	if in.Cache != nil {
+		var err error
+
+		cacheCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		hit, err = in.Cache.Restore(cacheCtx)
+
+		cancel()
+
+		switch {
+		case err != nil:
+			_, _ = fmt.Fprintln(stderr, "warning: Cargo download cache restore unavailable or rejected; using locked fetch")
+		case hit:
+			_, _ = fmt.Fprintln(stderr, "Cargo download cache restored; running locked fetch")
+		default:
+			_, _ = fmt.Fprintln(stderr, "Cargo download cache miss; running locked fetch")
+		}
+	}
+
+	err := retryDependencyRead(ctx, stderr, in.Attempts, in.RetryDelay, errs.CargoReport, func(stderr io.Writer) error {
+		return tool.Run(ctx, CargoRunInput{Dir: defaultCargoDir(in.Dir), Args: []string{"fetch", flagCargoLocked}, Stdout: out, Stderr: stderr})
 	})
+	if err != nil {
+		return err
+	}
+
+	if in.Cache != nil && !hit {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		cacheCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		err := in.Cache.Save(cacheCtx)
+
+		cancel()
+
+		if err != nil {
+			_, _ = fmt.Fprintln(stderr, "warning: Cargo download cache save unavailable; locked fetch succeeded")
+		}
+	}
+
+	return ctx.Err()
 }
 
 // CargoTest runs `cargo test --locked` against the workspace. Tests

@@ -403,19 +403,24 @@ func requireGoCalls(t *testing.T, calls []string, wantTest string) {
 
 	calls = append(calls[:1:1], calls[2:]...)
 
-	if len(calls) != 10 || calls[0] != "run ./test/live/internal/livetest/preflight" ||
-		calls[1] != "run ./test/live/internal/livetest/preflight runner-arch" || calls[8] != wantTest {
+	if len(calls) != 11 || calls[0] != "run ./test/live/internal/livetest/preflight" ||
+		calls[1] != "run ./test/live/internal/livetest/preflight runner-arch" || calls[9] != wantTest {
 		t.Fatalf("go calls:\n%s", strings.Join(calls, "\n"))
 	}
 
-	if !strings.HasPrefix(calls[9], "run ./test/live/internal/livetest/preflight classify-run 0 ") {
-		t.Fatalf("missing Go result classification: %v", calls[9])
+	if !strings.HasPrefix(calls[10], "run ./test/live/internal/livetest/preflight classify-run 0 ") {
+		t.Fatalf("missing Go result classification: %v", calls[10])
 	}
 
-	if !strings.HasPrefix(calls[6], "test -c -tags=live -buildvcs=false -o ") ||
-		!strings.HasSuffix(calls[6], "/tests/ ./test/live/internal/livetest/... ./test/live/conformance ./test/live/githubconsumer") ||
-		!strings.HasPrefix(calls[7], "list -tags=live -f ") || !strings.HasSuffix(calls[7], " ./test/live/internal/livetest/... ./test/live/conformance ./test/live/githubconsumer") {
-		t.Fatalf("test compilation/discovery calls: %v", calls[6:8])
+	if !strings.HasPrefix(calls[7], "test -c -tags=live -buildvcs=false -o ") ||
+		!strings.HasSuffix(calls[7], "/tests/ ./test/live/internal/livetest/... ./test/live/conformance ./test/live/githubconsumer") ||
+		!strings.HasPrefix(calls[8], "list -tags=live -f ") || !strings.HasSuffix(calls[8], " ./test/live/internal/livetest/... ./test/live/conformance ./test/live/githubconsumer") {
+		t.Fatalf("test compilation/discovery calls: %v", calls[7:9])
+	}
+
+	if !strings.HasPrefix(calls[6], "build -trimpath -buildvcs=false -ldflags=-s -w -o ") ||
+		!strings.HasSuffix(calls[6], "/cargo-cache-probe ./test/live/internal/livetest/cargocacheprobe") {
+		t.Fatalf("cache probe build call: %q", calls[6])
 	}
 
 	for index, target := range []string{
@@ -439,7 +444,7 @@ func requireHandover(t *testing.T, env map[string]string, profile string) {
 		t.Fatalf("FORGE_CI_LIVE_PROFILE=%q", env["FORGE_CI_LIVE_PROFILE"])
 	}
 
-	for _, name := range []string{"FORGE_CI_LIVE_BIN", "FORGE_CI_LIVE_RUNNER_BIN", "FORGE_CI_LIVE_CREDENTIAL_PROXY_BIN", "FORGE_CI_LIVE_PROBE_JSON_BIN", "FORGE_CI_LIVE_LAYER_BIN"} {
+	for _, name := range []string{"FORGE_CI_LIVE_BIN", "FORGE_CI_LIVE_RUNNER_BIN", "FORGE_CI_LIVE_CREDENTIAL_PROXY_BIN", "FORGE_CI_LIVE_PROBE_JSON_BIN", "FORGE_CI_LIVE_CARGO_CACHE_PROBE_BIN", "FORGE_CI_LIVE_LAYER_BIN"} {
 		if !filepath.IsAbs(env[name]) {
 			t.Fatalf("%s=%q is not an absolute path", name, env[name])
 		}

@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Consumer inputs take one name across forges; see "Names that changed" in
   docs/workflows.md for the old and new names.
 
+### Added
+
+- Opt-in Node-free Forgejo Actions caching for `build cargo fetch --cache`.
+  Only crates.io archives verified against Cargo.lock are cached, under a
+  dependency-only key; a hit needs every locked crate, and the command falls
+  back to locked fetching when the cache is unavailable. No action passes the
+  flag yet.
+
 ## [0.94.3] - 2026-11-20
 
 ### Changed

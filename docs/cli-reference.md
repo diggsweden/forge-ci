@@ -179,6 +179,7 @@ Runs cargo fetch --locked once by default. Explicit bounded retries use cancella
 | `--working-dir` | directory containing the Cargo.toml file | string | `"."` | `$WORKING_DIRECTORY` |
 | `--attempts` | dependency fetch attempts (1–10) | int | `1` | n/a |
 | `--retry-delay` | linear retry delay (0–1m) | duration | `2s` | n/a |
+| `--cache` | reuse checksum-verified crates.io downloads via the Forgejo Actions v1 cache (best effort, no Node) | bool | `false` | n/a |
 
 #### `forge-ci build cargo run`
 
