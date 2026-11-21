@@ -66,6 +66,10 @@ func Scan(root string, paths []string) (map[string][]string, error) {
 				return nil
 			}
 
+			if OwnPipeline(entry.Name()) {
+				return nil
+			}
+
 			body, err := os.ReadFile(path) //nolint:gosec // repository files under the fixed scan directories.
 			if err != nil {
 				return err
@@ -96,6 +100,15 @@ func Scan(root string, paths []string) (map[string][]string, error) {
 	}
 
 	return found, nil
+}
+
+// OwnPipeline reports whether a workflow file is one of the hosting
+// repository's own pipelines (self-*.yml) rather than something a consumer
+// calls. RUN BY tells a consumer where a step runs for them, so these are left
+// out; that also keeps the table, and with it the binary, the same in a
+// mirror that adds its own self-release caller.
+func OwnPipeline(name string) bool {
+	return strings.HasPrefix(name, "self-")
 }
 
 // Invoked returns the known command paths body invokes: the longest run of

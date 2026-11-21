@@ -4,6 +4,8 @@
 package runbyscan_test
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -49,5 +51,34 @@ func TestUnitNamesActionsByDirectory(t *testing.T) {
 		if got := runbyscan.Unit(rel); got != want {
 			t.Errorf("Unit(%q) = %q, want %q", rel, got, want)
 		}
+	}
+}
+
+// A repository's own pipelines are not something a consumer calls, and a
+// mirror adds its own: neither may change the table.
+func TestScanLeavesOutOwnPipelines(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	dir := filepath.Join(root, ".forgejo", "workflows")
+
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	step := []byte("jobs:\n  x:\n    steps:\n      - run: forge-ci release notes\n")
+	for _, name := range []string{"sign-and-publish-release.yml", "self-release.yml"} {
+		if err := os.WriteFile(filepath.Join(dir, name), step, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	found, err := runbyscan.Scan(root, []string{"release notes"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want := []string{".forgejo/workflows/sign-and-publish-release.yml"}; !slices.Equal(found["release notes"], want) {
+		t.Fatalf("release notes is run by %q, want %q", found["release notes"], want)
 	}
 }
