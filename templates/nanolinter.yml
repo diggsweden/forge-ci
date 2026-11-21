@@ -76,6 +76,14 @@ spec:
     forge-ci-repository:
       description: >-
         Project serving this component and its public engine package, including any subgroups. The SARIF to GitLab-SAST conversion runs the engine binary that this component's commit records, downloaded from that project's generic packages and checked against the recorded checksum. May name $CI_PROJECT_PATH: lib-forge-ci.sh refuses an expanded path that is not a project on server-url before any download.
+    pr-comment:
+      type: boolean
+      default: false
+      description: >-
+        Also post the PR check results as the merge request's one comment, replaced by each pipeline: a second job that checks out nothing and runs no project code. It needs the masked project variable PR_COMMENT_TOKEN with the environment scope pr/comment, a project access token with the api scope and the Reporter role. Without the token the job ends with a warning, as it does for a merge request from a fork, and the results stay in the lint job's artifact.
+    pr-comment-job-name:
+      default: PR check results
+      description: Name of the comment job pr-comment adds.
     runner-tags:
       type: array
       default: []
@@ -130,6 +138,12 @@ spec:
         exit 1
       fi
       export CI_API_V4_URL="${RC_SERVER_URL}/api/v4"
+      # This job reads the merge request's files. The comment token belongs
+      # to the comment job alone, through its environment scope.
+      if [ -n "${PR_COMMENT_TOKEN:-}" ]; then
+        echo "ERROR: PR_COMMENT_TOKEN must not be available to the lint job; give the variable the environment scope pr/comment." >&2
+        exit 1
+      fi
       # This artifact path belongs to the component, not to the change being
       # checked. Do not upload a checked-in report if bootstrap or lint aborts.
       readonly summary_file=forge-ci-pr-check-results.md
@@ -274,3 +288,92 @@ spec:
       # what the request adds, compared with the target branch's latest
       # pipeline, which runs this job too.
       codequality: gl-code-quality-report.json
+
+# The merge request's one results comment, for a forge without a run summary
+# page. It reads the file the lint job wrote and nothing of the change: no
+# checkout, no project command. The token reaches this job alone, through
+# the pr/comment environment scope, and the engine through standard input.
+"$[[ inputs.pr-comment-job-name ]]":
+  # One more attempt when the engine found a dependency unavailable, exit
+  # 69, and for no other failure.
+  retry:
+    max: 1
+    exit_codes: 69
+  stage: $[[ inputs.stage ]]
+  tags: $[[ inputs.runner-tags ]]
+  rules:
+    - if: '"$[[ inputs.pr-comment ]]" == "true" && $CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: always
+  needs:
+    - job: "$[[ inputs.job-name ]]"
+      artifacts: true
+  cache: []
+  image:
+    name: $[[ inputs.nanolinter-image ]]
+    entrypoint: [""]
+  environment:
+    name: pr/comment
+    action: prepare
+  variables:
+    GIT_STRATEGY: empty
+    GIT_CHECKOUT: "false"
+    GIT_SUBMODULE_STRATEGY: none
+    RC_FORGE_CI_REPOSITORY: "$[[ inputs.forge-ci-repository ]]"
+  # Reporting, not a gate: a comment that could not be posted is a warning.
+  allow_failure: true
+  before_script: []
+  after_script: []
+  script:
+    - |
+      set -euo pipefail
+      readonly RC_SERVER_URL='$[[ inputs.server-url ]]'
+      if [ "${CI_SERVER_URL-}" != "${RC_SERVER_URL}" ]; then
+        echo "ERROR: CI_SERVER_URL is '${CI_SERVER_URL-}', not server-url '${RC_SERVER_URL}'; remove the variable that sets it." >&2
+        exit 1
+      fi
+      export CI_API_V4_URL="${RC_SERVER_URL}/api/v4"
+      if [ "${GIT_STRATEGY-}" != empty ]; then
+        echo "ERROR: GIT_STRATEGY is '${GIT_STRATEGY-}', not empty; the comment job must not check out the change. Remove the variable that sets it." >&2
+        exit 1
+      fi
+      readonly summary_file=forge-ci-pr-check-results.md
+      if [ -z "${PR_COMMENT_TOKEN:-}" ]; then
+        echo "PR check results were not posted as a comment: PR_COMMENT_TOKEN is not available to this job." >&2
+        echo "Add it as a masked project variable with the environment scope pr/comment. A merge request from a fork never receives it." >&2
+        echo "The results are in the artifact of the job '$[[ inputs.job-name ]]'." >&2
+        exit 1
+      fi
+      # A regular file of the lint job, never a link to a file of this job.
+      if [ -L "$summary_file" ] || [ ! -f "$summary_file" ] || [ ! -s "$summary_file" ]; then
+        echo "The job '$[[ inputs.job-name ]]' left no PR check results to post; see its log." >&2
+        exit 1
+      fi
+      # Out of the environment before any other command runs.
+      comment_token=$PR_COMMENT_TOKEN
+      unset PR_COMMENT_TOKEN
+      export HOME=/home/nanolinter
+      expected='$[[ component.sha ]]'
+      export FORGE_CI_PACKAGE_PROVIDER=gitlab
+      export FORGE_CI_REPOSITORY_URL="${RC_SERVER_URL}/${RC_FORGE_CI_REPOSITORY:?}.git"
+      helpers=$(mktemp -d /tmp/forge-ci-helpers.XXXXXXXX)
+      trap 'rm -rf -- "${helpers}"' EXIT
+      git_options=(-c core.hooksPath=/dev/null -c credential.helper=)
+      if [ -n "${CI_SERVER_TLS_CA_FILE:-}" ]; then
+        git_options+=(-c "http.sslCAInfo=${CI_SERVER_TLS_CA_FILE}")
+      fi
+      object_format=sha1
+      if [ "${#expected}" -eq 64 ]; then object_format=sha256; fi
+      git init --quiet --object-format="${object_format}" "${helpers}"
+      git -C "${helpers}" remote add origin "${FORGE_CI_REPOSITORY_URL}"
+      GIT_TERMINAL_PROMPT=0 git "${git_options[@]}" -C "${helpers}" \
+        fetch --quiet --depth=1 --no-tags --no-recurse-submodules origin "${expected}"
+      git "${git_options[@]}" -C "${helpers}" checkout --quiet --detach "${expected}"
+      test "$(git -C "${helpers}" rev-parse HEAD)" = "${expected}"
+      # shellcheck source=.engine/bin/lib-forge-ci.sh
+      source "${helpers}/.engine/bin/lib-forge-ci.sh"
+      # The instance's own CA, for the engine download and the one API call.
+      ca=${CI_SERVER_TLS_CA_FILE:-}
+      CURL_CA_BUNDLE="$ca" fetch_forge_ci
+      SIGNER_STRICT=1 verify_forge_ci
+      printf '%s' "$comment_token" | SSL_CERT_FILE="$ca" FORGE_CI_PROVIDER=gitlab run_forge_ci report pr-comment --token-file - \
+        --repository "${CI_MERGE_REQUEST_PROJECT_PATH:?}" --pr-number "${CI_MERGE_REQUEST_IID:?}" --file "$summary_file"

@@ -137,8 +137,8 @@ func TestGitLabJobsTakeRunnerTagsOnlyFromInputs(t *testing.T) {
 	}
 }
 
-// Each single-job component runs its job untagged by default and on exactly
-// the runner tags given.
+// Each component runs its jobs untagged by default and on exactly the runner
+// tags given: its one job, and for the lint component the comment job too.
 func TestGitLabComponentJobsRunOnTheirRunnerTags(t *testing.T) {
 	t.Parallel()
 
@@ -153,9 +153,14 @@ func TestGitLabComponentJobsRunOnTheirRunnerTags(t *testing.T) {
 				given["runner-tags"] = want
 			}
 
+			wantJobs := 1
+			if path == "templates/nanolinter.yml" {
+				wantJobs = 2
+			}
+
 			jobs := gitlabrender.Jobs(t, path, given)
-			if len(jobs) != 1 {
-				t.Fatalf("%s renders %d jobs, want one", path, len(jobs))
+			if len(jobs) != wantJobs {
+				t.Fatalf("%s renders %d jobs, want %d", path, len(jobs), wantJobs)
 			}
 
 			for name, job := range jobs {

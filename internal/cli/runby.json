@@ -154,6 +154,7 @@
   "report build xcode": [".github/workflows/build-xcode-ios.yml"],
   "report extracted-binaries": [".github/workflows/publish-container.yml"],
   "report pr": [".github/workflows/pullrequest-quality-stage.yml","templates/nanolinter.yml"],
+  "report pr-comment": ["templates/nanolinter.yml"],
   "report publish appstore": [".github/workflows/publish-apple-appstore.yml","templates/publish-apple-appstore.yml"],
   "report publish forge-packages": [".forgejo/actions/publish-forge-packages",".github/workflows/publish-maven-github.yml","templates/publish-forge-packages.yml"],
   "report publish google-play": [".github/workflows/publish-google-play.yml"],

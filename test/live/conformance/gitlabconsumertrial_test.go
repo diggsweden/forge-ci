@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -18,6 +20,7 @@ import (
 
 	gitlabapi "gitlab.com/gitlab-org/api/client-go"
 
+	appsummary "github.com/diggsweden/forge-ci/internal/app/summary"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
 	"github.com/diggsweden/forge-ci/test/live/internal/livetest"
 )
@@ -103,7 +106,17 @@ func runGitLabConsumerTrial(t *testing.T, root string, private bool) {
 		t.Fatal(writeErr)
 	}
 
-	livetest.RetainGitLabJobLogsAfter(t, target, repo, map[string]string{variable: canary})
+	// A consumer that asks for the results comment gets the token the
+	// component documents, so a trial shows the merge request as its users
+	// see it and a rerun does not lose the comment.
+	secrets := map[string]string{variable: canary}
+
+	comment := gitlabConsumerAsksForResultsComment(t, root, consumer)
+	if comment {
+		secrets[gitlabResultsCommentVariable] = installGitLabResultsCommentToken(t, ctx, client, project)
+	}
+
+	livetest.RetainGitLabJobLogsAfter(t, target, repo, secrets)
 
 	waitGitLabPush(t, ctx, client, project, "main", main)
 	waitGitLabPush(t, ctx, client, project, trialBranch, head)
@@ -165,6 +178,10 @@ func runGitLabConsumerTrial(t *testing.T, root string, private bool) {
 	passedTrace := gitlabTrialTrace(t, ctx, client, project, passed.ID, "check", "Check: build and test", "Check: lint")
 	t.Log(strings.ReplaceAll(passedTrace, target.Token, "[REDACTED]"))
 
+	if comment {
+		requireGitLabResultsComment(t, ctx, client, project, mr.IID)
+	}
+
 	settings, _, err := client.Projects.GetProject(project, nil, gitlabapi.WithContext(ctx))
 	if err != nil {
 		t.Fatal(err)
@@ -173,6 +190,85 @@ func runGitLabConsumerTrial(t *testing.T, root string, private bool) {
 	if !settings.OnlyAllowMergeIfPipelineSucceeds || settings.AllowMergeOnSkippedPipeline {
 		t.Fatal("the project must require successful, non-skipped pipelines")
 	}
+}
+
+const gitlabResultsCommentVariable = "PR_COMMENT_TOKEN"
+
+// The component input as a consumer may write it: quoted or not, with or
+// without a trailing comment.
+var gitlabResultsCommentInput = regexp.MustCompile(`(?m)^\s*pr-comment:\s*["']?true["']?\s*(#.*)?$`)
+
+// gitlabConsumerAsksForResultsComment reads the consumer's own merge request
+// pipeline, the file PushGitLab stages: the comment is the consumer's choice,
+// never one the harness makes for it.
+func gitlabConsumerAsksForResultsComment(t *testing.T, root string, consumer livetest.Consumer) bool {
+	t.Helper()
+
+	file := ".gitlab-ci.yml"
+	if consumer.HasGitLabGate(t) {
+		file = livetest.GitLabGateFile
+	}
+
+	body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(file)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return gitlabResultsCommentInput.Match(body)
+}
+
+// installGitLabResultsCommentToken does what docs/gitlab.md asks of a project
+// that sets pr-comment: a project access token with the api scope and the
+// Reporter role, as a masked variable only the pr/comment environment reads.
+// The token is the scratch project's and ends with it, or after a week.
+func installGitLabResultsCommentToken(t *testing.T, ctx context.Context, client *gitlabapi.Client, project string) string {
+	t.Helper()
+
+	token, _, err := client.ProjectAccessTokens.CreateProjectAccessToken(project, &gitlabapi.CreateProjectAccessTokenOptions{
+		Name:        new("pr-check-results-comment"),
+		Scopes:      new([]string{"api"}),
+		AccessLevel: new(gitlabapi.ReporterPermissions),
+		ExpiresAt:   new(gitlabapi.ISOTime(time.Now().AddDate(0, 0, 7))),
+	}, gitlabapi.WithContext(ctx))
+	if err != nil {
+		t.Fatalf("create the results comment token: %v", err)
+	}
+
+	if _, _, err = client.ProjectVariables.CreateVariable(project, &gitlabapi.CreateProjectVariableOptions{
+		Key: new(gitlabResultsCommentVariable), Value: new(token.Token),
+		Masked: new(true), Protected: new(false), EnvironmentScope: new("pr/comment"),
+	}, gitlabapi.WithContext(ctx)); err != nil {
+		t.Fatalf("store the results comment token: %v", err)
+	}
+
+	return token.Token
+}
+
+// requireGitLabResultsComment: the passing pipeline left the merge request
+// its one results comment, and no pipeline before it left a second.
+func requireGitLabResultsComment(t *testing.T, ctx context.Context, client *gitlabapi.Client, project string, mr int64) {
+	t.Helper()
+
+	notes, _, err := client.Notes.ListMergeRequestNotes(project, mr, &gitlabapi.ListMergeRequestNotesOptions{
+		PerPage: 100,
+	}, gitlabapi.WithContext(ctx))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	written := 0
+
+	for _, note := range notes {
+		if !note.System && strings.HasPrefix(note.Body, appsummary.PRCommentMarker) {
+			written++
+		}
+	}
+
+	if written != 1 {
+		t.Fatalf("the merge request holds %d results comments, want the one pr-comment posts; see the comment job's log", written)
+	}
+
+	t.Logf("GitLab MR !%d carries its one PR check results comment", mr)
 }
 
 // The harness owns this independent policy project. The consumer's CI files

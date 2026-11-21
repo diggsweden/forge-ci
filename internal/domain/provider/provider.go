@@ -633,6 +633,25 @@ type SARIFUploader interface {
 	UploadSARIF(ctx context.Context, up SARIFUpload) error
 }
 
+// PRComment is the one comment a pipeline keeps on a pull or merge request.
+// Marker is a hidden line that identifies it across pipelines; Body is the
+// Markdown shown, without the marker.
+type PRComment struct {
+	Repository string
+	Number     int
+	Marker     string
+	Body       string
+}
+
+// PRCommenter creates that comment, or replaces the one the same account
+// wrote before, so a request has one current result and no trail of old
+// ones. The token is passed in, never read from the environment: it belongs
+// to the job that only comments. Today only gitlab implements this, where a
+// job has no summary page; GitHub and Forgejo show the same text there.
+type PRCommenter interface {
+	UpsertPRComment(ctx context.Context, token string, comment PRComment) error
+}
+
 // RunArtifactUploader and RunArtifactDownloader model the ephemeral,
 // per-workflow-run artifact store — the thing actions/upload-artifact and
 // actions/download-artifact talk to. This is deliberately distinct from

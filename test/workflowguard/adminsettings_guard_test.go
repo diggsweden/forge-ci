@@ -572,6 +572,11 @@ func TestGateComponentsStateTheirOutcomeKeys(t *testing.T) {
 		}
 
 		for name, keys := range jobs {
+			// The lint component's comment job reports and gates nothing.
+			if name == "$[[ inputs.pr-comment-job-name ]]" {
+				continue
+			}
+
 			if _, runs := keys["script"]; runs && !strings.HasPrefix(name, ".") {
 				job = keys
 			}

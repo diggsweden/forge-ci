@@ -98,6 +98,12 @@ spec:
         exit 1
       fi
       export CI_API_V4_URL="${RC_SERVER_URL}/api/v4"
+      # This job reads the merge request's files. The comment token belongs
+      # to the Nanolinter component's comment job alone.
+      if [ -n "${PR_COMMENT_TOKEN:-}" ]; then
+        echo "ERROR: PR_COMMENT_TOKEN must not be available to the lint job; give the variable the environment scope pr/comment." >&2
+        exit 1
+      fi
 
       # --- Merge-request base -----------------------------------------------
       # Trust the checkout, then fetch the merge request's target.

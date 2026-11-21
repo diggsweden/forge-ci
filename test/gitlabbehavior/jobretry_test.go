@@ -36,7 +36,7 @@ var retriedJobs = map[string][]string{
 	},
 	"templates/snapshot-images.yml": {"Check: snapshot plan"},
 	// The single-job components: the check, the lints and the builds.
-	"templates/check.yml": componentJob, "templates/nanolinter.yml": componentJob, "templates/megalinter.yml": componentJob,
+	"templates/check.yml": componentJob, "templates/nanolinter.yml": {"$[[ inputs.job-name ]]", "$[[ inputs.pr-comment-job-name ]]"}, "templates/megalinter.yml": componentJob,
 	"templates/build-cargo.yml": componentJob, "templates/build-go.yml": componentJob, "templates/build-gradle.yml": componentJob,
 	"templates/build-gradle-android.yml": componentJob, "templates/build-maven.yml": componentJob, "templates/build-npm.yml": componentJob,
 	"templates/snapshot-image-jobs.yml": {

@@ -11,6 +11,7 @@
 //   - status.go    — `status <prerequisites|build-sbom|sbom-count|quality-check>`
 //     plus flat `stage-result` / `job-result` composers
 //   - lifecycle.go — flat lifecycle: `release`, `snapshot-release`, `pr`
+//   - prcomment.go — `pr-comment`: the same text as a merge request comment
 //   - misc.go      — flat one-offs: `extracted-binaries`, `swift-lint`
 package report
 
@@ -30,7 +31,7 @@ func New() *cli.Command {
 		Commands: slices.Concat(
 			cmdmeta.WithCategory("Build & lint", buildGroup(), extractedBinariesCmd(), swiftLintCmd()),
 			cmdmeta.WithCategory("Publish & release", publishGroup(), releaseCmd(), snapshotReleaseCmd()),
-			cmdmeta.WithCategory("PR & status", prCmd(), statusGroup(), stageResultCmd(), jobResultCmd()),
+			cmdmeta.WithCategory("PR & status", prCmd(), prCommentCmd(), statusGroup(), stageResultCmd(), jobResultCmd()),
 		),
 	}
 }

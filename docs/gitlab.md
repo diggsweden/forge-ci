@@ -112,7 +112,9 @@ the steps are these.
    **PR check results** in the merge request's exposed artifacts. It contains
    the quality verdict, change context, and the Nanolinter matrix when emitted.
    The pipeline link shows the separate build result and remains the merge
-   gate. The artifact needs no comment token or extra CI job.
+   gate. The artifact needs no comment token or extra CI job. To see the
+   same text on the merge request itself, turn on [the results
+   comment](#the-results-comment).
 
    ```yaml
    workflow:
@@ -216,6 +218,7 @@ Use **project-level** protected variables with these environment scopes:
 | `RELEASE_GPG_PRIVATE_KEY`, `RELEASE_GPG_PASSPHRASE`, `RELEASE_GPG_FINGERPRINT` | `release/registry/signing` | Distro-package signatures, when `sign-distro-packages` is on, and checksum and release file signatures, when `artifacts.yml` says `sign.method: gpg` or `sign.files-method: gpg`. |
 | `RELEASE_REGISTRY_USER`, `RELEASE_REGISTRY_TOKEN` | `release/registry/*` | Importing, signing, promoting and cleaning up images in the publication project. |
 | `RELEASE_TOKEN` | `release/publish` | Creating the GitLab release and its assets. |
+| `PR_COMMENT_TOKEN` | `pr/comment` (masked, not protected) | The merge request's results comment, when the lint component has `pr-comment: true`. See [The results comment](#the-results-comment). |
 | `RELEASE_PACKAGE_TOKEN` | `release/packages` | Publishing the release's npm packages: a project deploy token with `read_package_registry` and `write_package_registry` only. See [Package publication](#package-publication). |
 
 Each release job refuses to start when a release secret it does not use is
@@ -1272,6 +1275,56 @@ latest pipeline of the target branch, so run the component there too: the
 example's `workflow: rules` do. A passed check adds nothing to the report, so
 an empty one is no verdict: the job's result is. The full matrix of passed,
 failed, skipped and not-applicable checks is in **PR check results**.
+
+### The results comment
+
+GitLab has no run summary page, so **PR check results** is an artifact link
+by default. With `pr-comment: true` the Nanolinter component adds a job,
+named **PR check results**, that posts the same text as one comment on the
+merge request and replaces it on each pipeline:
+
+```yaml
+include:
+  - component: $CI_SERVER_FQDN/diggsweden/forge-ci/nanolinter@<sha>
+    inputs:
+      forge-ci-repository: diggsweden/forge-ci
+      server-url: https://gitlab.example.com
+      nanolinter-image: "ghcr.io/itiquette/nanolinter:go@sha256:PIN_DIGEST"
+      job-name: Quality checks
+      pr-comment: true
+```
+
+1. In the project, create an access token named for the purpose, with the
+   **Reporter** role and the `api` scope.
+2. Add it as the project variable `PR_COMMENT_TOKEN`: masked, not protected
+   (merge request branches are not), with the environment scope `pr/comment`.
+
+The scope keeps the token out of the jobs that run the merge request's
+code. A project variable without one reaches every job. The comment job
+names the `pr/comment` environment, checks out nothing and runs no project
+command; it reads the results file of the lint job and posts it. The lint
+and check jobs refuse to start when they can see the token.
+
+The scope is not a wall. A job of any pipeline that runs in the project can
+name the `pr/comment` environment and receive the token, so whoever may
+change the pipeline definition there can read it: the project's developers,
+who hold more than the token's Reporter role already, and the author of a
+fork whose merge request pipeline a member chooses to run in the parent
+project. Do not run fork pipelines in the parent project with this token
+set, or protect the `pr/comment` environment where your GitLab tier has
+protected environments.
+
+The job is reporting, not a gate: when the token is missing, as for a merge
+request from a fork, it ends with a warning and says where the results are.
+It replaces only the comment its own token wrote.
+
+The lint job read the change, so the author chose part of the text. The
+comment shows it and takes its commands away: a mention notifies nobody and
+a line that starts with `/` is not a quick action. A reference such as `#12`
+still links, and GitLab notes it on the issue it names, as for any comment.
+A very long result is shortened; the artifact has all of it. The project gets a `pr/comment` entry
+in its environments list, which is how GitLab scopes the variable; nothing is
+deployed to it.
 
 The conversion runs the engine the way `check` does, from the
 component's commit, so a component included by version needs the engine of

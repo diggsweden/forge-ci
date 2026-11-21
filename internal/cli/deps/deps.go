@@ -179,6 +179,13 @@ func (d *Deps) RequireSARIFUploader() (provider.SARIFUploader, error) {
 	return requireRole[provider.SARIFUploader](d, "SARIF upload to Code Scanning")
 }
 
+// RequirePRCommenter returns the PRCommenter role when the active provider
+// implements it. Today only gitlab does: the other forges show the pull
+// request's results on the run's own summary page.
+func (d *Deps) RequirePRCommenter() (provider.PRCommenter, error) {
+	return requireRole[provider.PRCommenter](d, "pull request comment")
+}
+
 // RequireTagDeleter returns the TagDeleter role when the active provider
 // implements it. Forge-specific: deleting a container tag goes through
 // each forge's package API (Forgejo and GitLab do; GitHub and local not yet),

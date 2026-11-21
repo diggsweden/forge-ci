@@ -417,7 +417,7 @@ The GitHub layer has no Forgejo-style `check-l3-isolation` gate.
 | `Check: lint / Nanolinter` | **Nanolinter / Nanolinter** |
 | `Check: lint (MegaLinter)` or `Check: lint (Swift)` | **MegaLinter** or **Swift checks**, followed by the called job name |
 | `canonical-admit`, `canonical-build`, `canonical-receive` | **Setup: check build images**, **Setup: build Forge CI**, **Setup: verify Forge CI** |
-| `resolve` (three times in a PR run) | **Setup: check pinned inputs**, **Setup: check quality stage pins**, **Setup: check Nanolinter pin** |
+| `resolve`, in the PR quality chain | **Setup: check pinned inputs**, **Setup: check quality stage pins**, **Setup: check Nanolinter pin** |
 
 Every job that only prepares the run starts with **Setup:**, so the list
 reads as setup, **Select checks**, the checks themselves, then **PR check

@@ -5204,6 +5204,26 @@ EXAMPLE:
 | `--quality-stage-result-path` | path to the quality-stage result JSON file (alternative to inline) | string | `""` | `$QUALITY_STAGE_RESULT_PATH` |
 | `--job` | job outcome as "Name=result" (repeatable); lists these jobs in the status table instead of GitHub's stage targets, for GitLab and Forgejo | string | `""` | n/a |
 
+### `forge-ci report pr-comment`
+
+post the PR check results as the request's one comment, replacing the previous one
+
+```
+For a forge without a run summary page (GitLab). Run it in a job that
+checks out and runs no project code, with a token only that job receives.
+
+EXAMPLE:
+   # Token from $PR_COMMENT_TOKEN (or --token-file -)
+   forge-ci report pr-comment --repository group/app --pr-number 12 --file forge-ci-pr-check-results.md
+```
+
+| Flag | Description | Type | Default | Env vars |
+|------|-------------|------|---------|----------|
+| `--token-file` | path to a file containing the comment token (use "-" for stdin; defaults to $PR_COMMENT_TOKEN) | string | `""` | n/a |
+| `--repository` | "group/project[/sub]" receiving the request (required) | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
+| `--pr-number` | pull or merge request number (required) | int | `0` | `$PR_NUMBER` |
+| `--file` | Markdown file that forge-ci report pr wrote (required) | string | `""` | n/a |
+
 ### `forge-ci report publish`
 
 append a per-target publish summary to the step summary

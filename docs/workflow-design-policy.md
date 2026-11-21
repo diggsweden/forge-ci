@@ -39,8 +39,11 @@ below must not be read as a reason to hide. Its rules are in the
   observe: the overview lists the quality verdict everywhere, and other jobs
   only where its reporter runs after them, as in a flat Forgejo workflow. The
   run or pipeline is the overall verdict on every forge. Keep the detailed
-  matrix with **Quality checks**; do not duplicate it in a separate reporting
-  job or give PR jobs a write token for comments.
+  matrix with **Quality checks**; no reporting job computes it again. No job
+  that reads or runs the change gets a token that can write to the request.
+  GitLab's opt-in results comment is the one job with such a token: it
+  checks out nothing, posts the file **Quality checks** wrote, matrix
+  included, and receives the token through an environment scope of its own.
 - Findings go where the forge shows them beside the change: Code Scanning on
   GitHub, the SAST report and the Code Quality widget on GitLab, both from the
   one lint run. Forgejo has no such surface, so its findings stay in the
