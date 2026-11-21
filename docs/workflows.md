@@ -44,11 +44,13 @@ The pull request flow follows the same control-plane pattern as release and snap
 
 1. `compose-pr-plan`
 2. `execute-quality-stage`
-3. `pr-summary`
 
-The PR plan carries project/base-branch context, quality-policy flags, and the quality-stage target plan.
-The quality stage owns lint/security fanout and produces one stage result contract.
-The top-level summary job consumes the quality stage result and writes a GitHub Step Summary.
+The PR plan carries project and base-branch context, policy flags, and the
+quality-stage target plan.
+The quality stage owns lint/security fanout. Its **PR check results** job
+normalizes job outcomes, uploads `ci-results-pr-quality`, and writes the
+GitHub overview from the same local result. Blocking findings still fail the
+job that found them. Unselected checks are omitted from the overview.
 
 ```mermaid
 graph TD
@@ -59,27 +61,47 @@ graph TD
     D --> N[nanolinter]
     D --> G[megalinter]
     D --> L[swift-lint]
-    N --> M[quality-status]
-    G --> M
-    L --> M
-    M --> S[summarize-quality-stage]
-    D --> O[pr-summary]
+    N --> S[PR check results]
+    G --> S
+    L --> S
 
     style A fill:#a7c080,stroke:#5c6a4a,color:#2b3339
     style B fill:#e69875,stroke:#9d5c41,color:#2b3339
     style C fill:#e67e80,stroke:#9d4f50,color:#2b3339
     style D fill:#83c092,stroke:#5c856a,color:#2b3339
     style G fill:#83c092,stroke:#5c856a,color:#2b3339
-    style M fill:#83c092,stroke:#5c856a,color:#2b3339
     style N fill:#83c092,stroke:#5c856a,color:#2b3339
-    style O fill:#7fbbb3,stroke:#5a8a82,color:#2b3339
+    style S fill:#7fbbb3,stroke:#5a8a82,color:#2b3339
 ```
 
-### PR Stage Responsibilities
+### What contributors see
 
-- `pullrequest-orchestrator.yml` owns PR order, plan handoff, and top-level summary
-- `pullrequest-quality-stage.yml` owns quality check fanout and quality-stage result normalization
+For the Go examples, a blocking quality finding turns the job that finds it
+red, even if the project tests pass:
+
+| Forge | Open the failing job | Where to see the outcome |
+| --- | --- | --- |
+| GitHub | **Quality checks** → **Nanolinter** | The scan log and findings. **PR check results** is an overview, not a gate. |
+| Forgejo | **Quality checks** | The lint log. **PR check results** also lists **Verify release isolation** and **Build and test**. |
+| GitLab | **Quality checks** | The job log and SAST report. **Vet and test** and **Build Go artifacts** are separate jobs; pipeline status is the gate. |
+
+On GitHub, look at the setup jobs first if checks never start. Invalid
+pins and canonical artifact verification errors fail in setup, not in the
+linter. Unselected engines can appear as skipped jobs in Actions but do not
+clutter the overview. If an expected check was skipped, result normalization
+fails and the reporting job tells you where to find the error.
+
+### PR stage responsibilities
+
+- `pullrequest-orchestrator.yml` owns PR order and plan handoff
+- `pullrequest-quality-stage.yml` owns check fanout, result normalization, and reporting
 - leaf `lint-*` and `security-*` workflows stay focused on one check each
+
+Across forges, **Quality checks** means the configured lint and security
+plan. The project names its own jobs for what they do, such as **Vet and
+test** or **Check scripts**. Forgejo keeps **Verify release isolation** as a
+separate blocker and can render **PR check results** in the log. GitLab uses
+its native pipeline status and finding reports, with no overview job.
 
 ### Checks of your own
 

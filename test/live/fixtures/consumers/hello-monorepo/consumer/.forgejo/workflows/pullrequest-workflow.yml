@@ -51,7 +51,7 @@ env:
 
 jobs:
   lint:
-    name: "Check: lint"
+    name: Quality checks
     runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     container:
       image: ${{ vars.CI_JOB_IMAGE }}
@@ -70,7 +70,7 @@ jobs:
         uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/lint-nanolinter@2f4e845cee96973d1082bf00a5a18689c1482148
 
   release-gate:
-    name: "Check: release isolation"
+    name: Verify release isolation
     runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     timeout-minutes: 10
     steps:
@@ -89,7 +89,7 @@ jobs:
         uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/check-l3-isolation@2f4e845cee96973d1082bf00a5a18689c1482148
 
   check-backend:
-    name: "Check: backend"
+    name: Check backend
     runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     container:
       image: ${{ vars.CI_JOB_IMAGE }}
@@ -104,7 +104,7 @@ jobs:
           mvn --batch-mode --no-transfer-progress --file services/backend/pom.xml verify
 
   check-frontend:
-    name: "Check: frontend"
+    name: Check frontend
     runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     container:
       image: ${{ vars.CI_JOB_IMAGE_NODE }}
@@ -124,7 +124,7 @@ jobs:
   # logs, older Forgejo prints it in this job's log.
   # ===========================================================================
   summary:
-    name: Summary
+    name: PR check results
     if: ${{ always() }}
     needs: [lint, release-gate, check-backend, check-frontend]
     runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
@@ -144,7 +144,7 @@ jobs:
           FRONTEND_RESULT: ${{ needs.check-frontend.result }}
         run: |
           forge-ci report pr \
-            --job "Check: lint=${LINT_RESULT}" \
-            --job "Check: release isolation=${ISOLATION_RESULT}" \
-            --job "Check: backend=${BACKEND_RESULT}" \
-            --job "Check: frontend=${FRONTEND_RESULT}"
+            --job "Quality checks=${LINT_RESULT}" \
+            --job "Verify release isolation=${ISOLATION_RESULT}" \
+            --job "Check backend=${BACKEND_RESULT}" \
+            --job "Check frontend=${FRONTEND_RESULT}"

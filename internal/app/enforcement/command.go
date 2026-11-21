@@ -22,9 +22,18 @@ type LintRunner interface {
 	Run(ctx context.Context, out, stderr io.Writer, args []string) (int, error)
 }
 
+// ReportFiles names where an invocation's reports go. An empty path writes
+// none. Each is this invocation's own: a file already there is removed first.
+type ReportFiles struct {
+	// SecuritySARIF receives the security-only SARIF for provider upload.
+	SecuritySARIF string
+	// CodeQuality receives the GitLab Code Quality report of the other findings.
+	CodeQuality string
+}
+
 // Nanolinter runs before applying policy. Both process status and per-check
 // metadata must describe findings; operational failures remain errors.
-func Nanolinter(ctx context.Context, runner LintRunner, out, stderr io.Writer, args []string, sarifFile string) error {
+func Nanolinter(ctx context.Context, runner LintRunner, out, stderr io.Writer, args []string, files ReportFiles) error {
 	if len(args) == 0 {
 		return fmt.Errorf("a nanolinter command is required: %w", errs.ErrUsage)
 	}
@@ -34,17 +43,23 @@ func Nanolinter(ctx context.Context, runner LintRunner, out, stderr io.Writer, a
 		return err
 	}
 
-	return nanolinter(ctx, policy, runner, out, stderr, args, sarifFile)
+	return nanolinter(ctx, policy, runner, out, stderr, args, files)
 }
 
-func nanolinter(ctx context.Context, policy enforcement.Policy, runner LintRunner, out, stderr io.Writer, args []string, sarifFile string) error {
-	if err := retireSARIF(sarifFile); err != nil {
+func nanolinter(ctx context.Context, policy enforcement.Policy, runner LintRunner, out, stderr io.Writer, args []string, files ReportFiles) error {
+	if err := files.retire(); err != nil {
 		return err
 	}
 
 	capture := &boundedCapture{}
 
-	status, err := runner.Run(ctx, io.MultiWriter(out, capture), stderr, args)
+	var reportOutput io.Writer = capture
+	if files.SecuritySARIF == "" {
+		// Without a report destination, preserve streaming output for direct callers.
+		reportOutput = io.MultiWriter(out, capture)
+	}
+
+	status, err := runner.Run(ctx, reportOutput, stderr, args)
 	if ctx.Err() != nil {
 		return errors.Join(err, ctx.Err())
 	}
@@ -66,10 +81,8 @@ func nanolinter(ctx context.Context, policy enforcement.Policy, runner LintRunne
 		return err
 	}
 
-	if sarifFile != "" {
-		if err := cliio.WriteFile(sarifFile, append(report.SecuritySARIF, '\n'), 0o644); err != nil {
-			return fmt.Errorf("write security SARIF: %w", err)
-		}
+	if err := files.write(report); err != nil {
+		return err
 	}
 
 	if status == 1 && report.LintFindings+report.VulnerabilityFindings == 0 && report.Unavailable == nil {
@@ -113,7 +126,35 @@ func (capture *boundedCapture) Write(body []byte) (int, error) {
 	return len(body), nil
 }
 
-func retireSARIF(path string) error {
+// retire removes what an earlier run, or the checkout, left at the
+// destinations: a failed invocation must not leave it to be published.
+func (files ReportFiles) retire() error {
+	for _, path := range []string{files.SecuritySARIF, files.CodeQuality} {
+		if err := retireReport(path); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (files ReportFiles) write(report enforcement.NanolinterReport) error {
+	if files.SecuritySARIF != "" {
+		if err := cliio.WriteFile(files.SecuritySARIF, append(report.SecuritySARIF, '\n'), 0o644); err != nil {
+			return fmt.Errorf("write security SARIF: %w", err)
+		}
+	}
+
+	if files.CodeQuality != "" {
+		if err := cliio.WriteFile(files.CodeQuality, append(report.CodeQuality, '\n'), 0o644); err != nil {
+			return fmt.Errorf("write Code Quality report: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func retireReport(path string) error {
 	if path == "" {
 		return nil
 	}
@@ -128,11 +169,11 @@ func retireSARIF(path string) error {
 	}
 
 	if !info.Mode().IsRegular() {
-		return fmt.Errorf("SARIF destination must be a regular file: %w", errs.ErrUsage)
+		return fmt.Errorf("report destination %s must be a regular file: %w", path, errs.ErrUsage)
 	}
 
 	if err := os.Remove(path); err != nil {
-		return fmt.Errorf("retire previous SARIF: %w", err)
+		return fmt.Errorf("retire previous report: %w", err)
 	}
 
 	return nil

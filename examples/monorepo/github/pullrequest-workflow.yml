@@ -17,6 +17,7 @@ concurrency:
 
 jobs:
   pr-checks:
+    name: Quality checks
     uses: diggsweden/forge-ci/.github/workflows/pullrequest-orchestrator.yml@PIN_FORGE_CI_SHA # v0.90.0
     secrets:
       # Optional: uploads lint security findings (SARIF) to Code Scanning.

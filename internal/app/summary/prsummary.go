@@ -19,6 +19,7 @@ import (
 // quality stage result-json output; the use case extracts each linter's result
 // by name.
 type PRSummaryInput struct {
+	Change                 *PRChange // Opt in to the compact view.
 	ProjectType            string
 	Branch                 string
 	Commit                 string // full SHA — first 7 chars rendered
@@ -46,23 +47,9 @@ func PRSummary(ctx context.Context, sink ci.SummarySink, in PRSummaryInput) erro
 		return fmt.Errorf("quality-stage result-json: %w", err)
 	}
 
-	get := func(key string) string {
-		return string(quality.TargetResult(key))
+	if in.Change != nil {
+		return sink.Append(ctx, compactPRSummary(in, quality))
 	}
-	// At most one lint engine runs (they are mutually exclusive). Name the single
-	// Lint row after whichever engine actually executed; when none did (engine
-	// "none"), keep a neutral "Lint" label rather than implying a specific product.
-	nano, mega := get(pipeline.TargetNanolinter), get(pipeline.TargetMegalinter)
-	lintLabel, lintResult := "Lint", nano
-
-	switch {
-	case lintEngineRan(nano):
-		lintLabel = "Nanolinter"
-	case lintEngineRan(mega):
-		lintLabel, lintResult = "MegaLinter", mega
-	}
-
-	swift := get(pipeline.TargetSwift)
 
 	var builder strings.Builder
 
@@ -79,11 +66,14 @@ func PRSummary(ctx context.Context, sink ci.SummarySink, in PRSummaryInput) erro
 	_, _ = fmt.Fprintf(&builder, "| Check | Status |\n")
 
 	_, _ = fmt.Fprintf(&builder, "|-------|--------|\n")
-	if len(in.Jobs) > 0 {
+
+	switch {
+	case len(in.Jobs) > 0:
 		writeJobRows(&builder, in.Jobs)
-	} else {
-		_, _ = fmt.Fprintf(&builder, "| %s | %s |\n", lintLabel, domainsummary.StatusIcon(lintResult))
-		_, _ = fmt.Fprintf(&builder, "| Swift Lint | %s |\n", domainsummary.StatusIcon(swift))
+	case strings.TrimSpace(in.QualityStageResultJSON) != "":
+		writeQualityRows(&builder, quality)
+	default:
+		builder.WriteString("| Lint | − |\n| Swift Lint | − |\n")
 	}
 
 	_, _ = fmt.Fprintf(&builder, "\n## Resources\n")
@@ -92,10 +82,25 @@ func PRSummary(ctx context.Context, sink ci.SummarySink, in PRSummaryInput) erro
 	return sink.Append(ctx, builder.String())
 }
 
-// lintEngineRan reports whether a lint-engine target actually executed (vs.
-// being skipped because it was not the selected engine).
-func lintEngineRan(result string) bool {
-	return result == string(domainsummary.ResultSuccess) || result == string(domainsummary.ResultFailure) || result == string(domainsummary.ResultCancelled)
+// StageResult refuses a selected target that was skipped. An emitted skipped
+// result therefore represents a check that was not selected.
+func writeQualityRows(b *strings.Builder, quality domainsummary.StageResultEnvelope) {
+	wrote := false
+
+	for _, row := range []struct{ key, label string }{
+		{pipeline.TargetNanolinter, nanolinterLabel},
+		{pipeline.TargetMegalinter, "MegaLinter"},
+		{pipeline.TargetSwift, "Swift Lint"},
+	} {
+		if result := quality.TargetResult(row.key); result != domainsummary.ResultSkipped {
+			_, _ = fmt.Fprintf(b, "| %s | %s |\n", row.label, domainsummary.StatusIcon(string(result)))
+			wrote = true
+		}
+	}
+
+	if !wrote {
+		b.WriteString("| Quality checks | None selected |\n")
+	}
 }
 
 // writeJobRows writes one status-table row per named job.

@@ -46,6 +46,7 @@ permissions:
   contents: read
 jobs:
   canonical-admit:
+    name: "Setup: check build images"
     runs-on: ubuntu-26.04
     permissions:
       contents: read
@@ -64,6 +65,7 @@ jobs:
           [[ "$RUNTIME_IMAGE" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}$ ]]
           [[ "$RECEIVE_RUNTIME_IMAGE" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}$ ]]
   canonical-build:
+    name: "Setup: build Forge CI"
     needs: canonical-admit
     runs-on: ubuntu-26.04
     timeout-minutes: 20
@@ -116,6 +118,7 @@ jobs:
           retention-days: ${{ inputs.artifact-retention-days }}
           overwrite: false
   canonical-receive:
+    name: "Setup: verify Forge CI"
     needs: canonical-build
     runs-on: ubuntu-26.04
     timeout-minutes: 10

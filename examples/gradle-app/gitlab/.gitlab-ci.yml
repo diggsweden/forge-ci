@@ -47,6 +47,7 @@ include:
   # as a SAST report.
   - component: gitlab.example.com/team/ci/forge-ci/nanolinter@0.90.0
     inputs:
+      job-name: Quality checks
       forge-ci-repository: team/ci/forge-ci
       server-url: https://gitlab.example.com
       nanolinter-image: "ghcr.io/itiquette/nanolinter:kotlin@sha256:PIN_DIGEST"
@@ -58,6 +59,7 @@ include:
   # https://gitlab.example.com/team/ci/forge-ci/-/blob/PIN_FORGE_CI_SHA/docs/gitlab.md.
   - component: gitlab.example.com/team/ci/forge-ci/check@PIN_FORGE_CI_SHA
     inputs:
+      job-name: Run Gradle checks
       forge-ci-repository: team/ci/forge-ci
       server-url: https://gitlab.example.com
       job-image: registry.example.com/team/check-tools@sha256:PIN_IMAGE_DIGEST
@@ -68,6 +70,7 @@ include:
   # build/libs/ and the Build SBOM, kept as job artifacts.
   - component: gitlab.example.com/team/ci/forge-ci/build-gradle@0.90.0
     inputs:
+      job-name: Build Gradle artifacts
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-java-25@sha256:PIN_JAVA_IMAGE_DIGEST
       gradle-tasks: build
       java-version: "25"

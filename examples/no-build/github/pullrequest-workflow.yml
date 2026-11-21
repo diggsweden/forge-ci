@@ -29,6 +29,7 @@ jobs:
       - run: sh -n install.sh && sh -n lib/greeting.sh && sh install.sh
 
   pr-checks:
+    name: Quality checks
     uses: diggsweden/forge-ci/.github/workflows/pullrequest-orchestrator.yml@PIN_FORGE_CI_SHA # v0.90.0
     permissions:
       actions: read

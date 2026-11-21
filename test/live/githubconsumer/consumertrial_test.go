@@ -129,8 +129,8 @@ func TestGitHubLayer_ConsumerTrial(t *testing.T) {
 		t.Fatal("a lifecycle is TestGitHubLayer_ConsumerLifecycle; run `just test-live-consumer github <checkout> lifecycle org=<org-id>`")
 	}
 
-	if livetest.DemoName() != "" && settings.Event != livetest.TrialRelease {
-		t.Fatal("a demo runs the release and then a pull request; start it with the release event")
+	if livetest.DemoName() != "" && settings.Event != livetest.TrialRelease && settings.Event != livetest.TrialPullRequest {
+		t.Fatal("a demo requires the release or pull-request event")
 	}
 
 	releaseToken := hostedReleaseToken(t, settings)
@@ -398,7 +398,8 @@ func runTrial(t *testing.T, trial *livetest.GitHubTrial, engine livetest.GitHubE
 
 	if settings.Event == livetest.TrialPullRequest {
 		head := trial.PushChange(repo, tree, trialBranch)
-		trial.OpenPullRequest(repo, trialBranch)
+		number := trial.OpenPullRequest(repo, trialBranch)
+		t.Logf("demo pull request: https://github.com/%s/%s/pull/%d", engine.Owner, repo, number)
 		judge(t, trial, repo, settings.Workflow, "pull_request", head)
 
 		return

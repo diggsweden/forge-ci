@@ -266,3 +266,66 @@ func TestIncompleteIsRecordedPerGate(t *testing.T) {
 		t.Fatalf("lint gate took the dependency check's failure: %v", err)
 	}
 }
+
+// TestNanolinterCodeQualityListsTheFailedQualityFindings: the report holds
+// what the security SARIF leaves out, at each finding's file and line. A
+// passed check, a suppressed finding and one the merge base had add nothing,
+// and a repeated finding keeps its own fingerprint.
+func TestNanolinterCodeQualityListsTheFailedQualityFindings(t *testing.T) {
+	t.Parallel()
+
+	const located = `"locations":[{"physicalLocation":{"artifactLocation":{"uri":"docs/a.md"},"region":{"startLine":%d}}}]`
+
+	finding := func(line int, extra string) string {
+		return `{"ruleId":"MD013","level":"error","message":{"text":"line too long"},` + fmt.Sprintf(located, line) + extra +
+			`,"properties":{"source":"curated","check_id":"markdown","class":"formatter","policy":"block","status":"fail"}}`
+	}
+
+	report, err := ParseNanolinter([]byte(`{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"nanolinter"}},"results":[` +
+		finding(3, "") + "," + finding(9, "") + "," +
+		finding(12, `,"suppressions":[{"status":"accepted"}]`) + "," + finding(15, `,"baselineState":"unchanged"`) + `,
+{"ruleId":"yaml","level":"warning","message":{"text":"yaml failed"},"locations":[{"physicalLocation":{"artifactLocation":{"uri":"."}}}],"properties":{"source":"curated","check_id":"yaml","class":"formatter","policy":"warn","status":"fail"}},
+{"ruleId":"SC2086","level":"note","message":{"text":"quote this"},"properties":{"source":"curated","check_id":"shell","class":"diagnostic","status":"pass"}},
+{"ruleId":"secret","level":"error","message":{"text":"a secret"},"properties":{"source":"curated","check_id":"secrets","class":"security","status":"fail"}}]}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var issues []codeQualityIssue
+	if err := json.Unmarshal(report.CodeQuality, &issues); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(issues) != 3 {
+		t.Fatalf("want the two markdown findings and the yaml failure, got %s", report.CodeQuality)
+	}
+
+	first, second, whole := issues[0], issues[1], issues[2]
+	if first.CheckName != "nanolinter/markdown/MD013" || first.Severity != "major" || first.Location.Path != "docs/a.md" || first.Location.Lines.Begin != 3 || second.Location.Lines.Begin != 9 {
+		t.Fatalf("finding lost its rule, severity or place: %+v %+v", first, second)
+	}
+
+	if len(first.Fingerprint) != 64 || first.Fingerprint == second.Fingerprint {
+		t.Fatalf("a repeated finding must keep its own fingerprint: %q %q", first.Fingerprint, second.Fingerprint)
+	}
+
+	if whole.CheckName != "nanolinter/yaml" || whole.Severity != "minor" || whole.Location.Path != "." || whole.Location.Lines.Begin != 1 {
+		t.Fatalf("a failure without a finding is one repository entry: %+v", whole)
+	}
+
+	// The line is no part of the identity: a finding that moved is the same one.
+	moved, err := ParseNanolinter([]byte(`{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"nanolinter"}},"results":[` + finding(40, "") + `]}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var movedIssues []codeQualityIssue
+	if err := json.Unmarshal(moved.CodeQuality, &movedIssues); err != nil || len(movedIssues) != 1 || movedIssues[0].Fingerprint != first.Fingerprint {
+		t.Fatalf("moved finding changed identity: %s err=%v", moved.CodeQuality, err)
+	}
+
+	empty, err := ParseNanolinter([]byte(`{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"nanolinter"}},"results":[]}]}`))
+	if err != nil || strings.TrimSpace(string(empty.CodeQuality)) != "[]" {
+		t.Fatalf("no finding is an empty list, not null: %q err=%v", empty.CodeQuality, err)
+	}
+}

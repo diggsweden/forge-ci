@@ -17,7 +17,7 @@ type NanolinterVerifyInput struct {
 	RequiredLints string
 	DisableChecks string
 	Offline       bool
-	SARIFFile     string
+	Reports       ReportFiles
 	// BaselineRef is the git revision of a pull request's target branch, from
 	// PullRequestBaseline; empty on every other event.
 	BaselineRef string
@@ -65,5 +65,5 @@ func NanolinterVerify(ctx context.Context, runner LintRunner, out, stderr io.Wri
 
 	args = append(args, "--report", "sarif", "--out", "-")
 
-	return Nanolinter(ctx, runner, out, stderr, WithBaseline(args, in.BaselineRef), in.SARIFFile)
+	return Nanolinter(ctx, runner, out, stderr, WithBaseline(args, in.BaselineRef), in.Reports)
 }

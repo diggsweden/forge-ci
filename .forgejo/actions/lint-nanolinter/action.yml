@@ -21,6 +21,11 @@ inputs:
       'true' passes --offline: checks that need the network are skipped and tools use their caches. A skipped security check fails the job, once the linter reports skipped checks (Nanolinter 0.8.6 does not): name in disable-checks each one the job cannot run. For a runner or job image without network access, which must then also provide the pinned forge-ci engine through FORGE_CI_BIN.
     required: false
     default: 'false'
+  write-step-summary:
+    description: >-
+      Write Nanolinter's per-check matrix in the Quality checks job, not in the separate PR results overview. Enable this with a Nanolinter build that supports native Forgejo Markdown; older builds flatten the matrix to one line.
+    required: false
+    default: 'false'
   enforce-lint:
     description: >-
       Enforcement setting, true or false: false reports lint findings without failing the step; the checks still run. Set it only in the administrator's entry point, since whoever writes this call can pass it; it is the administrator's only where that file is. See docs/admin-policy.md.
@@ -41,6 +46,7 @@ runs:
         LINT_REQUIRED_LINTS: ${{ inputs.required-lints }}
         LINT_DISABLE_CHECKS: ${{ inputs.disable-checks }}
         LINT_OFFLINE: ${{ inputs.offline }}
+        LINT_WRITE_STEP_SUMMARY: ${{ inputs.write-step-summary }}
         LINT_ADMIN_LINT: ${{ inputs.enforce-lint }}
         LINT_ADMIN_VULNERABILITIES: ${{ inputs.enforce-vulnerabilities }}
       run: |
@@ -68,9 +74,26 @@ runs:
         # and a Containerfile that names an image without its registry.
         run_forge_ci container validate rebuilds
         run_forge_ci container validate image-names
+        # Leave the native file available only when the caller selects the
+        # detailed matrix. The separate overview never owns per-check details.
+        if [ "${LINT_WRITE_STEP_SUMMARY:-false}" != true ]; then
+          unset FORGEJO_STEP_SUMMARY GITEA_STEP_SUMMARY CI_JOB_SUMMARY GITHUB_STEP_SUMMARY
+        fi
+        lint_report=$(mktemp -d)
+        trap 'rm -rf -- "$lint_report"' EXIT
         LANG=C.UTF-8 LC_ALL=C.UTF-8 run_forge_ci policy nanolinter \
+          --sarif-file "${lint_report}/nanolinter.sarif" \
           --enforce-lint="${LINT_ADMIN_LINT:?enforce-lint is required}" \
           --enforce-vulnerabilities="${LINT_ADMIN_VULNERABILITIES:?enforce-vulnerabilities is required}" \
           --required-lints "${LINT_REQUIRED_LINTS}" \
           --disable-checks "${LINT_DISABLE_CHECKS}" \
           --offline "${LINT_OFFLINE}"
+
+    # Forgejo Runner reads the summary file when the step above ends and again
+    # when this action ends, so the matrix would show twice. Every step starts
+    # with a fresh summary file: this last one leaves it empty for the second
+    # read, also when the lint step failed.
+    - name: Close the step summary
+      if: ${{ always() }}
+      shell: bash
+      run: ':'

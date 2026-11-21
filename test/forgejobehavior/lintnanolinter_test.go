@@ -21,6 +21,11 @@ import (
 const fakeNanolinter = `#!/usr/bin/env bash
 test "${LANG:-}" = C.UTF-8 && test "${LC_ALL:-}" = C.UTF-8 || exit 97
 printf '%s\n' "$@" >"${FAKE_NANOLINTER_LOG:?}"
+if [ "${FAKE_EXPECT_SUMMARY:-}" = absent ]; then
+  test -z "${FORGEJO_STEP_SUMMARY:-}${GITEA_STEP_SUMMARY:-}${CI_JOB_SUMMARY:-}${GITHUB_STEP_SUMMARY:-}" || exit 98
+elif [ "${FAKE_EXPECT_SUMMARY:-}" = present ]; then
+  test "${FORGEJO_STEP_SUMMARY:-}" = /example-summary || exit 98
+fi
 results='[]'
 if [ "${FAKE_NANOLINTER_STATUS:-0}" = 1 ]; then
   results='[{"ruleId":"format","properties":{"source":"curated","check_id":"format","class":"formatter","status":"fail"}}]'
@@ -37,17 +42,29 @@ exit "${FAKE_NANOLINTER_STATUS:-0}"
 func TestLintNanolinter(t *testing.T) {
 	t.Parallel()
 	action := loadAction(t, "lint-nanolinter")
-	action.requireSteps(t, 1)
+	action.requireSteps(t, 2)
+
+	// Forgejo Runner reads the summary file after the lint step and again
+	// after the action: the last step must leave it empty, on failure too.
+	if closing := action.Runs.Steps[1]; closing.Run != ":" || closing.If != "${{ always() }}" {
+		t.Fatalf("closing step = %+v, want a no-op that always runs", closing)
+	}
+
 	action.requireStepEnv(t, 0, map[string]string{
 		"LINT_REQUIRED_LINTS":        "${{ inputs.required-lints }}",
 		"LINT_DISABLE_CHECKS":        "${{ inputs.disable-checks }}",
 		"LINT_OFFLINE":               "${{ inputs.offline }}",
+		"LINT_WRITE_STEP_SUMMARY":    "${{ inputs.write-step-summary }}",
 		"LINT_ADMIN_LINT":            "${{ inputs.enforce-lint }}",
 		"LINT_ADMIN_VULNERABILITIES": "${{ inputs.enforce-vulnerabilities }}",
 	})
 
 	if floor := action.Inputs["required-lints"].Default; floor != "secrets" {
 		t.Fatalf("default lint floor = %v, want secrets as on the other forges", floor)
+	}
+
+	if action.Inputs["write-step-summary"].Default != "false" {
+		t.Fatal("lint details should stay in the job log by default")
 	}
 
 	script := action.Runs.Steps[0].Run
@@ -125,6 +142,20 @@ func TestLintNanolinter(t *testing.T) {
 			got, argv := run(t, test.env...)
 			if got.status != 0 || !slices.Equal(argv, test.argv) {
 				t.Fatalf("status %d argv %q, want %q; stderr %s", got.status, argv, test.argv, got.stderr)
+			}
+		})
+	}
+
+	for _, tc := range []struct{ input, expect string }{{"false", "absent"}, {"true", "present"}} {
+		t.Run("step summary "+tc.input, func(t *testing.T) {
+			t.Parallel()
+
+			got, _ := run(t, "LINT_REQUIRED_LINTS=secrets", "LINT_DISABLE_CHECKS=", "LINT_OFFLINE=false",
+				"FORGEJO_STEP_SUMMARY=/example-summary", "GITEA_STEP_SUMMARY=/example-summary",
+				"GITHUB_STEP_SUMMARY=/example-summary", "CI_JOB_SUMMARY=/example-summary",
+				"LINT_WRITE_STEP_SUMMARY="+tc.input, "FAKE_EXPECT_SUMMARY="+tc.expect)
+			if got.status != 0 {
+				t.Fatalf("status %d, stderr %s", got.status, got.stderr)
 			}
 		})
 	}

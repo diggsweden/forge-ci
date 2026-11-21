@@ -402,12 +402,35 @@ Workflows](components.md#lint-workflows) has the flavour table and direct-call
 snippets, and [Linting](verification.md#linting) the caller/project policy
 boundary.
 
-The gate is your branch protection: require the orchestrator's jobs, and your
-test jobs, as status checks. The jobs are named by stage, as on the other
-forges: `Check: plan`, `Check: lint`, `Check: status` and so on. A required
-check is matched by that name, so a rename of a job changes the check to
-require. The GitHub layer has no release-isolation gate like Forgejo's
-`check-l3-isolation`.
+The gate is your branch protection: require the blocking quality and
+project jobs as status checks. Use the complete names GitHub reports for
+your caller; they include the reusable workflow chain. **PR check results**
+is for reporting, not a substitute for a blocking job. When moving from the
+old layout, update requirements referring to `Check: plan`, `Check: lint`,
+or the old bootstrap names. Remove requirements for `Check: status` or
+`Summary` only after confirming the real blocking checks are required.
+The GitHub layer has no Forgejo-style `check-l3-isolation` gate.
+
+| Old job label | New job label |
+| --- | --- |
+| `Check: plan` | **Select checks** |
+| `Check: lint / Nanolinter` | **Nanolinter / Nanolinter** |
+| `Check: lint (MegaLinter)` or `Check: lint (Swift)` | **MegaLinter** or **Swift checks**, followed by the called job name |
+| `canonical-admit`, `canonical-build`, `canonical-receive` | **Setup: check build images**, **Setup: build Forge CI**, **Setup: verify Forge CI** |
+| `resolve` (three times in a PR run) | **Setup: check pinned inputs**, **Setup: check quality stage pins**, **Setup: check Nanolinter pin** |
+
+Every job that only prepares the run starts with **Setup:**, so the list
+reads as setup, **Select checks**, the checks themselves, then **PR check
+results**. The setup labels also appear in release and snapshot runs. For PRs,
+the old `Check` grouping becomes **Run selected checks**. Compare full check
+names on a test PR before changing branch protection.
+
+The **PR check results** overview shows the change author, source and target
+refs, and the revision tested. It shows the source commit separately only
+when it differs from the tested revision. An incomplete result links to the
+workflow run for diagnosis; it is not presented as a scan finding. When the
+runner provides a check-run ID, the Nanolinter row opens that job directly.
+Project-owned build and test jobs keep their own results.
 
 **Who sets the enforcement settings.** The `enforce-*` inputs are only the
 administrator's when they are written in a workflow the consumer cannot

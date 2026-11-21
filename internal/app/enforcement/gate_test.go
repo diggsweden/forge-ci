@@ -78,7 +78,7 @@ func TestLintRunsAndKeepsInfrastructureFailuresBlocking(t *testing.T) {
 
 			var out bytes.Buffer
 
-			err := nanolinter(t.Context(), enforcement.Policy{EnforceLint: enforced}, r, &out, io.Discard, []string{"nanolinter", "verify"}, "")
+			err := nanolinter(t.Context(), enforcement.Policy{EnforceLint: enforced}, r, &out, io.Discard, []string{"nanolinter", "verify"}, ReportFiles{})
 			if !r.called {
 				t.Fatal("check was skipped")
 			}
@@ -101,7 +101,7 @@ func TestLintRunsAndKeepsInfrastructureFailuresBlocking(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	if err := nanolinter(ctx, enforcement.Policy{}, &runner{status: 1}, io.Discard, io.Discard, []string{"nanolinter"}, ""); !errors.Is(err, context.Canceled) {
+	if err := nanolinter(ctx, enforcement.Policy{}, &runner{status: 1}, io.Discard, io.Discard, []string{"nanolinter"}, ReportFiles{}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancellation suppressed: %v", err)
 	}
 }
@@ -121,10 +121,15 @@ func TestFindingsArePublishedBeforeACheckFailureIsReturned(t *testing.T) {
 		{EnforceLint: true, EnforceVulnerabilities: true},
 	} {
 		sarif := filepath.Join(t.TempDir(), "security.sarif")
+		// A report already at the destination is not this invocation's.
+		quality := filepath.Join(t.TempDir(), "quality.json")
+		if err := os.WriteFile(quality, []byte("checked in"), 0o600); err != nil {
+			t.Fatal(err)
+		}
 
 		var out bytes.Buffer
 
-		err := nanolinter(t.Context(), policy, &runner{status: 1, body: body}, &out, io.Discard, []string{"nanolinter", "verify"}, sarif)
+		err := nanolinter(t.Context(), policy, &runner{status: 1, body: body}, &out, io.Discard, []string{"nanolinter", "verify"}, ReportFiles{SecuritySARIF: sarif, CodeQuality: quality})
 		if errors.Is(err, errs.ErrPrerequisite) != policy.EnforceLint || errors.Is(err, errs.ErrValidation) != policy.EnforceVulnerabilities {
 			t.Fatalf("policy %+v: %v", policy, err)
 		}
@@ -137,6 +142,14 @@ func TestFindingsArePublishedBeforeACheckFailureIsReturned(t *testing.T) {
 		written, readErr := os.ReadFile(sarif)
 		if readErr != nil || !strings.Contains(string(written), "CVE-EXAMPLE") {
 			t.Fatalf("security SARIF not written: %v\n%s", readErr, written)
+		}
+
+		if written, readErr := os.ReadFile(quality); readErr != nil || strings.TrimSpace(string(written)) != "[]" {
+			t.Fatalf("Code Quality report not replaced by this run's: %v\n%s", readErr, written)
+		}
+
+		if strings.Contains(out.String(), `"version":"2.1.0"`) {
+			t.Fatalf("SARIF was also printed to the human log:\n%s", out.String())
 		}
 
 		for _, want := range []string{"vulnerabilities result=findings count=1", "lint result=incomplete count=0", "blocking-count=0 could-not-complete=sast\n"} {
@@ -156,7 +169,7 @@ func TestSkippedSecurityCheckIsNeverClean(t *testing.T) {
 	for _, enforced := range []bool{false, true} {
 		var out bytes.Buffer
 
-		err := nanolinter(t.Context(), enforcement.Policy{EnforceVulnerabilities: enforced}, &runner{body: fmt.Sprintf(document, "skip")}, &out, io.Discard, []string{"nanolinter", "verify"}, "")
+		err := nanolinter(t.Context(), enforcement.Policy{EnforceVulnerabilities: enforced}, &runner{body: fmt.Sprintf(document, "skip")}, &out, io.Discard, []string{"nanolinter", "verify"}, ReportFiles{})
 		if errors.Is(err, errs.ErrPrerequisite) != enforced || (!enforced && err != nil) {
 			t.Fatalf("enforced=%t: skipped scan: %v", enforced, err)
 		}
@@ -171,7 +184,7 @@ func TestSkippedSecurityCheckIsNeverClean(t *testing.T) {
 
 		out.Reset()
 
-		if err := nanolinter(t.Context(), enforcement.Policy{EnforceVulnerabilities: enforced}, &runner{body: fmt.Sprintf(document, "n/a")}, &out, io.Discard, []string{"nanolinter", "verify"}, ""); err != nil {
+		if err := nanolinter(t.Context(), enforcement.Policy{EnforceVulnerabilities: enforced}, &runner{body: fmt.Sprintf(document, "n/a")}, &out, io.Discard, []string{"nanolinter", "verify"}, ReportFiles{}); err != nil {
 			t.Fatalf("enforced=%t: a check that does not apply failed: %v", enforced, err)
 		}
 

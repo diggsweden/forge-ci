@@ -6,6 +6,7 @@ package livetest
 import (
 	"errors"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -34,8 +35,10 @@ func sourceImageFlavor(flavor string) (string, error) {
 		flavor = "rust"
 	}
 
-	if flavor != "rust" && flavor != "go" {
-		return "", errors.New("source image flavor must be rust or go")
+	// The flavours a trial consumer lints with; the name is part of the
+	// package name, so only these exact words pass.
+	if !slices.Contains([]string{"rust", "go", "java", "javascript-typescript"}, flavor) {
+		return "", errors.New("source image flavor must be rust, go, java or javascript-typescript")
 	}
 
 	return flavor, nil
@@ -54,13 +57,13 @@ func sourceImageBatchRetention(phase, acknowledgement string) (bool, error) {
 }
 
 func TestSourceImageFlavorAdmission(t *testing.T) {
-	for input, want := range map[string]string{"": "rust", "rust": "rust", "go": "go"} {
+	for input, want := range map[string]string{"": "rust", "rust": "rust", "go": "go", "java": "java", "javascript-typescript": "javascript-typescript"} {
 		if got, err := sourceImageFlavor(input); err != nil || got != want {
 			t.Fatalf("flavor %q: got %q, %v; want %q", input, got, err, want)
 		}
 	}
 
-	for _, bad := range []string{"core", "java", "GO", "go/rust", "../go"} {
+	for _, bad := range []string{"core", "kotlin", "GO", "go/rust", "../go"} {
 		if _, err := sourceImageFlavor(bad); err == nil {
 			t.Fatalf("unsupported flavor %q accepted", bad)
 		}

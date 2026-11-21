@@ -44,6 +44,7 @@ include:
   # the secrets floor, and its findings as a SAST report.
   - component: $CI_SERVER_FQDN/itiquette/forge-ci/nanolinter@0.90.0
     inputs:
+      job-name: Quality checks
       forge-ci-repository: itiquette/forge-ci
       server-url: $CI_SERVER_URL
       nanolinter-image: $CI_LINT_IMAGE
@@ -55,6 +56,7 @@ include:
   # https://$CI_SERVER_FQDN/itiquette/forge-ci/-/blob/2f4e845cee96973d1082bf00a5a18689c1482148/docs/gitlab.md.
   - component: $CI_SERVER_FQDN/itiquette/forge-ci/check@2f4e845cee96973d1082bf00a5a18689c1482148
     inputs:
+      job-name: Vet and test
       forge-ci-repository: itiquette/forge-ci
       server-url: $CI_SERVER_URL
       job-image: $CI_JOB_IMAGE
@@ -67,6 +69,7 @@ include:
   # administrator may require them, so the engine refuses skip-tests: true.
   - component: $CI_SERVER_FQDN/itiquette/forge-ci/build-go@0.90.0
     inputs:
+      job-name: Build Go artifacts
       runtime-image: $CI_JOB_IMAGE
       artifact-name: my-cli
       main-package: ./cmd/my-cli # FIXME: your command's main package ("." at the module root).

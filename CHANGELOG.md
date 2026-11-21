@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Breaking:** Pull request checks are named Quality checks, Build and
+  test and PR check results on every forge, and the GitHub orchestrator's
+  Summary job is gone. Update the required checks of your branch
+  protection when you move your pin.
+
 ## [0.94.3] - 2026-11-20
 
 ### Changed

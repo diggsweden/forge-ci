@@ -49,12 +49,15 @@ func TestPRSummary_HappyPath(t *testing.T) {
 		"| **Checked By** | @reviewer |",
 		"| **Checked At** | 2026-05-10 14:30:00 UTC |",
 		"| Nanolinter | ✓ |",
-		"| Swift Lint | − |",
 		"- [Workflow Run](https://example.com/run/1)",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("missing %q\nfull:\n%s", want, body)
 		}
+	}
+
+	if strings.Contains(body, "Swift Lint") {
+		t.Errorf("unselected check shown:\n%s", body)
 	}
 }
 
@@ -91,7 +94,7 @@ func TestPRSummary_MissingTargetsDefaultToSkipped(t *testing.T) {
 	}
 }
 
-func TestPRSummary_FailureAndSkippedIcons(t *testing.T) {
+func TestPRSummary_FailureAndUnselectedChecks(t *testing.T) {
 	t.Parallel()
 
 	sink := &fakeSummarySink{}
@@ -111,10 +114,8 @@ func TestPRSummary_FailureAndSkippedIcons(t *testing.T) {
 	}
 
 	body := sink.buf.String()
-	for _, want := range []string{"| Nanolinter | ✗ |", "| Swift Lint | − |"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("missing %q in %s", want, body)
-		}
+	if !strings.Contains(body, "| Nanolinter | ✗ |") || strings.Contains(body, "Swift Lint") {
+		t.Errorf("expected failure and no unselected checks:\n%s", body)
 	}
 }
 

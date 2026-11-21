@@ -45,7 +45,7 @@ env:
 
 jobs:
   lint:
-    name: "Check: lint"
+    name: Quality checks
     runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     container:
       # A nanolinter image, pinned by digest: the lint step runs the
@@ -67,7 +67,7 @@ jobs:
         uses: https://FORGE_HOST/OWNER/forge-ci/.forgejo/actions/lint-nanolinter@PIN_FORGE_CI_SHA
 
   release-gate:
-    name: "Check: release isolation"
+    name: Verify release isolation
     runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     timeout-minutes: 10
     steps:
@@ -86,7 +86,7 @@ jobs:
         uses: https://FORGE_HOST/OWNER/forge-ci/.forgejo/actions/check-l3-isolation@PIN_FORGE_CI_SHA
 
   build:
-    name: "Check: scripts"
+    name: Check scripts
     runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     container:
       image: ${{ vars.CI_JOB_IMAGE }}
@@ -107,7 +107,7 @@ jobs:
   # logs, older Forgejo prints it in this job's log.
   # ===========================================================================
   summary:
-    name: Summary
+    name: PR check results
     if: ${{ always() }}
     needs: [lint, release-gate, build]
     runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
@@ -126,6 +126,6 @@ jobs:
           CHECK_RESULT: ${{ needs.build.result }}
         run: |
           forge-ci report pr \
-            --job "Check: lint=${LINT_RESULT}" \
-            --job "Check: release isolation=${ISOLATION_RESULT}" \
-            --job "Check: scripts=${CHECK_RESULT}"
+            --job "Quality checks=${LINT_RESULT}" \
+            --job "Verify release isolation=${ISOLATION_RESULT}" \
+            --job "Check scripts=${CHECK_RESULT}"

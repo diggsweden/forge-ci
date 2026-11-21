@@ -107,6 +107,13 @@ the steps are these.
 3. **Add the merge-request gate** to the consumer's `.gitlab-ci.yml`: a lint
    component and the `check` component.
 
+   Name them **Quality checks** and **Build and test** when they serve those
+   roles. With a component revision that supports the summary, open
+   **PR check results** in the merge request's exposed artifacts. It contains
+   the quality verdict, change context, and the Nanolinter matrix when emitted.
+   The pipeline link shows the separate build result and remains the merge
+   gate. The artifact needs no comment token or extra CI job.
+
    ```yaml
    workflow:
      rules:
@@ -1257,6 +1264,14 @@ it as `artifacts:reports:sast`, so findings appear on the merge request's
 Security tab. Producing the report works on every tier; displaying it needs
 GitLab Ultimate. `enable-gitlab-sast: false` keeps the SARIF as a plain
 artifact only.
+
+The Nanolinter component publishes the other findings of the same run, those
+of the failed quality checks, as `artifacts:reports:codequality`. The merge
+request's Code Quality widget lists what the request adds, compared with the
+latest pipeline of the target branch, so run the component there too: the
+example's `workflow: rules` do. A passed check adds nothing to the report, so
+an empty one is no verdict: the job's result is. The full matrix of passed,
+failed, skipped and not-applicable checks is in **PR check results**.
 
 The conversion runs the engine the way `check` does, from the
 component's commit, so a component included by version needs the engine of

@@ -21,11 +21,16 @@ import (
 // own, and so is a URL carrying userinfo, which would publish a credential in
 // the job summary.
 func resourceLine(label, link string) string {
-	parsed, err := url.Parse(link)
-	if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" || parsed.User != nil ||
-		strings.ContainsAny(link, " ()<>\t\r\n") {
+	if !validSummaryLink(link) {
 		return fmt.Sprintf("- %s: not available\n", label)
 	}
 
 	return fmt.Sprintf("- [%s](%s)\n", label, link)
+}
+
+func validSummaryLink(link string) bool {
+	parsed, err := url.Parse(link)
+
+	return err == nil && (parsed.Scheme == "https" || parsed.Scheme == "http") && parsed.Host != "" && parsed.User == nil &&
+		!strings.ContainsAny(link, " ()<>\\\t\r\n")
 }

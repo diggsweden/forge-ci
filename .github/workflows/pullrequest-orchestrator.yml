@@ -125,14 +125,17 @@ permissions:
   contents: read # Default permission; individual jobs declare additions.
 jobs:
   resolve-bootstrap:
+    name: "Setup: check pinned inputs"
     permissions:
       contents: read
     uses: ./.github/workflows/resolve-forge-ci-bootstrap.yml
     with:
+      job-name: "Setup: check pinned inputs"
       forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
       images: |
         runtime-image=${{ inputs['runtime-image'] }}
   canonical-cli:
+    name: Prepare pinned Forge CI
     needs: [resolve-bootstrap]
     permissions:
       contents: read
@@ -150,7 +153,7 @@ jobs:
   compose-pr-plan:
     needs: [resolve-bootstrap, canonical-cli]
     if: ${{ !failure() && !cancelled() && needs.canonical-cli.result == 'success' }}
-    name: "Check: plan"
+    name: Select checks
     runs-on: ${{ fromJSON(inputs['runs-on']) }}
     container:
       image: ${{ inputs['runtime-image'] }}
@@ -161,8 +164,7 @@ jobs:
       pr-plan-json: ${{ steps.plan.outputs.pr-plan-json }}
       quality-stage-plan-json: ${{ steps.plan.outputs.quality-stage-plan-json }}
     steps:
-      - &canonical-context
-        name: Require original canonical success and approved identity
+      - name: Require original canonical success and approved identity
         shell: /bin/bash --noprofile --norc -peuo pipefail {0}
         env:
           ENGINE_REPOSITORY: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
@@ -187,8 +189,7 @@ jobs:
           for variable in ENGINE_REPOSITORY ENGINE_COMMIT ENGINE_ORIGIN RUNTIME_IMAGE PRODUCER_ARTIFACT_ID PRODUCER_ARTIFACT_NAME PRODUCER_RUN_ID PRODUCER_RUN_ATTEMPT PRODUCER_ENGINE_REPOSITORY PRODUCER_ENGINE_COMMIT CANONICAL_PRODUCER_RESULT; do
             printf '%s=%s\n' "$variable" "${!variable}" >>"$GITHUB_ENV"
           done
-      - &canonical-checkout
-        name: Checkout only the approved engine before consumer or private steps
+      - name: Checkout only the approved engine before consumer or private steps
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ env.ENGINE_REPOSITORY }}
@@ -197,8 +198,7 @@ jobs:
           persist-credentials: false
           submodules: false
           lfs: false
-      - &canonical-consume
-        name: Consume canonical CLI from the independently pinned engine checkout
+      - name: Consume canonical CLI from the independently pinned engine checkout
         id: canonical-bootstrap
         uses: ./_forge_ci_bootstrap/.github/actions/consume-canonical-cli
         with:
@@ -217,7 +217,7 @@ jobs:
 
   # ===== Stage 1: Quality =====
   execute-quality-stage:
-    name: Check
+    name: Run selected checks
     needs: [resolve-bootstrap, canonical-cli, compose-pr-plan]
     permissions:
       actions: read
@@ -244,30 +244,3 @@ jobs:
       canonical-producer-engine-repository: ${{ needs.canonical-cli.outputs.engine-repository }}
       canonical-producer-engine-commit: ${{ needs.canonical-cli.outputs.engine-commit }}
       canonical-producer-result: ${{ needs.canonical-cli.result }}
-
-  # ===== Summary =====
-  pr-summary:
-    name: Summary
-    needs: [resolve-bootstrap, canonical-cli, compose-pr-plan, execute-quality-stage]
-    if: always() && needs.resolve-bootstrap.result == 'success'
-    runs-on: ${{ fromJSON(inputs['runs-on']) }}
-    container:
-      image: ${{ inputs['runtime-image'] }}
-    permissions:
-      actions: read
-      contents: read
-    steps:
-      - *canonical-context
-      - *canonical-checkout
-      - *canonical-consume
-      - name: Download quality stage manifests
-        if: always() && steps.canonical-bootstrap.outputs.verified == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: forge-ci artifact download --name ci-results-pr-quality --dir .ci-results
-      - name: Generate PR summary
-        env:
-          PROJECT_TYPE: ${{ fromJson(needs.compose-pr-plan.outputs['pr-plan-json']).context.project_type }}
-          QUALITY_STAGE_RESULT_PATH: .ci-results/pr-quality-result.json
-          HAS_CODE_SCANNING_TOKEN: ${{ secrets.CODE_SCANNING_TOKEN != '' }}
-        run: forge-ci report pr

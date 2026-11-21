@@ -45,6 +45,7 @@ include:
   # flavour carries them all; see nanolinter.toml.
   - component: gitlab.example.com/team/ci/forge-ci/nanolinter@0.90.0
     inputs:
+      job-name: Quality checks
       forge-ci-repository: team/ci/forge-ci
       server-url: https://gitlab.example.com
       nanolinter-image: "ghcr.io/itiquette/nanolinter:core@sha256:PIN_DIGEST"
@@ -59,7 +60,7 @@ include:
     inputs:
       forge-ci-repository: team/ci/forge-ci
       server-url: https://gitlab.example.com
-      job-name: check-backend
+      job-name: Check backend
       job-image: ghcr.io/diggsweden/forge-ci-runtime-java-25@sha256:PIN_JAVA_IMAGE_DIGEST
       job-user: "65532:65532"
       commands:
@@ -68,7 +69,7 @@ include:
     inputs:
       forge-ci-repository: team/ci/forge-ci
       server-url: https://gitlab.example.com
-      job-name: check-frontend
+      job-name: Check frontend
       job-image: ghcr.io/diggsweden/forge-ci-runtime-node-24@sha256:PIN_NODE_IMAGE_DIGEST
       job-user: "65532:65532"
       commands:

@@ -1,8 +1,9 @@
 # Workflow Design Policy
 
-This document defines the preferred structure for GitHub Actions workflows in this repository.
+The PR experience below applies across forges. The workflow-shape guidance
+that follows is for GitHub Actions workflows in this repository.
 
-It does not apply to the Forgejo layer under `.forgejo/`, which is shaped by
+The GitHub workflow shape does not apply to the Forgejo layer under `.forgejo/`, which is shaped by
 two different constraints and is deliberately flat. Forgejo resolves a nested
 relative `uses:` against the calling repository, so shared workflows contain
 direct jobs rather than nested reusable-workflow calls. A cohesive lifecycle
@@ -20,6 +21,30 @@ below must not be read as a reason to hide. Its rules are in the
 - avoid mega-workflows
 - move implementation logic out of YAML when it becomes noisy
 - make workflow refactors predictable and safe
+
+## Pull Request Experience Across Forges
+
+- **Quality checks** runs the chosen project's lint plan once, including the
+  administrator's required checks. Nanolinter owns the per-check matrix and
+  its pass, fail, skip and not-applicable states. Forge CI owns enforcement
+  and the links from the overview to the details.
+- **Build and test** runs the consumer's build, test and packaging checks with
+  its pinned toolchain. A PR with complete quality coverage does not install
+  or rerun a second lint stack. Release and snapshot verification must still
+  run the checks they need without depending on a previous PR pipeline.
+- **PR check results** gives reviewers a short verdict and the change and
+  tested revision, linking to the job or pipeline. Use the native summary on
+  GitHub and Forgejo, and the MR's exposed job artifact plus native pipeline
+  status on GitLab. Do not claim a result from a job the reporter did not
+  observe: the overview lists the quality verdict everywhere, and other jobs
+  only where its reporter runs after them, as in a flat Forgejo workflow. The
+  run or pipeline is the overall verdict on every forge. Keep the detailed
+  matrix with **Quality checks**; do not duplicate it in a separate reporting
+  job or give PR jobs a write token for comments.
+- Findings go where the forge shows them beside the change: Code Scanning on
+  GitHub, the SAST report and the Code Quality widget on GitLab, both from the
+  one lint run. Forgejo has no such surface, so its findings stay in the
+  **Quality checks** log and matrix.
 
 ## Public And Internal Boundaries
 

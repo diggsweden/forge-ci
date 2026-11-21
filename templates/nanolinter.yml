@@ -16,7 +16,9 @@
 #   2. The security SARIF is converted to the GitLab SAST schema and published as
 #      `artifacts:reports:sast`, so blocking findings land on the merge-request
 #      Security tab (the GitLab analog of GitHub Code Scanning). The conversion
-#      uses `forge-ci security report to-gitlab-sast`; forge-ci is not baked
+#      uses `forge-ci security report to-gitlab-sast`. The other findings of the
+#      same run are published as `artifacts:reports:codequality`, for the merge
+#      request's Code Quality widget. forge-ci is not baked
 #      into the flavour image, so the job checks out forge-ci-repository at this
 #      component's commit and runs the engine binary that commit records,
 #      downloaded from that project's generic packages and checked against the
@@ -105,6 +107,7 @@ spec:
     RC_FORGE_CI_REPOSITORY: "$[[ inputs.forge-ci-repository ]]"
     SARIF_FILE: nanolinter-security.sarif
     GL_SAST_FILE: gl-sast-report.json
+    GL_CODE_QUALITY_FILE: gl-code-quality-report.json
   # Explicit gate fields replace earlier same-named values. Other keys still
   # merge; policy injection, not include ordering, is the authority boundary.
   allow_failure: false
@@ -127,6 +130,10 @@ spec:
         exit 1
       fi
       export CI_API_V4_URL="${RC_SERVER_URL}/api/v4"
+      # This artifact path belongs to the component, not to the change being
+      # checked. Do not upload a checked-in report if bootstrap or lint aborts.
+      readonly summary_file=forge-ci-pr-check-results.md
+      rm -f -- "$summary_file" || exit 1
 
       # opengrep (inside nanolinter) hardcodes paths under the image's home; the
       # flavour image's /home/nanolinter is writable, so cosign's sigstore cache
@@ -216,9 +223,10 @@ spec:
           require_args=()
           if [ -n "$REQUIRED_LINTS" ]; then require_args=(--require "$REQUIRED_LINTS"); fi
           if [ -n "$DISABLE_CHECKS" ]; then require_args+=(--disable-check "$DISABLE_CHECKS"); fi
+          unset FORGEJO_STEP_SUMMARY GITEA_STEP_SUMMARY GITHUB_STEP_SUMMARY
           gate=0
-          LANG=C.UTF-8 LC_ALL=C.UTF-8 run_forge_ci policy nanolinter \
-            --enforce-lint="$RC_ADMIN_LINT" --enforce-vulnerabilities="$RC_ADMIN_VULNERABILITIES" --sarif-file "$SARIF_FILE" -- \
+          LANG=C.UTF-8 LC_ALL=C.UTF-8 CI_JOB_SUMMARY="${helpers}/nanolinter-matrix.md" run_forge_ci policy nanolinter \
+            --enforce-lint="$RC_ADMIN_LINT" --enforce-vulnerabilities="$RC_ADMIN_VULNERABILITIES" --sarif-file "$SARIF_FILE" --code-quality-file "$GL_CODE_QUALITY_FILE" -- \
             nanolinter verify "${require_args[@]}" --report sarif --out - || gate=$?
           if [ "$gate" -ne 0 ]; then
             echo "nanolinter gate failed — see the per-check output for findings or a tool/runtime failure."
@@ -232,11 +240,37 @@ spec:
               if [ "$gate" -eq 0 ]; then gate=1; fi
             fi
           fi
+          if [ "${CI_PIPELINE_SOURCE:-}" = merge_request_event ] && [ -n "${CI_MERGE_REQUEST_IID:-}" ]; then
+            result=success
+            if [ "$gate" -ne 0 ]; then result=failure; fi
+            # The job knows its own result, not the concurrent build's result.
+            # Link the authoritative pipeline instead of guessing or polling.
+            if ! FORGE_CI_PROVIDER=gitlab CI_SUMMARY_FILE="${helpers}/${summary_file}" run_forge_ci report pr \
+              --compact --merge-request --job "Nanolinter=${result}" \
+              --pr-number "$CI_MERGE_REQUEST_IID" --pr-url "${CI_MERGE_REQUEST_PROJECT_URL:-}/-/merge_requests/${CI_MERGE_REQUEST_IID}" \
+              --pr-author '' --source-repository "${CI_MERGE_REQUEST_SOURCE_PROJECT_PATH:-}" \
+              --source-branch "${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME:-}" \
+              --target-repository "${CI_MERGE_REQUEST_TARGET_PROJECT_PATH:-}" --target-branch "$target" \
+              --source-commit "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA:-}" --commit "${CI_COMMIT_SHA:-}" \
+              --run-url "${CI_PIPELINE_URL:-}" --nanolinter-job-url "${CI_JOB_URL:-}" \
+              --quality-stage-result-json '' --quality-stage-result-path '' --results-unavailable=false ||
+              ! { [ ! -s "${helpers}/nanolinter-matrix.md" ] ||
+                cat -- "${helpers}/nanolinter-matrix.md" >> "${helpers}/${summary_file}"; } ||
+              ! mv -fT -- "${helpers}/${summary_file}" "$summary_file"; then
+              echo 'WARNING: PR check results could not be published. See the job log and pipeline.' >&2
+            fi
+          fi
           exit "$gate"
       )
   artifacts:
     when: always
+    expose_as: PR check results
     paths:
+      - forge-ci-pr-check-results.md
       - nanolinter-security.sarif
     reports:
       sast: gl-sast-report.json
+      # The quality findings of the same run. The merge request widget lists
+      # what the request adds, compared with the target branch's latest
+      # pipeline, which runs this job too.
+      codequality: gl-code-quality-report.json

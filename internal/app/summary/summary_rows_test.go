@@ -233,7 +233,7 @@ func TestPRSummary_LintRowNamesTheEngineThatRan(t *testing.T) {
 		},
 		"nanolinter cancelled": {
 			targets: map[string]string{"nanolinter": "cancelled", "megalinter": "skipped", "swift": "skipped"},
-			want:    []string{"| Nanolinter | ✗ |", "| Swift Lint | − |"},
+			want:    []string{"| Nanolinter | ✗ |"},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

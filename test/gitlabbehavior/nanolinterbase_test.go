@@ -203,6 +203,61 @@ func TestNanolinterLeavesOutDisabledChecksAndFailsOnALostSASTReport(t *testing.T
 	}
 }
 
+func TestNanolinterPublishesAnMRReportWithoutChangingTheGate(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name, pipeline, scan, report, want string
+		wantExit                           int
+	}{
+		{"green MR", "merge_request_event", "0", "0", "Nanolinter=success\n\n## Individual Linter Results\n", 0},
+		{"failed MR", "merge_request_event", "3", "0", "Nanolinter=failure\n\n## Individual Linter Results\n", 3},
+		{"report error", "merge_request_event", "0", "2", "", 0},
+		{"branch pipeline", "push", "0", "0", "", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+
+			const scanner = "#!/bin/sh\nprintf '\\n## Individual Linter Results\\n' > \"$CI_JOB_SUMMARY\" || exit 97\nexit \"$SCAN_STATUS\"\n"
+			if err := os.WriteFile(filepath.Join(dir, "nanolinter"), []byte(scanner), 0o700); err != nil {
+				t.Fatal(err)
+			}
+
+			path := filepath.Join(dir, "forge-ci-pr-check-results.md")
+			if err := os.WriteFile(path, []byte("not a report"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			output, err := runNanolinterScript(t, dir, dir, "CI_PIPELINE_SOURCE="+tc.pipeline,
+				"CI_MERGE_REQUEST_IID=7", "SCAN_STATUS="+tc.scan, "REPORT_STATUS="+tc.report)
+
+			var status *exec.ExitError
+			if (tc.wantExit == 0 && err != nil) || (tc.wantExit != 0 && (!errors.As(err, &status) || status.ExitCode() != tc.wantExit)) {
+				t.Fatalf("gate = %v, want exit %d\n%s", err, tc.wantExit, output)
+			}
+			// Every pipeline asks for the Code Quality report: the target
+			// branch's is what a merge request is compared with.
+			if target, err := os.ReadFile(filepath.Join(dir, "code-quality-file")); err != nil || strings.TrimSpace(string(target)) != filepath.Join(dir, "quality.json") {
+				t.Fatalf("Code Quality report destination = %q (%v)", target, err)
+			}
+
+			body, err := os.ReadFile(path)
+			if tc.want == "" {
+				if !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("unexpected report: %q (%v)", body, err)
+				}
+
+				if tc.report != "0" && !strings.Contains(output, "PR check results could not be published") {
+					t.Fatalf("missing reporting warning:\n%s", output)
+				}
+			} else if err != nil || string(body) != tc.want {
+				t.Fatalf("report = %q (%v), want %q", body, err, tc.want)
+			}
+		})
+	}
+}
+
 func runNanolinterScript(t *testing.T, dir, workspace string, env ...string) (string, error) {
 	t.Helper()
 
@@ -213,14 +268,18 @@ func runNanolinterScriptWith(t *testing.T, dir, workspace string, inputs map[str
 	t.Helper()
 	// This suite checks checkout and environment transport. Policy semantics
 	// execute against real compiled engines in commands/policy integration tests.
-	// The driver records the administrator flags it was given.
+	// The driver records the administrator flags it was given, and where the
+	// Code Quality report was to go.
 	// It stands in for the SAST conversion too, with the status the test names,
 	// and for the Containerfile checks, which never fail.
 	const policyDriver = "#!/bin/sh\n[ \"$1 $2 $3\" != 'security report to-gitlab-sast' ] || exit \"${CONVERT_STATUS:-0}\"\n" +
 		"[ \"$1 $2\" != 'container validate' ] || exit 0\n" +
+		"if [ \"$1 $2\" = 'report pr' ]; then\n  [ \"${REPORT_STATUS:-0}\" = 0 ] || exit \"$REPORT_STATUS\"\n" +
+		"  test \"$FORGE_CI_PROVIDER $3 $4 $5\" = 'gitlab --compact --merge-request --job' || exit 97\n" +
+		"  printf '%s\\n' \"$6\" > \"$CI_SUMMARY_FILE\"\n  exit\nfi\n" +
 		"[ \"$1\" = policy ] && [ \"$2\" = nanolinter ] || exit 98\nshift 2\n: > \"${0%/*}/admin-flags\"\n" +
 		"while :; do\n  case \"$1\" in\n    --enforce-*=*) printf '%s\\n' \"$1\" >> \"${0%/*}/admin-flags\"; shift ;;\n" +
-		"    --sarif-file) shift 2 ;;\n    *) break ;;\n  esac\ndone\n[ \"$1\" = -- ] || exit 98\nshift\nexec \"$@\"\n"
+		"    --sarif-file) shift 2 ;;\n    --code-quality-file) printf '%s\\n' \"$2\" > \"${0%/*}/code-quality-file\"; shift 2 ;;\n    *) break ;;\n  esac\ndone\n[ \"$1\" = -- ] || exit 98\nshift\nexec \"$@\"\n"
 	if err := os.WriteFile(filepath.Join(dir, "forge-ci"), []byte(policyDriver), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -289,6 +348,7 @@ func runNanolinterScriptWith(t *testing.T, dir, workspace string, inputs map[str
 		"CI_SERVER_URL=file://" + dir, "CI_PROJECT_PATH=group/app", "CI_PROJECT_DIR=" + workspace, "CI_JOB_TOKEN=job-token",
 		"RC_FORGE_CI_REPOSITORY=engine", "ENGINE_DIR=" + dir,
 		"SARIF_FILE=" + filepath.Join(dir, "out.sarif"), "GL_SAST_FILE=" + filepath.Join(dir, "gl.json"),
+		"GL_CODE_QUALITY_FILE=" + filepath.Join(dir, "quality.json"),
 	}, env...)
 
 	output, err := command.CombinedOutput()

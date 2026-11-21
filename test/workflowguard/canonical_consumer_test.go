@@ -111,7 +111,8 @@ func TestCanonicalConsumerWorkflowGraph(t *testing.T) {
 		"base-image-lifecycle.yml":          {"build"},
 		"snapshot-images.yml":               {"build"},
 		"release-snapshot-orchestrator.yml": {"setup-snapshot", "snapshot-release-summary"},
-		"pullrequest-orchestrator.yml":      {"compose-pr-plan", "pr-summary"},
+		"pullrequest-orchestrator.yml":      {"compose-pr-plan"},
+		"pullrequest-quality-stage.yml":     {"summarize-quality-stage"},
 		"lint-nanolinter.yml":               {"nanolinter-lint"},
 		"lint-megalinter.yml":               {"megalinter-lint"},
 	} {
@@ -229,6 +230,29 @@ func TestCanonicalConsumerWorkflowGraph(t *testing.T) {
 		require.Equal(t, "${{ inputs['canonical-artifact-id'] }}", quality.Jobs[lint].With["canonical-artifact-id"], lint)
 		require.Equal(t, "${{ inputs['runtime-image'] }}", quality.Jobs[lint].With["runtime-image"], lint)
 	}
+}
+
+func TestPullRequestReportsFromOneVerifiedJob(t *testing.T) {
+	t.Parallel()
+
+	root := reporoot.ReadFile(t, ".github/workflows/pullrequest-orchestrator.yml")
+	require.NotContains(t, string(root), "forge-ci artifact download --name ci-results-pr-quality")
+	require.NotContains(t, string(root), "forge-ci report pr")
+
+	stage := readCanonicalConsumerWorkflow(t, "pullrequest-quality-stage.yml")
+	require.NotContains(t, stage.Jobs, "quality-status")
+	report := stage.Jobs["summarize-quality-stage"]
+	require.ElementsMatch(t, []string{"resolve-bootstrap", "nanolinter", "megalinter", "swift"}, report.Needs)
+	require.Contains(t, report.If, "!cancelled()", "report after a failed check, not after cancellation")
+	require.Empty(t, report.Secrets)
+	require.Len(t, report.Steps, 6)
+	require.Equal(t, "forge-ci report stage-result", report.Steps[3].Run)
+	require.Equal(t, "forge-ci report pr", report.Steps[4].Run)
+	require.Contains(t, report.Steps[4].Env["QUALITY_STAGE_RESULT_PATH"], ".ci-results/pr-quality-result.json")
+	require.Contains(t, report.Steps[4].If, "steps.summary.outcome == 'failure'")
+	require.Contains(t, report.Steps[4].If, "steps.canonical-bootstrap.outputs.verified == 'true'")
+	require.Contains(t, report.Steps[5].If, "steps.summary.outcome == 'success'")
+	require.Equal(t, "ci-results-pr-quality", report.Steps[5].With["name"])
 }
 
 func TestReleaseAcquisitionSeparatesSourceFromProducerInventory(t *testing.T) {

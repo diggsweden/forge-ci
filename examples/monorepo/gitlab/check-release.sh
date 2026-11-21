@@ -6,7 +6,7 @@
 # Release-candidate checks, the release policy's `checks` input, run by Forge
 # CI's check job in the policy's job-image as its non-root user. That is one
 # image, the Java one here, so this checks the backend, as the merge-request
-# gate's check-backend does. The frontend's tests need Node, so they gate in
+# gate's Check backend job does. The frontend's tests need Node, so they gate in
 # the release's node build job: build-release.sh runs them there and stops
 # the release when one fails, after this job and before anything is signed.
 set -euo pipefail

@@ -95,20 +95,28 @@ on:
       CODE_SCANNING_TOKEN:
         description: "Token with security-events:write for SARIF upload"
         required: false
+    outputs:
+      job-url:
+        description: Native job log URL when the runner provides a check-run ID
+        value: ${{ jobs.nanolinter-lint.outputs.job-url }}
 permissions:
   contents: read
 jobs:
   resolve-bootstrap:
+    name: "Setup: check Nanolinter pin"
     permissions:
       contents: read
     uses: ./.github/workflows/resolve-forge-ci-bootstrap.yml
     with:
+      job-name: "Setup: check Nanolinter pin"
       forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
   nanolinter-lint:
     needs: [resolve-bootstrap]
     name: Nanolinter
     runs-on: ${{ fromJSON(inputs['runs-on']) }}
     timeout-minutes: 30
+    outputs:
+      job-url: ${{ job.check_run_id && format('{0}/{1}/actions/runs/{2}/job/{3}', github.server_url, github.repository, github.run_id, job.check_run_id) || '' }}
     permissions:
       contents: read
       actions: read # Canonical metadata/download; intentional read-only increase.
@@ -181,7 +189,7 @@ jobs:
         run: |
           forge-ci container validate rebuilds
           forge-ci container validate image-names
-      - name: Run nanolinter (security gate)
+      - name: Run Nanolinter quality plan
         # verify runs the full plan and gates on every check; --report
         # sarif-security only selects what the SARIF holds. The step fails on a
         # blocking finding, next to the per-check output; the SARIF steps below

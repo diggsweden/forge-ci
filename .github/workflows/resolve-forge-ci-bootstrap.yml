@@ -20,6 +20,11 @@ on:
         required: false
         default: ""
         type: string
+      job-name:
+        description: "What the run page calls this job, so a run that validates pins more than once lists each by what it validates"
+        required: false
+        default: "Setup: check pinned inputs"
+        type: string
     outputs:
       forge-ci-repository:
         description: "owner/name of the forge-ci repository whose engine, bootstrap scripts and signer the caller trusts"
@@ -28,6 +33,7 @@ permissions:
   contents: read
 jobs:
   resolve:
+    name: ${{ inputs['job-name'] }}
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     outputs:

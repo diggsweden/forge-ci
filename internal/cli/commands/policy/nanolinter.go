@@ -26,6 +26,7 @@ the request introduces. The checkout must hold that ref and the history back
 to the merge base, and the nanolinter must know the flag.`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "sarif-file", Usage: "write the invocation's security-only SARIF for provider upload"},
+			&cli.StringFlag{Name: "code-quality-file", Usage: "write the invocation's other findings as a GitLab Code Quality report"},
 			&cli.StringFlag{Name: "required-lints", Value: "secrets", Usage: "typed verify mode: mandatory check IDs; explicitly empty selects no floor"},
 			&cli.StringFlag{Name: "disable-checks", Usage: "typed verify mode: check IDs excluded from this invocation"},
 			&cli.StringFlag{Name: "offline", Value: "false", Usage: "typed verify mode: exactly true or false; true uses Nanolinter's offline checks"},
@@ -35,6 +36,8 @@ to the merge base, and the nanolinter must know the flag.`,
 			// judged against the target branch. This is the one place that
 			// decides it, for the typed and the wrapped command alike.
 			var baseline string
+
+			files := appenforcement.ReportFiles{SecuritySARIF: command.String("sarif-file"), CodeQuality: command.String("code-quality-file")}
 
 			if err := deps.FromCmd(ctx, command, func(d *deps.Deps) error {
 				event, err := d.Provider.ResolveContext(ctx)
@@ -48,7 +51,7 @@ to the merge base, and the nanolinter must know the flag.`,
 			typed := command.IsSet("required-lints") || command.IsSet("disable-checks") || command.IsSet("offline")
 			if !typed {
 				return appenforcement.Nanolinter(ctx, policycommand.Runner{}, os.Stdout, os.Stderr,
-					appenforcement.WithBaseline(command.Args().Slice(), baseline), command.String("sarif-file"))
+					appenforcement.WithBaseline(command.Args().Slice(), baseline), files)
 			}
 
 			if command.Args().Len() != 0 {
@@ -62,7 +65,7 @@ to the merge base, and the nanolinter must know the flag.`,
 
 			return appenforcement.NanolinterVerify(ctx, policycommand.Runner{}, os.Stdout, os.Stderr, appenforcement.NanolinterVerifyInput{
 				RequiredLints: command.String("required-lints"), DisableChecks: command.String("disable-checks"),
-				Offline: offline == "true", SARIFFile: command.String("sarif-file"), BaselineRef: baseline,
+				Offline: offline == "true", Reports: files, BaselineRef: baseline,
 			})
 		},
 	}

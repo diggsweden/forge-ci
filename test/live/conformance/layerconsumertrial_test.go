@@ -292,7 +292,9 @@ func runForgejoConsumerTrial(t *testing.T, root string, releaseCase forgejoRelea
 		if event == livetest.EventWorkflowDispatch {
 			livetest.DispatchConsumerWorkflow(t, target, repo, settings.Workflow, trialBranch)
 		} else {
-			requirePullRequest(t, livetest.OpenPullRequest(t, target, repo, trialBranch, layerMain, "test: consumer trial"), trialBranch, head, main)
+			pull := livetest.OpenPullRequest(t, target, repo, trialBranch, layerMain, "test: consumer trial")
+			requirePullRequest(t, pull, trialBranch, head, main)
+			t.Logf("demo pull request: %s/%s/pulls/%d", strings.TrimRight(target.BaseURL(), "/"), livetest.RepoSlug(target, repo), pull.Number)
 		}
 
 		run := livetest.WaitForConsumerRun(t, target, repo, settings.Workflow, event, "")
@@ -347,7 +349,7 @@ func runForgejoConsumerTrial(t *testing.T, root string, releaseCase forgejoRelea
 		}
 	}
 
-	if demo != "" {
+	if release && demo != "" {
 		runDemoPullRequest(t, scenario, consumer, settings.DemoPullRequest, pushed, facts.Secrets, plan.Secrets)
 	}
 }
@@ -642,6 +644,10 @@ func newConsumerRepo(t *testing.T, target livetest.Target, consumer livetest.Con
 // requireDemoReady refuses a demo that could not show both halves.
 func requireDemoReady(t *testing.T, settings livetest.TrialSettings, workflows map[string]string) {
 	t.Helper()
+
+	if settings.Event == livetest.TrialPullRequest {
+		return
+	}
 
 	if settings.Event != livetest.TrialRelease {
 		t.Fatalf("a demo runs the release and then a pull request; start it with the release event")

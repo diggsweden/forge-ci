@@ -135,8 +135,8 @@ func TestPRCancellationBoundary_BothEngines(t *testing.T) {
 				}
 
 				if status == "skipped" {
-					label = "Lint"
-					icon = "\u2212"
+					label = "Quality checks"
+					icon = "None selected"
 				}
 
 				row := "| " + label + " | " + icon + " |\n"

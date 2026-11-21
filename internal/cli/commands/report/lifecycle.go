@@ -41,9 +41,20 @@ func prCmd() *cli.Command {
 		Description: `EXAMPLE:
    forge-ci report pr --project-type maven --source-branch feature/x --actor octocat`,
 		Flags: []cli.Flag{
+			&cli.BoolFlag{Name: "compact", Sources: cli.EnvVars("PR_COMPACT"), Usage: "show the check verdict and submitting change without the legacy metadata table"},
+			&cli.BoolFlag{Name: "merge-request", Usage: "in compact mode, use GitLab merge request and pipeline labels; the report covers quality only"},
+			&cli.StringFlag{Name: "pr-number", Sources: cli.EnvVars("PR_NUMBER"), Usage: "pull request number"},
+			&cli.StringFlag{Name: "pr-url", Sources: cli.EnvVars("PR_URL"), Usage: "URL of the pull request"},
+			&cli.StringFlag{Name: "pr-author", Sources: cli.EnvVars("PR_AUTHOR"), Usage: "author of the change, not the run actor"},
+			&cli.StringFlag{Name: "source-repository", Sources: cli.EnvVars("PR_SOURCE_REPOSITORY"), Usage: "repository submitting the change"},
+			&cli.StringFlag{Name: "target-repository", Sources: cli.EnvVars("PR_TARGET_REPOSITORY"), Usage: "repository receiving the change"},
+			&cli.StringFlag{Name: "target-branch", Sources: cli.EnvVars("PR_TARGET_BRANCH"), Usage: "branch receiving the change"},
+			&cli.StringFlag{Name: "source-commit", Sources: cli.EnvVars("PR_SOURCE_COMMIT"), Usage: "head commit of the change, if distinct from the tested revision"},
+			&cli.StringFlag{Name: "nanolinter-job-url", Sources: cli.EnvVars("PR_NANOLINTER_JOB_URL"), Usage: "direct URL of the Nanolinter job, if available"},
+			&cli.BoolFlag{Name: "results-unavailable", Sources: cli.EnvVars("PR_RESULTS_UNAVAILABLE"), Usage: "show that planned quality results could not be normalized"},
 			&cli.StringFlag{Name: "project-type", Sources: cli.EnvVars("PROJECT_TYPE"), Usage: "primary ecosystem of the project (shown in the header)"},
 			&cli.StringFlag{Name: "source-branch", Sources: cli.EnvVars("CI_BRANCH"), Usage: "PR source branch"},
-			&cli.StringFlag{Name: "commit", Sources: cienv.Commit(), Usage: "head commit SHA of the PR"},
+			&cli.StringFlag{Name: "commit", Sources: cienv.Commit(), Usage: "commit SHA tested by CI"},
 			&cli.StringFlag{Name: "actor", Sources: cienv.Actor(), Usage: "user who opened/updated the PR"},
 			&cli.StringFlag{Name: "run-url", Sources: cienv.RunURL(), Usage: "URL of the CI run linked from the summary"}, //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
 			&cli.StringFlag{Name: "quality-stage-result-json", Sources: cli.EnvVars("QUALITY_STAGE_RESULT_JSON"), Usage: "inline JSON of the quality-stage result table"},
@@ -66,6 +77,7 @@ func prCmd() *cli.Command {
 
 			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error {
 				return appsummary.PRSummary(ctx, d.SummarySink, appsummary.PRSummaryInput{
+					Change:                 compactChange(cmd),
 					ProjectType:            cmd.String("project-type"),
 					Branch:                 cmd.String("source-branch"),
 					Commit:                 cmd.String("commit"),
@@ -76,6 +88,20 @@ func prCmd() *cli.Command {
 				})
 			})
 		},
+	}
+}
+
+func compactChange(cmd *cli.Command) *appsummary.PRChange {
+	if !cmd.Bool("compact") {
+		return nil
+	}
+
+	return &appsummary.PRChange{
+		Number: cmd.String("pr-number"), URL: cmd.String("pr-url"), Author: cmd.String("pr-author"),
+		SourceRepository: cmd.String("source-repository"), TargetRepository: cmd.String("target-repository"),
+		TargetBranch: cmd.String("target-branch"), SourceCommit: cmd.String("source-commit"),
+		NanolinterURL: cmd.String("nanolinter-job-url"), ResultsUnavailable: cmd.Bool("results-unavailable"),
+		MergeRequest: cmd.Bool("merge-request"),
 	}
 }
 

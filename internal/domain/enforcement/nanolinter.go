@@ -43,6 +43,9 @@ type NanolinterReport struct {
 	LintFindings          int
 	VulnerabilityFindings int
 	SecuritySARIF         []byte
+	// CodeQuality is the GitLab Code Quality report of the results the
+	// security SARIF leaves out.
+	CodeQuality []byte
 	// Unavailable is set when a check produced no verdict: it failed at run
 	// time, or a security check was skipped. That is not a finding. It blocks
 	// with the gate the check belongs to: see Incomplete.
@@ -124,7 +127,7 @@ func ParseNanolinter(body []byte) (NanolinterReport, error) {
 
 	report := NanolinterReport{gates: map[Check]*nanoGate{Lint: {}, Vulnerabilities: {}}}
 
-	securityResults := []json.RawMessage{}
+	securityResults, qualityResults := []json.RawMessage{}, []json.RawMessage{}
 
 	for _, raw := range document.Runs[0].Results {
 		result, err := parseNanoResult(raw)
@@ -134,6 +137,8 @@ func ParseNanolinter(body []byte) (NanolinterReport, error) {
 
 		if result.Properties.Class == "security" || result.Properties.Source != nanoCurated {
 			securityResults = append(securityResults, raw)
+		} else {
+			qualityResults = append(qualityResults, raw)
 		}
 
 		report.count(result)
@@ -141,7 +146,11 @@ func ParseNanolinter(body []byte) (NanolinterReport, error) {
 
 	var err error
 
-	report.SecuritySARIF, err = securitySARIF(body, securityResults)
+	if report.SecuritySARIF, err = securitySARIF(body, securityResults); err != nil {
+		return report, err
+	}
+
+	report.CodeQuality, err = codeQuality(qualityResults)
 
 	return report, err
 }
@@ -224,11 +233,20 @@ func (result nanoResult) runtimeError() error {
 	return nil
 }
 
-func (result nanoResult) findings() (int, int) {
+// suppressed holds for a finding an accepted suppression silences.
+func (result nanoResult) suppressed() bool {
 	for _, suppression := range result.Suppressions {
 		if suppression.Status == "accepted" {
-			return 0, 0
+			return true
 		}
+	}
+
+	return false
+}
+
+func (result nanoResult) findings() (int, int) {
+	if result.suppressed() {
+		return 0, 0
 	}
 
 	if result.Properties.Source == nanoCurated && result.Properties.Status != failedStatus {

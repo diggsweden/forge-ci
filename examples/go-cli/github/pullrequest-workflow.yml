@@ -20,6 +20,7 @@ concurrency:
 
 jobs:
   pr-checks:
+    name: Quality checks
     uses: diggsweden/forge-ci/.github/workflows/pullrequest-orchestrator.yml@PIN_FORGE_CI_SHA # v0.90.0
     secrets:
       # Optional: uploads lint security findings (SARIF) to Code Scanning.
@@ -43,7 +44,7 @@ jobs:
   # Your tests. The orchestrator above never runs them; require this job and
   # pr-checks as status checks. Add govulncheck or your own policy here.
   test:
-    name: "Check: build and test"
+    name: "Check: vet and test"
     runs-on: ubuntu-latest
     permissions:
       contents: read

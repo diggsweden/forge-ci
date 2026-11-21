@@ -22,7 +22,7 @@ on:
         required: true
         type: string
       runtime-image:
-        description: "Administrator-pinned forge-ci base runtime image@sha256 digest for the status/summary jobs and the lint jobs' canonical admission; the orchestrator passes the digest its delivery admitted"
+        description: "Administrator-pinned forge-ci base runtime image@sha256 digest for reporting and the lint jobs' canonical admission"
         required: true
         type: string
       required-lints:
@@ -73,16 +73,18 @@ permissions:
   contents: read
 jobs:
   resolve-bootstrap:
+    name: "Setup: check quality stage pins"
     permissions:
       contents: read
     uses: ./.github/workflows/resolve-forge-ci-bootstrap.yml
     with:
+      job-name: "Setup: check quality stage pins"
       forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
       images: |
         runtime-image=${{ inputs['runtime-image'] }}
   nanolinter:
     needs: [resolve-bootstrap]
-    name: "Check: lint"
+    name: Nanolinter
     if: ${{ fromJson(inputs['quality-stage-plan-json']).targets.nanolinter.runs }}
     permissions:
       contents: read
@@ -110,7 +112,7 @@ jobs:
       canonical-producer-result: ${{ inputs['canonical-producer-result'] }}
   megalinter:
     needs: [resolve-bootstrap]
-    name: "Check: lint (MegaLinter)"
+    name: MegaLinter
     if: ${{ fromJson(inputs['quality-stage-plan-json']).targets.megalinter.runs }}
     permissions:
       contents: read
@@ -132,7 +134,7 @@ jobs:
       canonical-producer-result: ${{ inputs['canonical-producer-result'] }}
   swift:
     needs: [resolve-bootstrap]
-    name: "Check: lint (Swift)"
+    name: Swift checks
     if: ${{ fromJson(inputs['quality-stage-plan-json']).targets.swift.runs }}
     permissions:
       contents: read
@@ -145,28 +147,10 @@ jobs:
       enable-swiftformat: ${{ fromJson(inputs['pr-plan-json']).policy.swift_format }}
       enable-swiftlint: ${{ fromJson(inputs['pr-plan-json']).policy.swift_lint }}
       runtime-image: ${{ inputs['runtime-image'] }}
-  quality-status:
-    name: "Check: status"
-    runs-on: ${{ fromJSON(inputs['runs-on']) }}
-    container:
-      image: ${{ inputs['runtime-image'] }}
-    if: always() && needs.resolve-bootstrap.result == 'success'
-    needs: [resolve-bootstrap, nanolinter, megalinter, swift]
-    steps:
-      - name: Check quality results
-        env:
-          CHECK_NANOLINTER: Nanolinter|${{ fromJson(inputs['quality-stage-plan-json']).targets.nanolinter.runs }}|${{ needs.nanolinter.result }}
-          CHECK_MEGALINTER: MegaLinter|${{ fromJson(inputs['quality-stage-plan-json']).targets.megalinter.runs }}|${{ needs.megalinter.result }}
-          CHECK_SWIFT: Swift Lint|${{ fromJson(inputs['quality-stage-plan-json']).targets.swift.runs }}|${{ needs.swift.result }}
-        run: |
-          forge-ci report status quality-check \
-            "$CHECK_NANOLINTER" \
-            "$CHECK_MEGALINTER" \
-            "$CHECK_SWIFT"
   summarize-quality-stage:
-    name: Summary
-    needs: [resolve-bootstrap, nanolinter, megalinter, swift, quality-status]
-    if: always() && needs.resolve-bootstrap.result == 'success'
+    name: PR check results
+    needs: [resolve-bootstrap, nanolinter, megalinter, swift]
+    if: ${{ !cancelled() && needs.resolve-bootstrap.result == 'success' }}
     runs-on: ${{ fromJSON(inputs['runs-on']) }}
     container:
       image: ${{ inputs['runtime-image'] }}
@@ -174,14 +158,70 @@ jobs:
       actions: read
       contents: read
     steps:
+      - name: Require original canonical success and approved identity
+        shell: /bin/bash --noprofile --norc -peuo pipefail {0}
+        env:
+          ENGINE_REPOSITORY: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
+          ENGINE_COMMIT: ${{ inputs['forge-ci-binary-ref'] }}
+          ENGINE_ORIGIN: ${{ github.server_url }}/${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
+          RUNTIME_IMAGE: ${{ inputs['runtime-image'] }}
+          PRODUCER_ARTIFACT_ID: ${{ inputs['canonical-artifact-id'] }}
+          PRODUCER_ARTIFACT_NAME: ${{ inputs['canonical-artifact-name'] }}
+          PRODUCER_RUN_ID: ${{ inputs['canonical-producer-run-id'] }}
+          PRODUCER_RUN_ATTEMPT: ${{ inputs['canonical-producer-run-attempt'] }}
+          PRODUCER_ENGINE_REPOSITORY: ${{ inputs['canonical-producer-engine-repository'] }}
+          PRODUCER_ENGINE_COMMIT: ${{ inputs['canonical-producer-engine-commit'] }}
+          CANONICAL_PRODUCER_RESULT: ${{ inputs['canonical-producer-result'] }}
+        run: |
+          [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ && "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$CANONICAL_PRODUCER_RESULT" == success && "$PRODUCER_RUN_ID" == "$GITHUB_RUN_ID" && "$PRODUCER_RUN_ATTEMPT" == "$GITHUB_RUN_ATTEMPT" ]]
+          [[ "$ENGINE_REPOSITORY" =~ ^[A-Za-z0-9_-][A-Za-z0-9_.-]*/[A-Za-z0-9_-][A-Za-z0-9_.-]*$ && "$ENGINE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$PRODUCER_ENGINE_REPOSITORY" == "$ENGINE_REPOSITORY" && "$PRODUCER_ENGINE_COMMIT" == "$ENGINE_COMMIT" ]]
+          [[ "$PRODUCER_ARTIFACT_ID" =~ ^[1-9][0-9]*$ && "$PRODUCER_ARTIFACT_NAME" == "forge-ci-canonical-linux-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$ENGINE_COMMIT" ]]
+          [[ "$RUNTIME_IMAGE" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}$ ]]
+          [[ "$GITHUB_SERVER_URL" =~ ^https://[^/?#@[:space:]]+$ && "$ENGINE_ORIGIN" == "$GITHUB_SERVER_URL/$ENGINE_REPOSITORY" ]]
+          for variable in ENGINE_REPOSITORY ENGINE_COMMIT ENGINE_ORIGIN RUNTIME_IMAGE PRODUCER_ARTIFACT_ID PRODUCER_ARTIFACT_NAME PRODUCER_RUN_ID PRODUCER_RUN_ATTEMPT PRODUCER_ENGINE_REPOSITORY PRODUCER_ENGINE_COMMIT CANONICAL_PRODUCER_RESULT; do
+            printf '%s=%s\n' "$variable" "${!variable}" >>"$GITHUB_ENV"
+          done
+      - name: Checkout only the approved engine before consumer or private steps
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: ${{ env.ENGINE_REPOSITORY }}
+          ref: ${{ env.ENGINE_COMMIT }}
+          path: _forge_ci_bootstrap
+          persist-credentials: false
+          submodules: false
+          lfs: false
+      - name: Consume canonical CLI from the independently pinned engine checkout
+        id: canonical-bootstrap
+        uses: ./_forge_ci_bootstrap/.github/actions/consume-canonical-cli
+        with:
+          tool-profile: runtime
       - name: Normalize PR quality stage result
         id: summary
         env:
           STAGE_PLAN_JSON: ${{ inputs['quality-stage-plan-json'] }}
           JOB_RESULTS: ${{ toJson(needs) }}
         run: forge-ci report stage-result
+      - name: Write PR check results
+        if: ${{ !cancelled() && steps.canonical-bootstrap.outputs.verified == 'true' && (steps.summary.outcome == 'success' || steps.summary.outcome == 'failure') }}
+        env:
+          PR_COMPACT: 'true'
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_SOURCE_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_TARGET_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}
+          PR_TARGET_BRANCH: ${{ github.base_ref }}
+          PR_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha }}
+          CI_BRANCH: ${{ github.head_ref || github.ref_name }}
+          CI_RUN_URL: ${{ format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+          PR_NANOLINTER_JOB_URL: ${{ needs.nanolinter.outputs.job-url }}
+          PR_RESULTS_UNAVAILABLE: ${{ steps.summary.outcome == 'failure' }}
+          QUALITY_STAGE_RESULT_PATH: ${{ steps.summary.outcome == 'success' && '.ci-results/pr-quality-result.json' || '' }}
+        run: forge-ci report pr
       - name: Upload quality stage manifests
-        if: always() && hashFiles('.ci-results/*.json') != ''
+        if: ${{ !cancelled() && steps.summary.outcome == 'success' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ci-results-pr-quality

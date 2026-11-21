@@ -3737,6 +3737,7 @@ to the merge base, and the nanolinter must know the flag.
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
 | `--sarif-file` | write the invocation's security-only SARIF for provider upload | string | `""` | n/a |
+| `--code-quality-file` | write the invocation's other findings as a GitLab Code Quality report | string | `""` | n/a |
 | `--required-lints` | typed verify mode: mandatory check IDs; explicitly empty selects no floor | string | `"secrets"` | n/a |
 | `--disable-checks` | typed verify mode: check IDs excluded from this invocation | string | `""` | n/a |
 | `--offline` | typed verify mode: exactly true or false; true uses Nanolinter's offline checks | string | `"false"` | n/a |
@@ -5183,9 +5184,20 @@ EXAMPLE:
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
+| `--compact` | show the check verdict and submitting change without the legacy metadata table | bool | `false` | `$PR_COMPACT` |
+| `--merge-request` | in compact mode, use GitLab merge request and pipeline labels; the report covers quality only | bool | `false` | n/a |
+| `--pr-number` | pull request number | string | `""` | `$PR_NUMBER` |
+| `--pr-url` | URL of the pull request | string | `""` | `$PR_URL` |
+| `--pr-author` | author of the change, not the run actor | string | `""` | `$PR_AUTHOR` |
+| `--source-repository` | repository submitting the change | string | `""` | `$PR_SOURCE_REPOSITORY` |
+| `--target-repository` | repository receiving the change | string | `""` | `$PR_TARGET_REPOSITORY` |
+| `--target-branch` | branch receiving the change | string | `""` | `$PR_TARGET_BRANCH` |
+| `--source-commit` | head commit of the change, if distinct from the tested revision | string | `""` | `$PR_SOURCE_COMMIT` |
+| `--nanolinter-job-url` | direct URL of the Nanolinter job, if available | string | `""` | `$PR_NANOLINTER_JOB_URL` |
+| `--results-unavailable` | show that planned quality results could not be normalized | bool | `false` | `$PR_RESULTS_UNAVAILABLE` |
 | `--project-type` | primary ecosystem of the project (shown in the header) | string | `""` | `$PROJECT_TYPE` |
 | `--source-branch` | PR source branch | string | `""` | `$CI_BRANCH` |
-| `--commit` | head commit SHA of the PR | string | `""` | `$CI_COMMIT`, `$CI_COMMIT_SHA`, `$COMMIT_SHA`, `$FORGEJO_SHA`, `$GITHUB_SHA` |
+| `--commit` | commit SHA tested by CI | string | `""` | `$CI_COMMIT`, `$CI_COMMIT_SHA`, `$COMMIT_SHA`, `$FORGEJO_SHA`, `$GITHUB_SHA` |
 | `--actor` | user who opened/updated the PR | string | `""` | `$CI_ACTOR`, `$FORGEJO_ACTOR`, `$GITHUB_ACTOR` |
 | `--run-url` | URL of the CI run linked from the summary | string | `""` | `$CI_RUN_URL`, `$CI_PIPELINE_URL` |
 | `--quality-stage-result-json` | inline JSON of the quality-stage result table | string | `""` | `$QUALITY_STAGE_RESULT_JSON` |

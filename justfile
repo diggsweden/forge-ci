@@ -1184,10 +1184,11 @@ demo forge name *settings:
         printf 'demo name must be lowercase letters, digits and hyphens, got %q\n' "$name" >&2
         exit 2
     fi
-    checkout='' settings=()
+    checkout='' event=release settings=()
     for word in "$@"; do
         case "$forge:$word" in
-        *:checkout=*) checkout="${word#*=}" ;;
+            *:checkout=*) checkout="${word#*=}" ;;
+            *:event=pull-request) event=pull-request ;;
         gitlab:job-archive=*) export FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE="${word#*=}" ;;
         gitlab:build-archive=*) export FORGE_CI_LIVE_BUILD_IMAGE_ARCHIVE="${word#*=}" ;;
         gitlab:signer-archive=*) export FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE="${word#*=}" ;;
@@ -1217,7 +1218,14 @@ demo forge name *settings:
         trap 'rm -rf -- "$checkout"' EXIT
         bash scripts/ci/demo-checkout.sh "$name" "$checkout"
     fi
-    export FORGE_CI_LIVE_DEMO="$name" FORGE_CI_LIVE_CONSUMER="$checkout" FORGE_CI_LIVE_CONSUMER_EVENT=release
+    if [[ "$event" == pull-request ]]; then
+        if [[ "$forge" == gitlab ]]; then
+            printf 'PR-only demos are supported on GitHub and Forgejo\n' >&2
+            exit 2
+        fi
+        export FORGE_CI_LIVE_CONSUMER_VISIBILITY=public
+    fi
+    export FORGE_CI_LIVE_DEMO="$name" FORGE_CI_LIVE_CONSUMER="$checkout" FORGE_CI_LIVE_CONSUMER_EVENT="$event"
     FORGE_CI_LIVE_CONSUMER_SETTINGS="$(printf '%s\n' "${settings[@]}")"
     export FORGE_CI_LIVE_CONSUMER_SETTINGS
     if [[ "$forge" != github ]]; then
