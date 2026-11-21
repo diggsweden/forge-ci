@@ -22,10 +22,13 @@ const fakeNanolinter = `#!/usr/bin/env bash
 test "${LANG:-}" = C.UTF-8 && test "${LC_ALL:-}" = C.UTF-8 || exit 97
 printf '%s\n' "$@" >"${FAKE_NANOLINTER_LOG:?}"
 if [ "${FAKE_EXPECT_SUMMARY:-}" = absent ]; then
-  test -z "${FORGEJO_STEP_SUMMARY:-}${GITEA_STEP_SUMMARY:-}${CI_JOB_SUMMARY:-}${GITHUB_STEP_SUMMARY:-}" || exit 98
+  # No summary the run shows; the matrix goes to a file of the step alone.
+  test -z "${FORGEJO_STEP_SUMMARY:-}${GITEA_STEP_SUMMARY:-}${GITHUB_STEP_SUMMARY:-}" || exit 98
+  case "${CI_JOB_SUMMARY:-}" in */results/nanolinter-matrix.md) ;; *) exit 98 ;; esac
 elif [ "${FAKE_EXPECT_SUMMARY:-}" = present ]; then
   test "${FORGEJO_STEP_SUMMARY:-}" = /example-summary || exit 98
 fi
+if [ -n "${FAKE_MATRIX:-}" ]; then printf '%s\n' "$FAKE_MATRIX" >"${CI_JOB_SUMMARY:?}"; fi
 results='[]'
 if [ "${FAKE_NANOLINTER_STATUS:-0}" = 1 ]; then
   results='[{"ruleId":"format","properties":{"source":"curated","check_id":"format","class":"formatter","status":"fail"}}]'
@@ -159,6 +162,31 @@ func TestLintNanolinter(t *testing.T) {
 			}
 		})
 	}
+
+	// The matrix is handed to the PR check results job as a run artifact.
+	// Outside a run that upload fails: a warning, and the lint result stands.
+	t.Run("a matrix that cannot be handed on is a warning", func(t *testing.T) {
+		t.Parallel()
+
+		got, argv := run(t, "LINT_REQUIRED_LINTS=secrets", "LINT_DISABLE_CHECKS=", "LINT_OFFLINE=false",
+			"GITHUB_ACTIONS=true", "FORGEJO_ACTIONS=true", "FORGEJO_EVENT_NAME=pull_request", "FORGEJO_BASE_REF=main",
+			"FAKE_MATRIX=| Check | Result |")
+		if got.status != 0 || argv == nil || !strings.Contains(got.stdout, "::warning::The lint results could not be handed") {
+			t.Fatalf("status %d, stdout %s, stderr %s", got.status, got.stdout, got.stderr)
+		}
+	})
+
+	// A pull request without a matrix still replaces an earlier attempt's:
+	// the upload is tried, and here, outside a run, ends as the warning.
+	t.Run("a pull request without a matrix says so", func(t *testing.T) {
+		t.Parallel()
+
+		got, argv := run(t, "LINT_REQUIRED_LINTS=secrets", "LINT_DISABLE_CHECKS=", "LINT_OFFLINE=false",
+			"GITHUB_ACTIONS=true", "FORGEJO_ACTIONS=true", "FORGEJO_EVENT_NAME=pull_request", "FORGEJO_BASE_REF=main")
+		if got.status != 0 || argv == nil || !strings.Contains(got.stdout, "::warning::The lint results could not be handed") {
+			t.Fatalf("status %d, stdout %s, stderr %s", got.status, got.stdout, got.stderr)
+		}
+	})
 
 	t.Run("a blocking finding fails the policy gate", func(t *testing.T) {
 		t.Parallel()

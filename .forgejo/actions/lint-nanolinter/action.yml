@@ -74,20 +74,43 @@ runs:
         # and a Containerfile that names an image without its registry.
         run_forge_ci container validate rebuilds
         run_forge_ci container validate image-names
-        # Leave the native file available only when the caller selects the
-        # detailed matrix. The separate overview never owns per-check details.
-        if [ "${LINT_WRITE_STEP_SUMMARY:-false}" != true ]; then
-          unset FORGEJO_STEP_SUMMARY GITEA_STEP_SUMMARY CI_JOB_SUMMARY GITHUB_STEP_SUMMARY
-        fi
         lint_report=$(mktemp -d)
         trap 'rm -rf -- "$lint_report"' EXIT
+        # Nanolinter writes its per-check matrix to the step summary when the
+        # caller selects it there, and otherwise to a file of this step. The
+        # pr-check-results action reads it either way, from the run artifact
+        # below.
+        mkdir -- "${lint_report}/results"
+        matrix="${lint_report}/results/nanolinter-matrix.md"
+        shown="${FORGEJO_STEP_SUMMARY:-${GITHUB_STEP_SUMMARY:-}}"
+        if [ "${LINT_WRITE_STEP_SUMMARY:-false}" != true ]; then
+          shown=''
+          unset FORGEJO_STEP_SUMMARY GITEA_STEP_SUMMARY GITHUB_STEP_SUMMARY
+          export CI_JOB_SUMMARY="$matrix"
+        fi
+        gate=0
         LANG=C.UTF-8 LC_ALL=C.UTF-8 run_forge_ci policy nanolinter \
           --sarif-file "${lint_report}/nanolinter.sarif" \
           --enforce-lint="${LINT_ADMIN_LINT:?enforce-lint is required}" \
           --enforce-vulnerabilities="${LINT_ADMIN_VULNERABILITIES:?enforce-vulnerabilities is required}" \
           --required-lints "${LINT_REQUIRED_LINTS}" \
           --disable-checks "${LINT_DISABLE_CHECKS}" \
-          --offline "${LINT_OFFLINE}"
+          --offline "${LINT_OFFLINE}" || gate=$?
+        # Reporting, never the gate: a matrix that could not be handed on is
+        # a warning, and the step ends as the lint run did.
+        if [ -n "$shown" ] && [ -s "$shown" ]; then cp -- "$shown" "$matrix" || :; fi
+        if [ "${FORGEJO_EVENT_NAME:-${GITHUB_EVENT_NAME:-}}" = pull_request ]; then
+          # An upload replaces the artifact of an earlier attempt of this
+          # run, so a run without a matrix says so and never leaves the
+          # earlier attempt's results to be posted as current.
+          if [ ! -s "$matrix" ]; then
+            printf '%s\n' "_Nanolinter left no per-check results in this run; see the Quality checks job's log._" >"$matrix"
+          fi
+          run_forge_ci artifact upload --name forge-ci-pr-lint-results \
+            --dir "${lint_report}/results" --retention-days 1 ||
+            echo "::warning::The lint results could not be handed to the PR check results job; they are in this job's log."
+        fi
+        exit "$gate"
 
     # Forgejo Runner reads the summary file when the step above ends and again
     # when this action ends, so the matrix would show twice. Every step starts

@@ -1,0 +1,124 @@
+# SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+#
+# SPDX-License-Identifier: CC0-1.0
+
+name: 'PR check results'
+description: >-
+  The pull request's overview: the result of each job the caller names, the change and its commits, and Nanolinter's per-check results. Written to the run's summary and posted as the pull request's one comment, which each run replaces. Run it in a job of its own that needs the jobs it reports and runs no project code; a checkout before it adds the commit list.
+inputs:
+  jobs:
+    description: >-
+      The jobs to report, one `Name=result` per line, for example `Quality checks=${{ needs.lint.result }}`.
+    required: true
+  comment:
+    description: >-
+      'true' also posts the overview as the pull request's one comment, with the job's own token. That token may not comment on a pull request from a fork: there, and whenever the comment cannot be posted, the step ends with a warning. 'false' keeps the results in the run.
+    required: false
+    default: 'true'
+  project-type:
+    description: >-
+      The project type the overview names, for example go or maven. Empty leaves it out.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Write the PR check results
+      shell: bash
+      env:
+        RESULT_JOBS: ${{ inputs.jobs }}
+        RESULT_COMMENT: ${{ inputs.comment }}
+        PROJECT_TYPE: ${{ inputs.project-type }}
+        PR_COMPACT: "true"
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        PR_URL: ${{ github.event.pull_request.html_url }}
+        PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        PR_SOURCE_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        PR_TARGET_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}
+        PR_TARGET_BRANCH: ${{ github.base_ref }}
+        PR_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha }}
+        CI_BRANCH: ${{ github.head_ref }}
+        CI_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_number }}
+        # Only this step holds the token, and it runs no project code.
+        RESULT_COMMENT_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        if [ "${RESULT_COMMENT}" != true ] && [ "${RESULT_COMMENT}" != false ]; then
+          echo "ERROR: comment must be true or false, not '${RESULT_COMMENT}'" >&2
+          exit 2
+        fi
+        # Out of the environment before any other command runs.
+        comment_token=$RESULT_COMMENT_TOKEN
+        unset RESULT_COMMENT_TOKEN
+        # The action's own immutable engine, as in lint-nanolinter.
+        # shellcheck source=.engine/bin/lib-forge-ci.sh
+        source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
+        if [ -z "${FORGE_CI_BIN:-}" ]; then fetch_forge_ci; fi
+        SIGNER_STRICT=1 verify_forge_ci
+
+        jobs=()
+        while IFS= read -r line; do
+          line="${line#"${line%%[![:space:]]*}"}"
+          line="${line%"${line##*[![:space:]]}"}"
+          [ -n "$line" ] || continue
+          case "$line" in
+            *=*) jobs+=(--job "$line") ;;
+            *)
+              echo "ERROR: jobs takes one Name=result per line, not '${line}'" >&2
+              exit 2
+              ;;
+          esac
+        done <<<"${RESULT_JOBS}"
+        if [ "${#jobs[@]}" -eq 0 ]; then
+          echo "ERROR: jobs names no job to report" >&2
+          exit 2
+        fi
+
+        # The commit list needs the history a checkout before this action
+        # fetched; without one the overview leaves the list out.
+        if [ -n "${PR_TARGET_BRANCH}" ] && git rev-parse --verify --quiet "origin/${PR_TARGET_BRANCH}" >/dev/null 2>&1; then
+          export PR_COMMITS_BASE="origin/${PR_TARGET_BRANCH}"
+        fi
+        work=$(mktemp -d)
+        trap 'rm -rf -- "$work"' EXIT
+        # An older Forgejo keeps no step summary and prints the overview in
+        # the log; the comment then needs a file of this step to read.
+        summary="${FORGEJO_STEP_SUMMARY:-${GITHUB_STEP_SUMMARY:-}}"
+        if [ -z "$summary" ]; then
+          summary="${work}/summary.md"
+          export FORGEJO_STEP_SUMMARY="$summary"
+        fi
+        run_forge_ci report pr "${jobs[@]}"
+
+        if [ "${RESULT_COMMENT}" != true ] || [ -z "${PR_NUMBER}" ]; then exit 0; fi
+        if [ ! -s "$summary" ]; then
+          echo "::warning::PR check results were not posted as a comment: the overview was not written."
+          exit 0
+        fi
+
+        # The comment is the overview and, under it, the per-check results
+        # the lint job handed on. Without them the overview is posted alone.
+        # Any job of the run can upload an artifact of that name, a job that
+        # runs the pull request's code too: the job results above come from
+        # the forge and are the authority, the per-check results are a
+        # report. An oversized one is left out.
+        cp -- "$summary" "${work}/comment.md"
+        if run_forge_ci artifact download --name forge-ci-pr-lint-results --dir "${work}/lint" >/dev/null 2>&1; then
+          matrix="${work}/lint/nanolinter-matrix.md"
+          if [ -f "$matrix" ] && [ ! -L "$matrix" ] && [ -s "$matrix" ] && [ "$(wc -c <"$matrix")" -le 262144 ]; then
+            { printf '\n'; cat -- "$matrix"; } >>"${work}/comment.md"
+          fi
+        fi
+        printf '%s' "$comment_token" | run_forge_ci report pr-comment --token-file - \
+          --pr-number "${PR_NUMBER}" --file "${work}/comment.md" ||
+          echo "::warning::PR check results were not posted as a comment; they are in this run's summary."
+
+    # Forgejo Runner reads the summary file when the step above ends and again
+    # when this action ends, so the overview would show twice. Every step
+    # starts with a fresh summary file: this last one leaves it empty for the
+    # second read, also when the step above failed.
+    - name: Close the step summary
+      if: ${{ always() }}
+      shell: bash
+      run: ':'

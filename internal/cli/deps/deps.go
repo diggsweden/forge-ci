@@ -180,8 +180,8 @@ func (d *Deps) RequireSARIFUploader() (provider.SARIFUploader, error) {
 }
 
 // RequirePRCommenter returns the PRCommenter role when the active provider
-// implements it. Today only gitlab does: the other forges show the pull
-// request's results on the run's own summary page.
+// implements it. GitLab and Forgejo do; GitHub shows the pull request's
+// results on the run's own summary page.
 func (d *Deps) RequirePRCommenter() (provider.PRCommenter, error) {
 	return requireRole[provider.PRCommenter](d, "pull request comment")
 }

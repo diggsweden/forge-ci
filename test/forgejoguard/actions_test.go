@@ -254,7 +254,7 @@ func checkConsumerPRTemplate(t *testing.T, kit consumerKit) {
 		"lint":         {"lint-nanolinter", jobImage, usesAction("lint-nanolinter")},
 		"release-gate": {"check-l3-isolation", "", usesAction("check-l3-isolation")},
 		"build":        {buildName, jobImage, build},
-		"summary":      {"setup-forge-ci", "", usesAction("setup-forge-ci")},
+		"summary":      {"pr-check-results", "", usesAction("pr-check-results")},
 	} {
 		entry, ok := parsed.jobs[name]
 		if !ok {

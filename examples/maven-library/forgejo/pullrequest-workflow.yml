@@ -115,7 +115,8 @@ jobs:
 
   # ===========================================================================
   # JOB: summary — the pull request overview; Forgejo 17 shows it above the
-  # logs, older Forgejo prints it in this job's log.
+  # logs, older Forgejo prints it in this job's log. Also the pull request's
+  # one comment, which each run replaces; comment: "false" turns that off.
   # ===========================================================================
   summary:
     name: PR check results
@@ -124,19 +125,11 @@ jobs:
     runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     timeout-minutes: 5
     steps:
-      - name: Set up forge-ci
-        uses: https://FORGE_HOST/OWNER/forge-ci/.forgejo/actions/setup-forge-ci@PIN_FORGE_CI_SHA
-
-      - name: Write the pull request summary
-        env:
-          CI_RUN_URL: ${{ forgejo.server_url }}/${{ forgejo.repository }}/actions/runs/${{ forgejo.run_number }}
-          PROJECT_TYPE: maven
-          CI_BRANCH: ${{ forgejo.head_ref }}
-          LINT_RESULT: ${{ needs.lint.result }}
-          ISOLATION_RESULT: ${{ needs.release-gate.result }}
-          BUILD_RESULT: ${{ needs.build.result }}
-        run: |
-          forge-ci report pr \
-            --job "Quality checks=${LINT_RESULT}" \
-            --job "Verify release isolation=${ISOLATION_RESULT}" \
-            --job "Build and test=${BUILD_RESULT}"
+      - name: Write and post the PR check results
+        uses: https://FORGE_HOST/OWNER/forge-ci/.forgejo/actions/pr-check-results@PIN_FORGE_CI_SHA
+        with:
+          project-type: maven
+          jobs: |
+            Quality checks=${{ needs.lint.result }}
+            Verify release isolation=${{ needs.release-gate.result }}
+            Build and test=${{ needs.build.result }}

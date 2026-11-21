@@ -82,7 +82,7 @@ red, even if the project tests pass:
 | Forge | Open the failing job | Where to see the outcome |
 | --- | --- | --- |
 | GitHub | **Quality checks** → **Nanolinter** | The scan log and findings. **PR check results** is an overview, not a gate. |
-| Forgejo | **Quality checks** | The lint log. **PR check results** also lists **Verify release isolation** and **Build and test**. |
+| Forgejo | **Quality checks** | The lint log. **PR check results** also lists **Verify release isolation** and **Build and test**, and is posted as the pull request's one comment. |
 | GitLab | **Quality checks** | The job log and SAST report. **Vet and test** and **Build Go artifacts** are separate jobs; pipeline status is the gate. |
 
 On GitHub, look at the setup jobs first if checks never start. Invalid

@@ -5211,8 +5211,8 @@ EXAMPLE:
 post the PR check results as the request's one comment, replacing the previous one
 
 ```
-For a forge without a run summary page (GitLab). Run it in a job that
-checks out and runs no project code, with a token only that job receives.
+For GitLab and Forgejo. Run it in a job that checks out and runs no
+project code, with a token only that job receives.
 
 EXAMPLE:
    # Token from $PR_COMMENT_TOKEN (or --token-file -)

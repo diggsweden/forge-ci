@@ -336,6 +336,7 @@ alone. Each `action.yml` documents its own inputs and outputs.
 | `checkout-consumer` | Checks the consumer out without Node and without persisted credentials. |
 | `setup-toolchain` | Installs the consumer's pinned tools with mise, verified and cache-aware. |
 | `lint-nanolinter` | The pull-request lint gate: the repository's nanolinter plan with a mandated floor. |
+| `pr-check-results` | The pull request's overview: the result of each job the caller names and Nanolinter's per-check results, in the run's summary and as the pull request's one comment. See [The results as a comment](#the-results-as-a-comment). |
 | `build-go`, `build-cargo` | The build step of the consumer's job: tests, Build SBOM and one binary per platform. |
 | `sbom-go`, `sbom-cargo` | The build SBOMs of the container-first artifacts, which their Containerfiles build: written from the lockfile into `dist/sboms/`, for `release files declare --sbom 'dist/sboms/*'`. See [Container-first build SBOMs](sbom.md#container-first-build-sboms-on-every-forge). |
 | `build-goreleaser` | The build step of a GoReleaser release: packages the prepared release unsigned and imports its manifest, or, with `snapshot: "true"`, the checked-out commit as a dry run. See [Unsigned GoReleaser handoff](#unsigned-goreleaser-handoff). |
@@ -638,6 +639,51 @@ consumer's own job, for example through `build-go`, which runs
 
 The gate is the protected branch: require the pull-request jobs as status
 checks. A direct push bypasses them.
+
+### The results as a comment
+
+The **PR check results** job of every example is one step, the
+`pr-check-results` action:
+
+```yaml
+summary:
+  name: PR check results
+  if: ${{ always() }}
+  needs: [lint, build]
+  runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
+  steps:
+    - uses: https://FORGE_HOST/OWNER/forge-ci/.forgejo/actions/pr-check-results@PIN_FORGE_CI_SHA
+      with:
+        jobs: |
+          Quality checks=${{ needs.lint.result }}
+          Build and test=${{ needs.build.result }}
+```
+
+It writes the overview to the run's summary and posts it as one comment on
+the pull request, followed by Nanolinter's per-check results, which
+`lint-nanolinter` hands on as a run artifact.
+
+- There is one comment. Each run replaces it, so a pull request shows its
+  current result and no trail of old ones. A comment another account wrote
+  is never changed.
+- The job results at the top come from the forge and are the authority. The
+  per-check results under them are a report: every job of a run writes as
+  the same account and may upload run artifacts, a job that runs the pull
+  request's code too. Branch protection on the required checks is the
+  gate, never the comment.
+- It needs no token of your own: the job's own token writes it. That token
+  may not comment on a pull request from a fork, so there the step ends
+  with a warning and the results stay in the run.
+- The job runs no project code. The text is made inert before it is posted:
+  no mention notifies anyone.
+- A comment that could not be posted is a warning, never a failed check.
+  When the lint job left no per-check results, the overview is posted alone.
+- `comment: "false"` keeps the results in the run only.
+- A `checkout-consumer` step with `fetch-base` before the action adds the
+  list of the change's commits to the overview.
+
+GitLab posts the same comment through its lint component's `pr-comment`
+input; see [GitLab](gitlab.md).
 
 ## Builds
 

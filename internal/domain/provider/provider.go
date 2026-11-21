@@ -646,8 +646,8 @@ type PRComment struct {
 // PRCommenter creates that comment, or replaces the one the same account
 // wrote before, so a request has one current result and no trail of old
 // ones. The token is passed in, never read from the environment: it belongs
-// to the job that only comments. Today only gitlab implements this, where a
-// job has no summary page; GitHub and Forgejo show the same text there.
+// to the job that only comments. Implemented by gitlab and forgejo; GitHub
+// shows the same text on the run's summary page.
 type PRCommenter interface {
 	UpsertPRComment(ctx context.Context, token string, comment PRComment) error
 }

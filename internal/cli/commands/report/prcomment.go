@@ -27,8 +27,8 @@ func prCommentCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "pr-comment",
 		Usage: "post the PR check results as the request's one comment, replacing the previous one",
-		Description: `For a forge without a run summary page (GitLab). Run it in a job that
-checks out and runs no project code, with a token only that job receives.
+		Description: `For GitLab and Forgejo. Run it in a job that checks out and runs no
+project code, with a token only that job receives.
 
 EXAMPLE:
    # Token from $PR_COMMENT_TOKEN (or --token-file -)
