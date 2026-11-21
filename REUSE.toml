@@ -47,7 +47,8 @@ SPDX-License-Identifier = "CC0-1.0"
 # header. The schemas come from cmd/gen-artifacts-schema and
 # cmd/gen-release-images-schema, the RUN BY table from cmd/gen-runby, and the
 # engine checksums from scripts/ci/engine-binary.sh (the binaries themselves
-# are not tracked).
+# are not tracked). mise.lock is the lockfile a mirror generates for its own
+# runners; upstream tracks none.
 [[annotations]]
 path = [
   ".engine/bin/forge-ci-linux-amd64.sha256",
@@ -55,6 +56,7 @@ path = [
   ".forge-ci/artifacts.schema.json",
   "docs/schemas/release-images.schema.json",
   "internal/cli/runby.json",
+  "mise.lock",
 ]
 precedence = "closest"
 SPDX-FileCopyrightText = "2026 Digg - Agency for Digital Government"
