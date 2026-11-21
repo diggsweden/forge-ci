@@ -230,3 +230,176 @@ func TestCanonicalConsumerRealHelpers(t *testing.T) {
 		})
 	}
 }
+
+// The image source runs the CLI a pinned runtime image carries, and only when
+// it is the build the pinned engine commit records. It needs no producer
+// context: nothing was built in the run.
+func TestCanonicalConsumerImageSource(t *testing.T) {
+	if runtime.GOARCH != "amd64" {
+		t.Skip("canonical bootstrap currently supports native amd64")
+	}
+
+	for _, scenario := range []string{"valid", "other-build", "missing-binary", "linked-binary", "image-by-tag", "unknown-mode"} {
+		t.Run(scenario, func(t *testing.T) {
+			root := t.TempDir()
+			workspace, temp := filepath.Join(root, "workspace"), filepath.Join(root, "temp")
+			engine := filepath.Join(workspace, "_forge_ci_bootstrap")
+			write := func(path string, body []byte, mode os.FileMode) {
+				t.Helper()
+
+				if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+					t.Fatal(err)
+				}
+
+				if err := os.WriteFile(path, body, mode); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			if err := os.MkdirAll(temp, 0o700); err != nil {
+				t.Fatal(err)
+			}
+
+			for target, source := range map[string]string{"scripts/ci/trusted-bootstrap.sh": "trusted-bootstrap.sh", "scripts/ci/trusted-runtime-tools.sh": "trusted-runtime-tools.sh", "scripts/ci/canonical-consumer.sh": "canonical-consumer.sh", ".engine/bin/lib-forge-ci.sh": "../../.engine/bin/lib-forge-ci.sh"} {
+				body, err := os.ReadFile(source)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				write(filepath.Join(engine, target), body, 0o600)
+			}
+
+			recorded := []byte("#!/bin/bash\nprintf 'verified:%s\\n' \"$1\" >>\"$PROCESS_MARKER\"\n")
+			for _, arch := range []string{"amd64", "arm64"} {
+				write(filepath.Join(engine, ".engine/bin/forge-ci-linux-"+arch+".sha256"), []byte(fmt.Sprintf("%x  bin/forge-ci\n", sha256.Sum256(recorded))), 0o600)
+			}
+
+			git := func(args ...string) string {
+				t.Helper()
+				cmd := exec.CommandContext(t.Context(), "/usr/bin/git", append([]string{"-C", engine}, args...)...)
+				cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + root, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null"}
+
+				out, err := cmd.CombinedOutput()
+				if err != nil {
+					t.Fatalf("git: %v: %s", err, out)
+				}
+
+				return strings.TrimSpace(string(out))
+			}
+			git("init", "-q")
+			git("remote", "add", "origin", "https://approved.invalid/approved/engine.git")
+			git("add", ".")
+			git("-c", "user.name=Offline", "-c", "user.email=offline@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "inert fixture")
+
+			env := map[string]string{"PATH": "/nonexistent", "HOME": root, "RUNNER_TEMP": temp, "GITHUB_WORKSPACE": workspace, "GITHUB_RUN_ID": "123", "GITHUB_RUN_ATTEMPT": "2", "ENGINE_COMMIT": git("rev-parse", "HEAD"), "ENGINE_ORIGIN": "https://approved.invalid/approved/engine", "RUNTIME_IMAGE": "registry.invalid/runtime@sha256:" + strings.Repeat("a", 64), "TOOL_PROFILE": "host", "GITHUB_PATH": filepath.Join(root, "path"), "GITHUB_OUTPUT": filepath.Join(root, "output"), "PROCESS_MARKER": filepath.Join(root, "processes")}
+			if scenario == "image-by-tag" {
+				env["RUNTIME_IMAGE"] = "registry.invalid/runtime:latest"
+			}
+
+			run := func(script string, args ...string) error {
+				t.Helper()
+
+				cmd := exec.CommandContext(t.Context(), "/bin/bash", append([]string{"-p", script}, args...)...)
+				for key, value := range env {
+					cmd.Env = append(cmd.Env, key+"="+value)
+				}
+
+				out, err := cmd.CombinedOutput()
+				if err != nil {
+					t.Logf("expected-or-diagnostic refusal: %s", out)
+				}
+
+				return err
+			}
+			launcher := filepath.Join(temp, "forge-ci-canonical-bin/forge-ci")
+			refused := func() {
+				t.Helper()
+
+				for _, path := range []string{env["PROCESS_MARKER"], env["GITHUB_PATH"], env["GITHUB_OUTPUT"], launcher} {
+					if _, err := os.Lstat(path); !os.IsNotExist(err) {
+						t.Fatalf("a refusal left %s behind", path)
+					}
+				}
+			}
+
+			if scenario == "unknown-mode" {
+				if run(filepath.Join(engine, "scripts/ci/canonical-consumer.sh"), "image") == nil {
+					t.Fatal("an unknown mode passed")
+				}
+
+				refused()
+
+				return
+			}
+
+			prepareErr := run(filepath.Join(engine, "scripts/ci/canonical-consumer.sh"), "image-prepare")
+			if scenario == "image-by-tag" {
+				if prepareErr == nil {
+					t.Fatal("an image named by tag passed")
+				}
+
+				refused()
+
+				return
+			}
+
+			if prepareErr != nil {
+				t.Fatal(prepareErr)
+			}
+
+			// What image-extract leaves: the file read out of the image.
+			binary := filepath.Join(temp, "forge-ci-image-123-2/forge-ci-linux-amd64")
+
+			switch scenario {
+			case "valid":
+				write(binary, recorded, 0o600)
+			case "other-build":
+				write(binary, []byte("#!/bin/bash\nprintf other >>\"$PROCESS_MARKER\"\n"), 0o700)
+			case "linked-binary":
+				// What docker cp leaves when the image has a link at the path.
+				write(binary+".target", recorded, 0o700)
+
+				if err := os.Symlink(binary+".target", binary); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			helper := filepath.Join(temp, "forge-ci-approved-engine/scripts/ci/canonical-consumer.sh")
+
+			receiveErr := run(helper, "image-receive")
+			if scenario != "valid" {
+				if receiveErr == nil {
+					t.Fatal("bytes the pinned commit does not record passed")
+				}
+
+				refused()
+
+				return
+			}
+
+			if receiveErr != nil {
+				t.Fatal(receiveErr)
+			}
+
+			if err := run(launcher, "plan"); err != nil {
+				t.Fatal(err)
+			}
+
+			processes, err := os.ReadFile(env["PROCESS_MARKER"])
+			if err != nil || string(processes) != "verified:--version\nverified:plan\n" {
+				t.Fatalf("processes=%q err=%v", processes, err)
+			}
+
+			// The launcher checks the bytes again at every invocation.
+			write(binary, []byte("#!/bin/bash\nprintf tampered >>\"$PROCESS_MARKER\"\n"), 0o700)
+
+			if run(launcher, "plan") == nil {
+				t.Fatal("the launcher ran bytes it had not verified")
+			}
+
+			if after, err := os.ReadFile(env["PROCESS_MARKER"]); err != nil || string(after) != string(processes) {
+				t.Fatal("tampered bytes executed")
+			}
+		})
+	}
+}

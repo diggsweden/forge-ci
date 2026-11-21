@@ -429,9 +429,8 @@ Orchestrates all quality checks for pull requests. Composes a control-plane inte
 ```yaml
 uses: diggsweden/forge-ci/.github/workflows/pullrequest-orchestrator.yml@PIN_FORGE_CI_SHA # v0.90.0
 with:
-  forge-ci-binary-ref: PIN_FORGE_CI_SHA # the full commit the uses: ref names; every job runs the CLI built from it
+  forge-ci-binary-ref: PIN_FORGE_CI_SHA # the full commit the uses: ref names; every job runs only the CLI it records
   runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:PIN_BASE_IMAGE_DIGEST # v0.90.0 digest: control-plane and summary jobs
-  canonical-builder-image: ghcr.io/diggsweden/forge-ci-runtime-go-1.27@sha256:PIN_GO_IMAGE_DIGEST # v0.90.0 digest: builds the canonical CLI
   project-type: maven              # Required: maven, npm, gradle, gradle-android, xcode-ios, cargo, or go
   base-branch: ""                  # Optional: auto-detects PR target
   lint-engine: nanolinter          # General lint engine: nanolinter (default) | megalinter | none — mutually exclusive
@@ -463,16 +462,34 @@ inside the nanolinter flavour image (which bakes nanolinter and its check
 toolchain, so no `just`/`justfile` is required). Fast, node-less. Security findings
 upload to GitHub Code Scanning as SARIF.
 ```yaml
-uses: diggsweden/forge-ci/.github/workflows/lint-nanolinter.yml@PIN_FORGE_CI_SHA # v0.90.0
-with:
-  nanolinter-image: ghcr.io/itiquette/nanolinter:java@sha256:PIN_DIGEST
-  forge-ci-binary-ref: PIN_FORGE_CI_SHA
-  runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:PIN_BASE_IMAGE_DIGEST # v0.90.0 digest
-  canonical-artifact-id: ${{ needs.canonical-cli.outputs.artifact-id }}
-  # ... the other six canonical-* inputs, as in the publish-container example
+jobs:
+  # Names the repository that serves the engine and checks the commit.
+  resolve-bootstrap:
+    uses: diggsweden/forge-ci/.github/workflows/resolve-forge-ci-bootstrap.yml@PIN_FORGE_CI_SHA # v0.90.0
+    with:
+      forge-ci-binary-ref: PIN_FORGE_CI_SHA
+
+  lint:
+    needs: [resolve-bootstrap]
+    uses: diggsweden/forge-ci/.github/workflows/lint-nanolinter.yml@PIN_FORGE_CI_SHA # v0.90.0
+    with:
+      nanolinter-image: ghcr.io/itiquette/nanolinter:java@sha256:PIN_DIGEST
+      forge-ci-binary-ref: PIN_FORGE_CI_SHA
+      forge-ci-repository: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
+      runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:PIN_BASE_IMAGE_DIGEST # v0.90.0 digest
+      # The CLI the runtime image carries, checked against the commit above.
+      forge-ci-source: image
 ```
 
-A direct call is a canonical receiver like `publish-container.yml`: a
+A direct call names the engine repository itself: a `resolve-bootstrap` job
+in your workflow calls `resolve-forge-ci-bootstrap.yml` with the same
+`forge-ci-binary-ref` and passes its `forge-ci-repository` output, as the
+pull request stage does. The lint workflows have no setup job of their own.
+
+With `forge-ci-source: image`, as above, a direct call needs none of the
+`canonical-*` inputs: the lint job takes the CLI out of `runtime-image` and
+checks it against `forge-ci-binary-ref`. Without it, the default,
+a direct call is a canonical receiver like `publish-container.yml`: a
 `canonical-cli` job in your workflow builds the CLI of the run from the engine
 commit (`canonical-cli-bootstrap.yml`), and the lint job receives it before
 the checkout. The [GHCR example in publishing.md](publishing.md#github-container-registry-ghcrio)
@@ -546,9 +563,10 @@ uses: diggsweden/forge-ci/.github/workflows/lint-megalinter.yml@PIN_FORGE_CI_SHA
 with:
   megalinter-image: oxsecurity/megalinter@sha256:REVIEWED_SHA256
   forge-ci-binary-ref: PIN_FORGE_CI_SHA
+  # From a resolve-bootstrap job of your own, as in the lint-nanolinter.yml example.
+  forge-ci-repository: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
   runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:PIN_BASE_IMAGE_DIGEST # v0.90.0 digest
-  canonical-artifact-id: ${{ needs.canonical-cli.outputs.artifact-id }}
-  # ... the other six canonical-* inputs; the job is a canonical receiver like lint-nanolinter.yml
+  forge-ci-source: image
 ```
 
 ### Security Workflows

@@ -32,7 +32,8 @@ Every Linux job of a route that runs on the plain runner receives the
 binary through the `consume-canonical-cli` action, before it checks out
 anything else. So do the orchestrators' planning jobs that run inside the
 runtime image (`compose-pr-plan`, `parse-config`,
-`summarize-prepare-stage`, `setup-snapshot`). The job needs the
+`summarize-prepare-stage`, `setup-snapshot`). A pull request does this only
+with `forge-ci-source: build`; see the next section. The job needs the
 `actions: read` permission to read the artifact's metadata and download it:
 
 - It checks that the producer's run, attempt and engine commit match its
@@ -49,6 +50,20 @@ runtime image (`compose-pr-plan`, `parse-config`,
 
 The binary is only valid in the run and attempt that built it. To retry,
 rerun the whole chain, not one receiving job.
+
+## Pull requests: the runtime image's binary
+
+A pull request does not build. With `forge-ci-source: image`, the default of
+`pullrequest-orchestrator.yml`, `canonical-cli-bootstrap.yml` is skipped and
+the same `consume-canonical-cli` action takes `/usr/local/bin/forge-ci` out
+of the admitted `runtime-image`: a job in that container copies the file, a
+job on the plain runner creates the image without starting it and copies the
+file out. The file then goes through the bootstrap below exactly as a
+delivered binary does, so it runs only when it matches the `.sha256` record
+of the pinned engine commit. An image of another release is refused with a
+message that names the commit. `forge-ci-source: build` selects the build
+and hand-off above, which needs `canonical-builder-image`; Forge CI's own
+pull requests use it, because no image carries a commit under review.
 
 ## Bootstrap
 

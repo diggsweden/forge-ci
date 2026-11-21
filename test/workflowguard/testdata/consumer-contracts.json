@@ -7,8 +7,9 @@
         "default": ""
       },
       "canonical-builder-image": {
-        "required": true,
-        "type": "string"
+        "required": false,
+        "type": "string",
+        "default": ""
       },
       "disable-checks": {
         "required": false,
@@ -28,6 +29,11 @@
       "forge-ci-binary-ref": {
         "required": true,
         "type": "string"
+      },
+      "forge-ci-source": {
+        "required": false,
+        "type": "string",
+        "default": "image"
       },
       "lint-engine": {
         "required": false,

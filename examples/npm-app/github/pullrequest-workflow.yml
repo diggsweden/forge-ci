@@ -27,12 +27,12 @@ jobs:
       contents: read
     with:
       # The full commit the uses: ref above names; every job of the route runs
-      # the CLI built in this run from exactly this commit.
+      # only the CLI this commit records.
       forge-ci-binary-ref: PIN_FORGE_CI_SHA # v0.90.0
-      # Pinned by digest and admitted before any job runs; fill in
-      # the digests of the release you call (docs/runtime-images.md).
+      # Pinned by digest and admitted before any job runs; fill in the
+      # digest of the release you call (docs/runtime-images.md). The jobs run
+      # the Forge CI this image carries, checked against the commit above.
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:PIN_BASE_IMAGE_DIGEST # v0.90.0 digest
-      canonical-builder-image: ghcr.io/diggsweden/forge-ci-runtime-go-1.27@sha256:PIN_GO_IMAGE_DIGEST # v0.90.0 digest
       project-type: npm
       # The lint image, pinned by digest: the plan job refuses a tag.
       nanolinter-image: ghcr.io/itiquette/nanolinter:javascript-typescript@sha256:PIN_DIGEST

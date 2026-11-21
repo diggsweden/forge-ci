@@ -766,6 +766,28 @@ func TestCosignTrust_VerifyArgs(t *testing.T) {
 	}
 }
 
+// A pull request takes the CLI its runtime image carries, so its call needs
+// no builder image; asking for a build brings the requirement back.
+func TestRenderGitHubConsumer_APullRequestNeedsTheBuilderOnlyForABuild(t *testing.T) {
+	t.Parallel()
+
+	engine := GitHubEngine{
+		Owner: "org", Repository: "fc-forge-ci", Commit: strings.Repeat("a", 40),
+		Digests: map[string]string{"forge-ci-runtime-base": "sha256:" + strings.Repeat("b", 64)},
+	}
+	call := "jobs:\n  checks:\n    uses: diggsweden/forge-ci/.github/workflows/pullrequest-orchestrator.yml@v0.90.0\n    with:\n" +
+		"      runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base:v0.90.0\n"
+
+	if _, _, err := RenderGitHubConsumer("pullrequest-workflow.yml", call, engine, nil); err != nil {
+		t.Fatalf("RenderGitHubConsumer() = %v, want a pull request without a builder image to render", err)
+	}
+
+	if _, _, err := RenderGitHubConsumer("pullrequest-workflow.yml", call+"      forge-ci-source: build\n", engine, nil); !errors.Is(err, errs.ErrValidation) ||
+		!strings.Contains(err.Error(), "canonical-builder-image") {
+		t.Fatalf("RenderGitHubConsumer() = %v, want the missing canonical-builder-image named", err)
+	}
+}
+
 // An orchestrator call that leaves its images to their released defaults
 // would fail in its first job on an unreleased engine; it is refused before
 // anything is pushed, and the same call with runtime-image renders.

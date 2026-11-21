@@ -86,8 +86,11 @@ job/stage records use the [file-based report handoff](workflows.md#file-based-re
 
 No GitHub workflow installs forge-ci at run time. Container jobs run in a
 forge-ci runtime image pinned by digest, which carries the engine. Linux host
-jobs receive the CLI that the run's `canonical-cli` job builds from the pinned
-engine commit, and macOS jobs build it from that commit themselves. Every
+jobs of the release and snapshot routes receive the CLI that the run's
+`canonical-cli` job builds from the pinned engine commit; those of a pull
+request take it out of the pinned runtime image, checked against that commit,
+unless `forge-ci-source: build` asks for the build. macOS jobs build it from
+that commit themselves. Every
 workflow takes `forge-ci-binary-ref` as the full 40-hex engine commit; tags,
 branches and short hashes are refused. [Engine delivery](engine-delivery.md)
 describes each path. A direct caller of a leaf workflow that needs the

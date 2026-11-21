@@ -200,8 +200,11 @@ func requireOrchestratorImages(name, text string) error {
 			"or @sha256:<digest>, so the trial can point them at the engine under test: %w", name, errs.ErrValidation)
 	}
 
-	if !githubCanonicalBuilderInput.MatchString(text) {
-		return fmt.Errorf("%s calls a forge-ci orchestrator without passing canonical-builder-image; pass it as "+
+	// A pull request takes the CLI its runtime image carries; only a route
+	// that builds the CLI in the run needs the builder image.
+	builds := githubBuildingOrchestratorUse.MatchString(text) || githubSourceBuildInput.MatchString(text)
+	if builds && !githubCanonicalBuilderInput.MatchString(text) {
+		return fmt.Errorf("%s calls a forge-ci orchestrator that builds the CLI without passing canonical-builder-image; pass it as "+
 			"ghcr.io/diggsweden/forge-ci-runtime-go-1.27@sha256:<digest>, so the trial can point it at the engine under test: %w",
 			name, errs.ErrValidation)
 	}
@@ -251,6 +254,11 @@ var (
 	// githubOrchestratorUse is a call of one of the engine's orchestrators,
 	// whose runtime-image inputs default to released images.
 	githubOrchestratorUse = regexp.MustCompile(`uses:[ \t]*['"]?[A-Za-z0-9_.-]+/forge-ci/\.github/workflows/[a-z-]+-orchestrator\.yml@`)
+	// githubBuildingOrchestratorUse is a call of an orchestrator that always
+	// builds the CLI in the run: every one but the pull-request route.
+	githubBuildingOrchestratorUse = regexp.MustCompile(`uses:[ \t]*['"]?[A-Za-z0-9_.-]+/forge-ci/\.github/workflows/release(-snapshot)?-orchestrator\.yml@`)
+	// githubSourceBuildInput asks the pull-request route for a build too.
+	githubSourceBuildInput = regexp.MustCompile(`(?m)^[ \t]+forge-ci-source:[ \t]*['"]?build['"]?[ \t]*(#.*)?$`)
 	// githubRuntimeImageInput is the base runtime image passed as an input.
 	githubRuntimeImageInput = regexp.MustCompile(`(?m)^[ \t]+runtime-image:[ \t]*\S`)
 	// githubCanonicalBuilderInput is the Go builder image an orchestrator

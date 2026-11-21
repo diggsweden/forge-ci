@@ -4,6 +4,7 @@
 package workflowguard
 
 import (
+	"maps"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -55,7 +56,7 @@ func TestCanonicalConsumerActionOrder(t *testing.T) {
 	}
 	require.NoError(t, yaml.Unmarshal(reporoot.ReadFile(t, ".github/actions/consume-canonical-cli/action.yml"), &action))
 	steps := action.Runs.Steps
-	require.Len(t, steps, 5)
+	require.Len(t, steps, 6)
 	require.Contains(t, steps[0].Run, " prepare")
 	require.Contains(t, steps[1].Run, "gh api")
 	require.Equal(t, map[string]string{"GH_TOKEN": "${{ github.token }}", "TOOL_PROFILE": "${{ inputs.tool-profile }}"}, steps[1].Env)
@@ -65,11 +66,23 @@ func TestCanonicalConsumerActionOrder(t *testing.T) {
 	require.NotContains(t, steps[3].With, "name")
 	require.NotContains(t, steps[3].With, "github-token")
 	require.Contains(t, steps[4].Run, " receive")
-	require.Equal(t, "${{ steps.receive.outputs.verified }}", action.Outputs["verified"].Value)
 
-	for _, step := range steps {
-		require.Empty(t, step.If)
+	// The run's own build is the path unless the caller names the image: an
+	// unknown source takes it, and it refuses without its producer context.
+	for _, step := range steps[:5] {
+		require.Equal(t, "${{ inputs.source != 'image' }}", step.If)
 	}
+
+	// The image source prepares, reads the file out of the admitted image and
+	// verifies it, in that order and from the retained engine.
+	image := steps[5]
+	require.Equal(t, "${{ inputs.source == 'image' }}", image.If)
+	require.Equal(t, map[string]string{"TOOL_PROFILE": "${{ inputs.tool-profile }}"}, image.Env)
+
+	prepare, extract, receive := strings.Index(image.Run, " image-prepare"), strings.Index(image.Run, " image-extract"), strings.Index(image.Run, " image-receive")
+	require.True(t, prepare >= 0 && prepare < extract && extract < receive, image.Run)
+	require.Equal(t, 2, strings.Count(image.Run, `"$RUNNER_TEMP/forge-ci-approved-engine/scripts/ci/canonical-consumer.sh"`))
+	require.Equal(t, "${{ steps.receive.outputs.verified || steps.image.outputs.verified }}", action.Outputs["verified"].Value)
 }
 
 type canonicalConsumerWorkflow struct {
@@ -219,10 +232,69 @@ func TestCanonicalConsumerWorkflowGraph(t *testing.T) {
 	require.Equal(t, "${{ needs.canonical-cli.result }}", pr.Jobs["execute-quality-stage"].With["canonical-producer-result"])
 	require.Equal(t, "${{ needs.canonical-cli.outputs.artifact-id }}", pr.Jobs["execute-quality-stage"].With["canonical-artifact-id"])
 
-	for _, input := range []string{"runtime-image", "canonical-builder-image", "forge-ci-binary-ref"} {
+	for _, input := range []string{"runtime-image", "forge-ci-binary-ref"} {
 		spec, _ := pr.On.Call.Inputs[input].(map[string]any)
 		require.Equal(t, true, spec["required"], "pull-request route: %s is an administrator pin", input)
 	}
+
+	// A pull request takes the CLI its pinned runtime image carries unless
+	// the caller asks for a build, and only a build needs the builder image.
+	source, _ := pr.On.Call.Inputs["forge-ci-source"].(map[string]any)
+	require.Equal(t, "image", source["default"])
+	require.Equal(t, "${{ inputs['forge-ci-source'] == 'build' }}", pr.Jobs["canonical-cli"].If)
+	require.Equal(t, "${{ inputs['forge-ci-source'] }}", pr.Jobs["execute-quality-stage"].With["forge-ci-source"])
+
+	// A skipped build still starts the plan job, whose gate refuses an
+	// unknown source; a failed or cancelled build stops both later jobs.
+	require.Equal(t, "${{ !failure() && !cancelled() && (needs.canonical-cli.result == 'success' || needs.canonical-cli.result == 'skipped') }}", pr.Jobs["compose-pr-plan"].If)
+	require.Equal(t, "${{ !failure() && !cancelled() && needs.compose-pr-plan.result == 'success' }}", pr.Jobs["execute-quality-stage"].If)
+
+	// Every job of the route that runs the CLI states the source to its gate,
+	// which keeps the build's producer checks for anything but the image.
+	for file, job := range map[string]string{
+		"pullrequest-orchestrator.yml": "compose-pr-plan", "pullrequest-quality-stage.yml": "summarize-quality-stage",
+		"lint-nanolinter.yml": "nanolinter-lint", "lint-megalinter.yml": "megalinter-lint",
+	} {
+		var gate, consume *canonicalConsumerStep
+
+		steps := readCanonicalConsumerWorkflow(t, file).Jobs[job].Steps
+		for index := range steps {
+			switch {
+			case strings.Contains(steps[index].Run, "CANONICAL_PRODUCER_RESULT"):
+				gate = &steps[index]
+			case strings.HasSuffix(steps[index].Uses, "/consume-canonical-cli"):
+				consume = &steps[index]
+			}
+		}
+
+		require.NotNil(t, gate, "%s %s", file, job)
+		require.NotNil(t, consume, "%s %s", file, job)
+		require.Equal(t, "${{ inputs['forge-ci-source'] }}", gate.Env["FORGE_CI_SOURCE"])
+		require.Contains(t, gate.Run, `[[ "$FORGE_CI_SOURCE" == image || "$FORGE_CI_SOURCE" == build ]]`+"\n")
+		require.Contains(t, gate.Run, `[[ "$FORGE_CI_SOURCE" == image ]] || [[ "$CANONICAL_PRODUCER_RESULT" == success && "$PRODUCER_RUN_ID" == "$GITHUB_RUN_ID" && "$PRODUCER_RUN_ATTEMPT" == "$GITHUB_RUN_ATTEMPT" ]]`+"\n")
+		require.Contains(t, gate.Run, `[[ "$FORGE_CI_SOURCE" == image ]] || [[ "$PRODUCER_ENGINE_REPOSITORY" == "$ENGINE_REPOSITORY" && "$PRODUCER_ENGINE_COMMIT" == "$ENGINE_COMMIT" ]]`+"\n")
+		require.Contains(t, gate.Run, `[[ "$FORGE_CI_SOURCE" == image ]] || [[ "$PRODUCER_ARTIFACT_ID" =~`)
+		require.Equal(t, "${{ env.FORGE_CI_SOURCE }}", consume.With["source"])
+	}
+
+	// The stage resolves the engine repository once and hands it to the
+	// lint workflows, which run on the runner and have no setup job.
+	stage := readCanonicalConsumerWorkflow(t, "pullrequest-quality-stage.yml")
+
+	for _, lint := range []string{"nanolinter", "megalinter"} {
+		require.Equal(t, "${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}", stage.Jobs[lint].With["forge-ci-repository"])
+
+		callee := readCanonicalConsumerWorkflow(t, "lint-"+lint+".yml")
+		require.NotContains(t, callee.Jobs, "resolve-bootstrap")
+		require.Equal(t, "${{ inputs['forge-ci-repository'] }}", callee.Jobs[lint+"-lint"].Steps[gateIndex(t, callee.Jobs[lint+"-lint"].Steps)].Env["ENGINE_REPOSITORY"])
+
+		spec, _ := callee.On.Call.Inputs["forge-ci-repository"].(map[string]any)
+		require.Equal(t, true, spec["required"])
+	}
+
+	builder, _ := pr.On.Call.Inputs["canonical-builder-image"].(map[string]any)
+	require.Equal(t, false, builder["required"])
+	require.Empty(t, builder["default"], "no builder image is resolved for a caller that names none")
 
 	quality := readCanonicalConsumerWorkflow(t, "pullrequest-quality-stage.yml")
 	for _, lint := range []string{"nanolinter", "megalinter"} {
@@ -347,6 +419,75 @@ func TestCanonicalConsumerContextRefusesBeforeInertEffect(t *testing.T) {
 	}
 }
 
+// TestLintGateRefusesAnUnapprovedIdentity: the lint jobs have no resolver job
+// in front, so their first step is the only check of the engine repository
+// and commit a caller passed, whichever source the CLI comes from.
+func TestLintGateRefusesAnUnapprovedIdentity(t *testing.T) {
+	t.Parallel()
+
+	for file, job := range map[string]string{"lint-nanolinter.yml": "nanolinter-lint", "lint-megalinter.yml": "megalinter-lint"} {
+		steps := readCanonicalConsumerWorkflow(t, file).Jobs[job].Steps
+		gate := steps[gateIndex(t, steps)].Run
+
+		for name, change := range map[string]map[string]string{
+			"image":          {},
+			"build":          {"FORGE_CI_SOURCE": "build"},
+			"unknown source": {"FORGE_CI_SOURCE": "images"},
+			"no source":      {"FORGE_CI_SOURCE": ""},
+			"failed build":   {"FORGE_CI_SOURCE": "build", "CANONICAL_PRODUCER_RESULT": "failure"},
+			"no repository":  {"ENGINE_REPOSITORY": ""},
+			"no owner":       {"ENGINE_REPOSITORY": "engine"},
+			"parent segment": {"ENGINE_REPOSITORY": "approved/.."},
+			"parent owner":   {"ENGINE_REPOSITORY": "../engine"},
+			"three segments": {"ENGINE_REPOSITORY": "approved/engine/extra"},
+			"short commit":   {"ENGINE_COMMIT": "aaaaaaa"},
+			"image by tag":   {"RUNTIME_IMAGE": "registry.invalid/tools:latest"},
+			"another origin": {"ENGINE_ORIGIN": "https://other.invalid/approved/engine"},
+		} {
+			t.Run(file+"/"+name, func(t *testing.T) {
+				t.Parallel()
+
+				dir := t.TempDir()
+				env := canonicalConsumerContextEnv(dir)
+				env["FORGE_CI_SOURCE"] = "image"
+
+				// The image source has no producer in the run.
+				if change["FORGE_CI_SOURCE"] != "build" {
+					for _, producer := range []string{"CANONICAL_PRODUCER_RESULT", "PRODUCER_RUN_ID", "PRODUCER_RUN_ATTEMPT", "PRODUCER_ARTIFACT_ID", "PRODUCER_ARTIFACT_NAME", "PRODUCER_ENGINE_REPOSITORY", "PRODUCER_ENGINE_COMMIT"} {
+						env[producer] = ""
+					}
+				}
+
+				maps.Copy(env, change)
+
+				// A changed repository keeps its own origin, so the form is what refuses it.
+				if repository, changed := change["ENGINE_REPOSITORY"]; changed {
+					env["ENGINE_ORIGIN"] = "https://approved.invalid/" + repository
+				}
+
+				cmd := exec.CommandContext(t.Context(), testBash(t), "-peu", "-o", "pipefail", "-c", gate+"\nprintf private > effect\n")
+
+				cmd.Dir = dir
+				for key, value := range env {
+					cmd.Env = append(cmd.Env, key+"="+value)
+				}
+
+				out, err := cmd.CombinedOutput()
+				if name == "image" || name == "build" {
+					require.NoError(t, err, string(out))
+					require.FileExists(t, filepath.Join(dir, "effect"))
+
+					return
+				}
+
+				require.Error(t, err)
+				require.NoFileExists(t, filepath.Join(dir, "effect"))
+				require.NoFileExists(t, filepath.Join(dir, "environment"))
+			})
+		}
+	}
+}
+
 func canonicalConsumerContextEnv(dir string) map[string]string {
 	commit := strings.Repeat("a", 40)
 
@@ -359,4 +500,19 @@ func canonicalConsumerContextEnv(dir string) map[string]string {
 		"ENGINE_COMMIT": commit, "PRODUCER_ENGINE_COMMIT": commit,
 		"RUNTIME_IMAGE": "registry.invalid/tools@sha256:" + strings.Repeat("c", 64),
 	}
+}
+
+// gateIndex is the step that admits the engine identity before any checkout.
+func gateIndex(t *testing.T, steps []canonicalConsumerStep) int {
+	t.Helper()
+
+	for index := range steps {
+		if strings.Contains(steps[index].Run, "CANONICAL_PRODUCER_RESULT") {
+			return index
+		}
+	}
+
+	t.Fatal("no gate step")
+
+	return -1
 }

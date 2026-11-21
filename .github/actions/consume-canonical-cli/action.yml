@@ -1,24 +1,30 @@
 # SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 # SPDX-License-Identifier: CC0-1.0
 name: Consume approved canonical CLI
-description: "Run only from the fresh explicitly pinned ENGINE checkout, before consumer checkout; requires job-specific actions read and canonical producer context env."
+description: "Run only from the fresh explicitly pinned ENGINE checkout, before consumer checkout. source build requires job-specific actions read and canonical producer context env; source image requires the admitted RUNTIME_IMAGE."
 inputs:
+  source:
+    description: "Where the CLI comes from: build, the artifact the run's canonical build job uploaded, or image, the CLI the pinned runtime image carries. Either is run only when it matches the checksum the pinned engine commit records. Anything but image takes the build path, which refuses without its producer context."
+    required: false
+    default: build
   tool-profile:
     description: "Literal tool profile of scripts/ci/trusted-runtime-tools.sh for this job: runtime inside the approved image, host on a hosted runner, host-toolchain only for key-free version-file preparation. The calling workflow states it; there is no default."
     required: true
 outputs:
   verified:
     description: "Local step completion only, not an authorization token for another job"
-    value: ${{ steps.receive.outputs.verified }}
+    value: ${{ steps.receive.outputs.verified || steps.image.outputs.verified }}
 runs:
   using: composite
   steps:
     - name: Retain approved engine and admit original delivery context
+      if: ${{ inputs.source != 'image' }}
       shell: /bin/bash --noprofile --norc -peuo pipefail {0}
       env:
         TOOL_PROFILE: ${{ inputs.tool-profile }}
       run: /bin/bash -p "$GITHUB_ACTION_PATH/../../../scripts/ci/canonical-consumer.sh" prepare
     - name: Read fresh native metadata with this job's token
+      if: ${{ inputs.source != 'image' }}
       shell: /bin/bash --noprofile --norc -peuo pipefail {0}
       env:
         GH_TOKEN: ${{ github.token }}
@@ -28,19 +34,32 @@ runs:
         /bin/bash -p "$RUNNER_TEMP/forge-ci-approved-engine/scripts/ci/trusted-runtime-tools.sh" "$TOOL_PROFILE" gh api --hostname "${GITHUB_SERVER_URL#https://}" \
           "repos/$GITHUB_REPOSITORY/actions/artifacts/$PRODUCER_ARTIFACT_ID" >"$RUNNER_TEMP/forge-ci-canonical-metadata.json"
     - name: Admit exact metadata before extraction
+      if: ${{ inputs.source != 'image' }}
       shell: /bin/bash --noprofile --norc -peuo pipefail {0}
       env:
         TOOL_PROFILE: ${{ inputs.tool-profile }}
       run: /bin/bash -p "$RUNNER_TEMP/forge-ci-approved-engine/scripts/ci/canonical-consumer.sh" admit
     - name: Download only the original canonical ID
+      if: ${{ inputs.source != 'image' }}
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
       with:
         artifact-ids: ${{ env.PRODUCER_ARTIFACT_ID }}
         path: ${{ runner.temp }}/forge-ci-canonical-${{ github.run_id }}-${{ github.run_attempt }}
         merge-multiple: true
     - name: Verify raw bytes and bootstrap before installing a launcher
+      if: ${{ inputs.source != 'image' }}
       id: receive
       shell: /bin/bash --noprofile --norc -peuo pipefail {0}
       env:
         TOOL_PROFILE: ${{ inputs.tool-profile }}
       run: /bin/bash -p "$RUNNER_TEMP/forge-ci-approved-engine/scripts/ci/canonical-consumer.sh" receive
+    - name: Verify the pinned runtime image's CLI before installing a launcher
+      id: image
+      if: ${{ inputs.source == 'image' }}
+      shell: /bin/bash --noprofile --norc -peuo pipefail {0}
+      env:
+        TOOL_PROFILE: ${{ inputs.tool-profile }}
+      run: |
+        /bin/bash -p "$GITHUB_ACTION_PATH/../../../scripts/ci/canonical-consumer.sh" image-prepare
+        /bin/bash -p "$RUNNER_TEMP/forge-ci-approved-engine/scripts/ci/canonical-consumer.sh" image-extract
+        /bin/bash -p "$RUNNER_TEMP/forge-ci-approved-engine/scripts/ci/canonical-consumer.sh" image-receive

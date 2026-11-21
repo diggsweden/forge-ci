@@ -27,7 +27,7 @@ jobs:
       contents: read
     with:
       # The full commit the uses: ref above names; every job of the route runs
-      # the CLI built in this run from exactly this commit.
+      # only the CLI this commit records.
       forge-ci-binary-ref: 2f4e845cee96973d1082bf00a5a18689c1482148 # v0.90.0
       # The first artifact's type; the lint gate runs over the whole tree.
       project-type: maven
@@ -36,10 +36,10 @@ jobs:
       nanolinter-image: codefloe.com/itiquette/nanolinter:core@sha256:0000000000000000000000000000000000000000000000000000000000000000
       # Default lint engine: nanolinter (runs `nanolinter verify` from your nanolinter.toml)
       lint-engine: nanolinter
-      # Pinned by digest and admitted before any job runs; fill in
-      # the digests of the release you call (docs/runtime-images.md).
+      # Pinned by digest and admitted before any job runs; fill in the
+      # digest of the release you call (docs/runtime-images.md). The jobs run
+      # the Forge CI this image carries, checked against the commit above.
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:0000000000000000000000000000000000000000000000000000000000000000 # v0.90.0 digest
-      canonical-builder-image: ghcr.io/diggsweden/forge-ci-runtime-go-1.27@sha256:0000000000000000000000000000000000000000000000000000000000000000 # v0.90.0 digest
 
   # Your tests, one job per project. The orchestrator above never runs them;
   # require these jobs and pr-checks as status checks.

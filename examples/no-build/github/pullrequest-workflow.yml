@@ -42,4 +42,3 @@ jobs:
       # refuses a tag.
       nanolinter-image: ghcr.io/itiquette/nanolinter:core@sha256:PIN_DIGEST
       runtime-image: ghcr.io/diggsweden/forge-ci-runtime-base@sha256:PIN_BASE_IMAGE_DIGEST # v0.90.0 digest
-      canonical-builder-image: ghcr.io/diggsweden/forge-ci-runtime-go-1.27@sha256:PIN_GO_IMAGE_DIGEST # v0.90.0 digest

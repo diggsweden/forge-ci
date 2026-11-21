@@ -56,13 +56,18 @@ on:
         type: string
       # Canonical delivery of the same run, forwarded to the lint jobs that
       # run on the runner.
-      canonical-artifact-id: {type: string, required: true}
-      canonical-artifact-name: {type: string, required: true}
-      canonical-producer-run-id: {type: string, required: true}
-      canonical-producer-run-attempt: {type: string, required: true}
-      canonical-producer-engine-repository: {type: string, required: true}
-      canonical-producer-engine-commit: {type: string, required: true}
-      canonical-producer-result: {type: string, required: true}
+      canonical-artifact-id: {type: string, required: false, default: ""}
+      canonical-artifact-name: {type: string, required: false, default: ""}
+      canonical-producer-run-id: {type: string, required: false, default: ""}
+      canonical-producer-run-attempt: {type: string, required: false, default: ""}
+      canonical-producer-engine-repository: {type: string, required: false, default: ""}
+      canonical-producer-engine-commit: {type: string, required: false, default: ""}
+      canonical-producer-result: {type: string, required: false, default: ""}
+      forge-ci-source:
+        description: "Where the jobs of this run get Forge CI: image, the CLI the pinned runtime image carries, or build, the CLI the run compiles from forge-ci-binary-ref. Either runs only when it matches the checksum that commit records."
+        required: false
+        default: build
+        type: string
     # Aggregator: forwards CODE_SCANNING_TOKEN to the nanolinter job for
     # its security-SARIF upload; other lint jobs use the auto GITHUB_TOKEN.
     secrets:
@@ -102,6 +107,8 @@ jobs:
       required-lints: ${{ inputs['required-lints'] }}
       disable-checks: ${{ inputs['disable-checks'] }}
       forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      # Resolved once, by this stage's first job.
+      forge-ci-repository: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
       runtime-image: ${{ inputs['runtime-image'] }}
       canonical-artifact-id: ${{ inputs['canonical-artifact-id'] }}
       canonical-artifact-name: ${{ inputs['canonical-artifact-name'] }}
@@ -110,6 +117,7 @@ jobs:
       canonical-producer-engine-repository: ${{ inputs['canonical-producer-engine-repository'] }}
       canonical-producer-engine-commit: ${{ inputs['canonical-producer-engine-commit'] }}
       canonical-producer-result: ${{ inputs['canonical-producer-result'] }}
+      forge-ci-source: ${{ inputs['forge-ci-source'] }}
   megalinter:
     needs: [resolve-bootstrap]
     name: MegaLinter
@@ -124,6 +132,8 @@ jobs:
       runs-on: ${{ inputs['runs-on'] }}
       megalinter-image: ${{ inputs['megalinter-image'] }}
       forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
+      # Resolved once, by this stage's first job.
+      forge-ci-repository: ${{ needs.resolve-bootstrap.outputs.forge-ci-repository }}
       runtime-image: ${{ inputs['runtime-image'] }}
       canonical-artifact-id: ${{ inputs['canonical-artifact-id'] }}
       canonical-artifact-name: ${{ inputs['canonical-artifact-name'] }}
@@ -132,6 +142,7 @@ jobs:
       canonical-producer-engine-repository: ${{ inputs['canonical-producer-engine-repository'] }}
       canonical-producer-engine-commit: ${{ inputs['canonical-producer-engine-commit'] }}
       canonical-producer-result: ${{ inputs['canonical-producer-result'] }}
+      forge-ci-source: ${{ inputs['forge-ci-source'] }}
   swift:
     needs: [resolve-bootstrap]
     name: Swift checks
@@ -172,15 +183,18 @@ jobs:
           PRODUCER_ENGINE_REPOSITORY: ${{ inputs['canonical-producer-engine-repository'] }}
           PRODUCER_ENGINE_COMMIT: ${{ inputs['canonical-producer-engine-commit'] }}
           CANONICAL_PRODUCER_RESULT: ${{ inputs['canonical-producer-result'] }}
+          FORGE_CI_SOURCE: ${{ inputs['forge-ci-source'] }}
         run: |
           [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ && "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
-          [[ "$CANONICAL_PRODUCER_RESULT" == success && "$PRODUCER_RUN_ID" == "$GITHUB_RUN_ID" && "$PRODUCER_RUN_ATTEMPT" == "$GITHUB_RUN_ATTEMPT" ]]
+          # The CLI of the pinned runtime image has no producer in this run.
+          [[ "$FORGE_CI_SOURCE" == image || "$FORGE_CI_SOURCE" == build ]]
+          [[ "$FORGE_CI_SOURCE" == image ]] || [[ "$CANONICAL_PRODUCER_RESULT" == success && "$PRODUCER_RUN_ID" == "$GITHUB_RUN_ID" && "$PRODUCER_RUN_ATTEMPT" == "$GITHUB_RUN_ATTEMPT" ]]
           [[ "$ENGINE_REPOSITORY" =~ ^[A-Za-z0-9_-][A-Za-z0-9_.-]*/[A-Za-z0-9_-][A-Za-z0-9_.-]*$ && "$ENGINE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$PRODUCER_ENGINE_REPOSITORY" == "$ENGINE_REPOSITORY" && "$PRODUCER_ENGINE_COMMIT" == "$ENGINE_COMMIT" ]]
-          [[ "$PRODUCER_ARTIFACT_ID" =~ ^[1-9][0-9]*$ && "$PRODUCER_ARTIFACT_NAME" == "forge-ci-canonical-linux-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$ENGINE_COMMIT" ]]
+          [[ "$FORGE_CI_SOURCE" == image ]] || [[ "$PRODUCER_ENGINE_REPOSITORY" == "$ENGINE_REPOSITORY" && "$PRODUCER_ENGINE_COMMIT" == "$ENGINE_COMMIT" ]]
+          [[ "$FORGE_CI_SOURCE" == image ]] || [[ "$PRODUCER_ARTIFACT_ID" =~ ^[1-9][0-9]*$ && "$PRODUCER_ARTIFACT_NAME" == "forge-ci-canonical-linux-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$ENGINE_COMMIT" ]]
           [[ "$RUNTIME_IMAGE" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}$ ]]
           [[ "$GITHUB_SERVER_URL" =~ ^https://[^/?#@[:space:]]+$ && "$ENGINE_ORIGIN" == "$GITHUB_SERVER_URL/$ENGINE_REPOSITORY" ]]
-          for variable in ENGINE_REPOSITORY ENGINE_COMMIT ENGINE_ORIGIN RUNTIME_IMAGE PRODUCER_ARTIFACT_ID PRODUCER_ARTIFACT_NAME PRODUCER_RUN_ID PRODUCER_RUN_ATTEMPT PRODUCER_ENGINE_REPOSITORY PRODUCER_ENGINE_COMMIT CANONICAL_PRODUCER_RESULT; do
+          for variable in ENGINE_REPOSITORY ENGINE_COMMIT ENGINE_ORIGIN RUNTIME_IMAGE PRODUCER_ARTIFACT_ID PRODUCER_ARTIFACT_NAME PRODUCER_RUN_ID PRODUCER_RUN_ATTEMPT PRODUCER_ENGINE_REPOSITORY PRODUCER_ENGINE_COMMIT CANONICAL_PRODUCER_RESULT FORGE_CI_SOURCE; do
             printf '%s=%s\n' "$variable" "${!variable}" >>"$GITHUB_ENV"
           done
       - name: Checkout only the approved engine before consumer or private steps
@@ -196,6 +210,7 @@ jobs:
         id: canonical-bootstrap
         uses: ./_forge_ci_bootstrap/.github/actions/consume-canonical-cli
         with:
+          source: ${{ env.FORGE_CI_SOURCE }}
           tool-profile: runtime
       - name: Normalize PR quality stage result
         id: summary

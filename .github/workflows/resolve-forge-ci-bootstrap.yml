@@ -1,7 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 # SPDX-License-Identifier: CC0-1.0
 name: Resolve forge-ci bootstrap revision
-# The first job of every reusable workflow that runs forge-ci: it names the
+# The first job of every reusable workflow that runs forge-ci, but the two
+# pull request lint workflows, whose caller passes its result: it names the
 # repository that serves the engine, admits the engine commit, and admits
 # every runtime image the caller's container jobs run, before any of them
 # starts. An image is admitted only as a digest. Nothing here picks an image

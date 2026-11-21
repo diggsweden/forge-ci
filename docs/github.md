@@ -14,7 +14,7 @@ forge layer has beside the others is in
 | Path | Content |
 |---|---|
 | `.github/workflows/` | Three orchestrators a consumer calls, the stages they compose, and the build, publish, lint, security and release leaves. [Components Reference](components.md#workflow-inventory) is the complete inventory. |
-| `.github/actions/consume-canonical-cli`, `.github/actions/build-darwin-cli` | How a job that is not a runtime container gets the engine: Linux host jobs receive the canonical CLI built in the run from the pinned engine commit; macOS jobs build it from the engine checkout. See [Installing `forge-ci`](providers.md#installing-forge-ci). |
+| `.github/actions/consume-canonical-cli`, `.github/actions/build-darwin-cli` | How a job that is not a runtime container gets the engine: Linux host jobs receive the CLI the pinned engine commit records, built in the run or, on a pull request, taken from the pinned runtime image; macOS jobs build it from the engine checkout. See [Installing `forge-ci`](providers.md#installing-forge-ci). |
 | `containers/runtime/Containerfile` | The runtime images the workflow jobs run in, published on `ghcr.io`. See [Runtime Images](runtime-images.md). |
 | `examples/` | A pull-request, release and, where it applies, snapshot workflow per ecosystem under `<ecosystem>/github/`, and the signing backends. See [Examples](../examples/README.md). |
 
@@ -251,9 +251,10 @@ carries a description. The orchestrator inputs most callers set:
 | `release-asset-retention` | release | How many of the newest releases keep every file; older ones keep their checksums and signatures. Empty, the default, deletes nothing. See [Old releases' files](#old-releases-files). |
 | `promote-staging-environment`, `promote-release-environment`, `promote-release-*` | release | The GitHub Environments that gate the promotion ladder, and an optional separate release registry. |
 | `enforce-lint`, `enforce-vulnerabilities`, `enforce-application-tests`, `enforce-reproducible-builds` | PR, release, snapshot | [Check enforcement](admin-policy.md), default `false`, forwarded to every gate. Checks run and report findings; explicit `true` makes recognized findings block. Organisation-mandated values belong in its ruleset-required workflow. No workflow reads them from `vars` or the environment. |
-| `forge-ci-binary-ref` | all | Required: the full engine commit the canonical CLI is built from in the run, for every plain-runner job of the PR, snapshot and release routes. The macOS lanes build the engine from a checkout of the same commit. |
+| `forge-ci-binary-ref` | all | Required: the full engine commit whose recorded build every plain-runner job of the PR, snapshot and release routes runs. The snapshot and release routes build it in the run; the PR route takes it from `runtime-image` unless `forge-ci-source` says `build`. The macOS lanes build the engine from a checkout of the same commit. |
 | `runtime-image*` | all | The runtime image of each toolchain family. `runtime-image` is required on every orchestrator and admitted only as an `@sha256:` digest; it is the control-plane, release-notes, SARIF-upload and cosign signing container. |
-| `canonical-builder-image` | all | Required: the Go runtime image digest the canonical CLI is built in. |
+| `canonical-builder-image` | all | The Go runtime image digest the canonical CLI is built in. Required on the release and snapshot routes, and on the PR route with `forge-ci-source: build`. |
+| `forge-ci-source` | PR | Where the jobs get Forge CI: `image`, the default, takes the CLI the pinned `runtime-image` carries; `build` compiles it in the run from `forge-ci-binary-ref`. Either runs only when it matches the checksum that commit records. Use `build` to try a commit no runtime image has been published for. |
 | `runs-on`, `runs-on-darwin-arm64` | PR, release, snapshot | JSON arrays of runner labels for the ordinary jobs, default `["ubuntu-26.04"]`, and the Xcode builds, signed or not, and the Swift jobs, default `["macos-26"]`; a signed Android build stays on a hosted runner. See [GitHub runners](runners.md#github-runners). |
 | `enforce-signer-runs-on-darwin-arm64` | release, snapshot | Administrator setting: a JSON array of the runner labels the signed Xcode build may run on, default `[]`, which lets the caller choose. With a list, a `runs-on-darwin-arm64` that names any other label is refused before the build starts. Set it in the entry point the consumer cannot change. See [GitHub runners](runners.md#github-runners). |
 | `xcode-version` | release, snapshot | The Xcode version of the Xcode builds, for a caller that keeps it outside the repository: `xcode-version: ${{ vars.XCODE_VERSION }}` follows a repository variable without a commit. Empty uses `config.xcode-version` of the declaration, which stays required and is the version a build falls back to. |
@@ -315,8 +316,9 @@ names.
 Containerized jobs run in the runtime images, which carry the `forge-ci`
 binary and the toolchain of one family (base, full, Java, Node, Rust, Go,
 Android; Android is linux/amd64 only). Every orchestrator requires
-`forge-ci-binary-ref` as the full engine commit and `runtime-image` and
-`canonical-builder-image` as `@sha256:` digests. `runtime-image-full` and the
+`forge-ci-binary-ref` as the full engine commit and `runtime-image` as an
+`@sha256:` digest; the release and snapshot routes require
+`canonical-builder-image` the same way. `runtime-image-full` and the
 family images (`-java`, `-node`, `-go`, `-rust`, `-android`) are digests too:
 pass the ones your artifacts use, and a native release always needs
 `runtime-image-full`. A workflow refuses a tag or an empty image it needs
@@ -326,12 +328,16 @@ workflow ref, `forge-ci-binary-ref` and the image digests on one release; the
 to read them. A leaf workflow called on its own takes the same
 `forge-ci-binary-ref` and one `runtime-image` digest.
 
-The first job builds the CLI from `forge-ci-binary-ref` in the builder image.
-Linux jobs on a plain runner, and the planning jobs, receive that exact
-build and check it before they run it; other container jobs, such as the
-product builds, use the CLI baked into their image, and macOS jobs build it
-from a checkout of the same commit. No workflow downloads a forge-ci binary
-onto a host. [Engine delivery](engine-delivery.md) describes the checks, and
+On the release and snapshot routes the first job builds the CLI from
+`forge-ci-binary-ref` in the builder image. Linux jobs on a plain runner, and
+the planning jobs, receive that exact build and check it before they run it.
+A pull request skips the build: its jobs take the CLI out of the pinned
+`runtime-image` and run it only when it matches the checksum
+`forge-ci-binary-ref` records, so the image and the commit must come from the
+same release; `forge-ci-source: build` brings the build back. Other container
+jobs, such as the product builds, use the CLI baked into their image, and
+macOS jobs build it from a checkout of the same commit. No workflow downloads
+a forge-ci binary from a release or package onto a host. [Engine delivery](engine-delivery.md) describes the checks, and
 [Runtime Images](runtime-images.md) the roster and which workflow uses which
 image.
 
@@ -417,7 +423,7 @@ The GitHub layer has no Forgejo-style `check-l3-isolation` gate.
 | `Check: lint / Nanolinter` | **Nanolinter / Nanolinter** |
 | `Check: lint (MegaLinter)` or `Check: lint (Swift)` | **MegaLinter** or **Swift checks**, followed by the called job name |
 | `canonical-admit`, `canonical-build`, `canonical-receive` | **Setup: check build images**, **Setup: build Forge CI**, **Setup: verify Forge CI** |
-| `resolve`, in the PR quality chain | **Setup: check pinned inputs**, **Setup: check quality stage pins**, **Setup: check Nanolinter pin** |
+| `resolve`, in the PR quality chain | **Setup: check pinned inputs**, **Setup: check quality stage pins** |
 
 Every job that only prepares the run starts with **Setup:**, so the list
 reads as setup, **Select checks**, the checks themselves, then **PR check
@@ -773,6 +779,7 @@ maintainer side.
 | A build succeeds but nothing is published | See [Configuration troubleshooting](artifacts-reference.md#configuration-troubleshooting). |
 | A release failed after the final tag was pushed | Re-run forward; see [Failed Release Recovery](failed-release-recovery.md). |
 | A run stops in `canonical-cli` or before it | `forge-ci-binary-ref` is not a full 40-hex commit, or `runtime-image` / `canonical-builder-image` is a tag rather than an `@sha256:` digest; see [Advanced Pinning Recipe](runtime-images.md#advanced-pinning-recipe). |
+| A pull request job stops with "the runtime image does not carry the Forge CI build that commit … records" | `runtime-image` and `forge-ci-binary-ref` name different releases. Pin the image of the same release, or set `forge-ci-source: build` and pass `canonical-builder-image`. |
 
 `forge-ci doctor` in a job prints the detected forge, its capabilities and what
 to do where it degrades.

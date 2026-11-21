@@ -86,16 +86,22 @@ on:
         default: '["macos-26"]'
         type: string
       forge-ci-binary-ref:
-        description: "Full approved engine commit (40 hex). The canonical CLI every control-plane job and lint job runs is built from exactly this commit; the stage pins its callees to it."
+        description: "Full approved engine commit (40 hex). Every control-plane job and lint job runs only the CLI this commit records; the stage pins its callees to it."
         required: true
         type: string
       runtime-image:
         description: "Administrator-pinned forge-ci base runtime image@sha256 digest for the PR control-plane and summary jobs. Tags are refused by canonical admission."
         required: true
         type: string
+      forge-ci-source:
+        description: "Where the jobs of this run get Forge CI: image, the CLI the pinned runtime image carries, or build, the CLI the run compiles from forge-ci-binary-ref. Either runs only when it matches the checksum that commit records."
+        required: false
+        default: image
+        type: string
       canonical-builder-image:
-        description: "Administrator-pinned Go-qualified image@sha256 digest for the canonical CLI build only. No fallback to policy or product runtimes."
-        required: true
+        description: "Required when forge-ci-source=build: administrator-pinned Go-qualified image@sha256 digest for the canonical CLI build only. No fallback to policy or product runtimes."
+        required: false
+        default: ""
         type: string
       nanolinter-image:
         description: "Required when lint-engine=nanolinter: the image the nanolinter lint job runs in, pinned by @sha256:<64 lowercase hex>. Pick the flavour for project-type: go, java (maven), kotlin (gradle, gradle-android), javascript-typescript (npm), rust (cargo), swift (xcode-ios), core otherwise; the plan job refuses a tag."
@@ -134,9 +140,12 @@ jobs:
       forge-ci-binary-ref: ${{ inputs['forge-ci-binary-ref'] }}
       images: |
         runtime-image=${{ inputs['runtime-image'] }}
+  # Only when the run builds its own CLI. By default every job takes the CLI
+  # the pinned runtime image carries and checks it against the pinned commit.
   canonical-cli:
     name: Prepare pinned Forge CI
     needs: [resolve-bootstrap]
+    if: ${{ inputs['forge-ci-source'] == 'build' }}
     permissions:
       contents: read
       actions: read
@@ -152,7 +161,9 @@ jobs:
   # ===== Stage 0: PR Plan =====
   compose-pr-plan:
     needs: [resolve-bootstrap, canonical-cli]
-    if: ${{ !failure() && !cancelled() && needs.canonical-cli.result == 'success' }}
+    # A skipped build still starts this job, so that its first step refuses
+    # an unknown forge-ci-source instead of the route ending with no checks.
+    if: ${{ !failure() && !cancelled() && (needs.canonical-cli.result == 'success' || needs.canonical-cli.result == 'skipped') }}
     name: Select checks
     runs-on: ${{ fromJSON(inputs['runs-on']) }}
     container:
@@ -178,15 +189,18 @@ jobs:
           PRODUCER_ENGINE_REPOSITORY: ${{ needs.canonical-cli.outputs.engine-repository }}
           PRODUCER_ENGINE_COMMIT: ${{ needs.canonical-cli.outputs.engine-commit }}
           CANONICAL_PRODUCER_RESULT: ${{ needs.canonical-cli.result }}
+          FORGE_CI_SOURCE: ${{ inputs['forge-ci-source'] }}
         run: |
           [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ && "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
-          [[ "$CANONICAL_PRODUCER_RESULT" == success && "$PRODUCER_RUN_ID" == "$GITHUB_RUN_ID" && "$PRODUCER_RUN_ATTEMPT" == "$GITHUB_RUN_ATTEMPT" ]]
+          # The CLI of the pinned runtime image has no producer in this run.
+          [[ "$FORGE_CI_SOURCE" == image || "$FORGE_CI_SOURCE" == build ]]
+          [[ "$FORGE_CI_SOURCE" == image ]] || [[ "$CANONICAL_PRODUCER_RESULT" == success && "$PRODUCER_RUN_ID" == "$GITHUB_RUN_ID" && "$PRODUCER_RUN_ATTEMPT" == "$GITHUB_RUN_ATTEMPT" ]]
           [[ "$ENGINE_REPOSITORY" =~ ^[A-Za-z0-9_-][A-Za-z0-9_.-]*/[A-Za-z0-9_-][A-Za-z0-9_.-]*$ && "$ENGINE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$PRODUCER_ENGINE_REPOSITORY" == "$ENGINE_REPOSITORY" && "$PRODUCER_ENGINE_COMMIT" == "$ENGINE_COMMIT" ]]
-          [[ "$PRODUCER_ARTIFACT_ID" =~ ^[1-9][0-9]*$ && "$PRODUCER_ARTIFACT_NAME" == "forge-ci-canonical-linux-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$ENGINE_COMMIT" ]]
+          [[ "$FORGE_CI_SOURCE" == image ]] || [[ "$PRODUCER_ENGINE_REPOSITORY" == "$ENGINE_REPOSITORY" && "$PRODUCER_ENGINE_COMMIT" == "$ENGINE_COMMIT" ]]
+          [[ "$FORGE_CI_SOURCE" == image ]] || [[ "$PRODUCER_ARTIFACT_ID" =~ ^[1-9][0-9]*$ && "$PRODUCER_ARTIFACT_NAME" == "forge-ci-canonical-linux-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$ENGINE_COMMIT" ]]
           [[ "$RUNTIME_IMAGE" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}$ ]]
           [[ "$GITHUB_SERVER_URL" =~ ^https://[^/?#@[:space:]]+$ && "$ENGINE_ORIGIN" == "$GITHUB_SERVER_URL/$ENGINE_REPOSITORY" ]]
-          for variable in ENGINE_REPOSITORY ENGINE_COMMIT ENGINE_ORIGIN RUNTIME_IMAGE PRODUCER_ARTIFACT_ID PRODUCER_ARTIFACT_NAME PRODUCER_RUN_ID PRODUCER_RUN_ATTEMPT PRODUCER_ENGINE_REPOSITORY PRODUCER_ENGINE_COMMIT CANONICAL_PRODUCER_RESULT; do
+          for variable in ENGINE_REPOSITORY ENGINE_COMMIT ENGINE_ORIGIN RUNTIME_IMAGE PRODUCER_ARTIFACT_ID PRODUCER_ARTIFACT_NAME PRODUCER_RUN_ID PRODUCER_RUN_ATTEMPT PRODUCER_ENGINE_REPOSITORY PRODUCER_ENGINE_COMMIT CANONICAL_PRODUCER_RESULT FORGE_CI_SOURCE; do
             printf '%s=%s\n' "$variable" "${!variable}" >>"$GITHUB_ENV"
           done
       - name: Checkout only the approved engine before consumer or private steps
@@ -202,6 +216,7 @@ jobs:
         id: canonical-bootstrap
         uses: ./_forge_ci_bootstrap/.github/actions/consume-canonical-cli
         with:
+          source: ${{ env.FORGE_CI_SOURCE }}
           tool-profile: runtime # The job container is the approved image.
       - name: Compose PR control-plane plan
         id: plan
@@ -219,6 +234,8 @@ jobs:
   execute-quality-stage:
     name: Run selected checks
     needs: [resolve-bootstrap, canonical-cli, compose-pr-plan]
+    # canonical-cli is skipped unless the run builds its own CLI.
+    if: ${{ !failure() && !cancelled() && needs.compose-pr-plan.result == 'success' }}
     permissions:
       actions: read
       contents: read
@@ -244,3 +261,4 @@ jobs:
       canonical-producer-engine-repository: ${{ needs.canonical-cli.outputs.engine-repository }}
       canonical-producer-engine-commit: ${{ needs.canonical-cli.outputs.engine-commit }}
       canonical-producer-result: ${{ needs.canonical-cli.result }}
+      forge-ci-source: ${{ inputs['forge-ci-source'] }}
