@@ -151,6 +151,11 @@ func TestConsumerGitHubJobsAreNamedForTheirStage(t *testing.T) {
 
 			count++
 
+			// The pull request's project job has the name it has on every forge.
+			if job.Name == "Build and test" {
+				continue
+			}
+
 			if stage, _, _ := strings.Cut(job.Name, ":"); !slices.Contains(stages, stage) {
 				violations = append(violations, fmt.Sprintf("%s: job %s is named %q", relative, id, job.Name))
 			}
@@ -166,7 +171,7 @@ func TestConsumerGitHubJobsAreNamedForTheirStage(t *testing.T) {
 	require.NotZero(t, count, "no consumer job runs its own steps")
 
 	slices.Sort(violations)
-	require.Emptyf(t, violations, "a consumer job's name starts with its stage, one of %v, as in \"Check: build and test\":\n  %s",
+	require.Emptyf(t, violations, "a consumer job's name starts with its stage, one of %v, as in \"Check: scripts\", or is the pull request's \"Build and test\":\n  %s",
 		stages, strings.Join(violations, "\n  "))
 }
 

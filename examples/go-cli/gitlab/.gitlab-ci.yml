@@ -56,7 +56,7 @@ include:
   # https://gitlab.example.com/team/ci/forge-ci/-/blob/PIN_FORGE_CI_SHA/docs/gitlab.md.
   - component: gitlab.example.com/team/ci/forge-ci/check@PIN_FORGE_CI_SHA
     inputs:
-      job-name: Vet and test
+      job-name: Build and test
       forge-ci-repository: team/ci/forge-ci
       server-url: https://gitlab.example.com
       job-image: registry.example.com/team/check-tools@sha256:PIN_IMAGE_DIGEST

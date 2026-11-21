@@ -83,7 +83,7 @@ red, even if the project tests pass:
 | --- | --- | --- |
 | GitHub | **Quality checks** → **Nanolinter** | The scan log and findings. **PR check results** is an overview, not a gate. |
 | Forgejo | **Quality checks** | The lint log. **PR check results** also lists **Verify release isolation** and **Build and test**, and is posted as the pull request's one comment. |
-| GitLab | **Quality checks** | The job log and SAST report. **Vet and test** and **Build Go artifacts** are separate jobs; pipeline status is the gate. |
+| GitLab | **Quality checks** | The job log and SAST report. **Build and test** and **Build Go artifacts** are separate jobs; pipeline status is the gate. |
 
 On GitHub, look at the setup jobs first if checks never start. Invalid
 pins and canonical artifact verification errors fail in setup, not in the
@@ -98,10 +98,12 @@ fails and the reporting job tells you where to find the error.
 - leaf `lint-*` and `security-*` workflows stay focused on one check each
 
 Across forges, **Quality checks** means the configured lint and security
-plan. The project names its own jobs for what they do, such as **Vet and
-test** or **Check scripts**. Forgejo keeps **Verify release isolation** as a
-separate blocker and can render **PR check results** in the log. GitLab uses
-its native pipeline status and finding reports, with no overview job.
+plan and **Build and test** the project's own build and tests; a project
+without a build names its jobs for what they check, such as **Check
+scripts**. Forgejo keeps **Verify release isolation** as a separate blocker
+and writes **PR check results** as an overview and one comment. GitLab uses
+its native pipeline status and finding reports; `pr-comment: true` adds the
+overview as one comment.
 
 ### Checks of your own
 

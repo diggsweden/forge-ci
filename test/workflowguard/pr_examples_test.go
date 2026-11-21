@@ -6,6 +6,7 @@ package workflowguard
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -42,13 +43,26 @@ func TestPullRequestExamplesUseConsistentLabels(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, yaml.Unmarshal(body, &example), path)
 
+			// The project's own job has one name on every forge. An example
+			// without a build names its jobs for what they check instead.
+			ownNames := !slices.Contains([]string{"no-build", "monorepo", "base-images"},
+				filepath.Base(filepath.Dir(filepath.Dir(path))))
+
 			switch forge {
 			case "github":
 				require.Equal(t, "Quality checks", example.Jobs["pr-checks"].Name, path)
+
+				if ownNames {
+					require.Equal(t, "Build and test", example.Jobs["test"].Name, path)
+				}
 			case "forgejo":
 				require.Equal(t, "Quality checks", example.Jobs["lint"].Name, path)
 				require.Equal(t, "Verify release isolation", example.Jobs["release-gate"].Name, path)
 				require.Equal(t, "PR check results", example.Jobs["summary"].Name, path)
+
+				if ownNames {
+					require.Equal(t, "Build and test", example.Jobs["build"].Name, path)
+				}
 			case "gitlab":
 				names := make(map[string]bool)
 
@@ -56,6 +70,10 @@ func TestPullRequestExamplesUseConsistentLabels(t *testing.T) {
 					name, ok := include.Inputs["job-name"].(string)
 					if strings.Contains(include.Component, "/nanolinter@") {
 						require.Equal(t, "Quality checks", name, path)
+					}
+
+					if ownNames && strings.Contains(include.Component, "/check@") {
+						require.Equal(t, "Build and test", name, path)
 					}
 
 					if ok {

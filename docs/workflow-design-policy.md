@@ -32,6 +32,21 @@ below must not be read as a reason to hide. Its rules are in the
   its pinned toolchain. A PR with complete quality coverage does not install
   or rerun a second lint stack. Release and snapshot verification must still
   run the checks they need without depending on a previous PR pipeline.
+  The project owns this job from first line to last: Forge CI provides
+  **Quality checks** and the overview, never the tests. On every forge it
+  has the same name, runs on every pull request, starts together with
+  **Quality checks** and runs the project's own test command, such as
+  `mvn test`, `npm test`, `go test` or a script. Only the place where the
+  project writes its steps follows the forge:
+
+  | GitHub | Forgejo | GitLab |
+  | --- | --- | --- |
+  | The **Build and test** job in the pull request workflow, or a `test.yml` it calls | The **Build and test** job in the pull request workflow | The `commands:` list of the **Build and test** job |
+
+  Do not move a project's steps into a Forge CI workflow or force one
+  mechanism onto all three forges. A GitHub project that keeps its tests
+  in a `test.yml` other workflows also call sees the check as **Build and
+  test / Test**, because a called workflow shows both names.
 - **PR check results** gives reviewers a short verdict and the change and
   tested revision, linking to the job or pipeline. Use the native summary on
   GitHub and Forgejo, and the MR's exposed job artifact plus native pipeline
@@ -41,9 +56,11 @@ below must not be read as a reason to hide. Its rules are in the
   run or pipeline is the overall verdict on every forge. Keep the detailed
   matrix with **Quality checks**; no reporting job computes it again. No job
   that reads or runs the change gets a token that can write to the request.
-  GitLab's opt-in results comment is the one job with such a token: it
-  checks out nothing, posts the file **Quality checks** wrote, matrix
-  included, and receives the token through an environment scope of its own.
+  The results comment is the exception, and it runs nothing of the change.
+  GitLab's opt-in job checks out nothing, posts the file **Quality checks**
+  wrote, matrix included, and receives its token through an environment
+  scope of its own. Forgejo's **PR check results** job posts with the job's
+  own token and, as the examples write it, checks out nothing.
 - Findings go where the forge shows them beside the change: Code Scanning on
   GitHub, the SAST report and the Code Quality widget on GitLab, both from the
   one lint run. Forgejo has no such surface, so its findings stay in the

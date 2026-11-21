@@ -42,7 +42,7 @@ jobs:
   # Your tests. The orchestrator above never runs them; require this job and
   # pr-checks as status checks.
   test:
-    name: "Check: build and test"
+    name: Build and test
     runs-on: ubuntu-latest
     permissions:
       contents: read
