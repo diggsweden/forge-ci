@@ -203,6 +203,22 @@ jobs:
           STAGE_PLAN_JSON: ${{ inputs['quality-stage-plan-json'] }}
           JOB_RESULTS: ${{ toJson(needs) }}
         run: forge-ci report stage-result
+      # History only, for the commit list of the overview: no file of the
+      # change is checked out and nothing from it runs. A failure here leaves
+      # the list out and nothing else.
+      - name: Fetch the commit history of the change
+        if: ${{ !cancelled() && steps.canonical-bootstrap.outputs.verified == 'true' && github.event.pull_request.base.sha != '' }}
+        continue-on-error: true
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          path: _pr_history
+          fetch-depth: 0
+          filter: tree:0
+          sparse-checkout: .forge-ci-history-only
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+          submodules: false
+          lfs: false
       - name: Write PR check results
         if: ${{ !cancelled() && steps.canonical-bootstrap.outputs.verified == 'true' && (steps.summary.outcome == 'success' || steps.summary.outcome == 'failure') }}
         env:
@@ -214,6 +230,8 @@ jobs:
           PR_TARGET_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}
           PR_TARGET_BRANCH: ${{ github.base_ref }}
           PR_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha }}
+          PR_COMMITS_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_COMMITS_CHECKOUT: _pr_history
           CI_BRANCH: ${{ github.head_ref || github.ref_name }}
           CI_RUN_URL: ${{ format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
           PR_NANOLINTER_JOB_URL: ${{ needs.nanolinter.outputs.job-url }}

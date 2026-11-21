@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -1067,6 +1068,28 @@ func (r *Repo) CommitInfo(ctx context.Context, sha string) (domaingit.CommitInfo
 	}
 
 	return domaingit.CommitInfo{Author: author, Date: date, Message: message, Body: body}, nil
+}
+
+var errCommitRangeEnds = errors.New("commit range ends are not plain revisions")
+
+var commitRangeEnd = regexp.MustCompile(`^[0-9A-Za-z][0-9A-Za-z._/-]*$`)
+
+// CommitRange returns the commits head has and base does not, newest
+// first. Both ends are plain revisions; anything git could read as an
+// option is refused.
+func (r *Repo) CommitRange(ctx context.Context, base, head string) ([]domaingit.Commit, error) {
+	if !commitRangeEnd.MatchString(base) || !commitRangeEnd.MatchString(head) || strings.Contains(base+head, "..") {
+		return nil, fmt.Errorf("%w: %q..%q", errCommitRangeEnds, base, head)
+	}
+
+	args := append(r.safeDirArgs(), "log", "--format=raw", "-z", "--no-color", "--no-show-signature", "--end-of-options", base+".."+head)
+
+	out, err := r.Output(ctx, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	return domaingit.ParseRawLog(out), nil
 }
 
 // TagMessage returns the message body of an annotated tag. In-process

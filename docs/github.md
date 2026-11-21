@@ -430,7 +430,17 @@ refs, and the revision tested. It shows the source commit separately only
 when it differs from the tested revision. An incomplete result links to the
 workflow run for diagnosis; it is not presented as a scan finding. When the
 runner provides a check-run ID, the Nanolinter row opens that job directly.
+With Nanolinter as the only check there is no table: the heading is its
+result, and one link opens its job log.
 Project-owned build and test jobs keep their own results.
+
+Under the tested revision the overview folds out the commits of the change.
+The closed line counts them and says how many are signed, with SSH or GPG,
+signed off and co-authored; opened, it lists each commit, linked to its view in the request, with its author,
+signature kind and trailers, one per line. Signed means a signature is
+present: whether it is valid is GitHub's Verified mark on the commit.
+Requiring signatures or sign-off stays with the commits check. The job
+fetches the history of the change for this and none of its files.
 
 **Who sets the enforcement settings.** The `enforce-*` inputs are only the
 administrator's when they are written in a workflow the consumer cannot

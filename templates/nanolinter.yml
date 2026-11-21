@@ -281,6 +281,7 @@ spec:
               --source-branch "${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME:-}" \
               --target-repository "${CI_MERGE_REQUEST_TARGET_PROJECT_PATH:-}" --target-branch "$target" \
               --source-commit "${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA:-}" --commit "${CI_COMMIT_SHA:-}" \
+              --commits-base "origin/${target}" \
               --run-url "${CI_PIPELINE_URL:-}" --nanolinter-job-url "${CI_JOB_URL:-}" \
               --quality-stage-result-json '' --quality-stage-result-path '' --results-unavailable=false ||
               ! { [ ! -s "${helpers}/nanolinter-matrix.md" ] ||

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/diggsweden/forge-ci/internal/domain/git"
 	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
 	domainsummary "github.com/diggsweden/forge-ci/internal/domain/summary"
@@ -21,6 +22,9 @@ type PRChange struct {
 	NanolinterURL                                                  string
 	ResultsUnavailable                                             bool
 	MergeRequest                                                   bool
+	// Commits are the change's own commits, newest first; none when the
+	// range could not be read.
+	Commits []git.Commit
 }
 
 // nanolinterLabel is the row the Nanolinter job link belongs to.
@@ -45,9 +49,16 @@ func compactPRSummary(in PRSummaryInput, quality domainsummary.StageResultEnvelo
 	_, _ = fmt.Fprintf(&out, "## Quality checks — %s\n\n", compactVerdict(change.ResultsUnavailable, rows))
 	writeChangeContext(&out, in)
 
-	if change.ResultsUnavailable {
+	switch {
+	case change.ResultsUnavailable:
 		out.WriteString("A planned check may not have run. Open **Normalize PR quality stage result** for the exact error.\n")
-	} else if len(rows) > 0 {
+	case len(rows) == 1 && rows[0].Label == nanolinterLabel:
+		// Nanolinter alone: the heading is its result and its own matrix
+		// follows, so a table would repeat both.
+		if validSummaryLink(change.NanolinterURL) {
+			_, _ = fmt.Fprintf(&out, "[Open the %s job log](%s)\n", nanolinterLabel, change.NanolinterURL)
+		}
+	case len(rows) > 0:
 		out.WriteString("| Check | Result |\n| --- | --- |\n")
 
 		for _, row := range rows {
@@ -137,6 +148,8 @@ func writeChangeContext(out *strings.Builder, in PRSummaryInput) {
 	if in.Commit != "" {
 		_, _ = fmt.Fprintf(out, "**Tested revision:** %s\n\n", prCode(provider.ShortSHA(in.Commit)))
 	}
+
+	writeCommits(out, change)
 }
 
 func prRef(repo, branch string) string {

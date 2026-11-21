@@ -245,14 +245,27 @@ func TestPullRequestReportsFromOneVerifiedJob(t *testing.T) {
 	require.ElementsMatch(t, []string{"resolve-bootstrap", "nanolinter", "megalinter", "swift"}, report.Needs)
 	require.Contains(t, report.If, "!cancelled()", "report after a failed check, not after cancellation")
 	require.Empty(t, report.Secrets)
-	require.Len(t, report.Steps, 6)
+	require.Len(t, report.Steps, 7)
 	require.Equal(t, "forge-ci report stage-result", report.Steps[3].Run)
-	require.Equal(t, "forge-ci report pr", report.Steps[4].Run)
-	require.Contains(t, report.Steps[4].Env["QUALITY_STAGE_RESULT_PATH"], ".ci-results/pr-quality-result.json")
-	require.Contains(t, report.Steps[4].If, "steps.summary.outcome == 'failure'")
-	require.Contains(t, report.Steps[4].If, "steps.canonical-bootstrap.outputs.verified == 'true'")
-	require.Contains(t, report.Steps[5].If, "steps.summary.outcome == 'success'")
-	require.Equal(t, "ci-results-pr-quality", report.Steps[5].With["name"])
+
+	// The commit list needs the change's history and nothing else of it: no
+	// file is checked out, no credential stays, and a failed fetch only
+	// leaves the list out.
+	history := report.Steps[4]
+	require.True(t, strings.HasPrefix(history.Uses, "actions/checkout@"))
+	require.Equal(t, "_pr_history", history.With["path"])
+	require.Equal(t, false, history.With["persist-credentials"])
+	require.Equal(t, ".forge-ci-history-only", history.With["sparse-checkout"])
+	require.Contains(t, history.If, "steps.canonical-bootstrap.outputs.verified == 'true'", "after the engine, never before it")
+	require.Empty(t, history.Run)
+
+	require.Equal(t, "forge-ci report pr", report.Steps[5].Run)
+	require.Equal(t, "_pr_history", report.Steps[5].Env["PR_COMMITS_CHECKOUT"])
+	require.Contains(t, report.Steps[5].Env["QUALITY_STAGE_RESULT_PATH"], ".ci-results/pr-quality-result.json")
+	require.Contains(t, report.Steps[5].If, "steps.summary.outcome == 'failure'")
+	require.Contains(t, report.Steps[5].If, "steps.canonical-bootstrap.outputs.verified == 'true'")
+	require.Contains(t, report.Steps[6].If, "steps.summary.outcome == 'success'")
+	require.Equal(t, "ci-results-pr-quality", report.Steps[6].With["name"])
 }
 
 func TestReleaseAcquisitionSeparatesSourceFromProducerInventory(t *testing.T) {

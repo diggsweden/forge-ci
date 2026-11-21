@@ -6,14 +6,18 @@ package report
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/diggsweden/forge-ci/internal/adapters/git"
 	appsummary "github.com/diggsweden/forge-ci/internal/app/summary"
 	"github.com/diggsweden/forge-ci/internal/cli/cienv"
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
+	domaingit "github.com/diggsweden/forge-ci/internal/domain/git"
 	"github.com/diggsweden/forge-ci/internal/domain/projecttype"
 	domainsummary "github.com/diggsweden/forge-ci/internal/domain/summary"
 )
@@ -50,6 +54,8 @@ func prCmd() *cli.Command {
 			&cli.StringFlag{Name: "target-repository", Sources: cli.EnvVars("PR_TARGET_REPOSITORY"), Usage: "repository receiving the change"},
 			&cli.StringFlag{Name: "target-branch", Sources: cli.EnvVars("PR_TARGET_BRANCH"), Usage: "branch receiving the change"},
 			&cli.StringFlag{Name: "source-commit", Sources: cli.EnvVars("PR_SOURCE_COMMIT"), Usage: "head commit of the change, if distinct from the tested revision"},
+			&cli.StringFlag{Name: "commits-base", Sources: cli.EnvVars("PR_COMMITS_BASE"), Usage: "in compact mode, list the commits the change adds to this revision"},
+			&cli.StringFlag{Name: "commits-checkout", Sources: cli.EnvVars("PR_COMMITS_CHECKOUT"), Usage: "checkout to read the commits from; the working directory when empty"},
 			&cli.StringFlag{Name: "nanolinter-job-url", Sources: cli.EnvVars("PR_NANOLINTER_JOB_URL"), Usage: "direct URL of the Nanolinter job, if available"},
 			&cli.BoolFlag{Name: "results-unavailable", Sources: cli.EnvVars("PR_RESULTS_UNAVAILABLE"), Usage: "show that planned quality results could not be normalized"},
 			&cli.StringFlag{Name: "project-type", Sources: cli.EnvVars("PROJECT_TYPE"), Usage: "primary ecosystem of the project (shown in the header)"},
@@ -75,9 +81,14 @@ func prCmd() *cli.Command {
 				return err
 			}
 
+			change := compactChange(cmd)
+			if change != nil {
+				change.Commits = changeCommits(ctx, cmd)
+			}
+
 			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error {
 				return appsummary.PRSummary(ctx, d.SummarySink, appsummary.PRSummaryInput{
-					Change:                 compactChange(cmd),
+					Change:                 change,
 					ProjectType:            cmd.String("project-type"),
 					Branch:                 cmd.String("source-branch"),
 					Commit:                 cmd.String("commit"),
@@ -89,6 +100,43 @@ func prCmd() *cli.Command {
 			})
 		},
 	}
+}
+
+// changeCommits reads the commits of the change from the checkout. The list
+// is extra information: when the range cannot be read, the summary is
+// written without it and the log says why.
+func changeCommits(ctx context.Context, cmd *cli.Command) []domaingit.Commit {
+	base := cmd.String("commits-base")
+	if base == "" {
+		return nil
+	}
+
+	head := cmd.String("source-commit")
+	if head == "" {
+		head = cmd.String("commit")
+	}
+
+	repo := git.New()
+
+	if dir := cmd.String("commits-checkout"); dir != "" {
+		abs, err := filepath.Abs(dir)
+		if err != nil {
+			slog.Warn("pr summary: leaving the commit list out", "checkout", dir, "err", err)
+
+			return nil
+		}
+
+		repo.Dir = abs
+	}
+
+	commits, err := repo.CommitRange(ctx, base, head)
+	if err != nil {
+		slog.Warn("pr summary: leaving the commit list out", "base", base, "head", head, "err", err)
+
+		return nil
+	}
+
+	return commits
 }
 
 func compactChange(cmd *cli.Command) *appsummary.PRChange {

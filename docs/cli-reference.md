@@ -5193,6 +5193,8 @@ EXAMPLE:
 | `--target-repository` | repository receiving the change | string | `""` | `$PR_TARGET_REPOSITORY` |
 | `--target-branch` | branch receiving the change | string | `""` | `$PR_TARGET_BRANCH` |
 | `--source-commit` | head commit of the change, if distinct from the tested revision | string | `""` | `$PR_SOURCE_COMMIT` |
+| `--commits-base` | in compact mode, list the commits the change adds to this revision | string | `""` | `$PR_COMMITS_BASE` |
+| `--commits-checkout` | checkout to read the commits from; the working directory when empty | string | `""` | `$PR_COMMITS_CHECKOUT` |
 | `--nanolinter-job-url` | direct URL of the Nanolinter job, if available | string | `""` | `$PR_NANOLINTER_JOB_URL` |
 | `--results-unavailable` | show that planned quality results could not be normalized | bool | `false` | `$PR_RESULTS_UNAVAILABLE` |
 | `--project-type` | primary ecosystem of the project (shown in the header) | string | `""` | `$PROJECT_TYPE` |
