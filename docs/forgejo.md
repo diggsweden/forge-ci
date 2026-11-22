@@ -1964,12 +1964,13 @@ layer's `prepare-release.yml` or `sign-and-publish-release.yml`, and none
 found fails. Every reference to the layer in the directory must be pinned
 to a full commit, never a branch, a tag or a short commit. In them it rejects a signing secret in a job that runs your
 code, `secrets: inherit` on any job (the prepare, sign and signer calls
-included), a prepare call without a secret the signer takes, and a broken
-release-identity or digest hand-off. Across the whole directory it rejects
-mixed pins and a signer image, key digest or transparency-log setting that is
-not a literal. For secrets it reads every job of every workflow and the
-workflow-level `env` each inherits, and lets a name in `signing-secrets`
-reach only a call of `prepare-release.yml`, `sign-and-publish-release.yml`,
+included) and a broken release-identity or digest hand-off. Across the
+whole directory it rejects mixed pins and a signer image, key digest,
+transparency-log or `enforce-*` setting that is not a literal. For secrets
+it reads every job of every workflow and the workflow-level `env` each
+inherits, and lets a signing secret (the layer's `RELEASE_COSIGN_*` and
+`RELEASE_GPG_*` names, or those you list in `signing-secrets` when your
+repository's secrets are named otherwise) reach only a call of `prepare-release.yml`, `sign-and-publish-release.yml`,
 `sign-container-images.yml`, `runtime-images.yml` or
 `base-image-lifecycle.yml` of the layer; the build, its tests, the image jobs
 and the hand-off are all checked. A call of such a workflow in another

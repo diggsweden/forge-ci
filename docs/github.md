@@ -283,8 +283,8 @@ A fork's own CI reads more; see [Forks](#forks).
 The orchestrators declare their secrets in `workflow_call.secrets`; the caller
 passes the ones its release uses with an explicit `secrets:` mapping. Which are
 needed follows the selected signing methods and publishing targets.
-`secrets: inherit` also works, but it hands the called workflow every secret,
-and the default lint gate's SAST check rejects it.
+Never use `secrets: inherit`: it hands the release every secret, and the
+release refuses it (see [Release isolation](#release-isolation)).
 [Secrets, Permissions, and Validation](reference.md) is the full matrix and
 says how to create each one.
 
@@ -310,6 +310,30 @@ Keyless Sigstore signing needs no secret: it uses the job's OIDC token
 `RELEASE_COSIGN_*` secrets have the same names on the GitLab and Forgejo
 release paths, so an organization on several forges configures one set of
 names.
+
+### Release isolation
+
+Before it reads the release configuration, `release-orchestrator.yml` runs
+`forge-ci validate isolation` over your `.github/workflows` at the request
+commit, and the release stops on a violation. Your release workflows are
+the ones that call the orchestrator, under any file name. The check
+refuses `secrets: inherit` on any of their jobs, a signing key
+(`RELEASE_GPG_*`, `RELEASE_COSIGN_*`) in any job of any workflow but the
+call of the orchestrator, a reference to the engine that is not pinned to
+the one full commit the orchestrator runs at, or that names another forge,
+a third-party action in a release job, and a `forge-ci-sha` or trust input
+(`signer-image`, `cosign-public-key-sha256`, `transparency-log`,
+`enforce-*`) that is not written out. A job of a release workflow that
+checks the repository out may hold only the job token and `DEPENDENCY_*`
+credentials. Run the same check locally:
+
+```bash
+forge-ci validate isolation --workflows-dir .github/workflows \
+  --single-pin-subject diggsweden/forge-ci
+```
+
+The check reads secret names: a key you store under another name is not
+recognized as one.
 
 ## Images and the engine binary
 
@@ -415,7 +439,8 @@ is for reporting, not a substitute for a blocking job. When moving from the
 old layout, update requirements referring to `Check: plan`, `Check: lint`,
 or the old bootstrap names. Remove requirements for `Check: status` or
 `Summary` only after confirming the real blocking checks are required.
-The GitHub layer has no Forgejo-style `check-l3-isolation` gate.
+The GitHub pull-request gate does not run the release-isolation check; the
+release orchestrator runs it (see [Release isolation](#release-isolation)).
 
 | Old job label | New job label |
 | --- | --- |

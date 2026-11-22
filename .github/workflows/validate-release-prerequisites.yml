@@ -109,7 +109,7 @@ on:
         description: "Full engine commit (40 hex) the workflow ref names; a tag or branch is refused"
         required: true
         type: string
-    # All `required: false` — `secrets: inherit` callers unchanged.
+    # All `required: false`: a caller passes by name only what it uses.
     # This is the subset of release secrets that the preflight exercises or
     # reports. Declaring a secret here does not imply remote credential
     # validation.

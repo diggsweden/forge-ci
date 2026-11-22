@@ -68,9 +68,7 @@ func TestConsumerPRIsolationInputsMatchReleaseHandoff(t *testing.T) {
 					t.Errorf("%s passes %v to check-l3-isolation; the engine finds the release workflows and their jobs", release, step.With)
 				}
 
-				violations, err := validate.CheckIsolation([]byte(body), validate.IsolationConfig{
-					SigningSecrets: []string{"RELEASE_COSIGN_PRIVATE_KEY", "RELEASE_COSIGN_PASSPHRASE", "RELEASE_GPG_PRIVATE_KEY", "RELEASE_GPG_PASSPHRASE", "RELEASE_GPG_FINGERPRINT"},
-				})
+				violations, err := validate.CheckIsolation([]byte(body), validate.IsolationConfig{SigningSecrets: validate.DefaultSigningSecrets()})
 				if err != nil || len(violations) != 0 {
 					t.Errorf("%s isolation: %v; violations: %v", release, err, violations)
 				}
@@ -105,9 +103,7 @@ func TestGoReleaserCallerSharesTheGoCLIIsolationContract(t *testing.T) {
 		"PIN_COSIGN_PUBLIC_KEY_SHA256", strings.Repeat("c", 64),
 		"FORGE_HOST", "forge.example", "OWNER", "owner").Replace(string(reporoot.ReadFile(t, "examples/go-cli/forgejo/goreleaser/release-workflow.yml")))
 
-	violations, err := validate.CheckIsolation([]byte(body), validate.IsolationConfig{
-		SigningSecrets: []string{"RELEASE_COSIGN_PRIVATE_KEY", "RELEASE_COSIGN_PASSPHRASE", "RELEASE_GPG_PRIVATE_KEY", "RELEASE_GPG_PASSPHRASE", "RELEASE_GPG_FINGERPRINT"},
-	})
+	violations, err := validate.CheckIsolation([]byte(body), validate.IsolationConfig{SigningSecrets: validate.DefaultSigningSecrets()})
 	if err != nil || len(violations) != 0 {
 		t.Fatalf("GoReleaser caller isolation: %v; violations: %v", err, violations)
 	}

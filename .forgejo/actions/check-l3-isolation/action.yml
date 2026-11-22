@@ -7,9 +7,9 @@ description: >-
   The release-integrity gate: statically asserts the release-isolation and secret-boundary invariants of the repository's workflow directory. The release workflows are found, not named: every workflow under .forgejo/workflows that calls the layer's prepare-release.yml or sign-and-publish-release.yml. No job of any workflow but the calls of the layer's signer workflows references a signing-key secret, so neither the build, its tests, the image jobs nor the hand-off can reach a key; each call of sign-and-publish-release.yml takes release-tag, release-sha and artifacts-config from a call of prepare-release.yml and dist-digest from the job that declares it, as bare needs expressions; plus the supporting hygiene that keeps them meaningful (one forge-ci repository, on the forge of the run, at one pin across the workflow directory, and the signer image, the Cosign public key digest, the transparency-log setting and the enforce-* settings written out as literals wherever a job or step passes them to the layer). Shared so every signing consumer enforces the same guard instead of carrying its own copy.
 inputs:
   signing-secrets:
-    description: Space-separated signing-key secret names to enforce.
+    description: Space-separated signing-key secret names to enforce, when the repository's own names for them are not the layer's. Empty, the default, takes the layer's names (RELEASE_COSIGN_PRIVATE_KEY, RELEASE_COSIGN_PASSPHRASE, RELEASE_GPG_PRIVATE_KEY, RELEASE_GPG_PASSPHRASE, RELEASE_GPG_FINGERPRINT).
     required: false
-    default: RELEASE_COSIGN_PRIVATE_KEY RELEASE_COSIGN_PASSPHRASE RELEASE_GPG_PRIVATE_KEY RELEASE_GPG_PASSPHRASE RELEASE_GPG_FINGERPRINT
+    default: ''
   single-pin-subject:
     description: >-
       owner/repository whose commit pins must agree across the workflow directory. Empty takes the repository the runner fetched this action from, so the check follows a fork without configuration. An action referenced by a local path has no such repository and must name the subject. The workflows that call its prepare-release.yml or sign-and-publish-release.yml are the release workflows. A reference to it that writes a forge address (https://host/owner/repository/...) must write the address of the forge the job runs on, and every call of a signer workflow must call it. Every job that calls one of the subject's reusable workflows must also pass that commit, written out, as forge-ci-sha. A job that passes signer-image, cosign-public-key-sha256 or transparency-log to one of them must write the value out too: an image reference pinned by digest, 64 hex characters, and none or public, never an expression. So must a job or step that passes an enforce-* setting to one of its workflows or actions: true or false.
@@ -36,14 +36,9 @@ runs:
           echo "ERROR: single-pin-subject is empty and this action was not fetched from a repository" >&2
           exit 1
         fi
-        # The signer image runs with the signing keys, and the digest is what
-        # binds a public key read from a variable to the reviewed workflow.
-        # Both are literals of the layer's own input names. So is the
-        # transparency log: a value from a variable could send the next
-        # release to the public log, for good, without a reviewed commit.
-        # So are the enforcement settings, wherever a job or step passes
-        # one: a value from a variable would relax a gate without a
-        # reviewed commit.
+        # The helper-pin input, the inputs a caller writes out and the
+        # layer's signing-secret names are the engine's defaults; an empty
+        # list here keeps them.
         secret_flags=()
         for secret in ${ISOLATION_SIGNING_SECRETS}; do
           secret_flags+=(--signing-secret "${secret}")
@@ -58,13 +53,5 @@ runs:
         run_forge_ci validate isolation \
           --workflows-dir .forgejo/workflows \
           --single-pin-subject "${single_pin_subject}" \
-          --single-pin-input forge-ci-sha \
-          --literal-input signer-image=image-digest \
-          --literal-input cosign-public-key-sha256=sha256 \
-          --literal-input transparency-log=enum:none/public \
-          --literal-input enforce-lint=enum:true/false \
-          --literal-input enforce-vulnerabilities=enum:true/false \
-          --literal-input enforce-application-tests=enum:true/false \
-          --literal-input enforce-reproducible-builds=enum:true/false \
           "${contract_flags[@]}" \
           "${secret_flags[@]}"

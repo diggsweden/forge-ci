@@ -217,7 +217,7 @@ on:
     # may need Android/iOS signing secrets via gradle-android /
     # xcode-ios leaves) and release-snapshot-publish-stage (only needs
     # GITHUB_TOKEN auto-provided + the external registry-password).
-    # All `required: false` — `secrets: inherit` callers unchanged.
+    # All `required: false`: a caller passes by name only what it uses.
     secrets:
       container-registry-password:
         description: "OCI registry credential; GitHub token is used for GHCR when omitted"

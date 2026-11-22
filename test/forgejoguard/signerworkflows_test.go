@@ -5,7 +5,6 @@
 package forgejoguard
 
 import (
-	"path"
 	"slices"
 	"strings"
 	"testing"
@@ -23,11 +22,7 @@ import (
 func TestIsolationSignerWorkflowsAreTheOnesThatTakeSigningSecrets(t *testing.T) {
 	t.Parallel()
 
-	signing := strings.Fields(scalarString(mappingValue(mappingValue(mappingValue(
-		loadDocument(t, ".forgejo/actions/check-l3-isolation/action.yml"), "inputs"), "signing-secrets"), "default")))
-	if len(signing) == 0 {
-		t.Fatal("check-l3-isolation names no default signing secret")
-	}
+	signing := validate.DefaultSigningSecrets()
 
 	var takers []string
 
@@ -35,14 +30,14 @@ func TestIsolationSignerWorkflowsAreTheOnesThatTakeSigningSecrets(t *testing.T) 
 		for line := range strings.Lines(string(reporoot.ReadFile(t, workflow))) {
 			contract, found := strings.CutPrefix(strings.TrimSpace(line), "# workflow-call-secrets-contract:")
 			if found && slices.ContainsFunc(strings.Fields(contract), func(secret string) bool { return slices.Contains(signing, secret) }) {
-				takers = append(takers, path.Base(workflow))
+				takers = append(takers, workflow)
 			}
 		}
 	}
 
 	slices.Sort(takers)
 
-	listed := validate.SignerWorkflows()
+	listed := slices.DeleteFunc(validate.SignerWorkflows(), func(workflow string) bool { return !strings.HasPrefix(workflow, ".forgejo/") })
 	slices.Sort(listed)
 
 	if !slices.Equal(takers, listed) {

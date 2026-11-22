@@ -6214,7 +6214,8 @@ check static release isolation over a workflow directory (signing secrets reach 
 Static release-isolation checks over a repository's workflow directory.
 The release workflows are found, not named: every workflow under
 --workflows-dir with a job that calls the --single-pin-subject's
-prepare-release.yml or sign-and-publish-release.yml. None found fails.
+.forgejo/workflows/prepare-release.yml or sign-and-publish-release.yml, or
+its .github/workflows/release-orchestrator.yml. None found fails.
 
 In every workflow of the directory, no job may reach a signing secret,
 directly or through the workflow env it inherits, but a call of one of the
@@ -6248,7 +6249,7 @@ runs on, and every call of a signer workflow names the subject. A reference
 without an address is resolved by the forge and is held to the repository
 alone, in any case of its owner and name. Off a runner the forge is not known: the written addresses must then
 agree, and a note says the address was not compared.
---single-pin-input names the input through which the subject's reusable
+--single-pin-input (forge-ci-sha by default) names the input through which the subject's reusable
 workflows receive that commit a second time (the revision they check their
 helper files out at): every job in the workflow directory that calls one of
 them must then pass it as a literal commit, and it counts as a pin. The name
@@ -6256,7 +6257,8 @@ is never derived from the subject, so a renamed repository or fork cannot
 switch the check off.
 
 --literal-input names an input of the subject's reusable workflows that a
-caller must write out, as NAME or NAME=SHAPE: every job in the workflow
+caller must write out (by default signer-image, cosign-public-key-sha256,
+transparency-log and the enforce-* settings, each in its shape), as NAME or NAME=SHAPE: every job in the workflow
 directory that calls one of them and passes that input must pass a literal,
 never an expression such as ${{ vars.X }}, so the value changes only by a
 reviewed commit. SHAPE also holds the literal to a form: sha256 (64 lowercase
@@ -6266,17 +6268,17 @@ job that does not pass the input is left to the called workflow.
 
 EXAMPLE:
    forge-ci validate isolation --workflows-dir .forgejo/workflows \
-     --single-pin-subject example/forge-ci --single-pin-input forge-ci-sha
+     --single-pin-subject example/forge-ci
 ```
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
 | `--workflows-dir` | the repository's workflow directory, two levels below its root (for example, .forgejo/workflows) (required) | string | `""` | n/a |
 | `--single-pin-subject` | owner/repository of the engine: the workflows that call its release entry points are the release workflows, and its references must agree on one commit and one forge across the workflow directory (for example, example/forge-ci) (required) | string | `""` | n/a |
-| `--single-pin-input` | input of the subject's reusable workflows that repeats their commit pin (for example, forge-ci-sha) | string | `""` | n/a |
+| `--single-pin-input` | input of the subject's reusable workflows that repeats their commit pin; empty checks none | string | `"forge-ci-sha"` | n/a |
 | `--contract-root` | trusted checkout of --single-pin-subject at the caller's pin; reject undeclared action/workflow inputs against its YAML, without fetching anything | string | `""` | n/a |
-| `--literal-input` | input of the subject's reusable workflows that a caller must pass as a literal, as NAME or NAME=SHAPE with SHAPE sha256, image-digest or enum:VALUE/VALUE (repeatable) | string | `""` | n/a |
-| `--signing-secret` | signing secret name no job but a signer workflow call may reference (repeatable) | string | `"RELEASE_GPG_PRIVATE_KEY", "RELEASE_GPG_PASSPHRASE", "COSIGN_PRIVATE_KEY", "COSIGN_PASSWORD"` | n/a |
+| `--literal-input` | input of the subject's reusable workflows that a caller must pass as a literal, as NAME or NAME=SHAPE with SHAPE sha256, image-digest or enum:VALUE/VALUE (repeatable; replaces the default list) | string | `"signer-image=image-digest", "cosign-public-key-sha256=sha256", "transparency-log=enum:none/public", "enforce-lint=enum:true/false", "enforce-vulnerabilities=enum:true/false", "enforce-application-tests=enum:true/false", "enforce-reproducible-builds=enum:true/false"` | n/a |
+| `--signing-secret` | signing secret name no job but a signer workflow call may reference (repeatable; replaces the layer's own names) | string | `"RELEASE_COSIGN_PRIVATE_KEY", "RELEASE_COSIGN_PASSPHRASE", "RELEASE_GPG_PRIVATE_KEY", "RELEASE_GPG_PASSPHRASE", "RELEASE_GPG_FINGERPRINT"` | n/a |
 
 ### `forge-ci validate job-graph`
 

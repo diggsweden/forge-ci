@@ -109,7 +109,7 @@ func Isolation(out io.Writer, annot output.Annotator, in IsolationInput) error {
 	if len(releases) == 0 {
 		violations = append(violations, fileViolation{File: in.WorkflowsDir, Msg: fmt.Sprintf(
 			"no workflow under %s calls %s's %s: there is no release workflow to check",
-			in.WorkflowsDir, in.SinglePinSubject, strings.Join(validate.ReleaseEntryWorkflows(), " or "))})
+			in.WorkflowsDir, in.SinglePinSubject, strings.Join(validate.ReleaseEntryWorkflows(), ", "))})
 	}
 
 	if addressNote != "" {

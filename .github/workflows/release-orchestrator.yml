@@ -285,9 +285,9 @@ on:
     # Top-level orchestrator: the canonical union of every secret any
     # downstream stage may need. All `required: false`, so a caller
     # passes by name only the secrets its release uses, in an explicit
-    # `secrets:` mapping. Older callers using `secrets: inherit` still
-    # work, but it hands every secret to the release. The declaration
-    # is also what `forge-ci doctor`-style tooling validates.
+    # `secrets:` mapping; `forge-ci validate isolation` refuses
+    # `secrets: inherit`, which hands every secret to the release. The
+    # declaration is also what `forge-ci doctor`-style tooling validates.
     secrets:
       # Release-time signing + tag pushing
       RELEASE_GPG_PRIVATE_KEY:
@@ -512,6 +512,18 @@ jobs:
           CHECKOUT_REF: ${{ github.sha }}
           CHECKOUT_FETCH_ALL_REFS: "true"
         run: forge-ci platform checkout
+      # The caller's workflows at the request commit, before any key is in
+      # reach: no job but the call of this orchestrator holds a signing key,
+      # none passes `secrets: inherit`, and every reference to this engine
+      # is at one full commit on this forge. The engine checkout above holds
+      # the declarations the caller's inputs are checked against. The
+      # engine's own release (self-release.yml) calls this workflow by path
+      # at the commit it releases: its workflows are the engine itself.
+      - name: Check release isolation of the caller's workflows
+        if: ${{ github.repository != env.ENGINE_REPOSITORY }}
+        run: |
+          forge-ci validate isolation --workflows-dir .github/workflows \
+            --single-pin-subject "$ENGINE_REPOSITORY" --contract-root _forge_ci_bootstrap
       - name: Derive release tag from request ref
         id: relctx
         # release-request/vX.Y.Z → vX.Y.Z (the final release tag). The CLI

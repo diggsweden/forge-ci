@@ -109,15 +109,32 @@ func signingSecretViolations(env yaml.Node, jobs map[string]yaml.Node, cfg Isola
 	return append(violations, inherited...), nil
 }
 
-// signerWorkflows are the layer's reusable workflows that take signing
-// secrets: a job that calls one of them is the separately trusted place a key
-// may go. test/forgejoguard holds the list to the workflows whose secrets
-// contract names one.
-var signerWorkflows = []string{
-	"prepare-release.yml", "sign-and-publish-release.yml", "sign-container-images.yml", "runtime-images.yml", "base-image-lifecycle.yml",
+// defaultSigningSecrets are the layer's own names for the signing keys, the
+// ones its signer workflows declare: validate isolation guards them unless
+// the caller names others.
+var defaultSigningSecrets = []string{
+	"RELEASE_COSIGN_PRIVATE_KEY", "RELEASE_COSIGN_PASSPHRASE", "RELEASE_GPG_PRIVATE_KEY", "RELEASE_GPG_PASSPHRASE", "RELEASE_GPG_FINGERPRINT",
 }
 
-// SignerWorkflows returns the file names of the layer's workflows that take
+// DefaultSigningSecrets returns the layer's names for its signing keys.
+func DefaultSigningSecrets() []string { return slices.Clone(defaultSigningSecrets) }
+
+// signerWorkflows are the layer's reusable workflows that take signing
+// secrets, by their path in the layer's repository: a job that calls one of
+// them is the separately trusted place a key may go. On Forgejo they are the
+// release's signing workflows; on GitHub the release orchestrator, which
+// signs inside. test/forgejoguard and test/workflowguard hold the list to the
+// workflows whose secrets contract names one.
+var signerWorkflows = []string{
+	forgejoWorkflows + prepareReleaseWorkflow,
+	forgejoWorkflows + signAndPublishWorkflow,
+	forgejoWorkflows + "sign-container-images.yml",
+	forgejoWorkflows + "runtime-images.yml",
+	forgejoWorkflows + "base-image-lifecycle.yml",
+	githubWorkflows + releaseOrchestratorWorkflow,
+}
+
+// SignerWorkflows returns the paths of the layer's workflows that take
 // signing secrets, the calls of which may receive them.
 func SignerWorkflows() []string { return slices.Clone(signerWorkflows) }
 
@@ -128,24 +145,22 @@ func mayHoldSigningSecrets(job *yaml.Node) bool {
 }
 
 // CallsSignerWorkflow reports whether a job's uses: value is a
-// cross-repository call of a workflow named like a signer workflow of the
-// layer. Which repository it names is the caller's to check.
+// cross-repository call of a workflow at the path of a signer workflow of
+// the layer. Which repository it names is the caller's to check.
 func CallsSignerWorkflow(uses string) bool {
-	if uses == "" || strings.HasPrefix(uses, "./") {
-		return false
-	}
-
-	return slices.ContainsFunc(signerWorkflows, func(workflow string) bool {
-		return strings.Contains(uses, "/.forgejo/workflows/"+workflow+"@")
-	})
+	return slices.ContainsFunc(signerWorkflows, func(workflow string) bool { return callsLayerWorkflow(uses, workflow) })
 }
 
-// releaseEntryWorkflows are the layer's workflows a release calls: a
-// workflow of the repository that calls one of them is a release workflow,
-// and the release rules hold for it.
-var releaseEntryWorkflows = []string{prepareReleaseWorkflow, signAndPublishWorkflow}
+// releaseEntryWorkflows are the layer's workflows a release calls, by their
+// path in the layer's repository: a workflow of the repository that calls
+// one of them is a release workflow, and the release rules hold for it.
+var releaseEntryWorkflows = []string{
+	forgejoWorkflows + prepareReleaseWorkflow,
+	forgejoWorkflows + signAndPublishWorkflow,
+	githubWorkflows + releaseOrchestratorWorkflow,
+}
 
-// ReleaseEntryWorkflows returns the file names of the layer's release entry
+// ReleaseEntryWorkflows returns the paths of the layer's release entry
 // points.
 func ReleaseEntryWorkflows() []string { return slices.Clone(releaseEntryWorkflows) }
 
@@ -272,7 +287,7 @@ func releaseCallViolations(jobs map[string]yaml.Node) []IsolationViolation {
 
 	for _, name := range sortedKeys(jobs) {
 		sign := jobs[name]
-		if !callsLayerWorkflow(scalarValue(mappingValue(&sign, "uses")), signAndPublishWorkflow) {
+		if !callsLayerWorkflow(scalarValue(mappingValue(&sign, "uses")), forgejoWorkflows+signAndPublishWorkflow) {
 			continue
 		}
 
@@ -303,13 +318,20 @@ var releaseIdentityOutputs = []string{releaseTagOutput, releaseSHAOutput, artifa
 const (
 	prepareReleaseWorkflow = "prepare-release.yml"
 	signAndPublishWorkflow = "sign-and-publish-release.yml"
+
+	// releaseOrchestratorWorkflow is the GitHub release entry point: it
+	// prepares, builds, signs and publishes in one call.
+	releaseOrchestratorWorkflow = "release-orchestrator.yml"
+
+	forgejoWorkflows = ".forgejo/workflows/"
+	githubWorkflows  = ".github/workflows/"
 )
 
 // callsLayerWorkflow reports whether uses is a cross-repository call of the
 // layer's Forgejo workflow of that file name. Which repository it names is
 // the caller's to check.
 func callsLayerWorkflow(uses, workflow string) bool {
-	return uses != "" && !strings.HasPrefix(uses, "./") && strings.Contains(uses, "/.forgejo/workflows/"+workflow+"@")
+	return uses != "" && !strings.HasPrefix(uses, "./") && strings.Contains(uses, "/"+workflow+"@")
 }
 
 // releaseIdentityViolations refuses a sign job that does not take the release
@@ -319,7 +341,7 @@ func releaseIdentityViolations(jobs map[string]yaml.Node, signJob string, sign *
 	prepareJob := needsJob(scalarValue(mappingValue(mappingValue(sign, "with"), releaseTagOutput)))
 
 	prepare, ok := jobs[prepareJob]
-	if prepareJob == "" || !ok || !callsLayerWorkflow(scalarValue(mappingValue(&prepare, "uses")), prepareReleaseWorkflow) {
+	if prepareJob == "" || !ok || !callsLayerWorkflow(scalarValue(mappingValue(&prepare, "uses")), forgejoWorkflows+prepareReleaseWorkflow) {
 		return []IsolationViolation{{
 			Line: sign.Line,
 			Msg: fmt.Sprintf("sign job %q must take release-tag from a job that calls the layer's prepare-release.yml, as ${{ needs.<job>.outputs.release-tag }}; its outputs are what the sign job is bound to",

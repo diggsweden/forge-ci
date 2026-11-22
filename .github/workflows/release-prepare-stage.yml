@@ -59,9 +59,9 @@ on:
         required: false
         default: ""
         type: string
-    # Aggregator: forwards to version-bump.yml. All `required: false`
-    # — `secrets: inherit` at callsites continues to flow org-scoped
-    # secrets through unchanged. The declaration documents the
+    # Aggregator: forwards to version-bump.yml. All `required: false`:
+    # the orchestrator passes by name only what the release uses. The
+    # declaration documents the
     # contract for adopters outside the org.
     secrets:
       RELEASE_GPG_PRIVATE_KEY:

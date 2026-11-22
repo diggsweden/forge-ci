@@ -12,6 +12,7 @@ import (
 
 	appvalidate "github.com/diggsweden/forge-ci/internal/app/validate"
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
+	"github.com/diggsweden/forge-ci/internal/domain/validate"
 	"github.com/diggsweden/forge-ci/internal/runcontext"
 )
 
@@ -25,7 +26,8 @@ func isolationCmd() *cli.Command {
 		Description: `Static release-isolation checks over a repository's workflow directory.
 The release workflows are found, not named: every workflow under
 --workflows-dir with a job that calls the --single-pin-subject's
-prepare-release.yml or sign-and-publish-release.yml. None found fails.
+.forgejo/workflows/prepare-release.yml or sign-and-publish-release.yml, or
+its .github/workflows/release-orchestrator.yml. None found fails.
 
 In every workflow of the directory, no job may reach a signing secret,
 directly or through the workflow env it inherits, but a call of one of the
@@ -59,7 +61,7 @@ runs on, and every call of a signer workflow names the subject. A reference
 without an address is resolved by the forge and is held to the repository
 alone, in any case of its owner and name. Off a runner the forge is not known: the written addresses must then
 agree, and a note says the address was not compared.
---single-pin-input names the input through which the subject's reusable
+--single-pin-input (forge-ci-sha by default) names the input through which the subject's reusable
 workflows receive that commit a second time (the revision they check their
 helper files out at): every job in the workflow directory that calls one of
 them must then pass it as a literal commit, and it counts as a pin. The name
@@ -67,7 +69,8 @@ is never derived from the subject, so a renamed repository or fork cannot
 switch the check off.
 
 --literal-input names an input of the subject's reusable workflows that a
-caller must write out, as NAME or NAME=SHAPE: every job in the workflow
+caller must write out (by default signer-image, cosign-public-key-sha256,
+transparency-log and the enforce-* settings, each in its shape), as NAME or NAME=SHAPE: every job in the workflow
 directory that calls one of them and passes that input must pass a literal,
 never an expression such as ${{ vars.X }}, so the value changes only by a
 reviewed commit. SHAPE also holds the literal to a form: sha256 (64 lowercase
@@ -77,17 +80,21 @@ job that does not pass the input is left to the called workflow.
 
 EXAMPLE:
    forge-ci validate isolation --workflows-dir .forgejo/workflows \
-     --single-pin-subject example/forge-ci --single-pin-input forge-ci-sha`,
+     --single-pin-subject example/forge-ci`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "workflows-dir", Required: true, Usage: "the repository's workflow directory, two levels below its root (for example, .forgejo/workflows)"},
 			&cli.StringFlag{Name: "single-pin-subject", Required: true, Usage: "owner/repository of the engine: the workflows that call its release entry points are the release workflows, and its references must agree on one commit and one forge across the workflow directory (for example, example/forge-ci)"},
-			&cli.StringFlag{Name: "single-pin-input", Usage: "input of the subject's reusable workflows that repeats their commit pin (for example, forge-ci-sha)"},
+			&cli.StringFlag{Name: "single-pin-input", Value: "forge-ci-sha", Usage: "input of the subject's reusable workflows that repeats their commit pin; empty checks none"},
 			&cli.StringFlag{Name: "contract-root", Usage: "trusted checkout of --single-pin-subject at the caller's pin; reject undeclared action/workflow inputs against its YAML, without fetching anything"},
-			&cli.StringSliceFlag{Name: "literal-input", Usage: "input of the subject's reusable workflows that a caller must pass as a literal, as NAME or NAME=SHAPE with SHAPE sha256, image-digest or enum:VALUE/VALUE (repeatable)"},
+			&cli.StringSliceFlag{
+				Name:  "literal-input",
+				Usage: "input of the subject's reusable workflows that a caller must pass as a literal, as NAME or NAME=SHAPE with SHAPE sha256, image-digest or enum:VALUE/VALUE (repeatable; replaces the default list)",
+				Value: defaultLiteralInputs,
+			},
 			&cli.StringSliceFlag{
 				Name:  "signing-secret",
-				Usage: "signing secret name no job but a signer workflow call may reference (repeatable)",
-				Value: []string{"RELEASE_GPG_PRIVATE_KEY", "RELEASE_GPG_PASSPHRASE", "COSIGN_PRIVATE_KEY", "COSIGN_PASSWORD"},
+				Usage: "signing secret name no job but a signer workflow call may reference (repeatable; replaces the layer's own names)",
+				Value: validate.DefaultSigningSecrets(),
 			},
 		},
 		Action: func(_ context.Context, cmd *cli.Command) error {
@@ -102,6 +109,21 @@ EXAMPLE:
 			})
 		},
 	}
+}
+
+// defaultLiteralInputs are the trust inputs of the layer's workflows a caller
+// writes out: the signer image runs with the signing keys, the public key
+// digest binds a key read from a variable to the reviewed workflow, a
+// transparency-log entry cannot be withdrawn, and an enforce-* setting from a
+// variable would relax a gate without a reviewed commit.
+var defaultLiteralInputs = []string{
+	"signer-image=image-digest",
+	"cosign-public-key-sha256=sha256",
+	"transparency-log=enum:none/public",
+	"enforce-lint=enum:true/false",
+	"enforce-vulnerabilities=enum:true/false",
+	"enforce-application-tests=enum:true/false",
+	"enforce-reproducible-builds=enum:true/false",
 }
 
 // Keep the existing comma-list syntax for secret names, independently of the

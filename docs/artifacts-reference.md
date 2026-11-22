@@ -1568,7 +1568,7 @@ jobs:
       actions: read
       attestations: write
     # Name each secret the release uses; `secrets: inherit` hands the called
-    # workflow every secret and fails the default lint gate's SAST check.
+    # workflow every secret, and the release's isolation check refuses it.
     secrets:
       RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
       RELEASE_GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}

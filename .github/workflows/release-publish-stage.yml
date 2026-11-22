@@ -112,8 +112,8 @@ on:
         type: string
     # Aggregator: forwards to publish-{maven-github,maven-central,
     # google-play,apple-appstore,container} and sbom-{cargo,go}.
-    # All `required: false`; `secrets: inherit` at the orchestrator
-    # callsite continues to forward org-scoped secrets transparently.
+    # All `required: false`: the orchestrator passes by name only what
+    # the release uses.
     secrets:
       MAVEN_CENTRAL_USERNAME:
         description: "Sonatype OSSRH portal username"

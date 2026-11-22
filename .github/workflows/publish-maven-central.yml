@@ -81,8 +81,8 @@ on:
         description: "Full engine commit (40 hex) the workflow ref names; a tag or branch is refused"
         required: true
         type: string
-    # All secrets are declared `required: false` so callers using
-    # `secrets: inherit` continue to work unchanged. The declarations
+    # All secrets are declared `required: false`, so a caller passes by
+    # name only the ones it uses. The declarations
     # exist for discoverability (downstream adopters can see what
     # this workflow needs without grepping its body) and to let
     # actionlint / `forge-ci doctor` validate caller bindings.

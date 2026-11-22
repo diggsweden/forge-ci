@@ -166,7 +166,7 @@ on:
         required: false
         default: ""
         type: string
-    # All `required: false` — `secrets: inherit` callers unchanged.
+    # All `required: false`: a caller passes by name only what it uses.
     secrets:
       RELEASE_GPG_PUBLIC_KEY:
         description: "Public verification material only, for final-tag signature checks"

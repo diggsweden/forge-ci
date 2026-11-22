@@ -405,7 +405,7 @@ func TestIsolation_FindsTheReleaseWorkflows(t *testing.T) {
 		},
 		"no release workflow": {
 			files: map[string]string{"pullrequest.yml": "jobs:\n  lint:\n    uses: examplescope/ci-layer/.forgejo/workflows/lint.yml@" + isolationPin + "\n"},
-			want:  []string{"no workflow under .forgejo/workflows calls examplescope/ci-layer's prepare-release.yml or sign-and-publish-release.yml"},
+			want:  []string{"no workflow under .forgejo/workflows calls examplescope/ci-layer's .forgejo/workflows/prepare-release.yml, .forgejo/workflows/sign-and-publish-release.yml, .github/workflows/release-orchestrator.yml"},
 		},
 		"another repository's entry point does not make a release workflow": {
 			files: map[string]string{"release.yml": strings.ReplaceAll(forgejoIsolationCleanWorkflow, "examplescope/ci-layer", "other/ci-layer")},
@@ -1018,6 +1018,78 @@ func TestIsolation_SubjectMatchesInAnyCase(t *testing.T) {
 			}
 
 			out, err := subjectGateIn(t, mem, "https://forge.example")
+			checkSubjectGate(t, out, err, test.want)
+		})
+	}
+}
+
+// githubReleaseWorkflow is a GitHub release workflow: one call of the
+// layer's release orchestrator, which signs inside, with named secrets.
+const githubReleaseWorkflow = `on:
+  push:
+    tags: ["release-request/v*"]
+jobs:
+  release:
+    uses: examplescope/ci-layer/.github/workflows/release-orchestrator.yml@` + isolationPin + `
+    secrets:
+      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+      GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+    with:
+      forge-ci-sha: ` + isolationPin + `
+`
+
+// A GitHub workflow directory is read as a Forgejo one is: the workflows
+// that call the release orchestrator are the release workflows, the
+// orchestrator call is the signer call that may take the keys, and
+// secrets: inherit, which hands it every secret, is refused.
+func TestIsolation_GitHubReleaseWorkflows(t *testing.T) {
+	t.Parallel()
+
+	for name, test := range map[string]struct {
+		release string
+		other   string
+		want    string
+	}{
+		"named secrets to the orchestrator": {release: githubReleaseWorkflow},
+		"secrets: inherit": {
+			release: strings.Replace(githubReleaseWorkflow, "    secrets:\n      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}\n      GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}\n", "    secrets: inherit\n", 1),
+			want:    `job "release" inherits every caller secret (secrets: inherit)`,
+		},
+		"a signing key to another job": {
+			release: githubReleaseWorkflow + "  notes:\n    runs-on: ubuntu-26.04\n    steps:\n      - run: echo\n        env:\n          KEY: ${{ secrets.GPG_SIGNING_KEY }}\n",
+			want:    `job "notes" references signing secret "GPG_SIGNING_KEY"`,
+		},
+		"a signing key in a workflow that is not a release": {
+			release: githubReleaseWorkflow,
+			other:   "jobs:\n  lint:\n    runs-on: ubuntu-26.04\n    steps:\n      - run: echo\n        env:\n          KEY: ${{ secrets.GPG_SIGNING_KEY }}\n",
+			want:    "file=.github/workflows/other.yml,line=7::job \"lint\" references signing secret",
+		},
+		"the orchestrator at a branch": {
+			release: strings.Replace(githubReleaseWorkflow, "release-orchestrator.yml@"+isolationPin, "release-orchestrator.yml@main", 1),
+			want:    "release-orchestrator.yml@main references examplescope/ci-layer at @main, which is not a full commit",
+		},
+		"the orchestrator of another repository": {
+			release: githubReleaseWorkflow + "  more:\n    uses: other/fork/.github/workflows/release-orchestrator.yml@" + isolationPin + "\n    secrets:\n      GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}\n",
+			want:    "other/fork/.github/workflows/release-orchestrator.yml",
+		},
+		"a Forgejo signer path on GitHub": {
+			release: githubReleaseWorkflow + "  more:\n    uses: examplescope/ci-layer/.github/workflows/prepare-release.yml@" + isolationPin + "\n    secrets:\n      GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}\n",
+			want:    `job "more" references signing secret "GPG_SIGNING_KEY"`,
+		},
+		"no orchestrator call": {
+			release: "jobs:\n  build:\n    runs-on: ubuntu-26.04\n    steps:\n      - run: make\n",
+			want:    "no workflow under .github/workflows calls examplescope/ci-layer's",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			other := test.other
+			if other == "" {
+				other = "jobs:\n  lint:\n    runs-on: ubuntu-26.04\n    steps:\n      - run: echo\n"
+			}
+
+			out, err := subjectGate(t, ".github", test.release, other, "https://github.com")
 			checkSubjectGate(t, out, err, test.want)
 		})
 	}

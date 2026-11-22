@@ -119,7 +119,9 @@ These are the controls that have to live on the adopter's side. forge-ci can doc
 1. **Branch protection** on the release branch (require PRs, require reviews, require signed commits if your org policy demands it)
 2. **Per-team / per-repo secrets** instead of org-wide where possible; limits multi-tenant blast radius
 3. **Review `.forge-ci/allowed_signers`** and `allowed_gpg_keys.asc` like any other security policy file (the test for it is "would I be comfortable if this person could ship a release with my org's name on it")
-4. **Audit the publish-workflow caller** for `secrets: inherit` scope. Internally, forge-ci does not use `secrets: inherit` between reusable workflows; every call site names the secrets it forwards. The **top-level caller in the adopter's repo is still adopter-controlled**, though: a caller workflow that inherits everything will pass everything down.
+4. **Audit the publish-workflow caller** for the secrets it passes. Internally, forge-ci does not use `secrets: inherit` between reusable workflows; every call site names the secrets it forwards. The **top-level caller in the adopter's repo is adopter-controlled**.
+   `forge-ci validate isolation` refuses `secrets: inherit` there and a signing key in any job but the layer's signer calls. The GitHub release orchestrator runs it on the caller's workflows, and `check-l3-isolation` on a Forgejo pull request.
+   It reads secret names, so a key stored under another name than the layer's is checked only when that name is listed.
 5. **Review each runtime-image digest** before pinning it: `runtime-image: ghcr.io/diggsweden/forge-ci-runtime-go-1.27@sha256:…`. The workflows refuse a tag, so the digest is the only pin.
 6. **Promote egress to `block`** on the workflows that declare `egress-policy` / `egress-allowed-endpoints` (grep `.github/workflows/`), where the network surface is bounded and you can enumerate the endpoints
 7. **Rotate publish credentials periodically** (Maven Central tokens, npm tokens, and so on) independent of any specific incident; reduces the value of a compromised credential

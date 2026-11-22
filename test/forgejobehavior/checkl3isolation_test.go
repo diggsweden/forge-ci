@@ -14,29 +14,21 @@ import (
 )
 
 // The isolation step names the repository's workflow directory, whose release
-// workflows the engine finds itself, the layer's helper-pin input and the
-// inputs that must be literals, and turns the whitespace-separated
-// signing-secret list into repeated --signing-secret flags. Isolation
-// analysis belongs to the engine.
+// workflows the engine finds itself, and the subject, and turns a
+// whitespace-separated signing-secret list into repeated --signing-secret
+// flags. The helper-pin input, the literal inputs and the layer's own
+// signing-secret names are the engine's defaults, so the step and the
+// layer's own workflows run one check. Isolation analysis belongs to the
+// engine.
 func TestCheckL3Isolation(t *testing.T) {
 	t.Parallel()
 	action := loadAction(t, "check-l3-isolation")
 	action.requireSteps(t, 1)
 	script := action.Runs.Steps[0].Run
-	base := []string{
-		"validate", "isolation", "--workflows-dir", ".forgejo/workflows", "--single-pin-subject", "served/layer",
-		// The layer's own name for the second pin, never one derived from
-		// the serving repository.
-		"--single-pin-input", "forge-ci-sha",
-		// The trust inputs a caller writes out, each in its shape.
-		"--literal-input", "signer-image=image-digest",
-		"--literal-input", "cosign-public-key-sha256=sha256",
-		// The transparency log: a public entry cannot be withdrawn.
-		"--literal-input", "transparency-log=enum:none/public",
-		"--literal-input", "enforce-lint=enum:true/false",
-		"--literal-input", "enforce-vulnerabilities=enum:true/false",
-		"--literal-input", "enforce-application-tests=enum:true/false",
-		"--literal-input", "enforce-reproducible-builds=enum:true/false",
+	base := []string{"validate", "isolation", "--workflows-dir", ".forgejo/workflows", "--single-pin-subject", "served/layer"}
+
+	if value := fmt.Sprint(action.Inputs["signing-secrets"].Default); value != "" {
+		t.Fatalf("signing-secrets defaults to %q, want empty: the engine owns the layer's names", value)
 	}
 
 	for _, test := range []struct {
@@ -44,16 +36,8 @@ func TestCheckL3Isolation(t *testing.T) {
 		want                  int
 		flags                 []string
 	}{
-		{
-			"forwards every default signing secret", fmt.Sprint(action.Inputs["signing-secrets"].Default), "0", 0,
-			[]string{
-				"--signing-secret", "RELEASE_COSIGN_PRIVATE_KEY", "--signing-secret", "RELEASE_COSIGN_PASSPHRASE",
-				"--signing-secret", "RELEASE_GPG_PRIVATE_KEY", "--signing-secret", "RELEASE_GPG_PASSPHRASE",
-				"--signing-secret", "RELEASE_GPG_FINGERPRINT",
-			},
-		},
 		{"splits on runs of whitespace", " ALPHA \t BETA\n", "0", 0, []string{"--signing-secret", "ALPHA", "--signing-secret", "BETA"}},
-		{"forwards no secret flag for an empty list", "", "0", 0, nil},
+		{"leaves the engine its own names for an empty list", "", "0", 0, nil},
 		{"propagates the engine status", "ALPHA", "3", 3, []string{"--signing-secret", "ALPHA"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {

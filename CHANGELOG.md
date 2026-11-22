@@ -45,6 +45,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   repository in any case, as forges resolve them: `ExampleScope/CI-Layer`
   is held to the same pin and forge as `examplescope/ci-layer`, where it
   passed as another repository before.
+- **Breaking:** GitHub's `release-orchestrator.yml` runs `validate
+  isolation` over the caller's `.github/workflows` before it reads the
+  release configuration, and stops the release on a violation:
+  `secrets: inherit` on a release job, a signing key in any job but the
+  call of the orchestrator, an engine reference not at the one full commit,
+  and the other release-isolation rules. `validate isolation` now reads a
+  GitHub workflow directory: a workflow that calls the subject's
+  `.github/workflows/release-orchestrator.yml` is a release workflow, and
+  that call is the GitHub signer call. Pass the orchestrator its secrets by
+  name.
+- **Breaking:** `validate isolation`'s defaults are the layer's own:
+  `--signing-secret` the `RELEASE_COSIGN_*` and `RELEASE_GPG_*` names
+  (`COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD` are gone), `--single-pin-input`
+  `forge-ci-sha`, and `--literal-input` the signer image, key digest,
+  transparency-log and `enforce-*` inputs. `check-l3-isolation`'s
+  `signing-secrets` defaults to empty, the engine's names.
 - `validate isolation --single-pin-subject`, and so the `check-l3-isolation`
   action, takes a reference for the subject only when it names that
   repository, refuses one that writes another forge address than the forge

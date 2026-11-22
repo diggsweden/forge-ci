@@ -39,9 +39,10 @@ func singlePinWorkflow(withBlock string) string {
     uses: ` + singlePinSubject + `/.forgejo/workflows/prepare-release.yml@` + singlePinCommit + "\n" + withBlock
 }
 
-// releaseEntryJob makes a fixture a release workflow without passing any
-// input.
-const releaseEntryJob = "  prepare:\n    uses: " + singlePinSubject + "/.forgejo/workflows/prepare-release.yml@" + singlePinCommit + "\n"
+// releaseEntryJob makes a fixture a release workflow, passing only the pin
+// input the check requires by default.
+const releaseEntryJob = "  prepare:\n    uses: " + singlePinSubject + "/.forgejo/workflows/prepare-release.yml@" + singlePinCommit + "\n" +
+	"    with:\n      " + singlePinInput + ": " + singlePinCommit + "\n"
 
 func runIsolationThroughRoot(t *testing.T, workflow string, extra ...string) error {
 	t.Helper()
@@ -113,8 +114,18 @@ func TestIsolationCmd_SinglePinInput(t *testing.T) {
 			want:      errs.ErrValidation,
 		},
 		{
-			name:  "without the flag only uses pins are compared",
+			name:  "by default the input is forge-ci-sha",
 			flags: []string{"--single-pin-subject", singlePinSubject},
+			want:  errs.ErrValidation,
+		},
+		{
+			name:      "the default input repeating the pin passes",
+			withBlock: "    with:\n      " + singlePinInput + ": " + singlePinCommit + "\n",
+			flags:     []string{"--single-pin-subject", singlePinSubject},
+		},
+		{
+			name:  "with the input switched off only uses pins are compared",
+			flags: []string{"--single-pin-subject", singlePinSubject, "--single-pin-input", ""},
 		},
 		{
 			name:      "the subject is required",
@@ -157,7 +168,7 @@ const (
 // key itself may stay an expression: the gate holds only what it is told to.
 func TestIsolationCmd_LiteralInput(t *testing.T) {
 	literalFlags := []string{
-		"--single-pin-subject", singlePinSubject,
+		"--single-pin-subject", singlePinSubject, "--single-pin-input", "",
 		"--literal-input", "signer-image=image-digest",
 		"--literal-input", "key-sha256=sha256",
 		"--literal-input", "caller",
@@ -412,4 +423,37 @@ func captureStderr(t *testing.T, fn func() error) (string, error) {
 	_ = reader.Close()
 
 	return text, runErr
+}
+
+// The layer's own workflows and check-l3-isolation run the same check, so
+// its defaults are the layer's: its signing-secret names, forge-ci-sha and
+// the trust inputs a caller writes out. A flag replaces its default list.
+func TestIsolationCmd_DefaultsAreTheLayers(t *testing.T) {
+	t.Parallel()
+
+	pin := "    with:\n      " + singlePinInput + ": " + singlePinCommit + "\n"
+
+	for name, test := range map[string]struct {
+		workflow string
+		flags    []string
+		want     error
+	}{
+		"a layer signing key in a build job":    {workflow: "jobs:\n  build:\n    steps:\n      - run: echo '${{ secrets.RELEASE_GPG_PRIVATE_KEY }}'\n" + releaseEntryJob, want: errs.ErrValidation},
+		"the cosign passphrase in a build job":  {workflow: "jobs:\n  build:\n    steps:\n      - run: echo '${{ secrets.RELEASE_COSIGN_PASSPHRASE }}'\n" + releaseEntryJob, want: errs.ErrValidation},
+		"a named secret list replaces them":     {workflow: "jobs:\n  build:\n    steps:\n      - run: echo '${{ secrets.RELEASE_GPG_PRIVATE_KEY }}'\n" + releaseEntryJob, flags: []string{"--signing-secret", "OTHER"}},
+		"a signer image from a variable":        {workflow: singlePinWorkflow(pin + "      signer-image: ${{ vars.IMAGE }}\n"), want: errs.ErrValidation},
+		"a transparency log from a variable":    {workflow: singlePinWorkflow(pin + "      transparency-log: ${{ vars.LOG }}\n"), want: errs.ErrValidation},
+		"an enforce setting from a variable":    {workflow: singlePinWorkflow(pin + "      enforce-lint: ${{ vars.LINT }}\n"), want: errs.ErrValidation},
+		"a literal-input list replaces them":    {workflow: singlePinWorkflow(pin + "      enforce-lint: ${{ vars.LINT }}\n"), flags: []string{"--literal-input", "other"}},
+		"the layer's literals written out pass": {workflow: singlePinWorkflow(pin + "      signer-image: " + literalImage + "\n      transparency-log: none\n      enforce-lint: 'true'\n")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			err := runIsolationThroughRoot(t, test.workflow, append([]string{"--single-pin-subject", singlePinSubject}, test.flags...)...)
+			if test.want == nil && err != nil || test.want != nil && !errors.Is(err, test.want) {
+				t.Fatalf("err = %v, want %v", err, test.want)
+			}
+		})
+	}
 }

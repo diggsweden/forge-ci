@@ -126,7 +126,7 @@ on:
         description: "Full approved engine commit; the macOS job builds forge-ci from the engine checkout at it (canonical delivery serves Linux only). The release route passes its own."
         required: true
         type: string
-    # All `required: false` — `secrets: inherit` callers unchanged.
+    # All `required: false`: a caller passes by name only what it uses.
     secrets:
       IOS_SIGNING_CERTIFICATE_BASE64:
         description: "Base64-encoded .p12 code-signing certificate"

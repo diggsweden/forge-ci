@@ -149,7 +149,7 @@ on:
         description: "Full engine commit (40 hex) the workflow ref names; a tag or branch is refused"
         required: true
         type: string
-    # All `required: false` — `secrets: inherit` callers unchanged.
+    # All `required: false`: a caller passes by name only what it uses.
     secrets:
       ANDROID_KEYSTORE:
         description: "Base64-encoded Android signing keystore (.jks/.keystore)"

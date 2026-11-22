@@ -96,8 +96,8 @@ on:
         required: false
         default: ""
         type: string
-    # All `required: false` — callers using `secrets: inherit`
-    # continue to work. Declarations exist for discoverability +
+    # All `required: false`: a caller passes by name only what it uses.
+    # Declarations exist for discoverability +
     # tooling validation.
     secrets:
       RELEASE_GPG_PRIVATE_KEY:

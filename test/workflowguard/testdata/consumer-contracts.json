@@ -278,7 +278,7 @@
       "signing-secrets": {
         "required": false,
         "type": "",
-        "default": "RELEASE_COSIGN_PRIVATE_KEY RELEASE_COSIGN_PASSPHRASE RELEASE_GPG_PRIVATE_KEY RELEASE_GPG_PASSPHRASE RELEASE_GPG_FINGERPRINT"
+        "default": ""
       },
       "single-pin-subject": {
         "required": false,

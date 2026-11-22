@@ -94,7 +94,8 @@ narrows its own permissions, and a selected backend may not use every grant.
 a separately supplied PAT, App token or registry credential. Those credentials
 need their own permissions. An explicit `secrets:` mapping passes secret values
 and belongs outside `permissions:`; `secrets: inherit` passes every secret, and
-the default lint gate's SAST check rejects it.
+the default lint gate's SAST check and the release's isolation check reject
+it.
 
 `id-token: write` enables keyless OIDC signing, not provenance generation in
 general. Container provenance and SBOM attestations use cosign and the registry;
