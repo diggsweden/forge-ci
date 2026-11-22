@@ -36,7 +36,7 @@ immutable release request
 | `.forgejo/scripts/verify-signer-toolchain.sh` | The check every privileged job runs first, and the signer image runs at build time. |
 | `containers/signer/Containerfile` | The definition of the signer image. No image is published; see [The signer image](#the-signer-image). |
 | `examples/<ecosystem>/forgejo/` | A pull-request and a release workflow to start from, for [Go CLI](../examples/go-cli/forgejo/), [Go service](../examples/go-service/forgejo/), [Cargo](../examples/cargo-app/forgejo/), [Maven](../examples/maven-app/forgejo/) and a [Maven library](../examples/maven-library/forgejo/). |
-| `examples/forgejo/` | Organization publication callers, including runtime images and package-retention preview. |
+| `examples/forgejo/` | Organization publication callers, including runtime images and package retention. |
 
 Lint and build ship as actions, not as workflows: the pull-request jobs and
 the release build job stay the consumer's, and an action is one step in them.
@@ -298,7 +298,7 @@ the caller passes them by name. Never use `secrets: inherit`.
 | `promote-base-container-images.yml` | Verifies base-image signatures, then moves the final tags. | `RELEASE_REGISTRY_TOKEN` |
 | `release-images.yml` | Builds the release images `artifacts.yml` declares, one native job per container and architecture, with the organization's image builder; scans each, publishes it under its staging tag and records it for the signer. See [Release images](#release-images). | `RELEASE_REGISTRY_TOKEN`, in the publish job only |
 | `snapshot-images.yml` | Builds and publishes the unsigned snapshot images of a branch. See [Snapshots](#snapshots). | `SNAPSHOT_REGISTRY_PASSWORD` |
-| `package-retention.yml` | Previews which old package versions a retention rule would delete; it never deletes. See [GHCR package retention previews](#ghcr-package-retention-previews). | `RELEASE_REGISTRY_TOKEN` |
+| `package-retention.yml` | Previews which old GHCR package versions a retention rule would delete, and deletes them only with `dry-run: false`. See [GHCR package retention](#ghcr-package-retention). | `RELEASE_REGISTRY_TOKEN` |
 | `runtime-images.yml` | Publishes the runtime images from a mirror. See [Forgejo runtime publication](runtime-images.md#forgejo-runtime-publication). | `RELEASE_REGISTRY_TOKEN`, Cosign, optional `CI_RUNNER_LENDER_TOKEN` |
 
 Each workflow's `inputs:` block is its reference: every input carries a
@@ -2037,24 +2037,30 @@ Forgejo ingests no SARIF report
 log; it writes no SARIF file. `forge-ci security report upload-sarif` on a
 Forgejo runner prints a notice and exits 0.
 
-## GHCR package retention previews
+## GHCR package retention
 
-`.forgejo/workflows/package-retention.yml` previews which old versions of
-GHCR packages a retention rule would delete; it never deletes.
+`.forgejo/workflows/package-retention.yml` lists which old versions of GHCR
+packages a retention rule would delete, and deletes them only when the caller
+passes `dry-run: false`; the default, `true`, previews.
 [`examples/forgejo/package-retention.yml`](../examples/forgejo/package-retention.yml)
-is the caller and owns the schedule. It takes `runs-on`, a digest-pinned
-`job-image` holding the CLI, that CLI's `engine-sha256`, `registry-user`,
-the `RELEASE_REGISTRY_TOKEN` secret, and `packages-json` listing the consumer
-pins to protect, which the example reads from the `PACKAGE_RETENTION_MATRIX`
-variable:
+is a preview caller and owns the schedule. The workflow takes `runs-on`, a
+digest-pinned `job-image` holding the CLI, that CLI's `engine-sha256`,
+`registry-user`, the `RELEASE_REGISTRY_TOKEN` secret, and the packages: either
+`repository`, one `ghcr.io/owner/name`, or `packages-json` listing the
+consumer pins to protect, which the example reads from the
+`PACKAGE_RETENTION_MATRIX` variable:
 `{"include":[{"repository":"ghcr.io/owner/name","digest":"sha256:..."}]}`.
-Release tags (`v1.2.3`) are always kept. Every listed digest is kept with its
-signatures and manifests, as are the `recent-count` newest versions
-(default 10); `max-delete` (default 100) caps the preview. A listed digest
-that the package does not hold stops the pass.
+Give one of the two; the CLI refuses neither and both.
+Tags matching `keep-tags` are always kept; empty, the default, keeps release
+tags (`v1.2.3`). Every listed digest is kept with its signatures and
+manifests, as are the `recent-count` newest versions (default 10);
+`max-delete` (default 100) refuses a package that would lose more versions,
+in a preview and in a deletion alike. A listed digest that the package does
+not hold stops the pass.
 
-Apply the rule yourself once you have reviewed the preview, with a classic
-token holding `read:packages` and `delete:packages`:
+Run the preview first and read its list. Deleting takes `dry-run: false` and
+a classic GitHub token holding `read:packages` and `delete:packages`. The job
+calls the CLI, which works the same by hand:
 
 ```bash
 forge-ci container package-retention --dry-run=false \

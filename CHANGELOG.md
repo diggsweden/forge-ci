@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `package-retention.yml` (Forgejo) can delete: `dry-run: false` applies
+  the rule, and `true`, the default, still previews. It takes one package
+  as `repository` in place of `packages-json`, and `keep-tags`. Its job is
+  now `retention`. A release job that ran `container package-retention`
+  itself with the registry token can call it instead; `validate isolation`
+  asks no `forge-ci-sha` of that call, since the workflow checks nothing
+  out, and still compares its `uses:` pin.
 - **Breaking:** Pull request checks are named Quality checks, Build and
   test and PR check results on every forge, and the GitHub orchestrator's
   Summary job is gone. Update the required checks of your branch

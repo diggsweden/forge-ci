@@ -30,8 +30,8 @@ and Go build images, native runner pools, registry credentials and public-key
 digest as described in [Runtime images](../../docs/runtime-images.md#configuration).
 
 [`package-retention.yml`](package-retention.yml) previews a separately reviewed
-consumer-pin matrix using that namespace and registry account. It never applies
-deletion. Copy either example into `.forgejo/workflows/` only after configuration.
+consumer-pin matrix using that namespace and registry account. It deletes only
+with `dry-run: false`. Copy either example into `.forgejo/workflows/` only after configuration.
 
 ## Releasing a Forge CI mirror
 

@@ -27,7 +27,7 @@ func TestRetentionPreviewNeedsNoEngineSourceInTheConsumerCheckout(t *testing.T) 
 	box := newSandbox(t, "retention-consumer")
 	box.write("bin/forge-ci", fakeEngine, 0o700)
 
-	for _, step := range workflow.Jobs["preview"].Steps {
+	for _, step := range workflow.Jobs["retention"].Steps {
 		if step.Run == "" {
 			continue // The pinned setup action supplies the published CLI.
 		}
@@ -50,10 +50,10 @@ func TestRetentionPreviewNeedsNoEngineSourceInTheConsumerCheckout(t *testing.T) 
 	}
 }
 
-func TestScheduledRetentionAlwaysPreviewsWithAllConsumerPins(t *testing.T) {
+func TestRetentionPreviewsUnlessDeletionIsAsked(t *testing.T) {
 	t.Parallel()
 
-	step := jobStep(t, ".forgejo/workflows/package-retention.yml", "preview", "Preview the reviewed retention policy")
+	step := jobStep(t, ".forgejo/workflows/package-retention.yml", "retention", "Apply the reviewed retention policy")
 	if step.Env["GH_TOKEN"] != "${{ secrets.RELEASE_REGISTRY_TOKEN }}" || step.Env["REGISTRY_USER"] != "${{ inputs['registry-user'] }}" {
 		t.Fatal("retention must reuse the publisher's existing registry settings")
 	}
@@ -70,11 +70,24 @@ func TestScheduledRetentionAlwaysPreviewsWithAllConsumerPins(t *testing.T) {
 	if result.status != 0 || !slices.Equal(box.argv(), want) {
 		t.Fatalf("unsafe retention invocation: %v %s", box.argv(), result.stderr)
 	}
+
+	// Only an explicit false deletes; any other value previews.
+	for dryRun, want := range map[string]string{"false": "--dry-run=false", "true": "--dry-run=true", "False": "--dry-run=true", "": "--dry-run=true"} {
+		result := box.run(step.Run, "PATH="+filepath.Join(box.root, "bin")+":"+os.Getenv("PATH"),
+			"REPOSITORY=ghcr.io/acme/runtime", "KEEP_TAGS=^v[0-9]+$", "DRY_RUN="+dryRun,
+			"REGISTRY_USER=owner", "RECENT_COUNT=10", "MAX_DELETE=100", "GH_TOKEN=PRIVATE-retention-token")
+
+		got := []string{"container", "package-retention", "--repository", "ghcr.io/acme/runtime", "--keep-tags", "^v[0-9]+$",
+			"--recent-count", "10", "--max-delete", "100", "--registry-username", "owner", want}
+		if result.status != 0 || !slices.Equal(box.argv(), got) {
+			t.Fatalf("dry-run %q: %v %s", dryRun, box.argv(), result.stderr)
+		}
+	}
 }
 
 func TestScheduledRetentionUsesTheRealCLIFlags(t *testing.T) {
 	t.Parallel()
-	step := jobStep(t, ".forgejo/workflows/package-retention.yml", "preview", "Preview the reviewed retention policy")
+	step := jobStep(t, ".forgejo/workflows/package-retention.yml", "retention", "Apply the reviewed retention policy")
 	box := newSandbox(t, "retention-cli")
 	box.write("bin/forge-ci", "#!/usr/bin/env bash\nexec '"+forgeCIEngine(t)+"' \"$@\"\n", 0o700)
 	result := box.run(step.Run, "PATH="+filepath.Join(box.root, "bin")+":"+os.Getenv("PATH"),

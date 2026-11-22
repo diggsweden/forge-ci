@@ -1138,6 +1138,11 @@
   },
   ".forgejo/workflows/package-retention.yml": {
     "inputs": {
+      "dry-run": {
+        "required": false,
+        "type": "boolean",
+        "default": true
+      },
       "engine-sha256": {
         "required": true,
         "type": "string"
@@ -1146,14 +1151,20 @@
         "required": true,
         "type": "string"
       },
+      "keep-tags": {
+        "required": false,
+        "type": "string",
+        "default": ""
+      },
       "max-delete": {
         "required": false,
         "type": "number",
         "default": 100
       },
       "packages-json": {
-        "required": true,
-        "type": "string"
+        "required": false,
+        "type": "string",
+        "default": ""
       },
       "recent-count": {
         "required": false,
@@ -1163,6 +1174,11 @@
       "registry-user": {
         "required": true,
         "type": "string"
+      },
+      "repository": {
+        "required": false,
+        "type": "string",
+        "default": ""
       },
       "runs-on": {
         "required": true,

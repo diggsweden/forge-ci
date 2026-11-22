@@ -4,7 +4,8 @@
 # Replace the workflow, image and engine-checksum pins with a verified tuple.
 # PACKAGE_RETENTION_MATRIX is reviewed policy, shaped as:
 # {"include":[{"repository":"ghcr.io/owner/runtime","digest":"sha256:<protected consumer pin>"}]}.
-# Only this caller owns scheduling; the reusable workflow always previews.
+# Only this caller owns scheduling. The reusable workflow previews unless
+# dry-run: false is passed; pass it only after reviewing a preview.
 name: Preview package retention
 on:
   schedule:

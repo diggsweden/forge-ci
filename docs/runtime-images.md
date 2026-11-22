@@ -201,7 +201,7 @@ registry token pulls the candidates, the forge's job token reads the source.
 
 A rebuild of the same commit can give a new digest, because distribution
 packages move on. A failed run may leave candidate images behind; see
-[GHCR package retention previews](forgejo.md#ghcr-package-retention-previews).
+[GHCR package retention](forgejo.md#ghcr-package-retention).
 
 ## Pinning convention
 

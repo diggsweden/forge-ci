@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: CC0-1.0
 # workflow-call-secrets-contract: RELEASE_REGISTRY_TOKEN
 
-name: Preview GHCR package retention (reusable)
+name: GHCR package retention (reusable)
 defaults:
   run:
     shell: bash
@@ -21,23 +21,35 @@ on:
         description: Literal checksum of the engine in job-image, from the reviewed engine revision.
         type: string
         required: true
+      repository:
+        description: One package to prune, as ghcr.io/owner/name. Give this or packages-json, not both.
+        type: string
+        default: ''
       packages-json:
-        description: Reviewed inventory {"include":[{"repository":"ghcr.io/owner/name","digest":"sha256:..."}]}. All rows for one repository are protected together.
+        description: Reviewed inventory {"include":[{"repository":"ghcr.io/owner/name","digest":"sha256:..."}]}. All rows for one repository are protected together. Give this or repository, not both.
         type: string
-        required: true
+        default: ''
       registry-user:
-        description: GitHub account for the read-only GHCR inventory credential.
+        description: GitHub account the GHCR credential logs in as.
         type: string
         required: true
+      keep-tags:
+        description: Regular expression of tags kept whatever their age. Empty keeps the engine's default, the release and pre-release tags.
+        type: string
+        default: ''
       recent-count:
         type: number
         default: 10
       max-delete:
-        description: Refuse a preview whose deletion set exceeds this limit.
+        description: Refuse a package whose deletion set exceeds this limit.
         type: number
         default: 100
+      dry-run:
+        description: true, the default, only lists what would be deleted. false deletes it; ask for it only after a reviewed preview of the same inputs.
+        type: boolean
+        default: true
 jobs:
-  preview:
+  retention:
     runs-on: ${{ fromJSON(inputs['runs-on']) }}
     container: ${{ inputs['job-image'] }}
     # One serial Go pass covers the complete inventory, not one package per job.
@@ -51,16 +63,26 @@ jobs:
           [[ "${EXPECTED_SHA256:?}" =~ ^[a-f0-9]{64}$ ]]
           engine=$(command -v forge-ci)
           printf '%s  %s\n' "$EXPECTED_SHA256" "$engine" | sha256sum --check --strict
-      - name: Preview the reviewed retention policy
+      - name: Apply the reviewed retention policy
         env:
+          REPOSITORY: ${{ inputs['repository'] }}
           PACKAGES_JSON: ${{ inputs['packages-json'] }}
+          KEEP_TAGS: ${{ inputs['keep-tags'] }}
           RECENT_COUNT: ${{ inputs['recent-count'] }}
           MAX_DELETE: ${{ inputs['max-delete'] }}
+          DRY_RUN: ${{ inputs['dry-run'] }}
           GH_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
           REGISTRY_USER: ${{ inputs['registry-user'] }}
         run: |
           set -euo pipefail
-          forge-ci container package-retention \
-            --packages-json "${PACKAGES_JSON:?}" \
+          # Anything but an explicit false previews.
+          dry_run=true
+          [[ "${DRY_RUN:-}" != false ]] || dry_run=false
+          # The CLI refuses neither selector, and both together.
+          args=()
+          [[ -z "${REPOSITORY:-}" ]] || args+=(--repository "${REPOSITORY}")
+          [[ -z "${PACKAGES_JSON:-}" ]] || args+=(--packages-json "${PACKAGES_JSON}")
+          [[ -z "${KEEP_TAGS:-}" ]] || args+=(--keep-tags "${KEEP_TAGS}")
+          forge-ci container package-retention "${args[@]}" \
             --recent-count "${RECENT_COUNT:?}" --max-delete "${MAX_DELETE:?}" \
-            --registry-username "${REGISTRY_USER:?}" --dry-run=true
+            --registry-username "${REGISTRY_USER:?}" --dry-run="${dry_run}"

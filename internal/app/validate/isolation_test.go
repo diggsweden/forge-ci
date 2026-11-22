@@ -636,6 +636,35 @@ func TestIsolation_SinglePinInputIsTheCallersName(t *testing.T) {
 	}
 }
 
+// Retention checks nothing out at a helper commit, so its call needs none;
+// its uses: pin is still compared with the others.
+func TestIsolation_RetentionCallTakesNoHelperPin(t *testing.T) {
+	const retention = `on: push
+jobs:
+  prune:
+    uses: example/other-ci/.forgejo/workflows/package-retention.yml@%s
+`
+
+	for pin, wantErr := range map[string]bool{
+		"1111111111111111111111111111111111111111": false,
+		"3333333333333333333333333333333333333333": true,
+	} {
+		mem := testfs.NewMemory(t)
+		mem.WriteFile(".forgejo/workflows/release.yml",
+			fmt.Appendf(nil, otherSubjectWorkflow, "      layer-sha: 1111111111111111111111111111111111111111\n"))
+		mem.WriteFile(".forgejo/workflows/retention.yml", fmt.Appendf(nil, retention, pin))
+
+		out, err := runIsolationForSubject(t, mem, "example/other-ci", "layer-sha")
+		if wantErr != errors.Is(err, errs.ErrValidation) {
+			t.Fatalf("pin %s: err = %v, want a validation failure: %v\n%s", pin, err, wantErr, out)
+		}
+
+		if !wantErr && strings.Contains(out, "retention.yml") {
+			t.Errorf("pin %s: the retention call was flagged:\n%s", pin, out)
+		}
+	}
+}
+
 // Full SHA-256 pins obey the same exact-match rule as SHA-1 pins.
 func TestIsolation_SHA256PinInputs(t *testing.T) {
 	t.Parallel()

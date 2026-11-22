@@ -531,7 +531,7 @@ func subjectCallInputPins(body []byte, subject, input string) ([]string, []valid
 		job := doc.Jobs[name]
 
 		uses, ok := resolvedScalar(&job.Uses)
-		if !ok || !referencesSubject(uses, subject) {
+		if !ok || !referencesSubject(uses, subject) || checksOutNoHelpers(uses) {
 			continue
 		}
 
@@ -550,6 +550,13 @@ func subjectCallInputPins(body []byte, subject, input string) ([]string, []valid
 	}
 
 	return pins, violations
+}
+
+// checksOutNoHelpers reports a call of package-retention.yml, the layer's one
+// workflow that runs the engine of its job image and checks nothing out, so
+// it takes no helper commit; its uses: pin is still compared with the others.
+func checksOutNoHelpers(uses string) bool {
+	return strings.Contains(uses, "/.forgejo/workflows/package-retention.yml@")
 }
 
 // workflowDirYAMLFiles reads every workflow file of the directory, by name.

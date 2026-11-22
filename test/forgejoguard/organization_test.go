@@ -116,8 +116,8 @@ func TestHelperRepositoryIsTheCallersInputOrVariable(t *testing.T) {
 
 	for _, path := range reusableWorkflows(t) {
 		// Retention executes an explicitly checksum-pinned job-image engine,
-		// not helper source. Its alternative bootstrap and preview-only scope
-		// are checked by TestCallableRetentionNeverAcquiresDeletionAuthority.
+		// not helper source. Its alternative bootstrap and preview default
+		// are checked by TestCallableRetentionDeletesOnlyWhenAsked.
 		if path == ".forgejo/workflows/package-retention.yml" {
 			continue
 		}
