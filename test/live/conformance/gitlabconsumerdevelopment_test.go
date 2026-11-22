@@ -113,7 +113,7 @@ func runGitLabDevelopmentVisibility(t *testing.T, root string, private bool, acc
 
 	project := livetest.RepoSlug(target, repo)
 	installGitLabDevelopmentPolicy(t, client, target, project, consumer, layer, images, private)
-	main := consumer.PushGitLab(t, repo, layer, images)
+	main := consumer.PushSnapshot(t, repo)
 	requireObjectFormats(t, consumer.ObjectFormat, main, layer.Commit)
 
 	before := livetest.BranchCommitSHA(t, target, repo, "main")

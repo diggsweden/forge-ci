@@ -91,7 +91,7 @@ func runGitLabConsumerTrial(t *testing.T, root string, private bool) {
 
 	installGitLabConsumerPolicy(t, client, target, project, consumer, layer, images, private)
 
-	main := consumer.PushGitLab(t, repo, layer, images)
+	main := consumer.PushSnapshot(t, repo)
 	requireObjectFormats(t, consumer.ObjectFormat, main, layer.Commit)
 	head := consumer.PushChange(t, repo, trialBranch, main)
 	t.Logf("consumer %s at %s (%s); layer %s; job image %s", root, consumer.Commit, consumer.ObjectFormat, layer.Commit, image)
@@ -199,8 +199,8 @@ const gitlabResultsCommentVariable = "PR_COMMENT_TOKEN"
 var gitlabResultsCommentInput = regexp.MustCompile(`(?m)^\s*pr-comment:\s*["']?true["']?\s*(#.*)?$`)
 
 // gitlabConsumerAsksForResultsComment reads the consumer's own merge request
-// pipeline, the file PushGitLab stages: the comment is the consumer's choice,
-// never one the harness makes for it.
+// pipeline, the file the trial's policy is rendered from: the comment is the
+// consumer's choice, never one the harness makes for it.
 func gitlabConsumerAsksForResultsComment(t *testing.T, root string, consumer livetest.Consumer) bool {
 	t.Helper()
 

@@ -19,14 +19,20 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
-	"github.com/diggsweden/forge-ci/internal/domain/provider"
 )
 
 // The consumer's own merge-request gate. Without a policy GitLab runs
 // .gitlab-ci.yml; once the project's CI configuration path names a release
 // policy, GitLab runs only the policy, which includes the gate file for
 // merge-request pipelines (docs/gitlab.md, The merge-request gate under a
-// policy). A consumer that keeps its gate in that file renders it there.
+// policy).
+//
+// A trial binds the gate to the layer under test in the policy project it
+// owns (GitLabAdminPolicy, GitLabDevelopmentPolicy), which is where GitLab
+// reads the gate of a trial from. The consumer's own copy is pushed as
+// committed (PushSnapshot): no job reads it, and the consumer's own checks
+// then read the tree its maintainers wrote, with no coordinate of the lab
+// in it.
 const (
 	gitlabCIFile = ".gitlab-ci.yml"
 
@@ -81,75 +87,6 @@ func (consumer Consumer) WithGitLabGateFromSource(tb TB, path string) Consumer {
 	return consumer
 }
 
-// PushGitLab stages the consumer's own MR pipeline, replacing only its
-// components' coordinates and job image with the trial's. Other source files,
-// including the consumer's existing Forgejo policy, stay byte-for-byte intact.
-// The gate is .gitlab/merge-request.yml when the consumer has one, and
-// otherwise .gitlab-ci.yml.
-func (consumer Consumer) PushGitLab(tb TB, repo string, layer Layer, images GitLabGateImages) string {
-	tb.Helper()
-
-	if consumer.target.Forge != provider.ForgeGitLab {
-		tb.Fatalf("livetest: this consumer trial requires GitLab")
-	}
-
-	ctx, cancel := context.WithTimeout(Context(tb), timeoutLayerPush)
-	defer cancel()
-
-	file := gitlabCIFile
-	if consumer.HasGitLabGate(tb) {
-		file = GitLabGateFile
-	}
-
-	if err := consumer.stageGitLabGate(ctx, file, layer, images); err != nil {
-		tb.Fatalf("livetest: stage the consumer pipeline: %v", err)
-	}
-
-	commit, err := consumer.commit(ctx, consumerBaseMessage)
-	if err == nil {
-		err = consumer.git.push(ctx, consumer.stage, scratchRemote(consumer.target, repo), commit, defaultBranch)
-	}
-
-	if err != nil {
-		tb.Fatalf("livetest: push the GitLab consumer: %v", err)
-	}
-
-	return commit
-}
-
-// PushGitLabRelease publishes the admitted tree for a release under a policy,
-// as PushSnapshot does, with one file rendered: the merge-request gate, when
-// the consumer has one, so the merge requests the policy admits run the layer
-// under test.
-func (consumer Consumer) PushGitLabRelease(tb TB, repo string, layer Layer, images GitLabGateImages) string {
-	tb.Helper()
-	requireAccepted(tb, consumer.target)
-
-	ctx, cancel := context.WithTimeout(Context(tb), timeoutLayerPush)
-	defer cancel()
-
-	if _, err := consumer.git.run(ctx, consumer.stage, "read-tree", consumer.Commit); err != nil {
-		tb.Fatalf("livetest: restore the consumer tree: %v", err)
-	}
-
-	if consumer.HasGitLabGate(tb) {
-		if err := consumer.stageGitLabGate(ctx, GitLabGateFile, layer, images); err != nil {
-			tb.Fatalf("livetest: stage the consumer's merge-request gate: %v", err)
-		}
-	}
-
-	commit, err := consumer.commit(ctx, consumerBaseMessage)
-	if err == nil {
-		err = consumer.git.push(ctx, consumer.stage, scratchRemote(consumer.target, repo), commit, defaultBranch)
-	}
-
-	if err != nil {
-		tb.Fatalf("livetest: push the GitLab consumer to %s/%s: %v", consumer.target.Owner, repo, err)
-	}
-
-	return commit
-}
-
 // HasGitLabGate reports whether the consumer keeps its merge-request gate in
 // .gitlab/merge-request.yml.
 func (consumer Consumer) HasGitLabGate(tb TB) bool {
@@ -164,22 +101,6 @@ func (consumer Consumer) HasGitLabGate(tb TB) bool {
 	}
 
 	return listed == GitLabGateFile
-}
-
-// stageGitLabGate renders the gate file's components (check, and nanolinter
-// when included) and their image with the trial's, and stages it.
-func (consumer Consumer) stageGitLabGate(ctx context.Context, file string, layer Layer, images GitLabGateImages) error {
-	body, err := consumer.git.output(ctx, consumer.stage, nil, "cat-file", "blob", consumer.Commit+":"+file)
-	if err != nil {
-		return fmt.Errorf("read the consumer's committed %s: %w", file, err)
-	}
-
-	rendered, err := renderGitLabConsumer(body, layer, images)
-	if err != nil {
-		return fmt.Errorf("render the GitLab coordinates of %s: %w", file, err)
-	}
-
-	return consumer.stageFile(ctx, "100644", file, rendered)
 }
 
 // GitLabAdminPolicy renders the admitted gate into an independent administrator

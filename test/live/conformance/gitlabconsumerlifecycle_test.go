@@ -292,7 +292,7 @@ func runGitLabConsumerLifecycleVisibility(t *testing.T, row gitlabLifecycleRow, 
 	t.Logf("consumer %s at %s (%s); layer %s at %s; job image %s, build image %s for producers %v of %s, image builder %s", root, consumer.Commit, consumer.ObjectFormat, layer.Repository, layer.Commit, images.job, images.build, families, snapshotSource, imageBuilder)
 
 	// Phase 1: the merge request.
-	base := consumer.PushGitLabRelease(t, repo, layer, gateImages)
+	base := consumer.PushSnapshot(t, repo)
 	requireObjectFormats(t, consumer.ObjectFormat, base, layer.Commit)
 
 	head := consumer.PushChange(t, repo, lifecycleBranch, base)

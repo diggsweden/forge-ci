@@ -1226,7 +1226,10 @@ func (consumer Consumer) Push(tb TB, repo string, plan ConsumerPlan) string {
 }
 
 // PushSnapshot publishes the admitted consumer tree without rewriting files.
-// Native release trials install their policy in an independently pinned project.
+// Native release trials install their policy in an independently pinned
+// project, and so does every GitLab trial with the gate it binds to the layer
+// under test: GitLab reads a pipeline's configuration from that project, so
+// the consumer's tree needs no coordinate of the lab.
 func (consumer Consumer) PushSnapshot(tb TB, repo string) string {
 	tb.Helper()
 	requireAccepted(tb, consumer.target)

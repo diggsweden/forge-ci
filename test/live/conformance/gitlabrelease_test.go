@@ -687,7 +687,7 @@ func runGitLabReleaseVisibility(t *testing.T, row gitlabReleaseRow, private bool
 	livetest.RestrictGitLabReleaseBranch(t, target, repo, deploy.ID)
 
 	if consumer != nil {
-		request = consumer.PushGitLabRelease(t, repo, layer, gateImages)
+		request = consumer.PushSnapshot(t, repo)
 	} else {
 		request = seedGitLabReleaseCanary(t, ctx, client, project, files)
 	}

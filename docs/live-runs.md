@@ -2953,9 +2953,10 @@ source publication, and private trials must refuse anonymous repository reads.
 
 The consumer must be a clean committed checkout with its own `.gitlab-ci.yml`.
 If it keeps the gate in `.gitlab/merge-request.yml`, the standalone MR trial
-selects that rendered file as the scratch project's CI configuration path and
-verifies the setting before pushing source. Release trials instead retain the
-separate release policy, which includes the gate for MR pipelines.
+renders that file into a policy project it owns, selects the rendered file as
+the scratch project's CI configuration path and verifies the setting before
+pushing source. Release trials instead retain the separate release policy,
+which includes the gate for MR pipelines from the same policy project.
 Both paths wait for the native-pushed source branch. GitLab can still briefly
 reject MR creation after its branch-read API sees the commit; the harness retries
 only the definite HTTP 400 `source_branch: does not exist` rejection. Transport
@@ -2968,7 +2969,14 @@ a nanolinter flavour image archive: the recipe's third argument, or
 `FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE`; the release recipe takes it as the setting
 `lint-archive=`. The
 trial rewrites those coordinates to the lab's engine commit and served image
-digests, preserving the consumer's commands and other files.
+digests in the policy project's copy, preserving the consumer's commands.
+
+The consumer's tree is pushed as committed, its own gate file included.
+GitLab reads the trial's gate from the policy project, so no coordinate of
+the lab enters the tree: a consumer's own checks of its files, such as a
+rule that its gate, its other workflows and its policy tests name one engine,
+hold in the trial as they do on its own forge. The MR, development, release
+and lifecycle trials all push the tree this way.
 Deployment outside the trial requires the published image digest, as in
 [Source-check component](gitlab.md#source-check-component).
 

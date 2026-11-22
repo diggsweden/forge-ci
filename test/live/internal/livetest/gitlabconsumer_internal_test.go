@@ -404,3 +404,64 @@ func TestGitLabGateComponentsDefaultTheirJobNameToTheirName(t *testing.T) {
 		}
 	}
 }
+
+// A GitLab trial binds the consumer's gate to the layer under test in the
+// policy project it owns, and pushes the consumer's tree as committed. The
+// consumer's own checks read that tree: one that held the lab's coordinates
+// in its gate alone would disagree with its workflows, its policy tests and
+// its documentation, and fail checks it passes on its own forge.
+func TestGitLabTrialBindsTheGateOutsideTheConsumersTree(t *testing.T) {
+	t.Parallel()
+
+	gate := "workflow:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"merge_request_event\"\ninclude:\n" +
+		"  - component: $CI_SERVER_FQDN/owner/forge-ci/check@" + consumerPinned + "\n" +
+		"    inputs:\n      forge-ci-repository: owner/forge-ci\n      server-url: $CI_SERVER_URL\n      job-image: $CI_JOB_IMAGE\n"
+
+	git, root := newConsumerCheckout(t, consumerSHA256)
+	writeLayerFile(t, root, GitLabGateFile, gate)
+	writeLayerFile(t, root, "policy/anchors_test.go",
+		"package policy_test\n\nconst layerSetupAction = \"https://forge.example/owner/forge-ci/.forgejo/actions/setup-forge-ci@"+consumerPinned+"\"\n")
+	mustLayerGit(t, git, root, "add", "--all")
+	mustLayerGit(t, git, root, "commit", "--quiet", "--message", "test: add the gate")
+
+	consumer, err := openConsumer(t.Context(), git, root, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	layer := Layer{ServerURL: "https://gitlab.compose.forgelab:8443", Repository: "labgroup/fci-gitlab-consumer-layer", Commit: strings.Repeat("a", 40)}
+	images := GitLabGateImages{Job: "registry.gitlab.compose.forgelab:8443/" + layer.Repository + "@sha256:" + strings.Repeat("c", 64)}
+
+	committed, err := git.output(t.Context(), consumer.stage, nil, "cat-file", "blob", consumer.Commit+":"+GitLabGateFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	policy, err := renderGitLabConsumer(committed, layer, images)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, bound := range []string{
+		"component: gitlab.compose.forgelab:8443/" + layer.Repository + "/check@" + layer.Commit,
+		"forge-ci-repository: " + layer.Repository, "server-url: " + layer.ServerURL, "job-image: " + images.Job,
+	} {
+		if !strings.Contains(policy, bound) {
+			t.Errorf("the policy's gate is not bound to the layer under test as %q:\n%s", bound, policy)
+		}
+	}
+
+	pushed, err := consumer.commitSnapshot(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got, want := mustLayerGit(t, git, consumer.stage, "rev-parse", pushed+"^{tree}"), mustLayerGit(t, git, root, "rev-parse", "HEAD^{tree}"); got != want {
+		t.Errorf("the pushed tree is %s, want the committed tree %s: %s", got, want,
+			mustLayerGit(t, git, consumer.stage, "diff", "--stat", consumer.Commit, pushed))
+	}
+
+	if staged := mustLayerGit(t, git, consumer.stage, "show", pushed+":"+GitLabGateFile); staged != strings.TrimSpace(gate) {
+		t.Errorf("the consumer's own gate was pushed as\n%s\nwant it as committed", staged)
+	}
+}
