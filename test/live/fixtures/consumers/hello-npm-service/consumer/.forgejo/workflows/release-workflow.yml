@@ -189,13 +189,17 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-forge-ci@c08b59fe61f4b926d80875ce850f6bdc695b1d9a
-      - name: Download the release files
-        run: forge-ci artifact download --name release-files --dir package
+      # The job holds a token that may write packages, so it runs only the
+      # layer's actions that run the engine alone: no run: step.
       - name: Publish the released package
-        env:
+        uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/publish-forge-packages@c08b59fe61f4b926d80875ce850f6bdc695b1d9a
+        with:
+          project-type: npm
+          working-directory: package
+          artifact-name: release-files
+          # Forgejo reads release-<version> as a version and refuses it as a
+          # dist-tag, so the tag is release.<version> here.
+          npm-tag: 'release.{version}'
           # The automatic token may not write packages; this one may write
           # the owner's.
-          FORGEJO_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
-        # Forgejo reads release-<version> as a version and refuses it as a
-        # dist-tag, so the tag is release.<version> here.
-        run: forge-ci publish forge-packages deploy --project-type npm --working-dir package --npm-tag 'release.{version}'
+          token: ${{ secrets.RELEASE_REGISTRY_TOKEN }}

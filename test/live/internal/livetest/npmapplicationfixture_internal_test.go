@@ -109,18 +109,28 @@ func TestNPMApplicationFixtureSourceBoundary(t *testing.T) {
 					}
 
 					publisher, ok := policy.Jobs["publish-package"]
-					if !ok || len(publisher.Steps) != 4 {
+					if !ok || len(publisher.Steps) != 2 {
 						t.Fatal("missing separate publisher")
 					}
 
-					publisherText := strings.SplitN(workflow, "  publish-package:", 2)[1]
-					for _, required := range []string{"sign-and-publish", "sha256sum -c SHA256SUMS", "publish npm validate-tarball", "publish npm write-npmrc", "publish npm validate-version", "publish npm deploy", "release.{version}", `--npm-tag "$NPM_TAG"`, "unset FORGEJO_TOKEN GITHUB_TOKEN GH_TOKEN RELEASE_TOKEN"} {
+					verifierText, publisherText, _ := strings.Cut(strings.SplitN(workflow, "  verify-package:", 2)[1], "  publish-package:")
+					for _, required := range []string{"sign-and-publish", "sha256sum -c SHA256SUMS", "publish npm validate-tarball", "publish npm validate-version"} {
+						if !strings.Contains(verifierText, required) {
+							t.Fatalf("missing verifier check %s", required)
+						}
+					}
+
+					if strings.Contains(verifierText, "secrets.") {
+						t.Fatal("the verifier holds a secret")
+					}
+
+					for _, required := range []string{"verify-package", "publish-forge-packages@", "artifact-name: retained-npm-package", "release.{version}", "secrets.RELEASE_TOKEN"} {
 						if !strings.Contains(publisherText, required) {
 							t.Fatalf("missing publisher boundary %s", required)
 						}
 					}
 
-					for _, forbidden := range []string{"platform checkout", "checkout-consumer", "npm pack", "npm ci", "npm run", "publish forge-packages", "tar -x", "secrets.RELEASE_SSH", "secrets.RELEASE_COSIGN"} {
+					for _, forbidden := range []string{"run:", "platform checkout", "checkout-consumer", "npm pack", "npm ci", "npm run", "tar -x", "secrets.RELEASE_SSH", "secrets.RELEASE_COSIGN"} {
 						if strings.Contains(publisherText, forbidden) {
 							t.Fatalf("publisher has source/lifecycle/signing authority: %s", forbidden)
 						}
@@ -213,8 +223,7 @@ func TestNPMApplicationForgejoTagCompatibility(t *testing.T) {
 	var policy struct {
 		Jobs map[string]struct {
 			Steps []struct {
-				Env map[string]string `yaml:"env"`
-				Run string            `yaml:"run"`
+				With map[string]string `yaml:"with"`
 			} `yaml:"steps"`
 		} `yaml:"jobs"`
 	}
@@ -229,15 +238,9 @@ func TestNPMApplicationForgejoTagCompatibility(t *testing.T) {
 		t.Fatal("missing publisher steps")
 	}
 
-	publication := steps[len(steps)-1]
-
-	setting := publication.Env["NPM_TAG"]
+	setting := steps[len(steps)-1].With["npm-tag"]
 	if setting != domainpublish.NPMDottedVersionTagTemplate {
 		t.Fatalf("Forgejo fixture selected incompatible tag policy %q", setting)
-	}
-
-	if !strings.Contains(publication.Run, `--npm-tag "$NPM_TAG"`) {
-		t.Fatal("deploy must consume the same tag setting as preflight")
 	}
 	// Forgejo v16.0.6 setPackageTag rejects any version.NewVersion success.
 	// Its go.mod REPLACES hashicorp/go-version with 6543/go-version v1.3.1.

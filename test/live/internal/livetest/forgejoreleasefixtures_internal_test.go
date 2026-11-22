@@ -298,7 +298,6 @@ func TestForgejoReleasesPassWhatForgejoAccepts(t *testing.T) {
 	rules := []struct{ line, want string }{
 		{line: "artifact upload --name image-context ", want: "--include-hidden"},
 		{line: "npm-tag: ", want: "release.{version}"},
-		{line: "--npm-tag ", want: "release.{version}"},
 	}
 
 	root := reporoot.Path(t)

@@ -140,8 +140,11 @@ const npmApplicationBuildSteps = `      - name: Build original npm application
           forge-ci release files declare --asset 'dist/*.tgz' --sbom dist/application.cdx.json
 `
 
-// Neither consumer checks out project code. Signing completes before either
-// consumer starts, so a registry/oracle finding cannot block signed files.
+// No consumer checks out project code. Signing completes before any of them
+// starts, so a registry/oracle finding cannot block signed files. The checks
+// of the retained bytes run in verify-package, which holds no secret; the
+// job that holds the package token runs only the layer's engine actions, as
+// the isolation check requires of a release job that holds a secret.
 const npmApplicationStableConsumers = `  installed-oracle:
     needs: sign-and-publish
     runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
@@ -152,7 +155,7 @@ const npmApplicationStableConsumers = `  installed-oracle:
       - run: forge-ci artifact download --name retained-npm-package --dir retained-package
       - run: forge-ci artifact download --name npm-oracle-policy --dir oracle-policy
       - run: bash oracle-policy/npm-oracle.sh "$PWD/retained-package"
-  publish-package:
+  verify-package:
     needs: [prepare, sign-and-publish]
     runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
     container:
@@ -163,6 +166,7 @@ const npmApplicationStableConsumers = `  installed-oracle:
       - name: Validate retained bytes and metadata without project code
         env:
           EXPECTED_VERSION: ${{ needs.prepare.outputs.release-tag }}
+          NPM_REGISTRY: ${{ vars.NPM_APPLICATION_REGISTRY }}
         run: |
           set -euo pipefail
           cd retained-package
@@ -173,30 +177,26 @@ const npmApplicationStableConsumers = `  installed-oracle:
           (cd verification && forge-ci publish npm validate-tarball)
           node --input-type=module -e 'import fs from "node:fs"; const a=JSON.parse(fs.readFileSync("package-metadata.json")),b=JSON.parse(fs.readFileSync("verification/package.json")); if(a.name!==b.name||a.version!==b.version) throw Error("packed metadata mismatch");'
           rm -rf verification
-          sha256sum -c SHA256SUMS
-      - name: Publish retained bytes with version-specific tag
-        env:
-          NPM_REGISTRY: ${{ vars.NPM_APPLICATION_REGISTRY }}
-          NODE_AUTH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-          # Forgejo 16's version parser recognizes release-<version> as a
-          # version and rejects it as a dist-tag, after storing the package.
-          NPM_TAG: 'release.{version}'
-        run: |
-          set -euo pipefail
-          set +x
-          unset FORGEJO_TOKEN GITHUB_TOKEN GH_TOKEN RELEASE_TOKEN RELEASE_SSH_SIGNING_KEY RELEASE_COSIGN_PRIVATE_KEY RELEASE_GPG_PRIVATE_KEY
-          cd retained-package
-          export HOME=$(mktemp -d)
-          trap 'rm -rf "$HOME"' EXIT
-          export npm_config_cache="$HOME/cache"
-          forge-ci publish npm write-npmrc --registry "$NPM_REGISTRY" --output "$HOME/.npmrc"
-          export npm_config_userconfig="$HOME/.npmrc"
           name=$(node --input-type=module -e 'import fs from "node:fs"; console.log(JSON.parse(fs.readFileSync("package-metadata.json")).name)')
           version=$(node --input-type=module -e 'import fs from "node:fs"; console.log(JSON.parse(fs.readFileSync("package-metadata.json")).version)')
-          forge-ci publish npm validate-tag --version "$version"
           forge-ci publish npm validate-version --name "$name" --version "$version" --registry "$NPM_REGISTRY"
-          forge-ci publish npm deploy --working-dir . --registry "$NPM_REGISTRY" --npm-tag "$NPM_TAG"
-          sha256sum -c SHA256SUMS
+  publish-package:
+    needs: [prepare, sign-and-publish, verify-package]
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
+    container:
+      image: @IMAGE@
+    steps:
+      - uses: @ACTIONS@setup-forge-ci@@PIN@
+      - name: Publish retained bytes with version-specific tag
+        uses: @ACTIONS@publish-forge-packages@@PIN@
+        with:
+          project-type: npm
+          artifact-name: retained-npm-package
+          working-directory: retained-package
+          # Forgejo 16's version parser recognizes release-<version> as a
+          # version and rejects it as a dist-tag, after storing the package.
+          npm-tag: 'release.{version}'
+          token: ${{ secrets.RELEASE_TOKEN }}
 `
 
 // validateNPMPackage admits only publishable package metadata with a bin, or,

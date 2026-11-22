@@ -142,8 +142,9 @@ jobs:
     needs: [prepare, export-plan]
     runs-on: ${{ fromJSON(matrix.suffix == 'arm64' && (vars.CI_RUNNER_LABEL_CONTAINER_ARM64 || vars.CI_RUNNER_LABEL_ARM64) || (vars.CI_RUNNER_LABEL_CONTAINER || vars.CI_RUNNER_LABEL)) }}
     # kaniko's job image, checked above; empty for Buildah, which runs in the
-    # runner's own environment.
-    container: ${{ needs.export-plan.outputs.builder_job_image }}
+    # runner's own environment. A release job's image is a digest or one
+    # repository variable, never a job output.
+    container: ${{ vars.CI_IMAGE_BUILDER_JOB_IMAGE }}
     timeout-minutes: 30
     strategy:
       fail-fast: true

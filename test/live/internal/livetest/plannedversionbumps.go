@@ -111,8 +111,8 @@ func npmPackageName(dir string) (string, error) {
 // publishes to the owner's package registry. The layer has no package job,
 // so the consumer's release workflow (a file name under .forgejo/workflows)
 // is the plan: PlannedNPMPackages of the declaration it passes
-// prepare-release.yml when it runs `forge-ci publish forge-packages deploy`,
-// and none when it does not.
+// prepare-release.yml when a step runs the layer's publish-forge-packages
+// action with project-type: npm, and none when none does.
 func ForgejoPlannedNPMPackages(consumerRoot, workflow string) ([]string, error) {
 	path := filepath.Join(consumerRoot, ".forgejo", "workflows", workflow)
 
@@ -121,8 +121,9 @@ func ForgejoPlannedNPMPackages(consumerRoot, workflow string) ([]string, error) 
 		return nil, fmt.Errorf("read the release workflow: %w", err)
 	}
 
-	if !strings.Contains(string(body), "forge-ci publish forge-packages deploy") {
-		return nil, nil
+	publishes, err := publishesNPMPackage(body)
+	if err != nil || !publishes {
+		return nil, err
 	}
 
 	artifactsConfig, err := forgejoCalledArtifactsConfig(path, "prepare-release.yml")
@@ -131,6 +132,32 @@ func ForgejoPlannedNPMPackages(consumerRoot, workflow string) ([]string, error) 
 	}
 
 	return PlannedNPMPackages(consumerRoot, artifactsConfig)
+}
+
+// publishesNPMPackage reports whether a step of the workflow runs the layer's
+// publish-forge-packages action for an npm package.
+func publishesNPMPackage(body []byte) (bool, error) {
+	var workflow struct {
+		Jobs map[string]struct {
+			Steps []struct {
+				Uses string            `yaml:"uses"`
+				With map[string]string `yaml:"with"`
+			} `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal(body, &workflow); err != nil {
+		return false, fmt.Errorf("read the release workflow: %w", err)
+	}
+
+	for _, job := range workflow.Jobs {
+		for _, step := range job.Steps {
+			if strings.Contains(step.Uses, "/.forgejo/actions/publish-forge-packages@") && step.With["project-type"] == "npm" {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
 }
 
 // forgejoCalledArtifactsConfig is the artifacts-config input a Forgejo

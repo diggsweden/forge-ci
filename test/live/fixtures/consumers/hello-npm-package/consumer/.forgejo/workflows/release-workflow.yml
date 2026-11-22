@@ -149,27 +149,19 @@ jobs:
   # Ours: the packed package of the signed release to the owner's package
   # registry, as publish-to: [forge-packages] declares. It runs after the
   # release is published, holds the package token and no signing key, and
-  # npm publishes the hand-off's bytes with lifecycle scripts off.
+  # npm publishes the hand-off's bytes with lifecycle scripts off. The job
+  # holds a token, so it runs only the layer's engine actions, in the job
+  # image that carries Node and npm: no checkout, toolchain or run: step.
   publish-package:
     name: "Publish: package"
     needs: [prepare, build, sign-and-publish]
     runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
+    container:
+      image: ${{ vars.CI_JOB_IMAGE }}
     timeout-minutes: 15
     steps:
       - name: Set up forge-ci
         uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-forge-ci@c08b59fe61f4b926d80875ce850f6bdc695b1d9a
-
-      - name: Checkout prepared release
-        env:
-          CHECKOUT_REF: ${{ needs.prepare.outputs.release-sha }}
-        run: forge-ci platform checkout
-
-      - uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/setup-toolchain@c08b59fe61f4b926d80875ce850f6bdc695b1d9a
-        with:
-          cache-key-suffix: release-publish
-          install-dev-tools: false
-          cache: 'false'
-          mise-locked: true
 
       - name: Publish to the package registry
         uses: https://codefloe.com/itiquette/forge-ci/.forgejo/actions/publish-forge-packages@c08b59fe61f4b926d80875ce850f6bdc695b1d9a
