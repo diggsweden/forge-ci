@@ -424,20 +424,21 @@ jobs:
     steps:
       - name: Set up forge-ci
         uses: https://FORGE_HOST/OWNER/forge-ci/.forgejo/actions/setup-forge-ci@PIN_FORGE_CI_SHA
-      - name: Download the release files
-        run: |
-          set -euo pipefail
-          forge-ci artifact download --name release-files --dir package
+      # The job holds a token that may write packages, so it runs only the
+      # layer's actions that run the engine alone: no run: step, local
+      # action, checkout or build.
       - name: Publish the released package
-        env:
+        uses: https://FORGE_HOST/OWNER/forge-ci/.forgejo/actions/publish-forge-packages@PIN_FORGE_CI_SHA
+        with:
+          project-type: npm
+          working-directory: package
+          artifact-name: release-files
+          # Forgejo reads release-<version> as a version and refuses it as
+          # a dist-tag, so the tag is release.<version> here.
+          npm-tag: 'release.{version}'
           # The automatic token may not write packages; this one may write
           # the owner's.
-          FORGEJO_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
-        # Forgejo reads release-<version> as a version and refuses it as a
-        # dist-tag, so the tag is release.<version> here.
-        run: |
-          set -euo pipefail
-          forge-ci publish forge-packages deploy --project-type npm --working-dir package --npm-tag 'release.{version}'
+          token: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
   # ===========================================================================
   # JOB: summary — the release overview; Forgejo 17 shows it above the logs,
   # older Forgejo prints it in this job's log.

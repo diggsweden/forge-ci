@@ -5,7 +5,6 @@ package validate
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -29,39 +28,53 @@ func isJobTokenSecret(secret string) bool {
 // layer's own workflows read none of them.
 const dependencySecretPrefix = "DEPENDENCY_"
 
-// checkoutCommand matches a run: that fetches the repository: the engine's
-// checkout, or git cloning, fetching or pulling.
-var checkoutCommand = regexp.MustCompile(`\b(?:forge-ci|run_forge_ci)\s+platform\s+checkout\b|\bgit\b[^\n;&|]*\s(?:clone|fetch|pull)\b`)
-
-// checksOutTheRepository reports whether a job of steps brings the
-// project's code into its workspace: an actions/checkout or checkout-consumer
-// step, a local action (code of the repository, run from its checkout), or a
-// run: that checks the repository out or fetches it with git.
-func checksOutTheRepository(job yaml.Node) bool {
+// engineOnlySteps returns the first step of a job of steps that is not one
+// of the layer's actions that run only the engine (layerActions): a run:
+// step, a local action, another action, or a layer action that runs the
+// project's code or the caller's commands. The secret-holding job of a
+// release may run nothing else. Whether every remote action is the layer's
+// at its pin is the caller's check of every uses: of the release; this one
+// reads the job's shape.
+func engineOnlySteps(job yaml.Node) (yaml.Node, string, bool) {
 	for _, step := range jobSteps(job) {
 		uses := scalarValue(mappingValue(&step, "uses"))
-		if usesAction(uses, "actions/checkout@") || usesAction(uses, "/checkout-consumer@") || strings.HasPrefix(uses, "./") {
-			return true
-		}
+		name, layer := layerActionName(uses)
+		with := mappingValue(&step, "with")
 
-		if checkoutCommand.MatchString(scalarValue(mappingValue(&step, "run"))) {
-			return true
+		switch {
+		case mappingValue(&step, "run") != nil:
+			return step, "a run: step", false
+		case uses == "":
+			return step, "a step without uses:", false
+		case strings.HasPrefix(uses, "./"):
+			return step, "the local action " + uses, false
+		case !layer:
+			return step, "the action " + uses + ", which is not the layer's", false
+		case !layerActions[name]:
+			return step, "the layer's " + name + ", which runs the project's code or the caller's commands", false
+		case name == "publish-forge-packages" && runsMavenDeploy(scalarValue(mappingValue(with, "project-type")), scalarValue(mappingValue(with, "from-build"))):
+			return step, "publish-forge-packages with mvn deploy, which runs the project's build (publish the build's hand-off with from-build: true)", false
 		}
 	}
 
-	return false
+	return yaml.Node{}, "", true
 }
 
 // jobTokenViolations refuses every secret but the job token and the
-// read-only dependency credentials in a job that
-// checks the repository out: once the project's code is in the workspace,
-// any step of the job can run it, and it reads whatever the job holds,
-// whichever step, env name, file or $FORGEJO_ENV write the secret went to.
-// A release, registry, API or dependency token belongs in a job that runs
-// only the engine's code, or in a call of one of its workflows. The workflow
-// env a job inherits is read as well, unless the job overrides the name.
-// A signing secret and the whole secrets context are left to the
-// signing-secret rule, which refuses them in every such job already.
+// read-only dependency credentials in a job of a release workflow that runs
+// anything but the layer's actions that run the engine alone. A run: step, a
+// local action, a checkout or a layer action that builds, lints or sets up
+// the project's tools runs code the release does not pin, or the project's
+// code, and it reads whatever the job holds, whichever step,
+// env name, file or $FORGEJO_ENV write the secret went to. Telling a
+// checkout from any other way of fetching code (an archive download, a
+// submodule, a downloaded artifact) is not possible from the text, so the
+// job's shape decides. A release, registry, API or dependency token belongs
+// in a job of the layer's actions alone, or in a call of one of its
+// workflows. The workflow env a job inherits is read as well, unless the job
+// overrides the name. A signing secret and the whole secrets context are
+// left to the signing-secret rule, which refuses them in every such job
+// already.
 func jobTokenViolations(workflowEnv yaml.Node, jobs map[string]yaml.Node, cfg IsolationConfig) []IsolationViolation {
 	signing := map[string]bool{}
 	for _, name := range cfg.SigningSecrets {
@@ -77,9 +90,13 @@ func jobTokenViolations(workflowEnv yaml.Node, jobs map[string]yaml.Node, cfg Is
 
 	for _, name := range sortedKeys(jobs) {
 		job := jobs[name]
-		if !checksOutTheRepository(job) {
+
+		step, runs, ok := engineOnlySteps(job)
+		if ok {
 			continue
 		}
+
+		why := fmt.Sprintf(" and runs %s (line %d)", runs, step.Line)
 
 		refs, err := findSecretRefsMatching(&job, isOtherToken)
 		if err != nil {
@@ -89,21 +106,22 @@ func jobTokenViolations(workflowEnv yaml.Node, jobs map[string]yaml.Node, cfg Is
 		}
 
 		for _, ref := range refs {
-			violations = append(violations, IsolationViolation{Line: ref.line, Msg: fmt.Sprintf("job %q checks out the repository and references secret %s%s", name, ref.describe(), checkoutJobMayHold)})
+			violations = append(violations, IsolationViolation{Line: ref.line, Msg: fmt.Sprintf("job %q references secret %s%s%s", name, ref.describe(), why, secretJobMayRun)})
 		}
 
-		violations = append(violations, inheritedTokenViolations(workflowEnv, name, &job, isOtherToken)...)
+		violations = append(violations, inheritedTokenViolations(workflowEnv, name, &job, why, isOtherToken)...)
 	}
 
 	return violations
 }
 
-// checkoutJobMayHold ends each diagnostic of a checkout job with what the job may hold.
-const checkoutJobMayHold = "; a job that runs the project's code may hold only the job token (${{ forgejo.token }}, ${{ github.token }} or secrets.GITHUB_TOKEN) and read-only DEPENDENCY_* credentials, so move the step that needs it to a job without a checkout"
+// secretJobMayRun ends each diagnostic of a secret-holding job with what it may run.
+var secretJobMayRun = "; a release job that holds a secret but the job token (${{ forgejo.token }}, ${{ github.token }} or secrets.GITHUB_TOKEN) and read-only DEPENDENCY_* credentials may run only the layer's actions that run the engine alone (" + strings.Join(PrivilegedActions(), ", ") + "), with no run: step, local action, checkout or other action, so move the secret to such a job or to a call of one of the layer's workflows"
 
 // inheritedTokenViolations reports a secret in the workflow env that a job
-// which checks the repository out inherits without overriding the name.
-func inheritedTokenViolations(workflowEnv yaml.Node, name string, job *yaml.Node, isOtherToken func(string) bool) []IsolationViolation {
+// which runs more than the layer's actions inherits without overriding the
+// name.
+func inheritedTokenViolations(workflowEnv yaml.Node, name string, job *yaml.Node, why string, isOtherToken func(string) bool) []IsolationViolation {
 	overrides := map[string]bool{}
 	for _, key := range mappingKeys(mappingValue(job, "env")) {
 		overrides[key] = true
@@ -122,7 +140,7 @@ func inheritedTokenViolations(workflowEnv yaml.Node, name string, job *yaml.Node
 		}
 
 		for _, ref := range refs {
-			violations = append(violations, IsolationViolation{Line: ref.line, Msg: fmt.Sprintf("job %q checks out the repository and inherits secret %s through workflow env %q%s", name, ref.describe(), key, checkoutJobMayHold)})
+			violations = append(violations, IsolationViolation{Line: ref.line, Msg: fmt.Sprintf("job %q inherits secret %s through workflow env %q%s%s", name, ref.describe(), key, why, secretJobMayRun)})
 		}
 	}
 

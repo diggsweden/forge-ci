@@ -29,8 +29,9 @@ type IsolationInput struct {
 	// WorkflowsDir is the repository's workflow directory (relative to FS
 	// when FS is set, else an OS path), for example .forgejo/workflows. The
 	// repository root is the directory two levels above it. Its release
-	// workflows are the ones that call the subject's release entry points;
-	// the caller does not name them.
+	// workflows are the ones that call the subject's release entry points,
+	// directly or through local reusable workflows; the caller does not name
+	// them.
 	WorkflowsDir string
 	// SigningSecrets are the secret names no job may reference but a call of
 	// a signer workflow of the layer.
@@ -68,7 +69,7 @@ type IsolationInput struct {
 // Isolation asserts the static release-isolation invariants of a
 // repository's workflow directory. Its release workflows are found, not
 // named: every workflow that calls one of the subject's release entry
-// points. Their jobs, the local workflows they call and the local actions
+// points, directly or through local reusable workflows. Their jobs, the local workflows they call and the local actions
 // they use are held to the release rules (validate.CheckIsolation, local and
 // subject actions only); every workflow of the directory is held to the
 // signing-secret boundary, one subject pin on one forge and the literal and
@@ -93,7 +94,7 @@ func Isolation(out io.Writer, annot output.Annotator, in IsolationInput) error {
 		return err
 	}
 
-	releases, others := releaseWorkflows(files, in.SinglePinSubject)
+	releases, others := releaseWorkflows(in, files)
 	called, violations := calledLocalWorkflows(in, releases)
 
 	ruleViolations, err := releaseRuleViolations(in, releases, notIn(others, called))
@@ -106,6 +107,7 @@ func Isolation(out io.Writer, annot output.Annotator, in IsolationInput) error {
 
 	actions, actionViolations := foreignActionViolations(in, slices.Concat(releases, called))
 	violations = append(violations, actionViolations...)
+	violations = append(violations, releaseImageViolations(slices.Concat(releases, called))...)
 
 	// The pin and address checks read every file the release runs, not only
 	// the workflow directory: a local action can reference the engine too.
@@ -117,7 +119,7 @@ func Isolation(out io.Writer, annot output.Annotator, in IsolationInput) error {
 	if len(releases) == 0 {
 		violations = append(violations, fileViolation{File: in.WorkflowsDir, Msg: fmt.Sprintf(
 			"no workflow under %s calls %s's %s: there is no release workflow to check",
-			in.WorkflowsDir, in.SinglePinSubject, strings.Join(validate.ReleaseEntryWorkflows(), ", "))})
+			in.WorkflowsDir, in.SinglePinSubject, strings.Join(validate.SignerWorkflows(), ", "))})
 	}
 
 	if addressNote != "" {
@@ -150,14 +152,38 @@ func Isolation(out io.Writer, annot output.Annotator, in IsolationInput) error {
 	return nil
 }
 
-// releaseWorkflows splits the workflow directory into the release workflows,
-// the ones with a job that calls one of the subject's release entry points,
-// and the rest.
-func releaseWorkflows(files []releaseFile, subject string) ([]releaseFile, []releaseFile) {
+// releaseWorkflows splits the workflow directory into the release workflows
+// and the rest. A release workflow has a job that calls one of the subject's
+// release entry points, or one that calls a local reusable workflow that is a
+// release workflow, through any number of them: the caller runs the release
+// as much as the workflow it calls, and its other jobs run beside it with
+// whatever the trigger and the secrets of the caller hand them.
+func releaseWorkflows(in IsolationInput, files []releaseFile) ([]releaseFile, []releaseFile) {
+	root := repositoryRoot(in)
+	release := map[string]bool{}
+
+	for _, file := range files {
+		if callsReleaseEntry(file.Body, in.SinglePinSubject) {
+			release[path.Clean(file.Path)] = true
+		}
+	}
+
+	for grown := true; grown; {
+		grown = false
+
+		for _, file := range files {
+			if release[path.Clean(file.Path)] || !callsLocalRelease(file.Body, root, release) {
+				continue
+			}
+
+			release[path.Clean(file.Path)], grown = true, true
+		}
+	}
+
 	var releases, others []releaseFile
 
 	for _, file := range files {
-		if callsReleaseEntry(file.Body, subject) {
+		if release[path.Clean(file.Path)] {
 			releases = append(releases, file)
 		} else {
 			others = append(others, file)
@@ -167,8 +193,23 @@ func releaseWorkflows(files []releaseFile, subject string) ([]releaseFile, []rel
 	return releases, others
 }
 
+// callsLocalRelease reports whether a job of the workflow calls a local
+// reusable workflow that is one of the release workflows. A workflow that
+// does not parse is a release workflow already.
+func callsLocalRelease(body []byte, root string, release map[string]bool) bool {
+	calls, err := localWorkflowCalls(body)
+	if err != nil {
+		return false
+	}
+
+	return slices.ContainsFunc(calls, func(call localWorkflowCall) bool {
+		return release[path.Join(root, strings.TrimPrefix(call.uses, "./"))]
+	})
+}
+
 // callsReleaseEntry reports whether a job of the workflow calls one of the
-// subject's release entry points. A file that does not parse is a release
+// subject's release entry points: the signer workflows, every workflow of the
+// layer that takes signing secrets. A file that does not parse is a release
 // workflow: the release rules then report it as malformed rather than the
 // directory passing without it.
 func callsReleaseEntry(body []byte, subject string) bool {
@@ -183,7 +224,7 @@ func callsReleaseEntry(body []byte, subject string) bool {
 	}
 
 	for _, job := range doc.Jobs {
-		if uses, ok := resolvedScalar(&job.Uses); ok && validate.CallsReleaseEntry(uses) && referencesSubject(uses, subject) {
+		if uses, ok := resolvedScalar(&job.Uses); ok && validate.CallsSignerWorkflow(uses) && referencesSubject(uses, subject) {
 			return true
 		}
 	}

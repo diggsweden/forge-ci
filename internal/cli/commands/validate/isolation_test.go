@@ -64,7 +64,9 @@ func TestIsolationCommaSeparatedSigningSecretsStillRejectsEitherSecret(t *testin
 		t.Run(secret, func(t *testing.T) {
 			t.Parallel()
 
-			workflow := "jobs:\n  build:\n    steps:\n      - run: echo '${{ secrets." + secret + " }}'\n" + releaseEntryJob
+			// A job of no steps holds the secret: the token rule leaves it, and
+			// the signing-secret set alone decides.
+			workflow := "jobs:\n  build:\n    env:\n      K: ${{ secrets." + secret + " }}\n    steps: []\n" + releaseEntryJob
 			if err := runIsolationThroughRoot(t, workflow, "--single-pin-subject", singlePinSubject); err != nil {
 				t.Fatalf("custom name is not in the default signing-secret set: %v", err)
 			}
@@ -440,7 +442,7 @@ func TestIsolationCmd_DefaultsAreTheLayers(t *testing.T) {
 	}{
 		"a layer signing key in a build job":    {workflow: "jobs:\n  build:\n    steps:\n      - run: echo '${{ secrets.RELEASE_GPG_PRIVATE_KEY }}'\n" + releaseEntryJob, want: errs.ErrValidation},
 		"the cosign passphrase in a build job":  {workflow: "jobs:\n  build:\n    steps:\n      - run: echo '${{ secrets.RELEASE_COSIGN_PASSPHRASE }}'\n" + releaseEntryJob, want: errs.ErrValidation},
-		"a named secret list replaces them":     {workflow: "jobs:\n  build:\n    steps:\n      - run: echo '${{ secrets.RELEASE_GPG_PRIVATE_KEY }}'\n" + releaseEntryJob, flags: []string{"--signing-secret", "OTHER"}},
+		"a named secret list replaces them":     {workflow: "jobs:\n  build:\n    env:\n      K: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}\n    steps: []\n" + releaseEntryJob, flags: []string{"--signing-secret", "OTHER"}},
 		"a signer image from a variable":        {workflow: singlePinWorkflow(pin + "      signer-image: ${{ vars.IMAGE }}\n"), want: errs.ErrValidation},
 		"a transparency log from a variable":    {workflow: singlePinWorkflow(pin + "      transparency-log: ${{ vars.LOG }}\n"), want: errs.ErrValidation},
 		"an enforce setting from a variable":    {workflow: singlePinWorkflow(pin + "      enforce-lint: ${{ vars.LINT }}\n"), want: errs.ErrValidation},

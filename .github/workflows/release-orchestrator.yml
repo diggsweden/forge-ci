@@ -518,9 +518,12 @@ jobs:
       # is at one full commit on this forge. The engine checkout above holds
       # the declarations the caller's inputs are checked against. The
       # engine's own release (self-release.yml) calls this workflow by path
-      # at the commit it releases: its workflows are the engine itself.
+      # at the commit it releases: its workflows are the engine itself. The
+      # skip reads the repository GitHub says serves this workflow, never
+      # FORGE_CI_REPOSITORY, a variable the caller sets; where the context is
+      # missing (GitHub Enterprise Server) the check runs.
       - name: Check release isolation of the caller's workflows
-        if: ${{ github.repository != env.ENGINE_REPOSITORY }}
+        if: ${{ github.repository != needs.resolve-bootstrap.outputs.serving-repository }}
         run: |
           forge-ci validate isolation --workflows-dir .github/workflows \
             --single-pin-subject "$ENGINE_REPOSITORY" --contract-root _forge_ci_bootstrap

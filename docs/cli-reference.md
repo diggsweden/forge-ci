@@ -6213,19 +6213,22 @@ check static release isolation over a workflow directory (signing secrets reach 
 ```
 Static release-isolation checks over a repository's workflow directory.
 The release workflows are found, not named: every workflow under
---workflows-dir with a job that calls the --single-pin-subject's
-.forgejo/workflows/prepare-release.yml or sign-and-publish-release.yml, or
-its .github/workflows/release-orchestrator.yml. None found fails.
+--workflows-dir with a job that calls one of the --single-pin-subject's
+signer workflows, the ones that take signing secrets (.forgejo/workflows/prepare-release.yml, .forgejo/workflows/sign-and-publish-release.yml, .forgejo/workflows/sign-container-images.yml, .forgejo/workflows/runtime-images.yml, .forgejo/workflows/base-image-lifecycle.yml, .github/workflows/release-orchestrator.yml), and every workflow with a
+job that calls a release workflow as a local reusable workflow (uses:
+./.forgejo/workflows/...), through any number of them. None found fails.
 
 In every workflow of the directory, no job may reach a signing secret,
 directly or through the workflow env it inherits, but a call of one of the
 layer's signer workflows. In the release workflows, no job may pass
 secrets: inherit, every actions/checkout step must set
 persist-credentials: false, every setup-toolchain step cache: false, and a
-job that checks the repository out (actions/checkout, checkout-consumer,
-forge-ci platform checkout, git clone/fetch/pull or a local action) may
-reference no secret but the job token and read-only DEPENDENCY_*
-credentials, in its steps, its env or the workflow env it inherits. A call
+job that references any secret but the job token and read-only DEPENDENCY_*
+credentials, in its steps, its env or the workflow env it inherits, may run
+only the subject's actions that run the engine alone (assemble-release-dist, check-l3-isolation, guard-release-tag, pr-check-results, prune-base-images, publish-forge-packages, record-release-image, registry-login, setup-forge-ci, upload-dist, verify-forgejo-token;
+publish-forge-packages not as a Maven mvn deploy): no run: step, local
+action, checkout or other action, and none that runs the project's code or
+the caller's commands. A call
 of sign-and-publish-release.yml must take release-tag, release-sha and
 artifacts-config from a call of prepare-release.yml, and dist-digest from a
 job that declares the output it names, each as the bare
@@ -6239,7 +6242,10 @@ release: its jobs are held to the same rules, and one that is missing fails.
 Every uses: in the release workflows, in those local workflows and in the
 local actions they use must be a path in the repository or a reference to
 the subject, and a local action must be a composite action: no third-party
-action, docker:// image or Node action runs in the release.
+action, docker:// image or Node action runs in the release. A job's
+container image and each service image there is pinned by digest
+(@sha256:...) or is one repository variable (${{ vars.NAME }}); a tag or an
+expression from an input or the event fails.
 
 Every reference to the subject in the workflow directory, and in the local
 workflows and actions the release workflows run, is pinned to a full commit (a branch, a tag or a short commit fails), and all of them to

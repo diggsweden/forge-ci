@@ -151,26 +151,6 @@ func CallsSignerWorkflow(uses string) bool {
 	return slices.ContainsFunc(signerWorkflows, func(workflow string) bool { return callsLayerWorkflow(uses, workflow) })
 }
 
-// releaseEntryWorkflows are the layer's workflows a release calls, by their
-// path in the layer's repository: a workflow of the repository that calls
-// one of them is a release workflow, and the release rules hold for it.
-var releaseEntryWorkflows = []string{
-	forgejoWorkflows + prepareReleaseWorkflow,
-	forgejoWorkflows + signAndPublishWorkflow,
-	githubWorkflows + releaseOrchestratorWorkflow,
-}
-
-// ReleaseEntryWorkflows returns the paths of the layer's release entry
-// points.
-func ReleaseEntryWorkflows() []string { return slices.Clone(releaseEntryWorkflows) }
-
-// CallsReleaseEntry reports whether a job's uses: value is a
-// cross-repository call of one of the layer's release entry points. Which
-// repository it names is the caller's to check.
-func CallsReleaseEntry(uses string) bool {
-	return slices.ContainsFunc(releaseEntryWorkflows, func(workflow string) bool { return callsLayerWorkflow(uses, workflow) })
-}
-
 // workflowEnvSecretViolations reports a signing secret in the workflow env
 // that a job which may not hold one inherits, without overriding the name.
 func workflowEnvSecretViolations(env yaml.Node, jobs map[string]yaml.Node, cfg IsolationConfig) ([]IsolationViolation, error) {

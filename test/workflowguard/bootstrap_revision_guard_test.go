@@ -53,6 +53,7 @@ func TestBootstrapResolverRefusesAnUnknownRepository(t *testing.T) {
 	require.NotEmpty(t, steps)
 	require.Equal(t, "repository", steps[0].ID, "the repository is admitted before anything reads it")
 	require.Equal(t, "${{ vars.FORGE_CI_REPOSITORY || job.workflow_repository }}", steps[0].Env["REPOSITORY"])
+	require.Equal(t, "${{ job.workflow_repository }}", steps[0].Env["SERVING_REPOSITORY"])
 
 	for _, step := range steps[1:] {
 		for _, value := range []string{step.With["repository"], step.Env["REPOSITORY"]} {
@@ -90,7 +91,7 @@ func TestBootstrapResolverRefusesAnUnknownRepository(t *testing.T) {
 			require.NoError(t, err, "%s", out)
 			body, err := os.ReadFile(output)
 			require.NoError(t, err)
-			require.Equal(t, "repository="+tc.repository+"\n", string(body))
+			require.Equal(t, "repository="+tc.repository+"\nserving=\n", string(body))
 		})
 	}
 }
@@ -110,9 +111,11 @@ func TestOnlyTheResolverReadsTheWorkflowRepository(t *testing.T) {
 				return err
 			}
 
+			// The resolver reads it twice: as the default repository, and
+			// as the serving repository no variable can name.
 			want := 0
 			if filepath.Base(path) == "resolve-forge-ci-bootstrap.yml" {
-				want = 1
+				want = 2
 			}
 
 			require.Equal(t, want, strings.Count(string(body), "job.workflow_repository"),

@@ -22,8 +22,8 @@ import (
 // job calls one of the layer's GitHub signer workflows. Those are the
 // orchestrators a consumer calls whose workflow_call secrets name a signing
 // secret: one left off the list would have its callers refused, and one kept
-// on it after it stopped taking keys would let any caller hand it one. The
-// release orchestrator is also the GitHub release entry point.
+// on it after it stopped taking keys would let any caller hand it one. A
+// workflow that calls one of them is a release workflow.
 func TestIsolationGitHubSignerWorkflowsAreTheOrchestratorsThatTakeSigningSecrets(t *testing.T) {
 	t.Parallel()
 
@@ -49,7 +49,6 @@ func TestIsolationGitHubSignerWorkflowsAreTheOrchestratorsThatTakeSigningSecrets
 	slices.Sort(takers)
 
 	require.Equal(t, takers, listed, "the isolation check's GitHub signer workflows must be the orchestrators whose secrets name a signing secret")
-	require.Contains(t, validate.ReleaseEntryWorkflows(), ".github/workflows/release-orchestrator.yml")
 }
 
 // The release orchestrator checks the caller's workflows before anything
@@ -84,5 +83,8 @@ func TestReleaseOrchestratorChecksTheCallersIsolation(t *testing.T) {
 	require.Contains(t, check.Run, "forge-ci validate isolation --workflows-dir .github/workflows")
 	require.Contains(t, check.Run, `--single-pin-subject "$ENGINE_REPOSITORY"`)
 	require.Contains(t, check.Run, "--contract-root _forge_ci_bootstrap")
-	require.Equal(t, "${{ github.repository != env.ENGINE_REPOSITORY }}", check.If)
+	// Only the forge's own record of the repository serving the workflow
+	// skips the check: FORGE_CI_REPOSITORY, which ENGINE_REPOSITORY may come
+	// from, is the caller's variable, and naming the caller there skipped it.
+	require.Equal(t, "${{ github.repository != needs.resolve-bootstrap.outputs.serving-repository }}", check.If)
 }

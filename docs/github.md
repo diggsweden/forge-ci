@@ -316,16 +316,21 @@ names.
 Before it reads the release configuration, `release-orchestrator.yml` runs
 `forge-ci validate isolation` over your `.github/workflows` at the request
 commit, and the release stops on a violation. Your release workflows are
-the ones that call the orchestrator, under any file name. The check
+the ones that call the orchestrator, under any file name, and the ones
+that call such a workflow as a local reusable workflow. The check
 refuses `secrets: inherit` on any of their jobs, a signing key
 (`RELEASE_GPG_*`, `RELEASE_COSIGN_*`) in any job of any workflow but the
 call of the orchestrator, a reference to the engine that is not pinned to
 the one full commit the orchestrator runs at, or that names another forge,
-a third-party action in a release job, and a `forge-ci-sha` or trust input
+a third-party action in a release job, a job or service image that is
+neither pinned by digest nor one `${{ vars.NAME }}`, and a `forge-ci-sha` or trust input
 (`signer-image`, `cosign-public-key-sha256`, `transparency-log`,
 `enforce-*`) that is not written out. A job of a release workflow that
-checks the repository out may hold only the job token and `DEPENDENCY_*`
-credentials. Run the same check locally:
+holds any secret but the job token and `DEPENDENCY_*` credentials may run
+only those of the engine's actions that run the engine alone (the list is in
+[the Forgejo guide](forgejo.md#the-transparency-log)): no `run:`
+step, local action, checkout or other action. Run the
+same check locally:
 
 ```bash
 forge-ci validate isolation --workflows-dir .github/workflows \

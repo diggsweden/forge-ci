@@ -88,3 +88,86 @@ func TestIsolation_CalledLocalWorkflowsAreChecked(t *testing.T) {
 		})
 	}
 }
+
+// A workflow that calls a release workflow as a local reusable workflow is a
+// release workflow too, through any number of calls: its other jobs run with
+// the caller's trigger and secrets beside the release. A tag-triggered
+// wrapper whose checkout job held a publish token passed before, because
+// only a direct call of an entry point made a release.
+func TestIsolation_WorkflowsThatCallAReleaseAreReleases(t *testing.T) {
+	const (
+		release = ".forgejo/workflows/release.yml"
+		outer   = ".forgejo/workflows/outer.yml"
+		sneaky  = "  sneaky:\n    steps:\n" +
+			"      - uses: examplescope/ci-layer/.forgejo/actions/checkout-consumer@" + isolationPin + "\n" +
+			"      - run: ./scripts/publish.sh\n        env:\n          T: ${{ secrets.PACKAGE_PUBLISH_TOKEN }}\n"
+		tokenRefused = `job "sneaky" references secret "PACKAGE_PUBLISH_TOKEN" and runs the layer's checkout-consumer`
+	)
+
+	wrapper := func(target, extra string) string {
+		return "on:\n  push:\n    tags: ['release-request/v*']\njobs:\n" + extra +
+			"  release:\n    uses: ./" + target + "\n    secrets: inherit\n"
+	}
+
+	for name, tc := range map[string]struct {
+		files map[string]string
+		want  []string
+		pass  bool
+	}{
+		// fxC of the second review.
+		"a wrapper with a token-holding checkout job": {
+			files: map[string]string{outer: wrapper(release, sneaky)},
+			want: []string{
+				"file=" + outer + ",line=12::job \"release\" inherits every caller secret (secrets: inherit)",
+				"file=" + outer + ",line=10::" + tokenRefused,
+			},
+		},
+		"a wrapper of a wrapper": {
+			files: map[string]string{
+				outer:                          wrapper(".forgejo/workflows/mid.yml", ""),
+				".forgejo/workflows/mid.yml":   "on:\n  workflow_call: {}\njobs:\n" + sneaky + "  release:\n    uses: ./" + release + "\n",
+				".forgejo/workflows/other.yml": "on: push\njobs:\n  lint:\n    uses: ./.forgejo/workflows/lint.yml\n    secrets: inherit\n",
+				".forgejo/workflows/lint.yml":  "on:\n  workflow_call: {}\njobs:\n" + sneaky,
+			},
+			want: []string{
+				"file=" + outer + `,line=6::job "release" inherits every caller secret`,
+				"file=.forgejo/workflows/mid.yml,line=9::" + tokenRefused,
+			},
+		},
+		"a workflow that calls no release": {
+			files: map[string]string{
+				".forgejo/workflows/other.yml": "on: push\njobs:\n  lint:\n    uses: ./.forgejo/workflows/lint.yml\n    secrets: inherit\n",
+				".forgejo/workflows/lint.yml":  "on:\n  workflow_call: {}\njobs:\n" + sneaky,
+			},
+			pass: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			mem := testfs.NewMemory(t)
+			mem.WriteFile(release, []byte("on:\n  workflow_call: {}\n"+forgejoIsolationCleanWorkflow))
+
+			for file, body := range tc.files {
+				mem.WriteFile(file, []byte(body))
+			}
+
+			out, err := runForgejoIsolationInFS(t, mem)
+			if tc.pass {
+				if err != nil {
+					t.Fatalf("Isolation: %v\n%s", err, out)
+				}
+
+				return
+			}
+
+			if !errors.Is(err, errs.ErrValidation) {
+				t.Fatalf("err = %v, want ErrValidation\n%s", err, out)
+			}
+
+			for _, want := range tc.want {
+				if !strings.Contains(out, want) {
+					t.Errorf("missing %q in:\n%s", want, out)
+				}
+			}
+		})
+	}
+}

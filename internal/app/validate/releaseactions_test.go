@@ -165,3 +165,81 @@ func TestIsolation_LocalActionsAreHeldToThePinAndForge(t *testing.T) {
 		})
 	}
 }
+
+// A release job's container and service images are code its steps run in,
+// with what the job holds: each is pinned by digest or taken from one
+// repository variable. fxA of the second review ran in docker.io/evil
+// images at :latest.
+func TestIsolation_ReleaseImagesArePinned(t *testing.T) {
+	t.Parallel()
+
+	const (
+		digest = "@sha256:" + "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+		refuse = "a release job's container and service images are pinned by digest"
+	)
+
+	job := func(spec string) string { return "  extra:\n" + spec + "    steps: []\n" }
+
+	for name, tc := range map[string]struct {
+		jobs  string
+		files map[string]string
+		want  string
+	}{
+		"a digest-pinned container":           {jobs: job("    container:\n      image: docker.io/library/node:24" + digest + "\n")},
+		"a digest-pinned container by string": {jobs: job("    container: ghcr.io/example/runner" + digest + "\n")},
+		"a container from a variable":         {jobs: job("    container:\n      image: ${{ vars.CI_JOB_IMAGE }}\n")},
+		"a digest-pinned service":             {jobs: job("    services:\n      db:\n        image: docker.io/library/postgres:17" + digest + "\n")},
+		"fxA: a container at latest": {
+			jobs: job("    container:\n      image: docker.io/evil/anything:latest\n"),
+			want: `line=23::job "extra" runs in image docker.io/evil/anything:latest: ` + refuse,
+		},
+		"fxA: a service at latest": {
+			jobs: job("    services:\n      db:\n        image: docker.io/evil/svc:latest\n"),
+			want: `line=24::job "extra" starts service "db" from image docker.io/evil/svc:latest: ` + refuse,
+		},
+		"a short digest":                 {jobs: job("    container: docker.io/library/alpine@sha256:abc\n"), want: `runs in image docker.io/library/alpine@sha256:abc`},
+		"a container by string at a tag": {jobs: job("    container: alpine:3\n"), want: `job "extra" runs in image alpine:3`},
+		"a container from an input":      {jobs: job("    container:\n      image: ${{ inputs.image }}\n"), want: `runs in image ${{ inputs.image }}`},
+		"a container from the event":     {jobs: job("    container:\n      image: ${{ github.event.inputs.image }}\n"), want: `runs in image ${{ github.event.inputs.image }}`},
+		"a variable with a fallback":     {jobs: job("    container:\n      image: ${{ vars.IMAGE || 'alpine:3' }}\n"), want: `runs in image ${{ vars.IMAGE || 'alpine:3' }}`},
+		"a variable inside a reference":  {jobs: job("    container:\n      image: docker.io/x/${{ vars.NAME }}:1\n"), want: `runs in image docker.io/x/${{ vars.NAME }}:1`},
+		"an image behind a YAML merge key": {
+			jobs:  "  images:\n    uses: ./.forgejo/workflows/images.yml\n",
+			files: map[string]string{".forgejo/workflows/images.yml": "on:\n  workflow_call: {}\nx-base: &c\n  image: alpine:3\njobs:\n  build:\n    container:\n      <<: *c\n    steps: []\n"},
+			want:  `job "build" runs in image alpine:3`,
+		},
+		"a container in a called local workflow": {
+			jobs:  "  images:\n    uses: ./.forgejo/workflows/images.yml\n",
+			files: map[string]string{".forgejo/workflows/images.yml": "on:\n  workflow_call: {}\njobs:\n  build:\n    container: alpine:3\n    steps: []\n"},
+			want:  `file=.forgejo/workflows/images.yml,line=5::job "build" runs in image alpine:3`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			mem := testfs.NewMemory(t)
+			mem.WriteFile(".forgejo/workflows/release.yml", []byte(forgejoIsolationCleanWorkflow+tc.jobs))
+
+			for file, body := range tc.files {
+				mem.WriteFile(file, []byte(body))
+			}
+
+			out, err := runForgejoIsolationInFS(t, mem)
+			if tc.want == "" {
+				if err != nil {
+					t.Fatalf("Isolation: %v\n%s", err, out)
+				}
+
+				return
+			}
+
+			if !errors.Is(err, errs.ErrValidation) {
+				t.Fatalf("err = %v, want ErrValidation\n%s", err, out)
+			}
+
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("missing %q in:\n%s", tc.want, out)
+			}
+		})
+	}
+}

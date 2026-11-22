@@ -36,15 +36,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a reference to the subject that is not pinned to a full commit: a branch
   (`@main`), a tag or a short commit. Such a reference was skipped by the
   pin check before, so it passed.
-- `validate isolation`, and so `check-l3-isolation`, holds the local
-  actions a release runs to the pin and address checks: a reference to the
-  subject inside `.forgejo/actions/*/action.yml` must be at the directory's
-  one full commit and on the forge of the run. Before, only the workflow
-  directory was read for them.
-- `validate isolation --single-pin-subject` matches the subject's owner and
-  repository in any case, as forges resolve them: `ExampleScope/CI-Layer`
-  is held to the same pin and forge as `examplescope/ci-layer`, where it
-  passed as another repository before.
+- **Breaking:** `validate isolation`, and so `check-l3-isolation`, holds the
+  local actions a release runs to the pin and address checks: a reference to
+  the subject inside `.forgejo/actions/*/action.yml` must be at the
+  directory's one full commit and on the forge of the run. Before, only the
+  workflow directory was read for them.
+- **Breaking:** `validate isolation --single-pin-subject` matches the
+  subject's owner and repository in any case, as forges resolve them:
+  `ExampleScope/CI-Layer` is held to the same pin and forge as
+  `examplescope/ci-layer`, where it passed as another repository before.
 - **Breaking:** GitHub's `release-orchestrator.yml` runs `validate
   isolation` over the caller's `.github/workflows` before it reads the
   release configuration, and stops the release on a violation:
@@ -57,43 +57,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   name.
 - **Breaking:** `validate isolation`'s defaults are the layer's own:
   `--signing-secret` the `RELEASE_COSIGN_*` and `RELEASE_GPG_*` names
-  (`COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD` are gone), `--single-pin-input`
-  `forge-ci-sha`, and `--literal-input` the signer image, key digest,
-  transparency-log and `enforce-*` inputs. `check-l3-isolation`'s
-  `signing-secrets` defaults to empty, the engine's names.
+  (`COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD` are gone),
+  `--single-pin-input` `forge-ci-sha`, and `--literal-input` the signer
+  image, key digest, transparency-log and `enforce-*` inputs.
+  `check-l3-isolation`'s `signing-secrets` defaults to empty, the engine's
+  names.
 - **Breaking:** Forgejo's `prepare-release.yml` runs `validate isolation`
   over the caller's `.forgejo/workflows` at the release request commit, in
   its plan job and before any job holds a key, and stops the release on a
   violation, so a direct push or a skipped pull-request gate no longer
   passes the rules by. `--single-pin-subject` also takes the HTTPS URL of
   the engine repository.
-- `validate isolation --single-pin-subject`, and so the `check-l3-isolation`
-  action, takes a reference for the subject only when it names that
-  repository, refuses one that writes another forge address than the forge
-  of the run, and refuses a sign job or a signer workflow call in another
-  repository. A workflow directory that takes the engine from another forge
-  by URL, or signs through another repository than the subject, now fails.
-- `validate isolation`, and so `check-l3-isolation`, refuses `secrets:
-  inherit` on every job of the release workflow. The prepare job, the sign
-  job and the signer workflow calls passed it before.
-- `validate isolation`, and so `check-l3-isolation`, also checks each local
-  reusable workflow the release workflow calls, directly or through another:
-  no signing secret, no `secrets: inherit`, no persisted checkout credential
-  and no `setup-toolchain` cache in its jobs. Before, only the release
-  workflow's own jobs were read.
-- `validate isolation --single-pin-subject`, and so `check-l3-isolation`,
-  refuses a `uses:` in the release workflow, the local workflows it calls or
-  their local actions that is neither a path in the repository nor the
-  subject, and a local action that is not a composite action. A third-party
-  action, a `docker://` image or a Node action in a release job now fails.
+- **Breaking:** `validate isolation --single-pin-subject`, and so the
+  `check-l3-isolation` action, takes a reference for the subject only when
+  it names that repository, refuses one that writes another forge address
+  than the forge of the run, and refuses a sign job or a signer workflow
+  call in another repository. A workflow directory that takes the engine
+  from another forge by URL, or signs through another repository than the
+  subject, now fails.
 - **Breaking:** `validate isolation`, and so `check-l3-isolation`, refuses
-  every secret but the job token and read-only `DEPENDENCY_*` credentials in
-  a release job that checks the repository out (`actions/checkout`,
-  `checkout-consumer`, `forge-ci platform checkout`, `git clone`, `fetch` or
-  `pull`, or a local action), in any step, under any name and through the
-  workflow env. It replaces the rule that read only the token variables of
-  `platform checkout` and `release validate-tag` steps, which a secret in
-  the next step, under another name, passed.
+  `secrets: inherit` on every job of the release workflow. The prepare job,
+  the sign job and the signer workflow calls passed it before.
+- **Breaking:** `validate isolation`, and so `check-l3-isolation`, also
+  checks each local reusable workflow the release workflow calls, directly
+  or through another: no signing secret, no `secrets: inherit`, no persisted
+  checkout credential and no `setup-toolchain` cache in its jobs. Before,
+  only the release workflow's own jobs were read.
+- **Breaking:** `validate isolation --single-pin-subject`, and so
+  `check-l3-isolation`, refuses a `uses:` in the release workflow, the local
+  workflows it calls or their local actions that is neither a path in the
+  repository nor the subject, and a local action that is not a composite
+  action. A third-party action, a `docker://` image or a Node action in a
+  release job now fails.
+- **Breaking:** `validate isolation`, and so `check-l3-isolation`, lets a
+  release job hold a secret other than the job token and read-only
+  `DEPENDENCY_*` credentials, in any step, under any name or through the
+  workflow env, only when the job runs the layer's actions alone: no `run:`
+  step, no local action and no checkout (`actions/checkout`,
+  `checkout-consumer`). A job that runs `forge-ci` or a check of its own
+  beside a publish or registry token now fails; pass the token to the
+  layer's action instead (`publish-forge-packages`, `registry-login`), or
+  move the command to a job without the token. It replaces the rule that
+  read only the token variables of `platform checkout` and `release
+  validate-tag` steps, and the checkout-command patterns that an archive
+  download, a submodule update or a downloaded artifact passed.
+- **Breaking:** `validate isolation`, and so `check-l3-isolation`, lets such
+  a job run only the layer's actions that run the engine alone, from one
+  list that classifies every action: `assemble-release-dist`,
+  `check-l3-isolation`, `guard-release-tag`, `pr-check-results`,
+  `prune-base-images`, `publish-forge-packages`, `record-release-image`,
+  `registry-login`, `setup-forge-ci`, `upload-dist` and
+  `verify-forgejo-token`. A build, `lint-nanolinter`, an SBOM action,
+  `setup-toolchain`, an image-builder setup, `generate-changelog`,
+  `prepare-release` or an action the list does not name beside such a
+  secret now fails, as does `publish-forge-packages` publishing Maven by
+  `mvn deploy`: publish the build's hand-off with `from-build: true`.
+- **Breaking:** `validate isolation`, and so `check-l3-isolation`, refuses a
+  job `container:` image or a `services:` image in a release workflow, or a
+  local workflow it calls, that is neither pinned by digest (`@sha256:`)
+  nor one repository variable (`${{ vars.CI_JOB_IMAGE }}`). An image at a
+  tag such as `:latest`, or from an input or the event, passed before.
+- GitHub's `release-orchestrator.yml` skips its isolation check of the
+  caller's workflows only when GitHub's `job.workflow_repository`, the
+  repository serving the orchestrator, is the caller: the engine's own
+  release. `resolve-forge-ci-bootstrap.yml` returns it as
+  `serving-repository`. A caller whose `FORGE_CI_REPOSITORY` variable named
+  itself skipped the check before; on GitHub Enterprise Server, which lacks
+  the context, the check now always runs.
+- **Breaking:** `validate isolation`, and so `check-l3-isolation` and the
+  release's own check, takes a workflow that calls a release workflow as a
+  local reusable workflow (`uses: ./.forgejo/workflows/release.yml`),
+  through any number of them, for a release workflow too, and holds it to
+  every release rule. A tag-triggered wrapper with its own checkout job
+  holding a publish token, or with `secrets: inherit`, passed before.
+- **Breaking:** `validate isolation` takes a workflow that calls any of the
+  layer's signer workflows for a release workflow:
+  `sign-container-images.yml`, `runtime-images.yml` and
+  `base-image-lifecycle.yml` as well as the release entry points. A workflow
+  that calls only those was held to the signing-secret rule alone before;
+  its other jobs now meet every release rule.
 
 ### Added
 

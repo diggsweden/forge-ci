@@ -1961,9 +1961,13 @@ checked against your key. With `public`, leave the flag out.
 repository's `.forgejo/workflows` directory. `prepare-release.yml` runs the
 same check on the release request commit before any job holds a key, so a
 direct push or a skipped gate stops the release instead. It finds the release workflows
-itself, whatever their file names: every workflow with a job that calls the
-layer's `prepare-release.yml` or `sign-and-publish-release.yml`, and none
-found fails. Every reference to the layer in the directory must be pinned
+itself, whatever their file names: every workflow with a job that calls one
+of the layer's signer workflows (`prepare-release.yml`,
+`sign-and-publish-release.yml`, `sign-container-images.yml`,
+`runtime-images.yml`, `base-image-lifecycle.yml`), and every workflow that
+calls such a workflow as a local reusable workflow
+(`uses: ./.forgejo/workflows/...`), through any number of them; none found
+fails. Every reference to the layer in the directory must be pinned
 to a full commit, never a branch, a tag or a short commit. In them it rejects a signing secret in a job that runs your
 code, `secrets: inherit` on any job (the prepare, sign and signer calls
 included) and a broken release-identity or digest hand-off. Across the
@@ -1990,17 +1994,32 @@ and `setup-toolchain` `cache: false` rules, and one that is missing fails.
 Every `uses:` in those files, and in the local actions they use, must be a
 path in the repository or the layer at its one full-commit pin on the forge
 of the run, and a local action must be a composite action: no third-party action, `docker://` image or Node
-action runs in the release.
+action runs in the release. A job's `container:` image and each `services:`
+image is pinned by digest (`@sha256:`) or taken from one repository variable
+(`${{ vars.CI_JOB_IMAGE }}`); a tag such as `:latest`, or an image from an
+input or the event, fails.
 
-A job that checks the repository out (`actions/checkout`,
-`checkout-consumer`, `forge-ci platform checkout`, a `git clone`, `fetch` or
-`pull`, or a local action) runs the project's code, so it may hold no secret
-but the job token (`${{ forgejo.token }}`, `secrets.GITHUB_TOKEN`) and the
-read-only `DEPENDENCY_*` credentials of
+A job of a release workflow that holds any secret but the job token
+(`${{ forgejo.token }}`, `secrets.GITHUB_TOKEN`) and the read-only
+`DEPENDENCY_*` credentials of
 [the dependency token](#the-dependency-token-of-your-own-jobs), in any step,
-env level or `with:`, and through the workflow env. A release, registry or
-personal token belongs in a job without a checkout, or in a call of one of
-the layer's workflows. The check goes by name: the project's code can read a
+env level or `with:`, or through the workflow env, may run only the layer's
+actions that run the engine alone: `assemble-release-dist`,
+`check-l3-isolation`, `guard-release-tag`, `pr-check-results`,
+`prune-base-images`, `publish-forge-packages` (not a Maven `mvn deploy`:
+publish the build's hand-off with `from-build: true`),
+`record-release-image`, `registry-login`, `setup-forge-ci`, `upload-dist`
+and `verify-forgejo-token`. No `run:` step, local action or checkout, and
+none of the layer's actions that run the project's code, a tool the project
+configures or the caller's commands (the builds, `checkout-consumer`,
+`lint-nanolinter`, the SBOM actions, `setup-toolchain`, the image-builder
+setups, `generate-changelog`, `prepare-release`). Whether a command fetches or runs code the release
+does not pin (an archive download, a submodule, a downloaded artifact) cannot
+be read from its text, so the job's shape decides. A release, registry or
+personal token belongs in such a job, passed to the layer's action that
+needs it (for example `publish-forge-packages` or `registry-login`), or in a
+call of one of the layer's workflows; a check of repository variables or a
+command of your own goes to a job of its own. The check goes by name: the project's code can read a
 `DEPENDENCY_*` secret, so store only a read-only, scope-less credential under
 such a name (see [what the build's code can see][dependency-visibility]).
 

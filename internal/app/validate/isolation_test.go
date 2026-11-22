@@ -7,12 +7,14 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"path"
 	"strings"
 	"testing"
 
 	appvalidate "github.com/diggsweden/forge-ci/internal/app/validate"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/output"
+	"github.com/diggsweden/forge-ci/internal/domain/validate"
 	"github.com/diggsweden/forge-ci/internal/testutil/testfs"
 )
 
@@ -405,7 +407,23 @@ func TestIsolation_FindsTheReleaseWorkflows(t *testing.T) {
 		},
 		"no release workflow": {
 			files: map[string]string{"pullrequest.yml": "jobs:\n  lint:\n    uses: examplescope/ci-layer/.forgejo/workflows/lint.yml@" + isolationPin + "\n"},
-			want:  []string{"no workflow under .forgejo/workflows calls examplescope/ci-layer's .forgejo/workflows/prepare-release.yml, .forgejo/workflows/sign-and-publish-release.yml, .github/workflows/release-orchestrator.yml"},
+			want:  []string{"no workflow under .forgejo/workflows calls examplescope/ci-layer's .forgejo/workflows/prepare-release.yml, .forgejo/workflows/sign-and-publish-release.yml, .forgejo/workflows/sign-container-images.yml"},
+		},
+		// fxD of the second review: a call of another signer workflow makes
+		// a release workflow, and its other jobs are held to the release
+		// rules.
+		"a base-image lifecycle call is a release workflow": {
+			files: map[string]string{
+				"release.yml": forgejoIsolationCleanWorkflow,
+				"bases.yml": "on:\n  push:\n    branches: [main]\njobs:\n  build:\n    steps:\n" +
+					"      - uses: examplescope/ci-layer/.forgejo/actions/checkout-consumer@" + isolationPin + "\n" +
+					"      - run: make\n        env:\n          T: ${{ secrets.PACKAGE_PUBLISH_TOKEN }}\n" +
+					"  bases:\n    uses: examplescope/ci-layer/.forgejo/workflows/base-image-lifecycle.yml@" + isolationPin + "\n    secrets: inherit\n",
+			},
+			want: []string{
+				`file=.forgejo/workflows/bases.yml,line=10::job "build" references secret "PACKAGE_PUBLISH_TOKEN" and runs the layer's checkout-consumer`,
+				`file=.forgejo/workflows/bases.yml,line=12::job "bases" inherits every caller secret`,
+			},
 		},
 		"another repository's entry point does not make a release workflow": {
 			files: map[string]string{"release.yml": strings.ReplaceAll(forgejoIsolationCleanWorkflow, "examplescope/ci-layer", "other/ci-layer")},
@@ -452,6 +470,29 @@ func TestIsolation_FindsTheReleaseWorkflows(t *testing.T) {
 				if !strings.Contains(out, want) {
 					t.Errorf("missing %q in:\n%s", want, out)
 				}
+			}
+		})
+	}
+}
+
+// A call of any signer workflow of the layer, the workflows that take signing
+// secrets, makes a release workflow: the list is the one the signing-secret
+// rule admits, never a second copy of it.
+func TestIsolation_EverySignerWorkflowMakesARelease(t *testing.T) {
+	t.Parallel()
+
+	for _, workflow := range validate.SignerWorkflows() {
+		t.Run(workflow, func(t *testing.T) {
+			t.Parallel()
+
+			dir := path.Dir(workflow)
+			mem := testfs.NewMemory(t)
+			mem.WriteFile(dir+"/images.yml", []byte("jobs:\n  images:\n    uses: examplescope/ci-layer/"+workflow+"@"+isolationPin+
+				"\n    secrets: inherit\n"))
+
+			out, err := forgejoIsolation(t, mem, dir, "examplescope/ci-layer", "")
+			if !errors.Is(err, errs.ErrValidation) || !strings.Contains(out, `job "images" inherits every caller secret`) {
+				t.Fatalf("err = %v, want the release rules applied\n%s", err, out)
 			}
 		})
 	}
@@ -1124,6 +1165,61 @@ func TestIsolation_SubjectAsARepositoryURL(t *testing.T) {
 			out, err := forgejoIsolation(t, mem, ".forgejo/workflows", subject, "")
 			if want == nil && err != nil || want != nil && !errors.Is(err, want) {
 				t.Fatalf("err = %v, want %v\n%s", err, want, out)
+			}
+		})
+	}
+}
+
+// The second review's fixtures of secret-holding release jobs: fxB fetches
+// and runs code by an archive, the engine binary's variable, a submodule and
+// a script of its own; fxE names the secret by a computed index, a bracket
+// and a lower-case dependency name; fxF fetches with git init and a forge
+// CLI, and pins the engine by another case at a branch.
+func TestIsolation_SecretJobsOfTheSecondReview(t *testing.T) {
+	t.Parallel()
+
+	const refuse = "may run only the layer's actions"
+
+	for name, test := range map[string]struct {
+		jobs string
+		want []string
+	}{
+		"fxB": {
+			jobs: "  publish-extra:\n    needs: [build-and-release]\n    env:\n      TOKEN: ${{ secrets.PACKAGE_PUBLISH_TOKEN }}\n    steps:\n      - run: |\n" +
+				"          curl -fsSL \"$FORGEJO_SERVER/$FORGEJO_REPO/archive/main.tar.gz\" | tar xz\n" +
+				"          \"$FORGE_CI_BIN\" platform checkout\n          git submodule update --init\n          ./forge-sync/publish.sh\n",
+			want: []string{`line=24::job "publish-extra" references secret "PACKAGE_PUBLISH_TOKEN" and runs a run: step (line 26)`, refuse},
+		},
+		"fxE": {
+			jobs: "  build:\n    env:\n      X: ${{ secrets[format('{0}_TOKEN', 'PACKAGE_PUBLISH')] }}\n      Y: ${{ secrets['PACKAGE_PUBLISH_TOKEN'] }}\n" +
+				"      Z: ${{ secrets.dependency_x }}\n    steps:\n      - run: make\n",
+			want: []string{
+				`job "build" references signing secret through the whole secrets context`,
+				`job "build" references secret "PACKAGE_PUBLISH_TOKEN" and runs a run: step`,
+			},
+		},
+		"fxF": {
+			jobs: "  fetch:\n    steps:\n      - run: |\n          git init . && git remote add o \"$FORGEJO_SERVER/$FORGEJO_REPO\" && git fetch o\n          GH=1 tea clone x\n" +
+				"        env:\n          T: ${{ secrets.PACKAGE_PUBLISH_TOKEN }}\n" +
+				"  other-prepare:\n    uses: https://forge.example/ExampleScope/CI-Layer/.forgejo/workflows/prepare-release.yml@main\n",
+			want: []string{
+				`job "fetch" references secret "PACKAGE_PUBLISH_TOKEN" and runs a run: step`,
+				"https://forge.example/ExampleScope/CI-Layer/.forgejo/workflows/prepare-release.yml@main references examplescope/ci-layer at @main, which is not a full commit",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			out, err := runForgejoIsolation(t, forgejoIsolationCleanWorkflow+test.jobs)
+			if !errors.Is(err, errs.ErrValidation) {
+				t.Fatalf("err = %v, want ErrValidation\n%s", err, out)
+			}
+
+			for _, want := range test.want {
+				if !strings.Contains(out, want) {
+					t.Errorf("missing %q in:\n%s", want, out)
+				}
 			}
 		})
 	}
