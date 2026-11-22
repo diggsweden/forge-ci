@@ -2000,7 +2000,11 @@ read-only `DEPENDENCY_*` credentials of
 [the dependency token](#the-dependency-token-of-your-own-jobs), in any step,
 env level or `with:`, and through the workflow env. A release, registry or
 personal token belongs in a job without a checkout, or in a call of one of
-the layer's workflows.
+the layer's workflows. The check goes by name: the project's code can read a
+`DEPENDENCY_*` secret, so store only a read-only, scope-less credential under
+such a name (see [what the build's code can see][dependency-visibility]).
+
+[dependency-visibility]: private-dependencies.md#what-the-builds-code-can-see
 
 It also refuses unknown inputs to the layer's actions and workflows.
 

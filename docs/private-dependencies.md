@@ -68,6 +68,15 @@ CLI commands in their own trusted build jobs. No token is automatically promoted
 from package-publishing credentials. GitLab job-token cross-project access and
 Forgejo token scopes remain provider/operator configuration.
 
+## What the build's code can see
+
+A `DEPENDENCY_*` secret sits in a job that runs the project's code: build
+scripts, plugins and install hooks can read it. The isolation check allows
+these names there and no other secret, so the name is a promise: store only
+a read-only, scope-less credential under it, never a publishing, registry
+write, release or personal token. Where the job image already carries the
+tools and dependencies, leave the secret out.
+
 Use the CLI's `--private-dependencies` flag explicitly. npm also requires
 `--dependency-registry`; Maven requires `--settings-path`. Missing credentials,
 insecure non-loopback registry URLs, and missing settings are early failures.
