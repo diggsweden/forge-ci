@@ -2407,6 +2407,23 @@ A gate that checks its parts in images of their own names each further one
 `FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_<NAME>`. `hello-monorepo` checks its
 frontend in `$CI_JOB_IMAGE_NODE`, the Node runtime image.
 
+`event=pull-request` shows the merge request alone, without a release. It runs
+`TestGitLabLayer_ConsumerTrial` and takes `job-archive=`, `lint-archive=` and
+`job-archive-<name>=` only:
+
+```text
+just demo gitlab myapp checkout=/absolute/myapp event=pull-request \
+  job-archive=/absolute/images/forge-ci-runtime-java.tar lint-archive=/absolute/images/lint.tar
+```
+
+The consumer is `demo/demo-<name>` with its full history, its layer
+`demo/demo-<name>-forge-ci`, and the admin policy and job images are kept in
+`demo/demo-<name>-release-*` so the pipelines stay readable and rerunnable. The
+log prints `demo merge request: <url>`. The merge request keeps both of the
+trial's pipelines: the first fails on purpose, refusing an inert misplaced
+signing variable, and the second passes. When the run ends the variables are
+deleted and a results-comment project access token is revoked.
+
 On GitHub, `demo-list` and `demo-delete` run inside the same hosted session as
 `demo`, with `org=<id>`. Every demo repository is named `demo-<name>` on every
 forge; trials never use the name.
@@ -2415,7 +2432,7 @@ forge; trials never use the name.
 |---|---|---|---|
 | Recipe | `test-live-consumer forgejo` | the same, with `FORGE_CI_LIVE_KEEP_SCRATCH=1` | `demo <forge>`; `demo-list`, `demo-delete` |
 | Lab account | `forgeci` | `forgeci` | `demo` |
-| Repository | `fci-consumer-trial` | `fci-consumer-trial`, archived | Forgejo: `demo/demo-<name>` and its layer `demo/demo-<name>-forge-ci`; GitLab: `demo/demo-<name>` and its helpers `demo/demo-<name>-release-*`; GitHub: `<prefix>demo-<name>` in the test organization |
+| Repository | `fci-consumer-trial` | `fci-consumer-trial`, archived | Forgejo: `demo/demo-<name>` and its layer `demo/demo-<name>-forge-ci`; GitLab: `demo/demo-<name>`, its layer `demo/demo-<name>-forge-ci` and its helpers `demo/demo-<name>-release-*`; GitHub: `<prefix>demo-<name>` in the test organization |
 | Afterwards | deleted | kept until the next trial resets it | kept until `demo-delete` |
 | Same name again | reset | reset | refused |
 | History | one parentless commit | one parentless commit | the consumer's history, then one commit of rendered pins |

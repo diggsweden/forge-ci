@@ -46,36 +46,37 @@ func TestGitLabLayer_ConsumerTrial(t *testing.T) {
 func runGitLabConsumerTrial(t *testing.T, root string, private bool) {
 	t.Helper()
 
-	if livetest.DemoName() != "" {
-		t.Fatal("this trial plants a failing canary; a GitLab demo is `just demo gitlab <name>`")
-	}
-
 	if !livetest.Requires(t, provider.ForgeGitLab, livetest.NeedsInRunner) {
 		livetest.NotCoveredf(t, "the consumer trial needs a GitLab runner")
 	}
 
 	target := livetest.Accept(t, provider.ForgeGitLab)
+	demo := livetest.DemoName()
 
 	consumer := livetest.OpenConsumer(t, target, root)
 	if gate := os.Getenv("FORGE_CI_LIVE_GITLAB_GATE_SOURCE"); gate != "" {
 		consumer = consumer.WithGitLabGateFromSource(t, gate)
 	}
 
+	if demo != "" {
+		consumer = consumer.WithHistory()
+	}
+
 	livetest.Admitted(t)
 
-	engineRepo := livetest.NewPublicScratchRepo(t, target, "gitlab-consumer-layer", livetest.ReadLayerAnonymously)
+	engineRepo := gitlabTrialLayerRepo(t, target)
 	layer := livetest.PushLayer(t, target, engineRepo)
 	consumer = consumer.WithDraftLayer(t, layer)
 	// A further job image of the gate is often the consumer image's archive.
 	pushed := livetest.JobImages{}
 	image := pushed.Push(t, target, os.Getenv("FORGE_CI_LIVE_CONSUMER_IMAGE_ARCHIVE"), func() string { return engineRepo })
-	repo := livetest.NewBareScratchRepo(t, target, "gitlab-consumer-trial", consumer.ObjectFormat, private)
+	repo := gitlabTrialConsumerRepo(t, target, consumer.ObjectFormat, private)
 
 	images := livetest.GitLabGateImages{Job: image, ExtraJobs: livetest.PushGitLabGateExtraJobImages(t, target, consumer, pushed, func(name string) string {
-		return livetest.NewPublicScratchRepo(t, target, "gitlab-consumer-job-image-"+strings.ToLower(name), livetest.ReadJobImageAnonymously)
+		return gitlabTrialImageRepo(t, target, "job-image-"+strings.ToLower(name))
 	})}
 	if archive := os.Getenv("FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE"); archive != "" {
-		images.Lint = livetest.PushJobImage(t, target, livetest.NewPublicScratchRepo(t, target, "gitlab-consumer-lint-image", livetest.ReadJobImageAnonymously), archive)
+		images.Lint = livetest.PushJobImage(t, target, gitlabTrialImageRepo(t, target, "lint-image"), archive)
 	}
 
 	client, err := gitlabapi.NewClient(target.Token, gitlabapi.WithBaseURL(target.BaseURL()+"/api/v4/"),
@@ -100,6 +101,12 @@ func runGitLabConsumerTrial(t *testing.T, root string, private bool) {
 		variable = "RELEASE_COSIGN_PRIVATE_KEY"
 		canary   = "inert-signer-scope-canary"
 	)
+
+	// A kept demo holds no key or token once the run is over.
+	if demo != "" {
+		livetest.DeleteSecretsAfter(t, target, repo, []string{variable, gitlabResultsCommentVariable})
+	}
+
 	if _, _, writeErr := client.ProjectVariables.CreateVariable(project, &gitlabapi.CreateProjectVariableOptions{
 		Key: gitlabapi.Ptr(variable), Value: gitlabapi.Ptr(canary), EnvironmentScope: new("*"),
 	}, gitlabapi.WithContext(ctx)); writeErr != nil {
@@ -126,6 +133,10 @@ func runGitLabConsumerTrial(t *testing.T, root string, private bool) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if demo != "" {
+		t.Logf("demo merge request: %s", mr.WebURL)
 	}
 
 	failed := waitGitLabMRPipeline(t, ctx, client, project, mr.IID, head, 0)
@@ -192,6 +203,41 @@ func runGitLabConsumerTrial(t *testing.T, root string, private bool) {
 	}
 }
 
+// gitlabTrialLayerRepo makes the project that serves the layer: a scratch one
+// a trial deletes, or in demo mode the demo's kept layer.
+func gitlabTrialLayerRepo(t *testing.T, target livetest.Target) string {
+	t.Helper()
+
+	if demo := livetest.DemoName(); demo != "" {
+		return livetest.NewDemoRepo(t, target, livetest.DemoLayerRepo(demo), "sha1", true)
+	}
+
+	return livetest.NewPublicScratchRepo(t, target, "gitlab-consumer-layer", livetest.ReadLayerAnonymously)
+}
+
+// gitlabTrialConsumerRepo makes the empty project the consumer is pushed to.
+func gitlabTrialConsumerRepo(t *testing.T, target livetest.Target, objectFormat string, private bool) string {
+	t.Helper()
+
+	if demo := livetest.DemoName(); demo != "" {
+		return livetest.NewDemoRepo(t, target, livetest.DemoRepo(demo), objectFormat, false)
+	}
+
+	return livetest.NewBareScratchRepo(t, target, "gitlab-consumer-trial", objectFormat, private)
+}
+
+// gitlabTrialImageRepo makes a public project for one job image. A demo keeps
+// it, because a rerun of a kept pipeline pulls the image from there.
+func gitlabTrialImageRepo(t *testing.T, target livetest.Target, role string) string {
+	t.Helper()
+
+	if demo := livetest.DemoName(); demo != "" {
+		return livetest.NewDemoRepo(t, target, livetest.DemoHelperRepo(demo, role), "sha1", true)
+	}
+
+	return livetest.NewPublicScratchRepo(t, target, "gitlab-consumer-"+role, livetest.ReadJobImageAnonymously)
+}
+
 const gitlabResultsCommentVariable = "PR_COMMENT_TOKEN"
 
 // The component input as a consumer may write it: quoted or not, with or
@@ -220,7 +266,8 @@ func gitlabConsumerAsksForResultsComment(t *testing.T, root string, consumer liv
 // installGitLabResultsCommentToken does what docs/gitlab.md asks of a project
 // that sets pr-comment: a project access token with the api scope and the
 // Reporter role, as a masked variable only the pr/comment environment reads.
-// The token is the scratch project's and ends with it, or after a week.
+// The token is the scratch project's and ends with it, or after a week; a kept
+// demo's is revoked when the run ends.
 func installGitLabResultsCommentToken(t *testing.T, ctx context.Context, client *gitlabapi.Client, project string) string {
 	t.Helper()
 
@@ -232,6 +279,17 @@ func installGitLabResultsCommentToken(t *testing.T, ctx context.Context, client 
 	}, gitlabapi.WithContext(ctx))
 	if err != nil {
 		t.Fatalf("create the results comment token: %v", err)
+	}
+
+	if livetest.DemoName() != "" {
+		t.Cleanup(func() {
+			cleanup, stop := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+			defer stop()
+
+			if _, revokeErr := client.ProjectAccessTokens.RevokeProjectAccessToken(project, token.ID, gitlabapi.WithContext(cleanup)); revokeErr != nil {
+				t.Errorf("revoke the results comment token: %v", revokeErr)
+			}
+		})
 	}
 
 	if _, _, err = client.ProjectVariables.CreateVariable(project, &gitlabapi.CreateProjectVariableOptions{
@@ -282,7 +340,14 @@ func installGitLabConsumerPolicy(t *testing.T, client *gitlabapi.Client, target 
 	defer cancel()
 
 	body := consumer.GitLabAdminPolicy(t, layer, images)
-	repo := livetest.NewBareScratchRepo(t, target, "consumer-admin-policy", "sha1", private)
+
+	var repo string
+	if demo := livetest.DemoName(); demo != "" {
+		repo = livetest.NewDemoRepo(t, target, livetest.DemoHelperRepo(demo, "admin-policy"), "sha1", false)
+	} else {
+		repo = livetest.NewBareScratchRepo(t, target, "consumer-admin-policy", "sha1", private)
+	}
+
 	policy := gitlabPolicyCommit(t, ctx, client, livetest.RepoSlug(target, repo), livetest.GitLabAdminGateFile, body, gitlabapi.FileCreate)
 	useGitLabAdminPolicy(ctx, t, client, project, livetest.GitLabAdminGateFile+"@"+livetest.RepoSlug(target, repo)+":"+policy.ID)
 }

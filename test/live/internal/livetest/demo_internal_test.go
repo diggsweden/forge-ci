@@ -4,11 +4,127 @@
 package livetest
 
 import (
+	"context"
 	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
+
+// demoRecipeRecorder stands in for the live launcher and records what the
+// `just demo` recipe hands it.
+const demoRecipeRecorder = `#!/usr/bin/env bash
+printf 'args=%s\n' "$*" >"$RECEIPT"
+env | grep -E '^FORGE_CI_LIVE_(DEMO|CONSUMER|CONSUMER_EVENT|CONSUMER_VISIBILITY|CONSUMER_IMAGE_ARCHIVE|JOB_IMAGE_ARCHIVE|JOB_IMAGE_ARCHIVE_NODE|BUILD_IMAGE_ARCHIVE|LINT_IMAGE_ARCHIVE)=' >>"$RECEIPT"
+`
+
+// runDemoRecipe runs `just demo gitlab myapp` from a copy of the justfile, with
+// the recorder as the launcher, and returns the receipt, or the output of a
+// refusal.
+func runDemoRecipe(t *testing.T, just string, shell []string, words ...string) (string, error) {
+	t.Helper()
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "scripts/ci"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(root, "justfile"), reporoot.ReadFile(t, "justfile"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(root, "scripts/ci/run-live-tests.sh"), []byte(demoRecipeRecorder), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+
+	receipt := filepath.Join(root, "receipt")
+	args := append([]string{"--justfile", filepath.Join(root, "justfile"), "demo", "gitlab", "myapp", "checkout=/abs/myapp"}, words...)
+	command := exec.CommandContext(ctx, just, args...)
+
+	command.Env = append(append(os.Environ(), "RECEIPT="+receipt), shell...)
+
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return string(output), err
+	}
+
+	body, err := os.ReadFile(receipt)
+	if err != nil {
+		t.Fatalf("the recipe did not reach the launcher: %v\n%s", err, output)
+	}
+
+	return string(body), nil
+}
+
+// A GitLab demo's event picks its scenario, and a merge request takes its
+// archives from this command line alone, whatever the shell left set.
+func TestDemoRecipe_GitLabMergeRequest(t *testing.T) {
+	just, err := exec.LookPath("just")
+	if err != nil {
+		t.Skip("requires Just")
+	}
+
+	t.Run("merge request", func(t *testing.T) {
+		got, err := runDemoRecipe(t, just, []string{"FORGE_CI_LIVE_BUILD_IMAGE_ARCHIVE=/stale/build.tar"},
+			"event=pull-request", "job-archive=/abs/job.tar", "lint-archive=/abs/lint.tar", "job-archive-node=/abs/node.tar")
+		if err != nil {
+			t.Fatalf("%v\n%s", err, got)
+		}
+
+		for _, want := range []string{
+			"args=focused ^TestGitLabLayer_ConsumerTrial$\n", "FORGE_CI_LIVE_DEMO=myapp\n", "FORGE_CI_LIVE_CONSUMER=/abs/myapp\n",
+			"FORGE_CI_LIVE_CONSUMER_EVENT=pull-request\n", "FORGE_CI_LIVE_CONSUMER_VISIBILITY=public\n",
+			"FORGE_CI_LIVE_CONSUMER_IMAGE_ARCHIVE=/abs/job.tar\n", "FORGE_CI_LIVE_LINT_IMAGE_ARCHIVE=/abs/lint.tar\n",
+			"FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE_NODE=/abs/node.tar\n",
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("receipt lacks %q:\n%s", want, got)
+			}
+		}
+
+		for _, stale := range []string{"FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE=", "FORGE_CI_LIVE_BUILD_IMAGE_ARCHIVE="} {
+			if strings.Contains(got, stale) {
+				t.Errorf("receipt keeps %q:\n%s", stale, got)
+			}
+		}
+	})
+
+	t.Run("release keeps its scenario", func(t *testing.T) {
+		got, err := runDemoRecipe(t, just, nil, "job-archive=/abs/job.tar")
+		if err != nil {
+			t.Fatalf("%v\n%s", err, got)
+		}
+
+		for _, want := range []string{"args=focused ^TestGitLabRelease_ConsumerTrial$\n", "FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE=/abs/job.tar\n"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("receipt lacks %q:\n%s", want, got)
+			}
+		}
+	})
+
+	for name, refused := range map[string]struct{ shell, words []string }{
+		"no job archive":               {words: []string{"lint-archive=/abs/lint.tar"}},
+		"a job archive the shell left": {shell: []string{"FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE=/stale/job.tar"}},
+		"a release archive":            {words: []string{"job-archive=/abs/job.tar", "signer-archive=/abs/signer.tar"}},
+		"a release setting":            {words: []string{"job-archive=/abs/job.tar", "version=0.2.0"}},
+	} {
+		t.Run("refuses "+name, func(t *testing.T) {
+			got, err := runDemoRecipe(t, just, refused.shell, append([]string{"event=pull-request"}, refused.words...)...)
+			if err == nil || !strings.Contains(got, "a GitLab merge request demo takes") {
+				t.Fatalf("not refused: %v\n%s", err, got)
+			}
+		})
+	}
+}
 
 // Each account is out of the other's reach: a demo never acts as the trial
 // account, whose repositories trials reset, and a trial never acts as the demo

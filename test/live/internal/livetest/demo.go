@@ -67,7 +67,8 @@ func DemoRepo(name string) string { return demoRepoPrefix + name }
 // DemoLayerRepo names the repository that serves a demo's layer.
 func DemoLayerRepo(name string) string { return DemoRepo(name) + demoLayerSuffix }
 
-// DemoHelperRepo names one of a GitLab demo's release helper projects.
+// DemoHelperRepo names one of a GitLab demo's helper projects, for a release
+// or a merge request alone; demo-list and demo-delete find them by the infix.
 func DemoHelperRepo(name, role string) string { return DemoRepo(name) + demoHelperInfix + role }
 
 // validDemoName reports whether name can name a demo: a repository name that

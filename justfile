@@ -1153,7 +1153,9 @@ test-live-consumer forge repo event *settings:
 #            buildah-archive= when the release builds images),
 #            job-user=<uid[:gid]> for the release's job-image jobs,
 #            version=<X.Y.Z>, version-bump=maven and KEY=value variables for
-#            the release build
+#            the release build; with event=pull-request the merge request
+#            alone, which takes job-archive=, lint-archive= and
+#            job-archive-<name>= only
 #   github   org=<numeric organization ID>, run inside Forge Lab's
 #            `just github run ... -- just --justfile <this> demo github ...`
 #
@@ -1161,6 +1163,8 @@ test-live-consumer forge repo event *settings:
 #   just demo forgejo hello-maven version=0.2.0 CI_JOB_IMAGE=<reference>
 #   just demo gitlab hello-maven-service checkout=/abs/myapp \
 #     job-archive=/abs/job.tar build-archive=/abs/build.tar signer-archive=/abs/signer.tar
+#   just demo gitlab myapp checkout=/abs/myapp event=pull-request \
+#     job-archive=/abs/job.tar lint-archive=/abs/lint.tar
 #   just targets-revoke ~/.local/state/forge-lab/targets/demo.json   # when over
 #
 # docs/live-runs.md, Showing a consumer, lists the images each forge needs.
@@ -1220,8 +1224,23 @@ demo forge name *settings:
     fi
     if [[ "$event" == pull-request ]]; then
         if [[ "$forge" == gitlab ]]; then
-            printf 'PR-only demos are supported on GitHub and Forgejo\n' >&2
-            exit 2
+            # Only this command line names the archives, as for
+            # `just test-live-consumer gitlab <checkout> pull-request`.
+            job_archive=''
+            for word in "$@"; do
+                case "$word" in
+                job-archive=*) job_archive="${word#*=}" ;;
+                build-archive=* | signer-archive=* | buildah-archive=*) settings+=("$word") ;;
+                esac
+            done
+            if [[ -z "$job_archive" || ${#settings[@]} != 0 ]]; then
+                printf 'a GitLab merge request demo takes job-archive=<path>, lint-archive=<path> and job-archive-<name>=<path> alone\n' >&2
+                exit 2
+            fi
+            unset FORGE_CI_LIVE_JOB_IMAGE_ARCHIVE FORGE_CI_LIVE_BUILD_IMAGE_ARCHIVE \
+                FORGE_CI_LIVE_SIGNER_IMAGE_ARCHIVE FORGE_CI_LIVE_BUILDAH_JOB_IMAGE_ARCHIVE
+            export FORGE_CI_LIVE_CONSUMER_IMAGE_ARCHIVE="$job_archive"
+            scenario='^TestGitLabLayer_ConsumerTrial$'
         fi
         export FORGE_CI_LIVE_CONSUMER_VISIBILITY=public
     fi
