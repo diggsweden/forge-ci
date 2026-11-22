@@ -39,18 +39,21 @@ func TestIsolation_SecretTraversalBounds(t *testing.T) {
 	}
 }
 
+// A job of steps named prepare is not the layer's prepare call: it runs in
+// the caller's repository and is held to the rule of every other job, each
+// reference reported at the scalar that holds it.
 func TestIsolation_PrepareScalarAttribution(t *testing.T) {
 	t.Parallel()
 
 	body := "jobs:\n  prepare:\n    steps:\n      - run: ${{ secrets.BEFORE }}\n      - uses: actions/checkout@v4\n        with:\n          persist-credentials: false\n      - run: >-\n          ${{ secrets.KEY }}\n          ${{ secrets.OTHER }}\n      - env:\n          KEY: ${{ secrets.KEY }}\n"
 
-	got, err := CheckIsolation([]byte(body), IsolationConfig{PrepareJob: "prepare", SigningSecrets: []string{"BEFORE", "KEY", "OTHER"}})
-	if err != nil || len(got) != 3 {
+	got, err := CheckIsolation([]byte(body), IsolationConfig{SigningSecrets: []string{"BEFORE", "KEY", "OTHER"}})
+	if err != nil || len(got) != 4 {
 		t.Fatalf("violations=%v err=%v", got, err)
 	}
 
-	for index, wantLine := range []int{8, 8, 12} {
-		if got[index].Line != wantLine || !strings.Contains(got[index].Msg, `prepare job "prepare"`) || !strings.Contains(got[index].Msg, "at/after checkout") || strings.Contains(got[index].Msg, "BEFORE") {
+	for index, wantLine := range []int{4, 8, 8, 12} {
+		if got[index].Line != wantLine || !strings.Contains(got[index].Msg, `job "prepare" references signing secret`) {
 			t.Fatalf("incorrect prepare attribution: %v", got[index])
 		}
 	}

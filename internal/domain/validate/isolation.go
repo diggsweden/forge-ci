@@ -13,28 +13,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// IsolationConfig parameterises the static release-isolation checks. Job
-// names and the signing-secret set differ per pipeline, so they are supplied by
-// the caller rather than hard-coded.
+// IsolationConfig parameterises the static release-isolation checks. The
+// signing-secret set differs per pipeline, so the caller supplies it. The
+// prepare and sign jobs are not configured: they are the jobs that call the
+// layer's prepare-release.yml and sign-and-publish-release.yml, and the jobs
+// the sign job takes its inputs from are read from its with: block.
 type IsolationConfig struct {
-	// SigningSecrets are the secret names no job may reference but the
-	// prepare job, the sign job and a call of one of the layer's signer
-	// workflows (e.g. RELEASE_GPG_PRIVATE_KEY, COSIGN_PRIVATE_KEY).
+	// SigningSecrets are the secret names no job may reference but a call of
+	// one of the layer's signer workflows (e.g. RELEASE_GPG_PRIVATE_KEY,
+	// RELEASE_COSIGN_PRIVATE_KEY).
 	SigningSecrets []string
-	// SignJob is the reusable signing workflow call-site job. Empty disables the
-	// Forgejo release-signing call-site checks, keeping the generic validator
-	// backwards-compatible for workflows that only want the core release-isolation
-	// checks.
-	SignJob string
-	// PrepareJob is the job that produces release-tag, release-sha and
-	// artifacts-config. With SignJob set it must call the layer's
-	// prepare-release.yml; without, a job built from steps must run its
-	// signing-secret presence checks before the consumer checkout.
-	PrepareJob string
-	// DistDigestOutput is the output carrying the build-to-sign digest, of the
-	// job the sign job takes dist-digest from. Empty disables the dist-digest
-	// channel check.
-	DistDigestOutput string
 }
 
 // IsolationViolation is one failed static invariant. Secret diagnostics identify
@@ -48,13 +36,20 @@ type IsolationViolation struct {
 // CheckIsolation returns the release-isolation violations in a workflow:
 //
 //  1. a job referencing a signing secret, directly or through the workflow
-//     env it inherits, other than the prepare job, the sign job and the calls
-//     of the layer's signer workflows: keys live only in separately trusted
-//     jobs, never in one that runs the project's code, whichever job that is
-//     (a build, its tests, an image build or the hand-off);
-//  2. any actions/checkout step that does not set persist-credentials: false
+//     env it inherits, other than a call of the layer's signer workflows:
+//     keys live only in separately trusted jobs, never in one that runs the
+//     project's code, whichever job that is (a build, its tests, an image
+//     build or the hand-off);
+//  2. any job, the signer calls included, that passes secrets: inherit;
+//  3. a call of sign-and-publish-release.yml that does not take release-tag,
+//     release-sha and artifacts-config from a call of prepare-release.yml,
+//     and dist-digest from a job that declares that output, each as the bare
+//     ${{ needs.<job>.outputs.<name> }} expression;
+//  4. a step that runs forge-ci platform checkout or release validate-tag
+//     with another token than the job's own;
+//  5. any actions/checkout step that does not set persist-credentials: false
 //     (a persisted token in a job that runs the project's code widens the
-//     blast radius).
+//     blast radius), and a setup-toolchain step without cache: false.
 //
 // It is pure — the caller supplies the raw YAML and owns IO and annotation — so
 // it is exhaustively table-testable without a filesystem.
@@ -68,32 +63,50 @@ func CheckIsolation(workflowYAML []byte, cfg IsolationConfig) ([]IsolationViolat
 		return nil, fmt.Errorf("parse workflow yaml: %w", err)
 	}
 
-	violations, err := jobSecretViolations(doc.Jobs, cfg)
+	violations, err := signingSecretViolations(doc.Env, doc.Jobs, cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	inheritedViolations, err := workflowEnvSecretViolations(doc.Env, doc.Jobs, cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	violations = append(violations, inheritedViolations...)
-
-	prepareViolations, err := prepareOrderingViolations(doc.Jobs, cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	violations = append(violations, prepareViolations...)
-	violations = append(violations, signCallSiteViolations(doc.Jobs, cfg)...)
-	violations = append(violations, prepareCallSiteViolations(doc.Jobs, cfg)...)
-	violations = append(violations, releaseIdentityViolations(doc.Jobs, cfg)...)
-	violations = append(violations, distDigestViolations(doc.Jobs, cfg)...)
+	violations = append(violations, inheritViolations(doc.Jobs)...)
+	violations = append(violations, releaseCallViolations(doc.Jobs)...)
 	violations = append(violations, persistCredentialViolations(doc.Jobs)...)
 	violations = append(violations, setupToolchainCacheViolations(doc.Jobs)...)
+	violations = append(violations, jobTokenViolations(doc.Env, doc.Jobs, cfg)...)
 
 	return violations, nil
+}
+
+// CheckSigningSecrets returns only the signing-secret violations of a
+// workflow: a job that is not a call of the layer's signer workflows and
+// references a signing secret, directly or through the workflow env. It
+// holds the workflows of a repository that do not release to the same rule
+// as those that do: a key may reach the engine's signers alone.
+func CheckSigningSecrets(workflowYAML []byte, cfg IsolationConfig) ([]IsolationViolation, error) {
+	var doc struct {
+		Jobs map[string]yaml.Node `yaml:"jobs"`
+		Env  yaml.Node            `yaml:"env"`
+	}
+
+	if err := yaml.Unmarshal(workflowYAML, &doc); err != nil {
+		return nil, fmt.Errorf("parse workflow yaml: %w", err)
+	}
+
+	return signingSecretViolations(doc.Env, doc.Jobs, cfg)
+}
+
+func signingSecretViolations(env yaml.Node, jobs map[string]yaml.Node, cfg IsolationConfig) ([]IsolationViolation, error) {
+	violations, err := jobSecretViolations(jobs, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	inherited, err := workflowEnvSecretViolations(env, jobs, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return append(violations, inherited...), nil
 }
 
 // signerWorkflows are the layer's reusable workflows that take signing
@@ -109,14 +122,15 @@ var signerWorkflows = []string{
 func SignerWorkflows() []string { return slices.Clone(signerWorkflows) }
 
 // mayHoldSigningSecrets reports whether a job is one of the separately
-// trusted ones: the configured prepare and sign jobs, whose own rules apply
-// below, and a cross-repository call of a signer workflow of the layer.
-func mayHoldSigningSecrets(name string, job *yaml.Node, cfg IsolationConfig) bool {
-	if name != "" && (name == cfg.PrepareJob || name == cfg.SignJob) {
-		return true
-	}
+// trusted ones: a cross-repository call of a signer workflow of the layer.
+func mayHoldSigningSecrets(job *yaml.Node) bool {
+	return CallsSignerWorkflow(scalarValue(mappingValue(job, "uses")))
+}
 
-	uses := scalarValue(mappingValue(job, "uses"))
+// CallsSignerWorkflow reports whether a job's uses: value is a
+// cross-repository call of a workflow named like a signer workflow of the
+// layer. Which repository it names is the caller's to check.
+func CallsSignerWorkflow(uses string) bool {
 	if uses == "" || strings.HasPrefix(uses, "./") {
 		return false
 	}
@@ -124,6 +138,22 @@ func mayHoldSigningSecrets(name string, job *yaml.Node, cfg IsolationConfig) boo
 	return slices.ContainsFunc(signerWorkflows, func(workflow string) bool {
 		return strings.Contains(uses, "/.forgejo/workflows/"+workflow+"@")
 	})
+}
+
+// releaseEntryWorkflows are the layer's workflows a release calls: a
+// workflow of the repository that calls one of them is a release workflow,
+// and the release rules hold for it.
+var releaseEntryWorkflows = []string{prepareReleaseWorkflow, signAndPublishWorkflow}
+
+// ReleaseEntryWorkflows returns the file names of the layer's release entry
+// points.
+func ReleaseEntryWorkflows() []string { return slices.Clone(releaseEntryWorkflows) }
+
+// CallsReleaseEntry reports whether a job's uses: value is a
+// cross-repository call of one of the layer's release entry points. Which
+// repository it names is the caller's to check.
+func CallsReleaseEntry(uses string) bool {
+	return slices.ContainsFunc(releaseEntryWorkflows, func(workflow string) bool { return callsLayerWorkflow(uses, workflow) })
 }
 
 // workflowEnvSecretViolations reports a signing secret in the workflow env
@@ -142,7 +172,7 @@ func workflowEnvSecretViolations(env yaml.Node, jobs map[string]yaml.Node, cfg I
 
 	for _, name := range sortedKeys(jobs) {
 		job := jobs[name]
-		if mayHoldSigningSecrets(name, &job, cfg) {
+		if mayHoldSigningSecrets(&job) {
 			continue
 		}
 
@@ -175,7 +205,7 @@ func workflowEnvSecretViolations(env yaml.Node, jobs map[string]yaml.Node, cfg I
 }
 
 // signingSecretHome ends each signing-secret diagnostic with where a key may go.
-const signingSecretHome = "; only the prepare job and the calls of the layer's signer workflows may receive signing keys, never a job that runs the project's code (release isolation)"
+const signingSecretHome = "; only the calls of the layer's signer workflows (prepare-release.yml and sign-and-publish-release.yml among them) may receive signing keys, never a job that runs the project's code (release isolation)"
 
 // jobSecretViolations flags every job that may not hold a signing secret and
 // references one: a build, its tests, an image build and the hand-off all run
@@ -189,7 +219,7 @@ func jobSecretViolations(jobs map[string]yaml.Node, cfg IsolationConfig) ([]Isol
 
 	for _, name := range sortedKeys(jobs) {
 		node := jobs[name]
-		if mayHoldSigningSecrets(name, &node, cfg) {
+		if mayHoldSigningSecrets(&node) {
 			continue
 		}
 
@@ -204,9 +234,21 @@ func jobSecretViolations(jobs map[string]yaml.Node, cfg IsolationConfig) ([]Isol
 				Msg:  fmt.Sprintf("job %q references signing secret %s%s", name, ref.describe(), signingSecretHome),
 			})
 		}
+	}
 
-		// A reusable-workflow job that inherits the caller's secrets holds
-		// every signing secret without naming one.
+	return violations, nil
+}
+
+// inheritViolations refuses every job that inherits the caller's secrets,
+// a signer workflow call included: such a
+// job holds every secret of the repository without naming one, so the
+// called workflow and each job it starts can reach keys and tokens the
+// release never handed it.
+func inheritViolations(jobs map[string]yaml.Node) []IsolationViolation {
+	var violations []IsolationViolation
+
+	for _, name := range sortedKeys(jobs) {
+		node := jobs[name]
 		if scalarValue(mappingValue(&node, "secrets")) == "inherit" {
 			violations = append(violations, IsolationViolation{
 				Line: node.Line,
@@ -215,138 +257,27 @@ func jobSecretViolations(jobs map[string]yaml.Node, cfg IsolationConfig) ([]Isol
 		}
 	}
 
-	return violations, nil
-}
-
-func prepareOrderingViolations(jobs map[string]yaml.Node, cfg IsolationConfig) ([]IsolationViolation, error) {
-	if cfg.PrepareJob == "" || len(cfg.SigningSecrets) == 0 {
-		return nil, nil
-	}
-
-	node, ok := jobs[cfg.PrepareJob]
-	if !ok {
-		return nil, nil
-	}
-
-	steps := jobSteps(node)
-	checkoutIndex := -1
-
-	for i, step := range steps {
-		uses := scalarValue(mappingValue(&step, "uses"))
-		if usesAction(uses, "actions/checkout@") || usesAction(uses, "checkout-consumer") {
-			checkoutIndex = i
-
-			break
-		}
-	}
-
-	if checkoutIndex < 0 {
-		return nil, nil
-	}
-
-	var violations []IsolationViolation
-
-	re := signingSecretPattern(cfg.SigningSecrets)
-	for _, step := range steps[checkoutIndex:] {
-		refs, err := findSecretRefs(&step, re)
-		if err != nil {
-			return nil, fmt.Errorf("inspect prepare job %q: %w", cfg.PrepareJob, err)
-		}
-
-		for _, ref := range refs {
-			violations = append(violations, IsolationViolation{
-				Line: ref.line,
-				Msg:  fmt.Sprintf("prepare job %q references signing secret %s at/after checkout; signing-secret checks must run before consumer code is checked out", cfg.PrepareJob, ref.describe()),
-			})
-		}
-	}
-
-	return violations, nil
-}
-
-func signCallSiteViolations(jobs map[string]yaml.Node, cfg IsolationConfig) []IsolationViolation {
-	if cfg.SignJob == "" {
-		return nil
-	}
-
-	node, ok := jobs[cfg.SignJob]
-	if !ok {
-		return []IsolationViolation{{Line: 1, Msg: fmt.Sprintf("sign job %q is missing from workflow", cfg.SignJob)}}
-	}
-
-	uses := scalarValue(mappingValue(&node, "uses"))
-	if uses == "" || strings.HasPrefix(uses, "./") {
-		return []IsolationViolation{{
-			Line: node.Line,
-			Msg:  fmt.Sprintf("sign job %q must be a cross-repo workflow_call invocation", cfg.SignJob),
-		}}
-	}
-
-	if len(cfg.SigningSecrets) == 0 {
-		return nil
-	}
-
-	secretsNode := mappingValue(&node, "secrets")
-
-	var violations []IsolationViolation
-
-	for _, secret := range cfg.SigningSecrets {
-		if secret == "" {
-			continue
-		}
-
-		if !nodeContainsSecretRef(secretsNode, secret) {
-			violations = append(violations, IsolationViolation{
-				Line: node.Line,
-				Msg:  fmt.Sprintf("sign job %q call site is missing signing secret %s", cfg.SignJob, secret),
-			})
-		}
-	}
-
 	return violations
 }
 
-// prepareCallSiteViolations reports a secret the sign job takes that the
-// prepare job does not pass to prepare-release.yml. Prepare refuses the
-// release before it pushes the tag when a secret the release uses is not
-// configured, and a called workflow sees only the secrets its caller passes:
-// without this check the omission shows only at the release. It reads only
-// whether each is set, never its value.
-func prepareCallSiteViolations(jobs map[string]yaml.Node, cfg IsolationConfig) []IsolationViolation {
-	if cfg.SignJob == "" || cfg.PrepareJob == "" {
-		return nil
-	}
-
-	prepare, ok := jobs[cfg.PrepareJob]
-	if !ok {
-		return nil
-	}
-
-	uses := scalarValue(mappingValue(&prepare, "uses"))
-	if strings.HasPrefix(uses, "./") || !strings.Contains(uses, prepareReleaseWorkflow) {
-		return nil
-	}
-
-	sign, ok := jobs[cfg.SignJob]
-	if !ok {
-		return nil
-	}
-
-	passed := mappingValue(&prepare, "secrets")
-	if scalarValue(passed) == "inherit" {
-		return nil
-	}
-
+// releaseCallViolations follows every call of the layer's
+// sign-and-publish-release.yml back to the jobs it takes its inputs from:
+// release-tag, release-sha and artifacts-config from one call of
+// prepare-release.yml, and dist-digest from a job that declares the output
+// it names, each as the bare ${{ needs.<job>.outputs.<name> }} expression
+// under its exact key. The jobs are read from the sign job, never named by
+// the caller, so the check follows whatever the workflow calls them.
+func releaseCallViolations(jobs map[string]yaml.Node) []IsolationViolation {
 	var violations []IsolationViolation
 
-	for _, secret := range mappingKeys(mappingValue(&sign, "secrets")) {
-		if mappingValue(passed, secret) == nil {
-			violations = append(violations, IsolationViolation{
-				Line: prepare.Line,
-				Msg: fmt.Sprintf("prepare job %q call site is missing secret %s, which sign job %q takes: prepare-release.yml refuses the release before its tag when a secret the release uses is not configured, and it sees only what its caller passes",
-					cfg.PrepareJob, secret, cfg.SignJob),
-			})
+	for _, name := range sortedKeys(jobs) {
+		sign := jobs[name]
+		if !callsLayerWorkflow(scalarValue(mappingValue(&sign, "uses")), signAndPublishWorkflow) {
+			continue
 		}
+
+		violations = append(violations, releaseIdentityViolations(jobs, name, &sign)...)
+		violations = append(violations, distDigestViolations(jobs, name, &sign)...)
 	}
 
 	return violations
@@ -365,39 +296,70 @@ const (
 // releaseIdentityOutputs are the prepare outputs the sign job must take.
 var releaseIdentityOutputs = []string{releaseTagOutput, releaseSHAOutput, artifactsConfigOutput}
 
-// prepareReleaseWorkflow is the reusable workflow the prepare job must call.
-// Its outputs are the release identity and the declaration the bump was
-// planned from; a prepare job of the caller's own would let the caller
-// choose them.
-const prepareReleaseWorkflow = "/.forgejo/workflows/prepare-release.yml@"
+// prepareReleaseWorkflow and signAndPublishWorkflow are the reusable
+// workflows of the layer a Forgejo release calls. The prepare call's outputs
+// are the release identity and the declaration the bump was planned from; a
+// prepare job of the caller's own would let the caller choose them.
+const (
+	prepareReleaseWorkflow = "prepare-release.yml"
+	signAndPublishWorkflow = "sign-and-publish-release.yml"
+)
 
-func releaseIdentityViolations(jobs map[string]yaml.Node, cfg IsolationConfig) []IsolationViolation {
-	if cfg.SignJob == "" || cfg.PrepareJob == "" {
-		return nil
+// callsLayerWorkflow reports whether uses is a cross-repository call of the
+// layer's Forgejo workflow of that file name. Which repository it names is
+// the caller's to check.
+func callsLayerWorkflow(uses, workflow string) bool {
+	return uses != "" && !strings.HasPrefix(uses, "./") && strings.Contains(uses, "/.forgejo/workflows/"+workflow+"@")
+}
+
+// releaseIdentityViolations refuses a sign job that does not take the release
+// identity from a call of prepare-release.yml, and a prepare call that does
+// not pass a secret the sign job takes.
+func releaseIdentityViolations(jobs map[string]yaml.Node, signJob string, sign *yaml.Node) []IsolationViolation {
+	prepareJob := needsJob(scalarValue(mappingValue(mappingValue(sign, "with"), releaseTagOutput)))
+
+	prepare, ok := jobs[prepareJob]
+	if prepareJob == "" || !ok || !callsLayerWorkflow(scalarValue(mappingValue(&prepare, "uses")), prepareReleaseWorkflow) {
+		return []IsolationViolation{{
+			Line: sign.Line,
+			Msg: fmt.Sprintf("sign job %q must take release-tag from a job that calls the layer's prepare-release.yml, as ${{ needs.<job>.outputs.release-tag }}; its outputs are what the sign job is bound to",
+				signJob),
+		}}
 	}
 
-	prepare, ok := jobs[cfg.PrepareJob]
-	if !ok {
-		return nil
+	var violations []IsolationViolation
+
+	for _, output := range releaseIdentityOutputs {
+		violations = append(violations, boundInputViolations(sign, signJob, output, prepareJob, output)...)
 	}
 
-	sign, ok := jobs[cfg.SignJob]
-	if !ok {
+	return append(violations, prepareCallSiteViolations(prepareJob, &prepare, signJob, sign)...)
+}
+
+// prepareCallSiteViolations reports a secret the sign job takes that the
+// prepare job does not pass to prepare-release.yml. Prepare refuses the
+// release before it pushes the tag when a secret the release uses is not
+// configured, and a called workflow sees only the secrets its caller passes:
+// without this check the omission shows only at the release. It reads only
+// whether each is set, never its value.
+func prepareCallSiteViolations(prepareJob string, prepare *yaml.Node, signJob string, sign *yaml.Node) []IsolationViolation {
+	passed := mappingValue(prepare, "secrets")
+	// inheritViolations refuses this spelling; naming each secret again
+	// would only repeat it.
+	if scalarValue(passed) == "inherit" {
 		return nil
 	}
 
 	var violations []IsolationViolation
 
-	uses := scalarValue(mappingValue(&prepare, "uses"))
-	if strings.HasPrefix(uses, "./") || !strings.Contains(uses, prepareReleaseWorkflow) {
-		violations = append(violations, IsolationViolation{
-			Line: prepare.Line,
-			Msg:  fmt.Sprintf("prepare job %q must call the layer's prepare-release.yml; its outputs are what the sign job is bound to", cfg.PrepareJob),
-		})
-	}
-
-	for _, name := range releaseIdentityOutputs {
-		violations = append(violations, boundInputViolations(&sign, cfg.SignJob, name, cfg.PrepareJob, name)...)
+	for _, secret := range mappingKeys(mappingValue(sign, "secrets")) {
+		if mappingValue(passed, secret) == nil {
+			violations = append(violations, IsolationViolation{
+				Line: prepare.Line,
+				Msg: fmt.Sprintf("prepare job %q call site is missing secret %s, which sign job %q takes: prepare-release.yml refuses the release before its tag when a secret the release uses is not configured, and it sees only what its caller passes",
+					prepareJob, secret, signJob),
+			})
+		}
 	}
 
 	return violations
@@ -432,40 +394,31 @@ func boundInputViolations(sign *yaml.Node, signJob, input, job, output string) [
 }
 
 // distDigestViolations follows the digest hand-off from the sign job back to
-// the job it names: the sign job takes dist-digest as one bare
-// ${{ needs.<job>.outputs.<DistDigestOutput> }} expression, and that job
-// declares the output. The producer is read from the sign job, so the check
-// follows whichever job hands dist/ over, a build or a hand-off after the
-// image jobs.
-func distDigestViolations(jobs map[string]yaml.Node, cfg IsolationConfig) []IsolationViolation {
-	if cfg.SignJob == "" || cfg.DistDigestOutput == "" {
-		return nil
-	}
-
-	sign, ok := jobs[cfg.SignJob]
+// the job and output it names: the sign job takes dist-digest as one bare
+// ${{ needs.<job>.outputs.<name> }} expression, and that job declares the
+// output. Both are read from the sign job, so the check follows whichever
+// job hands dist/ over, a build or a hand-off after the image jobs, under
+// whatever name it gives the output.
+func distDigestViolations(jobs map[string]yaml.Node, signJob string, sign *yaml.Node) []IsolationViolation {
+	producer, output, ok := needOutput(scalarValue(mappingValue(mappingValue(sign, "with"), "dist-digest")))
 	if !ok {
-		return nil
+		return boundInputViolations(sign, signJob, "dist-digest", "<job>", "<name>")
 	}
 
-	producer := needsJob(scalarValue(mappingValue(mappingValue(&sign, "with"), "dist-digest")))
-	if producer == "" {
-		return boundInputViolations(&sign, cfg.SignJob, "dist-digest", "<job>", cfg.DistDigestOutput)
-	}
-
-	violations := boundInputViolations(&sign, cfg.SignJob, "dist-digest", producer, cfg.DistDigestOutput)
+	violations := boundInputViolations(sign, signJob, "dist-digest", producer, output)
 
 	build, ok := jobs[producer]
 	if !ok {
 		return append(violations, IsolationViolation{
 			Line: sign.Line,
-			Msg:  fmt.Sprintf("sign job %q takes dist-digest from job %q, which the workflow does not have", cfg.SignJob, producer),
+			Msg:  fmt.Sprintf("sign job %q takes dist-digest from job %q, which the workflow does not have", signJob, producer),
 		})
 	}
 
-	if mappingValue(mappingValue(&build, "outputs"), cfg.DistDigestOutput) == nil {
+	if mappingValue(mappingValue(&build, "outputs"), output) == nil {
 		violations = append(violations, IsolationViolation{
 			Line: build.Line,
-			Msg:  fmt.Sprintf("job %q, which the sign job takes dist-digest from, does not declare %q output", producer, cfg.DistDigestOutput),
+			Msg:  fmt.Sprintf("job %q, which the sign job takes dist-digest from, does not declare %q output", producer, output),
 		})
 	}
 
@@ -483,6 +436,21 @@ func needsJob(expr string) string {
 	}
 
 	return ""
+}
+
+// needOutputPattern reads the job and output of an expression that is one
+// needs.<job>.outputs.<name> reference and nothing else, dotted or bracketed.
+var needOutputPattern = regexp.MustCompile(`^\$\{\{\s*needs\.([A-Za-z_][A-Za-z0-9_-]*)\.outputs(?:\.([A-Za-z_][A-Za-z0-9_-]*)|\['([A-Za-z_][A-Za-z0-9_-]*)'\]|\["([A-Za-z_][A-Za-z0-9_-]*)"\])\s*\}\}$`)
+
+// needOutput returns the job and output a bare needs-output expression
+// reads.
+func needOutput(expr string) (string, string, bool) {
+	match := needOutputPattern.FindStringSubmatch(expr)
+	if match == nil {
+		return "", "", false
+	}
+
+	return match[1], match[2] + match[3] + match[4], true
 }
 
 // persistCredentialViolations flags every actions/checkout step that does not
@@ -553,17 +521,6 @@ func signingSecretPattern(secrets []string) map[string]bool {
 	return names
 }
 
-func nodeContainsSecretRef(node *yaml.Node, secret string) bool {
-	if node == nil {
-		return false
-	}
-
-	re := signingSecretPattern([]string{secret})
-	refs, err := findSecretRefs(node, re)
-
-	return err == nil && len(refs) > 0
-}
-
 type signingSecretRef struct {
 	line   int
 	secret string // empty when the whole secrets context is referenced
@@ -582,7 +539,13 @@ func (r signingSecretRef) describe() string {
 // findSecretRefs reports distinct literal secret names per scalar, not token
 // occurrences. yaml.v3 resolves effective mapping values before traversal, so
 // direct keys and earlier merge sources shadow defaults just as in env decoding.
-func findSecretRefs(node *yaml.Node, names map[string]bool) ([]signingSecretRef, error) { //nolint:cyclop,gocognit // Keep bounded traversal, cycle state and effective-value diagnostics in one walk.
+func findSecretRefs(node *yaml.Node, names map[string]bool) ([]signingSecretRef, error) {
+	return findSecretRefsMatching(node, func(secret string) bool { return secret == "" || names[secret] })
+}
+
+// findSecretRefsMatching is findSecretRefs for the secrets match selects; the
+// whole secrets context is passed to it as "".
+func findSecretRefsMatching(node *yaml.Node, match func(string) bool) ([]signingSecretRef, error) { //nolint:cyclop,gocognit // Keep bounded traversal, cycle state and effective-value diagnostics in one walk.
 	var refs []signingSecretRef
 
 	active, seen := map[*yaml.Node]bool{}, map[*yaml.Node]bool{}
@@ -622,7 +585,7 @@ func findSecretRefs(node *yaml.Node, names map[string]bool) ([]signingSecretRef,
 					secret = ref.members[0]
 				}
 
-				if (secret == "" || names[secret]) && !matched[secret] {
+				if match(secret) && !matched[secret] {
 					refs = append(refs, signingSecretRef{line: node.Line, secret: secret})
 					matched[secret] = true
 				}

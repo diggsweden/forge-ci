@@ -27,7 +27,7 @@ func TestIsolationChecksInputsAgainstTheSuppliedLayer(t *testing.T) {
       - uses: https://forge.example/team/engine/.forgejo/actions/tool@` + pin + `
         with: {message: hello}
   prepare:
-    uses: team/engine/.forgejo/workflows/prepare.yml@` + pin + `
+    uses: team/engine/.forgejo/workflows/prepare-release.yml@` + pin + `
     with: {version: v1.2.3}
 `
 
@@ -64,23 +64,23 @@ func TestIsolationChecksInputsAgainstTheSuppliedLayer(t *testing.T) {
 			tree["caller/release.yml"].Data = []byte(strings.ReplaceAll(caller, "actions/tool@", "actions/tool@main@"))
 		}},
 		{name: "required workflow input left out", want: `leaves out the required input "runner"`, edit: func(tree fstest.MapFS) {
-			tree["layer/.forgejo/workflows/prepare.yml"].Data = []byte("on:\n  workflow_call:\n    inputs: {version: {type: string}, runner: {type: string, required: true}}\n")
+			tree["layer/.forgejo/workflows/prepare-release.yml"].Data = []byte("on:\n  workflow_call:\n    inputs: {version: {type: string}, runner: {type: string, required: true}}\n")
 		}},
 		{name: "required input with a default may be left out", edit: func(tree fstest.MapFS) {
-			tree["layer/.forgejo/workflows/prepare.yml"].Data = []byte("on:\n  workflow_call:\n    inputs: {version: {type: string}, runner: {type: string, required: true, default: pool}}\n")
+			tree["layer/.forgejo/workflows/prepare-release.yml"].Data = []byte("on:\n  workflow_call:\n    inputs: {version: {type: string}, runner: {type: string, required: true, default: pool}}\n")
 		}},
 		{name: "inputless workflow", edit: func(tree fstest.MapFS) {
 			tree["caller/release.yml"].Data = []byte(strings.ReplaceAll(caller, "    with: {version: v1.2.3}\n", ""))
-			tree["layer/.forgejo/workflows/prepare.yml"].Data = []byte("on:\n  workflow_call:\n")
+			tree["layer/.forgejo/workflows/prepare-release.yml"].Data = []byte("on:\n  workflow_call:\n")
 		}},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			t.Parallel()
 
 			tree := fstest.MapFS{
-				"caller/release.yml":                     {Data: []byte(caller)},
-				"layer/.forgejo/actions/tool/action.yml": {Data: []byte("inputs: {message: {}}")},
-				"layer/.forgejo/workflows/prepare.yml":   {Data: []byte("on:\n  workflow_call:\n    inputs: {version: {type: string}}\n")},
+				"caller/release.yml":                           {Data: []byte(caller)},
+				"layer/.forgejo/actions/tool/action.yml":       {Data: []byte("inputs: {message: {}}")},
+				"layer/.forgejo/workflows/prepare-release.yml": {Data: []byte("on:\n  workflow_call:\n    inputs: {version: {type: string}}\n")},
 			}
 			if scenario.edit != nil {
 				scenario.edit(tree)
@@ -89,7 +89,7 @@ func TestIsolationChecksInputsAgainstTheSuppliedLayer(t *testing.T) {
 			var diagnostics strings.Builder
 
 			err := appvalidate.Isolation(io.Discard, output.NewAnnotator(&diagnostics, output.FormatText), appvalidate.IsolationInput{
-				Workflow: "caller/release.yml", SinglePinSubject: "team/engine", ContractRoot: "layer", FS: tree,
+				WorkflowsDir: "caller", SinglePinSubject: "team/engine", ContractRoot: "layer", FS: tree,
 			})
 			if scenario.want == "" {
 				require.NoError(t, err)

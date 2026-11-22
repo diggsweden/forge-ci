@@ -332,7 +332,7 @@ alone. Each `action.yml` documents its own inputs and outputs.
 | Action | Does |
 |---|---|
 | `setup-forge-ci` | Downloads the layer's binary, verifies it against the recorded checksum and puts it on the job `PATH`. The first step of a consumer job that calls `forge-ci` itself. |
-| `check-l3-isolation` | The pull-request gate over the consumer's release workflow: no signing secret in any job but the prepare job and the calls of the layer's signer workflows, enumerated signer secrets, a prepare job that calls `prepare-release.yml` with every secret the signer takes, its `release-tag`, `release-sha` and `artifacts-config` passed to the signer as bare `needs` expressions, the digest hand-off, one commit across every reference, and the signer image, the key digest and the transparency-log setting written out as literals. |
+| `check-l3-isolation` | The pull-request gate over the consumer's workflow directory, whose release workflows it finds itself: no signing secret in any job but the calls of the layer's signer workflows, a prepare job that calls `prepare-release.yml` with every secret the signer takes, its `release-tag`, `release-sha` and `artifacts-config` passed to the signer as bare `needs` expressions, the digest hand-off, one commit across every reference, and the signer image, the key digest and the transparency-log setting written out as literals. |
 | `checkout-consumer` | Checks the consumer out without Node and without persisted credentials. |
 | `setup-toolchain` | Installs the consumer's pinned tools with mise, verified and cache-aware. |
 | `lint-nanolinter` | The pull-request lint gate: the repository's nanolinter plan with a mandated floor. |
@@ -631,8 +631,8 @@ for them; every `pullrequest-workflow.yml` in the examples, such as
   [Lint Workflows](components.md#lint-workflows) shows the same
   choice on each forge.
 - **`check-l3-isolation`**: the release-isolation gate over the consumer's
-  workflows: no signing secret in any job but the prepare job and the calls
-  of the layer's signer workflows, enumerated signer secrets,
+  workflows, whose release workflows it finds itself: no signing secret in
+  any job but the calls of the layer's signer workflows,
   a prepare job that calls `prepare-release.yml` with every secret the
   signer takes, its release identity and
   declaration passed to the signer as bare `needs` expressions,
@@ -708,7 +708,7 @@ example shows the two workflows they add up to.
 | Step | Action | Runs |
 |---|---|---|
 | Lint | `lint-nanolinter` | `nanolinter verify --require <floor>`, with `disable-checks` and `offline` for what another job or the runner's network decides. The default floor is `secrets`, as on the other forges. |
-| Release isolation | `check-l3-isolation` | `validate isolation` over the consumer's `release-workflow.yml`. |
+| Release isolation | `check-l3-isolation` | `validate isolation` over the consumer's `.forgejo/workflows`, whose release workflows it finds. |
 | Build, Go | `build-go` | `build go run`: `go mod download`, `go test ./...`, the Build SBOM, one binary per platform. |
 | Build, Cargo | `build-cargo` | `build cargo run`: `cargo fetch`, `cargo test --locked`, the Build SBOM, one binary per platform. |
 | Build, Maven | `build-maven` | `build maven run --expect-version`: `mvn install`, a refusal unless the POM declares the release version, the app or library lifecycle with its tests, the Build SBOM, all in `target/`. A library build (`build-type: lib`) then uploads the POMs and the built JARs as the run artifact `maven-build-artifacts`, as GitHub's workflow does. |
@@ -1958,23 +1958,46 @@ the public record of when the signature was made; the signature is still
 checked against your key. With `public`, leave the flag out.
 
 **What the pull-request gate does not check.** `check-l3-isolation` checks the
-declared workflow: it rejects mixed pins, a signing secret in a job that runs
-your code, an inherited signer secret set, a prepare call without a secret the
-signer takes, a broken digest hand-off, and a signer image,
-key digest or transparency-log setting that is not a literal. For secrets it
-reads every job and the workflow-level `env` each inherits, and lets a name in
-`signing-secrets` reach only the prepare job, the sign job and a call of
-`prepare-release.yml`, `sign-and-publish-release.yml`,
-`sign-container-images.yml` or `runtime-images.yml`; the build, its tests, the
-image jobs and the hand-off are all checked. It matches those calls by the
-layer's workflow path, not by repository, so a same-named workflow in another
-repository counts too. It looks for the names in
-`signing-secrets` alone: another secret in a job is not looked at. The digest
-hand-off is followed from the sign job's `dist-digest` to the job it names,
-which must declare `dist-digest-output`. The action's `build-job` input is
-deprecated, and ignored with a warning. It does not check
-runner isolation, branch protection, or the provenance of a completed release.
-A direct push bypasses it, so the protected branch is part of the boundary.
+repository's `.forgejo/workflows` directory. It finds the release workflows
+itself, whatever their file names: every workflow with a job that calls the
+layer's `prepare-release.yml` or `sign-and-publish-release.yml`, and none
+found fails. Every reference to the layer in the directory must be pinned
+to a full commit, never a branch, a tag or a short commit. In them it rejects a signing secret in a job that runs your
+code, `secrets: inherit` on any job (the prepare, sign and signer calls
+included), a prepare call without a secret the signer takes, and a broken
+release-identity or digest hand-off. Across the whole directory it rejects
+mixed pins and a signer image, key digest or transparency-log setting that is
+not a literal. For secrets it reads every job of every workflow and the
+workflow-level `env` each inherits, and lets a name in `signing-secrets`
+reach only a call of `prepare-release.yml`, `sign-and-publish-release.yml`,
+`sign-container-images.yml`, `runtime-images.yml` or
+`base-image-lifecycle.yml` of the layer; the build, its tests, the image jobs
+and the hand-off are all checked. A call of such a workflow in another
+repository is refused. The sign and prepare jobs are the calls of those two
+workflows, and the digest hand-off is followed from the sign job's
+`dist-digest` to the job and output it names, which that job must declare:
+nothing is named to the action. It does not check runner isolation, branch
+protection, or the provenance of a completed release. A direct push bypasses
+it, so the protected branch is part of the boundary.
+
+A local reusable workflow a release workflow calls
+(`uses: ./.forgejo/workflows/...`), directly or through another, runs in the
+release: its jobs are held to the same secret, `secrets: inherit`, checkout
+and `setup-toolchain` `cache: false` rules, and one that is missing fails.
+Every `uses:` in those files, and in the local actions they use, must be a
+path in the repository or the layer at its one full-commit pin on the forge
+of the run, and a local action must be a composite action: no third-party action, `docker://` image or Node
+action runs in the release.
+
+A job that checks the repository out (`actions/checkout`,
+`checkout-consumer`, `forge-ci platform checkout`, a `git clone`, `fetch` or
+`pull`, or a local action) runs the project's code, so it may hold no secret
+but the job token (`${{ forgejo.token }}`, `secrets.GITHUB_TOKEN`) and the
+read-only `DEPENDENCY_*` credentials of
+[the dependency token](#the-dependency-token-of-your-own-jobs), in any step,
+env level or `with:`, and through the workflow env. A release, registry or
+personal token belongs in a job without a checkout, or in a call of one of
+the layer's workflows.
 
 It also refuses unknown inputs to the layer's actions and workflows.
 
@@ -2155,8 +2178,7 @@ A fork that only adds files rebases onto upstream without conflicts:
 
 The actionlint configuration accepts Forgejo full-URL action references only
 in Forgejo workflow files. Use the consumer release examples for the build/sign
-separation and run `check-l3-isolation` against the fork's release workflow as
-well.
+separation and run `check-l3-isolation` in the fork's pull requests as well.
 
 The runner and permissions remain deployment responsibilities. Forgejo does
 not enforce GitHub's `permissions:` field: configure the actual repository-token
@@ -2208,7 +2230,7 @@ that the consumer and the layer agree on the lab's runner, not on yours.
 | The request is refused as ahead of or behind the release branch | See [The request is the head of the release branch](#the-request-is-the-head-of-the-release-branch). |
 | GoReleaser stops with `git is in a dirty state` | A step left an untracked file in the checkout, such as `release-notes.md`; render it in `$RUNNER_TEMP`. |
 | `lint-nanolinter` stops: no `nanolinter` | `CI_JOB_IMAGE` does not carry nanolinter. |
-| `check-l3-isolation` fails a pull request | Mixed pins, a signing secret in a job other than the prepare job and the calls of the layer's signer workflows, a prepare call without a secret the sign job takes, or a signer image, key digest or transparency-log setting that is not a literal. |
+| `check-l3-isolation` fails a pull request | No workflow that calls the layer's `prepare-release.yml` or `sign-and-publish-release.yml`, mixed pins, a signing secret in a job other than the calls of the layer's signer workflows, a prepare call without a secret the sign job takes, or a signer image, key digest or transparency-log setting that is not a literal. |
 | A signing job cannot start its container, after the final tag exists | The signer image reference names no image. Publish the image it names and re-run the failed jobs. |
 | A package publish answers 401 or 403 | The automatic token cannot write packages; supply one with `write:package`. See [forgejo](providers.md#forgejo). |
 | Plain `cosign verify` fails on a release | Signatures made with `transparency-log: none` need `--insecure-ignore-tlog`; see [The transparency log](#the-transparency-log). |

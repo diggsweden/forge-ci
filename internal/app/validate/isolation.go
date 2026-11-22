@@ -4,9 +4,11 @@
 package validate
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -23,154 +25,277 @@ import (
 
 // IsolationInput drives Isolation.
 type IsolationInput struct {
-	// Workflow is the path to the workflow file to check (relative to FS when
-	// FS is set, else an OS path).
-	Workflow string
-	// SignJob is the cross-repo signing workflow call-site job. Empty keeps only
-	// the generic release-isolation checks enabled.
-	SignJob string
-	// PrepareJob is the job that produces release identity outputs and may run
-	// fail-fast secret presence checks before checkout.
-	PrepareJob string
-	// DistDigestOutput is the build job output that feeds the signer's dist-digest
-	// input.
-	DistDigestOutput string
-	// SigningSecrets are the secret names no job may reference but the
-	// prepare job, the sign job and a call of a signer workflow of the layer.
+	// WorkflowsDir is the repository's workflow directory (relative to FS
+	// when FS is set, else an OS path), for example .forgejo/workflows. The
+	// repository root is the directory two levels above it. Its release
+	// workflows are the ones that call the subject's release entry points;
+	// the caller does not name them.
+	WorkflowsDir string
+	// SigningSecrets are the secret names no job may reference but a call of
+	// a signer workflow of the layer.
 	SigningSecrets []string
-	// SinglePinSubject enables directory-wide pin consistency for uses refs that
-	// contain this subject (for example, "example/provider-workflows"). Empty disables
-	// the check.
+	// SinglePinSubject is the owner/repository of the engine (for example,
+	// "example/provider-workflows"). The release workflows are the ones that
+	// call its release entry points; every reference to it in the workflow
+	// directory agrees on one commit and one forge, and the jobs that may
+	// receive signing secrets call it. It is required.
 	SinglePinSubject string
+	// ServerURL is the base URL of the forge the workflows run on. A reference
+	// to SinglePinSubject that writes a forge address must write this one, and
+	// a reference without one is resolved by the forge. Empty means it is not
+	// known: the references that write an address must then agree on one.
+	ServerURL string
 	// SinglePinInput names the input through which the subject's reusable
 	// workflows receive their commit a second time. Every job in the workflow
 	// directory that calls one of them must pass it as a literal commit, and
 	// the value joins the pins that must agree. Empty checks uses: pins only.
-	// It needs SinglePinSubject.
 	SinglePinInput string
 	// LiteralInputs names inputs of the subject's reusable workflows that a
 	// caller must write out: every job in the workflow directory that calls
 	// one of them and passes such an input must pass a literal, never an
 	// expression. Each value is NAME or NAME=SHAPE, where SHAPE (sha256,
 	// image-digest, or enum:VALUE/VALUE) also holds the literal to that form.
-	// It needs SinglePinSubject.
 	LiteralInputs []string
 	// ContractRoot is the trusted checkout of SinglePinSubject at the pin
 	// used by the caller. Its action/workflow declarations admit with: keys.
-	// Empty keeps standalone isolation checks independent of a layer checkout.
+	// Empty leaves the with: keys unchecked.
 	ContractRoot string
 	// FS overrides filesystem access for tests. Nil -> the real OS filesystem.
 	FS fs.FS
 }
 
-// Isolation asserts selected static release-isolation invariants: no job
-// but the prepare job, the sign job and the calls of the layer's signer
-// workflows references a signing secret, and every actions/checkout step sets
-// persist-credentials: false. Violations are emitted as error annotations
-// (GitHub: `::error file=…,line=…::`; elsewhere a plain `Error:` line) and the
-// call returns a wrapped errs.ErrValidation. Sibling checks concern local header
-// and lexical input-reference hints only, never runtime digest verification or
-// signing order.
+// Isolation asserts the static release-isolation invariants of a
+// repository's workflow directory. Its release workflows are found, not
+// named: every workflow that calls one of the subject's release entry
+// points. Their jobs, the local workflows they call and the local actions
+// they use are held to the release rules (validate.CheckIsolation, local and
+// subject actions only); every workflow of the directory is held to the
+// signing-secret boundary, one subject pin on one forge and the literal and
+// declared inputs. Violations are emitted as error annotations (GitHub:
+// `::error file=…,line=…::`; elsewhere a plain `Error:` line) and the call
+// returns a wrapped errs.ErrValidation.
 func Isolation(out io.Writer, annot output.Annotator, in IsolationInput) error {
 	literalInputs, err := subjectInputs(in)
 	if err != nil {
 		return err
 	}
 
-	data, err := readWorkflow(in)
+	files, err := workflowDirYAMLFiles(in)
 	if err != nil {
 		return err
 	}
 
-	violations, err := validate.CheckIsolation(data, validate.IsolationConfig{
-		SignJob:          in.SignJob,
-		PrepareJob:       in.PrepareJob,
-		DistDigestOutput: in.DistDigestOutput,
-		SigningSecrets:   in.SigningSecrets,
-	})
+	releases, others := releaseWorkflows(files, in.SinglePinSubject)
+	called, violations := calledLocalWorkflows(in, releases)
+
+	ruleViolations, err := releaseRuleViolations(in, releases, notIn(others, called))
 	if err != nil {
-		return fmt.Errorf("check isolation %s: %w: %w", in.Workflow, err, errs.ErrMalformedInput)
+		return err
 	}
 
-	violations = append(violations, singlePinViolations(in)...)
-	violations = append(violations, literalInputViolations(in, literalInputs)...)
-	violations = append(violations, declaredInputViolations(in)...)
-	siblingViolations, siblingChecked := siblingContractViolations(in, data)
-	violations = append(violations, siblingViolations...)
+	violations = append(violations, ruleViolations...)
+	violations = append(violations, calledWorkflowViolations(in, called)...)
 
-	if in.SignJob != "" {
-		if siblingChecked {
-			_, _ = fmt.Fprintln(out, "Local sibling header/input-reference hints checked (lexical only, not proof of input consumption); checkout is not verified against the workflow pin.")
-		} else {
-			_, _ = fmt.Fprintln(out, "Sibling signer static contract not checked: local workflow unavailable or malformed.")
-		}
+	actions, actionViolations := foreignActionViolations(in, slices.Concat(releases, called))
+	violations = append(violations, actionViolations...)
 
-		_, _ = fmt.Fprintln(out, "Digest verification before signing is not checked; the owner of the pinned signing workflow must enforce the runtime verifier and ordering.")
+	// The pin and address checks read every file the release runs, not only
+	// the workflow directory: a local action can reference the engine too.
+	pinViolations, addressNote := singlePinViolations(in, slices.Concat(files, notIn(slices.Concat(called, actions), files)))
+	violations = append(violations, pinViolations...)
+	violations = append(violations, literalInputViolations(in, literalInputs, files)...)
+	violations = append(violations, declaredInputViolations(in, files)...)
+
+	if len(releases) == 0 {
+		violations = append(violations, fileViolation{File: in.WorkflowsDir, Msg: fmt.Sprintf(
+			"no workflow under %s calls %s's %s: there is no release workflow to check",
+			in.WorkflowsDir, in.SinglePinSubject, strings.Join(validate.ReleaseEntryWorkflows(), " or "))})
+	}
+
+	if addressNote != "" {
+		_, _ = fmt.Fprintln(out, addressNote)
 	}
 
 	for _, v := range violations {
-		annot.ErrorAt(output.Annotation{File: in.Workflow, Line: v.Line}, "%s", v.Msg)
+		annot.ErrorAt(output.Annotation{File: v.File, Line: v.Line}, "%s", v.Msg)
 	}
 
 	if len(violations) > 0 {
-		return fmt.Errorf("isolation validation failed for %s: %w", in.Workflow, errs.ErrValidation)
+		return fmt.Errorf("isolation validation failed for %s: %w", in.WorkflowsDir, errs.ErrValidation)
 	}
 
 	if in.ContractRoot != "" {
 		_, _ = fmt.Fprintf(out, "Action and workflow inputs checked against the supplied layer checkout %s\n", in.ContractRoot)
 	}
 
-	_, _ = fmt.Fprintf(out, "%s Static release-isolation checks passed in %s\n", clicolor.Check(out), in.Workflow)
+	for _, file := range releases {
+		_, _ = fmt.Fprintf(out, "Release workflow %s, which calls %s, checked\n", file.Path, in.SinglePinSubject)
+	}
+
+	for _, file := range called {
+		_, _ = fmt.Fprintf(out, "Local workflow %s, which a release workflow calls, checked with it\n", file.Path)
+	}
+
+	_, _ = fmt.Fprintln(out, "Digest verification before signing is not checked here; the pinned signing workflow enforces the runtime verifier and ordering.")
+	_, _ = fmt.Fprintf(out, "%s Static release-isolation checks passed in %s\n", clicolor.Check(out), in.WorkflowsDir)
 
 	return nil
 }
 
-// subjectInputs refuses a flag that names inputs of the subject's workflows
-// when no subject is given, and returns the parsed literal inputs.
+// releaseWorkflows splits the workflow directory into the release workflows,
+// the ones with a job that calls one of the subject's release entry points,
+// and the rest.
+func releaseWorkflows(files []releaseFile, subject string) ([]releaseFile, []releaseFile) {
+	var releases, others []releaseFile
+
+	for _, file := range files {
+		if callsReleaseEntry(file.Body, subject) {
+			releases = append(releases, file)
+		} else {
+			others = append(others, file)
+		}
+	}
+
+	return releases, others
+}
+
+// callsReleaseEntry reports whether a job of the workflow calls one of the
+// subject's release entry points. A file that does not parse is a release
+// workflow: the release rules then report it as malformed rather than the
+// directory passing without it.
+func callsReleaseEntry(body []byte, subject string) bool {
+	var doc struct {
+		Jobs map[string]struct {
+			Uses yaml.Node `yaml:"uses"`
+		} `yaml:"jobs"`
+	}
+
+	if err := yaml.Unmarshal(body, &doc); err != nil {
+		return true
+	}
+
+	for _, job := range doc.Jobs {
+		if uses, ok := resolvedScalar(&job.Uses); ok && validate.CallsReleaseEntry(uses) && referencesSubject(uses, subject) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// notIn returns the files that are none of the others.
+func notIn(files, others []releaseFile) []releaseFile {
+	return slices.DeleteFunc(slices.Clone(files), func(file releaseFile) bool {
+		return slices.ContainsFunc(others, func(other releaseFile) bool { return path.Clean(other.Path) == path.Clean(file.Path) })
+	})
+}
+
+// releaseRuleViolations holds each release workflow to the release rules,
+// and every other workflow of the directory to the signing-secret boundary:
+// a key reaches the engine's signers alone, whichever workflow names it.
+func releaseRuleViolations(in IsolationInput, releases, others []releaseFile) ([]fileViolation, error) {
+	cfg := validate.IsolationConfig{SigningSecrets: in.SigningSecrets}
+
+	var violations []fileViolation
+
+	for _, file := range releases {
+		found, err := validate.CheckIsolation(file.Body, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("check isolation %s: %w: %w", file.Path, err, errs.ErrMalformedInput)
+		}
+
+		violations = append(violations, inFile(file.Path, found)...)
+	}
+
+	for _, file := range others {
+		found, err := validate.CheckSigningSecrets(file.Body, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("check signing secrets %s: %w: %w", file.Path, err, errs.ErrMalformedInput)
+		}
+
+		violations = append(violations, inFile(file.Path, found)...)
+	}
+
+	return violations, nil
+}
+
+// inFile places the violations of one file at that file.
+func inFile(file string, found []validate.IsolationViolation) []fileViolation {
+	violations := make([]fileViolation, 0, len(found))
+	for _, v := range found {
+		violations = append(violations, fileViolation{File: file, Line: v.Line, Msg: v.Msg})
+	}
+
+	return violations
+}
+
+// perFile runs a check over each file and places its violations there.
+func perFile(files []releaseFile, check func([]byte) []validate.IsolationViolation) []fileViolation {
+	violations := make([]fileViolation, 0, len(files))
+	for _, file := range files {
+		violations = append(violations, inFile(file.Path, check(file.Body))...)
+	}
+
+	return violations
+}
+
+// subjectInputs refuses a call without a subject, and returns the parsed
+// literal inputs.
 func subjectInputs(in IsolationInput) ([]literalInput, error) {
-	if in.ContractRoot != "" && in.SinglePinSubject == "" {
-		return nil, fmt.Errorf("--contract-root requires --single-pin-subject: %w", errs.ErrUsage)
+	if in.SinglePinSubject == "" {
+		return nil, fmt.Errorf("--single-pin-subject names the engine whose release entry points find the release workflows, and none is given: %w", errs.ErrUsage)
 	}
 
-	if in.SinglePinInput != "" && in.SinglePinSubject == "" {
-		return nil, fmt.Errorf("--single-pin-input names an input of the --single-pin-subject workflows, and no subject is given: %w", errs.ErrUsage)
-	}
-
-	if len(in.LiteralInputs) > 0 && in.SinglePinSubject == "" {
-		return nil, fmt.Errorf("--literal-input names inputs of the --single-pin-subject workflows, and no subject is given: %w", errs.ErrUsage)
+	if in.WorkflowsDir == "" {
+		return nil, fmt.Errorf("--workflows-dir names the workflow directory to check, and none is given: %w", errs.ErrUsage)
 	}
 
 	return parseLiteralInputs(in.LiteralInputs)
 }
 
-func singlePinViolations(in IsolationInput) []validate.IsolationViolation {
-	if in.SinglePinSubject == "" {
-		return nil
-	}
+// singlePinViolations holds the workflow directory to one engine: every
+// reference to the subject at one commit and one forge address, and every job
+// that may receive a signing secret calling the subject. The string is a note
+// for the reader when the address could not be compared with the forge's own.
+func singlePinViolations(in IsolationInput, files []releaseFile) ([]fileViolation, string) {
+	shas, addresses := map[string]struct{}{}, map[string]struct{}{}
 
-	files, err := workflowDirYAMLFiles(in)
-	if err != nil {
-		return []validate.IsolationViolation{{Line: 1, Msg: err.Error()}}
-	}
+	var violations, engineViolations, unpinned []fileViolation
 
-	shas := map[string]struct{}{}
-
-	var violations []validate.IsolationViolation
-
-	for _, body := range files {
-		usesValues, err := yamlUsesValues([]byte(body))
+	for _, file := range files {
+		refs, err := yamlUsesRefs(file.Body)
 		if err != nil {
-			return []validate.IsolationViolation{{Line: 1, Msg: err.Error()}}
+			violations = append(violations, fileViolation{File: file.Path, Line: 1, Msg: err.Error()})
+
+			continue
 		}
 
-		for _, uses := range usesValues {
-			if sha := pinnedSubjectSHA(uses, in.SinglePinSubject); sha != "" {
-				shas[sha] = struct{}{}
+		for _, ref := range refs {
+			address, _, ok := subjectReference(ref.value, in.SinglePinSubject)
+			if !ok {
+				continue
 			}
+
+			if address != "" {
+				addresses[address] = struct{}{}
+			}
+
+			sha := pinnedSubjectSHA(ref.value, in.SinglePinSubject)
+			if sha == "" {
+				unpinned = append(unpinned, fileViolation{File: file.Path, Line: ref.line, Msg: fmt.Sprintf(
+					"%s references %s at %s, which is not a full commit: every reference to the engine is pinned to one full commit SHA",
+					ref.value, in.SinglePinSubject, subjectRef(ref.value))})
+
+				continue
+			}
+
+			shas[sha] = struct{}{}
 		}
 
-		inputPins, inputViolations := subjectCallInputPins([]byte(body), in.SinglePinSubject, in.SinglePinInput)
-		violations = append(violations, inputViolations...)
+		engineViolations = append(engineViolations, inFile(file.Path, signerCallViolations(file.Body, in.SinglePinSubject))...)
+
+		inputPins, inputViolations := subjectCallInputPins(file.Body, in.SinglePinSubject, in.SinglePinInput)
+		violations = append(violations, inFile(file.Path, inputViolations)...)
 
 		for _, sha := range inputPins {
 			shas[sha] = struct{}{}
@@ -178,36 +303,115 @@ func singlePinViolations(in IsolationInput) []validate.IsolationViolation {
 	}
 
 	if len(violations) > 0 {
-		return violations
+		return violations, ""
 	}
 
 	// A subject that matches nothing is not a workflow directory with one
 	// consistent pin -- it is a check that ran over nothing and said so in the
 	// same words. A stale or misspelled subject silently disabled this entirely.
-	if len(shas) == 0 {
-		return []validate.IsolationViolation{{
-			Line: 1,
+	if len(shas) == 0 && len(unpinned) == 0 {
+		return []fileViolation{{
+			File: in.WorkflowsDir,
 			Msg: fmt.Sprintf(
 				"no %s pin found under workflow directory: the single-pin subject matches nothing, so pin consistency was not checked",
 				in.SinglePinSubject),
-		}}
+		}}, ""
 	}
 
-	if len(shas) == 1 {
-		return nil
+	addressViolations, note := subjectAddressViolations(in, slices.Sorted(maps.Keys(addresses)))
+	engineViolations = slices.Concat(unpinned, engineViolations, addressViolations)
+
+	if len(shas) > 1 {
+		engineViolations = append(engineViolations, fileViolation{
+			File: in.WorkflowsDir,
+			Msg: fmt.Sprintf("mixed %s pins under workflow directory: %s",
+				in.SinglePinSubject, strings.Join(slices.Sorted(maps.Keys(shas)), ", ")),
+		})
 	}
 
-	vals := make([]string, 0, len(shas))
-	for sha := range shas {
-		vals = append(vals, sha)
+	return engineViolations, note
+}
+
+// subjectRef is the ref a uses: value names after its last @, or says that
+// it names none.
+func subjectRef(uses string) string {
+	if _, ref, found := strings.CutLast(uses, "@"); found {
+		return "@" + ref
 	}
 
-	slices.Sort(vals)
+	return "no ref"
+}
 
-	return []validate.IsolationViolation{{
-		Line: 1,
-		Msg:  fmt.Sprintf("mixed %s pins under workflow directory: %s", in.SinglePinSubject, strings.Join(vals, ", ")),
-	}}
+// subjectAddressViolations refuses a reference to the subject on another
+// forge. A reference that writes an address is fetched from that address,
+// whatever forge runs the workflow, so the same owner/repository on a foreign
+// host is another engine. Without the forge's own URL, off a runner, only the
+// agreement of the written addresses can be checked, and the note says so.
+func subjectAddressViolations(in IsolationInput, addresses []string) ([]fileViolation, string) {
+	server := strings.TrimRight(in.ServerURL, "/")
+	if server == "" {
+		switch len(addresses) {
+		case 0:
+			return nil, ""
+		case 1:
+			return nil, fmt.Sprintf("The forge's server URL is not known here: the address %s of the %s references was not compared with it.",
+				addresses[0], in.SinglePinSubject)
+		}
+
+		return []fileViolation{{
+			File: in.WorkflowsDir,
+			Msg: fmt.Sprintf("%s is referenced at more than one forge address under workflow directory: %s",
+				in.SinglePinSubject, strings.Join(addresses, ", ")),
+		}}, ""
+	}
+
+	var violations []fileViolation
+
+	for _, address := range addresses {
+		if !strings.EqualFold(address, server) {
+			violations = append(violations, fileViolation{
+				File: in.WorkflowsDir,
+				Msg: fmt.Sprintf("%s is referenced at %s, and this forge is %s: a reference that writes a forge address must write the forge's own",
+					in.SinglePinSubject, address, server),
+			})
+		}
+	}
+
+	return violations, ""
+}
+
+// signerCallViolations refuses a job that calls a workflow named like one of
+// the layer's signer workflows in another repository than the subject. The
+// secret check lets such a call receive signing secrets by the workflow's
+// name alone, so the name must be the subject's.
+func signerCallViolations(body []byte, subject string) []validate.IsolationViolation {
+	var doc struct {
+		Jobs map[string]struct {
+			Uses yaml.Node `yaml:"uses"`
+		} `yaml:"jobs"`
+	}
+
+	if err := yaml.Unmarshal(body, &doc); err != nil {
+		return []validate.IsolationViolation{{Line: 1, Msg: fmt.Sprintf("parse workflow YAML: %v", err)}}
+	}
+
+	var violations []validate.IsolationViolation
+
+	for _, name := range slices.Sorted(maps.Keys(doc.Jobs)) {
+		job := doc.Jobs[name]
+
+		uses, ok := resolvedScalar(&job.Uses)
+		if !ok || !validate.CallsSignerWorkflow(uses) || referencesSubject(uses, subject) {
+			continue
+		}
+
+		violations = append(violations, validate.IsolationViolation{
+			Line: job.Uses.Line,
+			Msg:  fmt.Sprintf("job %q calls %s, which is not %s: a job that may receive signing secrets must call the single-pin subject", name, uses, subject),
+		})
+	}
+
+	return violations
 }
 
 // subjectCallInputPins returns the commit each job passes as input to a
@@ -273,255 +477,80 @@ func subjectCallInputPins(body []byte, subject, input string) ([]string, []valid
 	return pins, violations
 }
 
-func siblingContractViolations(in IsolationInput, workflowYAML []byte) ([]validate.IsolationViolation, bool) {
-	if in.SignJob == "" {
-		return nil, false
-	}
+// workflowDirYAMLFiles reads every workflow file of the directory, by name.
+func workflowDirYAMLFiles(in IsolationInput) ([]releaseFile, error) {
+	dir := cleanDir(in.WorkflowsDir)
 
-	uses := signJobUses(workflowYAML, in.SignJob)
-	if uses == "" {
-		return nil, false
-	}
+	var (
+		entries []fs.DirEntry
+		err     error
+	)
 
-	siblingPath := siblingWorkflowPath(in.Workflow, uses)
-	if siblingPath == "" {
-		return nil, false
-	}
-
-	body, ok, err := readOptionalIsolationFile(in, siblingPath)
-	if err != nil {
-		return []validate.IsolationViolation{{Line: 1, Msg: err.Error()}}, false
-	}
-
-	if !ok {
-		return nil, false
-	}
-
-	violations := missingContractSecrets(string(body), in.SigningSecrets)
-
-	scalars, err := yamlScalarValues(body)
-	if err != nil {
-		return append(violations, validate.IsolationViolation{Line: 1, Msg: fmt.Sprintf("parse sibling signer workflow %s: %v", siblingPath, err)}), false
-	}
-
-	if !signerMentionsDistDigest(scalars) {
-		violations = append(violations, validate.IsolationViolation{Line: 1, Msg: "sibling signer workflow has no literal dist-digest input reference (lexical hint only; consumption is not checked)"})
-	}
-
-	return violations, true
-}
-
-// missingContractSecrets reports enforced signing secrets absent from the
-// sibling signer's secrets-contract header (when such a header is declared).
-func missingContractSecrets(body string, signingSecrets []string) []validate.IsolationViolation {
-	declared := secretsContractHeader(body)
-	if len(declared) == 0 {
-		return nil
-	}
-
-	var violations []validate.IsolationViolation
-
-	for _, secret := range signingSecrets {
-		if secret == "" {
-			continue
-		}
-
-		if _, ok := declared[secret]; !ok {
-			violations = append(violations, validate.IsolationViolation{
-				Line: 1,
-				Msg:  fmt.Sprintf("gate enforces %s but sibling signer secrets-contract header does not list it", secret),
-			})
-		}
-	}
-
-	return violations
-}
-
-// signerMentionsDistDigest is only a lexical hint. A name or description can
-// satisfy it; neither this nor verifier-looking text establishes execution.
-func signerMentionsDistDigest(scalars []string) bool {
-	for _, text := range scalars {
-		if strings.Contains(text, "inputs.dist-digest") ||
-			strings.Contains(text, "inputs['dist-digest']") ||
-			strings.Contains(text, `inputs["dist-digest"]`) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func workflowDirYAMLFiles(in IsolationInput) ([]string, error) {
-	dir := workflowDir(in.Workflow)
 	if in.FS != nil {
-		entries, err := fs.ReadDir(in.FS, dir)
-		if err != nil {
-			return nil, fmt.Errorf("read workflow directory %s: %w", dir, err)
-		}
-
-		return readYAMLFilesFS(in.FS, dir, entries)
+		entries, err = fs.ReadDir(in.FS, dir)
+	} else {
+		entries, err = os.ReadDir(filepath.FromSlash(dir))
 	}
 
-	entries, err := os.ReadDir(filepath.FromSlash(dir))
 	if err != nil {
-		return nil, fmt.Errorf("read workflow directory %s: %w", dir, err)
+		return nil, workflowReadError(dir, err)
 	}
 
-	files := make([]string, 0, len(entries))
+	var files []releaseFile
+
 	for _, entry := range entries {
 		if entry.IsDir() || !isYAMLFile(entry.Name()) {
 			continue
 		}
 
-		data, err := os.ReadFile(filepath.Join(filepath.FromSlash(dir), entry.Name()))
+		name := path.Join(dir, entry.Name())
+
+		data, err := readFile(in, name)
 		if err != nil {
-			return nil, fmt.Errorf("read workflow file %s: %w", entry.Name(), err)
+			return nil, workflowReadError(name, err)
 		}
 
-		files = append(files, string(data))
+		files = append(files, releaseFile{Path: name, Body: data})
 	}
 
 	return files, nil
 }
 
-func readYAMLFilesFS(fsys fs.FS, dir string, entries []fs.DirEntry) ([]string, error) {
-	files := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() || !isYAMLFile(entry.Name()) {
-			continue
-		}
-
-		data, err := fs.ReadFile(fsys, path.Join(dir, entry.Name()))
-		if err != nil {
-			return nil, fmt.Errorf("read workflow file %s: %w", entry.Name(), err)
-		}
-
-		files = append(files, string(data))
-	}
-
-	return files, nil
-}
-
-func readOptionalIsolationFile(in IsolationInput, name string) ([]byte, bool, error) {
-	if in.FS != nil {
-		data, err := fs.ReadFile(in.FS, name)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return nil, false, nil
-			}
-
-			return nil, false, fmt.Errorf("read sibling signer workflow %s: %w", name, err)
-		}
-
-		return data, true, nil
-	}
-
-	data, err := os.ReadFile(filepath.FromSlash(name))
+// readRepositoryFile reads a file through FS when set, else the OS. A file
+// that does not exist is not an error: the second result is false.
+func readRepositoryFile(in IsolationInput, name string) ([]byte, bool, error) {
+	data, err := readFile(in, name)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return nil, false, nil
 		}
 
-		return nil, false, fmt.Errorf("read sibling signer workflow %s: %w", name, err)
+		return nil, false, fmt.Errorf("read %s: %w", name, err)
 	}
 
 	return data, true, nil
 }
 
-func signJobUses(workflowYAML []byte, signJob string) string {
-	var doc struct {
-		Jobs map[string]yaml.Node `yaml:"jobs"`
-	}
-	if err := yaml.Unmarshal(workflowYAML, &doc); err != nil {
-		return ""
+// readFile reads a file through FS when set, else the OS.
+func readFile(in IsolationInput, name string) ([]byte, error) {
+	if in.FS != nil {
+		return fs.ReadFile(in.FS, name) //nolint:wrapcheck // the callers say which file
 	}
 
-	job, ok := doc.Jobs[signJob]
-	if !ok || job.Kind != yaml.MappingNode {
-		return ""
-	}
-
-	for i := 0; i+1 < len(job.Content); i += 2 {
-		if job.Content[i].Value == "uses" && job.Content[i+1].Kind == yaml.ScalarNode {
-			return job.Content[i+1].Value
-		}
-	}
-
-	return ""
+	return os.ReadFile(filepath.FromSlash(name)) //nolint:wrapcheck // the callers say which file
 }
 
-func siblingWorkflowPath(workflow, uses string) string {
-	before, _, ok := strings.CutLast(uses, "@")
-	if !ok {
-		return ""
-	}
-
-	pathPart := before
-	if schemeIdx := strings.Index(pathPart, "://"); schemeIdx >= 0 {
-		afterScheme := pathPart[schemeIdx+3:]
-
-		_, after, ok := strings.Cut(afterScheme, "/")
-		if !ok {
-			return ""
-		}
-
-		pathPart = after
-	}
-
-	parts := strings.Split(pathPart, "/")
-	if len(parts) < 3 {
-		return ""
-	}
-
-	repo := parts[1]
-	subpath := path.Join(parts[2:]...)
-	repoRoot := path.Dir(path.Dir(workflowDir(workflow)))
-
-	return path.Join(path.Dir(repoRoot), repo, subpath)
+// cleanDir is the workflow directory as a clean slash path.
+func cleanDir(dir string) string {
+	return path.Clean(filepath.ToSlash(dir))
 }
 
-func workflowDir(workflow string) string {
-	cleaned := filepath.ToSlash(strings.TrimPrefix(workflow, "./"))
-
-	return path.Dir(cleaned)
+// repositoryRoot is the directory two levels above the workflow directory,
+// where the local actions and workflows the release uses are resolved.
+func repositoryRoot(in IsolationInput) string {
+	return path.Dir(path.Dir(cleanDir(in.WorkflowsDir)))
 }
 
 func isYAMLFile(name string) bool {
 	return strings.HasSuffix(name, ".yml") || strings.HasSuffix(name, ".yaml")
-}
-
-func secretsContractHeader(body string) map[string]struct{} {
-	for line := range strings.SplitSeq(body, "\n") {
-		contract, ok := strings.CutPrefix(line, "# workflow-call-secrets-contract:")
-		if !ok {
-			continue
-		}
-
-		declared := map[string]struct{}{}
-		for field := range strings.FieldsSeq(contract) {
-			declared[field] = struct{}{}
-		}
-
-		return declared
-	}
-
-	return nil
-}
-
-func readWorkflow(in IsolationInput) ([]byte, error) {
-	if in.FS != nil {
-		data, err := fs.ReadFile(in.FS, in.Workflow)
-		if err != nil {
-			return nil, workflowReadError(in.Workflow, err)
-		}
-
-		return data, nil
-	}
-
-	data, err := os.ReadFile(in.Workflow)
-	if err != nil {
-		return nil, workflowReadError(in.Workflow, err)
-	}
-
-	return data, nil
 }

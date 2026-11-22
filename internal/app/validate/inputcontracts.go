@@ -27,39 +27,36 @@ type isolationCall struct {
 
 // Read only the checkout supplied by the caller. A consumer file with the
 // same name is not the pinned layer's declaration and must not admit inputs.
-func declaredInputViolations(in IsolationInput) []validate.IsolationViolation {
+func declaredInputViolations(in IsolationInput, files []releaseFile) []fileViolation {
 	if in.ContractRoot == "" {
 		return nil
 	}
 
-	files, err := workflowDirYAMLFiles(in)
-	if err != nil {
-		return []validate.IsolationViolation{{Line: 1, Msg: err.Error()}}
+	return perFile(files, func(body []byte) []validate.IsolationViolation {
+		return declaredInputViolationsIn(in, body)
+	})
+}
+
+func declaredInputViolationsIn(in IsolationInput, body []byte) []validate.IsolationViolation {
+	var document struct {
+		Jobs map[string]struct {
+			isolationCall `yaml:",inline"`
+
+			Steps []isolationCall `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal(body, &document); err != nil {
+		return []validate.IsolationViolation{{Line: 1, Msg: fmt.Sprintf("parse caller inputs: %v", err)}}
 	}
 
 	var violations []validate.IsolationViolation
 
-	for _, body := range files {
-		var document struct {
-			Jobs map[string]struct {
-				isolationCall `yaml:",inline"`
+	for _, name := range slices.Sorted(maps.Keys(document.Jobs)) {
+		job := document.Jobs[name]
+		calls := append([]isolationCall{job.isolationCall}, job.Steps...)
 
-				Steps []isolationCall `yaml:"steps"`
-			} `yaml:"jobs"`
-		}
-		if err := yaml.Unmarshal([]byte(body), &document); err != nil {
-			violations = append(violations, validate.IsolationViolation{Line: 1, Msg: fmt.Sprintf("parse caller inputs: %v", err)})
-
-			continue
-		}
-
-		for _, name := range slices.Sorted(maps.Keys(document.Jobs)) {
-			job := document.Jobs[name]
-			calls := append([]isolationCall{job.isolationCall}, job.Steps...)
-
-			for _, call := range calls {
-				violations = append(violations, callInputViolations(in, name, call)...)
-			}
+		for _, call := range calls {
+			violations = append(violations, callInputViolations(in, name, call)...)
 		}
 	}
 
@@ -67,8 +64,8 @@ func declaredInputViolations(in IsolationInput) []validate.IsolationViolation {
 }
 
 func callInputViolations(in IsolationInput, job string, call isolationCall) []validate.IsolationViolation {
-	end := subjectEnd(call.Uses, in.SinglePinSubject)
-	if end < 0 {
+	_, end, ok := subjectReference(call.Uses, in.SinglePinSubject)
+	if !ok {
 		return nil
 	}
 

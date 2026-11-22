@@ -32,9 +32,10 @@ func consumerReleaseTemplates() []string {
 	}
 }
 
-// Exercise the same digest channel that each kit's PR gate selects. In
-// particular, a joined image/file hand-off must not leave the gate checking
-// the earlier binary-only build job.
+// Each kit's PR gate runs check-l3-isolation without naming a workflow, a
+// job or an output, and the kit's release workflow passes the release rules
+// the engine derives from its calls. In particular, a joined image/file
+// hand-off is followed from the sign job, not from an earlier build job.
 func TestConsumerPRIsolationInputsMatchReleaseHandoff(t *testing.T) {
 	t.Parallel()
 
@@ -63,15 +64,12 @@ func TestConsumerPRIsolationInputsMatchReleaseHandoff(t *testing.T) {
 					"PIN_COSIGN_PUBLIC_KEY_SHA256", strings.Repeat("c", 64),
 					"FORGE_HOST", "forge.example", "OWNER", "owner").Replace(string(reporoot.ReadFile(t, release)))
 
-				digest := step.With["dist-digest-output"]
-				if digest == "" {
-					digest = "dist-digest"
+				if len(step.With) != 0 {
+					t.Errorf("%s passes %v to check-l3-isolation; the engine finds the release workflows and their jobs", release, step.With)
 				}
 
 				violations, err := validate.CheckIsolation([]byte(body), validate.IsolationConfig{
-					SignJob: "sign-and-publish", PrepareJob: "prepare",
-					DistDigestOutput: digest,
-					SigningSecrets:   []string{"RELEASE_COSIGN_PRIVATE_KEY", "RELEASE_COSIGN_PASSPHRASE", "RELEASE_GPG_PRIVATE_KEY", "RELEASE_GPG_PASSPHRASE", "RELEASE_GPG_FINGERPRINT"},
+					SigningSecrets: []string{"RELEASE_COSIGN_PRIVATE_KEY", "RELEASE_COSIGN_PASSPHRASE", "RELEASE_GPG_PRIVATE_KEY", "RELEASE_GPG_PASSPHRASE", "RELEASE_GPG_FINGERPRINT"},
 				})
 				if err != nil || len(violations) != 0 {
 					t.Errorf("%s isolation: %v; violations: %v", release, err, violations)
@@ -108,7 +106,6 @@ func TestGoReleaserCallerSharesTheGoCLIIsolationContract(t *testing.T) {
 		"FORGE_HOST", "forge.example", "OWNER", "owner").Replace(string(reporoot.ReadFile(t, "examples/go-cli/forgejo/goreleaser/release-workflow.yml")))
 
 	violations, err := validate.CheckIsolation([]byte(body), validate.IsolationConfig{
-		SignJob: "sign-and-publish", PrepareJob: "prepare", DistDigestOutput: "dist-digest",
 		SigningSecrets: []string{"RELEASE_COSIGN_PRIVATE_KEY", "RELEASE_COSIGN_PASSPHRASE", "RELEASE_GPG_PRIVATE_KEY", "RELEASE_GPG_PASSPHRASE", "RELEASE_GPG_FINGERPRINT"},
 	})
 	if err != nil || len(violations) != 0 {

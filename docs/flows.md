@@ -193,10 +193,20 @@ so the comparison binds the downloaded bytes to the build output. It does not
 prove that the build itself was trustworthy.
 
 `forge-ci validate isolation` (the `check-l3-isolation` action on Forgejo)
-checks the workflow statically: the build output is passed as a `needs`
-output, the signer's secrets are listed, and checkout uses
+checks the release workflows it finds statically: the build output is passed
+as a `needs` output the producing job declares, and checkout uses
 `persist-credentials: false`. It does not prove that the signer runs
 `release validate-dist`; the pinned signing workflow does that.
+
+With `--single-pin-subject <owner>/<repository>`, which the action always
+passes, it also holds the workflow directory to one engine: every reference to
+that repository at one commit, every reference that writes a forge address
+(`https://<host>/<owner>/<repository>/…`) at the address of the forge the job
+runs on, and the sign job and every call of a signer workflow in that
+repository. A reference without an address is resolved by the forge and is
+held to the repository alone. Off a runner the forge is not known, so the
+written addresses must agree and a note says the address was not compared. It
+reads `uses:` references only: a GitLab `include: component:` is not checked.
 
 Two consequences worth knowing:
 

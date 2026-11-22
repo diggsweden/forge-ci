@@ -178,7 +178,7 @@ func TestCheckIsolation_CheckoutRequiresLiteralFalse(t *testing.T) {
 		{"expression_true", "{persist-credentials: '${{ true }}'}", 1},
 		{"expression_false", "{persist-credentials: '${{ false }}'}", 1},
 		{"expression_input", "{persist-credentials: '${{ inputs.persist }}'}", 1},
-		{"expression_secret", "{persist-credentials: '${{ secrets.COSIGN_PRIVATE_KEY }}'}", 1},
+		{"expression_secret", "{persist-credentials: '${{ secrets.GITHUB_TOKEN }}'}", 1},
 		{"missing_value", "{}", 1},
 		{"null_value", "{persist-credentials: null}", 1},
 		{"empty_value", "{persist-credentials: ''}", 1},
@@ -195,6 +195,9 @@ func TestCheckIsolation_CheckoutRequiresLiteralFalse(t *testing.T) {
 			t.Parallel()
 
 			got, err := validate.CheckIsolation([]byte(workflow+"        with: "+tc.with+"\n"), validate.IsolationConfig{})
+			// A duplicate key is also refused as an unreadable mapping by
+			// the job-token rule; only the checkout diagnostics count here.
+			got = slices.DeleteFunc(got, func(v validate.IsolationViolation) bool { return strings.Contains(v.Msg, "decode workflow mapping") })
 			if err != nil || len(got) != tc.want {
 				t.Fatalf("violations=%v err=%v want %d checkout violations", got, err, tc.want)
 			}
@@ -219,7 +222,7 @@ func TestCheckIsolation_CheckoutAliasPrecedence(t *testing.T) {
 	}{
 		{"safe_value_and_step_alias", "'false'", "      - *checkout\n", 0},
 		{"unsafe_value_and_step_alias", "'${{ true }}'", "      - *checkout\n", 2},
-		{"secret_value_and_step_alias", "'${{ secrets.COSIGN_PRIVATE_KEY }}'", "      - *checkout\n", 2},
+		{"secret_value_and_step_alias", "'${{ secrets.GITHUB_TOKEN }}'", "      - *checkout\n", 2},
 		{"unsafe_with_alias", "'${{ true }}'", "      - uses: *action\n        with: *credentials\n", 2},
 		{"safe_override", "'${{ true }}'", "      - <<: *checkout\n        with:\n          <<: *credentials\n          persist-credentials: false\n", 1},
 		{"unsafe_override", "'false'", "      - <<: *checkout\n        with:\n          <<: *credentials\n          persist-credentials: ${{ true }}\n", 1},
@@ -512,33 +515,30 @@ func TestCheckIsolation_ActionNamesMatchCaseInsensitively(t *testing.T) {
 	}
 }
 
-// TestCheckIsolation_ReleaseCallSiteInvariants pins the sign, prepare and
-// dist-digest checks that only a survivor showed were unasserted: a prepare
-// job's checkout-consumer step orders the secret check like actions/checkout;
-// a sign job called from the same repository is refused; bracketed
-// needs.<job>.outputs['x'] spellings satisfy the identity check; and a build
-// job that does not declare the dist-digest output is refused.
+// The sign and prepare jobs are the calls of the layer's
+// sign-and-publish-release.yml and prepare-release.yml: the sign call names
+// the job it takes the release identity from, which must be a prepare call,
+// and the job and output it takes dist-digest from, which that job must
+// declare. Nothing is configured by job name.
 //
-// The prepare job must call prepare-release.yml, and the sign job must pass
-// each bound input as that expression alone under its exact key: a value
-// that falls back to, or is built around, another, a longer output name, or
-// a second key spelled in another case would let the caller re-check the
-// release against another plan than the one the release bumped.
+// The sign job must pass each bound input as that expression alone under its
+// exact key: a value that falls back to, or is built around, another, a
+// longer output name, or a second key spelled in another case would let the
+// caller re-check the release against another plan than the one the release
+// bumped.
 func TestCheckIsolation_ReleaseCallSiteInvariants(t *testing.T) {
 	t.Parallel()
 
 	const (
-		remote = "org/forge-ci/.github/workflows/sign.yml@0123456789abcdef0123456789abcdef01234567"
+		remote = "org/forge-ci/.forgejo/workflows/sign-and-publish-release.yml@0123456789abcdef0123456789abcdef01234567"
 		called = "  prepare:\n    uses: org/forge-ci/.forgejo/workflows/prepare-release.yml@0123456789abcdef0123456789abcdef01234567\n" +
 			"    secrets:\n      RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}\n"
 		bound   = "${{ needs.prepare.outputs.artifacts-config }}"
-		mustUse = "must call the layer's prepare-release.yml"
+		mustUse = "must take release-tag from a job that calls the layer's prepare-release.yml"
+		leak    = `job "prepare" references signing secret "RELEASE_GPG_PRIVATE_KEY"`
 	)
 
-	cfg := validate.IsolationConfig{
-		SigningSecrets: []string{"RELEASE_GPG_PRIVATE_KEY"},
-		SignJob:        "sign", PrepareJob: "prepare", DistDigestOutput: "dist-digest",
-	}
+	cfg := validate.IsolationConfig{SigningSecrets: []string{"RELEASE_GPG_PRIVATE_KEY"}}
 
 	composed := func(steps string) string {
 		return "  prepare:\n    runs-on: x\n    outputs:\n      release-tag: v1\n      release-sha: abc\n      artifacts-config: ''\n    steps:\n" + steps
@@ -555,7 +555,6 @@ func TestCheckIsolation_ReleaseCallSiteInvariants(t *testing.T) {
 	bracketWith := "      release-tag: ${{ needs.prepare.outputs['release-tag'] }}\n      release-sha: ${{ needs.prepare.outputs[\"release-sha\"] }}\n" +
 		"      artifacts-config: ${{ needs.prepare.outputs['artifacts-config'] }}\n      dist-digest: ${{ needs.build.outputs['dist-digest'] }}\n"
 	safeSteps := "      - run: test -n \"${{ secrets.RELEASE_GPG_PRIVATE_KEY }}\"\n      - uses: org/forge-ci/checkout-consumer@0123456789abcdef0123456789abcdef01234567\n        with:\n          persist-credentials: false\n"
-	lateSteps := "      - uses: org/forge-ci/checkout-consumer@0123456789abcdef0123456789abcdef01234567\n        with:\n          persist-credentials: false\n      - run: test -n \"${{ secrets.RELEASE_GPG_PRIVATE_KEY }}\"\n"
 	digestOutput := "    outputs:\n      dist-digest: ${{ steps.d.outputs.digest }}\n"
 	declaration := func(value string) string {
 		return base(remote, called, strings.Replace(dotWith, bound, value, 1), digestOutput)
@@ -566,23 +565,50 @@ func TestCheckIsolation_ReleaseCallSiteInvariants(t *testing.T) {
 		body string
 		want []string
 	}{
-		"clean dotted":     {body: base(remote, called, dotWith, digestOutput)},
-		"clean bracketed":  {body: base(remote, called, bracketWith, digestOutput)},
-		"composed prepare": {body: base(remote, composed(safeSteps), dotWith, digestOutput), want: []string{mustUse}},
-		"local prepare":    {body: base(remote, strings.Replace(called, "org/forge-ci/", "./", 1), dotWith, digestOutput), want: []string{mustUse}},
-		"local sign job":   {body: base("./.github/workflows/sign.yml", called, dotWith, digestOutput), want: []string{"cross-repo workflow_call"}},
+		"clean dotted":    {body: base(remote, called, dotWith, digestOutput)},
+		"clean bracketed": {body: base(remote, called, bracketWith, digestOutput)},
+		// A prepare job of steps is the caller's own code: it chooses the
+		// release identity and may not hold a key.
+		"composed prepare": {body: base(remote, composed(safeSteps), dotWith, digestOutput), want: []string{mustUse, leak}},
+		"local prepare":    {body: base(remote, strings.Replace(called, "org/forge-ci/", "./", 1), dotWith, digestOutput), want: []string{mustUse, leak}},
+		"no prepare at all": {
+			body: base(remote, "", strings.Replace(dotWith, "${{ needs.prepare.outputs.release-tag }}", "v1.2.3", 1), digestOutput),
+			want: []string{mustUse},
+		},
+		"release identity from another job": {
+			body: base(remote, called, strings.Replace(dotWith, "needs.prepare.outputs.release-tag", "needs.build.outputs.release-tag", 1), digestOutput),
+			want: []string{mustUse},
+		},
+		// A local sign workflow is not the layer's signer: it is a local call
+		// that may not receive the key.
+		"local sign job": {
+			body: base("./.forgejo/workflows/sign-and-publish-release.yml", called, dotWith, digestOutput),
+			want: []string{`job "sign" references signing secret "RELEASE_GPG_PRIVATE_KEY"`},
+		},
 		"prepare without the sign job's secret": {
 			body: base(remote, strings.Replace(called, "RELEASE_GPG_PRIVATE_KEY: ", "RELEASE_SSH_SIGNING_KEY: ", 1), dotWith, digestOutput),
 			want: []string{`prepare job "prepare" call site is missing secret RELEASE_GPG_PRIVATE_KEY`},
 		},
+		// A trusted job may take keys, never every secret of the repository.
 		"prepare inheriting the secrets": {
 			body: base(remote, strings.Replace(called, "    secrets:\n      RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}\n", "    secrets: inherit\n", 1), dotWith, digestOutput),
+			want: []string{`job "prepare" inherits every caller secret`},
 		},
-		"no dist-digest output": {body: base(remote, called, dotWith, ""), want: []string{`does not declare "dist-digest" output`}},
-		"secret after consumer checkout": {
-			body: base(remote, composed(lateSteps), dotWith, digestOutput),
-			want: []string{"at/after checkout", mustUse},
+		"sign job inheriting the secrets": {
+			body: strings.Replace(base(remote, called, dotWith, digestOutput), "    secrets:\n      RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}\n    with:", "    secrets: inherit\n    with:", 1),
+			want: []string{`job "sign" inherits every caller secret`},
 		},
+		"a signer workflow call inheriting the secrets": {
+			body: base(remote, called, dotWith, digestOutput) + "  base-sign:\n    uses: org/forge-ci/.forgejo/workflows/sign-container-images.yml@0123456789abcdef0123456789abcdef01234567\n" +
+				"    secrets: inherit\n",
+			want: []string{`job "base-sign" inherits every caller secret`},
+		},
+		"an engine workflow call inheriting the secrets": {
+			body: base(remote, called, dotWith, digestOutput) + "  images:\n    uses: org/forge-ci/.forgejo/workflows/release-images.yml@0123456789abcdef0123456789abcdef01234567\n" +
+				"    secrets: inherit\n",
+			want: []string{`job "images" inherits every caller secret`},
+		},
+		"no dist-digest output":        {body: base(remote, called, dotWith, ""), want: []string{`does not declare "dist-digest" output`}},
 		"declaration not from prepare": {body: declaration(".forge-ci/other.yml"), want: []string{unbound}},
 		"declaration with a fallback": {
 			body: declaration("${{ needs.prepare.outputs.artifacts-config || '.forge-ci/evil.yml' }}"),
@@ -619,6 +645,15 @@ func TestCheckIsolation_ReleaseCallSiteInvariants(t *testing.T) {
 			body: base(remote, called, strings.Replace(dotWith, "needs.build.outputs.dist-digest", "needs.handoff.outputs.dist-digest", 1), "") +
 				"  handoff:\n    runs-on: x\n" + digestOutput + "    steps: []\n",
 		},
+		// So is the output's name: no caller-chosen setting names it.
+		"output name read from the sign job": {
+			body: base(remote, called, strings.Replace(dotWith, "needs.build.outputs.dist-digest", "needs.build.outputs['dist_digest']", 1),
+				"    outputs:\n      dist_digest: ${{ steps.d.outputs.digest }}\n"),
+		},
+		"renamed output the producer does not declare": {
+			body: base(remote, called, strings.Replace(dotWith, "needs.build.outputs.dist-digest", "needs.build.outputs.dist_digest", 1), digestOutput),
+			want: []string{`job "build", which the sign job takes dist-digest from, does not declare "dist_digest" output`},
+		},
 		"inferred producer without the output": {
 			body: base(remote, called, strings.Replace(dotWith, "needs.build.outputs.dist-digest", "needs.handoff.outputs.dist-digest", 1), digestOutput) +
 				"  handoff:\n    runs-on: x\n    steps: []\n",
@@ -630,7 +665,11 @@ func TestCheckIsolation_ReleaseCallSiteInvariants(t *testing.T) {
 		},
 		"dist-digest not from a job": {
 			body: base(remote, called, strings.Replace(dotWith, "${{ needs.build.outputs.dist-digest }}", "sha256:abc", 1), digestOutput),
-			want: []string{"must pass dist-digest from needs.<job>.outputs.dist-digest"},
+			want: []string{"must pass dist-digest from needs.<job>.outputs.<name>"},
+		},
+		"dist-digest built around an output": {
+			body: base(remote, called, strings.Replace(dotWith, "${{ needs.build.outputs.dist-digest }}", "${{ needs.build.outputs.dist-digest || 'sha256:abc' }}", 1), digestOutput),
+			want: []string{"must pass dist-digest from needs.<job>.outputs.<name>"},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

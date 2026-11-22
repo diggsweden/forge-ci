@@ -73,8 +73,9 @@ jobs:
 }
 
 // A sibling repository whose name extends the subject is a different
-// repository: its pin must not be collected as the subject's, and a
-// subject nested under a host or owner prefix is still recognised.
+// repository: its pin must not be collected as the subject's. A value
+// without a forge address starts with its repository; one with an address
+// names it after the host.
 func TestPinnedSubjectSHA_RequiresSubjectAsWholePathComponents(t *testing.T) {
 	t.Parallel()
 
@@ -89,8 +90,19 @@ func TestPinnedSubjectSHA_RequiresSubjectAsWholePathComponents(t *testing.T) {
 		"plain forge shorthand":                    {"example/ci/.github/workflows/x.yml@" + sha, sha},
 		"subject pinned directly":                  {"example/ci@" + sha, sha},
 		"full URL form":                            {"https://forge.example/example/ci/.github/workflows/x.yml@" + sha, sha},
-		"sibling first, subject later":             {"example/ci-extras/example/ci/x.yml@" + sha, sha},
+		"subject in another repository's path":     {"example/ci-extras/example/ci/x.yml@" + sha, ""},
+		"subject under another owner":              {"prefix/example/ci/x.yml@" + sha, ""},
+		"subject as a directory of itself":         {"example/ci/example/ci/x.yml@" + sha, sha},
+		"URL form of a forge below a path":         {"https://forge.example/git/example/ci/x.yml@" + sha, sha},
+		"URL form of a sibling repository":         {"https://forge.example/example/ci-extras/x.yml@" + sha, ""},
+		"URL form with the owner as host suffix":   {"https://example/ci/x.yml@" + sha, ""},
 		"branch ref is not a pin":                  {"example/ci/.github/workflows/x.yml@main", ""},
+		// Forges name owners and repositories without regard to case.
+		"owner in another case":                 {"Example/ci/.github/workflows/x.yml@" + sha, sha},
+		"repository in another case":            {"example/CI/.github/workflows/x.yml@" + sha, sha},
+		"URL form in another case":              {"https://forge.example/EXAMPLE/Ci/x.yml@" + sha, sha},
+		"sibling repository in another case":    {"Example/CI-extras/x.yml@" + sha, ""},
+		"subject under another owner, any case": {"prefix/Example/CI/x.yml@" + sha, ""},
 	}
 
 	for name, tc := range cases {

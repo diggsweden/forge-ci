@@ -126,10 +126,6 @@ jobs:
 
       - name: Verify release isolation boundaries
         uses: https://FORGE_HOST/OWNER/forge-ci/.forgejo/actions/check-l3-isolation@PIN_FORGE_CI_SHA
-        with:
-          workflow: .forgejo/workflows/release-workflow.yml
-          sign-job: sign-and-publish
-          prepare-job: prepare
-          dist-digest-output: dist-digest
-          # No single-pin-subject: the action takes the repository the runner
-          # fetched it from, which is the one release-workflow.yml names.
+        # No input: the action finds the release workflows that call the
+        # repository the runner fetched it from, which release-workflow.yml
+        # names.

@@ -16,54 +16,63 @@ import (
 	"github.com/diggsweden/forge-ci/internal/testutil/testfs"
 )
 
+// isolationPin is the one commit the fixtures pin the subject to.
+const isolationPin = "1111111111111111111111111111111111111111"
+
+// isolationEntry is a call of the subject's prepare-release.yml: the job that
+// makes a workflow a release workflow. A fixture of the generic rules ends
+// with it so that the gate finds the workflow.
+const isolationEntry = `  prepare:
+    uses: examplescope/ci-layer/.forgejo/workflows/prepare-release.yml@` + isolationPin + `
+`
+
 const isolationCleanWorkflow = `name: release
 jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-        with:
-          persist-credentials: false
+      - uses: examplescope/ci-layer/.forgejo/actions/checkout-consumer@1111111111111111111111111111111111111111
       - run: make dist
   sign:
     needs: build
-    # The layer's signer workflow, the one kind of job besides prepare that
-    # may receive a key. A local one could be changed by the pull request.
-    uses: examplescope/ci-layer/.forgejo/workflows/sign-and-publish-release.yml@1111111111111111111111111111111111111111
+    # The layer's signer workflow, the one kind of job that may receive a
+    # key. A local one could be changed by the pull request.
+    uses: examplescope/ci-layer/.forgejo/workflows/sign-container-images.yml@1111111111111111111111111111111111111111
     secrets:
       RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
-`
+` + isolationEntry
+
+// foreignCheckout is the violation every fixture that uses actions/checkout
+// also has: a release runs only the repository's and the subject's actions.
+const foreignCheckout = "actions/checkout@v5 is neither a path in this repository nor examplescope/ci-layer"
 
 func runIsolation(t *testing.T, body string) (string, error) {
 	t.Helper()
 
 	mem := testfs.NewMemory(t)
-	mem.WriteFile(".github/workflows/release.yml", []byte(body))
+	mem.WriteFile(".forgejo/workflows/release.yml", []byte(body))
 
 	var out bytes.Buffer
 
 	err := appvalidate.Isolation(&out, output.NewAnnotator(&out, output.FormatGitHub), appvalidate.IsolationInput{
-		Workflow:       ".github/workflows/release.yml",
-		SigningSecrets: []string{"RELEASE_GPG_PRIVATE_KEY", "COSIGN_PRIVATE_KEY"},
-		FS:             mem.FS(),
+		WorkflowsDir:     ".forgejo/workflows",
+		SinglePinSubject: "examplescope/ci-layer",
+		SigningSecrets:   []string{"RELEASE_GPG_PRIVATE_KEY", "COSIGN_PRIVATE_KEY"},
+		FS:               mem.FS(),
 	})
 
 	return out.String(), err
 }
 
-// forgejoIsolation runs the forgejo-shaped gate. The three wrappers below
-// vary exactly one field each; spelling the whole IsolationInput out once per
-// wrapper meant a change to the shape had to be made in three places.
-func forgejoIsolation(t *testing.T, mem *testfs.Memory, workflow, subject, pinInput string) (string, error) {
+// forgejoIsolation runs the forgejo-shaped gate over the workflow directory
+// of mem.
+func forgejoIsolation(t *testing.T, mem *testfs.Memory, dir, subject, pinInput string) (string, error) {
 	t.Helper()
 
 	var out bytes.Buffer
 
 	err := appvalidate.Isolation(&out, output.NewAnnotator(&out, output.FormatGitHub), appvalidate.IsolationInput{
-		Workflow:         workflow,
-		SignJob:          "sign-and-publish",
-		PrepareJob:       "prepare",
-		DistDigestOutput: "dist-digest",
+		WorkflowsDir:     dir,
 		SigningSecrets:   []string{"COSIGN_SIGNING_KEY", "GPG_SIGNING_KEY"},
 		SinglePinSubject: subject,
 		SinglePinInput:   pinInput,
@@ -79,13 +88,13 @@ func runForgejoIsolation(t *testing.T, body string) (string, error) {
 	mem := testfs.NewMemory(t)
 	mem.WriteFile(".forgejo/workflows/release.yml", []byte(body))
 
-	return forgejoIsolation(t, mem, ".forgejo/workflows/release.yml", "examplescope/ci-layer", "")
+	return forgejoIsolation(t, mem, ".forgejo/workflows", "examplescope/ci-layer", "")
 }
 
-func runForgejoIsolationInFS(t *testing.T, mem *testfs.Memory, workflow string) (string, error) {
+func runForgejoIsolationInFS(t *testing.T, mem *testfs.Memory) (string, error) {
 	t.Helper()
 
-	return forgejoIsolation(t, mem, workflow, "examplescope/ci-layer", "")
+	return forgejoIsolation(t, mem, ".forgejo/workflows", "examplescope/ci-layer", "")
 }
 
 const forgejoIsolationCleanWorkflow = `jobs:
@@ -129,10 +138,8 @@ jobs:
     env:
       KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
     steps:
-      - uses: actions/checkout@v5
-        with:
-          persist-credentials: false
-`
+      - run: make dist
+` + isolationEntry
 
 	out, err := runIsolation(t, body)
 	if !errors.Is(err, errs.ErrValidation) {
@@ -151,7 +158,7 @@ jobs:
   build:
     steps:
       - uses: actions/checkout@v5
-`,
+` + isolationEntry,
 		"explicit true": `name: release
 jobs:
   build:
@@ -159,7 +166,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: true
-`,
+` + isolationEntry,
 	}
 
 	for name, body := range tests {
@@ -176,7 +183,20 @@ jobs:
 	}
 }
 
+// Each fixture also runs actions/checkout, which a release refuses as a
+// foreign action; the persist-credentials and secret refusals stand beside
+// that one.
 func TestIsolation_CheckoutExpressionsAndSecrets(t *testing.T) {
+	checkout := `name: release
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+` + isolationEntry
+
 	for _, tc := range []struct {
 		name       string
 		value      string
@@ -189,19 +209,16 @@ func TestIsolation_CheckoutExpressionsAndSecrets(t *testing.T) {
 		{"secret_expression", "${{ secrets.COSIGN_PRIVATE_KEY }}", 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			body := strings.Replace(isolationCleanWorkflow, "persist-credentials: false", "persist-credentials: "+tc.value, 1)
+			body := strings.Replace(checkout, "persist-credentials: false", "persist-credentials: "+tc.value, 1)
 
 			out, err := runIsolation(t, body)
-			if tc.wantErrors == 0 {
-				if err != nil || !strings.Contains(out, "Static release-isolation checks passed") {
-					t.Fatalf("clean workflow refused: %s %v", out, err)
-				}
-
-				return
+			if !errors.Is(err, errs.ErrValidation) || strings.Contains(out, "Static release-isolation checks passed") ||
+				strings.Count(out, "::error ") != tc.wantErrors+1 || !strings.Contains(out, foreignCheckout) {
+				t.Fatalf("checkout refusal lost or masked by another rule: %s %v", out, err)
 			}
 
-			if !errors.Is(err, errs.ErrValidation) || strings.Contains(out, "Static release-isolation checks passed") || strings.Count(out, "::error ") != tc.wantErrors {
-				t.Fatalf("checkout refusal lost or masked by another rule: %s %v", out, err)
+			if tc.wantErrors == 0 {
+				return
 			}
 
 			if !strings.Contains(out, `line=6::job "build": actions/checkout step must set persist-credentials: false`) {
@@ -226,7 +243,7 @@ func TestIsolation_CheckoutExpressionsAndSecrets(t *testing.T) {
 func TestIsolation_ReportsEveryViolatingJob(t *testing.T) {
 	body := `name: release
 jobs:
-  prepare:
+  lint:
     steps:
       - uses: actions/checkout@v5
         with:
@@ -244,7 +261,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: true
-`
+` + isolationEntry
 
 	out, err := runIsolation(t, body)
 	if !errors.Is(err, errs.ErrValidation) {
@@ -278,7 +295,7 @@ jobs:
   build:
     steps:
       - uses: https://forge.example/examplescope/ci-layer/actions/checkout-consumer@1111111111111111111111111111111111111111
-`
+` + isolationEntry
 
 	out, err := runIsolation(t, body)
 	if err != nil {
@@ -309,33 +326,28 @@ func composedPrepare(steps string) string {
 func TestIsolation_ForgejoStrictViolations(t *testing.T) {
 	tests := map[string]struct {
 		body string
-		want string
+		want []string
 	}{
+		// A prepare job of the caller's own steps is not a prepare call: it
+		// chooses the release identity and may not see a key.
 		"composed_prepare": {composedPrepare(`      - name: Check secrets before checkout
         env:
           KEY: ${{ secrets.GPG_SIGNING_KEY }}
-      - uses: actions/checkout@1111111111111111111111111111111111111111
-`), "must call the layer's prepare-release.yml"},
-		"late_prepare_secret": {composedPrepare(`      - uses: actions/checkout@1111111111111111111111111111111111111111
-      - name: Late secret check
-        env:
-          KEY: ${{ secrets.GPG_SIGNING_KEY }}
-`), "at/after checkout"},
+      - run: "true"
+`), []string{"must take release-tag from a job that calls the layer's prepare-release.yml", `job "prepare" references signing secret "GPG_SIGNING_KEY"`}},
 		"declaration_with_a_fallback": {strings.Replace(forgejoIsolationCleanWorkflow,
 			"artifacts-config: ${{ needs.prepare.outputs.artifacts-config }}",
-			"artifacts-config: ${{ needs.prepare.outputs.artifacts-config || '.forge-ci/evil.yml' }}", 1), "must pass artifacts-config"},
-		"missing_sign_secret": {strings.TrimSuffix(forgejoIsolationCleanWorkflow,
-			"      GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}\n"), "missing signing secret GPG_SIGNING_KEY"},
+			"artifacts-config: ${{ needs.prepare.outputs.artifacts-config || '.forge-ci/evil.yml' }}", 1), []string{"must pass artifacts-config"}},
 		"missing_prepare_secret": {strings.Replace(forgejoIsolationCleanWorkflow,
 			`      GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
-  build-and-release:`, "  build-and-release:", 1), `prepare job "prepare" call site is missing secret GPG_SIGNING_KEY`},
+  build-and-release:`, "  build-and-release:", 1), []string{`prepare job "prepare" call site is missing secret GPG_SIGNING_KEY`}},
 		"broken_dist_digest": {strings.Replace(forgejoIsolationCleanWorkflow,
 			"dist-digest: ${{ needs.build-and-release.outputs.dist-digest }}",
-			"dist-digest: ${{ steps.local.outputs.digest }}", 1), "must pass dist-digest"},
+			"dist-digest: ${{ steps.local.outputs.digest }}", 1), []string{"must pass dist-digest"}},
 		"cached_toolchain": {strings.Replace(forgejoIsolationCleanWorkflow,
 			"steps: []",
 			`steps:
-      - uses: https://forge.example/examplescope/ci-layer/actions/setup-toolchain@1111111111111111111111111111111111111111`, 1), "cache: false"},
+      - uses: https://forge.example/examplescope/ci-layer/actions/setup-toolchain@1111111111111111111111111111111111111111`, 1), []string{"cache: false"}},
 	}
 
 	for name, tc := range tests {
@@ -345,10 +357,124 @@ func TestIsolation_ForgejoStrictViolations(t *testing.T) {
 				t.Fatalf("err = %v, want ErrValidation\n%s", err, out)
 			}
 
-			if !strings.Contains(out, tc.want) {
-				t.Errorf("missing %q in:\n%s", tc.want, out)
+			for _, want := range tc.want {
+				if !strings.Contains(out, want) {
+					t.Errorf("missing %q in:\n%s", want, out)
+				}
 			}
 		})
+	}
+}
+
+// The release workflows are found by what they call, whatever they are
+// named, and each one is checked; a directory without one is refused rather
+// than passed over.
+func TestIsolation_FindsTheReleaseWorkflows(t *testing.T) {
+	t.Parallel()
+
+	leaky := strings.Replace(forgejoIsolationCleanWorkflow, "    steps: []\n",
+		"    env:\n      KEY: ${{ secrets.COSIGN_SIGNING_KEY }}\n    steps: []\n", 1)
+
+	_, signJobs, found := strings.Cut(forgejoIsolationCleanWorkflow, "  build-and-release:\n")
+	if !found {
+		t.Fatal("the clean workflow has no build-and-release job")
+	}
+
+	signOnly := "  build-and-release:\n" + signJobs
+
+	for name, test := range map[string]struct {
+		files map[string]string
+		want  []string
+		found []string
+	}{
+		"a release workflow named release.yml": {
+			files: map[string]string{"release.yml": forgejoIsolationCleanWorkflow},
+			found: []string{".forgejo/workflows/release.yml"},
+		},
+		"a release workflow under any name": {
+			files: map[string]string{"ship-it.yaml": forgejoIsolationCleanWorkflow, "pullrequest.yml": "jobs:\n  test:\n    steps:\n      - run: make test\n"},
+			found: []string{".forgejo/workflows/ship-it.yaml"},
+		},
+		"each of two release workflows is checked": {
+			files: map[string]string{"release.yml": forgejoIsolationCleanWorkflow, "hotfix.yml": leaky},
+			want:  []string{`file=.forgejo/workflows/hotfix.yml,line=`, `job "build-and-release" references signing secret "COSIGN_SIGNING_KEY"`},
+		},
+		"a workflow that only signs is a release workflow": {
+			files: map[string]string{"release.yml": "jobs:\n" + signOnly},
+			want:  []string{"must take release-tag from a job that calls the layer's prepare-release.yml"},
+		},
+		"no release workflow": {
+			files: map[string]string{"pullrequest.yml": "jobs:\n  lint:\n    uses: examplescope/ci-layer/.forgejo/workflows/lint.yml@" + isolationPin + "\n"},
+			want:  []string{"no workflow under .forgejo/workflows calls examplescope/ci-layer's prepare-release.yml or sign-and-publish-release.yml"},
+		},
+		"another repository's entry point does not make a release workflow": {
+			files: map[string]string{"release.yml": strings.ReplaceAll(forgejoIsolationCleanWorkflow, "examplescope/ci-layer", "other/ci-layer")},
+			want:  []string{"no workflow under .forgejo/workflows calls examplescope/ci-layer's"},
+		},
+		// A key in a workflow that is no release workflow is held to the same
+		// boundary: only the engine's signers receive one.
+		"a signing secret in a workflow that does not release": {
+			files: map[string]string{
+				"release.yml": forgejoIsolationCleanWorkflow,
+				"docs.yml":    "jobs:\n  pages:\n    steps:\n      - run: deploy\n        env:\n          KEY: ${{ secrets.GPG_SIGNING_KEY }}\n",
+			},
+			want: []string{`file=.forgejo/workflows/docs.yml,line=6::job "pages" references signing secret "GPG_SIGNING_KEY"`},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			mem := testfs.NewMemory(t)
+			for file, body := range test.files {
+				mem.WriteFile(".forgejo/workflows/"+file, []byte(body))
+			}
+
+			out, err := runForgejoIsolationInFS(t, mem)
+			if len(test.want) == 0 {
+				if err != nil {
+					t.Fatalf("refused: %v\n%s", err, out)
+				}
+
+				for _, file := range test.found {
+					if !strings.Contains(out, "Release workflow "+file+", which calls examplescope/ci-layer, checked") {
+						t.Errorf("release workflow %s not reported checked:\n%s", file, out)
+					}
+				}
+
+				return
+			}
+
+			if !errors.Is(err, errs.ErrValidation) {
+				t.Fatalf("err = %v, want ErrValidation\n%s", err, out)
+			}
+
+			for _, want := range test.want {
+				if !strings.Contains(out, want) {
+					t.Errorf("missing %q in:\n%s", want, out)
+				}
+			}
+		})
+	}
+}
+
+// The subject and the directory are required: without them nothing finds
+// the release workflows.
+func TestIsolation_SubjectAndDirectoryAreRequired(t *testing.T) {
+	t.Parallel()
+
+	mem := testfs.NewMemory(t)
+	mem.WriteFile(".forgejo/workflows/release.yml", []byte(forgejoIsolationCleanWorkflow))
+
+	if out, err := forgejoIsolation(t, mem, ".forgejo/workflows", "", ""); !errors.Is(err, errs.ErrUsage) {
+		t.Errorf("no subject: err = %v, want ErrUsage\n%s", err, out)
+	}
+
+	if out, err := forgejoIsolation(t, mem, "", "examplescope/ci-layer", ""); !errors.Is(err, errs.ErrUsage) {
+		t.Errorf("no directory: err = %v, want ErrUsage\n%s", err, out)
+	}
+
+	if out, err := forgejoIsolation(t, mem, ".gitea/workflows", "examplescope/ci-layer", ""); !errors.Is(err, errs.ErrMissingInput) {
+		t.Errorf("missing directory: err = %v, want ErrMissingInput\n%s", err, out)
 	}
 }
 
@@ -370,13 +496,15 @@ func TestIsolation_UnmatchedSinglePinSubjectFails(t *testing.T) {
 	}
 }
 
-// otherSubjectWorkflow is forgejoIsolationCleanWorkflow with the signer call
-// pinned to a subject whose repository is not named after the pin input, as a
-// renamed fork or a lab snapshot is. The %s is the sign job's extra input.
+// otherSubjectWorkflow is forgejoIsolationCleanWorkflow with its calls pinned
+// to a subject whose repository is not named after the pin input, as a
+// renamed fork or a lab snapshot is. The %[1]s is the extra input of the
+// prepare and the sign job.
 const otherSubjectWorkflow = `jobs:
   prepare:
-    uses: examplescope/ci-layer/.forgejo/workflows/prepare-release.yml@1111111111111111111111111111111111111111
-    secrets:
+    uses: example/other-ci/.forgejo/workflows/prepare-release.yml@1111111111111111111111111111111111111111
+    with:
+%[1]s    secrets:
       COSIGN_SIGNING_KEY: ${{ secrets.COSIGN_SIGNING_KEY }}
       GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
   build-and-release:
@@ -384,13 +512,13 @@ const otherSubjectWorkflow = `jobs:
       dist-digest: ${{ steps.handoff.outputs.digest }}
     steps: []
   sign-and-publish:
-    uses: example/other-ci/.forgejo/workflows/sign.yml@1111111111111111111111111111111111111111
+    uses: example/other-ci/.forgejo/workflows/sign-and-publish-release.yml@1111111111111111111111111111111111111111
     with:
       release-tag: ${{ needs.prepare.outputs.release-tag }}
       release-sha: ${{ needs.prepare.outputs.release-sha }}
       artifacts-config: ${{ needs.prepare.outputs.artifacts-config }}
       dist-digest: ${{ needs.build-and-release.outputs.dist-digest }}
-%s    secrets:
+%[1]s    secrets:
       COSIGN_SIGNING_KEY: ${{ secrets.COSIGN_SIGNING_KEY }}
       GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
 `
@@ -400,7 +528,7 @@ const otherSubjectWorkflow = `jobs:
 func runIsolationForSubject(t *testing.T, mem *testfs.Memory, subject, pinInput string) (string, error) {
 	t.Helper()
 
-	return forgejoIsolation(t, mem, ".forgejo/workflows/release.yml", subject, pinInput)
+	return forgejoIsolation(t, mem, ".forgejo/workflows", subject, pinInput)
 }
 
 // TestIsolation_SinglePinInputIsTheCallersName proves the pin input is the
@@ -502,7 +630,7 @@ func TestIsolation_SHA256PinInputs(t *testing.T) {
 
 // TestIsolation_SinglePinInputCoversEveryWorkflowFile holds the directory-wide
 // half: a call to the subject in a sibling workflow file answers to the same
-// input.
+// input, and is reported at that file.
 func TestIsolation_SinglePinInputCoversEveryWorkflowFile(t *testing.T) {
 	mem := testfs.NewMemory(t)
 	mem.WriteFile(".forgejo/workflows/release.yml", fmt.Appendf(nil, otherSubjectWorkflow,
@@ -519,18 +647,8 @@ func TestIsolation_SinglePinInputCoversEveryWorkflowFile(t *testing.T) {
 		t.Fatalf("err = %v, want ErrValidation\n%s", err, out)
 	}
 
-	if !strings.Contains(out, `job "verify" calls example/other-ci without a literal commit`) {
+	if !strings.Contains(out, `file=.forgejo/workflows/bases.yml,line=3::job "verify" calls example/other-ci without a literal commit`) {
 		t.Errorf("missing the sibling file's violation in:\n%s", out)
-	}
-}
-
-func TestIsolation_SinglePinInputNeedsSubject(t *testing.T) {
-	mem := testfs.NewMemory(t)
-	mem.WriteFile(".forgejo/workflows/release.yml", []byte(forgejoIsolationCleanWorkflow))
-
-	out, err := runIsolationForSubject(t, mem, "", "layer-sha")
-	if !errors.Is(err, errs.ErrUsage) {
-		t.Fatalf("err = %v, want ErrUsage\n%s", err, out)
 	}
 }
 
@@ -543,7 +661,7 @@ func TestIsolation_MixedPinsFail(t *testing.T) {
       - uses: https://forge.example/examplescope/ci-layer/actions/setup-buildah@2222222222222222222222222222222222222222
 `))
 
-	out, err := runForgejoIsolationInFS(t, mem, ".forgejo/workflows/release.yml")
+	out, err := runForgejoIsolationInFS(t, mem)
 	if !errors.Is(err, errs.ErrValidation) {
 		t.Fatalf("err = %v, want ErrValidation\n%s", err, out)
 	}
@@ -563,46 +681,14 @@ jobs:
       - run: echo no pin here
 `))
 
-	out, err := runForgejoIsolationInFS(t, mem, ".forgejo/workflows/release.yml")
+	out, err := runForgejoIsolationInFS(t, mem)
 	if err != nil {
 		t.Fatalf("commented pin created a conflict: %v\n%s", err, out)
 	}
 }
 
-func TestIsolation_SiblingSignerContract(t *testing.T) {
-	signerWorkflow := `# workflow-call-secrets-contract: COSIGN_SIGNING_KEY GPG_SIGNING_KEY
-jobs:
-  sign-and-publish:
-    steps:
-      - name: Verify dist integrity
-        env:
-          EXPECTED_DIGEST: ${{ inputs.dist-digest }}
-        run: forge-ci release validate-dist --dist-dir dist --expected-digest "${EXPECTED_DIGEST}"
-`
-
-	mem := testfs.NewMemory(t)
-	mem.WriteFile(".scratch/consumer/.forgejo/workflows/release.yml", []byte(forgejoIsolationCleanWorkflow))
-	mem.WriteFile(".scratch/ci-layer/.forgejo/workflows/sign-and-publish-release.yml", []byte(signerWorkflow))
-
-	out, err := runForgejoIsolationInFS(t, mem, ".scratch/consumer/.forgejo/workflows/release.yml")
-	if err != nil {
-		t.Fatalf("clean sibling contract rejected: %v\n%s", err, out)
-	}
-
-	mem.WriteFile(".scratch/ci-layer/.forgejo/workflows/sign-and-publish-release.yml", []byte(strings.Replace(signerWorkflow, " GPG_SIGNING_KEY", "", 1)))
-
-	out, err = runForgejoIsolationInFS(t, mem, ".scratch/consumer/.forgejo/workflows/release.yml")
-	if !errors.Is(err, errs.ErrValidation) {
-		t.Fatalf("err = %v, want ErrValidation\n%s", err, out)
-	}
-
-	if !strings.Contains(out, "does not list it") {
-		t.Errorf("missing sibling contract violation in:\n%s", out)
-	}
-}
-
 func TestIsolation_SecretScalarAnnotations(t *testing.T) {
-	body := "jobs:\n  build:\n    steps:\n      - run: >-\n          ${{ secrets.COSIGN_PRIVATE_KEY }}\n          ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}\n      - env:\n          KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}\n"
+	body := "jobs:\n  build:\n    steps:\n      - run: >-\n          ${{ secrets.COSIGN_PRIVATE_KEY }}\n          ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}\n      - env:\n          KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}\n" + isolationEntry
 
 	out, err := runIsolation(t, body)
 	if !errors.Is(err, errs.ErrValidation) || strings.Contains(out, "Static release-isolation checks passed") {
@@ -610,9 +696,9 @@ func TestIsolation_SecretScalarAnnotations(t *testing.T) {
 	}
 
 	for _, annotation := range []string{
-		`::error file=.github/workflows/release.yml,line=4::job "build" references signing secret "COSIGN_PRIVATE_KEY"`,
-		`::error file=.github/workflows/release.yml,line=4::job "build" references signing secret "RELEASE_GPG_PRIVATE_KEY"`,
-		`::error file=.github/workflows/release.yml,line=8::job "build" references signing secret "COSIGN_PRIVATE_KEY"`,
+		`::error file=.forgejo/workflows/release.yml,line=4::job "build" references signing secret "COSIGN_PRIVATE_KEY"`,
+		`::error file=.forgejo/workflows/release.yml,line=4::job "build" references signing secret "RELEASE_GPG_PRIVATE_KEY"`,
+		`::error file=.forgejo/workflows/release.yml,line=8::job "build" references signing secret "COSIGN_PRIVATE_KEY"`,
 	} {
 		if strings.Count(out, annotation) != 1 {
 			t.Fatalf("missing/duplicate scalar annotation %q: %s", annotation, out)
@@ -620,48 +706,319 @@ func TestIsolation_SecretScalarAnnotations(t *testing.T) {
 	}
 }
 
-func TestIsolation_SiblingStaticScope(t *testing.T) {
+// subjectGate runs the gate over a workflow directory holding release.yml and
+// other.yml, for the subject examplescope/ci-layer on the forge at server.
+func subjectGate(t *testing.T, dir, release, other, server string) (string, error) {
+	t.Helper()
+
+	mem := testfs.NewMemory(t)
+	mem.WriteFile(dir+"/workflows/release.yml", []byte(release))
+	mem.WriteFile(dir+"/workflows/other.yml", []byte(other))
+
+	return subjectGateAt(t, mem, dir+"/workflows", server)
+}
+
+// subjectGateIn runs the gate over mem's .forgejo/workflows on the forge at
+// server.
+func subjectGateIn(t *testing.T, mem *testfs.Memory, server string) (string, error) {
+	t.Helper()
+
+	return subjectGateAt(t, mem, ".forgejo/workflows", server)
+}
+
+func subjectGateAt(t *testing.T, mem *testfs.Memory, workflowsDir, server string) (string, error) {
+	t.Helper()
+
+	var out bytes.Buffer
+
+	err := appvalidate.Isolation(&out, output.NewAnnotator(&out, output.FormatGitHub), appvalidate.IsolationInput{
+		WorkflowsDir:     workflowsDir,
+		SigningSecrets:   []string{"COSIGN_SIGNING_KEY", "GPG_SIGNING_KEY"},
+		SinglePinSubject: "examplescope/ci-layer",
+		ServerURL:        server,
+		FS:               mem.FS(),
+	})
+
+	return out.String(), err
+}
+
+func checkSubjectGate(t *testing.T, out string, err error, want string) {
+	t.Helper()
+
+	if want == "" {
+		if err != nil {
+			t.Fatalf("refused: %v\n%s", err, out)
+		}
+
+		return
+	}
+
+	if !errors.Is(err, errs.ErrValidation) || !strings.Contains(out, want) {
+		t.Fatalf("err = %v, want a validation failure containing %q\n%s", err, want, out)
+	}
+}
+
+// The subject is one repository: a reference names it only as its own
+// repository, and every such reference agrees on one commit. The GitHub and
+// the Forgejo form of a reference without a forge address read alike.
+func TestIsolation_SubjectIsOneRepositoryAtOnePin(t *testing.T) {
+	t.Parallel()
+
+	const one, two = isolationPin, "2222222222222222222222222222222222222222"
+
+	for _, dir := range []string{".forgejo", ".github"} {
+		release := "jobs:\n  build:\n    uses: examplescope/ci-layer/" + dir + "/workflows/build.yml@" + one + "\n" + isolationEntry
+
+		for name, test := range map[string]struct{ uses, want string }{
+			"another owner's repository of the same name": {"other/ci-layer/" + dir + "/actions/x@" + two, ""},
+			"a repository whose name extends the subject": {"examplescope/ci-layer-extra/" + dir + "/actions/x@" + two, ""},
+			"the subject as a path under another owner":   {"prefix/examplescope/ci-layer/" + dir + "/actions/x@" + two, ""},
+			"a directory of the subject at a second pin":  {"examplescope/ci-layer/nested/" + dir + "/actions/x@" + two, "mixed examplescope/ci-layer pins"},
+			"the subject at a second pin":                 {"examplescope/ci-layer/" + dir + "/actions/x@" + two, "mixed examplescope/ci-layer pins"},
+			"the subject at the same pin":                 {"examplescope/ci-layer/" + dir + "/actions/x@" + one, ""},
+		} {
+			t.Run(dir+"/"+name, func(t *testing.T) {
+				t.Parallel()
+
+				out, err := subjectGate(t, dir, release, "jobs:\n  probe:\n    steps:\n      - uses: "+test.uses+"\n", "")
+				checkSubjectGate(t, out, err, test.want)
+			})
+		}
+
+		// The only reference is a path in another repository: nothing names
+		// the subject, and the gate says so in place of passing over nothing.
+		t.Run(dir+"/only a foreign repository", func(t *testing.T) {
+			t.Parallel()
+
+			out, err := subjectGate(t, dir, strings.ReplaceAll(release, "examplescope/", "prefix/examplescope/"), "jobs: {}\n", "")
+			checkSubjectGate(t, out, err, "matches nothing")
+		})
+	}
+}
+
+// A reference that writes a forge address is fetched from that address, so
+// the subject on a foreign host is another engine. Workflows are called
+// without an address and resolved by the forge; actions write one.
+func TestIsolation_SubjectIsOnTheForgeOfTheRun(t *testing.T) {
+	t.Parallel()
+
 	const (
-		header  = "# workflow-call-secrets-contract: COSIGN_SIGNING_KEY GPG_SIGNING_KEY\n"
-		channel = "on:\n  workflow_call:\n    inputs:\n      dist-digest:\n        type: string\n"
+		pin     = isolationPin
+		action  = "/examplescope/ci-layer/.forgejo/actions/x@" + pin
+		release = "jobs:\n  build:\n    uses: examplescope/ci-layer/.forgejo/workflows/build.yml@" + pin + "\n" + isolationEntry
 	)
-	for _, tc := range []struct {
-		name string
-		body string
-		want string
+
+	for name, test := range map[string]struct {
+		server string
+		uses   []string
+		want   string
+		note   bool
 	}{
-		{"absent_checkout", "", "Sibling signer static contract not checked"},
-		{"name_only", header + "name: validate-dist inputs.dist-digest\njobs: {}\n", "lexical only, not proof of input consumption"},
-		{"comment_only", header + "# validate-dist inputs.dist-digest\njobs: {}\n", "has no literal dist-digest input reference"},
-		{"description_only", header + "description: validate-dist inputs.dist-digest\njobs: {}\n", "lexical only, not proof of input consumption"},
-		{"wrong_input", header + strings.Replace(channel, "dist-digest:", "other-digest:", 1) + "name: validate-dist inputs.dist-digest\njobs: {}\n", "lexical only, not proof of input consumption"},
-		{"declaration_without_reference", header + channel + "jobs: {}\n", "has no literal dist-digest input reference"},
-		{"reference_without_verifier", header + channel + "name: inputs.dist-digest\njobs: {}\n", "lexical only, not proof of input consumption"},
-		{"late_verifier", header + channel + "jobs:\n  sign:\n    steps:\n      - run: sign-placeholder\n      - run: forge-ci release validate-dist --expected-digest '${{ inputs.dist-digest }}'\n", "lexical only, not proof of input consumption"},
-		{"wrong_runtime_input", header + channel + "name: inputs.dist-digest\njobs:\n  sign:\n    steps:\n      - run: forge-ci release validate-dist --expected-digest wrong\n", "lexical only, not proof of input consumption"},
+		"actions from the forge of the run":  {server: "https://forge.example", uses: []string{"https://forge.example" + action}},
+		"the server URL ends in a slash":     {server: "https://forge.example/", uses: []string{"https://forge.example" + action}},
+		"host names compare without case":    {server: "https://Forge.Example", uses: []string{"https://forge.example" + action}},
+		"a forge served below a path":        {server: "https://forge.example/git", uses: []string{"https://forge.example/git" + action}},
+		"no address written, forge known":    {server: "https://forge.example", uses: []string{action[1:]}},
+		"a foreign host":                     {server: "https://forge.example", uses: []string{"https://evil.example" + action}, want: "examplescope/ci-layer is referenced at https://evil.example, and this forge is https://forge.example"},
+		"another scheme":                     {server: "https://forge.example", uses: []string{"http://forge.example" + action}, want: "referenced at http://forge.example"},
+		"a path before the repository":       {server: "https://forge.example", uses: []string{"https://forge.example/git" + action}, want: "referenced at https://forge.example/git"},
+		"one foreign host among the forge's": {server: "https://forge.example", uses: []string{"https://forge.example" + action, "https://evil.example" + action}, want: "referenced at https://evil.example"},
+		"forge not known, one address":       {uses: []string{"https://evil.example" + action}, note: true},
+		"forge not known, two addresses":     {uses: []string{"https://forge.example" + action, "https://evil.example" + action}, want: "more than one forge address under workflow directory: https://evil.example, https://forge.example"},
+		"forge not known, no address":        {uses: []string{action[1:]}},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var other strings.Builder
+
+			other.WriteString("jobs:\n  probe:\n    steps:\n")
+
+			for _, uses := range test.uses {
+				other.WriteString("      - uses: " + uses + "\n")
+			}
+
+			out, err := subjectGate(t, ".forgejo", release, other.String(), test.server)
+			checkSubjectGate(t, out, err, test.want)
+
+			if noted := strings.Contains(out, "the address https://evil.example of the examplescope/ci-layer references was not compared"); noted != test.note {
+				t.Errorf("note that the address was not compared: %v, want %v\n%s", noted, test.note, out)
+			}
+		})
+	}
+}
+
+// A job that may receive a signing secret calls the subject. The secret check
+// admits a call by the signer workflow's name, so without this a foreign
+// repository's workflow took the keys.
+func TestIsolation_SigningSecretsGoToTheSubject(t *testing.T) {
+	t.Parallel()
+
+	const (
+		pin    = "@1111111111111111111111111111111111111111"
+		signer = "examplescope/ci-layer/.forgejo/workflows/sign-and-publish-release.yml" + pin
+		idle   = "jobs: {}\n"
+	)
+
+	for name, test := range map[string]struct{ release, other, server, want string }{
+		"the subject's signer": {forgejoIsolationCleanWorkflow, idle, "https://forge.example", ""},
+		"a signer of another repository": {
+			strings.Replace(forgejoIsolationCleanWorkflow, signer, "other/ci-layer/.forgejo/workflows/sign-and-publish-release.yml"+pin, 1), idle, "",
+			`job "sign-and-publish" calls other/ci-layer/.forgejo/workflows/sign-and-publish-release.yml` + pin + ", which is not examplescope/ci-layer",
+		},
+		"a prepare job of another repository": {
+			strings.Replace(forgejoIsolationCleanWorkflow, "examplescope/ci-layer/.forgejo/workflows/prepare-release.yml", "prefix/examplescope/ci-layer/.forgejo/workflows/prepare-release.yml", 1), idle, "",
+			`job "prepare" calls prefix/examplescope/ci-layer/.forgejo/workflows/prepare-release.yml`,
+		},
+		// A job that calls another repository's workflow under another name
+		// is no signer call: the key may not reach it.
+		"a sign job that calls another repository under another name": {
+			strings.Replace(forgejoIsolationCleanWorkflow, signer, "other/ci-layer/.forgejo/workflows/sign.yml"+pin, 1), idle, "",
+			`job "sign-and-publish" references signing secret "COSIGN_SIGNING_KEY"`,
+		},
+		"the subject's signer on a foreign host": {
+			strings.Replace(forgejoIsolationCleanWorkflow, signer, "https://evil.example/"+signer, 1), idle, "https://forge.example",
+			"examplescope/ci-layer is referenced at https://evil.example",
+		},
+		"a signer of another repository in a sibling file": {
+			forgejoIsolationCleanWorkflow, "jobs:\n  images:\n    uses: other/ci-layer/.forgejo/workflows/sign-container-images.yml" + pin + "\n", "",
+			`job "images" calls other/ci-layer/.forgejo/workflows/sign-container-images.yml`,
+		},
+		"another repository's workflow that is no signer": {
+			forgejoIsolationCleanWorkflow, "jobs:\n  notify:\n    uses: other/tools/.forgejo/workflows/notify.yml" + pin + "\n", "", "",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			out, err := subjectGate(t, ".forgejo", test.release, test.other, test.server)
+			checkSubjectGate(t, out, err, test.want)
+		})
+	}
+}
+
+// The gate reads uses: references. A GitLab include names its component under
+// another key, on any host, so it is not a reference the gate knows: the
+// subject matches nothing and the gate refuses, where passing would claim a
+// check of the component's repository, host and pin that nothing made.
+func TestIsolation_GitLabComponentsAreNotRead(t *testing.T) {
+	t.Parallel()
+
+	for _, host := range []string{"$CI_SERVER_FQDN", "evil.example"} {
+		t.Run(host, func(t *testing.T) {
+			t.Parallel()
+
 			mem := testfs.NewMemory(t)
-			mem.WriteFile(".scratch/consumer/.forgejo/workflows/release.yml", []byte(forgejoIsolationCleanWorkflow))
+			mem.WriteFile(".gitlab-ci.yml", []byte("include:\n  - component: "+host+"/examplescope/ci-layer/check@1111111111111111111111111111111111111111\n"))
 
-			if tc.body != "" {
-				mem.WriteFile(".scratch/ci-layer/.forgejo/workflows/sign-and-publish-release.yml", []byte(tc.body))
+			var out bytes.Buffer
+
+			err := appvalidate.Isolation(&out, output.NewAnnotator(&out, output.FormatGitHub), appvalidate.IsolationInput{
+				WorkflowsDir: ".", SinglePinSubject: "examplescope/ci-layer", ServerURL: "https://forge.example", FS: mem.FS(),
+			})
+			checkSubjectGate(t, out.String(), err, "matches nothing")
+		})
+	}
+}
+
+// Every reference to the subject is pinned to a full commit. A branch, a tag
+// or a short commit names whatever the engine's repository points it at
+// next, and passed before because only full commits were collected as pins.
+func TestIsolation_SubjectIsPinnedToAFullCommit(t *testing.T) {
+	t.Parallel()
+
+	const action = "examplescope/ci-layer/.forgejo/actions/setup-forge-ci"
+
+	for name, test := range map[string]struct{ uses, want string }{
+		"a full commit":            {uses: action + "@" + isolationPin},
+		"a branch":                 {uses: action + "@main", want: "references examplescope/ci-layer at @main, which is not a full commit"},
+		"a tag":                    {uses: action + "@v1.2.3", want: "at @v1.2.3, which is not a full commit"},
+		"a short commit":           {uses: action + "@" + isolationPin[:12], want: "at @" + isolationPin[:12] + ", which is not a full commit"},
+		"an upper-case commit":     {uses: action + "@" + strings.Repeat("A", 40), want: "which is not a full commit"},
+		"no ref":                   {uses: action, want: "at no ref, which is not a full commit"},
+		"a branch on the forge":    {uses: "https://forge.example/" + action + "@main", want: "at @main, which is not a full commit"},
+		"another repository's tag": {uses: "other/tools/.forgejo/actions/x@v1"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			mem := testfs.NewMemory(t)
+			mem.WriteFile(".forgejo/workflows/release.yml", []byte(forgejoIsolationCleanWorkflow))
+			mem.WriteFile(".forgejo/workflows/lint.yml", []byte("jobs:\n  lint:\n    steps:\n      - uses: "+test.uses+"\n"))
+
+			out, err := runForgejoIsolationInFS(t, mem)
+			if test.want == "" {
+				if err != nil {
+					t.Fatalf("refused: %v\n%s", err, out)
+				}
+
+				return
 			}
 
-			out, err := runForgejoIsolationInFS(t, mem, ".scratch/consumer/.forgejo/workflows/release.yml")
+			if !errors.Is(err, errs.ErrValidation) || !strings.Contains(out, "file=.forgejo/workflows/lint.yml,line=4::") || !strings.Contains(out, test.want) {
+				t.Fatalf("err = %v, want a refusal at lint.yml:4 containing %q\n%s", err, test.want, out)
+			}
+		})
+	}
 
-			wantFailure := strings.Contains(tc.want, "has no literal")
-			if (err != nil) != wantFailure || (wantFailure && !errors.Is(err, errs.ErrValidation)) || !strings.Contains(out, tc.want) {
-				t.Fatalf("out=%s err=%v want=%s", out, err, tc.want)
+	// A release workflow whose only engine reference is a branch is refused
+	// for the branch, not passed over as a subject that matches nothing.
+	t.Run("the entry point at a branch", func(t *testing.T) {
+		t.Parallel()
+
+		out, err := runForgejoIsolation(t, strings.ReplaceAll(forgejoIsolationCleanWorkflow, "@"+isolationPin, "@main"))
+		if !errors.Is(err, errs.ErrValidation) || !strings.Contains(out, "prepare-release.yml@main references examplescope/ci-layer at @main") ||
+			strings.Contains(out, "matches nothing") {
+			t.Fatalf("err = %v\n%s", err, out)
+		}
+	})
+}
+
+// The engine is the same repository in any case of its owner and name: a
+// reference spelled in another case is held to the one pin, may receive the
+// signing keys as a signer call, and makes a workflow a release workflow.
+func TestIsolation_SubjectMatchesInAnyCase(t *testing.T) {
+	t.Parallel()
+
+	upper := strings.ReplaceAll(forgejoIsolationCleanWorkflow, "examplescope/ci-layer", "ExampleScope/CI-Layer")
+
+	for name, test := range map[string]struct {
+		files map[string]string
+		want  string
+	}{
+		"a release workflow in another case": {files: map[string]string{"release.yml": upper}},
+		"another case at a second pin": {
+			files: map[string]string{
+				"release.yml": forgejoIsolationCleanWorkflow,
+				"lint.yml":    "jobs:\n  lint:\n    steps:\n      - uses: ExampleScope/ci-layer/.forgejo/actions/x@" + strings.Repeat("2", 40) + "\n",
+			},
+			want: "mixed examplescope/ci-layer pins",
+		},
+		"another case at a branch": {
+			files: map[string]string{
+				"release.yml": forgejoIsolationCleanWorkflow,
+				"lint.yml":    "jobs:\n  lint:\n    steps:\n      - uses: EXAMPLESCOPE/CI-LAYER/.forgejo/actions/x@main\n",
+			},
+			want: "which is not a full commit",
+		},
+		"another case on a foreign host": {
+			files: map[string]string{
+				"release.yml": forgejoIsolationCleanWorkflow,
+				"lint.yml":    "jobs:\n  lint:\n    steps:\n      - uses: https://evil.example/ExampleScope/CI-Layer/.forgejo/actions/x@" + isolationPin + "\n",
+			},
+			want: "referenced at https://evil.example",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			mem := testfs.NewMemory(t)
+			for file, body := range test.files {
+				mem.WriteFile(".forgejo/workflows/"+file, []byte(body))
 			}
 
-			if !strings.Contains(out, "Digest verification before signing is not checked; the owner of the pinned signing workflow must enforce the runtime verifier and ordering.") || strings.Contains(out, "release-ci") {
-				t.Fatalf("missing runtime ownership/scope notice: %s", out)
-			}
-
-			if wantFailure && strings.Contains(out, "Static release-isolation checks passed") {
-				t.Fatalf("failed static contract reported success: %s", out)
-			}
+			out, err := subjectGateIn(t, mem, "https://forge.example")
+			checkSubjectGate(t, out, err, test.want)
 		})
 	}
 }

@@ -13,17 +13,18 @@ import (
 	"testing"
 )
 
-// The isolation step forwards its inputs, names the layer's helper-pin input
-// and the inputs that must be literals, and turns the whitespace-separated signing-secret list into repeated
-// --signing-secret flags. Isolation analysis belongs to the engine.
+// The isolation step names the repository's workflow directory, whose release
+// workflows the engine finds itself, the layer's helper-pin input and the
+// inputs that must be literals, and turns the whitespace-separated
+// signing-secret list into repeated --signing-secret flags. Isolation
+// analysis belongs to the engine.
 func TestCheckL3Isolation(t *testing.T) {
 	t.Parallel()
 	action := loadAction(t, "check-l3-isolation")
 	action.requireSteps(t, 1)
 	script := action.Runs.Steps[0].Run
 	base := []string{
-		"validate", "isolation", "--workflow", "workflow-v", "--sign-job", "sign-v",
-		"--prepare-job", "prepare-v", "--dist-digest-output", "digest-v", "--single-pin-subject", "served/layer",
+		"validate", "isolation", "--workflows-dir", ".forgejo/workflows", "--single-pin-subject", "served/layer",
 		// The layer's own name for the second pin, never one derived from
 		// the serving repository.
 		"--single-pin-input", "forge-ci-sha",
@@ -60,8 +61,8 @@ func TestCheckL3Isolation(t *testing.T) {
 
 			box := newSandbox(t, "check-l3-isolation")
 
-			got := box.run(script, append(isolationEnv(), "GITHUB_ACTION_REPOSITORY=served/layer",
-				"ISOLATION_SIGNING_SECRETS="+test.secrets, "FAKE_ENGINE_STATUS="+test.status)...)
+			got := box.run(script, "GITHUB_ACTION_REPOSITORY=served/layer",
+				"ISOLATION_SIGNING_SECRETS="+test.secrets, "FAKE_ENGINE_STATUS="+test.status)
 			want := slices.Concat(base, []string{"--contract-root", box.actionDir + "/../../.."}, test.flags)
 
 			if got.status != test.want || !slices.Equal(box.argv(), want) {
@@ -71,31 +72,15 @@ func TestCheckL3Isolation(t *testing.T) {
 	}
 }
 
-// build-job is ignored: a caller that still sets it is warned, and the engine
-// is called as without it.
-func TestCheckL3IsolationWarnsOfTheIgnoredBuildJob(t *testing.T) {
+// The action takes no workflow, job or output name: the engine derives them.
+func TestCheckL3IsolationNamesNoWorkflowOrJob(t *testing.T) {
 	t.Parallel()
-	script := loadAction(t, "check-l3-isolation").Runs.Steps[0].Run
 
-	for _, test := range []struct {
-		buildJob string
-		warned   bool
-	}{
-		{"", false},
-		{"build-and-release", true},
-	} {
-		t.Run("build-job="+test.buildJob, func(t *testing.T) {
-			t.Parallel()
-
-			box := newSandbox(t, "check-l3-isolation")
-			got := box.run(script, append(isolationEnv(), "GITHUB_ACTION_REPOSITORY=served/layer",
-				"ISOLATION_SIGNING_SECRETS=", "ISOLATION_BUILD_JOB="+test.buildJob)...)
-
-			warned := strings.Contains(got.stderr, "build-job is deprecated and ignored")
-			if got.status != 0 || warned != test.warned || slices.Contains(box.argv(), "--build-job") {
-				t.Fatalf("status %d warned %v argv %q, want status 0 warned %v; stderr %s", got.status, warned, box.argv(), test.warned, got.stderr)
-			}
-		})
+	action := loadAction(t, "check-l3-isolation")
+	for _, input := range []string{"workflow", "sign-job", "prepare-job", "dist-digest-output", "build-job"} {
+		if _, ok := action.Inputs[input]; ok {
+			t.Errorf("check-l3-isolation declares %s; the engine finds the release workflows and their jobs", input)
+		}
 	}
 }
 
@@ -122,8 +107,8 @@ func TestCheckL3IsolationSinglePinSubject(t *testing.T) {
 			t.Parallel()
 
 			box := newSandbox(t, "check-l3-isolation")
-			got := box.run(script, append(isolationEnv(), "ISOLATION_SIGNING_SECRETS=",
-				"ISOLATION_SINGLE_PIN_SUBJECT="+test.input, "GITHUB_ACTION_REPOSITORY="+test.served)...)
+			got := box.run(script, "ISOLATION_SIGNING_SECRETS=",
+				"ISOLATION_SINGLE_PIN_SUBJECT="+test.input, "GITHUB_ACTION_REPOSITORY="+test.served)
 
 			argv := box.argv()
 			if at := slices.Index(argv, "--single-pin-subject"); got.status != 0 || at < 0 || argv[at+1] != test.want {
@@ -141,16 +126,9 @@ func TestCheckL3IsolationSinglePinSubject(t *testing.T) {
 
 		box := newSandbox(t, "check-l3-isolation")
 
-		got := box.run(script, append(isolationEnv(), "ISOLATION_SIGNING_SECRETS=")...)
+		got := box.run(script, "ISOLATION_SIGNING_SECRETS=")
 		if got.status == 0 || box.argv() != nil || !strings.Contains(got.stderr, "single-pin-subject is empty") {
 			t.Fatalf("status %d argv %q stderr %q", got.status, box.argv(), got.stderr)
 		}
 	})
-}
-
-func isolationEnv() []string {
-	return []string{
-		"ISOLATION_WORKFLOW=workflow-v", "ISOLATION_SIGN_JOB=sign-v",
-		"ISOLATION_PREPARE_JOB=prepare-v", "ISOLATION_DIST_DIGEST_OUTPUT=digest-v",
-	}
 }

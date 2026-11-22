@@ -189,7 +189,7 @@ func TestWorkflowInputBoundary_ClassifiedReadAndParseFailures(t *testing.T) {
 			t.Fatalf("jobgraph malformed=%v err=%v out=%s", malformed, err, &out)
 		}
 
-		err = appvalidate.Isolation(&out, output.Annotator{}, appvalidate.IsolationInput{FS: files, Workflow: "workflows/bad.yml"})
+		err = appvalidate.Isolation(&out, output.Annotator{}, appvalidate.IsolationInput{FS: files, WorkflowsDir: "workflows", SinglePinSubject: "team/engine"})
 		if !errors.Is(err, want) || out.Len() != 0 {
 			t.Fatalf("isolation malformed=%v err=%v out=%s", malformed, err, &out)
 		}
@@ -224,7 +224,7 @@ func TestWorkflowInputBoundary_UnreadableInput(t *testing.T) {
 			return appvalidate.JobGraph(&out, output.Annotator{}, appvalidate.JobGraphInput{FS: unreadableWorkflowFS{}, Workflows: []string{"file.yml"}})
 		},
 		func() error {
-			return appvalidate.Isolation(&out, output.Annotator{}, appvalidate.IsolationInput{FS: unreadableWorkflowFS{}, Workflow: "file.yml"})
+			return appvalidate.Isolation(&out, output.Annotator{}, appvalidate.IsolationInput{FS: unreadableWorkflowFS{}, WorkflowsDir: "workflows", SinglePinSubject: "team/engine"})
 		},
 		func() error {
 			return appvalidate.WorkflowInputDefaults(&out, output.Annotator{}, appvalidate.WorkflowInputDefaultsInput{FS: unreadableWorkflowFS{}, WorkflowsDir: "workflows"})

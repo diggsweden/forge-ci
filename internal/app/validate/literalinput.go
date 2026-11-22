@@ -128,23 +128,14 @@ func (l literalInput) shapeRefusal(value string) string {
 // A job that does not pass the input is not reported: whether the called
 // workflow needs it is that workflow's contract, which is not in the caller's
 // repository to read, and a required input left out fails there.
-func literalInputViolations(in IsolationInput, inputs []literalInput) []validate.IsolationViolation {
+func literalInputViolations(in IsolationInput, inputs []literalInput, files []releaseFile) []fileViolation {
 	if len(inputs) == 0 {
 		return nil
 	}
 
-	files, err := workflowDirYAMLFiles(in)
-	if err != nil {
-		return []validate.IsolationViolation{{Line: 1, Msg: err.Error()}}
-	}
-
-	var violations []validate.IsolationViolation
-
-	for _, body := range files {
-		violations = append(violations, literalInputViolationsIn([]byte(body), in.SinglePinSubject, inputs)...)
-	}
-
-	return violations
+	return perFile(files, func(body []byte) []validate.IsolationViolation {
+		return literalInputViolationsIn(body, in.SinglePinSubject, inputs)
+	})
 }
 
 func literalInputViolationsIn(body []byte, subject string, inputs []literalInput) []validate.IsolationViolation {

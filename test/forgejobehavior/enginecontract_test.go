@@ -84,10 +84,9 @@ func TestForgeCICLIContract(t *testing.T) {
 
 // The consumer kit, pinned to one forge-ci commit, passes the release
 // isolation gate a consumer pull request runs: the check-l3-isolation step
-// runs the engine over the kit's job names with the action's default signing
-// secrets. With this checkout's sign-and-publish workflow placed as the pinned
-// sibling, the engine also checks that its secrets-contract header lists
-// every enforced signing secret. The subject is the repository the kit's
+// runs the engine over the kit's workflow directory, in the consumer's
+// checkout, with the action's default signing secrets, and the engine finds
+// the release workflow itself. The subject is the repository the kit's
 // `uses:` lines name, as the runner reports it for a fetched action, and the
 // kit's forge-ci-sha inputs are the pin the action names to the engine.
 // The kit is served here from a repository that is not called forge-ci,
@@ -126,24 +125,19 @@ func TestConsumerTemplatesPassReleaseIsolation(t *testing.T) {
 	for _, template := range consumerTemplates() {
 		box.write("consumer/.forgejo/workflows/"+filepath.Base(template), instantiate.Replace(string(reporoot.ReadFile(t, template))), 0o600)
 	}
-	// The engine resolves the sign job's pinned workflow to this sibling path.
-	box.write("delivery-0a1b/.forgejo/workflows/sign-and-publish-release.yml",
-		string(reporoot.ReadFile(t, ".forgejo/workflows/sign-and-publish-release.yml")), 0o600)
-
-	// The resolver runs the built engine as a non-strict override.
-	script := action.script(t, action.Runs.Steps[0].Name)
+	// The resolver runs the built engine as a non-strict override, in the
+	// consumer's checkout as a runner's workspace is.
+	script := "cd consumer\n" + action.script(t, action.Runs.Steps[0].Name)
 
 	got := box.run(script,
 		"FORGE_CI_BIN="+forgeCIEngine(t), "GITHUB_ACTION_REPOSITORY=fork/delivery-0a1b",
-		"ISOLATION_WORKFLOW=consumer/.forgejo/workflows/release-workflow.yml",
-		"ISOLATION_BUILD_JOB=build", "ISOLATION_SIGN_JOB=sign-and-publish", "ISOLATION_PREPARE_JOB=prepare",
-		"ISOLATION_DIST_DIGEST_OUTPUT=dist-digest", "ISOLATION_SIGNING_SECRETS="+fmt.Sprint(action.Inputs["signing-secrets"].Default))
+		"ISOLATION_SIGNING_SECRETS="+fmt.Sprint(action.Inputs["signing-secrets"].Default))
 	if got.status != 0 {
 		t.Fatalf("status %d\nstdout %s\nstderr %s", got.status, got.stdout, got.stderr)
 	}
-	// The engine's only report that it read the sibling workflow.
-	if !strings.Contains(got.stdout+got.stderr, "Local sibling header/input-reference hints checked") {
-		t.Fatalf("the engine did not check the sibling sign-and-publish workflow:\n%s%s", got.stdout, got.stderr)
+	// The engine found the kit's release workflow by what it calls.
+	if !strings.Contains(got.stdout+got.stderr, "Release workflow .forgejo/workflows/release-workflow.yml, which calls fork/delivery-0a1b, checked") {
+		t.Fatalf("the engine did not find the kit's release workflow:\n%s%s", got.stdout, got.stderr)
 	}
 
 	// The helper pin is held to the same commit although the serving
@@ -155,9 +149,7 @@ func TestConsumerTemplatesPassReleaseIsolation(t *testing.T) {
 
 	refused := box.run(script,
 		"FORGE_CI_BIN="+forgeCIEngine(t), "GITHUB_ACTION_REPOSITORY=fork/delivery-0a1b",
-		"ISOLATION_WORKFLOW=consumer/.forgejo/workflows/release-workflow.yml",
-		"ISOLATION_BUILD_JOB=build", "ISOLATION_SIGN_JOB=sign-and-publish", "ISOLATION_PREPARE_JOB=prepare",
-		"ISOLATION_DIST_DIGEST_OUTPUT=dist-digest", "ISOLATION_SIGNING_SECRETS="+fmt.Sprint(action.Inputs["signing-secrets"].Default))
+		"ISOLATION_SIGNING_SECRETS="+fmt.Sprint(action.Inputs["signing-secrets"].Default))
 	if refused.status == 0 || !strings.Contains(refused.stdout+refused.stderr, "mixed fork/delivery-0a1b pins") {
 		t.Fatalf("a helper pin on another commit was not refused: status %d\n%s%s", refused.status, refused.stdout, refused.stderr)
 	}
@@ -182,9 +174,7 @@ func TestConsumerTemplatesPassReleaseIsolation(t *testing.T) {
 
 		refused := box.run(script,
 			"FORGE_CI_BIN="+forgeCIEngine(t), "GITHUB_ACTION_REPOSITORY=fork/delivery-0a1b",
-			"ISOLATION_WORKFLOW=consumer/.forgejo/workflows/release-workflow.yml",
-			"ISOLATION_BUILD_JOB=build", "ISOLATION_SIGN_JOB=sign-and-publish", "ISOLATION_PREPARE_JOB=prepare",
-			"ISOLATION_DIST_DIGEST_OUTPUT=dist-digest", "ISOLATION_SIGNING_SECRETS="+fmt.Sprint(action.Inputs["signing-secrets"].Default))
+			"ISOLATION_SIGNING_SECRETS="+fmt.Sprint(action.Inputs["signing-secrets"].Default))
 		if refused.status == 0 || !strings.Contains(refused.stdout+refused.stderr, kit.want) {
 			t.Fatalf("%s: not refused with %q: status %d\n%s%s", name, kit.want, refused.status, refused.stdout, refused.stderr)
 		}

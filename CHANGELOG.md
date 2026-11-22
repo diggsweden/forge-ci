@@ -15,6 +15,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   protection when you move your pin.
 - Consumer inputs take one name across forges; see "Names that changed" in
   docs/workflows.md for the old and new names.
+- **Breaking:** `validate isolation` checks a workflow directory and finds
+  the release workflows itself: every workflow with a job that calls the
+  subject's `prepare-release.yml` or `sign-and-publish-release.yml`, under
+  any file name; none found fails. `--workflow`, `--sign-job`,
+  `--prepare-job` and `--dist-digest-output` are gone, replaced by the
+  required `--workflows-dir`, and `--single-pin-subject` is required. The
+  sign and prepare jobs are the calls of those workflows, and the job and
+  output the sign job takes `dist-digest` from are read from its `with:`
+  block. A prepare job built from the caller's own steps is no longer a
+  prepare job: it may not hold a signing secret. The sign job is no longer
+  required to pass every configured signing secret, and the guessed
+  sibling-checkout read of the signer's secrets header is gone. Every
+  workflow of the directory, not only the release workflow, is held to the
+  signing-secret boundary, and violations are annotated at the file they
+  are in. The `check-l3-isolation` action loses its `workflow`, `sign-job`,
+  `prepare-job`, `dist-digest-output` and `build-job` inputs; remove them
+  from your pull-request workflow.
+- **Breaking:** `validate isolation`, and so `check-l3-isolation`, refuses
+  a reference to the subject that is not pinned to a full commit: a branch
+  (`@main`), a tag or a short commit. Such a reference was skipped by the
+  pin check before, so it passed.
+- `validate isolation`, and so `check-l3-isolation`, holds the local
+  actions a release runs to the pin and address checks: a reference to the
+  subject inside `.forgejo/actions/*/action.yml` must be at the directory's
+  one full commit and on the forge of the run. Before, only the workflow
+  directory was read for them.
+- `validate isolation --single-pin-subject` matches the subject's owner and
+  repository in any case, as forges resolve them: `ExampleScope/CI-Layer`
+  is held to the same pin and forge as `examplescope/ci-layer`, where it
+  passed as another repository before.
+- `validate isolation --single-pin-subject`, and so the `check-l3-isolation`
+  action, takes a reference for the subject only when it names that
+  repository, refuses one that writes another forge address than the forge
+  of the run, and refuses a sign job or a signer workflow call in another
+  repository. A workflow directory that takes the engine from another forge
+  by URL, or signs through another repository than the subject, now fails.
+- `validate isolation`, and so `check-l3-isolation`, refuses `secrets:
+  inherit` on every job of the release workflow. The prepare job, the sign
+  job and the signer workflow calls passed it before.
+- `validate isolation`, and so `check-l3-isolation`, also checks each local
+  reusable workflow the release workflow calls, directly or through another:
+  no signing secret, no `secrets: inherit`, no persisted checkout credential
+  and no `setup-toolchain` cache in its jobs. Before, only the release
+  workflow's own jobs were read.
+- `validate isolation --single-pin-subject`, and so `check-l3-isolation`,
+  refuses a `uses:` in the release workflow, the local workflows it calls or
+  their local actions that is neither a path in the repository nor the
+  subject, and a local action that is not a composite action. A third-party
+  action, a `docker://` image or a Node action in a release job now fails.
+- **Breaking:** `validate isolation`, and so `check-l3-isolation`, refuses
+  every secret but the job token and read-only `DEPENDENCY_*` credentials in
+  a release job that checks the repository out (`actions/checkout`,
+  `checkout-consumer`, `forge-ci platform checkout`, `git clone`, `fetch` or
+  `pull`, or a local action), in any step, under any name and through the
+  workflow env. It replaces the rule that read only the token variables of
+  `platform checkout` and `release validate-tag` steps, which a secret in
+  the next step, under another name, passed.
 
 ### Added
 

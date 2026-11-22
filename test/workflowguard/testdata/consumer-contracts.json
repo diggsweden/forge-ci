@@ -275,26 +275,6 @@
   },
   ".forgejo/actions/check-l3-isolation/action.yml": {
     "inputs": {
-      "build-job": {
-        "required": false,
-        "type": "",
-        "default": ""
-      },
-      "dist-digest-output": {
-        "required": false,
-        "type": "",
-        "default": "dist-digest"
-      },
-      "prepare-job": {
-        "required": false,
-        "type": "",
-        "default": "prepare"
-      },
-      "sign-job": {
-        "required": false,
-        "type": "",
-        "default": "sign-and-publish"
-      },
       "signing-secrets": {
         "required": false,
         "type": "",
@@ -304,11 +284,6 @@
         "required": false,
         "type": "",
         "default": ""
-      },
-      "workflow": {
-        "required": false,
-        "type": "",
-        "default": ".forgejo/workflows/release-workflow.yml"
       }
     },
     "secrets": [],

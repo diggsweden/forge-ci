@@ -4,37 +4,15 @@
 
 name: 'Check release isolation'
 description: >-
-  The release-integrity gate: statically asserts the release-isolation and secret-boundary invariants of a consumer's release workflow (no job but the prepare job and the calls of the layer's signer workflows references a signing-key secret, so neither the build, its tests, the image jobs nor the hand-off can reach a key; the prepare job calls the layer's prepare-release.yml, the cross-repo sign job enumerates every required signing secret and is pinned, release-tag, release-sha and artifacts-config flow from prepare to signer as bare needs expressions, and the dist-digest tamper-evidence channel is intact from the job the signer takes it from) plus the supporting hygiene that keeps them meaningful (one forge-ci pin across the workflow directory, and the signer image, the Cosign public key digest, the transparency-log setting and the enforce-* settings written out as literals wherever a job or step passes them to the layer). Shared so every signing consumer enforces the same guard instead of carrying its own copy.
+  The release-integrity gate: statically asserts the release-isolation and secret-boundary invariants of the repository's workflow directory. The release workflows are found, not named: every workflow under .forgejo/workflows that calls the layer's prepare-release.yml or sign-and-publish-release.yml. No job of any workflow but the calls of the layer's signer workflows references a signing-key secret, so neither the build, its tests, the image jobs nor the hand-off can reach a key; each call of sign-and-publish-release.yml takes release-tag, release-sha and artifacts-config from a call of prepare-release.yml and dist-digest from the job that declares it, as bare needs expressions; plus the supporting hygiene that keeps them meaningful (one forge-ci repository, on the forge of the run, at one pin across the workflow directory, and the signer image, the Cosign public key digest, the transparency-log setting and the enforce-* settings written out as literals wherever a job or step passes them to the layer). Shared so every signing consumer enforces the same guard instead of carrying its own copy.
 inputs:
-  workflow:
-    description: Release workflow path.
-    required: false
-    default: .forgejo/workflows/release-workflow.yml
-  build-job:
-    description: >-
-      Deprecated, and ignored with a warning: every job but the prepare job and the calls of the layer's signer workflows is checked for signing secrets, and the job that hands dist/ over is the one the sign job takes dist-digest from. Remove it from your workflow.
-    required: false
-    default: ''
-  sign-job:
-    description: Cross-repo signer call-site job.
-    required: false
-    default: sign-and-publish
-  prepare-job:
-    description: >-
-      Prepare job, which must call the layer's prepare-release.yml; the sign job takes release-tag, release-sha and artifacts-config from its outputs. Skipped when the job doesn't exist.
-    required: false
-    default: prepare
   signing-secrets:
     description: Space-separated signing-key secret names to enforce.
     required: false
     default: RELEASE_COSIGN_PRIVATE_KEY RELEASE_COSIGN_PASSPHRASE RELEASE_GPG_PRIVATE_KEY RELEASE_GPG_PASSPHRASE RELEASE_GPG_FINGERPRINT
-  dist-digest-output:
-    description: The digest output name (e.g. dist-digest) of the job the sign job takes dist-digest from.
-    required: false
-    default: dist-digest
   single-pin-subject:
     description: >-
-      owner/repository whose commit pins must agree across the workflow directory. Empty takes the repository the runner fetched this action from, so the check follows a fork without configuration. An action referenced by a local path has no such repository and must name the subject. Every job that calls one of the subject's reusable workflows must also pass that commit, written out, as forge-ci-sha. A job that passes signer-image, cosign-public-key-sha256 or transparency-log to one of them must write the value out too: an image reference pinned by digest, 64 hex characters, and none or public, never an expression. So must a job or step that passes an enforce-* setting to one of its workflows or actions: true or false.
+      owner/repository whose commit pins must agree across the workflow directory. Empty takes the repository the runner fetched this action from, so the check follows a fork without configuration. An action referenced by a local path has no such repository and must name the subject. The workflows that call its prepare-release.yml or sign-and-publish-release.yml are the release workflows. A reference to it that writes a forge address (https://host/owner/repository/...) must write the address of the forge the job runs on, and every call of a signer workflow must call it. Every job that calls one of the subject's reusable workflows must also pass that commit, written out, as forge-ci-sha. A job that passes signer-image, cosign-public-key-sha256 or transparency-log to one of them must write the value out too: an image reference pinned by digest, 64 hex characters, and none or public, never an expression. So must a job or step that passes an enforce-* setting to one of its workflows or actions: true or false.
     required: false
     default: ''
 
@@ -44,19 +22,10 @@ runs:
     - name: Check release isolation and secret boundaries
       shell: bash
       env:
-        ISOLATION_WORKFLOW: ${{ inputs.workflow }}
-        ISOLATION_SIGN_JOB: ${{ inputs.sign-job }}
-        ISOLATION_PREPARE_JOB: ${{ inputs.prepare-job }}
         ISOLATION_SIGNING_SECRETS: ${{ inputs.signing-secrets }}
-        ISOLATION_DIST_DIGEST_OUTPUT: ${{ inputs.dist-digest-output }}
         ISOLATION_SINGLE_PIN_SUBJECT: ${{ inputs.single-pin-subject }}
-        ISOLATION_BUILD_JOB: ${{ inputs.build-job }}
       run: |
         set -euo pipefail
-        # build-job is ignored, so a caller that still sets it is told.
-        if [ -n "${ISOLATION_BUILD_JOB:-}" ]; then
-          echo "WARNING: build-job is deprecated and ignored: every job but the prepare job and the signer calls is checked for signing secrets; remove build-job: ${ISOLATION_BUILD_JOB} from your workflow" >&2
-        fi
         # shellcheck source=.engine/bin/lib-forge-ci.sh
         source "${GITHUB_ACTION_PATH}/../../../.engine/bin/lib-forge-ci.sh"
         # The runner sets GITHUB_ACTION_REPOSITORY to the owner/repository of
@@ -87,10 +56,7 @@ runs:
           contract_flags=(--contract-root "${GITHUB_ACTION_PATH}/../../..")
         fi
         run_forge_ci validate isolation \
-          --workflow "${ISOLATION_WORKFLOW}" \
-          --sign-job "${ISOLATION_SIGN_JOB}" \
-          --prepare-job "${ISOLATION_PREPARE_JOB}" \
-          --dist-digest-output "${ISOLATION_DIST_DIGEST_OUTPUT}" \
+          --workflows-dir .forgejo/workflows \
           --single-pin-subject "${single_pin_subject}" \
           --single-pin-input forge-ci-sha \
           --literal-input signer-image=image-digest \

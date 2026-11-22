@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -26,6 +27,8 @@ const (
 	singlePinOther   = "2222222222222222222222222222222222222222"
 )
 
+// singlePinWorkflow is a release workflow: its one call of the subject is a
+// call of prepare-release.yml, with the given with: block.
 func singlePinWorkflow(withBlock string) string {
 	return `jobs:
   build:
@@ -33,8 +36,12 @@ func singlePinWorkflow(withBlock string) string {
       - run: make dist
   sign:
     needs: build
-    uses: ` + singlePinSubject + `/.forgejo/workflows/sign.yml@` + singlePinCommit + "\n" + withBlock
+    uses: ` + singlePinSubject + `/.forgejo/workflows/prepare-release.yml@` + singlePinCommit + "\n" + withBlock
 }
+
+// releaseEntryJob makes a fixture a release workflow without passing any
+// input.
+const releaseEntryJob = "  prepare:\n    uses: " + singlePinSubject + "/.forgejo/workflows/prepare-release.yml@" + singlePinCommit + "\n"
 
 func runIsolationThroughRoot(t *testing.T, workflow string, extra ...string) error {
 	t.Helper()
@@ -44,9 +51,9 @@ func runIsolationThroughRoot(t *testing.T, workflow string, extra ...string) err
 
 	root := cli.New(cli.BuildInfo{Version: "x", Commit: "y", Date: "z"})
 
-	argv := append([]string{"forge-ci", "validate", "isolation", "--workflow", path}, extra...)
+	argv := append([]string{"forge-ci", "validate", "isolation", "--workflows-dir", filepath.Dir(path)}, extra...)
 
-	return root.Run(context.Background(), argv)
+	return cli.ClassifyError(root.Run(context.Background(), argv))
 }
 
 func TestIsolationCommaSeparatedSigningSecretsStillRejectsEitherSecret(t *testing.T) {
@@ -56,12 +63,12 @@ func TestIsolationCommaSeparatedSigningSecretsStillRejectsEitherSecret(t *testin
 		t.Run(secret, func(t *testing.T) {
 			t.Parallel()
 
-			workflow := "jobs:\n  build:\n    steps:\n      - run: echo '${{ secrets." + secret + " }}'\n"
-			if err := runIsolationThroughRoot(t, workflow); err != nil {
+			workflow := "jobs:\n  build:\n    steps:\n      - run: echo '${{ secrets." + secret + " }}'\n" + releaseEntryJob
+			if err := runIsolationThroughRoot(t, workflow, "--single-pin-subject", singlePinSubject); err != nil {
 				t.Fatalf("custom name is not in the default signing-secret set: %v", err)
 			}
 
-			if err := runIsolationThroughRoot(t, workflow, "--signing-secret", "CUSTOM_ONE,CUSTOM_TWO"); !errors.Is(err, errs.ErrValidation) {
+			if err := runIsolationThroughRoot(t, workflow, "--single-pin-subject", singlePinSubject, "--signing-secret", "CUSTOM_ONE,CUSTOM_TWO"); !errors.Is(err, errs.ErrValidation) {
 				t.Fatalf("comma-list signing secrets did not reject %s: %v", secret, err)
 			}
 		})
@@ -110,7 +117,7 @@ func TestIsolationCmd_SinglePinInput(t *testing.T) {
 			flags: []string{"--single-pin-subject", singlePinSubject},
 		},
 		{
-			name:      "the flag needs a subject",
+			name:      "the subject is required",
 			withBlock: "    with:\n      " + singlePinInput + ": " + singlePinCommit + "\n",
 			flags:     []string{"--single-pin-input", singlePinInput},
 			want:      errs.ErrUsage,
@@ -246,7 +253,7 @@ func TestIsolationCmd_LiteralInput(t *testing.T) {
 			message:   "is not a scalar",
 		},
 		{
-			name:      "the flag needs a subject",
+			name:      "the subject is required",
 			withBlock: with("signer-image: " + literalImage),
 			flags:     []string{"--literal-input", "signer-image"},
 			want:      errs.ErrUsage,
@@ -318,7 +325,7 @@ func TestIsolationCmd_LiteralInputCoversActionSteps(t *testing.T) {
     steps:
       - uses: ` + singlePinSubject + `/.forgejo/actions/build-go@` + singlePinCommit + `
         with:
-          enforce-application-tests: ` + value + "\n"
+          enforce-application-tests: ` + value + "\n" + releaseEntryJob
 	}
 	flags := []string{"--single-pin-subject", singlePinSubject, "--literal-input", "enforce-application-tests=enum:true/false"}
 
@@ -363,7 +370,7 @@ func TestIsolationCmd_LiteralInputCoversSiblingWorkflowFiles(t *testing.T) {
 
 	stderr, err := captureStderr(t, func() error {
 		return cli.New(cli.BuildInfo{Version: "x", Commit: "y", Date: "z"}).Run(context.Background(), []string{
-			"forge-ci", "validate", "isolation", "--workflow", path,
+			"forge-ci", "validate", "isolation", "--workflows-dir", filepath.Dir(path),
 			"--single-pin-subject", singlePinSubject, "--literal-input", "signer-image=image-digest",
 		})
 	})
