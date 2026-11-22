@@ -108,6 +108,10 @@ A container that names an artifact under `from:` is declared as built from
 that artifact. Its Containerfile copies the built file. It does not run the
 build again.
 
+Build once and promote that exact file. A second build inside the image can
+differ subtly from the artifact that was tested, scanned and described in
+the SBOM, so the image would ship something nobody checked.
+
 ```yaml
 artifacts:
   - name: backend

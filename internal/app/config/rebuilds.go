@@ -133,6 +133,8 @@ func warnRebuild(
 
 	block.WriteString("  The image will hold a file built again during the image build. It is not the\n")
 	block.WriteString("  artifact forge-ci built, tested, described in the SBOM and released.\n")
+	block.WriteString("  Build once and promote that exact file: a second build can differ subtly from\n")
+	block.WriteString("  the one that was tested and scanned.\n")
 	block.WriteString("  Every image build also downloads the build tool and the dependencies, so it\n")
 	block.WriteString("  fails when the package registry cannot be reached.\n")
 	fmt.Fprintf(&block, "  Copy the built artifact into the image instead: %s\n\n", docslink.URL(rebuildGuide))

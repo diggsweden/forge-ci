@@ -67,6 +67,7 @@ containers:
 		"api/Containerfile line 3: ./mvnw clean package",
 		`The image of container "tool" rebuilds what forge-ci built`,
 		"fails when the package registry cannot be reached",
+		"Build once and promote that exact file",
 	} {
 		require.Contains(t, log.String(), want)
 	}
