@@ -1958,7 +1958,9 @@ the public record of when the signature was made; the signature is still
 checked against your key. With `public`, leave the flag out.
 
 **What the pull-request gate does not check.** `check-l3-isolation` checks the
-repository's `.forgejo/workflows` directory. It finds the release workflows
+repository's `.forgejo/workflows` directory. `prepare-release.yml` runs the
+same check on the release request commit before any job holds a key, so a
+direct push or a skipped gate stops the release instead. It finds the release workflows
 itself, whatever their file names: every workflow with a job that calls the
 layer's `prepare-release.yml` or `sign-and-publish-release.yml`, and none
 found fails. Every reference to the layer in the directory must be pinned

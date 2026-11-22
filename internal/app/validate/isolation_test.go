@@ -1094,3 +1094,37 @@ func TestIsolation_GitHubReleaseWorkflows(t *testing.T) {
 		})
 	}
 }
+
+// A reusable workflow of the layer knows its repository as the HTTPS URL it
+// fetched its files from, so the subject is taken in that form too and read
+// as the repository it names.
+func TestIsolation_SubjectAsARepositoryURL(t *testing.T) {
+	t.Parallel()
+
+	for subject, want := range map[string]error{
+		"examplescope/ci-layer":                            nil,
+		"https://forge.example/examplescope/ci-layer.git":  nil,
+		"https://forge.example/examplescope/ci-layer":      nil,
+		"https://forge.example/examplescope/ci-layer/":     nil,
+		"https://forge.example/ExampleScope/CI-Layer.git":  nil,
+		"https://forge.example/other/ci-layer.git":         errs.ErrValidation,
+		"https://forge.example/ci-layer.git":               errs.ErrUsage,
+		"https://forge.example/examplescope/../ci-layer":   errs.ErrUsage,
+		"http://forge.example/examplescope/ci-layer.git":   errs.ErrUsage,
+		"https://user@forge.example/examplescope/ci-layer": errs.ErrUsage,
+		"https://forge.example/examplescope/ci-layer?x=1":  errs.ErrUsage,
+		"https:///examplescope/ci-layer":                   errs.ErrUsage,
+	} {
+		t.Run(subject, func(t *testing.T) {
+			t.Parallel()
+
+			mem := testfs.NewMemory(t)
+			mem.WriteFile(".forgejo/workflows/release.yml", []byte(forgejoIsolationCleanWorkflow))
+
+			out, err := forgejoIsolation(t, mem, ".forgejo/workflows", subject, "")
+			if want == nil && err != nil || want != nil && !errors.Is(err, want) {
+				t.Fatalf("err = %v, want %v\n%s", err, want, out)
+			}
+		})
+	}
+}

@@ -14,6 +14,7 @@ import (
 
 func TestReleaseAuthorPreflight(t *testing.T) {
 	pin := "SHA256:" + strings.Repeat("A", 43)
+
 	for _, tc := range []struct {
 		label, name, email, pin string
 		sshPush                 bool

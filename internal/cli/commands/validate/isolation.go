@@ -83,7 +83,7 @@ EXAMPLE:
      --single-pin-subject example/forge-ci`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "workflows-dir", Required: true, Usage: "the repository's workflow directory, two levels below its root (for example, .forgejo/workflows)"},
-			&cli.StringFlag{Name: "single-pin-subject", Required: true, Usage: "owner/repository of the engine: the workflows that call its release entry points are the release workflows, and its references must agree on one commit and one forge across the workflow directory (for example, example/forge-ci)"},
+			&cli.StringFlag{Name: "single-pin-subject", Required: true, Usage: "owner/repository of the engine, or its HTTPS repository URL: the workflows that call its release entry points are the release workflows, and its references must agree on one commit and one forge across the workflow directory (for example, example/forge-ci)"},
 			&cli.StringFlag{Name: "single-pin-input", Value: "forge-ci-sha", Usage: "input of the subject's reusable workflows that repeats their commit pin; empty checks none"},
 			&cli.StringFlag{Name: "contract-root", Usage: "trusted checkout of --single-pin-subject at the caller's pin; reject undeclared action/workflow inputs against its YAML, without fetching anything"},
 			&cli.StringSliceFlag{

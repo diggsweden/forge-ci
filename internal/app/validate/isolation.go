@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"maps"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -75,6 +76,13 @@ type IsolationInput struct {
 // `::error file=…,line=…::`; elsewhere a plain `Error:` line) and the call
 // returns a wrapped errs.ErrValidation.
 func Isolation(out io.Writer, annot output.Annotator, in IsolationInput) error {
+	subject, err := engineRepository(in.SinglePinSubject)
+	if err != nil {
+		return err
+	}
+
+	in.SinglePinSubject = subject
+
 	literalInputs, err := subjectInputs(in)
 	if err != nil {
 		return err
@@ -241,6 +249,32 @@ func perFile(files []releaseFile, check func([]byte) []validate.IsolationViolati
 
 // subjectInputs refuses a call without a subject, and returns the parsed
 // literal inputs.
+// engineRepository reads the subject as owner/repository, or as the HTTPS
+// URL of the repository, which is how a reusable workflow of the layer knows
+// the repository it fetched its own files from. The repository is the URL's
+// path without a .git suffix; whether its host is the forge of the run is
+// the address check's to say, for every reference that writes one.
+func engineRepository(subject string) (string, error) {
+	if !strings.Contains(subject, "://") {
+		return subject, nil
+	}
+
+	address, err := url.Parse(subject)
+	if err != nil || address.Scheme != "https" || address.Host == "" || address.User != nil ||
+		address.RawQuery != "" || address.Fragment != "" || address.Opaque != "" {
+		return "", fmt.Errorf("--single-pin-subject %q is neither owner/repository nor an HTTPS repository URL without credentials, query or fragment: %w", subject, errs.ErrUsage)
+	}
+
+	repository := strings.TrimSuffix(strings.Trim(address.Path, "/"), ".git")
+	components := strings.Split(repository, "/")
+
+	if len(components) < 2 || slices.ContainsFunc(components, func(c string) bool { return c == "" || c == "." || c == ".." }) {
+		return "", fmt.Errorf("--single-pin-subject %q names no owner/repository path: %w", subject, errs.ErrUsage)
+	}
+
+	return repository, nil
+}
+
 func subjectInputs(in IsolationInput) ([]literalInput, error) {
 	if in.SinglePinSubject == "" {
 		return nil, fmt.Errorf("--single-pin-subject names the engine whose release entry points find the release workflows, and none is given: %w", errs.ErrUsage)

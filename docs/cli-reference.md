@@ -6274,7 +6274,7 @@ EXAMPLE:
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
 | `--workflows-dir` | the repository's workflow directory, two levels below its root (for example, .forgejo/workflows) (required) | string | `""` | n/a |
-| `--single-pin-subject` | owner/repository of the engine: the workflows that call its release entry points are the release workflows, and its references must agree on one commit and one forge across the workflow directory (for example, example/forge-ci) (required) | string | `""` | n/a |
+| `--single-pin-subject` | owner/repository of the engine, or its HTTPS repository URL: the workflows that call its release entry points are the release workflows, and its references must agree on one commit and one forge across the workflow directory (for example, example/forge-ci) (required) | string | `""` | n/a |
 | `--single-pin-input` | input of the subject's reusable workflows that repeats their commit pin; empty checks none | string | `"forge-ci-sha"` | n/a |
 | `--contract-root` | trusted checkout of --single-pin-subject at the caller's pin; reject undeclared action/workflow inputs against its YAML, without fetching anything | string | `""` | n/a |
 | `--literal-input` | input of the subject's reusable workflows that a caller must pass as a literal, as NAME or NAME=SHAPE with SHAPE sha256, image-digest or enum:VALUE/VALUE (repeatable; replaces the default list) | string | `"signer-image=image-digest", "cosign-public-key-sha256=sha256", "transparency-log=enum:none/public", "enforce-lint=enum:true/false", "enforce-vulnerabilities=enum:true/false", "enforce-application-tests=enum:true/false", "enforce-reproducible-builds=enum:true/false"` | n/a |

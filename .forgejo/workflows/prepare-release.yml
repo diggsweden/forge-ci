@@ -389,6 +389,23 @@ jobs:
           source ./.forge-ci-helpers/.engine/bin/lib-forge-ci.sh
           run_forge_ci platform checkout
 
+      # The caller's workflows at the release request commit, before the
+      # sign jobs run: the check-l3-isolation rules, enforced on the release
+      # itself so a direct push or a skipped pull-request gate cannot pass
+      # them by. The release workflows are found by what they call, so the
+      # caller's workflow file name is not needed. The helpers checkout is
+      # the layer at the caller's pin, whose declarations the inputs are
+      # checked against.
+      - name: Check release isolation of the caller's workflows
+        env:
+          FORGE_CI_REPOSITORY_URL: ${{ needs.coordinates.outputs.helpers_repository }}
+        run: |
+          set -euo pipefail
+          # shellcheck source=/dev/null
+          source ./.forge-ci-helpers/.engine/bin/lib-forge-ci.sh
+          run_forge_ci validate isolation --workflows-dir .forgejo/workflows \
+            --single-pin-subject "${FORGE_CI_REPOSITORY_URL:?}" --contract-root .forge-ci-helpers
+
       # One matrix row a planned family, [] for none. A planned family the
       # caller gave no runtime image stops the release here. A sign.method,
       # sign.key or sign.transparency the release does not use is a warning

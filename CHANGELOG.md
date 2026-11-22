@@ -61,6 +61,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `forge-ci-sha`, and `--literal-input` the signer image, key digest,
   transparency-log and `enforce-*` inputs. `check-l3-isolation`'s
   `signing-secrets` defaults to empty, the engine's names.
+- **Breaking:** Forgejo's `prepare-release.yml` runs `validate isolation`
+  over the caller's `.forgejo/workflows` at the release request commit, in
+  its plan job and before any job holds a key, and stops the release on a
+  violation, so a direct push or a skipped pull-request gate no longer
+  passes the rules by. `--single-pin-subject` also takes the HTTPS URL of
+  the engine repository.
 - `validate isolation --single-pin-subject`, and so the `check-l3-isolation`
   action, takes a reference for the subject only when it names that
   repository, refuses one that writes another forge address than the forge
