@@ -65,6 +65,14 @@ func PrivilegedActions() []string {
 // layerActionDir is the path of the layer's actions in its repository.
 const layerActionDir = "/.forgejo/actions/"
 
+// NamesLayerAction reports a remote uses: at the path of a layer action,
+// whichever repository it names.
+func NamesLayerAction(uses string) bool {
+	_, ok := layerActionName(uses)
+
+	return ok
+}
+
 // layerActionName returns the layer action a remote uses: names, by its
 // directory. Which repository and pin it names is the pin check's.
 func layerActionName(uses string) (string, bool) {

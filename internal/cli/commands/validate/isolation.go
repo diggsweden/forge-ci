@@ -52,9 +52,11 @@ A local reusable workflow a release workflow calls (uses:
 ./.forgejo/workflows/...), directly or through another, runs in the
 release: its jobs are held to the same rules, and one that is missing fails.
 Every uses: in the release workflows, in those local workflows and in the
-local actions they use must be a path in the repository or a reference to
-the subject, and a local action must be a composite action: no third-party
-action, docker:// image or Node action runs in the release. A job's
+local actions they use must be a path in the repository, a reference to
+the subject, or a third-party action pinned to a full 40-hex commit, and a
+local action must be a composite action. A job that holds a secret other
+than the job token and DEPENDENCY_* credentials runs no third-party action,
+and a tag, branch, short commit, docker:// image or Node action fails. A job's
 container image and each service image there is pinned by digest
 (@sha256:...) or is one repository variable (${{ vars.NAME }}); a tag or an
 expression from an input or the event fails.

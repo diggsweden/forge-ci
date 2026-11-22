@@ -14,16 +14,33 @@ import (
 	"gopkg.in/yaml.v3"
 
 	domaincontainer "github.com/diggsweden/forge-ci/internal/domain/container"
+	"github.com/diggsweden/forge-ci/internal/domain/validate"
 )
 
-// foreignActionViolations holds what the release runs to the repository and
-// the subject: every uses: in the release workflows, in each local workflow
-// they call and in each local action they use must be a path in the
-// repository or a reference to the subject, and a local action must be a
-// composite action. A third-party action, a docker:// image or a Node action
-// in a release job is code that no reviewed commit of the repository or the
-// engine pins. The local actions are followed in turn, and returned: their
-// references to the subject are held to the pin and address checks too.
+// pinnedThirdParty matches an action, by owner/repository or by its address,
+// at a full 40-hex commit.
+var pinnedThirdParty = regexp.MustCompile(`^(?:https://[A-Za-z0-9.-]+(?::[0-9]+)?/)?[\w.-]+(?:/[\w.-]+)+@[0-9a-f]{40}$`)
+
+// isPinnedThirdPartyAction reports a remote action at a full commit. A
+// reusable workflow is not one: its jobs cannot be read here. Neither is a
+// path that climbs, or one under the layer's action directory: the secret
+// rule trusts that path as the layer's, so only the subject may use it.
+func isPinnedThirdPartyAction(uses string) bool {
+	name, _, _ := strings.Cut(uses, "@")
+
+	return pinnedThirdParty.MatchString(uses) && !isYAMLFile(name) && !validate.NamesLayerAction(uses) &&
+		!slices.ContainsFunc(strings.Split(name, "/"), func(part string) bool { return part == "." || part == ".." })
+}
+
+// foreignActionViolations holds what the release runs to known code: every
+// uses: in the release workflows, in each local workflow they call and in
+// each local action they use must be a path in the repository, a reference
+// to the subject, or a third-party action pinned to a full commit, and a
+// local action must be a composite action. A job that holds a real secret
+// runs none of the third-party ones: jobTokenViolations allows it only the
+// layer's engine actions. The local actions are followed in turn, and
+// returned: their references to the subject are held to the pin and address
+// checks too.
 func foreignActionViolations(in IsolationInput, files []releaseFile) ([]releaseFile, []fileViolation) {
 	root := repositoryRoot(in)
 	seen := map[string]bool{}
@@ -50,8 +67,10 @@ func foreignActionViolations(in IsolationInput, files []releaseFile) ([]releaseF
 			switch {
 			case referencesSubject(ref.value, in.SinglePinSubject):
 			case !strings.HasPrefix(ref.value, "./"):
-				violations = append(violations, fileViolation{File: file.Path, Line: ref.line, Msg: fmt.Sprintf(
-					"%s is neither a path in this repository nor %s: a release runs only the repository's own actions and the subject's", ref.value, in.SinglePinSubject)})
+				if !isPinnedThirdPartyAction(ref.value) {
+					violations = append(violations, fileViolation{File: file.Path, Line: ref.line, Msg: fmt.Sprintf(
+						"%s is neither a path in this repository, nor %s, nor an action pinned to a full 40-hex commit", ref.value, in.SinglePinSubject)})
+				}
 			case isYAMLFile(ref.value):
 				// A local workflow: calledLocalWorkflows reads it.
 			default:

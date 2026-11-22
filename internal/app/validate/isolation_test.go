@@ -45,8 +45,8 @@ jobs:
 ` + isolationEntry
 
 // foreignCheckout is the violation every fixture that uses actions/checkout
-// also has: a release runs only the repository's and the subject's actions.
-const foreignCheckout = "actions/checkout@v5 is neither a path in this repository nor examplescope/ci-layer"
+// also has: it is pinned to a tag, not a full commit.
+const foreignCheckout = "actions/checkout@v5 is neither a path in this repository, nor examplescope/ci-layer"
 
 func runIsolation(t *testing.T, body string) (string, error) {
 	t.Helper()

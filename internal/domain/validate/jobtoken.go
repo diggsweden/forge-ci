@@ -91,6 +91,19 @@ func jobTokenViolations(workflowEnv yaml.Node, jobs map[string]yaml.Node, cfg Is
 	for _, name := range sortedKeys(jobs) {
 		job := jobs[name]
 
+		// An input of a local workflow reaches every step there under
+		// another name, where the called job's own check cannot see a secret.
+		if strings.HasPrefix(scalarValue(mappingValue(&job, "uses")), "./") {
+			refs, err := findSecretRefsMatching(mappingValue(&job, "with"), isOtherToken)
+			if err != nil {
+				violations = append(violations, IsolationViolation{Line: job.Line, Msg: fmt.Sprintf("job %q: %v", name, err)})
+			}
+
+			for _, ref := range refs {
+				violations = append(violations, IsolationViolation{Line: ref.line, Msg: fmt.Sprintf("job %q passes secret %s to a local workflow as an input%s", name, ref.describe(), secretJobMayRun)})
+			}
+		}
+
 		step, runs, ok := engineOnlySteps(job)
 		if ok {
 			continue

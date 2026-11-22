@@ -38,12 +38,26 @@ func TestIsolation_ReleaseRunsOnlyLocalAndSubjectActions(t *testing.T) {
 		files map[string]string
 		want  string
 	}{
-		"the subject's action":      {jobs: job(subjectAction)},
-		"a local composite action":  {jobs: job("./.forgejo/actions/pack"), files: map[string]string{".forgejo/actions/pack/action.yml": composite}},
-		"an action.yaml":            {jobs: job("./.forgejo/actions/pack"), files: map[string]string{".forgejo/actions/pack/action.yaml": composite}},
-		"a third-party action":      {jobs: job("https://code.forgejo.org/actions/setup-go@1111111111111111111111111111111111111111"), want: "https://code.forgejo.org/actions/setup-go@1111111111111111111111111111111111111111 is neither a path in this repository nor examplescope/ci-layer"},
-		"a bare third-party action": {jobs: job("actions/checkout@1111111111111111111111111111111111111111"), want: "actions/checkout@1111111111111111111111111111111111111111 is neither a path"},
-		"a container image":         {jobs: job("docker://alpine:3"), want: "docker://alpine:3 is neither a path"},
+		"the subject's action":                    {jobs: job(subjectAction)},
+		"a local composite action":                {jobs: job("./.forgejo/actions/pack"), files: map[string]string{".forgejo/actions/pack/action.yml": composite}},
+		"an action.yaml":                          {jobs: job("./.forgejo/actions/pack"), files: map[string]string{".forgejo/actions/pack/action.yaml": composite}},
+		"a pinned action by address":              {jobs: job("https://code.forgejo.org/actions/setup-go@1111111111111111111111111111111111111111")},
+		"a pinned action":                         {jobs: job("example/tool@1111111111111111111111111111111111111111")},
+		"a pinned action, write token":            {jobs: "  extra:\n    permissions:\n      packages: write\n    steps:\n      - uses: actions/setup-node@1111111111111111111111111111111111111111\n"},
+		"a pinned action with a dependency token": {jobs: "  extra:\n    env:\n      T: ${{ secrets.DEPENDENCY_TOKEN }}\n    steps:\n      - uses: example/tool@1111111111111111111111111111111111111111\n"},
+		"a pinned action beside a real secret":    {jobs: "  extra:\n    env:\n      T: ${{ secrets.NPM_TOKEN }}\n    steps:\n      - uses: example/tool@1111111111111111111111111111111111111111\n", want: `references secret "NPM_TOKEN"`},
+		"a pinned action beside a signing secret": {jobs: "  extra:\n    env:\n      K: ${{ secrets.GPG_SIGNING_KEY }}\n    steps:\n      - uses: example/tool@1111111111111111111111111111111111111111\n", want: `references signing secret "GPG_SIGNING_KEY"`},
+		"a real secret as a local workflow input": {
+			jobs:  "  images:\n    uses: ./" + images + "\n    with:\n      t: ${{ secrets.NPM_TOKEN }}\n",
+			files: map[string]string{images: "on:\n  workflow_call: {}\njobs:\n  build:\n    steps:\n      - uses: example/tool@1111111111111111111111111111111111111111\n"},
+			want:  `passes secret "NPM_TOKEN" to a local workflow`,
+		},
+		"another repository at a layer action's path": {jobs: job("evil/repo/.forgejo/actions/upload-dist@1111111111111111111111111111111111111111"), want: "upload-dist@1111111111111111111111111111111111111111 is neither a path"},
+		"a third-party reusable workflow":             {jobs: "  other:\n    uses: evil/repo/.github/workflows/x.yml@1111111111111111111111111111111111111111\n", want: "x.yml@1111111111111111111111111111111111111111 is neither a path"},
+		"a climbing action path":                      {jobs: job("actions/../../x@1111111111111111111111111111111111111111"), want: "is neither a path"},
+		"a third-party action at a tag":               {jobs: job("https://code.forgejo.org/actions/setup-go@v5"), want: "https://code.forgejo.org/actions/setup-go@v5 is neither a path in this repository, nor examplescope/ci-layer"},
+		"a third-party action at a short commit":      {jobs: job("actions/checkout@1111111"), want: "actions/checkout@1111111 is neither a path"},
+		"a container image":                           {jobs: job("docker://alpine:3"), want: "docker://alpine:3 is neither a path"},
 		"a local Node action": {
 			jobs: job("./.forgejo/actions/pack"), files: map[string]string{".forgejo/actions/pack/action.yml": "runs:\n  using: node20\n  main: index.js\n"},
 			want: `local action ./.forgejo/actions/pack runs "node20": a release runs composite actions only`,

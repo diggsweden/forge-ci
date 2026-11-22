@@ -1995,9 +1995,12 @@ A local reusable workflow a release workflow calls
 release: its jobs are held to the same secret, `secrets: inherit`, checkout
 and `setup-toolchain` `cache: false` rules, and one that is missing fails.
 Every `uses:` in those files, and in the local actions they use, must be a
-path in the repository or the layer at its one full-commit pin on the forge
-of the run, and a local action must be a composite action: no third-party action, `docker://` image or Node
-action runs in the release. A job's `container:` image and each `services:`
+path in the repository, the layer at its one full-commit pin on the forge
+of the run, or a third-party action pinned to a full 40-hex commit, and a
+local action must be a composite action. A job that holds a secret other
+than the job token and `DEPENDENCY_*` runs no third-party action, and a tag,
+branch, short commit, `docker://` image or Node action fails. A job's
+`container:` image and each `services:`
 image is pinned by digest (`@sha256:`) or taken from one repository variable
 (`${{ vars.CI_JOB_IMAGE }}`); a tag such as `:latest`, or an image from an
 input or the event, fails.
@@ -2265,7 +2268,7 @@ that the consumer and the layer agree on the lab's runner, not on yours.
 | The request is refused as ahead of or behind the release branch | See [The request is the head of the release branch](#the-request-is-the-head-of-the-release-branch). |
 | GoReleaser stops with `git is in a dirty state` | A step left an untracked file in the checkout, such as `release-notes.md`; render it in `$RUNNER_TEMP`. |
 | `lint-nanolinter` stops: no `nanolinter` | `CI_JOB_IMAGE` does not carry nanolinter. |
-| `check-l3-isolation` fails a pull request | No workflow that calls one of the layer's signer workflows, a reference not at the one full commit, a signing secret in a job other than the calls of those workflows, `secrets: inherit`, a third-party action, a job or service image neither digest-pinned nor one repository variable, a `run:` step or project-code action beside a secret other than the job token and `DEPENDENCY_*`, a prepare call without a secret the sign job takes, or a signer image, key digest, transparency-log or `enforce-*` setting that is not a literal. |
+| `check-l3-isolation` fails a pull request | No workflow that calls one of the layer's signer workflows, a reference not at the one full commit, a signing secret in a job other than the calls of those workflows, `secrets: inherit`, a third-party action not pinned to a full commit or beside a real secret, a job or service image neither digest-pinned nor one repository variable, a `run:` step or project-code action beside a secret other than the job token and `DEPENDENCY_*`, a prepare call without a secret the sign job takes, or a signer image, key digest, transparency-log or `enforce-*` setting that is not a literal. |
 | A signing job cannot start its container, after the final tag exists | The signer image reference names no image. Publish the image it names and re-run the failed jobs. |
 | A package publish answers 401 or 403 | The automatic token cannot write packages; supply one with `write:package`. See [forgejo](providers.md#forgejo). |
 | Plain `cosign verify` fails on a release | Signatures made with `transparency-log: none` need `--insecure-ignore-tlog`; see [The transparency log](#the-transparency-log). |

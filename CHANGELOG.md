@@ -98,11 +98,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the same rules.
 - **Breaking:** `validate isolation --single-pin-subject`, and so
   `check-l3-isolation`, refuses a `uses:` in the release workflow, the local
-  workflows it calls or their local actions that is neither a path in the
-  repository nor the subject, and a local action that is not a composite
-  action. A third-party action, a `docker://` image or a Node action in a
-  release job now fails. Move it out of the release, or replace it with an
-  engine action.
+  workflows it calls or their local actions that is not a path in the
+  repository, the subject or a third-party action pinned to a full 40-hex
+  commit, and a local action that is not a composite action. A pinned
+  third-party action is allowed in a release job that holds only the job
+  token or `DEPENDENCY_*` credentials, whatever its permissions. One at a
+  tag, branch or short commit, one in a job with any other secret, a
+  `docker://` image or a Node action fails, and so does a real secret passed
+  to a local workflow as an input.
 - **Breaking:** `validate isolation`, and so `check-l3-isolation`, lets a
   release job hold a secret other than the job token and read-only
   `DEPENDENCY_*` credentials, in any step, under any name or through the
