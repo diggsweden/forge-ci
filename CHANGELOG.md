@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A Forgejo job takes the layer's binary from the runner's cache when the
+  cache holds it, and downloads it from the forge only otherwise, in place
+  of one download per job.
 - Opt-in Node-free Forgejo Actions caching for `build cargo fetch --cache`.
   Only crates.io archives verified against Cargo.lock are cached, under a
   dependency-only key; a hit needs every locked crate, and the command falls

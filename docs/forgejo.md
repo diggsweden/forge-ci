@@ -131,10 +131,10 @@ Beside the instance itself (Git over HTTPS and SSH, the API, the package
 registry and run artifacts), jobs reach these hosts. An instance with
 restricted egress allows them or mirrors what they serve.
 
-The layer's binary is no host of its own: every job that runs the CLI makes
-one HTTPS request for it to the same instance, to the generic package registry
-under `/api/packages/`, without credentials and without a redirect to another
-host.
+The layer's binary is no host of its own: a job that runs the CLI and does
+not find it in the runner's cache makes one HTTPS request for it to the same
+instance, to the generic package registry under `/api/packages/`, without
+credentials and without a redirect to another host.
 
 | Job | Host | For |
 |---|---|---|
@@ -540,7 +540,7 @@ architecture by that architecture's line.
   (`GITHUB_SERVER_URL`, `GITHUB_ACTION_REPOSITORY`). A workflow, which checks
   the layer out itself, passes the repository it cloned
   (`FORGE_CI_REPOSITORY_URL`).
-- **How.** One HTTPS request without credentials, following a redirect only
+- **How.** Unless the runner's cache holds it, one HTTPS request without credentials, following a redirect only
   to HTTPS, refusing more than 128 MiB, into a temporary file beside the
   destination.
 - **Verified before it exists.** The file is moved into place only when its
@@ -553,6 +553,17 @@ architecture by that architecture's line.
   discards after the step, a directory named by the digest in the job's
   temporary directory (`RUNNER_TEMP`); `setup-forge-ci` puts it on `PATH`.
   A job downloads once, and later steps find the file.
+- **From the runner's cache, where it has one.** A Forgejo runner gives a
+  job the address of its cache service (`ACTIONS_CACHE_URL`). A job that
+  downloads offers the verified binary to that cache, and a later job of the
+  repository takes it from there and downloads nothing from the forge, for
+  as long as the runner keeps the entry and the pinned binary is the same.
+  Jobs that start together before the first has saved each download, and a
+  pull request saves for itself alone. No credential is read and no Node is
+  needed. The cache is trusted as little as the registry: its bytes are
+  moved into place only when they are the recorded ones. A cache that is
+  absent, does not answer or holds something else costs a download and
+  never the job.
 
 The package registry is storage and not a trust anchor. Whoever can write the
 owner's packages can make a job fail, and cannot make it run other bytes: a

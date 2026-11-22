@@ -10,7 +10,8 @@
 # The checkout tracks one line per architecture, bin/forge-ci-linux-<arch>.sha256,
 # and not the binary. A job takes the line of its host's architecture and
 # downloads the binary by that digest from the generic packages of the forge
-# that serves the layer, without credentials. The storage is not
+# that serves the layer, without credentials, unless the runner's cache
+# already holds it. The storage is not
 # trusted: the layer's binary, and under SIGNER_STRICT=1 any FORGE_CI_BIN
 # override, must match the recorded checksum before it runs, including a
 # caller's version probe. A non-strict override is an internal test and
@@ -217,10 +218,82 @@ download_forge_ci() {
   fi
 }
 
+# The runner's cache stands in front of the download. A Forgejo runner gives
+# every job the address of its cache service in ACTIONS_CACHE_URL; the address
+# is the job's permission to use it, so no credential is read. The cache is
+# trusted as little as the forge's storage: what it returns is moved into
+# place only when it is the bytes the digest names. Whatever goes wrong with
+# the cache is a miss, and never fails the job.
+
+# _forge_ci_cache_api prints the root of the runner's cache service, and fails
+# when the job has none that speaks this protocol.
+_forge_ci_cache_api() {
+  local root=${ACTIONS_CACHE_URL:-}
+
+  [ -z "${ACTIONS_CACHE_SERVICE_V2:-}" ] || return 1
+  [[ "${root}" =~ ^https?://[^?#@[:space:]]+$ ]] || return 1
+  command -v curl >/dev/null 2>&1 || return 1
+  printf '%s/_apis/artifactcache\n' "${root%/}"
+}
+
+# _forge_ci_cache_curl is one request to the cache: no redirect is followed,
+# and a slow or absent service costs seconds, not the job. The two transfers
+# of the binary have two minutes; the short questions pass their own limit.
+_forge_ci_cache_curl() {
+  curl --proto '=http,https' --fail --silent --connect-timeout 5 --max-time 120 \
+    --header 'Accept: application/json;api-version=6.0-preview.1' "$@" 2>/dev/null
+}
+
+# _forge_ci_cache_restore DIGEST ARCH DESTINATION puts the binary the cache
+# holds for that digest at the destination, when it is those bytes.
+_forge_ci_cache_restore() {
+  local digest=$1 arch=$2 destination=$3
+  local api answer location partial actual
+
+  api=$(_forge_ci_cache_api) || return 1
+  answer=$(_forge_ci_cache_curl --max-time 20 --max-filesize 65536 \
+    "${api}/cache?keys=forge-ci-linux-${arch}-${digest}&version=${digest}") || return 1
+  [[ "${answer}" =~ \"archiveLocation\"[[:space:]]*:[[:space:]]*\"(https?://[^\"\\?#@[:space:]]+)\" ]] || return 1
+  location=${BASH_REMATCH[1]}
+  partial=$(mktemp "${destination%/*}/.forge-ci.XXXXXX") || return 1
+  if _forge_ci_cache_curl --max-filesize "${HELPERS_ENGINE_MAX_BYTES}" --output "${partial}" -- "${location}"; then
+    actual=$(sha256sum -- "${partial}") || actual=
+    if [ "${actual%% *}" = "${digest}" ] && chmod 0755 -- "${partial}" && mv -f -- "${partial}" "${destination}"; then
+      return 0
+    fi
+  fi
+  rm -f -- "${partial}"
+  return 1
+}
+
+# _forge_ci_cache_save DIGEST ARCH BINARY offers the verified binary to the
+# cache for the jobs that follow. It always succeeds: a cache that refuses
+# leaves the next job to download.
+_forge_ci_cache_save() {
+  local digest=$1 arch=$2 binary=$3
+  local api answer id size
+
+  api=$(_forge_ci_cache_api) || return 0
+  size=$(wc -c <"${binary}") || return 0
+  size=${size//[!0-9]/}
+  [ -n "${size}" ] && [ "${size}" -gt 0 ] || return 0
+  answer=$(_forge_ci_cache_curl --max-time 20 --max-filesize 65536 --request POST --header 'Content-Type: application/json' \
+    --data "{\"key\":\"forge-ci-linux-${arch}-${digest}\",\"version\":\"${digest}\",\"cacheSize\":${size}}" \
+    "${api}/caches") || return 0
+  [[ "${answer}" =~ \"cacheId\"[[:space:]]*:[[:space:]]*([0-9]+) ]] || return 0
+  id=${BASH_REMATCH[1]}
+  _forge_ci_cache_curl --output /dev/null --request PATCH --header 'Content-Type: application/octet-stream' \
+    --header "Content-Range: bytes 0-$((size - 1))/*" --data-binary "@${binary}" "${api}/caches/${id}" || return 0
+  _forge_ci_cache_curl --max-time 20 --output /dev/null --request POST --header 'Content-Type: application/json' \
+    --data "{\"size\":${size}}" "${api}/caches/${id}" || return 0
+  echo "forge-ci: saved the binary to the runner's cache for the jobs that follow" >&2
+}
+
 # fetch_forge_ci makes the layer's binary present in this job: it does
-# nothing when the file is there with the recorded digest, and downloads it
-# otherwise. It runs nothing and reads no credential, so a signer job calls it
-# in a step of its own before the toolchain check and before any secret.
+# nothing when the file is there with the recorded digest, takes it from the
+# runner's cache when that holds it, and downloads it otherwise. It runs
+# nothing and reads no credential, so a signer job calls it in a step of its
+# own before the toolchain check and before any secret.
 fetch_forge_ci() {
   local binary directory actual url
 
@@ -238,7 +311,12 @@ fetch_forge_ci() {
     echo "ERROR: the directory for the forge-ci binary is not this job's own: ${directory} (downloading ${url})" >&2
     return 78
   fi
-  download_forge_ci "${url}" "${HELPERS_ENGINE_RECORDED}" "${binary}"
+  if _forge_ci_cache_restore "${HELPERS_ENGINE_RECORDED}" "${HELPERS_ENGINE_ARCH}" "${binary}"; then
+    echo "forge-ci: took the binary from the runner's cache, and downloaded nothing" >&2
+    return 0
+  fi
+  download_forge_ci "${url}" "${HELPERS_ENGINE_RECORDED}" "${binary}" || return
+  _forge_ci_cache_save "${HELPERS_ENGINE_RECORDED}" "${HELPERS_ENGINE_ARCH}" "${binary}"
 }
 
 # verify_forge_ci checks the selected binary and records its path in
