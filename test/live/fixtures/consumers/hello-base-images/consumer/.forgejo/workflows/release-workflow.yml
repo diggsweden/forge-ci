@@ -25,7 +25,8 @@
 # CI_RUNNER_LABEL, RELEASE_GIT_HOST_KEY_FINGERPRINT, COSIGN_PUBLIC_KEY and
 # BASE_IMAGE_REPOSITORY, the one repository the base images live in (for
 # example FORGE_HOST/OWNER/REPOSITORY-base), and the secrets used below.
-# RELEASE_REGISTRY_TOKEN may write packages of the repository's owner.
+# RELEASE_REGISTRY_TOKEN may write packages of the repository's owner, and
+# delete versions, so the lifecycle can remove its staging tags.
 # For a private parent, set PARENT_REGISTRY_REPOSITORY to the exact parent
 # repository (host/path), PARENT_REGISTRY_USER, and PARENT_REGISTRY_READ_TOKEN
 # to a short-lived pull-only credential. Configure these before repinning an

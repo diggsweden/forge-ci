@@ -5,8 +5,8 @@
 # workflow-call-secrets-contract: RELEASE_REGISTRY_TOKEN PARENT_REGISTRY_READ_TOKEN
 # (The platform rejects declared workflow_call.secrets, and test/forgejoguard
 #  holds this file to that. This comment is the authoritative,
-#  machine-readable owner instead; check-l3-isolation's sibling-mode
-#  lockstep invariant parses it.)
+#  machine-readable owner instead; test/forgejoguard holds the isolation
+#  check's signer list to it.)
 #
 # Builds one stage of the caller's own graph of base images: a root, or the
 # children of the one parent the caller authenticated, one child or all of

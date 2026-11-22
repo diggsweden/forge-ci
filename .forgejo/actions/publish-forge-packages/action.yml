@@ -4,7 +4,7 @@
 
 name: 'Publish to the forge package registry'
 description: >-
-  The publish step of a consumer's own job for a project that lists forge-packages under publish-to: one `forge-ci publish forge-packages deploy`, the command GitHub's publish-maven-github workflow and GitLab's publish-forge-packages component run. It publishes a Maven project, the packed npm tarball or exported Gradle Maven publications to the package registry of the repository's owner on this Forgejo. The job brings the toolchain, a JDK and Maven or Node (see setup-toolchain, or a job image), and runs after the release is signed and published. The step holds one credential, the token it is given, and refuses a pull-request run.
+  The publish step of a consumer's own job for a project that lists forge-packages under publish-to: one `forge-ci publish forge-packages deploy`, the command GitHub's publish-maven-github workflow and GitLab's publish-forge-packages component run. It publishes a Maven project, the packed npm tarball or exported Gradle Maven publications to the package registry of the repository's owner on this Forgejo. The job takes the toolchain, a JDK and Maven or Node, from its job image, since a release job that holds the token runs no setup-toolchain, and runs after the release is signed and published. The step holds one credential, the token it is given, and refuses a pull-request run.
 inputs:
   project-type:
     description: "Package type: maven, npm, gradle or gradle-android (exported Maven publications)."

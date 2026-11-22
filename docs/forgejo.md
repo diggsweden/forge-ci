@@ -410,7 +410,7 @@ names, which are not these.
 | `RELEASE_GPG_PRIVATE_KEY`, `RELEASE_GPG_PASSPHRASE` | OpenPGP signing key and its passphrase | `.sig` sidecars of `.deb`, `.rpm` and `.apk` packages, when `sign-distro-packages` is on, and `.asc` sidecars of the checksums and release files, when `artifacts.yml` says `sign.method: gpg`. | same names |
 | `RELEASE_GPG_FINGERPRINT` | Fingerprint the OpenPGP key must have | The same package and release file signatures: a key with another fingerprint is refused. | no such secret |
 | `RELEASE_COSIGN_PRIVATE_KEY`, `RELEASE_COSIGN_PASSPHRASE` | Cosign private key and its passphrase | Provenance, evidence and image signatures and attestations, and checksum and SBOM signatures unless `artifacts.yml` says `sign.method: gpg`. | same names, for `sign.key: env://COSIGN_KEY` |
-| `RELEASE_REGISTRY_TOKEN` | Token that may write packages of the owner, or, for images on another registry, a token for that registry | Signing, promoting and cleaning up container images, and, in the signer-image workflow, pushing the signer image and uploading the layer's binary; and publishing `.deb`, `.rpm` and `.apk` packages to the owner's registries, when `artifacts.yml` declares `distro-packages`. A release with neither an image ledger nor that block does not need it. | no such secret |
+| `RELEASE_REGISTRY_TOKEN` | Token that may write packages of the owner, or, for images on another registry, a token for that registry | Signing, promoting and cleaning up container images, and, in the signer-image workflow, pushing the signer image and uploading the layer's binary; and publishing `.deb`, `.rpm` and `.apk` packages to the owner's registries, when `artifacts.yml` declares `distro-packages`. A release with neither an image ledger nor that block does not need it. Removing staging tags, which the release and `base-image-lifecycle.yml` do once the final tag exists, takes delete permission too (`delete:packages` on GHCR). A token without it leaves the tags in place, reported. | no such secret |
 
 Every release needs `RELEASE_SSH_SIGNING_KEY`, `RELEASE_TOKEN`,
 `RELEASE_COSIGN_PRIVATE_KEY` and `RELEASE_COSIGN_PASSPHRASE`, and the prepare
@@ -1119,7 +1119,7 @@ run-base-lifecycle:
     caller-workflow: container-bases.yml
     forge-ci-repository: OWNER/forge-ci
     forge-ci-sha: PIN_FORGE_CI_SHA
-    signer-image: ${{ vars.CI_SIGNER_IMAGE }} # reviewed digest-pinned image
+    signer-image: FORGE_HOST/OWNER/forge-ci-signer@sha256:PIN_SIGNER_IMAGE_DIGEST # reviewed, written out
     cosign-public-key: ${{ vars.COSIGN_PUBLIC_KEY }}
     cosign-public-key-sha256: REVIEWED_PUBLIC_KEY_SHA256
   secrets:
@@ -1151,8 +1151,8 @@ prerequisites and rejects cancellation.
 For a downstream retry, retain the original run's ledger, SBOMs and layout
 artifacts and independent expectations. Retry the failed job and its dependants,
 not release preparation. Artifact expiry or missing evidence must fail closed.
-Candidate cleanup occurs only after authentication and consumer completion
-checks. Native cold/warm/mixed and downstream-retry live acceptance is required
+The lifecycle removes the candidate only after it has authenticated the final
+tag. Native cold/warm/mixed and downstream-retry live acceptance is required
 before a consumer adopts a published pin containing this workflow.
 
 #### Standalone stages
@@ -1435,9 +1435,11 @@ goes to the registry of the repository's owner on this Forgejo:
     name: "Publish: package"
     needs: [prepare, build, sign-and-publish]
     runs-on: ${{ fromJSON(vars.CI_RUNNER_LABEL) }}
+    # Node and npm come from the job image: a job that holds the token runs
+    # no setup-toolchain, checkout or run: step.
+    container:
+      image: ${{ vars.CI_JOB_IMAGE }}
     steps:
-      # Node and npm for the publish, as the build job installs them.
-      - uses: https://FORGE_HOST/OWNER/forge-ci/.forgejo/actions/setup-toolchain@PIN_FORGE_CI_SHA
       - uses: https://FORGE_HOST/OWNER/forge-ci/.forgejo/actions/publish-forge-packages@PIN_FORGE_CI_SHA
         with:
           project-type: npm
@@ -1453,7 +1455,7 @@ goes to the registry of the repository's owner on this Forgejo:
 |---|---|---|
 | `npm` | the one `*.tgz` in `working-directory`, under `npm-tag`, with lifecycle scripts off | the hand-off the release signed: `artifact-name` is the build job's artifact |
 | `maven` with `from-build: 'true'` | the library's POM, jar, sources and Javadoc bytes, without running Maven | the build hand-off in `working-directory`: `artifact-name` is the artifact `build-maven` uploaded for the library |
-| `maven` | `mvn deploy` in `working-directory`, with `maven-cli-opts` and `profile` | the checked-out project; this form runs the project's build with the token in reach |
+| `maven` | `mvn deploy` in `working-directory`, with `maven-cli-opts` and `profile` | the checked-out project; this form runs the project's build with the token in reach, so `check-l3-isolation` refuses it in a release workflow |
 | `gradle`, `gradle-android` | the exported Maven publications in `working-directory`, at `version` | `forge-ci build gradle export-publications` in the build job |
 
 A Maven library needs no step of its own for the hand-off. `build-maven`
@@ -1494,9 +1496,8 @@ bytes:
 [examples/maven-library/forgejo/](../examples/maven-library/forgejo/) is the
 whole pair.
 
-- The job runs on `runs-on`, the ordinary runner, and brings the toolchain:
-  a JDK and Maven, or Node; `from-build` needs neither. It holds no signing
-  key.
+- The job runs on `runs-on`, the ordinary runner, and takes Node from its job
+  image; `from-build` needs no toolchain. It holds no signing key.
 - `token` is a token that may write packages of the owner
   (`write:package`), such as `RELEASE_REGISTRY_TOKEN`. The automatic job
   token cannot write packages. The action gives the token to the deploy
@@ -2264,7 +2265,7 @@ that the consumer and the layer agree on the lab's runner, not on yours.
 | The request is refused as ahead of or behind the release branch | See [The request is the head of the release branch](#the-request-is-the-head-of-the-release-branch). |
 | GoReleaser stops with `git is in a dirty state` | A step left an untracked file in the checkout, such as `release-notes.md`; render it in `$RUNNER_TEMP`. |
 | `lint-nanolinter` stops: no `nanolinter` | `CI_JOB_IMAGE` does not carry nanolinter. |
-| `check-l3-isolation` fails a pull request | No workflow that calls the layer's `prepare-release.yml` or `sign-and-publish-release.yml`, mixed pins, a signing secret in a job other than the calls of the layer's signer workflows, a prepare call without a secret the sign job takes, or a signer image, key digest or transparency-log setting that is not a literal. |
+| `check-l3-isolation` fails a pull request | No workflow that calls one of the layer's signer workflows, a reference not at the one full commit, a signing secret in a job other than the calls of those workflows, `secrets: inherit`, a third-party action, a job or service image neither digest-pinned nor one repository variable, a `run:` step or project-code action beside a secret other than the job token and `DEPENDENCY_*`, a prepare call without a secret the sign job takes, or a signer image, key digest, transparency-log or `enforce-*` setting that is not a literal. |
 | A signing job cannot start its container, after the final tag exists | The signer image reference names no image. Publish the image it names and re-run the failed jobs. |
 | A package publish answers 401 or 403 | The automatic token cannot write packages; supply one with `write:package`. See [forgejo](providers.md#forgejo). |
 | Plain `cosign verify` fails on a release | Signatures made with `transparency-log: none` need `--insecure-ignore-tlog`; see [The transparency log](#the-transparency-log). |

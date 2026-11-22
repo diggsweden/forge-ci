@@ -448,7 +448,9 @@ contract the run reads: `forgeci`, or the account of the contract
 name the recipe.
 
 `TestForgejoLayer_RegistrySignerSmoke` is the one scenario that builds an
-image in a job: one `FROM scratch` image for linux/amd64, pushed to the
+image in a job. Its `build` job holds the registry token beside `run:` steps,
+which `validate isolation` now refuses, so the scenario stops in prepare
+until it is rebuilt on `release-images.yml`. It is written as: one `FROM scratch` image for linux/amd64, pushed to the
 forge's registry, recorded in the image ledger, signed by
 `sign-and-publish-release.yml`, and pushed a second time as a base that
 `sign-container-images.yml` signs and `verify-base-container-images.yml`

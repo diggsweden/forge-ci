@@ -5,8 +5,8 @@
 # workflow-call-secrets-contract: RELEASE_REGISTRY_TOKEN PARENT_REGISTRY_READ_TOKEN RELEASE_COSIGN_PRIVATE_KEY RELEASE_COSIGN_PASSPHRASE
 # (The platform rejects declared workflow_call.secrets, and test/forgejoguard
 #  holds this file to that. This comment is the authoritative,
-#  machine-readable owner instead; check-l3-isolation's sibling-mode
-#  lockstep invariant parses it.)
+#  machine-readable owner instead; test/forgejoguard holds the isolation
+#  check's signer list to it.)
 #
 # One cold flavor, executed as direct separately privileged jobs. The consumer
 # owns discovery, warm reuse, graph ordering and independent expected inputs;
