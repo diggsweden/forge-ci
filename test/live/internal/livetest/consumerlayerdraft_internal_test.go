@@ -11,7 +11,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
-func TestConsumerDraftLayerBindsPolicyAndGateOnlyInPrivateIndex(t *testing.T) {
+func TestConsumerDraftLayerBindsWiringOnlyInPrivateIndex(t *testing.T) {
 	t.Parallel()
 
 	for _, scenario := range []string{"draft", "published", "mixed", "no native workflows", "documentation only"} {
@@ -81,7 +81,12 @@ func TestConsumerDraftLayerBindsPolicyAndGateOnlyInPrivateIndex(t *testing.T) {
 				return
 			}
 
-			for _, path := range []string{consumerWorkflows + "/ci.yml", "policy/pin.sh", GitLabGateFile} {
+			// A policy script is no CI wiring: it keeps the marker it holds.
+			if staged := mustLayerGit(t, git, bound.stage, "show", bound.Commit+":policy/pin.sh"); staged != "pin="+pin {
+				t.Fatalf("draft bound outside the CI wiring, policy/pin.sh: %s", staged)
+			}
+
+			for _, path := range []string{consumerWorkflows + "/ci.yml", GitLabGateFile} {
 				staged := mustLayerGit(t, git, bound.stage, "show", bound.Commit+":"+path)
 				if strings.Contains(staged, pin) || !strings.Contains(staged, layer.Commit) {
 					t.Fatalf("draft not bound in %s: %s", path, staged)

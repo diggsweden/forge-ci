@@ -36,7 +36,7 @@ import (
 //
 // The consumer is HEAD of a checkout the caller names. It reaches the lab as
 // one parentless commit, as the layer does, with one difference: wherever its
-// files name the layer it pins today, they name the layer under test. What
+// CI wiring names the layer it pins today, it names the layer under test. What
 // that is, is read from the consumer's own workflows and from nothing else,
 // so the engine holds no table of consumers.
 //
@@ -661,8 +661,8 @@ type ConsumerFacts struct {
 
 // The inputs whose literal a consumer also writes where it is not an input:
 // the signer image as a job's container, the key digest in the step that
-// stages the key, both in its own policy tests. Their literal is replaced
-// wherever it stands. Every other literal is replaced as `input: literal`.
+// stages the key. Their literal is replaced wherever it stands in the CI
+// wiring. Every other literal is replaced as `input: literal`.
 // The key a replaced digest names is replaced by the lab's key wherever a
 // tracked file is that key.
 const (
@@ -672,11 +672,11 @@ const (
 )
 
 // ConsumerPlan is what a trial does to a consumer: text to replace in its
-// tracked files, and the repository variables and secrets its workflows read
+// CI wiring, and the repository variables and secrets its workflows read
 // the lab's values from.
 type ConsumerPlan struct {
 	Pin ConsumerPin
-	// Replace is old, new pairs, applied to every tracked text file at once.
+	// Replace is old, new pairs, applied to every CI wiring file at once.
 	Replace        []string
 	Variables      map[string]string
 	Secrets        map[string]string
@@ -735,10 +735,9 @@ func MergeConsumerVariables(plan, runtime map[string]string) (map[string]string,
 // PlanConsumer reads the consumer's workflows and plans the trial.
 //
 // The coordinates and the pin are replaced by the layer's, as Render does for
-// a fixture's placeholders. A consumer's whole tree is rendered and not only
-// its workflows, because a consumer holds its documentation, its policy tests
-// and its release gate to the pin its workflows use, and would fail its own
-// checks on a tree that disagreed with itself.
+// a fixture's placeholders, in the consumer's CI wiring alone (ciWiring): a
+// real engine upgrade repins those files and no other, so the consumer's
+// documentation, examples and tests keep the names it wrote.
 //
 // Each fact is taken the way the consumer passes it. From a variable or a
 // secret, `input: ${{ vars.NAME }}`, the plan sets NAME. As a literal, the
@@ -1311,22 +1310,20 @@ func (consumer Consumer) commitSnapshot(ctx context.Context) (string, error) {
 	return consumer.commit(ctx, consumerBaseMessage)
 }
 
-// commitRendered writes the plan into the staged tree and commits it without
-// a parent, so the forge receives no history.
+// commitRendered writes the plan into the staged tree's CI wiring and commits
+// it without a parent, so the forge receives no history.
 func (consumer Consumer) commitRendered(ctx context.Context, plan ConsumerPlan) (string, error) {
 	pristineGo, err := consumer.gitlabChecksNeedBuildah(ctx)
 	if err != nil {
 		return "", err
 	}
 
-	// Only text files that hold something to replace are read.
-	targets := make([]string, 0, len(plan.Replace)/2)
-	for index := 0; index < len(plan.Replace); index += 2 {
-		targets = append(targets, plan.Replace[index])
-	}
+	if err = consumer.eachWiringFile(ctx, pristineGo, func(mode, path string, content []byte) error {
+		if rendered := plan.Render(string(content)); rendered != string(content) {
+			return consumer.stageFile(ctx, mode, path, rendered)
+		}
 
-	if err = consumer.eachFileWith(ctx, pristineGo, targets, func(mode, path string, content []byte) error {
-		return consumer.stageFile(ctx, mode, path, plan.Render(string(content)))
+		return nil
 	}); err != nil {
 		return "", err
 	}
@@ -1336,6 +1333,62 @@ func (consumer Consumer) commitRendered(ctx context.Context, plan ConsumerPlan) 
 	}
 
 	return consumer.commit(ctx, consumerBaseMessage)
+}
+
+// ciWiringPaths are where a consumer wires its CI: the files a real engine
+// upgrade repins and the only ones the lab renders the engine into. A
+// consumer's documentation, examples and tests keep their own names.
+var ciWiringPaths = []string{".forgejo/workflows/", ".github/workflows/", ".gitlab/", ".gitlab-ci.yml"}
+
+// ciWiring reports whether path is CI wiring: under one of ciWiringPaths at
+// the root, or inside a lab fixture tree test/live/<name>/, which holds
+// either such paths or a workflows/ directory of its own.
+func ciWiring(path string) bool {
+	if rest, found := strings.CutPrefix(path, "test/live/"); found {
+		if _, inner, nested := strings.Cut(rest, "/"); nested {
+			if strings.HasPrefix(inner, "workflows/") {
+				return true
+			}
+
+			path = inner
+		}
+	}
+
+	return slices.ContainsFunc(ciWiringPaths, func(wiring string) bool {
+		return path == wiring || (strings.HasSuffix(wiring, "/") && strings.HasPrefix(path, wiring))
+	})
+}
+
+// eachWiringFile hands fn every regular file of the consumer's CI wiring, with
+// its mode and content; a link is no file. With pristineGo only its Forgejo
+// workflows are handed, as eachFileWith does.
+func (consumer Consumer) eachWiringFile(ctx context.Context, pristineGo bool, fn func(mode, path string, content []byte) error) error {
+	listed, err := consumer.git.output(ctx, consumer.stage, nil, "ls-tree", "-r", "-z", consumer.Commit)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range strings.FieldsFunc(string(listed), func(r rune) bool { return r == 0 }) {
+		// `<mode> blob <id>\t<path>`
+		header, path, _ := strings.Cut(entry, "\t")
+		fields := strings.Fields(header)
+
+		if len(fields) != 3 || (fields[0] != "100644" && fields[0] != "100755") || !ciWiring(path) ||
+			(pristineGo && !strings.HasPrefix(path, consumerWorkflows+"/")) {
+			continue
+		}
+
+		content, readErr := consumer.git.output(ctx, consumer.stage, nil, "cat-file", "blob", fields[2])
+		if readErr != nil {
+			return readErr
+		}
+
+		if err = fn(fields[0], path, content); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // pemPublicKey begins the PEM block of a public key, as of a Cosign key.

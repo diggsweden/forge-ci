@@ -333,10 +333,10 @@ func TestGitHubConsumerPreservesTrackedIgnoredSource(t *testing.T) {
 	}
 }
 
-// These are the native release wrapper and policy coordinates of a consumer's
-// migration draft. The hosted fixture must not leave their immutable-pin guard
-// checking a different identity than the native workflows it reads.
-func TestGitHubConsumerBindsNativeDraftPolicyInputs(t *testing.T) {
+// A consumer's migration draft names the engine in its native release
+// wrapper and in its policy test. The wrapper, CI wiring, is bound to the
+// frozen engine; the test keeps the names it wrote.
+func TestGitHubConsumerBindsNativeDraftWiringOnly(t *testing.T) {
 	t.Parallel()
 
 	const (
@@ -389,7 +389,7 @@ const (
 				got := trial.git(dir, "show", "HEAD:"+path)
 
 				want := original
-				if !strings.HasPrefix(path, "test/live/") {
+				if strings.HasPrefix(path, ".forgejo/") {
 					want = strings.NewReplacer(
 						"https://codefloe.com/itiquette/forge-ci/.forgejo/actions/", "https://github.com/"+trialEngine.Owner+"/"+trialEngine.Repository+"/.forgejo/actions/",
 						"itiquette/forge-ci/.forgejo/workflows/", trialEngine.Owner+"/"+trialEngine.Repository+"/.forgejo/workflows/",
@@ -491,9 +491,10 @@ func TestGitHubConsumerNativeChecksumPolicy(t *testing.T) {
 				t.Fatalf("native checksum or frozen identity lost: %s", got)
 			}
 
+			// A policy test is no CI wiring: it keeps both digests it holds.
 			got = trial.git(dir, "show", "HEAD:test/policy/workflow_policy_test.go")
-			if got != strings.ReplaceAll(policy, nativeDigest, wantDigest) {
-				t.Fatalf("checksum policy constant or independent digest changed incorrectly: %s", got)
+			if got != policy {
+				t.Fatalf("checksum policy test changed outside the CI wiring: %s", got)
 			}
 
 			for path, original := range files {

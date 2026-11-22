@@ -769,8 +769,9 @@ func TestConsumer_SwapsTheTrustRootKeyWithItsDigest(t *testing.T) {
 		t.Errorf("the consumer's key renders to %q, want the trial's", got)
 	}
 
-	if got := read("tests/trust_root.rs"); !strings.Contains(got, newDigest) || strings.Contains(got, oldDigest) {
-		t.Errorf("the consumer's policy renders to %q, want the trial key's digest", got)
+	// A test is no CI wiring: it keeps the digest the consumer wrote.
+	if got := read("tests/trust_root.rs"); !strings.Contains(got, oldDigest) || strings.Contains(got, newDigest) {
+		t.Errorf("the consumer's test renders to %q, want it unchanged", got)
 	}
 
 	// A file that holds the key among other bytes is not the key.
@@ -838,6 +839,79 @@ func TestConsumer_RendersTheTrustRootDigestWithoutAKeyFile(t *testing.T) {
 	}
 }
 
+// The lab renders the engine into a consumer's CI wiring alone, as a real
+// engine upgrade repins it: its documentation, examples and tests keep the
+// names they hold. A wiring file that names the layer only as its validation
+// subject is rendered too.
+func TestConsumer_RendersOnlyTheCIWiring(t *testing.T) {
+	t.Parallel()
+
+	const (
+		reference = "uses: owner/forge-ci/.forgejo/workflows/sign-and-publish-release.yml@" + consumerPinned + "\n"
+		subject   = "script: forge-ci validate isolation --single-pin-subject owner/forge-ci\n"
+	)
+
+	layer := sampleLayer()
+	rendered := "uses: " + layer.Repository + "/.forgejo/workflows/sign-and-publish-release.yml@" + layer.Commit + "\n"
+	renderedSubject := "script: forge-ci validate isolation --single-pin-subject " + layer.Repository + "\n"
+
+	for _, tc := range []struct {
+		path, content, want string
+	}{
+		{consumerWorkflows + "/a.yml", "jobs:\n  sign:\n    " + reference, "jobs:\n  sign:\n    " + rendered},
+		{".github/workflows/b.yml", reference, rendered},
+		{".gitlab-ci.yml", reference, rendered},
+		{".gitlab/merge-request.yml", subject, renderedSubject},
+		{"test/live/github/workflows/c.yml", reference, rendered},
+		{"test/live/forgejo-packages/.forgejo/workflows/d.yml", reference, rendered},
+		{"docs/x.md", reference + subject, reference + subject},
+		{"examples/gitlab/merge-request.yml", reference + subject, reference + subject},
+		{"test/policy/x_test.go", reference + subject, reference + subject},
+		{"test/live/x.md", reference, reference},
+		{".gitlab-ci.yml.sample", reference, reference},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			t.Parallel()
+
+			git, _ := newLayerCheckout(t)
+			root := t.TempDir()
+
+			writeLayerFile(t, root, consumerWorkflows+"/release.yml", "jobs:\n  sign:\n    "+reference)
+			writeLayerFile(t, root, tc.path, tc.content)
+
+			for _, args := range [][]string{
+				{"init", "--quiet", "--initial-branch=main"}, {"add", "--all"}, {"commit", "--quiet", "--message", "seed"},
+			} {
+				mustLayerGit(t, git, root, args...)
+			}
+
+			consumer, err := openConsumer(t.Context(), git, root, t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			workflows, err := consumer.workflows(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			plan, err := layer.PlanConsumer(workflows, ConsumerFacts{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			commit, err := consumer.commitRendered(t.Context(), plan)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if got := mustLayerGit(t, git, consumer.stage, "cat-file", "blob", commit+":"+tc.path); got != strings.TrimSpace(tc.want) {
+				t.Errorf("%s renders to %q, want %q", tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestConsumer_StagesTheRenderedTreeWithoutWritingToTheCheckout(t *testing.T) {
 	t.Parallel()
 
@@ -877,18 +951,14 @@ func TestConsumer_StagesTheRenderedTreeWithoutWritingToTheCheckout(t *testing.T)
 			t.Errorf("%s: the snapshot reaches %s commits, want 1", objectFormat, reached)
 		}
 
-		// The two text files that held the pin changed, and nothing else: not
-		// the binary file that holds it too, not the link, not a mode.
-		if changed := stage("diff-tree", "-r", "--name-status", consumer.Commit, commit); changed != "M\t.forgejo/workflows/ci.yml\nM\tpolicy/pin.sh" {
+		// The workflow that held the pin changed, and nothing else: not the
+		// policy script or the binary file that hold it too, not the link.
+		if changed := stage("diff-tree", "-r", "--name-status", consumer.Commit, commit); changed != "M\t.forgejo/workflows/ci.yml" {
 			t.Errorf("%s: the snapshot changes:\n%s", objectFormat, changed)
 		}
 
-		if script := stage("cat-file", "blob", commit+":policy/pin.sh"); script != "#!/bin/sh\npin="+layer.Commit {
-			t.Errorf("%s: the policy file renders to %q", objectFormat, script)
-		}
-
-		if mode := stage("ls-tree", commit, "--", "policy/pin.sh"); !strings.HasPrefix(mode, "100755 ") {
-			t.Errorf("%s: the executable is staged as %q", objectFormat, mode)
+		if workflow := stage("cat-file", "blob", commit+":.forgejo/workflows/ci.yml"); !strings.Contains(workflow, "@"+layer.Commit) {
+			t.Errorf("%s: the workflow renders to %q", objectFormat, workflow)
 		}
 
 		// The push a trial makes, to a local remote of the same object format.

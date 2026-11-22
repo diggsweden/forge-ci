@@ -2049,18 +2049,22 @@ FORGE_CI_LIVE_CONSUMER_VISIBILITY=private just test-live-consumer forgejo /absol
 ```
 
 **What is rewritten** is read from the consumer's workflows under
-`.forgejo/workflows/`, and applied as text to every tracked text file, because
-a consumer holds its policy tests, its documentation and its release gate to
-the pin its workflows use:
+`.forgejo/workflows/`, and applied as text to the consumer's CI wiring alone,
+the files a real engine upgrade repins: `.forgejo/workflows/`,
+`.github/workflows/`, `.gitlab/`, `.gitlab-ci.yml`, and the same paths or a
+`workflows/` directory inside a lab fixture tree `test/live/<name>/`. Its
+documentation, examples and tests keep the names they hold. A GitHub trial
+binds a migration draft's native workflows the same way:
 
 | In the consumer | Becomes |
 |---|---|
 | `https://<host>/<owner>/<repository>/.forgejo/actions/` | the same path of the layer under test on the lab |
 | `<owner>/<repository>/.forgejo/workflows/` | the same path of the layer under test |
-| the 40-character commit every such reference ends in | the commit of the layer under test, wherever the old one stands, a gate that compares a variable with it included |
+| the 40-character commit every such reference ends in | the commit of the layer under test, wherever the old one stands in the wiring, a gate that compares a variable with it included |
 | the digest a step passes as `expected-sha256` | the digest of the layer's binary at that commit |
 | `forge-ci-repository: <literal>` | the repository that serves the layer under test |
-| release only: the `signer-image` literal and the `cosign-public-key-sha256` literal | the lab's signer image and the digest of the trial's key, wherever the literals stand |
+| `--single-pin-subject <owner>/<repository>` naming the pinned layer, in a wiring file with or without a reference | the repository of the layer under test |
+| release only: the `signer-image` literal and the `cosign-public-key-sha256` literal | the lab's signer image and the digest of the trial's key, wherever the literals stand in the wiring; a tracked file that is the key the digest names becomes the trial's key |
 | release only: a literal `release-git-url` or `release-git-host-key-fingerprint` | the scratch repository's SSH route, from the contract |
 
 A consumer that names the layer in two repositories or at two commits is
