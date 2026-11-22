@@ -9,8 +9,9 @@
 #  lockstep invariant parses it.)
 #
 # One cold flavor, executed as direct separately privileged jobs. The consumer
-# owns discovery, warm reuse, graph ordering, independent expected inputs and
-# candidate cleanup after authentication. No nested reusable workflow calls.
+# owns discovery, warm reuse, graph ordering and independent expected inputs;
+# the authenticate job removes the staging candidate this workflow pushed once
+# the final tag is authenticated. No nested reusable workflow calls.
 name: Base image lifecycle (reusable)
 
 on:
@@ -133,7 +134,7 @@ on:
         required: true
     outputs:
       ledger-json:
-        description: Original candidate ledger, exposed only after successful authentication, for consumer completion and cleanup.
+        description: Original candidate ledger, exposed only after successful authentication, for the consumer's completion in a job without a secret. Its staging candidate is already removed.
         value: ${{ jobs.authenticate.outputs.ledger_json }}
       parent-base-json:
         description: Authenticated final digest and input identity for the next consumer-owned graph node.
@@ -842,7 +843,7 @@ jobs:
             --ledger base-images.ledger.json \
             --server-url "${FORGEJO_SERVER:?}" \
             --repository "${FORGEJO_REPO:?}" \
-            --repository-suffix "${REPOSITORY_SUFFIX}" \
+            --repository-suffix "${REPOSITORY_SUFFIX:-}" \
             --expected-repository "${BASE_IMAGE_REPOSITORY}" \
             --workflow "${CALLER_WORKFLOW:?}" \
             --source-sha "${SOURCE_SHA}" \
@@ -1154,12 +1155,22 @@ jobs:
           printf '%s' "${registry_token}" | FORGE_CI_PROVIDER=forgejo run_forge_ci container login \
             --registry "${EXPECTED_REPOSITORY}" --server-url "${FORGEJO_SERVER}" --repository "${FORGEJO_REPO}" \
             --registry-username "${REGISTRY_USER:-}" --registry-password-file - --auth-file "${auth_file}"
-          unset registry_token REGISTRY_USER
+          unset REGISTRY_USER
           # Authentication of one exact base, never discovery.
           parent=$(FORGE_CI_PROVIDER=forgejo run_forge_ci container base-images authenticate-parent --auth-file "${auth_file}" \
             --expected-ref "${EXPECTED_REF}" --base-inputs-json "${BASE_INPUTS_JSON}")
           printf 'ledger_json=%s\n' "${LEDGER_JSON}" >>"${FORGEJO_OUTPUT:?}"
           printf 'parent_base_json=%s\n' "${parent}" >>"${FORGEJO_OUTPUT:?}"
+          # This workflow pushed the staging candidate, so it removes it,
+          # now that the final tag is authenticated, with the token that
+          # pushed it: the caller holds no registry token for it.
+          ledger_file="${SIGNER_WORKSPACE:?}/base-images.ledger.json"
+          printf '%s' "${LEDGER_JSON}" >"${ledger_file}"
+          FORGEJO_TOKEN="${registry_token}" FORGE_CI_PROVIDER=forgejo run_forge_ci container base-images cleanup \
+            --server-url "${FORGEJO_SERVER}" --repository "${FORGEJO_REPO}" --repository-suffix "${REPOSITORY_SUFFIX:-}" \
+            --expected-repository "${EXPECTED_REPOSITORY}" --ledger "${ledger_file}" \
+            --base-inputs-json "${BASE_INPUTS_JSON}" --auth-file "${auth_file}"
+          unset registry_token
 
       - name: Cleanup signer workspace
         if: always()

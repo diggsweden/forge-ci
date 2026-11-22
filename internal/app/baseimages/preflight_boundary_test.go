@@ -197,12 +197,14 @@ func TestCleanupBoundary_UncertainSweepPreservesCandidates(t *testing.T) {
 				t.Fatalf("deleted=%v output=%s", cleaner.deleted, &out)
 			}
 
-			if strings.Contains(kind, "unavailable") && !errors.Is(err, errs.ErrDependencyUnavailable) {
+			// The final image is proven, so what the sweep cannot decide on
+			// stays in place with a warning.
+			if err != nil {
 				t.Fatalf("err=%v", err)
 			}
 
-			if kind == "mismatch" && !errors.Is(err, errs.ErrValidation) {
-				t.Fatalf("err=%v", err)
+			if (strings.Contains(kind, "unavailable") || kind == "mismatch") && !strings.Contains(out.String(), "WARNING: left stale staging base tag") {
+				t.Fatalf("output=%s", &out)
 			}
 		})
 	}

@@ -136,9 +136,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `base-image-lifecycle.yml` as well as the release entry points. A workflow
   that calls only those was held to the signing-secret rule alone before;
   its other jobs now meet every release rule.
+- **Breaking:** Forgejo's `base-image-lifecycle.yml` removes the staging
+  candidate it pushed, in its authenticate job, once the final tag is
+  authenticated, with `RELEASE_REGISTRY_TOKEN`, which must now also delete
+  package versions (`delete:packages` on GHCR). Drop the caller's own
+  `container base-images cleanup` and the registry token from its completion
+  job: it reads `ledger-json` and `parent-base-json` without a secret.
 
 ### Added
 
+- `container base-images cleanup --ledger` takes the publication ledger, as
+  `base-images promote --ledger` does, in place of `--base-images-json`.
 - A Forgejo job takes the layer's binary from the runner's cache when the
   cache holds it, and downloads it from the forge only otherwise, in place
   of one download per job.

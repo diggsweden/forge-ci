@@ -293,7 +293,7 @@ the caller passes them by name. Never use `secrets: inherit`.
 | `sign-and-publish-release.yml` | Five separately privileged jobs after a secret-free preflight: `sign` (checksums, SBOMs, provenance, images, distro packages), `promote` (final image tags), `publish` (the Forgejo release), `packages` (distro packages to the owner's registries; it starts only when they are declared), `cleanup` (the images' link to the repository, candidate tags). | Cosign, GPG, `RELEASE_TOKEN`, `RELEASE_REGISTRY_TOKEN`, each only in the job that needs it |
 | `base-images.yml` | Builds one stage of the caller's graph: a root or children of one authenticated parent. Native jobs build layouts; a separate job scans and publishes unsigned candidates. See [Base images](#base-images). | `PARENT_REGISTRY_READ_TOKEN` in the parent-fetch step only; `RELEASE_REGISTRY_TOKEN` in publication only |
 | `sign-container-images.yml` | Signs and attests a base-image ledger in one engine call. | Cosign, `RELEASE_REGISTRY_TOKEN` |
-| `base-image-lifecycle.yml` | Executes one cold flavor through native build, scan/staging publication, signing, promotion and exact-reference authentication as direct jobs. The consumer owns reuse, graph ordering and candidate cleanup. | Pull-only token in parent fetch; registry token in publication/signing/promotion/authentication; Cosign key in signing only |
+| `base-image-lifecycle.yml` | Executes one cold flavor through native build, scan/staging publication, signing, promotion and exact-reference authentication as direct jobs. The consumer owns reuse and graph ordering; authentication removes the staging candidate. | Pull-only token in parent fetch; registry token in publication/signing/promotion/authentication; Cosign key in signing only |
 | `verify-base-container-images.yml` | Verifies existing base images against the trusted key; optional explicit registry authentication supports private bases. Only missing images (or anonymous access refusal) are cache misses. With the token, `parent-bases-json` names every found base as a parent. With `expected-ref` it authenticates exactly one published base as a parent instead, and a missing base is a failure. | optional `RELEASE_REGISTRY_TOKEN`, `registry-user` for external registries; required with `expected-ref` |
 | `promote-base-container-images.yml` | Verifies base-image signatures, then moves the final tags. | `RELEASE_REGISTRY_TOKEN` |
 | `release-images.yml` | Builds the release images `artifacts.yml` declares, one native job per container and architecture, with the organization's image builder; scans each, publishes it under its staging tag and records it for the signer. See [Release images](#release-images). | `RELEASE_REGISTRY_TOKEN`, in the publish job only |
@@ -1134,9 +1134,11 @@ require the `parent-registry-repository`, `parent-registry-user` and optional
 explicitly in `secrets`. Never substitute the publication token.
 
 The workflow exposes `ledger-json` and `parent-base-json` only through the final
-successful authentication job. Consumer completion must require lifecycle
-success and both outputs, match the expected flavor/input identity/digest, then
-clean candidate tags using the original ledger. Warm reuse skips the lifecycle
+successful authentication job, which then removes the staging candidate tag
+the lifecycle pushed, with the registry token it already holds. Consumer
+completion must require lifecycle success and both outputs and match the
+expected flavor/input identity/digest; it runs in a job without a secret and
+deletes nothing. Warm reuse skips the lifecycle
 and returns the separately authenticated discovery result. Graph edges, flavor
 selection and completeness remain consumer policy.
 

@@ -93,6 +93,18 @@ func TestBaseLifecycleKeepsDirectJobsAndSeparateAuthorities(t *testing.T) {
 			t.Error("signing must consume this lifecycle's namespaced SBOM artifact")
 		}
 	}
+	// The lifecycle pushed the staging candidate, so the job that holds its
+	// token removes it once the final is authenticated; a caller that did it
+	// would need the registry token in a job of its own.
+	for name, job := range lifecycle.jobs {
+		if cleans := mentions(job.node, "container base-images cleanup"); cleans != (name == "authenticate") {
+			t.Errorf("%s: staging cleanup belongs to the authenticate job alone", name)
+		}
+	}
+
+	if !mentions(lifecycle.jobs["authenticate"].node, `--ledger "${ledger_file}"`) {
+		t.Error("authenticate must clean up the candidates of the ledger publication returned")
+	}
 
 	outputs := mappingValue(mappingValue(mappingValue(loadDocument(t, baseLifecycleWorkflow), "on"), "workflow_call"), "outputs")
 	for name, output := range map[string]string{"ledger-json": "ledger_json", "parent-base-json": "parent_base_json"} {

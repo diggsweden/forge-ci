@@ -177,12 +177,19 @@ func linkBaseImagePackages(ctx context.Context, forge any, stderr io.Writer, com
 }
 
 func basePromotionImages(cmd *cli.Command, repository string) ([]appbaseimages.BaseImageMetadata, error) {
+	return ledgerOrImagesJSON(cmd, "all-images-json", repository)
+}
+
+// ledgerOrImagesJSON returns the images of --ledger, admitted and projected,
+// or else those of the JSON flag, never both.
+func ledgerOrImagesJSON(cmd *cli.Command, jsonFlag, repository string) ([]appbaseimages.BaseImageMetadata, error) {
+	images := cmd.String(jsonFlag)
 	if cmd.String(flagLedger) == "" {
-		return parseBaseImages(cmd.String("all-images-json"))
+		return parseBaseImages(images)
 	}
 
-	if cmd.String("all-images-json") != "" {
-		return nil, fmt.Errorf("use --ledger or --all-images-json, not both: %w", errs.ErrUsage)
+	if images != "" && images != "[]" {
+		return nil, fmt.Errorf("use --ledger or --%s, not both: %w", jsonFlag, errs.ErrUsage)
 	}
 
 	body, err := cliio.ReadRegularFile(cmd.String(flagLedger))

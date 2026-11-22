@@ -194,8 +194,9 @@ func cleanupOnePromotedStagingImage(ctx context.Context, registry imageDigestRes
 
 // sweepStaleStagingVersions deletes the given flavors' staging package versions
 // that are still present in the registry after promotion. Other flavors'
-// versions are left to their own cleanup; a version name outside the staging
-// policy is still refused whichever flavor it claims.
+// versions are left to their own cleanup. The final images are already proven
+// here, so a version the sweep cannot safely remove, or a name outside the
+// staging policy, stays in place with a warning and does not fail the release.
 func sweepStaleStagingVersions(ctx context.Context, registry imageDigestResolver, cleaner baseImagePackageAPI, out io.Writer, expectedRepository string, flavors []string, archFinalTags map[string]string) error {
 	if len(flavors) == 0 {
 		_, _ = fmt.Fprintln(out, "No flavors given; skipping the stale staging sweep.")
@@ -212,7 +213,9 @@ func sweepStaleStagingVersions(ctx context.Context, registry imageDigestResolver
 
 	staleVersions, err := cleaner.ListContainerPackageVersions(ctx, owner, name)
 	if err != nil {
-		return err
+		_, _ = fmt.Fprintf(out, "WARNING: could not list stale staging base tags: %v\n", err)
+
+		return nil
 	}
 
 	slices.Sort(staleVersions)
@@ -227,7 +230,7 @@ func sweepStaleStagingVersions(ctx context.Context, registry imageDigestResolver
 		}
 
 		if err := deleteStagingBaseVersion(ctx, registry, cleaner, out, expectedRepository, archFinalTags, version, expectedRepository+":"+version); err != nil {
-			return err
+			_, _ = fmt.Fprintf(out, "WARNING: left stale staging base tag %s in place: %v\n", version, err)
 		}
 	}
 

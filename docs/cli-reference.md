@@ -854,7 +854,8 @@ Requires a forge implementing both container tag listing and tag deletion
 | `--expected-workflow` | workflow filename expected in SLSA lineage | string | `""` | `$EXPECTED_WORKFLOW` |
 | `--registry` | the forge's own registry host, when it is not the host of --server-url (GitLab's $CI_REGISTRY); the login goes to the image repository's host, and a repository on any other host has its tags deleted through that registry | string | `""` | `$CONTAINER_REGISTRY` |
 | `--shared-core-images-json` | JSON array of shared-core base image metadata | string | `"[]"` | `$SHARED_CORE_IMAGES_JSON` |
-| `--base-images-json` | JSON array of base image metadata | string | `"[]"` | `$BASE_IMAGES_JSON` |
+| `--base-images-json` | JSON array of base image metadata; exclusive with --ledger | string | `"[]"` | `$BASE_IMAGES_JSON` |
+| `--ledger` | publication base-image ledger whose candidates to clean up, admitted and projected as base-images promote --ledger does; exclusive with --base-images-json | string | `""` | n/a |
 | `--base-inputs-json` | JSON array mapping flavors to content/base input IDs | string | `"[]"` | `$BASE_INPUTS_JSON` |
 | `--local-registry` | list and delete through a plain OCI registry (bases kept beside the runner) instead of the forge package API | bool | `false` | `$BASE_IMAGES_LOCAL_REGISTRY` |
 | `--auth-file` | registry auth file for final/staging digest checks | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |

@@ -16,7 +16,7 @@ func TestBaseLifecycleExposesEvidenceOnlyAfterExactAuthentication(t *testing.T) 
 	t.Parallel()
 
 	run := workflowStep(t, "base-image-lifecycle.yml", "authenticate", "Authenticate promoted base").Run
-	for _, mode := range []string{"success", "missing-ref", "missing-ledger", "missing-token", "login-failure", "verification-failure"} {
+	for _, mode := range []string{"success", "missing-ref", "missing-ledger", "missing-token", "login-failure", "verification-failure", "cleanup-failure"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 			box := newSandbox(t, "base-lifecycle")
@@ -29,6 +29,20 @@ case "$1 $2" in
   test "$MODE" != login-failure || exit 73
   ;;
 'container base-images')
+  if [ "$3" = cleanup ]; then
+    # The candidate goes with the token that pushed it, from the ledger
+    # publication returned, after authentication.
+    test "${FORGEJO_TOKEN:-}" = fixture-token
+    test -s "${SIGNER_WORKSPACE:?}/parent-authenticated"
+    args=" $* "
+    case "${args}" in *" --ledger ${SIGNER_WORKSPACE}/base-images.ledger.json "*) ;; *) exit 98 ;; esac
+    case "${args}" in *" --expected-repository registry.example/owner/base "*) ;; *) exit 98 ;; esac
+    case "${args}" in *" --auth-file ${SIGNER_WORKSPACE}/registry-auth.json "*) ;; *) exit 98 ;; esac
+    test "$(cat "${SIGNER_WORKSPACE}/base-images.ledger.json")" = '[{"flavor":"base"}]'
+    test "$MODE" != cleanup-failure || exit 75
+    exit 0
+  fi
+  test -z "${FORGEJO_TOKEN:-}"
   test "$3" = authenticate-parent
   test "$4" = --auth-file
   test "$6" = --expected-ref
@@ -36,6 +50,7 @@ case "$1 $2" in
   test "$8" = --base-inputs-json
   test "$9" = '[{"flavor":"base","base_input_id":"independent"}]'
   test "$MODE" != verification-failure || exit 74
+  printf 'yes\n' >"${SIGNER_WORKSPACE:?}/parent-authenticated"
   printf '%s\n' '{"ref":"authenticated","input_id":"independent"}'
   ;;
 *) exit 99 ;;
@@ -73,13 +88,22 @@ esac
 				t.Fatal(err)
 			}
 
-			if mode == "success" {
+			switch mode {
+			case "success":
 				want := "ledger_json=" + ledger + "\nparent_base_json={\"ref\":\"authenticated\",\"input_id\":\"independent\"}\n"
 				if got.status != 0 || string(body) != want {
 					t.Fatalf("status=%d output=%s stderr=%s", got.status, body, got.stderr)
 				}
-			} else if got.status == 0 || len(body) != 0 {
-				t.Fatalf("%s exposed unverified output: status=%d output=%s", mode, got.status, body)
+			case "cleanup-failure":
+				// The base is authenticated; a cleanup that fails still fails
+				// the job, so the caller's completion does not run.
+				if got.status == 0 {
+					t.Fatal("a failed staging cleanup passed")
+				}
+			default:
+				if got.status == 0 || len(body) != 0 {
+					t.Fatalf("%s exposed unverified output: status=%d output=%s", mode, got.status, body)
+				}
 			}
 
 			if strings.Contains(got.stdout+got.stderr, "fixture-token") {

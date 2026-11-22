@@ -22,6 +22,7 @@
   "container base-images child-base build": [".forgejo/workflows/base-image-lifecycle.yml",".forgejo/workflows/base-images.yml",".github/workflows/base-image-lifecycle.yml"],
   "container base-images child-base plan": [".forgejo/workflows/base-image-lifecycle.yml",".forgejo/workflows/base-images.yml",".github/workflows/base-image-lifecycle.yml"],
   "container base-images child-base publish": [".forgejo/workflows/base-image-lifecycle.yml",".forgejo/workflows/base-images.yml",".github/workflows/base-image-lifecycle.yml"],
+  "container base-images cleanup": [".forgejo/workflows/base-image-lifecycle.yml"],
   "container base-images declared-inputs": [".forgejo/workflows/base-images.yml"],
   "container base-images promote": [".forgejo/workflows/base-image-lifecycle.yml",".forgejo/workflows/promote-base-container-images.yml",".github/workflows/base-image-lifecycle.yml"],
   "container base-images prune": [".forgejo/actions/prune-base-images"],

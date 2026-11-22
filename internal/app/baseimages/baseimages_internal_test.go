@@ -446,15 +446,6 @@ func TestCleanupStagingBaseImages_RejectsUnexpectedStagingVersion(t *testing.T) 
 		wantErr string
 	}{
 		{
-			// The version list comes back from the forge API, so a name that
-			// is not a staging version is either a real release or something
-			// this command has no business removing, whichever flavor it names.
-			name:    "listed version outside the staging policy",
-			image:   BaseImageMetadata{Flavor: "go", Tag: repo + ":" + baseID + "-go", Ref: repo + "@" + digest, BaseInputID: baseID},
-			version: "staging-not-a-content-id-rust",
-			wantErr: "refusing to delete unexpected staging version",
-		},
-		{
 			name: "entry carrying another flavor's candidate",
 			image: BaseImageMetadata{
 				Flavor: "rust", Tag: repo + ":" + baseID + "-rust", Ref: repo + "@" + digest,
@@ -491,6 +482,34 @@ func TestCleanupStagingBaseImages_RejectsUnexpectedStagingVersion(t *testing.T) 
 				t.Fatalf("deleted = %v, want nothing", cleaner.deleted)
 			}
 		})
+	}
+}
+
+// The version list comes back from the forge API, so a name that is not a
+// staging version is left alone, and does not fail a release whose final image
+// is already proven.
+func TestCleanupStagingBaseImages_LeavesAnUnexpectedVersionWithAWarning(t *testing.T) {
+	t.Parallel()
+
+	repo := "forge.example/examplescope/myapp-base"
+	baseID := strings.Repeat("4", 64)
+	digest := "sha256:" + strings.Repeat("6", 64)
+	version := "staging-not-a-content-id-rust"
+	registry := &fakeBaseImageRegistry{digests: map[string]string{repo + ":" + baseID + "-go": digest, repo + ":" + version: digest}}
+	cleaner := &fakeBaseImagePackageAPI{versions: []string{version}}
+
+	var out strings.Builder
+
+	err := CleanupStagingBaseImages(context.Background(), registry, cleaner, &out, BaseImageCleanupStagingInput{
+		Images:             []BaseImageMetadata{{Flavor: "go", Tag: repo + ":" + baseID + "-go", Ref: repo + "@" + digest, BaseInputID: baseID}},
+		ExpectedRepository: repo,
+	})
+	if err != nil {
+		t.Fatalf("err = %v, want none", err)
+	}
+
+	if len(cleaner.deleted) != 0 || !strings.Contains(out.String(), "WARNING: left stale staging base tag "+version) {
+		t.Fatalf("deleted = %v, output = %s", cleaner.deleted, out.String())
 	}
 }
 

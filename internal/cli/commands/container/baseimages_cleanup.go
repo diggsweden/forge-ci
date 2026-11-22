@@ -32,7 +32,8 @@ Requires a forge implementing both container tag listing and tag deletion
 "unsupported" error rather than deleting unsafely.`,
 		Flags: append(baseImagesRepositoryFlags(),
 			&cli.StringFlag{Name: "shared-core-images-json", Value: "[]", Sources: cli.EnvVars("SHARED_CORE_IMAGES_JSON"), Usage: "JSON array of shared-core base image metadata"},
-			&cli.StringFlag{Name: "base-images-json", Value: "[]", Sources: cli.EnvVars("BASE_IMAGES_JSON"), Usage: "JSON array of base image metadata"},
+			&cli.StringFlag{Name: "base-images-json", Value: "[]", Sources: cli.EnvVars("BASE_IMAGES_JSON"), Usage: "JSON array of base image metadata; exclusive with --ledger"},
+			&cli.StringFlag{Name: flagLedger, Usage: "publication base-image ledger whose candidates to clean up, admitted and projected as base-images promote --ledger does; exclusive with --base-images-json"},
 			&cli.StringFlag{Name: flagBaseInputsJSON, Value: "[]", Sources: cli.EnvVars("BASE_INPUTS_JSON"), Usage: "JSON array mapping flavors to content/base input IDs"},
 			localRegistryFlag(),
 			regflags.AuthFile(regflags.AuthFileOpts{Usage: "registry auth file for final/staging digest checks"}),
@@ -48,7 +49,7 @@ Requires a forge implementing both container tag listing and tag deletion
 				return err
 			}
 
-			baseImages, err := parseBaseImages(cmd.String("base-images-json"))
+			baseImages, err := ledgerOrImagesJSON(cmd, "base-images-json", common.ExpectedRepository)
 			if err != nil {
 				return err
 			}

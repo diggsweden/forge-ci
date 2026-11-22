@@ -19,6 +19,7 @@ import (
 
 	rootcli "github.com/diggsweden/forge-ci/internal/cli"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/imageledger"
 	"github.com/diggsweden/forge-ci/internal/testutil/mockbinary"
 	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
 )
@@ -137,6 +138,42 @@ func TestBaseImagesCleanup_LocalInventoryUsesConfiguredRegistry(t *testing.T) {
 	for _, request := range f.requests {
 		require.Equal(t, http.MethodGet, request.method)
 		require.Equal(t, pruneRegistry, request.host)
+	}
+}
+
+// The base-image lifecycle cleans up after its own authentication from the
+// ledger its publication returned, so cleanup takes that ledger as promote
+// does, and refuses it beside image metadata.
+func TestBaseImagesCleanup_TakesThePublicationLedger(t *testing.T) {
+	id := strings.Repeat("f", 64)
+	digest := "sha256:" + id
+	body, err := imageledger.Marshal([]imageledger.Entry{{
+		Role: "base", ImageKind: imageledger.ImageKindBase, Flavor: "go",
+		Ref: pruneBaseRepo + "@" + digest, Digest: digest,
+		FinalTag: pruneBaseRepo + ":" + id + "-go", BaseInputID: id,
+		CandidateTag: pruneBaseRepo + ":staging-" + id + "-go",
+	}})
+	require.NoError(t, err)
+
+	fixture := newPruneFixture(t, false)
+	require.NoError(t, os.WriteFile(fixture.env.Path("ledger.json"), body, 0o600))
+
+	images := fmt.Sprintf(`[{"flavor":"go","tag":%q,"ref":%q,"base_input_id":%q}]`, pruneBaseRepo+":"+id+"-go", pruneBaseRepo+"@"+digest, id)
+	require.ErrorIs(t, fixture.run(t, "cleanup", "--ledger", "ledger.json", "--base-images-json", images), errs.ErrUsage)
+	require.Empty(t, fixture.requests, "a refused call must not reach the registry")
+
+	require.NoError(t, os.WriteFile(fixture.env.Path("empty.json"), []byte("[]"), 0o600))
+	require.Error(t, fixture.run(t, "cleanup", "--ledger", "empty.json"))
+	require.Empty(t, fixture.requests, "an unadmitted ledger must not reach the registry")
+
+	// The fixture serves no final tag, so cleanup keeps the candidate and
+	// fails; that it asked for the ledger's final tag shows the ledger is
+	// what it cleans up.
+	require.Error(t, fixture.run(t, "cleanup", "--ledger", "ledger.json"))
+	require.Contains(t, fixture.requests, pruneRequest{method: http.MethodGet, host: pruneRegistry, path: "/v2/owner/nested/base/manifests/" + id + "-go"})
+
+	for _, request := range fixture.requests {
+		require.NotEqual(t, http.MethodDelete, request.method)
 	}
 }
 
