@@ -631,26 +631,32 @@ func TestGitHubListsAllRequiresEveryPushedWorkflowActive(t *testing.T) {
 
 func TestGitHubWaitWorkflowsCanSelectOnlyTheDispatchedGate(t *testing.T) {
 	t.Parallel()
+
 	dir := t.TempDir()
 	for _, name := range []string{"self-pullrequest.yml", "unrelated-reusable.yml"} {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/repos/example-org/self-build/actions/workflows" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
+
 			return
 		}
+
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"total_count":1,"workflows":[{"path":".github/workflows/self-pullrequest.yml","state":"active"}]}`))
 	}))
 	t.Cleanup(server.Close)
+
 	client, err := github.NewClient(github.WithHTTPClient(server.Client()), github.WithURLs(new(server.URL+"/"), nil))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	trial := &GitHubTrial{tb: t, api: client, org: "example-org"}
 	trial.waitWorkflows("self-build", dir, "self-pullrequest.yml")
 }

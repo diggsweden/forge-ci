@@ -78,6 +78,7 @@ func TestReleaseImagesPlanContextEnvironmentAdmission(t *testing.T) {
 			t.Setenv("CONTEXT_ARTIFACT", tc.artifact)
 			t.Setenv("CONTEXT_DIGEST", tc.digest)
 			err := releaseImagesPlanCmd().Run(t.Context(), []string{"plan", "--image-repository", "ghcr.io/acme/app", "--repository", "acme/app", "--registry-username", "acme", "--release-tag", "v1.2.3"})
+
 			contextErr := validateReleaseContextCmd().Run(t.Context(), []string{"release-context"})
 			if tc.valid {
 				require.NoError(t, err)

@@ -170,6 +170,7 @@ func selfReleaseSchedulingResults(t *testing.T, trial *GitHubTrial, repo string,
 		if name == failed {
 			want = "failure"
 		}
+
 		if name == "evidence" || name == "blackbox" {
 			want = "skipped"
 		}

@@ -65,23 +65,18 @@ func PlanReleaseFamilies(prepare pipeline.ReleasePrepareStagePlan, build pipelin
 	if err := refuseUnpublishedPackages(build.Targets); err != nil {
 		return ReleaseFamilies{}, err
 	}
+
 	androidMaven, err := pipeline.ReleaseAndroidMavenArtifacts(build)
 	if err != nil {
 		return ReleaseFamilies{}, err
 	}
 
-	version, buildSet, sbomSet := map[string]bool{}, map[string]bool{}, map[string]bool{}
-
-	for _, artifact := range containerFirst {
-		switch artifact.ProjectType {
-		case projecttype.Go:
-			sbomSet[familyGo] = true
-		case projecttype.Cargo:
-			sbomSet[familyRust] = true
-		default:
-			return ReleaseFamilies{}, fmt.Errorf("%s artifact %q is not built container-first: %w", artifact.ProjectType, artifact.Name, errs.ErrInvalidConfig)
-		}
+	sbomSet, err := containerFirstSBOMFamilies(containerFirst)
+	if err != nil {
+		return ReleaseFamilies{}, err
 	}
+
+	version, buildSet := map[string]bool{}, map[string]bool{}
 
 	// The plan names the families whose native tools prepare its bump.
 	for _, family := range prepare.VersionFamilies() {
@@ -115,6 +110,25 @@ func PlanReleaseFamilies(prepare pipeline.ReleasePrepareStagePlan, build pipelin
 	}
 
 	return out, nil
+}
+
+// containerFirstSBOMFamilies names the families whose build SBOM forge-ci
+// writes, and refuses a project type that is not built container-first.
+func containerFirstSBOMFamilies(containerFirst []pipeline.PlannedArtifact) (map[string]bool, error) {
+	families := map[string]bool{}
+
+	for _, artifact := range containerFirst {
+		switch artifact.ProjectType {
+		case projecttype.Go:
+			families[familyGo] = true
+		case projecttype.Cargo:
+			families[familyRust] = true
+		default:
+			return nil, fmt.Errorf("%s artifact %q is not built container-first: %w", artifact.ProjectType, artifact.Name, errs.ErrInvalidConfig)
+		}
+	}
+
+	return families, nil
 }
 
 // RequireImages refuses a planned family the policy gives no runtime image.
@@ -153,6 +167,7 @@ func (f ReleaseFamilies) JobNames() []string {
 	if len(f.Packages) > 0 {
 		names = append(names, jobPublishNPMPackages)
 	}
+
 	if f.AndroidMaven {
 		names = append(names, jobPublishAndroidMaven)
 	}
@@ -188,6 +203,7 @@ func (f ReleaseFamilies) Jobs() map[string]any {
 	if len(f.Packages) > 0 {
 		jobs[jobPublishNPMPackages] = map[string]any{keyExtends: ".forge-ci-release-publish-npm-packages"}
 	}
+
 	if f.AndroidMaven {
 		jobs[jobPublishAndroidMaven] = map[string]any{keyExtends: ".forge-ci-release-publish-android-maven"}
 	}

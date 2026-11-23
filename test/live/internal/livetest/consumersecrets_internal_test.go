@@ -12,6 +12,7 @@ import (
 
 func TestPlanConsumerBindsNestedBaseRegistryCredential(t *testing.T) {
 	t.Parallel()
+
 	workflows := map[string]string{
 		"release.yml": `on: push
 jobs:
@@ -37,7 +38,9 @@ jobs:
 
 func TestConsumerSecretsFollowLocalScopes(t *testing.T) {
 	t.Parallel()
-	const entry = `on: push
+
+	const (
+		entry = `on: push
 jobs:
   bases:
     uses: ./.forgejo/workflows/bases.yml
@@ -45,7 +48,7 @@ jobs:
       BASE_IMAGE_REGISTRY_TOKEN: ${{ secrets.BASE_PUBLISH_TOKEN }}
       PARENT_REGISTRY_READ_TOKEN: ${{ secrets.PRIVATE_PULL_TOKEN }}
 `
-	const bases = `on:
+		bases = `on:
   workflow_call:
 jobs:
   flavor:
@@ -54,7 +57,7 @@ jobs:
       RELEASE_REGISTRY_TOKEN: ${{ secrets.BASE_IMAGE_REGISTRY_TOKEN }}
       PARENT_REGISTRY_READ_TOKEN: ${{ secrets.PARENT_REGISTRY_READ_TOKEN }}
 `
-	const stage = `on:
+		stage = `on:
   workflow_call:
 jobs:
   build:
@@ -63,6 +66,8 @@ jobs:
       RELEASE_REGISTRY_TOKEN: ${{ secrets.RELEASE_REGISTRY_TOKEN }}
       PARENT_REGISTRY_READ_TOKEN: ${{ secrets.PARENT_REGISTRY_READ_TOKEN }}
 `
+	)
+
 	for _, tc := range []struct {
 		name, caller, middle string
 		want                 map[string]string
@@ -77,14 +82,19 @@ jobs:
 		{"missing workflow", entry, "jobs:\n  missing:\n    uses: ./.forgejo/workflows/missing.yml\n", nil, "is missing"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			plan := ConsumerPlan{Pin: ConsumerPin{Workflows: "owner/forge-ci/.forgejo/workflows/"}, Secrets: map[string]string{}}
 			workflows := map[string]string{"release.yml": tc.caller, "bases.yml": tc.middle, "stage.yml": stage}
+
 			err := plan.bindWorkflowSecrets(workflows, map[string]string{"release.yml": tc.caller}, map[string]string{"RELEASE_REGISTRY_TOKEN": "lab-publication-token"})
 			if tc.err != "" {
 				require.ErrorContains(t, err, tc.err)
 				require.NotContains(t, err.Error(), "lab-publication-token")
+
 				return
 			}
+
 			require.NoError(t, err)
 			require.Equal(t, tc.want, plan.Secrets)
 			require.NotContains(t, plan.Secrets, "PRIVATE_PULL_TOKEN", "publication authority must never substitute for a pull-only credential")
@@ -94,6 +104,7 @@ jobs:
 
 func TestPlanConsumerOnlyBindsCredentialsAtLayerBoundaries(t *testing.T) {
 	t.Parallel()
+
 	const workflow = `on: push
 jobs:
   release:
@@ -117,6 +128,7 @@ jobs:
         env:
           RELEASE_REGISTRY_TOKEN: ${{ secrets.SHELL_TOKEN }}
 `
+
 	plan, err := sampleLayer().PlanConsumer(map[string]string{"release.yml": workflow}, ConsumerFacts{Secrets: map[string]string{"RELEASE_REGISTRY_TOKEN": "lab-token"}})
 	require.NoError(t, err)
 	require.Equal(t, map[string]string{"PUBLISH_TOKEN": "lab-token", "ACTION_TOKEN": "lab-token"}, plan.Secrets)

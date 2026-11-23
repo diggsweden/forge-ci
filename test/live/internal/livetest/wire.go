@@ -47,7 +47,7 @@ func decode(ctx context.Context, target Target, method, endpoint string, body, i
 		reader = bytes.NewReader(encoded)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, endpoint, reader)
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, reader) //nolint:gosec // endpoint is built from the operator's lab target.
 	if err != nil {
 		return 0, fmt.Errorf("build request: %w", err)
 	}
@@ -63,7 +63,7 @@ func decode(ctx context.Context, target Target, method, endpoint string, body, i
 		return 0, fmt.Errorf("configure target HTTP trust: %w", err)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) //nolint:gosec // endpoint is built from the operator's lab target.
 	if err != nil {
 		return 0, fmt.Errorf("%s %s: %w", method, redact(endpoint), err)
 	}
@@ -155,7 +155,7 @@ func fetch(ctx context.Context, target Target, endpoint string, limit int64) ([]
 // keep bytes is not an error, its last keep bytes are returned, cut forward to
 // a line start, with how many bytes before them were dropped.
 func fetchTail(ctx context.Context, target Target, endpoint string, keep int) ([]byte, int64, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil) //nolint:gosec // endpoint is built from the operator's lab target.
 	if err != nil {
 		return nil, 0, fmt.Errorf("build request: %w", err)
 	}
@@ -167,7 +167,7 @@ func fetchTail(ctx context.Context, target Target, endpoint string, keep int) ([
 		return nil, 0, fmt.Errorf("configure target HTTP trust: %w", err)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) //nolint:gosec // endpoint is built from the operator's lab target.
 	if err != nil {
 		return nil, 0, fmt.Errorf("GET %s: %w", redact(endpoint), err)
 	}

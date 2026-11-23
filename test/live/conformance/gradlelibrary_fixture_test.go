@@ -56,10 +56,12 @@ func gradleLibraryFiles(version string) (map[string]string, error) {
 			if err != nil {
 				return err
 			}
+
 			if entry.IsDir() {
 				if entry.Name() == ".gradle" {
 					return fs.SkipDir
 				}
+
 				return nil
 			}
 

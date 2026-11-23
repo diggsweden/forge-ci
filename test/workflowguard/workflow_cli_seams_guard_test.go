@@ -28,18 +28,21 @@ func TestPublishContainerValidatesNamespaceForSelectedRegistry(t *testing.T) {
 
 func TestPublishContainerUsesPullOnlyCredentialsForBothBuilders(t *testing.T) {
 	t.Parallel()
+
 	for _, name := range []string{"Log in for registry reads", "Build and retain layout with Kaniko", "Extract binaries with Kaniko"} {
 		env := workflowStepEnv(t, "publish-container.yml", "build-arch", name)
 		require.Contains(t, env["REGISTRY_PASSWORD"], "secrets['registry-read-password']", name)
 		require.NotContains(t, env["REGISTRY_PASSWORD"], "secrets['registry-password']", name)
 		require.Equal(t, "${{ inputs['use-ci-token'] && github.actor || inputs['registry-read-username'] }}", env["REGISTRY_USER"], name)
 	}
+
 	env := workflowStepEnv(t, "publish-container.yml", "build-arch", "Log in for registry reads")
 	require.Equal(t, "ghcr.io", env["CI_REGISTRY"], "the read-scoped GitHub token must not be sent to another registry")
 }
 
 func TestPublishContainerRequiresProducerContextDigest(t *testing.T) {
 	t.Parallel()
+
 	for _, binding := range []struct{ job, step string }{
 		{"prep", "Admit verified release context"},
 		{"build-arch", "Verify and overlay release context"},
@@ -53,7 +56,9 @@ func TestPublishContainerRequiresProducerContextDigest(t *testing.T) {
 func TestPrivateBuildOnlyReadsRetainTheTrustedEventGate(t *testing.T) {
 	t.Parallel()
 	workflow := readCanonicalConsumerWorkflow(t, "publish-container.yml")
+
 	var login canonicalConsumerStep
+
 	for _, step := range workflow.Jobs["build-arch"].Steps {
 		switch step.Name {
 		case "Log in for registry reads":
@@ -66,16 +71,20 @@ func TestPrivateBuildOnlyReadsRetainTheTrustedEventGate(t *testing.T) {
 			require.Equal(t, "false", step.Env["BUILD_CACHE_PUSH"])
 		}
 	}
+
 	require.NotEmpty(t, login.Run)
+
 	for _, mode := range []string{"private", "anonymous", "untrusted", "invalid-auth"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
 			calls := filepath.Join(dir, "calls")
+
 			user, password := "reader", "fixture-read-token"
 			if mode == "anonymous" {
 				user, password = "", ""
 			}
+
 			stub := `forge-ci() {
   case "$*" in
     'validate event-context') test "$MODE" != untrusted ;;
@@ -90,11 +99,13 @@ func TestPrivateBuildOnlyReadsRetainTheTrustedEventGate(t *testing.T) {
 				"REGISTRY_USER=" + user, "REGISTRY_PASSWORD=" + password}
 			out, err := command.CombinedOutput()
 			require.NotContains(t, string(out), "fixture-read-token")
+
 			if mode == "private" || mode == "anonymous" {
 				require.NoError(t, err, "%s", out)
 			} else {
 				require.Error(t, err)
 			}
+
 			if mode == "private" {
 				require.FileExists(t, calls)
 			} else {

@@ -29,6 +29,7 @@ func (p *Provider) ResolveForgeMavenRegistry() (provider.ForgeMavenRegistry, err
 	if token == "" {
 		token, scheme = p.envFunc()("CI_JOB_TOKEN"), provider.MavenAuthJobTokenHeader
 	}
+
 	return provider.ForgeMavenRegistry{
 		ServerID:   "gitlab-maven",
 		URL:        projects + "/packages/maven",

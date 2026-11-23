@@ -292,13 +292,16 @@ func TestRelease_UploadAssetToExistingRelease_ServesTheSameBytes(t *testing.T) {
 			if !ok {
 				t.Fatalf("%s does not implement ReleaseReader", forge)
 			}
+
 			plan := apprelease.ValidatePublishedInput{Tag: tag, Repository: livetest.RepoSlug(target, repo), Assets: []string{path}}
 			if err := apprelease.ValidatePublishedRelease(ctx, reader, io.Discard, output.Annotator{}, plan); !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "missing "+filepath.Base(path)) {
 				t.Fatalf("read-back before upload must name the missing planned asset, got %v", err)
 			}
+
 			if err := uploader.UploadReleaseAsset(ctx, tag, path); err != nil {
 				t.Fatalf("%s UploadReleaseAsset: %v", forge, err)
 			}
+
 			if err := apprelease.ValidatePublishedRelease(ctx, reader, io.Discard, output.Annotator{}, plan); err != nil {
 				t.Fatalf("read-back after upload: %v", err)
 			}

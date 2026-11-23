@@ -66,17 +66,21 @@ func TestLiveLauncherWaitsForCleanupAndReleasesLock(t *testing.T) {
 			}()
 
 			waitFixtureFile(t, ctx, root, "ready", done)
+
 			flags, err := os.ReadFile(filepath.Join(root, "test-flags"))
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			wantTimeout := "3h0m0s"
 			if mode == "provider-scoped signal" {
 				wantTimeout = "8h0m0s"
 			}
+
 			if !strings.Contains(string(flags), "-test.timeout="+wantTimeout) {
 				t.Fatalf("launcher lost the resolved timeout: %s", flags)
 			}
+
 			lock := filepath.Join(root, "state/forge-ci/live.lock")
 			requireLiveLock(t, ctx, lock, true)
 

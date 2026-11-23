@@ -178,15 +178,15 @@ jobs:
           REGISTRY_USER: ${{ github.actor }}
           REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: ./cli-prebuilt/forge-ci container login
-      # Build into local container storage with buildah (daemonless, node-less,
-      # forge-neutral) — replaces docker/setup-buildx-action + docker/build-push-action.
-      # The build-once CLI staged above drives it; podman reads buildah's storage
-      # for the smoke tests below. buildah tags a bare name under localhost/, so
-      # the image is referenced as localhost/<tag>. Imports the forge-neutral
-      # registry cache read-only (no --cache-push; best-effort — a miss just
-      # builds from scratch). BUILD_CACHE_REPO is empty (no cache) on
-      # pull_request, matching the login gate. Only the publish jobs WRITE the
-       # cache. Each verification leg runs on its selected native architecture.
+        # Build into local container storage with buildah (daemonless, node-less,
+        # forge-neutral) — replaces docker/setup-buildx-action + docker/build-push-action.
+        # The build-once CLI staged above drives it; podman reads buildah's storage
+        # for the smoke tests below. buildah tags a bare name under localhost/, so
+        # the image is referenced as localhost/<tag>. Imports the forge-neutral
+        # registry cache read-only (no --cache-push; best-effort — a miss just
+        # builds from scratch). BUILD_CACHE_REPO is empty (no cache) on
+        # pull_request, matching the login gate. Only the publish jobs WRITE the
+        # cache. Each verification leg runs on its selected native architecture.
       - name: Build runtime image
         env:
           BUILD_CONTEXT: .
@@ -286,9 +286,7 @@ jobs:
     name: Publish (${{ matrix.name }} - linux/${{ matrix.arch }})
     needs: [image-coordinates, verify, build-cli, platforms]
     if: >-
-      (github.event_name == 'release' && github.ref_type == 'tag') ||
-      (needs.image-coordinates.outputs.on-publication-branch == 'true' &&
-      (github.event_name == 'schedule' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)))
+      (github.event_name == 'release' && github.ref_type == 'tag') || (needs.image-coordinates.outputs.on-publication-branch == 'true' && (github.event_name == 'schedule' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)))
     # GitHub's hosted runner label for the leg's architecture.
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-26.04-arm' || 'ubuntu-26.04' }}
     strategy:
@@ -504,9 +502,7 @@ jobs:
     name: Publish Manifest (${{ matrix.name }})
     needs: [image-coordinates, publish-arch, build-cli, platforms]
     if: >-
-      (github.event_name == 'release' && github.ref_type == 'tag') ||
-      (needs.image-coordinates.outputs.on-publication-branch == 'true' &&
-      (github.event_name == 'schedule' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)))
+      (github.event_name == 'release' && github.ref_type == 'tag') || (needs.image-coordinates.outputs.on-publication-branch == 'true' && (github.event_name == 'schedule' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)))
     runs-on: ubuntu-26.04
     strategy:
       fail-fast: false

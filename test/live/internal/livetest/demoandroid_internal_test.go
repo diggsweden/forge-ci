@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/goccy/go-yaml"
@@ -27,42 +26,53 @@ func TestAndroidDemosUseKotlinSourcesAndLintImage(t *testing.T) {
 		t.Run(demo, func(t *testing.T) {
 			t.Parallel()
 			root := filepath.Join(reporoot.Path(t), "test/live/fixtures/consumers", demo, "consumer")
+
 			for _, sourceSet := range []string{"main", "test"} {
 				count := 0
 				err := filepath.WalkDir(filepath.Join(root, module, "src", sourceSet), func(path string, entry fs.DirEntry, err error) error {
 					if err != nil {
 						return err
 					}
+
 					require.NotEqual(t, ".java", filepath.Ext(path), "Android demos are Kotlin, including tests")
+
 					if !entry.IsDir() && filepath.Ext(path) == ".kt" {
 						count++
 					}
+
 					return nil
 				})
 				require.NoError(t, err)
 				require.Positive(t, count, sourceSet)
 			}
+
 			plan, err := os.ReadFile(filepath.Join(root, "nanolinter.toml"))
 			require.NoError(t, err)
 			require.Contains(t, string(plan), `checks = ["kotlin-ktlint", "kotlin-detekt", "secrets", "sast"]`)
 			require.Contains(t, string(plan), `block = ["kotlin-ktlint", "kotlin-detekt", "secrets"]`)
+
 			build, err := os.ReadFile(filepath.Join(root, module, "build.gradle.kts"))
 			require.NoError(t, err)
 			require.Contains(t, string(build), "JvmTarget.JVM_17")
 			require.NotContains(t, string(build), `id("org.jetbrains.kotlin.android")`)
+
 			workflow, err := os.ReadFile(filepath.Join(root, "test/live/github/workflows/pullrequest-workflow.yml"))
 			require.NoError(t, err)
 			require.Contains(t, string(workflow), "nanolinter:kotlin@sha256:")
+
 			found := false
+
 			for _, c := range GitLabPreparedCases {
 				if c.Demo == demo && c.Lane == LanePrivateAndroid {
 					found = true
+
 					require.Equal(t, flavorKotlin, c.JobImage)
 					require.Equal(t, "android", c.Runtime)
 				}
 			}
+
 			require.True(t, found, "missing prepared Android gate")
-			require.False(t, strings.Contains(string(plan), "java-"))
+			require.NotContains(t, string(plan), "java-")
 		})
 	}
 }
@@ -71,6 +81,7 @@ func TestAndroidDemosUseKotlinSourcesAndLintImage(t *testing.T) {
 // both run their tests.
 func TestAndroidForgejoGatesSeparateLintAndSDKBuild(t *testing.T) {
 	t.Parallel()
+
 	for demo, tasks := range map[string]string{
 		"hello-android":         "app:test assembleDemoDebug assembleDemoRelease bundleDemoRelease",
 		"hello-android-library": "lib:test lib:lintRelease lib:assembleRelease",
@@ -79,6 +90,7 @@ func TestAndroidForgejoGatesSeparateLintAndSDKBuild(t *testing.T) {
 			t.Parallel()
 			body := reporoot.ReadFile(t, "test/live/fixtures/consumers/"+demo+"/consumer/.forgejo/workflows/pullrequest-workflow.yml")
 			require.NotContains(t, string(body), "secrets.")
+
 			var workflow struct {
 				Jobs map[string]struct {
 					Container struct{ Image, Options string }
@@ -92,15 +104,19 @@ func TestAndroidForgejoGatesSeparateLintAndSDKBuild(t *testing.T) {
 			require.Equal(t, "--user 65532:65532", workflow.Jobs["build"].Container.Options)
 			require.Contains(t, workflow.Jobs["build"].Steps[1].Run, "./gradlew --no-daemon "+tasks)
 			require.ElementsMatch(t, []string{"lint", "build"}, workflow.Jobs["summary"].Needs)
+
 			found := false
+
 			for _, c := range ForgejoPreparedCases {
 				if c.Demo == demo && c.Lane == LanePrivateAndroid {
 					found = true
+
 					require.Equal(t, flavorKotlin, c.JobImage)
 					require.Equal(t, "android", c.Runtime)
 					require.Equal(t, TrialPullRequest, c.Event)
 				}
 			}
+
 			require.True(t, found)
 		})
 	}

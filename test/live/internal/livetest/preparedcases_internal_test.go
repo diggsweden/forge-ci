@@ -89,7 +89,9 @@ func TestForgejoSettingsOfACase(t *testing.T) {
 	if _, err := (PreparedCase{Event: TrialPullRequest, JobImage: flavorGo, Builder: ImageBuilderKaniko}).Settings(prepared); err != nil {
 		t.Errorf("a kaniko pull request without the archive: %v", err)
 	}
+
 	delete(prepared, "RUNTIME_IMAGE_ANDROID")
+
 	if _, err := (PreparedCase{Event: TrialPullRequest, JobImage: flavorKotlin, Runtime: "android"}).Settings(prepared); !errors.Is(err, errs.ErrValidation) || !strings.Contains(err.Error(), "RUNTIME_IMAGE_ANDROID") {
 		t.Errorf("Android gate without its separate SDK image: %v", err)
 	}

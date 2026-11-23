@@ -29,25 +29,31 @@ func TestReleaseAuthorPreflight(t *testing.T) {
 			t.Setenv("COMMIT_AUTHOR_NAME", tc.name)
 			t.Setenv("COMMIT_AUTHOR_EMAIL", tc.email)
 			t.Setenv("RELEASE_GIT_HOST_KEY_FINGERPRINT", tc.pin)
+
 			args := []string{"validate", "release-author"}
 			if tc.sshPush {
 				args = append(args, "--require-ssh-host-pin")
 			}
+
 			err := validate.New().Run(t.Context(), args)
 			if len(tc.fields) == 0 {
 				if err != nil {
 					t.Fatal(err)
 				}
+
 				return
 			}
+
 			if !errors.Is(err, errs.ErrValidation) {
 				t.Fatalf("expected a blocking validation error, got %v", err)
 			}
+
 			for _, field := range tc.fields {
 				if !strings.Contains(err.Error(), field) {
 					t.Errorf("error should name %s", field)
 				}
 			}
+
 			for _, value := range []string{tc.name, tc.email, tc.pin} {
 				if value != "" && strings.Contains(err.Error(), value) {
 					t.Fatal("validation error disclosed an input")

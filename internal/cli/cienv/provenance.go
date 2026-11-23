@@ -93,6 +93,7 @@ func ProvenanceSource() (string, string, string) {
 // A short ref cannot distinguish a branch from a tag with the same name.
 func ProvenanceFullRef() string {
 	ref, _ := runcontext.Ref().ResolveAttested(runcontext.ProvenanceEnv(os.Getenv))
+
 	return ref.String()
 }
 

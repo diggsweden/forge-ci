@@ -146,6 +146,7 @@ func TestRuntimePublicationPreflightAdmitsOnlyPinnedBuildImages(t *testing.T) {
 
 func TestRuntimePublicationPreflightExplainsBranchRefusals(t *testing.T) {
 	t.Parallel()
+
 	script := preflightScript(t, ".forgejo/workflows/runtime-images.yml")
 	for _, tc := range []struct{ branch, ref, message string }{
 		{"master", "refs/heads/master", ""},
@@ -157,13 +158,16 @@ func TestRuntimePublicationPreflightExplainsBranchRefusals(t *testing.T) {
 	} {
 		t.Run(tc.branch+"/"+tc.ref, func(t *testing.T) {
 			t.Parallel()
+
 			ok, output, stderr := runPreflightWithStderr(t, script, exampleRepository, exampleSigner,
 				"RUNTIME_PUBLICATION_BRANCH="+tc.branch, "PUBLICATION_REF="+tc.ref)
 			if tc.message == "" {
 				require.True(t, ok, stderr)
 				require.NotEmpty(t, output)
+
 				return
 			}
+
 			require.False(t, ok)
 			require.Empty(t, output)
 			require.Contains(t, stderr, tc.message)
@@ -325,17 +329,22 @@ func TestRuntimeFlavoursMatchTheGitHubPublisherAndContainerfile(t *testing.T) {
 	containerfile := string(reporoot.ReadFile(t, "containers/runtime/Containerfile"))
 
 	github := loadWorkflow(t, ".github/workflows/self-runtime-container.yml")
+
 	for _, name := range []string{"verify", "publish-arch", "publish-merge"} {
 		output := "build-matrix"
 		if name == "publish-merge" {
 			output = "image-matrix"
 		}
+
 		matrix := mappingValue(mappingValue(github.jobs[name].node, "strategy"), "matrix")
 		require.Equal(t, "${{ fromJSON(needs.platforms.outputs."+output+") }}", scalarString(matrix))
 	}
+
 	require.Contains(t, string(reporoot.ReadFile(t, ".github/workflows/self-runtime-container.yml")), "container runtime-publication matrix")
+
 	for _, image := range roster {
 		require.Contains(t, containerfile, " AS "+image.Target+"\n")
+
 		if image.Target == "android" {
 			require.Equal(t, []string{"amd64"}, image.Archs)
 		} else {

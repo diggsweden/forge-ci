@@ -57,8 +57,10 @@ func TestRuntimePublicationNamespaceCoherence(t *testing.T) {
 					if !strings.Contains(value, "matrix.name") {
 						continue
 					}
+
 					if name == "verify" {
 						require.Equal(t, "localhost/${{ matrix.name }}:verify", value, step.Name)
+
 						continue
 					}
 

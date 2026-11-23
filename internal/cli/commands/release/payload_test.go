@@ -60,7 +60,10 @@ func TestContextOverlayCLIRejectsConflictingModesBeforeCheckoutWrites(t *testing
 	require.NoError(t, os.WriteFile(filepath.Join(source, "binary"), []byte("verified"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(destination, "binary"), []byte("checkout"), 0o644))
 	digest := capturePayloadDigest(t, "--dist-dir", source, "--manifest-root", ".")
-	args := []string{"release", "validate-dist", "--dist-dir", source, "--expected-digest", digest, "--overlay-dir", destination}
+
+	args := make([]string, 0, 10)
+	args = append(args, "release", "validate-dist", "--dist-dir", source, "--expected-digest", digest, "--overlay-dir", destination)
+
 	for _, flags := range [][]string{{"--stage-dir", filepath.Join(t.TempDir(), "new")}, {"--canonical-payload"}} {
 		err := releasecmd.New().Run(t.Context(), append(append([]string{}, args...), flags...))
 		require.ErrorContains(t, err, "--overlay-dir is exclusive")
@@ -68,7 +71,9 @@ func TestContextOverlayCLIRejectsConflictingModesBeforeCheckoutWrites(t *testing
 		require.NoError(t, err)
 		require.Equal(t, "checkout", string(body))
 	}
+
 	require.NoError(t, releasecmd.New().Run(t.Context(), append(args, "--manifest-root", ".")))
+
 	body, err := os.ReadFile(filepath.Join(destination, "binary"))
 	require.NoError(t, err)
 	require.Equal(t, "verified", string(body))

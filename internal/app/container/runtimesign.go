@@ -44,12 +44,8 @@ func SignRuntimePublication(ctx context.Context, signer ledgerImageSigner, regis
 		return fmt.Errorf("runtime signing requires image signer and registry adapters: %w", errs.ErrUsage)
 	}
 
-	branch, err := domaincontainer.RuntimePublicationBranch(in.PublicationBranch)
-	if err != nil {
+	if err := requireRuntimePublicationRef(in.PublicationBranch, in.Provenance.Ref); err != nil {
 		return err
-	}
-	if in.Provenance.Ref != "refs/heads/"+branch {
-		return fmt.Errorf("runtime signing requires the %s publication ref (refs/heads/%s): %w", branch, branch, errs.ErrValidation)
 	}
 
 	manifest, source := runtimeSourceManifest(in.Manifest)
@@ -110,6 +106,19 @@ func SignRuntimePublication(ctx context.Context, signer ledgerImageSigner, regis
 	}
 
 	return AttestImage(ctx, signer, out, attestation)
+}
+
+func requireRuntimePublicationRef(publicationBranch, ref string) error {
+	branch, err := domaincontainer.RuntimePublicationBranch(publicationBranch)
+	if err != nil {
+		return err
+	}
+
+	if ref != "refs/heads/"+branch {
+		return fmt.Errorf("runtime signing requires the %s publication ref (refs/heads/%s): %w", branch, branch, errs.ErrValidation)
+	}
+
+	return nil
 }
 
 func runtimeIndexMetadata(root string, derived signerImageManifestDerived) (SignerImageMetadata, error) {

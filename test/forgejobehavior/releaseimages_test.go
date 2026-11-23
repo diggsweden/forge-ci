@@ -21,20 +21,26 @@ import (
 // against the downloaded bytes before it can change the consumer checkout.
 func TestReleaseImageContextOverlayVerifiesDownloadedBytes(t *testing.T) {
 	t.Parallel()
+
 	engine := forgeCIEngine(t)
 	for _, mismatch := range []bool{false, true} {
 		t.Run(map[bool]string{false: "verified", true: "mismatch"}[mismatch], func(t *testing.T) {
+			t.Parallel()
+
 			box := newSandbox(t, "context-overlay")
 			box.write("payload/generated.txt", "producer bytes", 0o600)
 			box.write("workspace/source/generated.txt", "old bytes", 0o600)
 			box.write("workspace/source/Containerfile", "FROM scratch\n", 0o600)
+
 			digest, err := domainrelease.DistDigest(os.DirFS(filepath.Join(box.root, "payload")), ".")
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			if mismatch {
 				digest = strings.Repeat("0", 64)
 			}
+
 			box.write(".engine/bin/lib-forge-ci.sh", `run_forge_ci() {
   if [[ "$1 $2" == 'artifact download' ]]; then
     [[ "$3" == --name && "$4" == context && "$5" == --dir ]]
@@ -44,23 +50,28 @@ func TestReleaseImageContextOverlayVerifiesDownloadedBytes(t *testing.T) {
   fi
 }
 `, 0o600)
+
 			got := box.run(workflowStep(t, "release-images.yml", "build", "Verify and overlay the build context artifact").Run,
 				"HELPERS_DIR="+box.root, "RUNNER_TEMP="+box.root, "GITHUB_WORKSPACE="+filepath.Join(box.root, "workspace"),
 				"PAYLOAD="+filepath.Join(box.root, "payload"), "REAL_ENGINE="+engine, "CONTEXT_ARTIFACT=context", "CONTEXT_DIGEST="+digest)
 			if (got.status != 0) != mismatch {
 				t.Fatalf("status %d: %s", got.status, got.stderr)
 			}
+
 			body, err := os.ReadFile(filepath.Join(box.root, "workspace/source/generated.txt"))
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			want := "producer bytes"
 			if mismatch {
 				want = "old bytes"
 			}
+
 			if string(body) != want {
 				t.Fatalf("checkout bytes %q, want %q", body, want)
 			}
+
 			body, err = os.ReadFile(filepath.Join(box.root, "workspace/source/Containerfile"))
 			if err != nil || string(body) != "FROM scratch\n" {
 				t.Fatalf("checkout damaged: %q, %v", body, err)

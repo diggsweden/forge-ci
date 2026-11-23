@@ -9,8 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLiveTestTimeout(t *testing.T) {
+func TestProcessTimeout(t *testing.T) {
 	t.Parallel()
+
 	for _, tc := range []struct {
 		name, event, settings, override, want string
 	}{
@@ -31,12 +32,16 @@ func TestLiveTestTimeout(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			env := map[string]string{"FORGE_CI_LIVE_CONSUMER_EVENT": tc.event, "FORGE_CI_LIVE_CONSUMER_SETTINGS": tc.settings, "FORGE_CI_LIVE_TEST_TIMEOUT": tc.override}
-			got, err := LiveTestTimeout(func(key string) string { return env[key] })
+
+			got, err := ProcessTimeout(func(key string) string { return env[key] })
 			if tc.want == "" {
 				require.Error(t, err)
+
 				return
 			}
+
 			require.NoError(t, err)
 			require.Equal(t, tc.want, got)
 		})

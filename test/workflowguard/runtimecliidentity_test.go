@@ -70,6 +70,7 @@ func TestRuntimeImagesUseCanonicalDeliveryArtifacts(t *testing.T) {
 
 func TestRuntimeNativeSubsetsDriveVerificationBuildsAndMerge(t *testing.T) {
 	t.Parallel()
+
 	var workflow struct {
 		Jobs map[string]struct {
 			Needs    []string `yaml:"needs"`
@@ -78,16 +79,19 @@ func TestRuntimeNativeSubsetsDriveVerificationBuildsAndMerge(t *testing.T) {
 			Strategy struct {
 				Matrix string `yaml:"matrix"`
 			} `yaml:"strategy"`
-		}
+		} `yaml:"jobs"`
 	}
+
 	body := reporoot.ReadFile(t, ".github/workflows/self-runtime-container.yml")
 	require.NoError(t, yaml.Unmarshal(body, &workflow))
+
 	for _, name := range []string{"verify", "publish-arch"} {
 		job := workflow.Jobs[name]
 		require.Contains(t, job.Needs, "platforms")
 		require.Equal(t, "${{ fromJSON(needs.platforms.outputs.build-matrix) }}", job.Strategy.Matrix)
 		require.Equal(t, "${{ matrix.arch == 'arm64' && 'ubuntu-26.04-arm' || 'ubuntu-26.04' }}", job.Runner)
 	}
+
 	require.Contains(t, workflow.Jobs["publish-merge"].Needs, "platforms")
 	require.Equal(t, "${{ fromJSON(needs.platforms.outputs.image-matrix) }}", workflow.Jobs["publish-merge"].Strategy.Matrix)
 	require.Empty(t, workflow.Jobs["platforms"].If, "verification also needs a plan on PR and verify-only dispatch")

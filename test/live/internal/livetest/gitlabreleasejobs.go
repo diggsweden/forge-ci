@@ -61,5 +61,5 @@ func releaseJobBoundToChild(job *gitlabapi.Job, child int64, requestSHA string) 
 }
 
 func releaseJobHasArtifact(job *gitlabapi.Job) bool {
-	return job.ID > 0 && job.Status == "success" && job.ArtifactsFile.Size > 0
+	return job.ID > 0 && job.Status == runSuccess && job.ArtifactsFile.Size > 0
 }

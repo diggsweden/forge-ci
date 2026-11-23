@@ -66,6 +66,7 @@ func releaseImagesFetchBuildInputsCmd() *cli.Command {
 			if err != nil {
 				return err
 			}
+
 			if cmd.IsSet(flagParentBaseJSON) {
 				if err := validateBuildParentProjection(cmd, build); err != nil {
 					return err
@@ -90,14 +91,17 @@ func validateBuildParentProjection(cmd *cli.Command, build pipeline.ReleaseImage
 	if err != nil {
 		return err
 	}
+
 	if !domaincontainer.ValidSHA256Hex(parent.InputID) || len(build.RegistryInputs) != 1 || build.CacheTag != "" {
 		return fmt.Errorf("parent-base-json requires a valid input_id, exactly one planned parent and no architecture cache: %w", errs.ErrInvalidConfig)
 	}
+
 	for _, ref := range build.RegistryInputs {
 		if ref != parent.Ref {
 			return fmt.Errorf("planned digest-pinned parent does not match parent-base-json: %w", errs.ErrInvalidConfig)
 		}
 	}
+
 	return nil
 }
 
@@ -117,6 +121,7 @@ func registryForInputPull(cmd *cli.Command, builds []pipeline.ReleaseImageBuild)
 		if authFile != "" {
 			return ociregistry.WithAuthFile(authFile), nil
 		}
+
 		return ociregistry.NewAnonymous(), nil
 	}
 
@@ -126,13 +131,16 @@ func registryForInputPull(cmd *cli.Command, builds []pipeline.ReleaseImageBuild)
 			return nil, err
 		}
 	}
+
 	password, err := regflags.FileOrEnv(path)
 	if err != nil {
 		return nil, err
 	}
+
 	if password == "" {
 		return nil, fmt.Errorf("parent-registry-password-file must supply a pull credential: %w", errs.ErrUsage)
 	}
+
 	return ociregistry.WithRepositoryPullCredentials(repository, username, password, cmd.String("parent-registry-auth-origin"))
 }
 
@@ -140,9 +148,11 @@ func validateParentPullScope(build pipeline.ReleaseImageBuild, repository, usern
 	if !domaincontainer.ValidRepositoryName(repository) || username == "" || path == "" || authFile != "" {
 		return fmt.Errorf("authenticated parent pulls require parent-registry-repository, parent-registry-user and parent-registry-password-file, without auth-file: %w", errs.ErrUsage)
 	}
+
 	if len(build.RegistryInputs) != 1 || build.CacheTag != "" {
 		return fmt.Errorf("a scoped pull requires exactly one parent and no architecture cache: %w", errs.ErrInvalidConfig)
 	}
+
 	for _, ref := range build.RegistryInputs {
 		if parent, _, _ := strings.Cut(ref, "@"); parent != repository {
 			return fmt.Errorf("registry input does not match parent-registry-repository: %w", errs.ErrInvalidConfig)

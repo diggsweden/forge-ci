@@ -20,8 +20,10 @@ func TestPrepareReleaseIsolatesRenderingFromTheSigningJob(t *testing.T) {
 		if secretReference.MatchString(value) {
 			t.Errorf("render job references a secret: %s", value)
 		}
+
 		return false
 	})
+
 	prepare := parsed.jobs["prepare"]
 	if mentions(prepare.node, "inputs['changelog-") || mentions(prepare.node, "inputs['commit-body-config']") {
 		t.Error("the signing job must never evaluate a renderer config")

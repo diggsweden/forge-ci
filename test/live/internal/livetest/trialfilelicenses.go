@@ -15,6 +15,7 @@ func licensedTrialSigners(signers string) string {
 	if strings.HasPrefix(signers, trialFileLicense) {
 		return signers
 	}
+
 	return trialFileLicense + signers
 }
 

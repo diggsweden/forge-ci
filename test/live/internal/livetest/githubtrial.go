@@ -1861,6 +1861,7 @@ func (trial *GitHubTrial) waitWorkflows(repo, workflows string, only ...string) 
 	if err != nil {
 		trial.tb.Fatalf("livetest: list the rendered workflows: %v", err)
 	}
+
 	if len(only) != 0 {
 		entries = slices.DeleteFunc(entries, func(entry os.DirEntry) bool { return !slices.Contains(only, entry.Name()) })
 		if len(entries) != len(only) {

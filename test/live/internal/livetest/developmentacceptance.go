@@ -14,7 +14,7 @@ import (
 // acceptance contracts.
 func ValidateDevelopmentPush(run WorkflowRun, runs []WorkflowRun, workflow string) error {
 	switch {
-	case run.Status != "success":
+	case run.Status != runSuccess:
 		return fmt.Errorf("development push status = %q, want success: %w", run.Status, errs.ErrValidation)
 	case run.Event != eventPush:
 		return fmt.Errorf("development push event = %q, want push: %w", run.Event, errs.ErrValidation)

@@ -315,6 +315,7 @@ func (settings *TrialSettings) combinationGap() error {
 	if _, err := settings.DirectParentBuilds(); err != nil {
 		return err
 	}
+
 	if settings.NextVersion != "" && (settings.InterruptAfter != "" || semver.Compare("v"+settings.NextVersion, "v"+settings.Version) <= 0) {
 		return fmt.Errorf("next-version requires an increasing release version and cannot accompany interrupt-after: %w", errs.ErrValidation)
 	}
@@ -787,6 +788,7 @@ func (layer Layer) PlanConsumer(workflows map[string]string, facts ConsumerFacts
 			return ConsumerPlan{}, err
 		}
 	}
+
 	if err := plan.bindWorkflowSecrets(workflows, entryPoints, facts.Secrets); err != nil {
 		return ConsumerPlan{}, err
 	}

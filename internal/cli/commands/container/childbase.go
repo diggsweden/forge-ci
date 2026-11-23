@@ -103,6 +103,7 @@ build --inputs-dir reads. --inputs-dir must not hold a build's directory yet.`,
 			if err != nil {
 				return err
 			}
+
 			registry, err := registryForInputPull(cmd, plan.Builds)
 			if err != nil {
 				return err

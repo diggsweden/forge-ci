@@ -97,6 +97,7 @@ func TestBlackboxGatesUseFreshBinaryFromTheExactCheckout(t *testing.T) {
 		{".github/workflows/self-release.yml", "blackbox", "Build exact release candidate", "Run strict black-box release gate"},
 	} {
 		candidate := jobStep(t, gate.file, gate.job, gate.build)
+
 		test := jobStep(t, gate.file, gate.job, gate.test)
 		if candidate.Env["EXPECTED_SOURCE_SHA"] != "${{ github.sha }}" || candidate.Run != build.Run ||
 			test.Env["FORGE_CI_TEST_BINARY"] != "${{ runner.temp }}/forge-ci-candidate" {

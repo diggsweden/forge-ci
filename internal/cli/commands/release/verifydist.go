@@ -121,10 +121,12 @@ EXAMPLE:
 			var err error
 
 			destination := cmd.String("stage-dir")
+
 			overlay := cmd.String("overlay-dir")
 			if overlay != "" && (destination != "" || cmd.Bool("canonical-payload")) {
 				return fmt.Errorf("--overlay-dir is exclusive with --stage-dir and --canonical-payload: %w", errs.ErrUsage)
 			}
+
 			switch {
 			case overlay != "":
 				err = apprelease.OverlayVerifiedDist(ctx, dir, overlay, digest, cmd.String("manifest-root"))

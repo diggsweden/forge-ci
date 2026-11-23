@@ -73,6 +73,16 @@ caf = "caf"
 # matches both sh and bash. It is regex syntax, not a word.
 ba = "ba"
 
+# Deliberate misspelled boolean in
+# test/live/internal/livetest/parentpullevidence_internal_test.go: the
+# trial-settings parser must refuse every value but true and false, and
+# "ture" is one of the refused inputs.
+ture = "ture"
+
+# Heading anchor in docs/live-runs.md: the link target is generated from
+# "In this repository's own CI", where the apostrophe is dropped.
+repositorys = "repositorys"
+
 [files]
 # Workflows of other repositories, copied as they were so the consumer-trial
 # planner is tested on what real consumers write. Their wording is theirs.

@@ -20,15 +20,19 @@ func ValidateReleaseImageContext(name, digest string) error {
 	if name == "" && digest == "" {
 		return nil
 	}
+
 	if name == "" || digest == "" {
 		return fmt.Errorf("context-artifact and context-digest must be supplied together: %w", errs.ErrValidation)
 	}
+
 	if err := artifact.ValidateName(name); err != nil {
 		return err
 	}
+
 	decoded, err := hex.DecodeString(digest)
 	if err != nil || len(decoded) != sha256.Size || digest != strings.ToLower(digest) {
 		return fmt.Errorf("context-digest must be a lowercase SHA-256: %w", errs.ErrValidation)
 	}
+
 	return nil
 }

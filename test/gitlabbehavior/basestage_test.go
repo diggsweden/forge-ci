@@ -130,6 +130,7 @@ rc_engine() {
 
 func TestChildBasePullUsesOnlyReadCredential(t *testing.T) {
 	t.Parallel()
+
 	output, calls, _, err := runBaseJob(t, "rc_base_build 'tools+debug' 'base'",
 		map[string]string{"_release-base-parent/parent-base.json": baseProjection},
 		"PARENT_REGISTRY_READ_TOKEN=read-only-fixture", "PARENT_REGISTRY_USER=reader", "PARENT_REGISTRY_AUTH_ORIGIN=https://gitlab.invalid")
@@ -153,10 +154,12 @@ func runBaseJob(t *testing.T, call string, given map[string]string, env ...strin
 	// The signing preflight is the script's own; only the toolchain check it
 	// starts is empty here.
 	given[filepath.Join(dir, "helpers", ".forgejo", "scripts", "verify-signer-toolchain.sh")] = ""
+
 	pullWrapper, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".engine", "bin", "lib-parent-pull.sh"))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	given[filepath.Join(dir, "helpers", ".engine", "bin", "lib-parent-pull.sh")] = string(pullWrapper)
 
 	for name, content := range given {
@@ -433,6 +436,7 @@ func TestReleasePlanPassesOnlyTheFlagsOfItsCommand(t *testing.T) {
 	script := fmt.Sprint(gitlabrender.Jobs(t, "templates/release.yml", given)["Check: release plan"]["script"])
 	verified := strings.Index(script, "SIGNER_STRICT=1 verify_forge_ci")
 	author := strings.Index(script, `"${engine}" validate release-author --require-ssh-host-pin`)
+
 	checkout := strings.Index(script, `"${engine}" platform checkout`)
 	if verified < 0 || author <= verified || checkout <= author {
 		t.Fatal("check release author after bootstrap verification and before consumer checkout in the parent pipeline")

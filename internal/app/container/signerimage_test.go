@@ -57,6 +57,7 @@ func (f *fakeSignerImageTool) BindPublication(authFile, dest string) (appcontain
 	if err := f.step("bind"); err != nil {
 		return nil, err
 	}
+
 	return fakeArchitecturePublication{tool: f, authFile: authFile, dest: dest}, nil
 }
 

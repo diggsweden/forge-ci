@@ -16,35 +16,46 @@ import (
 
 func TestManifestPullDenialExplainsAccessMode(t *testing.T) {
 	t.Parallel()
+
 	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound} {
 		for _, authenticated := range []bool{false, true} {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/v2/" {
 					w.WriteHeader(http.StatusOK)
+
 					return
 				}
+
 				w.WriteHeader(status)
 			}))
 			repository := strings.TrimPrefix(server.URL, "http://") + "/org/parent"
 			adapter := NewAnonymous()
+
 			if authenticated {
 				var err error
+
 				adapter, err = WithRepositoryPullCredentials(repository, "reader", "fixture-secret", "")
 				require.NoError(t, err)
 				// Only this local HTTP fixture bypasses TLS; production scoped pulls require it.
 				adapter.explicitTLS = false
 			}
+
 			_, err := adapter.Manifest(t.Context(), repository+"@sha256:"+strings.Repeat("a", 64))
+
 			server.Close()
 			require.Error(t, err)
 			require.NotContains(t, err.Error(), "fixture-secret")
+
 			if status == http.StatusNotFound {
 				require.ErrorIs(t, err, errs.ErrMissingInput)
 				require.NotContains(t, err.Error(), "pull denied")
+
 				continue
 			}
+
 			require.ErrorIs(t, err, errs.ErrPermissionDenied)
 			require.Contains(t, err.Error(), repository)
+
 			if authenticated {
 				require.Contains(t, err.Error(), "authenticated parent registry pull denied")
 				require.Contains(t, err.Error(), "can read this exact package")

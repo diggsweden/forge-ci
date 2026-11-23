@@ -15,13 +15,16 @@ func TestRuntimeMatrixCommandWritesSelectedNativeMatricesWithoutPublicationAutho
 	root := t.TempDir()
 	roster, output := filepath.Join(root, "images.json"), filepath.Join(root, "output")
 	require.NoError(t, os.WriteFile(roster, []byte(`[{"target":"go","name":"runtime-go","archs":["amd64","arm64"]},{"target":"android","name":"runtime-android","archs":["amd64"]}]`), 0600))
+
 	for _, key := range []string{"GITLAB_CI", "FORGEJO_ACTIONS", "GITEA_ACTIONS"} {
 		t.Setenv(key, "")
 	}
+
 	t.Setenv("GITHUB_ACTIONS", "true")
 	t.Setenv("GITHUB_OUTPUT", output)
 	t.Setenv("GITHUB_REF", "refs/pull/1/merge")
 	require.NoError(t, runtimePublicationCmd().Run(t.Context(), []string{"runtime-publication", "matrix", "--roster", roster, "--release-platforms", "linux/arm64"}))
+
 	body, err := os.ReadFile(output)
 	require.NoError(t, err)
 	require.Contains(t, string(body), `build-matrix={"include":[{"target":"go","name":"runtime-go","arch":"arm64"}]}`)

@@ -48,6 +48,9 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
+// schemeHTTPS is the only scheme a registry or its auth origin may use.
+const schemeHTTPS = "https"
+
 // osLinux is the only image platform OS forge-ci selects from an index.
 const osLinux = "linux"
 
@@ -87,14 +90,16 @@ func WithRepositoryPullCredentials(repository, username, password, authOrigin st
 		return nil, fmt.Errorf("invalid parent-registry-repository: %w", errs.ErrInvalidConfig)
 	}
 
-	registryURL := &url.URL{Scheme: "https", Host: ref.RegistryStr()}
+	registryURL := &url.URL{Scheme: schemeHTTPS, Host: ref.RegistryStr()}
 	trusted := []string{httpsAuthority(registryURL)}
+
 	if authOrigin != "" {
 		u, err := url.Parse(authOrigin)
-		if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil ||
+		if err != nil || u.Scheme != schemeHTTPS || u.Hostname() == "" || u.User != nil ||
 			(u.Path != "" && u.EscapedPath() != "/") || u.ForceQuery || u.RawQuery != "" || strings.Contains(authOrigin, "#") {
 			return nil, fmt.Errorf("parent-registry-auth-origin must be an HTTPS origin without userinfo, path, query or fragment: %w", errs.ErrInvalidConfig)
 		}
+
 		trusted = append(trusted, httpsAuthority(u))
 	}
 
@@ -113,8 +118,11 @@ type ImagePublication struct {
 	imageRef string
 }
 
+// BindImagePublication resolves the credential for imageRef and binds it to
+// the returned publication.
 func BindImagePublication(authFile, imageRef string) (*ImagePublication, error) {
 	source := WithAuthFile(authFile)
+
 	ref, err := source.parse(imageRef)
 	if err != nil {
 		return nil, fmt.Errorf("parse publication reference: %w: %w", err, errs.ErrUsage)
@@ -128,10 +136,12 @@ func BindImagePublication(authFile, imageRef string) (*ImagePublication, error) 
 	return &ImagePublication{registry: &Adapter{boundAuth: auth}, imageRef: imageRef}, nil
 }
 
+// PushLayout pushes the layout to the bound destination and returns its digest.
 func (p *ImagePublication) PushLayout(ctx context.Context, layoutDir string) (string, error) {
 	return p.registry.PushLayout(ctx, layoutDir, p.imageRef)
 }
 
+// Manifest reads the bound destination back with the bound credential.
 func (p *ImagePublication) Manifest(ctx context.Context) ([]byte, error) {
 	return p.registry.Manifest(ctx, p.imageRef)
 }
@@ -261,14 +271,10 @@ func (a *Adapter) PushIndexLayout(ctx context.Context, layoutDir, imageRef strin
 func (a *Adapter) Manifest(ctx context.Context, ref string) ([]byte, error) {
 	raw, err := crane.Manifest(ref, a.craneOpts(ctx, ref)...)
 	if err != nil {
-		if errors.Is(classifyRegistryError(err), errs.ErrPermissionDenied) {
-			if a.anonymous {
-				return nil, fmt.Errorf("anonymous registry pull denied for %s; if this image is intended to be public, make the registry package public (a public source repository does not make its packages public); otherwise configure a separate repository-scoped pull-only credential (for parent builds: PARENT_REGISTRY_READ_TOKEN and the parent registry settings), never the publishing token: %w: %w", ref, err, errs.ErrPermissionDenied)
-			}
-			if a.pullAuth != nil {
-				return nil, fmt.Errorf("authenticated parent registry pull denied for %s; check that the separate pull-only credential is valid and can read this exact package, and that the parent registry user and repository settings match; do not substitute the publishing token: %w: %w", ref, err, errs.ErrPermissionDenied)
-			}
+		if denied := a.pullDeniedError(ref, err); denied != nil {
+			return nil, denied
 		}
+
 		return nil, fmt.Errorf("fetch manifest for %s: %w: %w", ref, err, classifyRegistryError(err))
 	}
 
@@ -735,6 +741,7 @@ func (a *Adapter) craneOpts(ctx context.Context, refs ...string) []crane.Option 
 		if a.pullAuth != nil {
 			verified.trustedAuth = a.pullAuth.trusted
 		}
+
 		opts = append(opts, crane.WithTransport(verified))
 	}
 
@@ -753,7 +760,7 @@ type verifiedRegistryTransport struct {
 }
 
 func (transport verifiedRegistryTransport) RoundTrip(request *http.Request) (*http.Response, error) {
-	if request.URL.Scheme != "https" {
+	if request.URL.Scheme != schemeHTTPS {
 		return nil, fmt.Errorf("registry TLS verification forbids HTTP: %w", errs.ErrValidation)
 	}
 	// OAuth refresh can carry a credential in a POST body instead of a header.
@@ -773,6 +780,7 @@ func httpsAuthority(u *url.URL) string {
 	if port == "" {
 		port = "443"
 	}
+
 	return net.JoinHostPort(strings.ToLower(u.Hostname()), port)
 }
 
@@ -916,4 +924,22 @@ func isLoopbackHost(registry string) bool {
 	ip := net.ParseIP(host)
 
 	return ip != nil && ip.IsLoopback()
+}
+
+// pullDeniedError explains a denied pull by how this adapter authenticates, or
+// returns nil for any other failure.
+func (a *Adapter) pullDeniedError(ref string, err error) error {
+	if !errors.Is(classifyRegistryError(err), errs.ErrPermissionDenied) {
+		return nil
+	}
+
+	if a.anonymous {
+		return fmt.Errorf("anonymous registry pull denied for %s; if this image is intended to be public, make the registry package public (a public source repository does not make its packages public); otherwise configure a separate repository-scoped pull-only credential (for parent builds: PARENT_REGISTRY_READ_TOKEN and the parent registry settings), never the publishing token: %w: %w", ref, err, errs.ErrPermissionDenied)
+	}
+
+	if a.pullAuth != nil {
+		return fmt.Errorf("authenticated parent registry pull denied for %s; check that the separate pull-only credential is valid and can read this exact package, and that the parent registry user and repository settings match; do not substitute the publishing token: %w: %w", ref, err, errs.ErrPermissionDenied)
+	}
+
+	return nil
 }

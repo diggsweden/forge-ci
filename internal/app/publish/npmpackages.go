@@ -145,6 +145,9 @@ func npmVersionPublished(ctx context.Context, ops NPMPublishOps, dir string, sai
 
 	defer func() { _ = file.Close() }()
 
+	// npm's packument still carries the SHA-1 shasum beside the SHA-512
+	// integrity; neither is a signature.
+	// nosemgrep: go.lang.security.audit.crypto.use_of_weak_crypto.use-of-sha1
 	strong, weak := sha512.New(), sha1.New() //nolint:gosec // See the import.
 	if _, err := io.Copy(io.MultiWriter(strong, weak), file); err != nil {
 		return err

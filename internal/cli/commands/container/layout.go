@@ -139,13 +139,13 @@ func layoutPublishCmd() *cli.Command {
 		Description: "Run only in a job depending on ALL selected build/scan jobs. Download the current run's artifacts as separate subdirectories, without merging their files. Checks every local blob and binding before the first registry write; emits platform-digests JSON after all uploads and read-backs succeed. Bare repositories publish tagless by digest. Partial upload failures may leave unreferenced images; retries reuse the same layouts.",
 		Flags: append(layoutIdentityFlags(),
 			&cli.StringFlag{Name: "layouts-dir", Required: true, Usage: "parent containing exactly one artifact directory per selected platform"},
-			&cli.StringFlag{Name: "platforms", Required: true, Sources: cli.EnvVars("PLATFORMS"), Usage: "complete comma/space-separated expected platform set"},
+			&cli.StringFlag{Name: flagPlatforms, Required: true, Sources: cli.EnvVars("PLATFORMS"), Usage: "complete comma/space-separated expected platform set"},
 			regflags.AuthFile(regflags.AuthFileOpts{}), regflags.TLSVerify(regflags.TLSVerifyOpts{}),
 			&cli.IntFlag{Name: flagRetryAttempts, Value: 3, Usage: "registry attempts"},
 			&cli.IntFlag{Name: flagRetryDelaySeconds, Value: 10, Usage: "base registry retry delay"}),
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return deps.FromCmd(ctx, cmd, func(dep *deps.Deps) error {
-				platforms := listval.Tokens(cmd.String("platforms"))
+				platforms := listval.Tokens(cmd.String(flagPlatforms))
 
 				inputs, err := appcontainer.LayoutSetInputs(cmd.String("layouts-dir"), cmd.String("image-ref"), cmd.String(flagSourceSHA), platforms)
 				if err != nil {

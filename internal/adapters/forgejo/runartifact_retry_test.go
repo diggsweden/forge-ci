@@ -45,52 +45,69 @@ func TestArtifactUploadRetriesWholeFile(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
+
 			puts, creates, finalizes := 0, 0, 0
+
 			var stored []byte
+
 			sum := md5.Sum([]byte(tc.body))
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+			srv := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, r *http.Request) {
 				switch r.Method {
 				case http.MethodPost:
 					creates++
-					writeJSON(w, jsonObj{"fileContainerResourceUrl": "http://" + r.Host + "/upload"})
+
+					writeJSON(writer, jsonObj{"fileContainerResourceUrl": "http://" + r.Host + "/upload"})
 				case http.MethodPut:
 					puts++
+
 					body, err := io.ReadAll(r.Body)
 					if err != nil || string(body) != tc.body || r.ContentLength != int64(len(tc.body)) {
 						t.Errorf("attempt %d: body=%q length=%d err=%v", puts, body, r.ContentLength, err)
 					}
+
 					if r.Header.Get("Content-Range") != fmt.Sprintf("bytes 0-%d/%d", len(tc.body)-1, len(tc.body)) || r.Header.Get("x-actions-results-md5") != base64.StdEncoding.EncodeToString(sum[:]) {
 						t.Error("upload range or digest changed")
 					}
+
 					stored = body
 					if tc.partial && puts < 3 {
 						stored = body[:len(body)/2]
 					}
+
 					if tc.disconnect {
-						conn, _, err := w.(http.Hijacker).Hijack()
+						conn, _, err := writer.(http.Hijacker).Hijack()
 						if err != nil {
 							t.Error(err)
+
 							return
 						}
+
 						_ = conn.Close()
+
 						return
 					}
+
 					if tc.cancel {
 						cancel()
 					}
+
 					if puts < 3 || tc.exhaust {
 						if tc.longWait {
-							w.Header().Set("Retry-After", "60")
+							writer.Header().Set("Retry-After", "60")
 						}
-						w.WriteHeader(tc.status)
+
+						writer.WriteHeader(tc.status)
 					}
 				case http.MethodPatch:
 					finalizes++
 				}
 			}))
 			defer srv.Close()
+
 			p := uploadProvider(srv)
 			p.HTTPClient.Transport = httpretry.NewTransport(httpretry.Config{
 				Inner: p.HTTPClient.Transport, MaxAttempts: 3,
@@ -99,10 +116,13 @@ func TestArtifactUploadRetriesWholeFile(t *testing.T) {
 			dir := t.TempDir()
 			mustWrite(t, filepath.Join(dir, "binary"), tc.body)
 			_, err := p.UploadRunArtifact(ctx, provider.RunArtifactUpload{Name: "dist", Dir: dir})
+
 			srv.Close()
+
 			if tc.exhaust || tc.attempts == 1 {
 				require.Error(t, err)
 				require.Zero(t, finalizes)
+
 				if tc.exhaust || tc.longWait {
 					require.ErrorIs(t, err, errs.ErrDependencyUnavailable)
 					require.ErrorContains(t, err, "HTTP 500, retry policy stopped")
@@ -112,6 +132,7 @@ func TestArtifactUploadRetriesWholeFile(t *testing.T) {
 				require.Equal(t, tc.body, string(stored))
 				require.Equal(t, 1, finalizes)
 			}
+
 			require.Equal(t, tc.attempts, puts)
 			require.Equal(t, 1, creates)
 		})

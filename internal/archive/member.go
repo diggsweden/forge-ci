@@ -41,6 +41,9 @@ func ReadTarGzipMember(filename, name string, limit int64) ([]byte, error) {
 		return nil, err
 	}
 
+	// stream is a LimitedReader over the decompressed bytes, so the drain
+	// stops at maxTarballStreamSize.
+	// nosemgrep: go.lang.security.decompression_bomb.potential-dos-via-decompression-bomb
 	if _, drainErr := io.Copy(io.Discard, stream); drainErr != nil || stream.N <= 0 {
 		return nil, fmt.Errorf("archive has invalid or excessive trailing data: %w", errs.ErrMalformedInput)
 	}
@@ -164,6 +167,9 @@ func ReadTarGzipFiles(filename string, limit int64) ([]TarFile, error) {
 		return nil, err
 	}
 
+	// stream is a LimitedReader over the decompressed bytes, so the drain
+	// stops at the member limit.
+	// nosemgrep: go.lang.security.decompression_bomb.potential-dos-via-decompression-bomb
 	if _, drainErr := io.Copy(io.Discard, stream); drainErr != nil || stream.N <= 0 {
 		return nil, fmt.Errorf("archive has invalid or excessive trailing data: %w", errs.ErrMalformedInput)
 	}

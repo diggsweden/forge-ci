@@ -98,6 +98,7 @@ func TestReleaseFamilies_JobsOfNoFamilyIsOneHiddenKey(t *testing.T) {
 
 func TestPlanReleaseFamilies_AndroidMavenHasASeparatePublisher(t *testing.T) {
 	t.Parallel()
+
 	artifact := pipeline.PlannedArtifact{
 		Name: "library", ProjectType: projecttype.GradleAndroid, BuildType: config.BuildTypeLibrary,
 		PublishTo: []config.PublishTarget{config.PublishForgePackages}, PublicationArtifactName: "library-maven-publications",
@@ -109,6 +110,7 @@ func TestPlanReleaseFamilies_AndroidMavenHasASeparatePublisher(t *testing.T) {
 	require.True(t, families.AndroidMaven)
 	require.Equal(t, map[string]any{"extends": ".forge-ci-release-publish-android-maven"}, families.Jobs()["Publish: Android Maven packages"])
 	require.Contains(t, families.JobNames(), "Publish: Android Maven packages")
+
 	build.Targets.GradleAndroid.Items[0].PublishTo = nil
 	families, err = gitlabpipeline.PlanReleaseFamilies(pipeline.ReleasePrepareStagePlan{}, build, nil)
 	require.NoError(t, err)

@@ -17,23 +17,28 @@ import (
 func TestWorkspaceSystemLayoutLookalikesAreNotTrusted(t *testing.T) {
 	t.Parallel()
 	base := t.TempDir()
+
 	outside := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(base, "var"), 0o700); err != nil {
 		t.Fatal(err)
 	}
+
 	link := filepath.Join(base, "var", "run")
 	if err := os.Symlink(outside, link); err != nil {
 		t.Fatal(err)
 	}
+
 	for _, path := range []string{link, filepath.Join(link, "created")} {
 		root, err := pathsafe.MkdirRoot(path, 0o700)
 		if root != nil {
 			_ = root.Close()
 		}
+
 		if !errors.Is(err, errs.ErrValidation) {
 			t.Fatalf("workspace link %s accepted (uid %d): %v", path, os.Geteuid(), err)
 		}
 	}
+
 	if _, err := os.Stat(filepath.Join(outside, "created")); !os.IsNotExist(err) {
 		t.Fatalf("refused link changed its target: %v", err)
 	}

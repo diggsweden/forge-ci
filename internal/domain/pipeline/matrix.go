@@ -51,6 +51,7 @@ func (plan ReleaseImagesPlan) FetchMatrix() Matrix[BuildRow] {
 			rows = append(rows, BuildRow{Name: build.Name, Arch: build.Arch})
 		}
 	}
+
 	return Matrix[BuildRow]{Include: rows}
 }
 

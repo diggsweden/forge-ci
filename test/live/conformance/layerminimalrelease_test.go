@@ -529,6 +529,7 @@ func requireReleaseJobs(t *testing.T, jobs []livetest.RunJob, runID int64, label
 		if job.Name == "Publish: packages" {
 			want = "skipped"
 		}
+
 		if job.Status != want {
 			t.Errorf("job %q is %s, want %s", job.Name, job.Status, want)
 		}

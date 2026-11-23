@@ -118,18 +118,23 @@ func publisherScripts(t *testing.T, file string) []string {
 
 func TestSignedGradlePublisherValidatesHandoffBeforeDeploy(t *testing.T) {
 	t.Parallel()
+
 	var body string
+
 	for _, script := range publisherScripts(t, "publish-forge-packages.yml") {
 		if strings.Contains(script, `if [ -n "$RC_RELEASE_MANIFEST" ]`) {
 			body = script
 		}
 	}
+
 	if body == "" {
 		t.Fatal("signed-release deploy step missing")
 	}
+
 	for _, mode := range []string{"valid", "changed digest", "missing digest"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
+
 			stub := `forge-ci() {
   if [ "$1 $2" = 'release validate-dist' ]; then
     printf 'validated\n'
@@ -145,15 +150,19 @@ func TestSignedGradlePublisherValidatesHandoffBeforeDeploy(t *testing.T) {
   fi
 }
 `
+
 			digest, fail := "signer-digest", "false"
 			if mode == "changed digest" {
 				fail = "true"
 			}
+
 			if mode == "missing digest" {
 				digest = ""
 			}
+
 			command := exec.CommandContext(commandContext(t), componentBash(t), "--noprofile", "--norc", "-eu", "-c", stub+body)
 			command.Env = []string{"PATH=/usr/bin:/bin", "PACKAGE_TYPE=gradle-android", "RC_PROJECT_DIRECTORY=dist/library with spaces", "RC_RELEASE_MANIFEST=dist/release-files.json", "RC_RELEASE_DIST=dist", "RC_RELEASE_DIGEST=" + digest, "FAIL_VALIDATE=" + fail}
+
 			out, err := command.CombinedOutput()
 			if mode == "valid" {
 				if err != nil || string(out) != "validated\ndeployed\n" {

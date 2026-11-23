@@ -52,35 +52,46 @@ func nativeBaseCLIJourney(t *testing.T, child bool) {
 	t.Chdir(env.Temp)
 
 	storage := registry.New(registry.Logger(log.New(io.Discard, "", 0)))
+
 	var cleartextRequests atomic.Int32
+
 	cleartext := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		cleartextRequests.Add(1)
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 	t.Cleanup(cleartext.Close)
 
-	var privateParent atomic.Bool
-	var redirectParent atomic.Bool
-	var insecureTokenExchange atomic.Bool
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if redirectParent.Load() && strings.HasPrefix(r.URL.Path, "/v2/shared/parent/") {
-			http.Redirect(w, r, cleartext.URL, http.StatusTemporaryRedirect)
+	var (
+		privateParent         atomic.Bool
+		redirectParent        atomic.Bool
+		insecureTokenExchange atomic.Bool
+	)
+
+	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if redirectParent.Load() && strings.HasPrefix(request.URL.Path, "/v2/shared/parent/") {
+			http.Redirect(writer, request, cleartext.URL, http.StatusTemporaryRedirect)
+
 			return
 		}
-		if insecureTokenExchange.Load() && r.URL.Path == "/v2/" {
-			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm=%q`, cleartext.URL+"/token"))
-			w.WriteHeader(http.StatusUnauthorized)
+
+		if insecureTokenExchange.Load() && request.URL.Path == "/v2/" {
+			writer.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm=%q`, cleartext.URL+"/token"))
+			writer.WriteHeader(http.StatusUnauthorized)
+
 			return
 		}
-		if privateParent.Load() && (r.URL.Path == "/v2/" || strings.HasPrefix(r.URL.Path, "/v2/shared/parent/")) {
-			user, password, _ := r.BasicAuth()
+
+		if privateParent.Load() && (request.URL.Path == "/v2/" || strings.HasPrefix(request.URL.Path, "/v2/shared/parent/")) {
+			user, password, _ := request.BasicAuth()
 			if user != "fixture-reader" || password != "fixture-read-token" {
-				w.Header().Set("WWW-Authenticate", `Basic realm="fixture registry"`)
-				w.WriteHeader(http.StatusUnauthorized)
+				writer.Header().Set("WWW-Authenticate", `Basic realm="fixture registry"`)
+				writer.WriteHeader(http.StatusUnauthorized)
+
 				return
 			}
 		}
-		storage.ServeHTTP(w, r)
+
+		storage.ServeHTTP(writer, request)
 	})
 	server := httptest.NewTLSServer(handler)
 	t.Cleanup(server.Close)
@@ -88,6 +99,7 @@ func nativeBaseCLIJourney(t *testing.T, child bool) {
 	// while exercising the production client's HTTPS enforcement.
 	defaultTransport := remote.DefaultTransport
 	remote.DefaultTransport = server.Client().Transport
+
 	t.Cleanup(func() { remote.DefaultTransport = defaultTransport })
 
 	host := strings.TrimPrefix(server.URL, "https://")
@@ -322,15 +334,21 @@ fi`, captured, captured+".sbom", captured))
 		require.NoError(t, encodeErr)
 		projection, encodeErr := json.Marshal(parent)
 		require.NoError(t, encodeErr)
+
 		fetch := []string{"container", "release-images", "fetch-build-inputs", "--build-json", string(buildJSON), "--release-sha", checkoutSHA,
 			"--server-url", "https://source.example", "--repository", "org/app", "--parent-base-json", string(projection)}
+
 		privateParent.Store(true)
+
 		testFetch := func(directory string, options ...string) error {
 			t.Helper()
+
 			args := append([]string{"forge-ci", "--provider", "forgejo"}, fetch...)
 			args = append(args, "--inputs-dir", directory)
+
 			return rootcli.New(rootcli.BuildInfo{Version: "dev"}).Run(t.Context(), append(args, options...))
 		}
+
 		for _, tc := range []struct {
 			name string
 			edit func([]string)
@@ -350,10 +368,12 @@ fi`, captured, captured+".sbom", captured))
 			require.ErrorIs(t, rootcli.New(rootcli.BuildInfo{Version: "dev"}).Run(t.Context(), append(args, "--inputs-dir", tc.name)), errs.ErrInvalidConfig)
 			require.NoDirExists(t, tc.name)
 		}
+
 		require.Error(t, testFetch("anonymous-refused"))
 		require.NoFileExists(t, "anonymous-refused/inputs.json")
 		write("pull-token", []byte("fixture-read-token\n"))
 		write("wrong-token", []byte("wrong\n"))
+
 		pull := func(repository, file string) []string {
 			return []string{"--parent-registry-repository", repository, "--parent-registry-user", "fixture-reader", "--parent-registry-password-file", file}
 		}
@@ -361,7 +381,9 @@ fi`, captured, captured+".sbom", captured))
 		require.NoFileExists(t, "wrong-token-refused/inputs.json")
 		require.ErrorIs(t, testFetch("wrong-repo-refused", pull(host+"/shared/other", "absent-file")...), errs.ErrInvalidConfig)
 		require.NoDirExists(t, "wrong-repo-refused")
+
 		credential := pull(host+"/shared/parent", "pull-token")
+
 		redirectParent.Store(true)
 		require.ErrorContains(t, testFetch("redirect-refused", credential...), "registry TLS verification forbids HTTP")
 		redirectParent.Store(false)

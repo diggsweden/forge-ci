@@ -29,6 +29,9 @@ func (p Plan) ArtifactTransfers() (pipeline.ArtifactTransferPlan, error) {
 func (p Plan) artifactTransfers() (pipeline.ArtifactTransferPlan, error) {
 	plan := pipeline.ArtifactTransferPlan{Version: pipeline.ArtifactTransferPlanVersion, Items: []pipeline.ArtifactTransfer{}}
 	seen := map[string]bool{}
+	// destinations fills as the loop goes: each one is compared with those
+	// seen before it.
+	// nosemgrep: trailofbits.go.iterate-over-empty-map.iterate-over-empty-map
 	destinations := map[string]string{}
 
 	for _, build := range p.Builds {

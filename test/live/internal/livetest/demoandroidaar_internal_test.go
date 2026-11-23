@@ -39,6 +39,7 @@ func TestAndroidAARGitLabReleaseChecksMatchTheMergeRequest(t *testing.T) {
 func TestAndroidAARForgejoReleaseKeepsSDKBuildKeyFree(t *testing.T) {
 	t.Parallel()
 	body := reporoot.ReadFile(t, androidAARConsumer+".forgejo/workflows/release-workflow.yml")
+
 	var workflow struct {
 		Jobs map[string]map[string]any
 	}
@@ -49,22 +50,28 @@ func TestAndroidAARForgejoReleaseKeepsSDKBuildKeyFree(t *testing.T) {
 	require.NoError(t, err)
 	require.NotContains(t, string(encoded), "secrets.")
 	require.NotContains(t, string(encoded), "KEYSTORE")
+
 	container := build["container"].(map[string]any)
 	require.Equal(t, "${{ vars.CI_JOB_IMAGE_ANDROID }}", container["image"])
 	require.Equal(t, "--user 65532:65532", container["options"])
+
 	prepare := workflow.Jobs["prepare"]
 	sign := workflow.Jobs["sign-and-publish"]
 	require.Equal(t, "${{ needs.prepare.result == 'success' && needs.build.result == 'success' }}", sign["if"])
+
 	var checkoutFound bool
+
 	for _, raw := range build["steps"].([]any) {
 		step := raw.(map[string]any)
 		if step["name"] == "Checkout prepared release" {
 			env := step["env"].(map[string]any)
 			require.Equal(t, "${{ needs.prepare.outputs.release-sha }}", env["CHECKOUT_REF"])
 			require.Equal(t, "${{ forgejo.token }}", env["FORGEJO_TOKEN"])
+
 			checkoutFound = true
 		}
 	}
+
 	require.True(t, checkoutFound, "build must check out the prepared release with private-repository authentication")
 	require.Contains(t, prepare["uses"], "/prepare-release.yml@")
 	require.Contains(t, sign["uses"], "/sign-and-publish-release.yml@")
@@ -110,16 +117,19 @@ case "$1 $2 $3" in
   *) exit 99 ;;
 esac
 `)
+
 	publications := ""
 	run := func(family, head string) error {
 		t.Helper()
 		cmd := exec.CommandContext(t.Context(), "/bin/bash", script)
 		cmd.Dir = root
 		cmd.Env = []string{"PATH=" + tools + ":/usr/bin:/bin", "HOME=" + root, "FIXTURE_HEAD=" + head, "RELEASE_TAG=v0.2.0", "RELEASE_VERSION=0.2.0", "RELEASE_SHA=prepared", "FORGE_CI_BUILD_FAMILY=" + family, "FIXTURE_PUBLICATIONS=" + publications}
+
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Logf("fixture refused: %s", out)
 		}
+
 		return err
 	}
 	families, err := gitlabpipeline.PlanReleaseFamilies(pipeline.ReleasePrepareStagePlan{}, pipeline.ReleaseBuildStagePlan{
@@ -131,30 +141,39 @@ esac
 	require.Equal(t, []string{"android"}, families.Build)
 	family := families.Build[0]
 	require.Error(t, run(family, "foreign"))
+
 	_, err = os.Stat(filepath.Join(root, "calls"))
 	require.True(t, os.IsNotExist(err), "foreign source must fail before build effects")
 	require.NoError(t, run(family, "prepared"))
 	require.NoError(t, run("", "prepared"))
+
 	aar, err := os.ReadFile(filepath.Join(root, "dist/hello-android-library-0.2.0.aar"))
 	require.NoError(t, err)
 	require.Equal(t, "fixture AAR bytes\n", string(aar))
+
 	sbom, err := os.ReadFile(filepath.Join(root, "dist/hello-android-library-0.2.0.cdx.json"))
 	require.NoError(t, err)
 	require.JSONEq(t, `{"bomFormat":"CycloneDX"}`, string(sbom))
+
 	calls, err := os.ReadFile(filepath.Join(root, "calls"))
 	require.NoError(t, err)
 	require.Contains(t, string(calls), "--library --build-module lib")
 	require.Contains(t, string(calls), "--enable-signing=false")
 	require.Contains(t, string(calls), "release files declare --asset dist/*.aar --sbom dist/hello-android-library-0.2.0.cdx.json")
-	for _, name := range strings.Fields("*.asc *.bundle *.sig") {
+
+	for name := range strings.FieldsSeq("*.asc *.bundle *.sig") {
 		matches, err := filepath.Glob(filepath.Join(root, "dist", name))
 		require.NoError(t, err)
 		require.Empty(t, matches, "the producer must not manufacture signer files")
 	}
+
 	require.Error(t, run("rust", "prepared"))
+
 	publications = "hello-android-library-maven-publications"
+
 	require.NoError(t, run(family, "prepared"))
 	require.NoError(t, run("", "prepared"))
+
 	calls, err = os.ReadFile(filepath.Join(root, "calls"))
 	require.NoError(t, err)
 	require.Contains(t, string(calls), "build gradle export-publications --project :lib --output dist/hello-android-library-maven-publications --version 0.2.0")
@@ -167,18 +186,22 @@ func TestAndroidAARFilesFixtureKeepsMavenPublicationExplicit(t *testing.T) {
 	changelog, err := GitLabChangelogInputs(root)
 	require.NoError(t, err)
 	require.Empty(t, changelog, "use the native git-cliff default, not absent git-chglog configs")
+
 	for _, name := range []string{"keepachangelog.toml", "minimal.toml"} {
 		require.FileExists(t, filepath.Join(root, ".forge-ci/gitcliff", name))
 	}
+
 	read := func(path string) map[string]any {
 		var config map[string]any
 		require.NoError(t, yaml.Unmarshal(reporoot.ReadFile(t, androidAARConsumer+path), &config))
+
 		return config
 	}
 	full := read(".forge-ci/artifacts.yml")
 	files := read("test/live/aar-files/.forge-ci/artifacts.yml")
 	fullArtifact := full["artifacts"].([]any)[0].(map[string]any)
 	fileArtifact := files["artifacts"].([]any)[0].(map[string]any)
+
 	require.Equal(t, []any{"forge-packages"}, fullArtifact["publish-to"])
 	require.NotContains(t, fileArtifact, "publish-to")
 	delete(fullArtifact, "publish-to")

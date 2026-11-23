@@ -288,13 +288,13 @@ func (trial *GitHubTrial) downloadArtifact(repo string, artifact *githubapi.Arti
 		trial.tb.Fatalf("could not obtain download location for development artifact %d %q: HTTP %d", artifact.GetID(), artifact.GetName(), status)
 	}
 
-	request, err := http.NewRequestWithContext(trial.tb.Context(), http.MethodGet, location.String(), nil)
+	request, err := http.NewRequestWithContext(trial.tb.Context(), http.MethodGet, location.String(), nil) //nolint:gosec // the location the trial forge API returned for its own artifact.
 	if err != nil {
 		trial.tb.Fatalf("could not prepare development artifact download")
 	}
 	// Do not forward the API credential or print transport errors containing
 	// this pre-signed URL's private query.
-	response, err := hostedReads.Do(request)
+	response, err := hostedReads.Do(request) //nolint:gosec // the location the trial forge API returned for its own artifact.
 	if err != nil {
 		trial.tb.Fatalf("development artifact %d download failed", artifact.GetID())
 	}

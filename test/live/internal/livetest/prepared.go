@@ -252,10 +252,9 @@ func laneRuntimeTargets(root string, lane PreparedLane, flavors []string, target
 	for _, trialCase := range cases {
 		// A GitLab snapshot runs no gate, so it lints in nothing.
 		lints := lane.Forge == forgeForgejo || trialCase.Event != TrialSnapshot
-		for _, flavor := range []string{trialCase.JobImage, trialCase.NodeJobImage} {
-			if lints && flavor != "" && !slices.Contains(flavors, flavor) {
-				return fmt.Errorf("%s: %s takes a nanolinter job image the prepare does not publish; add job-image=%s:<local image>: %w",
-					lane.Name, trialCase.Name(), flavor, errs.ErrValidation)
+		if lints {
+			if err := requirePublishedLintImages(lane, trialCase, flavors); err != nil {
+				return err
 			}
 		}
 
@@ -263,6 +262,7 @@ func laneRuntimeTargets(root string, lane PreparedLane, flavors []string, target
 			if trialCase.Runtime != "" {
 				targets[trialCase.Runtime] = true
 			}
+
 			continue
 		}
 
@@ -275,6 +275,17 @@ func laneRuntimeTargets(root string, lane PreparedLane, flavors []string, target
 
 		for _, name := range further {
 			targets[strings.ToLower(name)] = true
+		}
+	}
+
+	return nil
+}
+
+func requirePublishedLintImages(lane PreparedLane, trialCase PreparedCase, flavors []string) error {
+	for _, flavor := range []string{trialCase.JobImage, trialCase.NodeJobImage} {
+		if flavor != "" && !slices.Contains(flavors, flavor) {
+			return fmt.Errorf("%s: %s takes a nanolinter job image the prepare does not publish; add job-image=%s:<local image>: %w",
+				lane.Name, trialCase.Name(), flavor, errs.ErrValidation)
 		}
 	}
 

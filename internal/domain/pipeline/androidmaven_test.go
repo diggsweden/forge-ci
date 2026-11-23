@@ -14,6 +14,7 @@ import (
 
 func TestReleaseAndroidMavenArtifacts(t *testing.T) {
 	t.Parallel()
+
 	for _, tc := range []struct {
 		name                                string
 		library, publish, handoff, accepted bool
@@ -24,23 +25,32 @@ func TestReleaseAndroidMavenArtifacts(t *testing.T) {
 		{"missing handoff", true, true, false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			a := pipeline.PlannedArtifact{Name: "library", ProjectType: projecttype.GradleAndroid, BuildType: config.BuildTypeApplication}
 			if tc.library {
 				a.BuildType = config.BuildTypeLibrary
 			}
+
 			if tc.publish {
 				a.PublishTo = []config.PublishTarget{config.PublishForgePackages}
 			}
+
 			if tc.handoff {
 				a.PublicationArtifactName = "library-maven-publications"
 			}
+
 			build := pipeline.ReleaseBuildStagePlan{Targets: pipeline.ReleaseBuildTargets{GradleAndroid: pipeline.TargetPlan[pipeline.PlannedArtifact]{Runs: true, Items: []pipeline.PlannedArtifact{a}}}}
+
 			got, err := pipeline.ReleaseAndroidMavenArtifacts(build)
 			if !tc.accepted {
 				require.Error(t, err)
+
 				return
 			}
+
 			require.NoError(t, err)
+
 			if tc.publish {
 				require.Len(t, got, 1)
 			} else {

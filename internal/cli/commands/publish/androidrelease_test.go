@@ -21,11 +21,13 @@ func TestAndroidReleaseAdmissionIsCredentialFreeAndFailsClosed(t *testing.T) {
 		if publish {
 			target = "    publish-to: [forge-packages]\n"
 		}
+
 		require.NoError(t, os.WriteFile(file, []byte("artifacts:\n  - name: library\n    project-type: gradle-android\n    build-type: library\n"+target), 0600))
 	}
 	run := func(args ...string) error {
 		return publishcmd.New().Run(t.Context(), append([]string{"publish", "forge-packages", "android-release", "--file", file}, args...))
 	}
+
 	write(false)
 	require.NoError(t, run("--admit", "--token-configured", "false"))
 	require.Equal(t, "false", env.Output("android-maven-packages"))
@@ -44,6 +46,7 @@ func TestAndroidReleaseAdmissionIsCredentialFreeAndFailsClosed(t *testing.T) {
 	dist := filepath.Join(t.TempDir(), "dist")
 	repository := filepath.Join(dist, "library-maven-publications", "org", "example", "library", "1.2.3")
 	require.NoError(t, os.MkdirAll(repository, 0700))
+
 	pom := `<project><modelVersion>4.0.0</modelVersion><groupId>org.example</groupId><artifactId>library</artifactId><version>1.2.3</version><packaging>aar</packaging></project>`
 	require.NoError(t, os.WriteFile(filepath.Join(repository, "library-1.2.3.pom"), []byte(pom), 0600))
 	require.NoError(t, os.WriteFile(filepath.Join(repository, "library-1.2.3.aar"), []byte("producer AAR"), 0600))

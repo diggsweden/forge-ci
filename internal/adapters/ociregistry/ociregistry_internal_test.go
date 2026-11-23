@@ -42,13 +42,16 @@ func TestCraneOptions_LeaveRetryOwnershipWithGoContainerRegistry(t *testing.T) {
 
 func TestBoundPublicationAuthenticatesAfterAuthFileDisappears(t *testing.T) {
 	t.Parallel()
+
 	backend := registry.New()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if user, password, ok := r.BasicAuth(); !ok || user != "fixture" || password != "dummy" {
 			w.Header().Set("WWW-Authenticate", `Basic realm="test"`)
 			w.WriteHeader(http.StatusUnauthorized)
+
 			return
 		}
+
 		backend.ServeHTTP(w, r)
 	}))
 	t.Cleanup(srv.Close)
@@ -61,36 +64,45 @@ func TestBoundPublicationAuthenticatesAfterAuthFileDisappears(t *testing.T) {
 	if err := os.WriteFile(authFile, []byte(auth), 0o600); err != nil {
 		t.Fatal(err)
 	}
+
 	publication, err := BindImagePublication(authFile, host+"/owner/image:staging")
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if err := os.Remove(authFile); err != nil {
 		t.Fatal(err)
 	}
+
 	if _, err := BindImagePublication(authFile, host+"/owner/image:staging"); !errors.Is(err, errs.ErrMissingInput) {
 		t.Fatalf("binding without an auth file returned %v", err)
 	}
 
 	dir := t.TempDir()
+
 	p, err := layout.Write(dir, empty.Index)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if err := p.AppendImage(empty.Image); err != nil {
 		t.Fatal(err)
 	}
+
 	if _, err := publication.PushLayout(t.Context(), dir); err != nil {
 		t.Fatal(err)
 	}
+
 	got, err := publication.Manifest(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	want, err := empty.Image.RawManifest()
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if string(got) != string(want) {
 		t.Fatal("registry manifest differs from the pushed layout")
 	}

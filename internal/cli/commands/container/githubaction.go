@@ -39,6 +39,7 @@ func prepareKanikoActionCmd() *cli.Command {
 			if cmd.Bool("base") && cmd.Bool("snapshot") {
 				return fmt.Errorf("base and snapshot modes are mutually exclusive: %w", errs.ErrValidation)
 			}
+
 			workspace, err := filepath.Abs(cmd.String("workspace"))
 			if err != nil {
 				return err
@@ -50,34 +51,8 @@ func prepareKanikoActionCmd() *cli.Command {
 			}
 
 			in := appcontainer.GitHubKanikoAction{Workspace: workspace, JobImage: cmd.String("job-image"), Engine: engine, Snapshot: cmd.Bool("snapshot")}
-			if cmd.Bool("base") {
-				var plan pipeline.ReleaseImagesPlan
-				if cmd.String(flagParentBaseJSON) == "" {
-					plan, err = readRootBasePlanFile(cmd)
-				} else {
-					plan, err = readChildBasePlanFile(cmd)
-				}
-				if err != nil {
-					return err
-				}
-				in.Plan, err = json.Marshal(plan)
-			} else if in.Snapshot {
-				plan, readErr := appsnapshot.ReadPlan(cmd.String(flagPlan))
-				if readErr != nil {
-					return readErr
-				}
 
-				for _, build := range plan.Builds {
-					if err = appcontainer.ValidateSourceBuildPaths(filepath.Join(workspace, "source"), build.Context, build.ContainerFile); err != nil {
-						return err
-					}
-				}
-
-				in.Plan, err = json.Marshal(plan)
-			} else {
-				in.Plan, err = kanikoActionBuildPlan(workspace, cmd.String(flagPlan))
-			}
-
+			in.Plan, err = kanikoActionPlan(cmd, workspace, in.Snapshot)
 			if err != nil {
 				return err
 			}
@@ -92,6 +67,53 @@ func prepareKanikoActionCmd() *cli.Command {
 			})
 		},
 	}
+}
+
+// kanikoActionPlan returns the plan the action builds, for a base stage, a
+// snapshot or a release.
+func kanikoActionPlan(cmd *cli.Command, workspace string, snapshot bool) ([]byte, error) {
+	switch {
+	case cmd.Bool("base"):
+		return kanikoBaseActionPlan(cmd)
+	case snapshot:
+		return kanikoSnapshotActionPlan(cmd, workspace)
+	default:
+		return kanikoActionBuildPlan(workspace, cmd.String(flagPlan))
+	}
+}
+
+func kanikoBaseActionPlan(cmd *cli.Command) ([]byte, error) {
+	var (
+		plan pipeline.ReleaseImagesPlan
+		err  error
+	)
+
+	if cmd.String(flagParentBaseJSON) == "" {
+		plan, err = readRootBasePlanFile(cmd)
+	} else {
+		plan, err = readChildBasePlanFile(cmd)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return json.Marshal(plan)
+}
+
+func kanikoSnapshotActionPlan(cmd *cli.Command, workspace string) ([]byte, error) {
+	plan, err := appsnapshot.ReadPlan(cmd.String(flagPlan))
+	if err != nil {
+		return nil, err
+	}
+
+	for _, build := range plan.Builds {
+		if err := appcontainer.ValidateSourceBuildPaths(filepath.Join(workspace, "source"), build.Context, build.ContainerFile); err != nil {
+			return nil, err
+		}
+	}
+
+	return json.Marshal(plan)
 }
 
 // kanikoActionBuildPlan returns the validated plan without host paths. The

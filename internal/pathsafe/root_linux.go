@@ -166,6 +166,7 @@ func systemLink(parent *os.File, parentPath, component string, link fs.FileInfo,
 	if expected == "" {
 		return "", false
 	}
+
 	directory, err := parent.Stat()
 	if err != nil || !ownedByRoot(link) || !ownedByRoot(directory) || directory.Mode().Perm()&0o022 != 0 {
 		return "", false
@@ -183,6 +184,7 @@ func systemLink(parent *os.File, parentPath, component string, link fs.FileInfo,
 	if !filepath.IsAbs(target) {
 		target = filepath.Join(parentPath, target)
 	}
+
 	if filepath.Clean(target) != expected {
 		return "", false
 	}

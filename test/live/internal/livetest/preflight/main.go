@@ -421,7 +421,7 @@ func testingDocument(mode string, args []string) (string, error) {
 func preflightFact(mode string) (string, error) {
 	switch mode {
 	case "test-timeout":
-		return livetest.LiveTestTimeout(os.Getenv)
+		return livetest.ProcessTimeout(os.Getenv)
 	case "gitlab-consumer-scenario":
 		settings, err := livetest.ParseGitLabReleaseSettings(os.Getenv("FORGE_CI_LIVE_CONSUMER_SETTINGS"))
 		if err != nil {

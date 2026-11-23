@@ -394,9 +394,9 @@ EXAMPLE:
 		// A --runner-input value is a JSON array, whose commas separate nothing.
 		DisableSliceFlagSeparator: true,
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "platforms", Sources: cli.EnvVars("PLATFORMS"), Usage: "comma/space/newline-separated build platforms (linux/amd64,linux/arm64)"},
+			&cli.StringFlag{Name: flagPlatforms, Sources: cli.EnvVars("PLATFORMS"), Usage: "comma/space/newline-separated build platforms (linux/amd64,linux/arm64)"},
 			&cli.StringFlag{Name: flagPlatform, Sources: cli.EnvVars("PLATFORM"), Usage: "single build platform; falls back to the first entry of --platforms"},
-			&cli.StringFlag{Name: "release-platforms", Sources: cli.EnvVars("RELEASE_PLATFORMS"), Usage: "comma-separated subset of --platforms to build; empty builds them all"},
+			&cli.StringFlag{Name: flagReleasePlatforms, Sources: cli.EnvVars("RELEASE_PLATFORMS"), Usage: "comma-separated subset of --platforms to build; empty builds them all"},
 			commonflags.RunnerInput(),
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -407,9 +407,9 @@ EXAMPLE:
 				}
 
 				_, err = appcontainer.PlatformPlan(ctx, dep.OutputSink, os.Stderr, appcontainer.PlatformPlanInput{
-					Platforms:        cmd.String("platforms"),
+					Platforms:        cmd.String(flagPlatforms),
 					Platform:         cmd.String(flagPlatform),
-					ReleasePlatforms: cmd.String("release-platforms"),
+					ReleasePlatforms: cmd.String(flagReleasePlatforms),
 					Runners:          runnerInputs,
 				})
 

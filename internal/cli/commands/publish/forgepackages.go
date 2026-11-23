@@ -212,6 +212,7 @@ func deployExportedMaven(ctx context.Context, cmd *cli.Command, dependencies *de
 		defer func() { result = errors.Join(result, os.RemoveAll(work)) }()
 
 		directory = filepath.Join(work, "publication")
+
 		files := apprelease.FilesInput{DistDir: cmd.String(flagDistDir), ManifestFile: manifest, ManifestExplicit: true}
 		if err := apppublish.StageReleaseMavenPublication(ctx, files, cmd.String("working-dir"), directory, strings.TrimPrefix(cmd.String(flagVersion), "v")); err != nil {
 			return err

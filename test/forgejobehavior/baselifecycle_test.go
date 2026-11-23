@@ -14,6 +14,7 @@ import (
 
 func TestBaseLifecycleExposesEvidenceOnlyAfterExactAuthentication(t *testing.T) {
 	t.Parallel()
+
 	run := workflowStep(t, "base-image-lifecycle.yml", "authenticate", "Authenticate promoted base").Run
 	for _, mode := range []string{"success", "missing-ref", "missing-ledger", "missing-token", "login-failure", "verification-failure"} {
 		t.Run(mode, func(t *testing.T) {
@@ -40,12 +41,15 @@ case "$1 $2" in
 *) exit 99 ;;
 esac
 `, 0o700)
+
 			for _, dir := range []string{"private", "consumer"} {
 				if err := os.Mkdir(filepath.Join(box.root, dir), 0o700); err != nil {
 					t.Fatal(err)
 				}
 			}
+
 			ref, ledger, token := "registry.example/owner/base@sha256:"+strings.Repeat("a", 64), `[{"flavor":"base"}]`, "fixture-token"
+
 			switch mode {
 			case "missing-ref":
 				ref = ""
@@ -54,6 +58,7 @@ esac
 			case "missing-token":
 				token = ""
 			}
+
 			out := filepath.Join(box.root, "output")
 			box.write("output", "", 0o600)
 			got := box.run(run, "HELPERS_DIR="+box.root, "SIGNER_WORKSPACE="+filepath.Join(box.root, "private"),
@@ -62,10 +67,12 @@ esac
 				`BASE_INPUTS_JSON=[{"flavor":"base","base_input_id":"independent"}]`,
 				"EXPECTED_REPOSITORY=registry.example/owner/base", "FORGEJO_SERVER=https://forge.example", "FORGEJO_REPO=owner/app",
 				"REGISTRY_USER=owner", "REGISTRY_TOKEN="+token)
+
 			body, err := os.ReadFile(out)
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			if mode == "success" {
 				want := "ledger_json=" + ledger + "\nparent_base_json={\"ref\":\"authenticated\",\"input_id\":\"independent\"}\n"
 				if got.status != 0 || string(body) != want {
@@ -74,6 +81,7 @@ esac
 			} else if got.status == 0 || len(body) != 0 {
 				t.Fatalf("%s exposed unverified output: status=%d output=%s", mode, got.status, body)
 			}
+
 			if strings.Contains(got.stdout+got.stderr, "fixture-token") {
 				t.Fatal("credential escaped into diagnostics")
 			}

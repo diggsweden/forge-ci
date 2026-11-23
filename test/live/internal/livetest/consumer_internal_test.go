@@ -327,6 +327,7 @@ func TestPlanConsumer_RendersAWholeRelease(t *testing.T) {
 
 	layer := sampleLayer()
 	source := consumerWorkflow(t, "hello-cli-release.yml")
+
 	const reusable = `on:
   workflow_call:
 jobs:

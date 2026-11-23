@@ -243,6 +243,7 @@ func assertCoordinatesJob(t *testing.T, relative string, contract coordinateCont
 	requireWalkReaches(t, coordinates.node, "HELPERS_REPOSITORY_INPUT", relative+" coordinates")
 
 	secretUse := secretsWord.MatchString
+
 	if relative == ".forgejo/workflows/prepare-release.yml" {
 		// This settings job may read presence booleans, never the values.
 		presence := regexp.MustCompile(`^\$\{\{ secrets\.RELEASE_[A-Z0-9_]+ != '' \}\}$`)
@@ -250,6 +251,7 @@ func assertCoordinatesJob(t *testing.T, relative string, contract coordinateCont
 			return secretReference.MatchString(value) && !presence.MatchString(value)
 		}
 	}
+
 	if anyString(coordinates.node, secretUse) {
 		t.Errorf("%s: the coordinates job references secrets", relative)
 	}
@@ -276,9 +278,11 @@ func assertCoordinatesJob(t *testing.T, relative string, contract coordinateCont
 
 		outputs = append(outputs, "transparency_log")
 	}
+
 	if relative == ".forgejo/workflows/base-image-lifecycle.yml" {
 		wiring["BUILDER_INPUT"] = "${{ vars.CI_IMAGE_BUILDER }}"
 		wiring["BUILDER_JOB_IMAGE_INPUT"] = "${{ vars.CI_IMAGE_BUILDER_JOB_IMAGE }}"
+
 		outputs = append(outputs, "builder", "builder_job_image")
 	}
 
@@ -591,6 +595,7 @@ func TestCoordinatePreflightResolvesTheHelperRepository(t *testing.T) {
 				if relative == ".forgejo/workflows/runtime-images.yml" {
 					wantOutput += "go_build_image=" + exampleSigner + "\nbuilder=buildah\nbuilder_job_image=\n"
 				}
+
 				if relative == ".forgejo/workflows/base-image-lifecycle.yml" {
 					wantOutput += "builder=buildah\nbuilder_job_image=\n"
 				}
@@ -622,7 +627,9 @@ func TestReleaseAuthorPreflightRunsBeforeConsumerCheckout(t *testing.T) {
 		got != "${{ needs.coordinates.result == 'success' && needs.plan.result == 'success' }}" {
 		t.Fatal("changelog must wait for release author validation in the plan job")
 	}
+
 	validated := false
+
 	for _, step := range w.jobs["plan"].steps() {
 		switch scalarString(mappingValue(step, "name")) {
 		case "Validate release author and SSH host pin":
@@ -631,9 +638,11 @@ func TestReleaseAuthorPreflightRunsBeforeConsumerCheckout(t *testing.T) {
 			if !validated {
 				t.Fatal("run shared release author validation before consumer checkout")
 			}
+
 			return
 		}
 	}
+
 	t.Fatal("version plan must check out the consumer")
 }
 
@@ -644,6 +653,7 @@ func TestTrailingSlashServerURLResolvesTheHelperRepository(t *testing.T) {
 		t.Run(file, func(t *testing.T) {
 			t.Parallel()
 			script := preflightScript(t, ".forgejo/workflows/"+file)
+
 			ok, output, stderr := runPreflightWithStderr(t, script, "owner/delivery", exampleSigner, "SERVER_URL="+exampleServer+"/")
 			if !ok || !strings.Contains(output, "helpers_repository="+exampleRepository+"\n") {
 				t.Fatalf("trailing slash: accepted=%t output=%q stderr=%q", ok, output, stderr)

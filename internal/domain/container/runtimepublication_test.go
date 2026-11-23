@@ -86,11 +86,13 @@ func TestRuntimePublicationPlanRefusesIncompleteOrAmbiguousAuthority(t *testing.
 
 func TestRuntimePublicationPlanAcceptsSelectedBranch(t *testing.T) {
 	t.Parallel()
+
 	for _, branch := range []string{"main", "master", "release/stable", "Main"} {
 		in := runtimePlanInput()
 		in.PublicationBranch, in.Ref = branch, "refs/heads/"+branch
 		_, err := container.PlanRuntimePublication(in)
 		require.NoError(t, err)
+
 		in.Ref = "refs/tags/" + branch
 		_, err = container.PlanRuntimePublication(in)
 		require.Error(t, err)

@@ -332,10 +332,12 @@ func TestReleasePublishesExactlyThePlannedPackages(t *testing.T) {
 
 func TestAndroidMavenPublisherRequiresTokenAndVerifiedSignerHandoff(t *testing.T) {
 	t.Parallel()
+
 	script := filepath.Join(reporoot.Path(t), ".gitlab", "bin", "release.sh")
 	for _, mode := range []string{"valid", "missing token", "bad handoff"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
+
 			body := `source "$1"
 rc_release_checkout() { printf 'checkout\n'; }
 rc_read_handoff() {
@@ -351,10 +353,12 @@ rc_engine() {
 rc_publish_android_maven
 `
 			command := exec.CommandContext(commandContext(t), componentBash(t), "--noprofile", "--norc", "-eu", "-c", body, "publisher", script)
+
 			command.Env = []string{"PATH=/usr/bin:/bin", "MODE=" + mode, "CI_PROJECT_DIR=/fixture", "RC_ARTIFACTS_CONFIG=declarations/library.yml", "RELEASE_VERSION=1.2.3"}
 			if mode != "missing token" {
 				command.Env = append(command.Env, "RELEASE_PACKAGE_TOKEN=inert-package-authority")
 			}
+
 			out, err := command.CombinedOutput()
 			if mode == "valid" {
 				if err != nil || !strings.HasPrefix(string(out), "checkout\nverified\npublish ") || !strings.Contains(string(out), "--file declarations/library.yml --manifest dist/release-files.json --dist-dir dist --version 1.2.3") {

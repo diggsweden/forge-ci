@@ -62,6 +62,7 @@ func TestExampleSSHSigningReleasesNameTheirPrincipal(t *testing.T) {
 			if path == filepath.Join(reporoot.Path(t), "examples/forgejo/self-release.yml") && email == "${{ vars.RELEASE_BOT_EMAIL }}" {
 				continue
 			}
+
 			if strings.TrimSpace(email) == "" {
 				t.Errorf("%s job %s signs Git with SSH but passes no bot-email", path, name)
 			} else if !strings.HasPrefix(email, "FIXME") {

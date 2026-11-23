@@ -37,7 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pin the squashed black-box main
 - Initial commit
 
-
 [0.94.3]: https://github.com/diggsweden/forge-ci/compare/v0.94.2..v0.94.3
 [0.94.2]: https://github.com/diggsweden/forge-ci/compare/v0.94.1..v0.94.2
 [0.94.1]: https://github.com/diggsweden/forge-ci/compare/v0.93.2..v0.94.1

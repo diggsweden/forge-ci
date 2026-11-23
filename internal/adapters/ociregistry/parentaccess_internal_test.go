@@ -28,35 +28,49 @@ func TestParentAccessIsIndependentOfPublicationCredentials(t *testing.T) {
 	require.NoError(t, err)
 	digest, err := empty.Image.Digest()
 	require.NoError(t, err)
-	var public atomic.Bool
-	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/token" {
-			user, password, _ := r.BasicAuth()
+
+	var (
+		public atomic.Bool
+		server *httptest.Server
+	)
+
+	server = httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/token" {
+			user, password, _ := request.BasicAuth()
+
 			allowed := public.Load() || (user == "publisher" && password == "publish-fixture") || (user == "reader" && password == "pull-fixture")
 			if !allowed {
-				w.WriteHeader(http.StatusForbidden)
-				_, _ = w.Write([]byte(`{"errors":[{"code":"DENIED","message":"package access denied"}]}`))
+				writer.WriteHeader(http.StatusForbidden)
+				_, _ = writer.Write([]byte(`{"errors":[{"code":"DENIED","message":"package access denied"}]}`))
+
 				return
 			}
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"token":"read-session"}`))
+
+			writer.Header().Set("Content-Type", "application/json")
+			_, _ = writer.Write([]byte(`{"token":"read-session"}`))
+
 			return
 		}
-		if r.Header.Get("Authorization") != "Bearer read-session" {
-			w.Header().Set("Www-Authenticate", `Bearer realm="`+server.URL+`/token",service="registry"`)
-			w.WriteHeader(http.StatusUnauthorized)
+
+		if request.Header.Get("Authorization") != "Bearer read-session" {
+			writer.Header().Set("Www-Authenticate", `Bearer realm="`+server.URL+`/token",service="registry"`)
+			writer.WriteHeader(http.StatusUnauthorized)
+
 			return
 		}
-		if r.URL.Path == "/v2/" {
+
+		if request.URL.Path == "/v2/" {
 			return
 		}
-		if r.URL.Path != "/v2/org/parent/manifests/"+digest.String() {
-			w.WriteHeader(http.StatusNotFound)
+
+		if request.URL.Path != "/v2/org/parent/manifests/"+digest.String() {
+			writer.WriteHeader(http.StatusNotFound)
+
 			return
 		}
-		w.Header().Set("Content-Type", "application/vnd.docker.distribution.manifest.v2+json")
-		_, _ = w.Write(manifest)
+
+		writer.Header().Set("Content-Type", "application/vnd.docker.distribution.manifest.v2+json")
+		_, _ = writer.Write(manifest)
 	}))
 	t.Cleanup(server.Close)
 	host := strings.TrimPrefix(server.URL, "http://")
@@ -87,6 +101,7 @@ func TestParentAccessIsIndependentOfPublicationCredentials(t *testing.T) {
 		// Local HTTP transport fixture only; production scoped pulls retain
 		// verified TLS and the origin restrictions tested in pullauth tests.
 		reader.explicitTLS = false
+
 		got, err := reader.Manifest(t.Context(), ref)
 		if tc.allowed {
 			require.NoError(t, err)
@@ -98,6 +113,7 @@ func TestParentAccessIsIndependentOfPublicationCredentials(t *testing.T) {
 	}
 
 	public.Store(true)
+
 	got, err := NewAnonymous().Manifest(t.Context(), ref)
 	require.NoError(t, err, "making the package public enables anonymous builder access")
 	require.Equal(t, manifest, got)

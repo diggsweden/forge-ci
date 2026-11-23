@@ -390,9 +390,11 @@ const timeoutPreflight = "run ./test/live/internal/livetest/preflight test-timeo
 // direct suite execution, in that order.
 func requireGoCalls(t *testing.T, calls []string, wantTest string) {
 	t.Helper()
+
 	if len(calls) == 0 || calls[0] != timeoutPreflight {
 		t.Fatalf("go calls must admit the watchdog first: %v", calls)
 	}
+
 	calls = calls[1:]
 
 	if len(calls) < 2 || calls[1] != hostToolsPreflight {

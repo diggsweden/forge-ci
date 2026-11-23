@@ -29,12 +29,12 @@ func runtimeMatrixCmd() *cli.Command {
 		Name: "matrix", Usage: "select native build and nonempty image matrices without publication authority",
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "roster", Value: "containers/runtime/images.json", Usage: "product-owned runtime roster JSON"},
-			&cli.StringFlag{Name: "platforms", Value: "linux/amd64,linux/arm64", Usage: "declared native platforms"},
-			&cli.StringFlag{Name: "release-platforms", Usage: "optional subset of the declared platforms"},
+			&cli.StringFlag{Name: flagPlatforms, Value: "linux/amd64,linux/arm64", Usage: "declared native platforms"},
+			&cli.StringFlag{Name: flagReleasePlatforms, Usage: "optional subset of the declared platforms"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return deps.FromCmd(ctx, cmd, func(dep *deps.Deps) error {
-				return appcontainer.PlanRuntimeMatrix(ctx, dep.OutputSink, cmd.String("roster"), cmd.String("platforms"), cmd.String("release-platforms"))
+				return appcontainer.PlanRuntimeMatrix(ctx, dep.OutputSink, cmd.String("roster"), cmd.String(flagPlatforms), cmd.String(flagReleasePlatforms))
 			})
 		},
 	}
@@ -53,6 +53,7 @@ func runtimeDigestsCmd() *cli.Command {
 				if err != nil {
 					return err
 				}
+
 				return appcontainer.DownloadRuntimeDigests(ctx, downloader, cmd.String("image-json"), cmd.String("dir"))
 			})
 		},

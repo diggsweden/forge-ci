@@ -130,6 +130,7 @@ func TestPrepareKanikoBaseActionAdmitsRootAndChildPlans(t *testing.T) {
 			t.Setenv("GITHUB_OUTPUT", filepath.Join(t.TempDir(), "output"))
 			workspace := t.TempDir()
 			require.NoError(t, os.Mkdir(filepath.Join(workspace, "source"), 0o700))
+
 			id := strings.Repeat("a", 64)
 			repository := "registry.example/org/base"
 			plan := pipeline.ReleaseImagesPlan{
@@ -138,6 +139,7 @@ func TestPrepareKanikoBaseActionAdmitsRootAndChildPlans(t *testing.T) {
 				Builds: []pipeline.ReleaseImageBuild{{Name: "base", Arch: "amd64", Platform: "linux/amd64", ContainerFile: "Containerfile", Context: ".",
 					ImageRepository: repository, FinalTagName: id + "-go", CandidateTag: "staging-" + id + "-go"}},
 			}
+
 			args := []string{"prepare-kaniko-action", "--base", "--workspace", workspace,
 				"--plan", filepath.Join(workspace, "plan.json"), "--image-repository", repository,
 				"--job-image", "registry.invalid/kaniko@sha256:" + strings.Repeat("d", 64)}
@@ -147,27 +149,35 @@ func TestPrepareKanikoBaseActionAdmitsRootAndChildPlans(t *testing.T) {
 				plan.Images[0].ProvenanceJSON = `{"parent_base":` + parent + `}`
 				plan.Builds[0].BuildArgs = "PARENT=" + ref
 				plan.Builds[0].RegistryInputs = map[string]string{"PARENT": ref}
+
 				if mode == "wrong parent" {
 					parent = strings.ReplaceAll(parent, "/parent@", "/other@")
 				}
+
 				args = append(args, "--parent-base-json", parent)
 			}
+
 			if mode == "wrong flavor" {
 				args = append(args, "--stage-flavors", "java")
 			}
+
 			if mode == "mixed modes" {
 				args = append(args, "--snapshot")
 			}
+
 			body, err := json.Marshal(plan)
 			require.NoError(t, err)
 			require.NoError(t, os.WriteFile(filepath.Join(workspace, "plan.json"), body, 0o600))
 			err = prepareKanikoActionCmd().Run(t.Context(), args)
 			action := filepath.Join(workspace, ".forge-ci-kaniko-action")
+
 			if mode != "root" && mode != "child" {
 				require.Error(t, err)
 				require.NoDirExists(t, action)
+
 				return
 			}
+
 			require.NoError(t, err)
 			frozen, err := os.ReadFile(filepath.Join(action, "plan.json"))
 			require.NoError(t, err)

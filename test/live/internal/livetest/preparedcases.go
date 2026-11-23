@@ -83,6 +83,9 @@ const (
 )
 
 // liveSetEnv names the run set of a prepared run; unset, the full one.
+// runtimeTargetAndroid is the runtime image target of the Android cases.
+const runtimeTargetAndroid = "android"
+
 const liveSetEnv = "FORGE_CI_LIVE_SET"
 
 // ParseLiveSet is the run set that value names; none is the full one.
@@ -221,8 +224,8 @@ const (
 // TestForgejoLayer_ConsumerLifecycle the lifecycles and
 // TestForgejoLayer_Snapshot the snapshots, each as the subtest Name names.
 var ForgejoPreparedCases = []PreparedCase{
-	{Lane: LanePrivateAndroid, Demo: "hello-android", Event: TrialPullRequest, JobImage: flavorKotlin, Runtime: "android", Builder: ImageBuilderKaniko, Set: SetMedium},
-	{Lane: LanePrivateAndroid, Demo: "hello-android-library", Event: TrialPullRequest, JobImage: flavorKotlin, Runtime: "android", Builder: ImageBuilderKaniko, Set: SetMedium},
+	{Lane: LanePrivateAndroid, Demo: "hello-android", Event: TrialPullRequest, JobImage: flavorKotlin, Runtime: runtimeTargetAndroid, Builder: ImageBuilderKaniko, Set: SetMedium},
+	{Lane: LanePrivateAndroid, Demo: "hello-android-library", Event: TrialPullRequest, JobImage: flavorKotlin, Runtime: runtimeTargetAndroid, Builder: ImageBuilderKaniko, Set: SetMedium},
 	{Lane: LaneLifecycle, Demo: "hello-maven-service", Event: TrialLifecycle, JobImage: flavorJava, Builder: ImageBuilderBuildah, Platforms: nativePlatform, Set: SetFull},
 	{Lane: LaneLifecycle, Demo: "hello-maven-service", Event: TrialLifecycle, JobImage: flavorJava, Builder: ImageBuilderKaniko, Platforms: nativePlatform, Set: SetMedium, Half: visibilityPrivate},
 	{Lane: LaneLifecycle, Demo: "hello-cargo-container", Event: TrialLifecycle, JobImage: flavorRust, Builder: ImageBuilderBuildah, Platforms: nativePlatform, Set: SetFull},
@@ -409,8 +412,8 @@ var GitLabPreparedCases = []PreparedCase{
 
 	// The Kotlin Android gates build in the SDK runtime and lint in the
 	// separate Kotlin flavor, including ktlint and Detekt.
-	{Lane: LanePrivateAndroid, Demo: "hello-android", Event: TrialPullRequest, JobImage: flavorKotlin, Builder: ImageBuilderKaniko, Runtime: "android", Set: SetMedium},
-	{Lane: LanePrivateAndroid, Demo: "hello-android-library", Event: TrialPullRequest, JobImage: flavorKotlin, Builder: ImageBuilderKaniko, Runtime: "android", Set: SetMedium},
+	{Lane: LanePrivateAndroid, Demo: "hello-android", Event: TrialPullRequest, JobImage: flavorKotlin, Builder: ImageBuilderKaniko, Runtime: runtimeTargetAndroid, Set: SetMedium},
+	{Lane: LanePrivateAndroid, Demo: "hello-android-library", Event: TrialPullRequest, JobImage: flavorKotlin, Builder: ImageBuilderKaniko, Runtime: runtimeTargetAndroid, Set: SetMedium},
 
 	// The release options whose GitLab route is its own: a prerelease is a
 	// note on the release, GitLab having no flag for one, and retention
@@ -523,6 +526,7 @@ func (c PreparedCase) Settings(prepared map[string]string) ([]string, error) {
 		if prepared[key] == "" {
 			return nil, c.notPrepared(key)
 		}
+
 		settings = append(settings, "CI_JOB_IMAGE_"+flavorEnvKey(c.Runtime)+"="+prepared[key])
 	}
 

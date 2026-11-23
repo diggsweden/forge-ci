@@ -14,6 +14,7 @@ import (
 
 func TestReleaseImageContextAdmission(t *testing.T) {
 	t.Parallel()
+
 	digest := strings.Repeat("ab", 32)
 	for _, tc := range []struct {
 		name, artifact, digest string
@@ -30,6 +31,8 @@ func TestReleaseImageContextAdmission(t *testing.T) {
 		{"prefixed", "context", "sha256:" + digest, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := pipeline.ValidateReleaseImageContext(tc.artifact, tc.digest)
 			if tc.valid {
 				require.NoError(t, err)
@@ -42,9 +45,11 @@ func TestReleaseImageContextAdmission(t *testing.T) {
 
 func TestFetchMatrixIncludesOnlyRegistryPreparation(t *testing.T) {
 	t.Parallel()
+
 	checkout := pipeline.ReleaseImageBuild{Name: "checkout", Arch: "amd64"}
 	cache := pipeline.ReleaseImageBuild{Name: "cached", Arch: "arm64", CacheTag: "cache"}
 	parent := pipeline.ReleaseImageBuild{Name: "child", Arch: "amd64", RegistryInputs: map[string]string{"BASE": "parent"}}
+
 	both := pipeline.ReleaseImageBuild{Name: "both", Arch: "arm64", CacheTag: "cache", RegistryInputs: parent.RegistryInputs}
 	for _, tc := range []struct {
 		name   string
@@ -57,6 +62,8 @@ func TestFetchMatrixIncludesOnlyRegistryPreparation(t *testing.T) {
 		{"all required", []pipeline.ReleaseImageBuild{parent, both}, `{"include":[{"name":"child","arch":"amd64"},{"name":"both","arch":"arm64"}]}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			plan := pipeline.ReleaseImagesPlan{Builds: tc.builds}
 			body, err := json.Marshal(plan.FetchMatrix())
 			require.NoError(t, err)

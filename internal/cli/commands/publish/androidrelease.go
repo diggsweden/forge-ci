@@ -22,7 +22,11 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
 )
 
-const outputAndroidMavenPackages = "android-maven-packages"
+const (
+	outputAndroidMavenPackages = "android-maven-packages"
+	// valueFalse is the literal an output or a token-configured flag holds.
+	valueFalse = "false"
+)
 
 func forgePackagesAndroidReleaseCmd() *cli.Command {
 	return &cli.Command{
@@ -39,111 +43,184 @@ func forgePackagesAndroidReleaseCmd() *cli.Command {
 			&cli.StringFlag{Name: flagTokenConfigured, Usage: "with --admit: true or false, whether the package credential is configured"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error { return publishAndroidRelease(ctx, cmd, d) })
+			return deps.FromCmd(ctx, cmd, func(dep *deps.Deps) error { return publishAndroidRelease(ctx, cmd, dep) })
 		},
 	}
 }
 
-func publishAndroidRelease(ctx context.Context, cmd *cli.Command, d *deps.Deps) (result error) {
-	if (cmd.Bool("list") || cmd.Bool("list-files")) && (cmd.Bool(flagAdmit) || cmd.String(flagManifest) != "" || cmd.IsSet(flagTokenConfigured) || (cmd.Bool("list") && cmd.Bool("list-files"))) {
-		return fmt.Errorf("--list cannot admit or publish files: %w", errs.ErrUsage)
+func publishAndroidRelease(ctx context.Context, cmd *cli.Command, dep *deps.Deps) (result error) {
+	configured, err := androidReleaseTokenConfigured(cmd)
+	if err != nil {
+		return err
 	}
-	if cmd.IsSet(flagTokenConfigured) && !cmd.Bool(flagAdmit) {
-		return fmt.Errorf("--token-configured requires --admit: %w", errs.ErrUsage)
-	}
-	configured := cmd.String(flagTokenConfigured)
-	if configured != "" && configured != "true" && configured != "false" {
-		return fmt.Errorf("--token-configured takes true or false: %w", errs.ErrUsage)
-	}
+
 	plans, err := appconfig.LoadReleaseStagePlans(appconfig.EmitConfigPlanInput{Path: cmd.String(flagArtifactsFile)}, deps.Annotator(cmd), !cmd.IsSet(flagArtifactsFile))
 	if err != nil {
 		return err
 	}
+
 	artifacts, err := pipeline.ReleaseAndroidMavenArtifacts(plans.Build)
 	if err != nil {
 		return err
 	}
+
 	if cmd.Bool("list") {
-		for _, artifact := range artifacts {
-			if _, err := fmt.Fprintln(os.Stdout, artifact.PublicationArtifactName); err != nil {
-				return err
-			}
-		}
-		return nil
+		return printAndroidPublications(artifacts)
 	}
+
 	if cmd.Bool("list-files") {
-		if cmd.String(flagVersion) == "" {
-			return fmt.Errorf("--list-files requires --version: %w", errs.ErrUsage)
-		}
-		var paths []string
-		for _, artifact := range artifacts {
-			directory := filepath.Join(cmd.String(flagDistDir), artifact.PublicationArtifactName)
-			set, err := apppublish.InspectMavenPublication(directory, strings.TrimPrefix(cmd.String(flagVersion), "v"), false)
-			if err != nil {
-				return err
-			}
-			for _, name := range set.Files {
-				paths = append(paths, filepath.Join(directory, name))
-			}
-		}
-		for _, path := range paths {
-			if _, err := fmt.Fprintln(os.Stdout, path); err != nil {
-				return err
-			}
-		}
-		return nil
+		return printAndroidReleaseFiles(cmd, artifacts)
 	}
-	if len(artifacts) == 0 {
-		if cmd.Bool(flagAdmit) {
-			return d.OutputSink.Set(ctx, outputAndroidMavenPackages, "false")
-		}
-		return nil
+
+	done, err := androidReleaseNeedsNoFiles(ctx, cmd, dep, artifacts, configured)
+	if done || err != nil {
+		return err
 	}
-	if cmd.Bool(flagAdmit) && configured == "false" {
-		return fmt.Errorf("Android Maven publication requires the release package token: %w", errs.ErrPermissionDenied)
-	}
-	if cmd.Bool(flagAdmit) && cmd.String(flagManifest) == "" {
-		return d.OutputSink.Set(ctx, outputAndroidMavenPackages, "true")
-	}
-	if cmd.String(flagManifest) == "" || cmd.String(flagVersion) == "" {
-		return fmt.Errorf("Android Maven release files require --manifest and --version: %w", errs.ErrUsage)
-	}
+
 	work, err := os.MkdirTemp("", "forge-ci-android-release-*")
 	if err != nil {
 		return err
 	}
+
 	defer func() { result = errors.Join(result, os.RemoveAll(work)) }()
-	files := apprelease.FilesInput{DistDir: cmd.String(flagDistDir), ManifestFile: cmd.String(flagManifest), ManifestExplicit: true}
+
 	version := strings.TrimPrefix(cmd.String(flagVersion), "v")
-	// Validate every repository before the first registry operation.
+	if err := stageAndroidPublications(ctx, cmd, artifacts, work, version); err != nil {
+		return err
+	}
+
+	if cmd.Bool(flagAdmit) {
+		return dep.OutputSink.Set(ctx, outputAndroidMavenPackages, "true")
+	}
+
+	return uploadAndroidPublications(ctx, dep, artifacts, work, version)
+}
+
+// androidReleaseTokenConfigured checks the flag combinations and returns the
+// token-configured value.
+func androidReleaseTokenConfigured(cmd *cli.Command) (string, error) {
+	if (cmd.Bool("list") || cmd.Bool("list-files")) && (cmd.Bool(flagAdmit) || cmd.String(flagManifest) != "" || cmd.IsSet(flagTokenConfigured) || (cmd.Bool("list") && cmd.Bool("list-files"))) {
+		return "", fmt.Errorf("--list cannot admit or publish files: %w", errs.ErrUsage)
+	}
+
+	if cmd.IsSet(flagTokenConfigured) && !cmd.Bool(flagAdmit) {
+		return "", fmt.Errorf("--token-configured requires --admit: %w", errs.ErrUsage)
+	}
+
+	configured := cmd.String(flagTokenConfigured)
+	if configured != "" && configured != "true" && configured != valueFalse {
+		return "", fmt.Errorf("--token-configured takes true or false: %w", errs.ErrUsage)
+	}
+
+	return configured, nil
+}
+
+func printAndroidPublications(artifacts []pipeline.PlannedArtifact) error {
+	for _, artifact := range artifacts {
+		if _, err := fmt.Fprintln(os.Stdout, artifact.PublicationArtifactName); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func printAndroidReleaseFiles(cmd *cli.Command, artifacts []pipeline.PlannedArtifact) error {
+	if cmd.String(flagVersion) == "" {
+		return fmt.Errorf("--list-files requires --version: %w", errs.ErrUsage)
+	}
+
+	var paths []string
+
+	for _, artifact := range artifacts {
+		directory := filepath.Join(cmd.String(flagDistDir), artifact.PublicationArtifactName)
+
+		set, err := apppublish.InspectMavenPublication(directory, strings.TrimPrefix(cmd.String(flagVersion), "v"), false)
+		if err != nil {
+			return err
+		}
+
+		for _, name := range set.Files {
+			paths = append(paths, filepath.Join(directory, name))
+		}
+	}
+
+	for _, path := range paths {
+		if _, err := fmt.Fprintln(os.Stdout, path); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// androidReleaseNeedsNoFiles settles the cases that end before any file is
+// read, and reports whether the command is done.
+func androidReleaseNeedsNoFiles(ctx context.Context, cmd *cli.Command, dep *deps.Deps, artifacts []pipeline.PlannedArtifact, configured string) (bool, error) {
+	if len(artifacts) == 0 {
+		if cmd.Bool(flagAdmit) {
+			return true, dep.OutputSink.Set(ctx, outputAndroidMavenPackages, valueFalse)
+		}
+
+		return true, nil
+	}
+
+	if cmd.Bool(flagAdmit) && configured == valueFalse {
+		return true, fmt.Errorf("the Android Maven publication requires the release package token: %w", errs.ErrPermissionDenied)
+	}
+
+	if cmd.Bool(flagAdmit) && cmd.String(flagManifest) == "" {
+		return true, dep.OutputSink.Set(ctx, outputAndroidMavenPackages, "true")
+	}
+
+	if cmd.String(flagManifest) == "" || cmd.String(flagVersion) == "" {
+		return true, fmt.Errorf("the Android Maven release files require --manifest and --version: %w", errs.ErrUsage)
+	}
+
+	return false, nil
+}
+
+// stageAndroidPublications validates every repository before the first
+// registry operation.
+func stageAndroidPublications(ctx context.Context, cmd *cli.Command, artifacts []pipeline.PlannedArtifact, work, version string) error {
+	files := apprelease.FilesInput{DistDir: cmd.String(flagDistDir), ManifestFile: cmd.String(flagManifest), ManifestExplicit: true}
+
 	for _, artifact := range artifacts {
 		directory := filepath.Join(files.DistDir, artifact.PublicationArtifactName)
 		destination := filepath.Join(work, artifact.PublicationArtifactName)
+
+		var err error
 		if cmd.Bool(flagAdmit) {
 			err = apppublish.AdmitReleaseMavenPublication(ctx, files, directory, destination, version)
 		} else {
 			err = apppublish.StageReleaseMavenPublication(ctx, files, directory, destination, version)
 		}
+
 		if err != nil {
 			return err
 		}
 	}
-	if cmd.Bool(flagAdmit) {
-		return d.OutputSink.Set(ctx, outputAndroidMavenPackages, "true")
-	}
-	resolver, err := d.RequireForgeMavenRegistryResolver()
+
+	return nil
+}
+
+func uploadAndroidPublications(ctx context.Context, dep *deps.Deps, artifacts []pipeline.PlannedArtifact, work, version string) error {
+	resolver, err := dep.RequireForgeMavenRegistryResolver()
 	if err != nil {
 		return err
 	}
+
 	if verifier, ok := resolver.(provider.ForgeProjectVerifier); ok {
 		if err := verifier.VerifyForgeProject(ctx); err != nil {
 			return err
 		}
 	}
+
 	for _, artifact := range artifacts {
 		if err := uploadForgeMaven(ctx, resolver, filepath.Join(work, artifact.PublicationArtifactName), version, false); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }

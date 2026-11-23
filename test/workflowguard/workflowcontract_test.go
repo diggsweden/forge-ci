@@ -26,12 +26,14 @@ import (
 
 func TestRuntimeArchitectureAndManifestPublicationShareBranchPolicy(t *testing.T) {
 	t.Parallel()
+
 	var workflow struct {
 		Jobs map[string]struct {
 			If string `yaml:"if"`
 		} `yaml:"jobs"`
 	}
 	require.NoError(t, yaml.Unmarshal(reporoot.ReadFile(t, ".github/workflows/self-runtime-container.yml"), &workflow))
+
 	const policy = "(github.event_name == 'release' && github.ref_type == 'tag') || " +
 		"(needs.image-coordinates.outputs.on-publication-branch == 'true' && " +
 		"(github.event_name == 'schedule' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)))"
@@ -478,6 +480,7 @@ func TestReleaseGatePreservesTheStrictIntegrationTier(t *testing.T) {
 	require.NoError(t, release.On.Decode(&triggers))
 	require.Len(t, triggers, 1)
 	require.Contains(t, triggers, "push")
+
 	binary := release.Jobs["binary"]
 	require.Equal(t, []string{"release"}, jobNeeds(binary))
 	require.Equal(t, "./.github/workflows/release-binary.yml", binary.Uses)
@@ -485,6 +488,7 @@ func TestReleaseGatePreservesTheStrictIntegrationTier(t *testing.T) {
 
 	gates := jobsRunning(release, strictRecipe)
 	require.Equal(t, []string{"evidence"}, gates)
+
 	for _, waived := range []string{"evidence", "blackbox"} {
 		require.Equal(t, "${{ github.event_name != 'push' }}", release.Jobs[waived].If)
 		require.NotContains(t, jobNeeds(release.Jobs["release"]), waived)
@@ -507,6 +511,7 @@ func TestReleaseGatePreservesTheStrictIntegrationTier(t *testing.T) {
 		if name == "evidence" || name == "blackbox" {
 			continue // Temporary, explicitly checked above.
 		}
+
 		require.Emptyf(t, job.If, "self-release.yml job %s has a condition; a release job runs when its needs succeeded, and on nothing else", name)
 	}
 
@@ -515,6 +520,7 @@ func TestReleaseGatePreservesTheStrictIntegrationTier(t *testing.T) {
 	body := string(reporoot.ReadFile(t, ".github/workflows/self-release.yml"))
 	require.Contains(t, body, "::warning title=Strict integration not run::")
 	require.Contains(t, body, "::warning title=Black-box tests not run::")
+
 	for _, install := range []string{"if ! mise install; then", "if ! mise install go java rust || ! mise exec --no-deps go java rust -- mise install; then"} {
 		_, after, found := strings.Cut(body, install)
 		require.Truef(t, found, "self-release.yml no longer names a failed %q", install)
@@ -745,19 +751,26 @@ func TestProductionReleaseCeremonyUsesRequestThenFinalTag(t *testing.T) {
 
 	var runtime eventWorkflow
 	require.NoError(t, yaml.Unmarshal(runtimeWorkflow, &runtime))
+
 	var triggers map[string]yaml.Node
 	require.NoError(t, runtime.On.Decode(&triggers))
 	releaseTrigger, pushTrigger := triggers["release"], triggers["push"]
-	var releaseEvents map[string][]string
-	var pushFilters map[string]yaml.Node
+
+	var (
+		releaseEvents map[string][]string
+		pushFilters   map[string]yaml.Node
+	)
+
 	require.NoError(t, releaseTrigger.Decode(&releaseEvents))
 	require.NoError(t, pushTrigger.Decode(&pushFilters))
 	require.Equal(t, []string{"published"}, releaseEvents["types"])
 	require.NotContains(t, pushFilters, "tags", "the release event replaces the final-tag push trigger")
 	require.Contains(t, pushFilters, "branches", "rolling publication must still run on branch pushes")
+
 	for _, name := range []string{"publish-arch", "publish-merge"} {
 		require.Contains(t, runtime.Jobs[name].If, "github.event_name == 'release'", name)
 	}
+
 	require.Contains(t, runtime.Jobs["image-coordinates"].If, "!endsWith(github.ref_name, '-pre')")
 
 	runtimeText := string(runtimeWorkflow)

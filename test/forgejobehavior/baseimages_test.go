@@ -27,8 +27,12 @@ const (
 // input reaches the engine's admission as the caller passed it, empty or not.
 func TestBaseImagesWorkflowPlansTheStageItsParentNames(t *testing.T) {
 	t.Parallel()
+
 	for _, file := range []string{"base-images.yml", "base-image-lifecycle.yml"} {
-		t.Run(file, func(t *testing.T) { checkBaseStagePlanning(t, file) })
+		t.Run(file, func(t *testing.T) {
+			t.Parallel()
+			checkBaseStagePlanning(t, file)
+		})
 	}
 }
 
@@ -75,6 +79,7 @@ func checkBaseStagePlanning(t *testing.T, file string) {
 			if (at >= 0) != (tc.parent != "") || (at >= 0 && argv[at+1] != tc.parent) {
 				t.Fatalf("parent: argv=%v, want %q", argv, tc.parent)
 			}
+
 			if file == "base-image-lifecycle.yml" {
 				at := slices.Index(argv, "--stage-flavors")
 				if at < 0 || at+1 >= len(argv) || argv[at+1] != "base" {
@@ -90,8 +95,12 @@ func checkBaseStagePlanning(t *testing.T, file string) {
 // to the engine: without it the gate could only report.
 func TestBaseImagesWorkflowPassesTheVulnerabilitySettingToPublication(t *testing.T) {
 	t.Parallel()
+
 	for _, file := range []string{"base-images.yml", "base-image-lifecycle.yml"} {
-		t.Run(file, func(t *testing.T) { checkBaseStageScanGate(t, file) })
+		t.Run(file, func(t *testing.T) {
+			t.Parallel()
+			checkBaseStageScanGate(t, file)
+		})
 	}
 }
 

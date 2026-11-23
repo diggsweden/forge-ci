@@ -19,6 +19,7 @@ import (
 
 func TestGitHubBaseLifecycleKeepsAuthoritiesAndAuthenticatedOutputs(t *testing.T) {
 	t.Parallel()
+
 	workflow := readCanonicalConsumerWorkflow(t, "base-image-lifecycle.yml")
 	for name, dependencies := range map[string][]string{
 		"plan": {"resolve-bootstrap"}, "build": {"resolve-bootstrap", "plan"},
@@ -28,35 +29,46 @@ func TestGitHubBaseLifecycleKeepsAuthoritiesAndAuthenticatedOutputs(t *testing.T
 		job := workflow.Jobs[name]
 		require.Equal(t, dependencies, job.Needs, name)
 		require.NotEmpty(t, job.Steps, name)
+
 		for _, dependency := range dependencies {
 			require.Contains(t, job.If, "needs."+dependency+".result == 'success'", name)
 		}
+
 		require.Contains(t, job.If, "!cancelled()", name)
 	}
+
 	body := reporoot.ReadFile(t, ".github/workflows/base-image-lifecycle.yml")
+
 	var doc yaml.Node
 	require.NoError(t, yaml.Unmarshal(body, &doc))
+
 	root := doc.Content[0]
 	for _, name := range []string{"publish", "sign", "promote", "authenticate"} {
 		require.Equal(t, "ubuntu-26.04", scalarChild(mappingChild(mappingChild(root, "jobs"), name), "runs-on"))
 	}
+
 	for name, permission := range map[string]string{
 		"build": "", "plan": "", "publish": "write", "sign": "write", "promote": "write", "authenticate": "read",
 	} {
 		require.Equal(t, permission, workflow.Jobs[name].Permissions["packages"], name)
 	}
+
 	outputs := mappingChild(mappingChild(mappingChild(root, "on"), "workflow_call"), "outputs")
 	for _, name := range []string{"ledger-json", "parent-base-json"} {
 		require.Equal(t, "${{ jobs.authenticate.outputs."+name+" }}", scalarChild(mappingChild(outputs, name), "value"))
 	}
+
 	for _, name := range []string{"promote", "authenticate"} {
 		found := false
+
 		for _, step := range workflow.Jobs[name].Steps {
 			if value := step.Env["BASE_INPUTS_JSON"]; value != "" {
 				require.Equal(t, "${{ inputs['expected-inputs-json'] }}", value)
+
 				found = true
 			}
 		}
+
 		require.True(t, found, name)
 	}
 }
@@ -64,20 +76,26 @@ func TestGitHubBaseLifecycleKeepsAuthoritiesAndAuthenticatedOutputs(t *testing.T
 func TestGitHubBaseAuthenticationFailsWithoutEvidence(t *testing.T) {
 	t.Parallel()
 	workflow := readCanonicalConsumerWorkflow(t, "base-image-lifecycle.yml")
+
 	var script string
+
 	for _, step := range workflow.Jobs["authenticate"].Steps {
 		if step.Name == "Authenticate exact promoted parent" {
 			script = step.Run
 		}
 	}
+
 	require.NotEmpty(t, script)
+
 	for _, mode := range []string{"success", "missing-token", "missing-ref", "missing-ledger", "login-failure", "verification-failure"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
 			output := filepath.Join(dir, "output")
 			require.NoError(t, os.WriteFile(output, nil, 0o600))
+
 			ref, ledger, token := "registry.invalid/base@sha256:"+strings.Repeat("a", 64), "[]", "fixture-token"
+
 			switch mode {
 			case "missing-token":
 				token = ""
@@ -86,6 +104,7 @@ func TestGitHubBaseAuthenticationFailsWithoutEvidence(t *testing.T) {
 			case "missing-ledger":
 				ledger = ""
 			}
+
 			stub := `forge-ci() {
   test -z "${REGISTRY_TOKEN:-}" || return 90
   case "$1 $2" in
@@ -115,6 +134,7 @@ func TestGitHubBaseAuthenticationFailsWithoutEvidence(t *testing.T) {
 			body, readErr := os.ReadFile(output)
 			require.NoError(t, readErr)
 			require.NotContains(t, string(log), "fixture-token")
+
 			if mode == "success" {
 				require.NoError(t, err, "%s", log)
 				require.Equal(t, "ledger-json=[]\nparent-base-json={\"ref\":\"verified\",\"input_id\":\"independent\"}\n", string(body))
@@ -129,13 +149,17 @@ func TestGitHubBaseAuthenticationFailsWithoutEvidence(t *testing.T) {
 func TestGitHubBasePlanSelectsOneStageAndNativeBuilder(t *testing.T) {
 	t.Parallel()
 	workflow := readCanonicalConsumerWorkflow(t, "base-image-lifecycle.yml")
+
 	var script string
+
 	for _, step := range workflow.Jobs["plan"].Steps {
 		if step.Name == "Admit one native base stage" {
 			script = step.Run
 		}
 	}
+
 	require.NotEmpty(t, script)
+
 	for _, tc := range []struct {
 		name, flavor, builder, parent, stage, image string
 	}{
@@ -164,18 +188,23 @@ func TestGitHubBasePlanSelectsOneStageAndNativeBuilder(t *testing.T) {
 				`RUNS_ON=["ordinary"]`, `BUILD_RUNS_ON_LINUX_AMD64=["amd64"]`, `BUILD_RUNS_ON_LINUX_ARM64=["arm64"]`}
 			log, err := command.CombinedOutput()
 			body, readErr := os.ReadFile(calls)
+
 			if tc.stage == "" {
 				require.Error(t, err)
 				require.ErrorIs(t, readErr, os.ErrNotExist, "invalid selection must fail before planning")
+
 				return
 			}
+
 			require.NoError(t, err, "%s", log)
 			require.NoError(t, readErr)
 			require.True(t, strings.HasPrefix(string(body), "container\nbase-images\n"+tc.stage+"\nplan\n"))
+
 			for _, pair := range []string{"--stage-flavors\n" + tc.flavor, "--release-sha\napproved-source",
 				`build-runs-on-linux-amd64=["amd64"]`, `build-runs-on-linux-arm64=["arm64"]`} {
 				require.Contains(t, string(body), pair+"\n")
 			}
+
 			if tc.parent != "" {
 				require.Contains(t, string(body), "--parent-base-json\n"+tc.parent+"\n")
 			}

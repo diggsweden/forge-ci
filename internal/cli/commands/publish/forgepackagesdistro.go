@@ -94,7 +94,7 @@ func publishDistroPackages(ctx context.Context, cmd *cli.Command, dependencies *
 			return nil
 		}
 
-		return dependencies.OutputSink.Set(ctx, outputDistroPackages, "false")
+		return dependencies.OutputSink.Set(ctx, outputDistroPackages, valueFalse)
 	}
 
 	if admit {
@@ -135,7 +135,7 @@ func publishDistroPackages(ctx context.Context, cmd *cli.Command, dependencies *
 func admitDistroPackages(cmd *cli.Command, dependencies *deps.Deps, files apprelease.FilesInput, places config.DistroPackages) error {
 	switch cmd.String(flagTokenConfigured) {
 	case "", "true":
-	case "false":
+	case valueFalse:
 		return fmt.Errorf("%s declares distro-packages, but the token that may write the owner's packages is not configured (RELEASE_REGISTRY_TOKEN in the Forgejo release): %w",
 			cmd.String(flagArtifactsFile), errs.ErrPermissionDenied)
 	default:

@@ -420,8 +420,10 @@ func requestRelease(t *testing.T, scenario layerScenario, requester livetest.Req
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		livetest.RequireDirectParentPull(t, target, repo, run.ID, artifacts, expected)
 	}
+
 	return run, requireReleased(t, scenario, keys, settings, external, request, run, packages, distro)
 }
 

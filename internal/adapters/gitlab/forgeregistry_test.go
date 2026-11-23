@@ -33,13 +33,16 @@ func TestResolveForgeMavenRegistry_GitLab(t *testing.T) {
 
 func TestResolveForgeMavenRegistry_GitLabReleasePackageToken(t *testing.T) {
 	t.Parallel()
+
 	p := &gitlab.Provider{Env: func(k string) string {
 		return map[string]string{"CI_API_V4_URL": "https://gl.example.com/api/v4", "CI_PROJECT_ID": "42", "CI_JOB_TOKEN": "ordinary-job", "RELEASE_PACKAGE_TOKEN": "dedicated-package"}[k]
 	}}
+
 	registry, err := p.ResolveForgeMavenRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if registry.AuthScheme != provider.MavenAuthPrivateTokenHeader || registry.Token != "dedicated-package" {
 		t.Fatal("release Maven registry did not select the dedicated package authority")
 	}

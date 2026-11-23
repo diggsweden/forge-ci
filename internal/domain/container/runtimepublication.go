@@ -52,9 +52,11 @@ func RuntimePublicationBranch(branch string) (string, error) {
 	if branch == "" {
 		branch = "main"
 	}
+
 	if !gitdomain.ValidRefName("refs/heads/" + branch) {
 		return "", fmt.Errorf("runtime publication branch must be a valid Git branch name: %w", errs.ErrValidation)
 	}
+
 	return branch, nil
 }
 
@@ -66,6 +68,7 @@ func PlanRuntimePublication(in RuntimePublicationInput) (RuntimePublicationPlan,
 	if err != nil {
 		return RuntimePublicationPlan{}, err
 	}
+
 	if in.Ref != "refs/heads/"+branch || !gitdomain.ValidCommitSHA(in.SourceSHA) || in.SourceSHA != in.CheckedOutSHA || !runtimeRunID.MatchString(in.RunID) {
 		return RuntimePublicationPlan{}, fmt.Errorf("runtime publication requires refs/heads/%s, an exact source checkout and a numeric run-attempt identity: %w", branch, errs.ErrValidation)
 	}
@@ -78,7 +81,9 @@ func PlanRuntimePublication(in RuntimePublicationInput) (RuntimePublicationPlan,
 	if err != nil {
 		return RuntimePublicationPlan{}, err
 	}
+
 	plan.CandidateTag = "staging-" + in.RunID + "-" + in.SourceSHA[:12]
+
 	return plan, nil
 }
 
@@ -88,6 +93,7 @@ func PlanRuntimeImages(images []RuntimeImage, architectures []string) (RuntimePu
 	if len(images) == 0 {
 		return RuntimePublicationPlan{}, fmt.Errorf("runtime roster is empty: %w", errs.ErrInvalidConfig)
 	}
+
 	if err := validateRuntimeArchitectures(architectures); err != nil {
 		return RuntimePublicationPlan{}, err
 	}
@@ -97,6 +103,7 @@ func PlanRuntimeImages(images []RuntimeImage, architectures []string) (RuntimePu
 	}
 
 	var plan RuntimePublicationPlan
+
 	for _, image := range images {
 		selected := RuntimeImage{Target: image.Target, Name: image.Name}
 		for _, arch := range image.Archs {

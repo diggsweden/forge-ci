@@ -16,6 +16,17 @@ examples/
 # reflect-by-name in table-driven key tests.
 *_test.go
 
+# Test helpers and the live harness that only tests and the operator run:
+# they exec the tools a test selects, read capped archives, and check API
+# responses for nil before use, the same reasons as for the test files.
+internal/testutil/
+test/live/internal/
+
+# Live trial fixtures are test inputs. Adapter workflows carry ENGINE_SHA,
+# which prepare.sh replaces with the full engine commit, and the Android
+# app's launcher activity must be exported for the platform to start it.
+test/live/fixtures/
+
 # Live workflow fixtures pin PIN_FORGE_CI_SHA, which Layer.Render replaces
 # with the exact served commit and refuses if any placeholder survives.
 # They are test inputs, not workflows a forge can run as committed.

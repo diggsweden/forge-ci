@@ -42,6 +42,8 @@ const (
 	flagName                    = "name"
 	flagOutput                  = "output"
 	flagPlan                    = "plan"
+	flagPlatforms               = "platforms"
+	flagReleasePlatforms        = "release-platforms"
 	flagPlatform                = "platform"
 	flagProvenanceEnvelope      = "provenance-envelope"
 	flagPublish                 = "publish"

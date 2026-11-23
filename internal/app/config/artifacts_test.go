@@ -184,6 +184,7 @@ func TestEmitReleaseImagesPlan_ScansEveryImageAndRefusesTheOptOut(t *testing.T) 
 
 func TestEmitReleaseImagesPlanRefusesIncompleteContextBeforeReadingConfig(t *testing.T) {
 	t.Parallel()
+
 	for _, pair := range [][2]string{{"context", ""}, {"", strings.Repeat("a", 64)}, {"context", "bad"}} {
 		sink := fakeoutputsink.New(t)
 		_, err := appconfig.EmitReleaseImagesPlan(t.Context(), sink, output.Annotator{}, appconfig.EmitReleaseImagesPlanInput{

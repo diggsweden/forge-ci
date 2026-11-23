@@ -45,6 +45,7 @@ func TestRuntimeSigningUsesFullRunnerRef(t *testing.T) {
 			err := runtimePublicationSignCmd().Run(t.Context(), []string{"sign", "--flavor", "go", "--method", "kms",
 				"--key", "env://COSIGN_KEY", "--auth-file", authFile, "--source-sha", "invalid"})
 			require.ErrorIs(t, err, errs.ErrValidation)
+
 			if tc.admitted {
 				require.ErrorContains(t, err, "SOURCE_SHA must be a git commit hex digest")
 			} else {

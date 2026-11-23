@@ -90,6 +90,9 @@ EXAMPLES:
 				return err
 			}
 
+			// Result is a value, and a dry run reports its conflicts with the
+			// error on purpose.
+			// nosemgrep: trailofbits.go.invalid-usage-of-modified-variable.invalid-usage-of-modified-variable
 			result, err := appinit.Run(ctx, appinit.Input{
 				Remote: remote, URL: cmd.Args().Get(0),
 				Ref: cmd.String("ref"), Dir: dir, Example: example, DryRun: cmd.Bool("dry-run"),

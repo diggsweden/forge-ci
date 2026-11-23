@@ -170,6 +170,7 @@ func resolveReleaseImagesPlan(in EmitReleaseImagesPlanInput, annot output.Annota
 	if err := pipeline.ValidateReleaseImageContext(in.ContextArtifact, in.ContextDigest); err != nil {
 		return pipeline.ReleaseImagesPlan{}, err
 	}
+
 	plan, err := planReleaseImages(in, annot)
 	if err != nil {
 		return pipeline.ReleaseImagesPlan{}, err

@@ -757,6 +757,7 @@ func TestDistroPackagesAreAdmittedBeforeTheReleaseIsPublic(t *testing.T) {
 	if output := scalarString(mappingValue(mappingValue(signer.jobs["sign"].node, "outputs"), "distro-packages")); output != "${{ steps.packages.outputs.distro-packages }}" {
 		t.Errorf("the sign job's distro-packages output is %q, want the admission step's", output)
 	}
+
 	if output := scalarString(mappingValue(mappingValue(signer.jobs["sign"].node, "outputs"), "android-maven-packages")); output != "${{ steps.packages.outputs.android-maven-packages }}" {
 		t.Errorf("the sign job does not expose Android Maven admission: %q", output)
 	}
@@ -775,6 +776,7 @@ func TestDistroPackagesAreAdmittedBeforeTheReleaseIsPublic(t *testing.T) {
 		}
 
 		admitted = index
+
 		if !strings.Contains(run, "run_forge_ci publish forge-packages android-release --admit") {
 			t.Error("Android Maven repositories are not admitted beside distro packages before signing")
 		}

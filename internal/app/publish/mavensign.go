@@ -116,6 +116,9 @@ func mavenChecksums(root *os.Root, name string) (map[string][]byte, error) {
 	}
 	defer func() { _ = file.Close() }()
 
+	// Maven repositories require .md5 and .sha1 files beside each artifact;
+	// they are checksums, and the OpenPGP signature authenticates it.
+	// nosemgrep: go.lang.security.audit.crypto.use_of_weak_crypto.use-of-md5, go.lang.security.audit.crypto.use_of_weak_crypto.use-of-sha1
 	md, sha, sha256sum, sha512sum := md5.New(), sha1.New(), sha256.New(), sha512.New() //nolint:gosec // Compatibility checksums; OpenPGP is the authentication mechanism.
 	if _, err := io.Copy(io.MultiWriter(md, sha, sha256sum, sha512sum), file); err != nil {
 		return nil, err

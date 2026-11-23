@@ -40,19 +40,23 @@ func TestScopedPullRejectsCredentialsOutsideTrustedOrigins(t *testing.T) {
 
 			adapter, err := WithRepositoryPullCredentials("registry.example/org/image", "reader", "fixture", tc.authOrigin)
 			require.NoError(t, err)
+
 			forwarded := false
 			transport := verifiedRegistryTransport{
 				trustedAuth: adapter.pullAuth.trusted,
 				base: pullAuthTestTransport(func(*http.Request) (*http.Response, error) {
 					forwarded = true
+
 					return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
 				}),
 			}
 			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, tc.url, nil)
 			require.NoError(t, err)
+
 			if tc.authorize {
 				req.SetBasicAuth("reader", "fixture")
 			}
+
 			resp, err := transport.RoundTrip(req)
 			if tc.wantPassed {
 				require.NoError(t, err)
@@ -60,6 +64,7 @@ func TestScopedPullRejectsCredentialsOutsideTrustedOrigins(t *testing.T) {
 			} else {
 				require.ErrorIs(t, err, errs.ErrValidation)
 			}
+
 			require.Equal(t, tc.wantPassed, forwarded)
 		})
 	}
@@ -67,8 +72,10 @@ func TestScopedPullRejectsCredentialsOutsideTrustedOrigins(t *testing.T) {
 
 func TestScopedPullTokenPostsRequireTrustedOrigin(t *testing.T) {
 	t.Parallel()
+
 	adapter, err := WithRepositoryPullCredentials("registry.example/org/image", "reader", "fixture", "https://tokens.example")
 	require.NoError(t, err)
+
 	transport := verifiedRegistryTransport{trustedAuth: adapter.pullAuth.trusted, base: pullAuthTestTransport(func(*http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
 	})}
@@ -78,11 +85,14 @@ func TestScopedPullTokenPostsRequireTrustedOrigin(t *testing.T) {
 	}{{"https://tokens.example/exchange", true}, {"https://other.example/exchange", false}} {
 		req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, tc.endpoint, nil)
 		require.NoError(t, err)
+
 		resp, err := transport.RoundTrip(req)
 		if !tc.trusted {
 			require.ErrorIs(t, err, errs.ErrValidation)
+
 			continue
 		}
+
 		require.NoError(t, err)
 		require.NoError(t, resp.Body.Close())
 	}

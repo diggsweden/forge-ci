@@ -20,18 +20,22 @@ func TestIOSConsumerUsesReusableNativeBuildWithoutSimulator(t *testing.T) {
 		return cell.Demo == "hello-ios" && cell.Event == TrialDevRelease && cell.Set == SetMedium &&
 			slices.Equal(cell.Settings, []string{"workflow=build-workflow.yml"})
 	}), "the native build must remain repeatable through the normal hosted case table")
+
 	const root = "test/live/fixtures/consumers/hello-ios/consumer/test/live/github/workflows/"
+
 	type job struct {
 		Uses    string
 		With    map[string]any
 		Secrets any
 		Steps   []any
 	}
+
 	var build struct {
 		On          map[string]any
 		Permissions map[string]string
 		Jobs        map[string]job
 	}
+
 	body := reporoot.ReadFile(t, root+"build-workflow.yml")
 	require.NoError(t, yaml.Unmarshal(body, &build))
 	require.Contains(t, build.On, "workflow_dispatch")
@@ -50,10 +54,12 @@ func TestIOSConsumerUsesReusableNativeBuildWithoutSimulator(t *testing.T) {
 	require.Equal(t, false, archive.With["enable-code-signing"])
 	require.Empty(t, archive.Steps, "consumer delegates the build to reusable CI")
 	require.Nil(t, archive.Secrets, "unsigned build needs no signing secrets")
+
 	var pr struct{ Jobs map[string]job }
 	require.NoError(t, yaml.Unmarshal(reporoot.ReadFile(t, root+"pullrequest-workflow.yml"), &pr))
 	require.Len(t, pr.Jobs, 1)
 	require.Contains(t, pr.Jobs["pr-checks"].Uses, "/pullrequest-orchestrator.yml@")
+
 	for _, name := range []string{"pullrequest-workflow.yml", "build-workflow.yml", "release-workflow.yml"} {
 		workflow := strings.ToLower(string(reporoot.ReadFile(t, root+name)))
 		for _, forbidden := range []string{"simctl", "downloadplatform", "iphonesimulator", "xcodebuild test", "ios simulator"} {

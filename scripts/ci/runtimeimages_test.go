@@ -154,6 +154,7 @@ func TestRuntimeBuildRetainsVerifiedEngineForMetadataUpload(t *testing.T) {
 			root, tools := t.TempDir(), t.TempDir()
 			gitDir := filepath.Join(root, ".git")
 			require.NoError(t, os.Mkdir(gitDir, 0o700))
+
 			original := filepath.Join(tools, "forge-ci")
 			record := filepath.Join(root, "upload")
 			require.NoError(t, os.WriteFile(filepath.Join(tools, "git"), []byte("#!/bin/sh\nprintf '%s\\n' \"$SOURCE_SHA\"\n"), 0o700))
@@ -172,21 +173,27 @@ case "$1 $2 $3" in
   *) exit 99 ;;
 esac
 `), 0o700))
+
 			builder, status := mode, "0"
 			if mode == "kaniko-failure" {
 				builder, status = "kaniko", "78"
 			}
+
 			cmd := exec.CommandContext(t.Context(), "bash", filepath.Join(reporoot.Path(t), "scripts/ci/runtime-images.sh"), "build", "go", "amd64")
 			cmd.Dir = root
+
 			cmd.Env = append(os.Environ(), "PATH="+tools+":"+os.Getenv("PATH"), "CI_IMAGE_BUILDER="+builder,
 				"ORIGINAL_ENGINE="+original, "UPLOAD_RECORD="+record, "BUILD_STATUS="+status, "REGISTRY_AUTH_FILE=fixture-auth.json",
 				"RUNTIME_IMAGE_NAMESPACE=registry.example/acme", "SOURCE_SHA="+strings.Repeat("a", 40), "RUNTIME_RUN_ID=123-1",
 				"PUBLICATION_REF=refs/heads/main", "PLATFORM_MATRIX=[]", "FORGEJO_SERVER=https://forge.example", "FORGEJO_REPO=acme/project")
+
 			out, err := cmd.CombinedOutput()
 			if status == "0" {
 				require.NoError(t, err, "%s", out)
+
 				upload, readErr := os.ReadFile(record)
 				require.NoError(t, readErr)
+
 				path, args, _ := strings.Cut(string(upload), "\n")
 				if builder == "kaniko" {
 					require.True(t, strings.HasPrefix(path, gitDir+"/forge-ci-runtime."), path)
@@ -194,12 +201,14 @@ esac
 				} else {
 					require.Equal(t, original, path)
 				}
+
 				require.Equal(t, "artifact\nupload\n--name\nruntime-go-arch-amd64\n--dir\nruntime-go-arch-amd64/\n--retention-days\n1\n--if-no-files\nerror\n", args)
 			} else {
 				require.Error(t, err, "%s", out)
 				require.Equal(t, 78, cmd.ProcessState.ExitCode())
 				require.NoFileExists(t, record)
 			}
+
 			entries, err := os.ReadDir(gitDir)
 			require.NoError(t, err)
 			require.Empty(t, entries, "the retained CLI must be cleaned up")

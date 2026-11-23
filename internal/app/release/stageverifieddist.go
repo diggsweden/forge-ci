@@ -59,7 +59,21 @@ func OverlayVerifiedDist(ctx context.Context, source, destination, expected, man
 	if err != nil || !info.IsDir() {
 		return fmt.Errorf("context overlay requires an existing directory: %w", errs.ErrValidation)
 	}
+
 	return installVerifiedDist(ctx, source, destination, expected, manifestRoot, domainrelease.WalkSafe, true)
+}
+
+func requireStagedDistDigest(staged fs.FS, manifestRoot, expected string) error {
+	actual, err := domainrelease.DistDigest(staged, manifestRoot)
+	if err != nil {
+		return err
+	}
+
+	if actual != expected {
+		return fmt.Errorf("staged dist digest mismatch across job boundary: got %s, want %s: %w", actual, expected, errs.ErrValidation)
+	}
+
+	return nil
 }
 
 func installVerifiedDist(ctx context.Context, source, destination, expected, manifestRoot string, admit func(fs.FS) error, overlay bool) error {
@@ -100,13 +114,8 @@ func installVerifiedDist(ctx context.Context, source, destination, expected, man
 		manifestRoot = source
 	}
 
-	actual, err := domainrelease.DistDigest(stage.Root().FS(), manifestRoot)
-	if err != nil {
+	if err := requireStagedDistDigest(stage.Root().FS(), manifestRoot, expected); err != nil {
 		return err
-	}
-
-	if actual != expected {
-		return fmt.Errorf("staged dist digest mismatch across job boundary: got %s, want %s: %w", actual, expected, errs.ErrValidation)
 	}
 
 	if err := ctx.Err(); err != nil {

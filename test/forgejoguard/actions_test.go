@@ -188,6 +188,7 @@ func TestPublishForgePackagesActionGivesItsTokenToTheDeployAlone(t *testing.T) {
 	if !strings.Contains(script, `FORGEJO_TOKEN="${package_token}"`) {
 		t.Errorf("%s does not give the token to the deploy as FORGEJO_TOKEN", path)
 	}
+
 	if !strings.Contains(script, `--expected-digest "${PUBLISH_RELEASE_DIGEST:?`) ||
 		!strings.Contains(script, `deploy+=(--release-manifest "${PUBLISH_RELEASE_MANIFEST}" --dist-dir "${PUBLISH_RELEASE_DIST}")`) {
 		t.Errorf("%s does not bind signed-release publication to the signer's digest and manifest", path)

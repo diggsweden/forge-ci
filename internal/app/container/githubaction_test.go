@@ -133,10 +133,12 @@ func TestGitHubKanikoEntrypointPreservesGatesAndExitStatus(t *testing.T) {
 				script := filepath.Join(t.TempDir(), "entrypoint.sh")
 				require.NoError(t, os.WriteFile(script, []byte(strings.ReplaceAll(string(entrypoint), "/kaniko/tools", tools)), 0o600))
 				argsFile := filepath.Join(t.TempDir(), "args")
+
 				actionOperation := operation
 				if operation == "base-child" {
 					actionOperation = "base"
 				}
+
 				command := exec.CommandContext(t.Context(), "bash", script, actionOperation)
 
 				command.Env = []string{
@@ -151,6 +153,7 @@ func TestGitHubKanikoEntrypointPreservesGatesAndExitStatus(t *testing.T) {
 				if operation == "snapshot" || actionOperation == "base" {
 					command.Env = append(command.Env, "FIXTURE_NO_LOGIN=true")
 				}
+
 				if operation == "base-child" {
 					command.Env = append(command.Env, `PARENT_BASE_JSON={"ref":"verified","input_id":"independent"}`)
 				}
@@ -187,13 +190,17 @@ func TestGitHubKanikoEntrypointPreservesGatesAndExitStatus(t *testing.T) {
 				scanDir := filepath.Join(in.Workspace, "source")
 				if actionOperation == "base" {
 					scanDir = in.Workspace
+
 					stage := "root-base"
 					if operation == "base-child" {
 						stage = "child-base"
+
 						require.Contains(t, string(args), "--inputs-dir\nregistry-inputs\n")
 					}
+
 					require.Contains(t, string(args), "container\nbase-images\n"+stage+"\nbuild\n")
 				}
+
 				info, statErr := os.Stat(filepath.Join(scanDir, "trivy-results.sarif"))
 				require.NoError(t, statErr)
 				require.Equal(t, os.FileMode(0o600), info.Mode().Perm(), "permission repair belongs to the host, not a signal-handling shell wrapper")

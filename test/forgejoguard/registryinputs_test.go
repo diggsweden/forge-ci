@@ -34,9 +34,11 @@ func TestRegistryInputFetchSerializesArtifactFinalization(t *testing.T) {
 		if scalarString(mappingValue(strategy, "matrix")) != `${{ fromJSON(needs.plan.outputs.fetch-required == 'true' && needs.plan.outputs.fetch-matrix || '{"include":[{"arch":""}]}') }}` {
 			t.Errorf("%s: fetch must use the filtered matrix when required and retain one skipped dependency row otherwise", tc.file)
 		}
+
 		if got := scalarString(mappingValue(workflow.jobs["fetch-inputs"].node, "if")); got != needsGate([]string{"coordinates", "plan"}, "!cancelled()", "needs.plan.outputs.fetch-required == 'true'") {
 			t.Errorf("%s: fetch must run only when the successful plan requires it: %s", tc.file, got)
 		}
+
 		const buildGate = "${{ !cancelled() && needs.coordinates.result == 'success' && needs.plan.result == 'success' && ((needs.plan.outputs.fetch-required == 'true' && needs.fetch-inputs.result == 'success') || (needs.plan.outputs.fetch-required == 'false' && (needs.fetch-inputs.result == 'skipped' || needs.fetch-inputs.result == 'success'))) }}"
 		if got := scalarString(mappingValue(workflow.jobs["build"].node, "if")); got != buildGate {
 			t.Errorf("%s: builds may accept skipped fetch only when the plan explicitly requires none; failures and cancellation must block: %s", tc.file, got)
@@ -111,7 +113,6 @@ func TestPrivateRegistryFetchIsSeparatedFromConsumerBuild(t *testing.T) {
 				if tc.file == releaseImagesWorkflow && !strings.Contains(run, "container builder-identity") {
 					t.Error("prepared builds must preserve native builder identity checks")
 				}
-
 			}
 		}
 
@@ -137,6 +138,7 @@ func TestBaseImagesStageKeepsItsTokenAndItsGates(t *testing.T) {
 		if may := name == "build" || name == "publish"; holds != may {
 			t.Errorf("job %s: reads a secret = %t, want %t", name, holds, may)
 		}
+
 		if anyString(job.node, func(value string) bool { return strings.Contains(value, "secrets.RELEASE_REGISTRY_TOKEN") }) != (name == "publish") {
 			t.Errorf("job %s: only publish may read RELEASE_REGISTRY_TOKEN", name)
 		}
@@ -160,8 +162,12 @@ func TestBaseImagesStageKeepsItsTokenAndItsGates(t *testing.T) {
 
 func TestBaseImagesPullsParentWithoutArtifactHandoff(t *testing.T) {
 	t.Parallel()
+
 	for _, file := range []string{baseImagesWorkflow, ".forgejo/workflows/base-image-lifecycle.yml"} {
-		t.Run(file, func(t *testing.T) { checkBaseParentPull(t, file) })
+		t.Run(file, func(t *testing.T) {
+			t.Parallel()
+			checkBaseParentPull(t, file)
+		})
 	}
 }
 
@@ -174,20 +180,25 @@ func checkBaseParentPull(t *testing.T, file string) {
 	}
 
 	fetch, build, secretRefs := -1, -1, 0
+
 	anyString(workflow.jobs["build"].node, func(value string) bool {
 		if secretsWord.MatchString(value) {
 			secretRefs++
 		}
+
 		return false
 	})
+
 	if secretRefs != 1 {
 		t.Fatal("the build job may reference only one secret")
 	}
-	for i, step := range workflow.jobs["build"].steps() {
+
+	for stepIndex, step := range workflow.jobs["build"].steps() {
 		run := scalarString(mappingValue(step, "run"))
 		switch {
 		case strings.Contains(run, "release-images fetch-build-inputs"):
-			fetch = i
+			fetch = stepIndex
+
 			env := mappingValue(step, "env")
 			if scalarString(mappingValue(step, "if")) != "${{ inputs['parent-base-json'] != '' }}" ||
 				scalarString(mappingValue(env, "PARENT_REGISTRY_READ_TOKEN")) != "${{ secrets.PARENT_REGISTRY_READ_TOKEN }}" ||
@@ -201,7 +212,8 @@ func checkBaseParentPull(t *testing.T, file string) {
 		case strings.Contains(run, "artifact download"):
 			t.Fatal("a base build must not restore a parent artifact")
 		case strings.Contains(run, "container base-images child-base build"):
-			build = i
+			build = stepIndex
+
 			if !strings.Contains(run, "--inputs-dir registry-inputs") || !strings.Contains(run, `--image "${IMAGE_NAME:?}"`) {
 				t.Fatal("each matrix build must consume its own checked parent layout")
 			}

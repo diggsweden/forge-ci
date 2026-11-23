@@ -22,24 +22,31 @@ import (
 // release evidence. The projection is a trusted fixture pinned to a public image.
 func TestGitHubPublicParentPull(t *testing.T) {
 	RegisterLiveScenario(t)
+
 	if os.Getenv(GitHubContextEnv) == "" || os.Getenv("FORGE_CI_LIVE_BIN") == "" {
 		t.Skip("select test-live-github-parent-pull inside Forge Lab's hosted session")
 	}
+
 	id, err := strconv.ParseInt(os.Getenv("FORGE_CI_LIVE_GITHUB_ORG_ID"), 10, 64)
 	if err != nil || id <= 0 {
 		t.Fatal("explicit hosted organization ID is required")
 	}
+
 	trial := OpenGitHubTrial(t, id)
 	repo := minimalRepository(t, trial, "public-parent-pull")
+
 	source := trial.tempDir("public-parent-pull")
 	for _, name := range []string{".github/actions/fetch-parent-image/action.yml", ".engine/bin/lib-parent-pull.sh"} {
 		minimalCopy(t, filepath.Join(reporoot.Path(t), name), filepath.Join(source, name))
 	}
+
 	binary, err := os.ReadFile(os.Getenv("FORGE_CI_LIVE_BIN"))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	minimalCopy(t, os.Getenv("FORGE_CI_LIVE_BIN"), filepath.Join(source, "fixture-engine"))
+
 	workflow := strings.ReplaceAll(publicParentPullWorkflow, "ENGINE_SHA256", fmt.Sprintf("%x", sha256.Sum256(binary)))
 	minimalWrite(t, source, ".github/workflows/parent-pull.yml", workflow)
 	trial.git(source, "init", "--quiet", "--object-format=sha1", "--initial-branch=main")
@@ -49,9 +56,11 @@ func TestGitHubPublicParentPull(t *testing.T) {
 	trial.push(source, trial.remote(repo), "HEAD:refs/heads/main")
 	run := trial.WaitRun(repo, "parent-pull.yml", "push", commit, 15*time.Minute)
 	trial.ReportRun(repo, run)
+
 	if run.GetConclusion() != "success" {
 		t.Fatalf("public parent pull run %d: %s", run.GetID(), run.GetConclusion())
 	}
+
 	if count := trial.checkDevelopmentArtifacts(repo, run.GetID()); count != 1 {
 		t.Fatalf("expected one read-back evidence artifact, got %d", count)
 	}

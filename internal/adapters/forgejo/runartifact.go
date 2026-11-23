@@ -897,6 +897,7 @@ func (p *Provider) putFile(ctx context.Context, creds runtimeUploadCreds, contai
 	// Keep the opened file alive and use independent bounded readers so closing
 	// an attempt cannot close the source or leave the next attempt at EOF.
 	body := io.NewSectionReader(file, 0, item.entry.Size)
+
 	resp, err := p.runtimeSend(httpretry.ReplayRefusedMutation(ctx), http.MethodPut, putURL, creds.token, "application/octet-stream", body, item.entry.Size, headers)
 	if err != nil {
 		if errors.Is(err, errs.ErrDependencyUnavailable) {
@@ -988,6 +989,7 @@ func (p *Provider) runtimeSend(ctx context.Context, method, rawURL, token, conte
 	}
 
 	req.ContentLength = contentLength
+
 	if section, ok := body.(*io.SectionReader); ok {
 		reader, offset, length := section.Outer()
 		req.GetBody = func() (io.ReadCloser, error) {
