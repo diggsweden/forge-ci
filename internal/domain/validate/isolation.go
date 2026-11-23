@@ -511,12 +511,13 @@ func usesAction(uses, action string) bool {
 	return strings.Contains(strings.ToLower(uses), action)
 }
 
-// signingSecretPattern indexes exact configured names for literal member matching.
+// signingSecretPattern indexes the configured names in upper case: forges
+// compare secret names without case.
 func signingSecretPattern(secrets []string) map[string]bool {
 	names := make(map[string]bool, len(secrets))
 	for _, secret := range secrets {
 		if secret != "" {
-			names[secret] = true
+			names[strings.ToUpper(secret)] = true
 		}
 	}
 
@@ -542,7 +543,7 @@ func (r signingSecretRef) describe() string {
 // occurrences. yaml.v3 resolves effective mapping values before traversal, so
 // direct keys and earlier merge sources shadow defaults just as in env decoding.
 func findSecretRefs(node *yaml.Node, names map[string]bool) ([]signingSecretRef, error) {
-	return findSecretRefsMatching(node, func(secret string) bool { return secret == "" || names[secret] })
+	return findSecretRefsMatching(node, func(secret string) bool { return secret == "" || names[strings.ToUpper(secret)] })
 }
 
 // findSecretRefsMatching is findSecretRefs for the secrets match selects; the

@@ -135,6 +135,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nor one repository variable (`${{ vars.CI_JOB_IMAGE }}`). An image at a
   tag such as `:latest`, or from an input or the event, passed before. Pin
   it by digest or read it from a repository variable.
+- **Breaking:** `validate isolation`, and so `check-l3-isolation`, also
+  refuses a shell or loader startup variable such as `BASH_ENV` or `PATH`
+  in a job that holds a secret, a write token passed to a local workflow
+  under a name the callee treats as read-only, and a signing secret named
+  in another case.
 - GitHub's `release-orchestrator.yml` skips its isolation check of the
   caller's workflows only when GitHub's `job.workflow_repository`, the
   repository serving the orchestrator, is the caller: the engine's own

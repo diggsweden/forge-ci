@@ -108,4 +108,63 @@ func TestCheckIsolation_ASecretJobRunsOnlyTheLayersActions(t *testing.T) {
 			t.Fatalf("violations = %+v, err = %v", violations, err)
 		}
 	})
+
+	t.Run("a signing secret in another case is refused", func(t *testing.T) {
+		t.Parallel()
+
+		violations, err := validate.CheckIsolation([]byte(job(checkout+run("make", stepEnv("K", "${{ secrets.cosign_private_key }}")))),
+			validate.IsolationConfig{SigningSecrets: []string{"COSIGN_PRIVATE_KEY"}})
+		if err != nil || len(violations) != 1 || !strings.Contains(violations[0].Msg, "references signing secret") {
+			t.Fatalf("violations = %+v, err = %v", violations, err)
+		}
+	})
+
+	t.Run("a local call may not rename a write token as read-only", func(t *testing.T) {
+		t.Parallel()
+
+		body := "jobs:\n  publish:\n    uses: ./.forgejo/workflows/publish.yml\n    secrets:\n      DEPENDENCY_X: " + release + "\n"
+
+		violations, err := validate.CheckIsolation([]byte(body), validate.IsolationConfig{})
+		if err != nil || len(violations) != 1 || !strings.Contains(violations[0].Msg, "read-only name") {
+			t.Fatalf("violations = %+v, err = %v", violations, err)
+		}
+	})
+
+	for _, tc := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "job env", body: "jobs:\n  build:\n    env:\n      BASH_ENV: x\n    steps:\n" + withToken(engine), want: "BASH_ENV"},
+		{name: "step env", body: job(withToken(engine) + stepEnvAfterWith("LD_PRELOAD")), want: "LD_PRELOAD"},
+		{name: "workflow env", body: "env:\n  PATH: /x\n" + job(withToken(engine)), want: "PATH"},
+		{name: "no secret held", body: "jobs:\n  build:\n    env:\n      BASH_ENV: x\n    steps:\n" + engine},
+		{name: "an ordinary variable", body: "jobs:\n  build:\n    env:\n      MODE: x\n    steps:\n" + withToken(engine)},
+	} {
+		t.Run("startup variable: "+tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			violations, err := validate.CheckIsolation([]byte(tc.body), validate.IsolationConfig{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if tc.want == "" {
+				if len(violations) != 0 {
+					t.Fatalf("violations = %+v, want none", violations)
+				}
+
+				return
+			}
+
+			if len(violations) != 1 || !strings.Contains(violations[0].Msg, "sets "+tc.want) {
+				t.Fatalf("violations = %+v, want one naming %s", violations, tc.want)
+			}
+		})
+	}
+}
+
+// stepEnvAfterWith is an env block for the step written just before it.
+func stepEnvAfterWith(name string) string {
+	return "        env:\n          " + name + ": x\n"
 }

@@ -78,12 +78,15 @@ func engineOnlySteps(job yaml.Node) (yaml.Node, string, bool) {
 func jobTokenViolations(workflowEnv yaml.Node, jobs map[string]yaml.Node, cfg IsolationConfig) []IsolationViolation {
 	signing := map[string]bool{}
 	for _, name := range cfg.SigningSecrets {
-		signing[name] = true
+		signing[strings.ToUpper(name)] = true
+	}
+
+	isLowAuthority := func(secret string) bool {
+		return isJobTokenSecret(secret) || strings.HasPrefix(strings.ToUpper(secret), dependencySecretPrefix)
 	}
 
 	isOtherToken := func(secret string) bool {
-		return secret != "" && !signing[secret] && !isJobTokenSecret(secret) &&
-			!strings.HasPrefix(strings.ToUpper(secret), dependencySecretPrefix)
+		return secret != "" && !signing[strings.ToUpper(secret)] && !isLowAuthority(secret)
 	}
 
 	var violations []IsolationViolation
@@ -102,10 +105,16 @@ func jobTokenViolations(workflowEnv yaml.Node, jobs map[string]yaml.Node, cfg Is
 			for _, ref := range refs {
 				violations = append(violations, IsolationViolation{Line: ref.line, Msg: fmt.Sprintf("job %q passes secret %s to a local workflow as an input%s", name, ref.describe(), secretJobMayRun)})
 			}
+
+			violations = append(violations, renamedTokenViolations(name, &job, isLowAuthority, isOtherToken)...)
 		}
 
 		step, runs, ok := engineOnlySteps(job)
 		if ok {
+			violations = append(violations, startupEnvViolations(workflowEnv, name, job, func(secret string) bool {
+				return !isLowAuthority(secret)
+			})...)
+
 			continue
 		}
 
@@ -130,6 +139,83 @@ func jobTokenViolations(workflowEnv yaml.Node, jobs map[string]yaml.Node, cfg Is
 
 // secretJobMayRun ends each diagnostic of a secret-holding job with what it may run.
 var secretJobMayRun = "; a release job that holds a secret but the job token (${{ forgejo.token }}, ${{ github.token }} or secrets.GITHUB_TOKEN) and read-only DEPENDENCY_* credentials may run only the layer's actions that run the engine alone (" + strings.Join(PrivilegedActions(), ", ") + "), with no run: step, local action, checkout or other action, so move the secret to such a job or to a call of one of the layer's workflows"
+
+// renamedTokenViolations refuses a local workflow call that hands a write
+// token to the callee under a name the callee's check treats as read-only.
+func renamedTokenViolations(name string, job *yaml.Node, isLowAuthority, isOtherToken func(string) bool) []IsolationViolation {
+	secrets := mappingValue(job, "secrets")
+
+	var violations []IsolationViolation
+
+	for _, key := range mappingKeys(secrets) {
+		if !isLowAuthority(key) {
+			continue
+		}
+
+		refs, err := findSecretRefsMatching(mappingValue(secrets, key), isOtherToken)
+		if err != nil {
+			return append(violations, IsolationViolation{Line: job.Line, Msg: fmt.Sprintf("job %q: %v", name, err)})
+		}
+
+		for _, ref := range refs {
+			violations = append(violations, IsolationViolation{Line: ref.line, Msg: fmt.Sprintf("job %q passes secret %s to a local workflow as the read-only name %q%s", name, ref.describe(), key, secretJobMayRun)})
+		}
+	}
+
+	return violations
+}
+
+// isStartupEnv reports a variable that makes a shell or the dynamic loader
+// run code before an action's first command.
+func isStartupEnv(name string) bool {
+	switch name {
+	case "BASH_ENV", "ENV", "PATH", "SHELLOPTS", "BASHOPTS":
+		return true
+	}
+
+	return strings.HasPrefix(name, "LD_") || strings.HasPrefix(name, "BASH_FUNC_")
+}
+
+// startupEnvViolations refuses a startup variable in a job that holds a
+// secret and runs only the layer's actions: it would run the caller's code
+// inside those actions, beside the secret.
+func startupEnvViolations(workflowEnv yaml.Node, name string, job yaml.Node, holdsSecret func(string) bool) []IsolationViolation {
+	refs, err := findSecretRefsMatching(&job, holdsSecret)
+	if err != nil {
+		return []IsolationViolation{{Line: job.Line, Msg: fmt.Sprintf("job %q: %v", name, err)}}
+	}
+
+	inherited, err := findSecretRefsMatching(&workflowEnv, holdsSecret)
+	if err != nil {
+		return []IsolationViolation{{Line: job.Line, Msg: fmt.Sprintf("job %q: %v", name, err)}}
+	}
+
+	if len(refs)+len(inherited) == 0 {
+		return nil
+	}
+
+	envs := []*yaml.Node{&workflowEnv, mappingValue(&job, "env")}
+	for _, step := range jobSteps(job) {
+		envs = append(envs, mappingValue(&step, "env"))
+	}
+
+	found := map[string]bool{}
+
+	for _, env := range envs {
+		for _, key := range mappingKeys(env) {
+			if isStartupEnv(key) {
+				found[key] = true
+			}
+		}
+	}
+
+	violations := make([]IsolationViolation, 0, len(found))
+	for _, key := range sortedKeys(found) {
+		violations = append(violations, IsolationViolation{Line: job.Line, Msg: fmt.Sprintf("job %q holds a secret and sets %s, which runs code inside the layer's actions; remove it", name, key)})
+	}
+
+	return violations
+}
 
 // inheritedTokenViolations reports a secret in the workflow env that a job
 // which runs more than the layer's actions inherits without overriding the
