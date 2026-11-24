@@ -67,7 +67,7 @@ func restoreFixture(t *testing.T) (snapshotimage.Plan, string) {
 	t.Helper()
 	plan, _ := dependencyFixture(t)
 	require.NoError(t, os.WriteFile("dist/linux-amd64/a-first", []byte("incoming first artifact"), 0o700))
-	require.NoError(t, appsnapshot.RecordContext(t.Context(), &git{head: plan.SourceSHA}, plan, snapshotimage.DefaultDependenciesFile))
+	require.NoError(t, appsnapshot.WriteDependencyInventory(plan, snapshotimage.DefaultDependenciesFile))
 	bundle := contextBundle(t, plan)
 	require.NoError(t, os.WriteFile("dist/linux-amd64/a-first", []byte("previous checkout artifact"), 0o700))
 
@@ -231,7 +231,7 @@ func TestRestoreContextAcceptsBoundEmptyInventory(t *testing.T) {
 	in := input(t, "containers:\n  - name: app\n    platforms: linux/amd64\n")
 	plan, err := appsnapshot.Plan(t.Context(), &git{head: in.SourceSHA}, in)
 	require.NoError(t, err)
-	require.NoError(t, appsnapshot.RecordContext(t.Context(), &git{head: plan.SourceSHA}, plan, snapshotimage.DefaultDependenciesFile))
+	require.NoError(t, appsnapshot.WriteDependencyInventory(plan, snapshotimage.DefaultDependenciesFile))
 	bundle := contextBundle(t, plan)
 	require.NoError(t, os.Remove(snapshotimage.DefaultDependenciesFile))
 	require.NoError(t, appsnapshot.RestoreContext(t.Context(), &git{head: plan.SourceSHA}, plan, "snapshot-plan.json", bundle))

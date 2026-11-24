@@ -4,7 +4,6 @@
 package snapshotimage
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -17,7 +16,6 @@ import (
 	"strings"
 	"syscall"
 
-	appversion "github.com/diggsweden/forge-ci/internal/app/version"
 	"github.com/diggsweden/forge-ci/internal/domain/artifact"
 	"github.com/diggsweden/forge-ci/internal/domain/projecttype"
 	"github.com/diggsweden/forge-ci/internal/domain/snapshotimage"
@@ -25,7 +23,6 @@ import (
 )
 
 var (
-	errInventoryInsideInputs         = errors.New("dependency inventory output must be outside dependency inputs")
 	errInventorySourceDiffers        = errors.New("snapshot dependency inventory source identity differs from plan")
 	errInventoryDiffers              = errors.New("snapshot dependency inventory artifact, platform, file set or digest differs from inputs")
 	errUnsupportedDependencyType     = errors.New("unsupported snapshot dependency type")
@@ -38,33 +35,6 @@ var (
 	errTransportedSetDiffers         = errors.New("snapshot transported file set differs")
 	errTransportedFileDiffers        = errors.New("snapshot transported file identity, size or digest differs")
 )
-
-// RecordContext runs at the trusted context producer, after source-bound CI
-// downloads. Builds only verify this frozen handoff; they never regenerate it.
-func RecordContext(ctx context.Context, ops appversion.GenerateSnapshotOps, plan snapshotimage.Plan, destination string) error {
-	if err := plan.Validate(); err != nil {
-		return err
-	}
-
-	if err := CheckSource(ctx, ops, plan.SourceSHA); err != nil {
-		return err
-	}
-
-	for _, b := range plan.Builds {
-		for _, d := range b.RequiredArtifacts {
-			if inside(d.Destination, destination) {
-				return errInventoryInsideInputs
-			}
-		}
-	}
-
-	manifest, err := dependencyInventory(plan)
-	if err != nil {
-		return err
-	}
-
-	return WriteJSON(destination, manifest)
-}
 
 func inside(directory, path string) bool {
 	dir, err := filepath.Abs(directory)

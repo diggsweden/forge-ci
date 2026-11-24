@@ -27,7 +27,7 @@ import (
 )
 
 func snapshotImagesGroup() *cli.Command {
-	return &cli.Command{Name: "snapshot-images", Usage: "plan, stage, publish and collect declared snapshot images", Commands: []*cli.Command{snapshotImagesPlanCmd(), snapshotImagesReadPlanCmd(), snapshotBuildArtifactCmd(), snapshotBuildFilesCmd(), snapshotPrepareInputsCmd(), snapshotGatherContextCmd(), snapshotImagesContextCmd(), snapshotImagesRestoreContextCmd(), snapshotImagesBuildCmd(), snapshotImagesPublishCmd(), snapshotImagesCollectCmd()}}
+	return &cli.Command{Name: "snapshot-images", Usage: "plan, stage, publish and collect declared snapshot images", Commands: []*cli.Command{snapshotImagesPlanCmd(), snapshotImagesReadPlanCmd(), snapshotBuildArtifactCmd(), snapshotBuildFilesCmd(), snapshotPrepareInputsCmd(), snapshotGatherContextCmd(), snapshotImagesRestoreContextCmd(), snapshotImagesBuildCmd(), snapshotImagesPublishCmd(), snapshotImagesCollectCmd()}}
 }
 
 // Fields the read-plan transport query understands.
@@ -152,21 +152,6 @@ func snapshotImagesRestoreContextCmd() *cli.Command {
 		}
 
 		return appsnapshot.RestoreContext(ctx, gitadapter.New(), p, cmd.String(flagPlan), cmd.String("input"))
-	}}
-}
-
-func snapshotImagesContextCmd() *cli.Command {
-	return &cli.Command{Name: "context", Usage: "record source-bound artifact identities, platforms and file digests after trusted artifact downloads", Flags: []cli.Flag{&cli.StringFlag{Name: flagPlan, Required: true}, &cli.StringFlag{Name: flagOutput, Value: snapshotimage.DefaultDependenciesFile}}, Action: func(ctx context.Context, cmd *cli.Command) error {
-		if err := snapshotOutputDistinct(cmd.String(flagOutput), cmd.String(flagPlan)); err != nil {
-			return err
-		}
-
-		p, err := appsnapshot.ReadPlan(cmd.String(flagPlan))
-		if err != nil {
-			return err
-		}
-
-		return appsnapshot.RecordContext(ctx, gitadapter.New(), p, cmd.String(flagOutput))
 	}}
 }
 

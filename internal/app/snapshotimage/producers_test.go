@@ -183,7 +183,7 @@ func npmBesideGoFixture(t *testing.T, carried string) snapshotimage.Plan {
 		require.NoError(t, os.WriteFile(filepath.Join(verified, path), []byte(body), 0o600))
 	}
 
-	require.NoError(t, appsnapshot.RecordContext(t.Context(), &git{head: plan.SourceSHA}, plan, snapshotimage.DefaultDependenciesFile))
+	require.NoError(t, appsnapshot.WriteDependencyInventory(plan, snapshotimage.DefaultDependenciesFile))
 
 	return plan
 }

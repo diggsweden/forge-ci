@@ -8,7 +8,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -47,7 +46,7 @@ func dependencyFixture(t *testing.T) (snapshotimage.Plan, appsnapshot.BuildInput
 	require.NoError(t, os.WriteFile("Containerfile", []byte("FROM scratch\nCOPY dist /dist\n"), 0o600))
 	require.NoError(t, os.MkdirAll("dist/linux-amd64", 0o700))
 	require.NoError(t, os.WriteFile("dist/linux-amd64/server-linux-amd64", []byte("producer-built bytes"), 0o700))
-	require.NoError(t, appsnapshot.RecordContext(t.Context(), &git{head: plan.SourceSHA}, plan, snapshotimage.DefaultDependenciesFile))
+	require.NoError(t, appsnapshot.WriteDependencyInventory(plan, snapshotimage.DefaultDependenciesFile))
 	require.NoError(t, os.MkdirAll("metadata/app-arch-amd64", 0o700))
 	require.NoError(t, os.WriteFile("metadata/app-arch-amd64/keep", []byte("prior metadata"), 0o600))
 
@@ -55,7 +54,7 @@ func dependencyFixture(t *testing.T) (snapshotimage.Plan, appsnapshot.BuildInput
 }
 
 func TestDependencyInventoryValidatesBeforeBuilderOrMetadataMutation(t *testing.T) {
-	for _, defect := range []string{"foreign source", "wrong artifact", "wrong platform", "substituted bytes", "extra file", "missing file", "symlink", "fifo", "unknown field", "trailing document", "duplicate field"} {
+	for _, defect := range []string{"foreign source", "wrong artifact", "wrong platform", "substituted bytes", "extra file", "missing file", "symlink ancestor", "symlink", "fifo", "unknown field", "trailing document", "duplicate field"} {
 		t.Run(defect, func(t *testing.T) {
 			plan, in := dependencyFixture(t)
 
@@ -75,6 +74,9 @@ func TestDependencyInventoryValidatesBeforeBuilderOrMetadataMutation(t *testing.
 				require.NoError(t, os.WriteFile("dist/unrecorded", []byte("extra"), 0o600))
 			case "missing file":
 				require.NoError(t, os.Remove("dist/linux-amd64/server-linux-amd64"))
+			case "symlink ancestor":
+				require.NoError(t, os.Rename("dist", "real-dist"))
+				require.NoError(t, os.Symlink("real-dist", "dist"))
 			case "symlink":
 				require.NoError(t, os.Rename(snapshotimage.DefaultDependenciesFile, "real.json"))
 				require.NoError(t, os.Symlink("real.json", snapshotimage.DefaultDependenciesFile))
@@ -115,17 +117,6 @@ func TestDependencyInventoryValidatesBeforeBuilderOrMetadataMutation(t *testing.
 	}
 }
 
-func TestRecordedContextAllowsExactInputsAndExplicitInventoryPath(t *testing.T) {
-	plan, in := dependencyFixture(t)
-	in.DependenciesFile = "context-inventory.json"
-	require.NoError(t, os.Rename(snapshotimage.DefaultDependenciesFile, in.DependenciesFile))
-
-	builder := &countingBuilder{}
-	err := appsnapshot.Build(t.Context(), &git{head: plan.SourceSHA}, builder, ociregistry.NewAnonymous(), io.Discard, output.Annotator{}, plan, in)
-	require.ErrorIs(t, err, errBuilderReached)
-	require.Equal(t, 1, builder.calls)
-}
-
 func TestBuildRequiresSourceInventoryEvenWithoutArtifactDependencies(t *testing.T) {
 	t.Chdir(t.TempDir())
 	in := input(t, "containers:\n  - name: app\n    platforms: linux/amd64\n")
@@ -137,7 +128,7 @@ func TestBuildRequiresSourceInventoryEvenWithoutArtifactDependencies(t *testing.
 	err = appsnapshot.Build(t.Context(), &git{head: plan.SourceSHA}, builder, ociregistry.NewAnonymous(), io.Discard, output.Annotator{}, plan, build)
 	require.ErrorContains(t, err, "read snapshot dependencies")
 	require.Zero(t, builder.calls)
-	require.NoError(t, appsnapshot.RecordContext(t.Context(), &git{head: plan.SourceSHA}, plan, snapshotimage.DefaultDependenciesFile))
+	require.NoError(t, appsnapshot.WriteDependencyInventory(plan, snapshotimage.DefaultDependenciesFile))
 
 	var inventory snapshotimage.DependencyInventory
 	require.NoError(t, appsnapshot.ReadJSON(snapshotimage.DefaultDependenciesFile, &inventory))
@@ -172,36 +163,4 @@ func TestSnapshotJSONRejectsSymlinkPathsAndPreservesOutputs(t *testing.T) {
 	require.Error(t, appsnapshot.WriteJSON("linked-dir/plan.json", plan))
 	require.NoError(t, syscall.Mkfifo("output-fifo", 0o600))
 	require.Error(t, appsnapshot.WriteJSON("output-fifo", plan))
-}
-
-func TestContextRefusesUntrustedFilesAndPreservesPriorManifest(t *testing.T) {
-	for _, defect := range []string{"foreign HEAD", "symlink file", "symlink ancestor", "fifo file", "self inclusion"} {
-		t.Run(defect, func(t *testing.T) {
-			plan, _ := dependencyFixture(t)
-			ops := &git{head: plan.SourceSHA}
-			destination := snapshotimage.DefaultDependenciesFile
-			prior, err := os.ReadFile(destination)
-			require.NoError(t, err)
-
-			switch defect {
-			case "foreign HEAD":
-				ops.head = strings.Repeat("b", 40)
-			case "symlink file":
-				require.NoError(t, os.Symlink("server-linux-amd64", "dist/linux-amd64/link"))
-			case "fifo file":
-				require.NoError(t, syscall.Mkfifo("dist/linux-amd64/fifo", 0o600))
-			case "symlink ancestor":
-				require.NoError(t, os.Rename("dist", "real-dist"))
-				require.NoError(t, os.Symlink("real-dist", "dist"))
-			case "self inclusion":
-				destination = filepath.Join("dist", "snapshot-dependencies.json")
-			}
-
-			err = appsnapshot.RecordContext(t.Context(), ops, plan, destination)
-			require.Error(t, err)
-			after, err := os.ReadFile(snapshotimage.DefaultDependenciesFile)
-			require.NoError(t, err)
-			require.Equal(t, prior, after)
-		})
-	}
 }

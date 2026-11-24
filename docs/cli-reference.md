@@ -2513,15 +2513,6 @@ require exactly every planned image receipt and emit immutable digest references
 | `--receipts-dir` | Sets receipts dir. (required) | string | `""` | n/a |
 | `--output` | Sets output. (required) | string | `""` | n/a |
 
-#### `forge-ci container snapshot-images context`
-
-record source-bound artifact identities, platforms and file digests after trusted artifact downloads
-
-| Flag | Description | Type | Default | Env vars |
-|------|-------------|------|---------|----------|
-| `--plan` | Sets plan. (required) | string | `""` | n/a |
-| `--output` | Sets output. | string | `"snapshot-dependencies.json"` | n/a |
-
 #### `forge-ci container snapshot-images gather-context`
 
 verify the complete producer set, install bound inputs and emit the frozen context bundle

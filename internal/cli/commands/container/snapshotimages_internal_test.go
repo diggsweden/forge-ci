@@ -125,7 +125,10 @@ func TestSnapshotPlanCLIEmitsRunnerOutputsAndPinsManualBranch(t *testing.T) {
 			require.NoError(t, New().Run(t.Context(), []string{"container", "snapshot-images", "prepare-inputs", "--plan", "snapshot-plan.json"}))
 			require.NoError(t, New().Run(t.Context(), []string{"container", "snapshot-images", "gather-context", "--plan", "snapshot-plan.json", "--output", "automatic-bundle"}))
 			require.FileExists(t, "automatic-bundle/files/snapshot-dependencies.json")
-			require.NoError(t, New().Run(t.Context(), []string{"container", "snapshot-images", "context", "--plan", "snapshot-plan.json", "--output", "context.json"}))
+
+			gathered, readErr := os.ReadFile("automatic-bundle/files/snapshot-dependencies.json")
+			require.NoError(t, readErr)
+			require.NoError(t, os.WriteFile("context.json", gathered, 0o600))
 
 			var inventory snapshotimage.DependencyInventory
 			require.NoError(t, appsnapshot.ReadJSON("context.json", &inventory))
