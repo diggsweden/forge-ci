@@ -368,6 +368,10 @@ func TestIsolation_ForgejoStrictViolations(t *testing.T) {
 	}
 }
 
+// uncalledSigner is a reusable workflow that takes a signing key, as the
+// layer's signer workflows do in the layer's own repository.
+const uncalledSigner = "on:\n  workflow_call:\njobs:\n  sign:\n    steps:\n      - run: sign\n        env:\n          KEY: ${{ secrets.GPG_SIGNING_KEY }}\n"
+
 // The release workflows are found by what they call, whatever they are
 // named, and each one is checked; a directory without one is refused rather
 // than passed over.
@@ -428,6 +432,36 @@ func TestIsolation_FindsTheReleaseWorkflows(t *testing.T) {
 		"another repository's entry point does not make a release workflow": {
 			files: map[string]string{"release.yml": strings.ReplaceAll(forgejoIsolationCleanWorkflow, "examplescope/ci-layer", "other/ci-layer")},
 			want:  []string{"no workflow under .forgejo/workflows calls examplescope/ci-layer's"},
+		},
+		// The layer's own reusable workflows in a mirror that releases
+		// itself: they run only when called, and nothing here calls them, so
+		// this repository's keys never reach them.
+		"a reusable workflow nothing here calls": {
+			files: map[string]string{"release.yml": forgejoIsolationCleanWorkflow, "signer.yml": uncalledSigner},
+			found: []string{".forgejo/workflows/release.yml"},
+		},
+		"a reusable workflow a local job calls": {
+			files: map[string]string{
+				"release.yml":     forgejoIsolationCleanWorkflow,
+				"signer.yml":      uncalledSigner,
+				"pullrequest.yml": "on: pull_request\njobs:\n  call:\n    uses: ./.forgejo/workflows/signer.yml\n",
+			},
+			want: []string{`file=.forgejo/workflows/signer.yml,line=8::job "sign" references signing secret "GPG_SIGNING_KEY"`},
+		},
+		"a reusable workflow called by its full reference": {
+			files: map[string]string{
+				"release.yml":     forgejoIsolationCleanWorkflow,
+				"signer.yml":      uncalledSigner,
+				"pullrequest.yml": "on: pull_request\njobs:\n  call:\n    uses: acme/app/.forgejo/workflows/signer.yml@" + isolationPin + "\n    secrets: inherit\n",
+			},
+			want: []string{`file=.forgejo/workflows/signer.yml,line=8::job "sign" references signing secret "GPG_SIGNING_KEY"`},
+		},
+		"a reusable workflow with a second trigger": {
+			files: map[string]string{
+				"release.yml": forgejoIsolationCleanWorkflow,
+				"signer.yml":  strings.Replace(uncalledSigner, "on:\n  workflow_call:\n", "on: [workflow_call, push]\n", 1),
+			},
+			want: []string{`file=.forgejo/workflows/signer.yml,line=7::job "sign" references signing secret "GPG_SIGNING_KEY"`},
 		},
 		// A key in a workflow that is no release workflow is held to the same
 		// boundary: only the engine's signers receive one.

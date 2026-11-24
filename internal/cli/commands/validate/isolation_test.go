@@ -14,6 +14,7 @@ import (
 
 	"github.com/diggsweden/forge-ci/internal/cli"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 	"github.com/diggsweden/forge-ci/internal/testutil/testfs"
 )
 
@@ -457,5 +458,45 @@ func TestIsolationCmd_DefaultsAreTheLayers(t *testing.T) {
 				t.Fatalf("err = %v, want %v", err, test.want)
 			}
 		})
+	}
+}
+
+// The live case the uncalled-reusable exemption is for: a fork releases
+// itself on Forgejo, so its workflow directory holds the layer's own files,
+// unedited, next to the installed self-release.yml, and prepare checks that
+// directory with the fork as the subject and its own tree as contract root.
+func TestIsolationPassesAForkReleasingItself(t *testing.T) {
+	repo := reporoot.Path(t)
+	fsys := testfs.NewReal(t)
+
+	layer, err := filepath.Glob(filepath.Join(repo, ".forgejo", "workflows", "*.yml"))
+	if err != nil || len(layer) == 0 {
+		t.Fatalf("layer workflows: %v", err)
+	}
+
+	for _, file := range layer {
+		body, readErr := os.ReadFile(file)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+
+		fsys.WriteFile(filepath.Join(".forgejo", "workflows", filepath.Base(file)), body)
+	}
+
+	example, err := os.ReadFile(filepath.Join(repo, "examples", "forgejo", "self-release.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	installed := strings.NewReplacer("FORGE_HOST", "forge.example", "OWNER/", "example/", "PIN_FORGE_CI_SHA", singlePinCommit,
+		"PIN_SIGNER_IMAGE_DIGEST", strings.Repeat("b", 64), "PIN_COSIGN_PUBLIC_KEY_SHA256", strings.Repeat("c", 64), "fork:FIXME", "fork:example").Replace(string(example))
+	path := fsys.WriteFile(".forgejo/workflows/self-release.yml", []byte(installed))
+
+	root := cli.New(cli.BuildInfo{Version: "x", Commit: "y", Date: "z"})
+	argv := []string{"forge-ci", "validate", "isolation", "--workflows-dir", filepath.Dir(path),
+		"--single-pin-subject", "https://forge.example/example/forge-ci", "--contract-root", repo}
+
+	if err := cli.ClassifyError(root.Run(context.Background(), argv)); err != nil {
+		t.Fatalf("a fork's own release fails isolation: %v", err)
 	}
 }

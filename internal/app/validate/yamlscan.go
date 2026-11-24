@@ -5,6 +5,8 @@ package validate
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/diggsweden/forge-ci/internal/domain/git"
@@ -93,6 +95,38 @@ func walkYAML(node *yaml.Node, seen map[*yaml.Node]bool, visit func(*yaml.Node))
 	for _, child := range node.Content {
 		walkYAML(child, seen, visit)
 	}
+}
+
+// jobCall is one job's resolved uses: value in a workflow file.
+type jobCall struct {
+	job  string
+	uses string
+	line int
+}
+
+// jobCalls returns the resolved uses: value of every job that calls a
+// workflow, in job-name order.
+func jobCalls(body []byte) ([]jobCall, error) {
+	var doc struct {
+		Jobs map[string]struct {
+			Uses yaml.Node `yaml:"uses"`
+		} `yaml:"jobs"`
+	}
+
+	if err := yaml.Unmarshal(body, &doc); err != nil {
+		return nil, fmt.Errorf("parse workflow YAML: %w", err)
+	}
+
+	var calls []jobCall
+
+	for _, name := range slices.Sorted(maps.Keys(doc.Jobs)) {
+		job := doc.Jobs[name]
+		if uses, ok := resolvedScalar(&job.Uses); ok && uses != "" {
+			calls = append(calls, jobCall{job: name, uses: uses, line: job.Uses.Line})
+		}
+	}
+
+	return calls, nil
 }
 
 func resolvedScalar(node *yaml.Node) (string, bool) {

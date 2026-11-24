@@ -5,13 +5,11 @@ package validate
 
 import (
 	"fmt"
-	"maps"
 	"path"
 	"slices"
 	"strings"
 
 	"github.com/diggsweden/forge-ci/internal/domain/validate"
-	"gopkg.in/yaml.v3"
 )
 
 // fileViolation is a violation in another file than the checked workflow,
@@ -114,39 +112,14 @@ func calledWorkflowViolations(in IsolationInput, called []releaseFile) []fileVio
 	return violations
 }
 
-// localWorkflowCall is a job that calls a reusable workflow by a path in
-// the repository.
-type localWorkflowCall struct {
-	job  string
-	uses string
-	line int
-}
-
 // localWorkflowCalls returns the jobs of a workflow that call a reusable
 // workflow of the same repository, sorted by job name.
-func localWorkflowCalls(body []byte) ([]localWorkflowCall, error) {
-	var doc struct {
-		Jobs map[string]struct {
-			Uses yaml.Node `yaml:"uses"`
-		} `yaml:"jobs"`
-	}
+// localWorkflowCalls returns the jobs that call a reusable workflow by a path
+// in this repository (./...yml).
+func localWorkflowCalls(body []byte) ([]jobCall, error) {
+	calls, err := jobCalls(body)
 
-	if err := yaml.Unmarshal(body, &doc); err != nil {
-		return nil, fmt.Errorf("parse workflow YAML: %w", err)
-	}
-
-	var calls []localWorkflowCall
-
-	for _, name := range slices.Sorted(maps.Keys(doc.Jobs)) {
-		job := doc.Jobs[name]
-
-		uses, ok := resolvedScalar(&job.Uses)
-		if !ok || !strings.HasPrefix(uses, "./") || !isYAMLFile(uses) {
-			continue
-		}
-
-		calls = append(calls, localWorkflowCall{job: name, uses: uses, line: job.Uses.Line})
-	}
-
-	return calls, nil
+	return slices.DeleteFunc(calls, func(call jobCall) bool {
+		return !strings.HasPrefix(call.uses, "./") || !isYAMLFile(call.uses)
+	}), err
 }

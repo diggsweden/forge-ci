@@ -71,9 +71,10 @@ type IsolationInput struct {
 // named: every workflow that calls one of the subject's release entry
 // points, directly or through local reusable workflows. Their jobs, the local workflows they call and the local actions
 // they use are held to the release rules (validate.CheckIsolation, local and
-// subject actions only); every workflow of the directory is held to the
-// signing-secret boundary, one subject pin on one forge and the literal and
-// declared inputs. Violations are emitted as error annotations (GitHub:
+// subject actions only); every workflow of the directory, but a reusable one
+// nothing in it calls (uncalledReusable), is held to the signing-secret
+// boundary, and every one to one subject pin on one forge and the literal
+// and declared inputs. Violations are emitted as error annotations (GitHub:
 // `::error file=…,line=…::`; elsewhere a plain `Error:` line) and the call
 // returns a wrapped errs.ErrValidation.
 func Isolation(out io.Writer, annot output.Annotator, in IsolationInput) error {
@@ -97,7 +98,7 @@ func Isolation(out io.Writer, annot output.Annotator, in IsolationInput) error {
 	releases, others := releaseWorkflows(in, files)
 	called, violations := calledLocalWorkflows(in, releases)
 
-	ruleViolations, err := releaseRuleViolations(in, releases, notIn(others, called))
+	ruleViolations, err := releaseRuleViolations(in, releases, notIn(notIn(others, called), uncalledReusable(in, files)))
 	if err != nil {
 		return err
 	}
@@ -202,7 +203,7 @@ func callsLocalRelease(body []byte, root string, release map[string]bool) bool {
 		return false
 	}
 
-	return slices.ContainsFunc(calls, func(call localWorkflowCall) bool {
+	return slices.ContainsFunc(calls, func(call jobCall) bool {
 		return release[path.Join(root, strings.TrimPrefix(call.uses, "./"))]
 	})
 }
@@ -213,18 +214,13 @@ func callsLocalRelease(body []byte, root string, release map[string]bool) bool {
 // workflow: the release rules then report it as malformed rather than the
 // directory passing without it.
 func callsReleaseEntry(body []byte, subject string) bool {
-	var doc struct {
-		Jobs map[string]struct {
-			Uses yaml.Node `yaml:"uses"`
-		} `yaml:"jobs"`
-	}
-
-	if err := yaml.Unmarshal(body, &doc); err != nil {
+	calls, err := jobCalls(body)
+	if err != nil {
 		return true
 	}
 
-	for _, job := range doc.Jobs {
-		if uses, ok := resolvedScalar(&job.Uses); ok && validate.CallsSignerWorkflow(uses) && referencesSubject(uses, subject) {
+	for _, call := range calls {
+		if validate.CallsSignerWorkflow(call.uses) && referencesSubject(call.uses, subject) {
 			return true
 		}
 	}
@@ -237,6 +233,96 @@ func notIn(files, others []releaseFile) []releaseFile {
 	return slices.DeleteFunc(slices.Clone(files), func(file releaseFile) bool {
 		return slices.ContainsFunc(others, func(other releaseFile) bool { return path.Clean(other.Path) == path.Clean(file.Path) })
 	})
+}
+
+// uncalledReusable returns the workflows that run only when called
+// (workflow_call is their one trigger) and that no job of the directory
+// calls, by path or by a full reference to any repository but the subject.
+// Such a file never runs with this repository's secrets: a caller in another
+// repository hands it that repository's. They are the layer's own reusable
+// workflows when the directory is the layer's, as in a mirror that releases
+// itself; its callers reach them only through the subject at the pin, which
+// runs the pinned layer, not this copy. Any other call makes the file one the
+// boundary holds again.
+func uncalledReusable(in IsolationInput, files []releaseFile) []releaseFile {
+	root := repositoryRoot(in)
+
+	return slices.DeleteFunc(slices.Clone(files), func(file releaseFile) bool {
+		if !onlyCalled(file.Body) {
+			return true
+		}
+
+		return slices.ContainsFunc(files, func(caller releaseFile) bool {
+			return callsWorkflowFile(caller.Body, root, in.SinglePinSubject, path.Clean(file.Path))
+		})
+	})
+}
+
+// callsWorkflowFile reports whether a job of the workflow calls the workflow
+// file target: by a local path, or by any full reference that names its
+// workflow path, except one to the subject. A workflow that does not parse
+// counts as calling it.
+func callsWorkflowFile(body []byte, root, subject, target string) bool {
+	calls, err := jobCalls(body)
+	if err != nil {
+		return true
+	}
+
+	for _, call := range calls {
+		uses := call.uses
+		if local, isLocal := strings.CutPrefix(uses, "./"); isLocal {
+			if path.Join(root, local) == target {
+				return true
+			}
+
+			continue
+		}
+
+		if referencesSubject(uses, subject) {
+			continue
+		}
+
+		reference, _, _ := strings.Cut(uses, "@")
+		for _, dir := range []string{"/.forgejo/workflows/", "/.github/workflows/"} {
+			if index := strings.Index(reference, dir); index >= 0 && path.Join(root, reference[index+1:]) == target {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// onlyCalled reports whether workflow_call is the workflow's one trigger, in
+// any of the scalar, list and mapping forms of on:. A file that does not
+// parse, or names no trigger, is not.
+func onlyCalled(body []byte) bool {
+	var doc struct {
+		On yaml.Node `yaml:"on"`
+	}
+
+	if err := yaml.Unmarshal(body, &doc); err != nil {
+		return false
+	}
+
+	var triggers []string
+
+	switch doc.On.Kind {
+	case yaml.ScalarNode:
+		triggers = []string{doc.On.Value}
+	case yaml.SequenceNode:
+		for _, item := range doc.On.Content {
+			triggers = append(triggers, item.Value)
+		}
+	case yaml.MappingNode:
+		for i := 0; i < len(doc.On.Content); i += 2 {
+			triggers = append(triggers, doc.On.Content[i].Value)
+		}
+	default:
+		return false
+	}
+
+	return len(triggers) > 0 && !slices.ContainsFunc(triggers, func(trigger string) bool { return trigger != "workflow_call" })
 }
 
 // releaseRuleViolations holds each release workflow to the release rules,
