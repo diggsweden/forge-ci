@@ -13,21 +13,29 @@ import (
 	"strings"
 	"testing"
 
+	appinit "github.com/diggsweden/forge-ci/internal/app/consumerinit"
 	domain "github.com/diggsweden/forge-ci/internal/domain/consumerinit"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
-type fixtureRemote struct{}
+type fixtureCheckout struct{}
 
-func (fixtureRemote) VersionTags(context.Context, string) ([]string, error) {
-	return []string{"v1.2.3"}, nil
-}
+func (fixtureCheckout) Tags(context.Context) ([]string, error) { return []string{"v1.2.3"}, nil }
 
-func (fixtureRemote) TagCommit(context.Context, string, string) (string, error) {
+func (fixtureCheckout) Commit(context.Context, string) (string, error) {
 	return strings.Repeat("a", 40), nil
 }
 
-func (fixtureRemote) Export(_ context.Context, _, _, dest string, _ []string) ([]string, error) {
+func (fixtureCheckout) TagsAt(context.Context, string) ([]string, error) { return nil, nil }
+
+func (fixtureCheckout) Origin(context.Context) (string, error) {
+	return "https://github.com/fixture/forge-ci.git", nil
+}
+
+// openFixture opens every checkout path as the fixture.
+func openFixture(string) appinit.Checkout { return fixtureCheckout{} }
+
+func (fixtureCheckout) Export(_ context.Context, _, dest string, _ []string) ([]string, error) {
 	dir := filepath.Join(dest, "examples", "go-cli", "github")
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, err
@@ -67,10 +75,10 @@ func TestInitCommandDryRun(t *testing.T) {
 
 			var output bytes.Buffer
 
-			cmd := newCommand(fixtureRemote{})
+			cmd := newCommand(openFixture)
 			cmd.Writer, cmd.ErrWriter = &output, &output
 
-			err := cmd.Run(t.Context(), []string{"init", "https://github.com/fixture/forge-ci", dir, "--example", "go-cli", "--ref", "v1.2.3", "--dry-run"})
+			err := cmd.Run(t.Context(), []string{"init", t.TempDir(), dir, "--example", "go-cli", "--ref", "v1.2.3", "--dry-run"})
 			if conflict != errors.Is(err, errs.ErrUsage) || (!conflict && err != nil) {
 				t.Fatalf("conflict=%t: unexpected error: %v", conflict, err)
 			}
@@ -80,7 +88,7 @@ func TestInitCommandDryRun(t *testing.T) {
 				"Template source: https://github.com/fixture/forge-ci", "Release: v1.2.3",
 				"Resolved commit: " + strings.Repeat("a", 40), "Forge: github", "Example: go-cli",
 				".github/workflows/release-workflow.yml", "my-cli", "No project files were written",
-				"temporary storage", "no Nanolinter or MegaLinter configuration is generated",
+				"No project files were written.", "no Nanolinter or MegaLinter configuration is generated",
 			} {
 				if !strings.Contains(output.String(), expected) {
 					t.Errorf("missing %q in preview:\n%s", expected, output.String())
@@ -116,10 +124,10 @@ func TestInitCommandWithoutDryRunCreatesFiles(t *testing.T) {
 
 	var output bytes.Buffer
 
-	cmd := newCommand(fixtureRemote{})
+	cmd := newCommand(openFixture)
 	cmd.Writer, cmd.ErrWriter = &output, &output
 
-	err := cmd.Run(t.Context(), []string{"init", "https://github.com/fixture/forge-ci", dir, "--example", "go-cli", "--ref", "v1.2.3"})
+	err := cmd.Run(t.Context(), []string{"init", t.TempDir(), dir, "--example", "go-cli", "--ref", "v1.2.3"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,5 +214,21 @@ func TestReportProjectSaysWhenANameWasNotFilled(t *testing.T) {
 
 	if got := out.String(); strings.Contains(got, "not filled") || !strings.Contains(got, "project name   hello\n") {
 		t.Errorf("report = %q, want hello reported as filled", got)
+	}
+}
+
+// Init reads a local checkout: a URL, or a path that is no directory, is
+// refused with the clone line that makes one.
+func TestInitCommandRefusesWhatIsNoCheckout(t *testing.T) {
+	for _, source := range []string{"https://github.com/diggsweden/forge-ci", "git@forge.example:org/forge-ci.git", filepath.Join(t.TempDir(), "absent")} {
+		var output bytes.Buffer
+
+		cmd := newCommand(openFixture)
+		cmd.Writer, cmd.ErrWriter = &output, &output
+
+		err := cmd.Run(t.Context(), []string{"init", source, t.TempDir(), "--example", "go-cli"})
+		if !errors.Is(err, errs.ErrUsage) || !strings.Contains(err.Error(), "git clone") {
+			t.Errorf("%s: %v, want a usage error with the clone line", source, err)
+		}
 	}
 }

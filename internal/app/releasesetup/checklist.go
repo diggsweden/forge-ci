@@ -55,7 +55,7 @@ func Checklist(ctx context.Context, root, repo, commit string) ([]Step, error) {
 
 	filesDone, filesDetail := ok(appdoctor.CheckCIWorkflows)
 	steps = append(steps, step("Write the Forge CI files", filesDone, filesDetail,
-		"forge-ci init "+docslink.Repository+" --dry-run   (or your organization's fork URL)"))
+		"forge-ci init <checkout> --dry-run   (a clone of "+docslink.Repository+" or of your organization's fork)"))
 
 	placeholdersDone, placeholdersDetail := ok(appdoctor.CheckPlaceholders)
 	pathsDone, pathsDetail := ok(appdoctor.CheckArtifactPaths)

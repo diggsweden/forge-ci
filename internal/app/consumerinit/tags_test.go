@@ -13,29 +13,16 @@ import (
 	appinit "github.com/diggsweden/forge-ci/internal/app/consumerinit"
 )
 
-type recordingTagRemote struct {
-	fakeRemote
+type recordingTagCheckout struct {
+	fakeCheckout
 
-	resolved, exported string
-	lists              int
+	resolved string
 }
 
-func (r *recordingTagRemote) VersionTags(ctx context.Context, url string) ([]string, error) {
-	r.lists++
+func (r *recordingTagCheckout) Commit(ctx context.Context, ref string) (string, error) {
+	r.resolved = ref
 
-	return r.fakeRemote.VersionTags(ctx, url)
-}
-
-func (r *recordingTagRemote) TagCommit(ctx context.Context, url, tag string) (string, error) {
-	r.resolved = tag
-
-	return r.fakeRemote.TagCommit(ctx, url, tag)
-}
-
-func (r *recordingTagRemote) Export(ctx context.Context, url, tag, dest string, paths []string) ([]string, error) {
-	r.exported = tag
-
-	return r.fakeRemote.Export(ctx, url, tag, dest, paths)
+	return r.fakeCheckout.Commit(ctx, ref)
 }
 
 func TestRunReleaseTagSelectionPreservesExactRef(t *testing.T) {
@@ -54,20 +41,16 @@ func TestRunReleaseTagSelectionPreservesExactRef(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			remote := &recordingTagRemote{tags: tc.tags, defaults: "forge: gitlab\n"}
+			remote := &recordingTagCheckout{tags: append(tc.tags, tc.ref), defaults: "forge: gitlab\n"}
 			dir := t.TempDir()
 
-			result, err := appinit.Run(t.Context(), appinit.Input{Remote: remote, URL: "https://gitlab.example.com/team/forge-ci", Ref: tc.ref, Dir: dir, Example: "go-cli"})
+			result, err := appinit.Run(t.Context(), appinit.Input{Checkout: remote, URL: "https://gitlab.example.com/team/forge-ci", Ref: tc.ref, Dir: dir, Example: "go-cli"})
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			if result.Source.Tag != tc.want || remote.resolved != tc.want || remote.exported != tc.want {
-				t.Fatalf("tag spelling changed: source=%q resolved=%q exported=%q want=%q", result.Source.Tag, remote.resolved, remote.exported, tc.want)
-			}
-
-			if tc.ref != "" && remote.lists != 0 {
-				t.Fatal("explicit --ref unexpectedly queried latest releases")
+			if result.Source.Tag != tc.want || remote.resolved != tc.want {
+				t.Fatalf("tag spelling changed: source=%q resolved=%q want=%q", result.Source.Tag, remote.resolved, tc.want)
 			}
 
 			body, err := os.ReadFile(filepath.Join(dir, ".gitlab-ci.yml"))

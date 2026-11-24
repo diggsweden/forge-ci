@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: EUPL-1.2 OR GPL-3.0-or-later
 
 // Package initcmd wires `forge-ci init`: a repository's first Forge CI
-// files, from the selected release's examples, pinned to a Forge CI fork.
+// files, from the examples of a local Forge CI checkout at the commit it
+// pins.
 package initcmd
 
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -23,65 +25,81 @@ import (
 	domain "github.com/diggsweden/forge-ci/internal/domain/consumerinit"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/projecttype"
-	"github.com/diggsweden/forge-ci/internal/runcontext"
 )
+
+var errNoOrigin = errors.New("the checkout has no origin remote")
+
+// cloneHint is how a person gets the checkout init reads.
+const cloneHint = "clone it first, for example git clone https://github.com/diggsweden/forge-ci, then run forge-ci init ./forge-ci"
 
 // New returns the `init` top-level command.
 func New() *cli.Command {
-	return newCommand(gitRemote{})
+	return newCommand(func(dir string) appinit.Checkout { return gitCheckout{repo: &git.Repo{Dir: dir}} })
 }
 
-func newCommand(remote appinit.Remote) *cli.Command {
+func newCommand(open func(dir string) appinit.Checkout) *cli.Command {
 	return &cli.Command{
 		Name:      "init",
 		Usage:     "write a repository's first Forge CI files from an example",
-		ArgsUsage: "<forge-ci URL> [directory]",
+		ArgsUsage: "<forge-ci checkout> [directory]",
 		Description: `Copies the example for the repository's ecosystem and forge into place,
-pinned to the newest release tag of the Forge CI repository the URL names.
-The examples and the values its operator records in ` + domain.DefaultsFile + `
-are read from that repository at that tag, so the files match the release
-they pin. github.com is GitHub; any other host is the forge that file
-names. Existing files are never overwritten. The report lists what is
-still left to fill in. On Forgejo and GitLab it also writes the release's
-changelog configuration to .forge-ci/gitcliff/, which their releases read,
-keeping any such file the repository already has.
+pinned to one commit of a local checkout of Forge CI or of your
+organization's fork. The examples and the values its operator records in
+` + domain.DefaultsFile + ` are read from that commit's history, never
+from the working tree or the network, so the files match what they pin.
+The workflows name the fork by the checkout's origin, or by --url.
+github.com is GitHub; any other host is the forge that file names.
+Existing files are never overwritten. The report lists what is still left
+to fill in. On Forgejo and GitLab it also writes the changelog
+configuration to .forge-ci/gitcliff/, which their releases read, keeping
+any such file the repository already has.
 Linter configuration is not generated.
 
-With --dry-run, render the same proposal and report existing-file conflicts
-without writing project files. Templates are still fetched into temporary
-storage. Conflicts return a nonzero status; unresolved placeholders are
-reported for review, not treated as proof that the workflows are ready to run.
+The commit is --ref, a tag or a commit SHA, else the newest stable X.Y.Z
+or vX.Y.Z tag the checkout has (fetch its tags first to see newer ones);
+if both spellings exist for the highest version, vX.Y.Z
+wins. A fork that releases its own vX.Y.Z-WORD.N builds passes
+--release-policy fork:WORD to pin the newest of those.
 
-Automatic selection accepts stable X.Y.Z and vX.Y.Z tags, excludes prereleases
-and build metadata, and keeps the exact tag name. If both spellings exist for
-the highest version, vX.Y.Z wins; use --ref to select the other explicitly.
+With --dry-run, render the same proposal and report existing-file conflicts
+without writing project files. Conflicts return a nonzero status;
+unresolved placeholders are reported for review, not treated as proof that
+the workflows are ready to run.
 
 EXAMPLES:
    # GitHub, from the published Forge CI:
-   forge-ci init https://github.com/diggsweden/forge-ci
+   git clone https://github.com/diggsweden/forge-ci
+   forge-ci init ./forge-ci
 
    # Forgejo or GitLab, from your organization's fork:
-   forge-ci init https://forge.example/examplescope/forge-ci
+   git clone https://forge.example/examplescope/forge-ci
+   forge-ci init ./forge-ci
 
-   # A fork that releases its own vX.Y.Z-acme.N builds:
-   forge-ci init https://forge.example/examplescope/forge-ci --release-policy fork:acme
+   # Preview a chosen example and tag without writing project files:
+   forge-ci init ./forge-ci --example go-service --ref v0.90.0 --dry-run
 
-   # Preview without writing project files:
-   forge-ci init https://github.com/diggsweden/forge-ci --example go-service --ref v0.90.0 --dry-run
-
-   # Another directory, a chosen example and tag:
-   forge-ci init https://github.com/diggsweden/forge-ci ../hello --example go-service --ref v0.90.0`,
+   # Another directory, pinned to a commit:
+   forge-ci init ./forge-ci ../hello --example go-service --ref 0123abcd`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "example", Usage: "example to start from, one of " + strings.Join(domain.Examples(), ", ") + " (default: from the repository's build files)"},
-			&cli.StringFlag{Name: "ref", Usage: "release tag to pin (default: the newest stable X.Y.Z or vX.Y.Z tag; v-prefixed wins ties)"},
+			&cli.StringFlag{Name: "ref", Usage: "tag or commit SHA to pin (default: the newest stable X.Y.Z or vX.Y.Z tag; v-prefixed wins ties)"},
 			&cli.StringFlag{Name: "release-policy", Usage: "fork:WORD pins the fork's newest vX.Y.Z-WORD.N build instead of a stable tag"},
-			&cli.BoolFlag{Name: "dry-run", Usage: "preview files, conflicts and remaining placeholders without writing project files; still fetches templates"},
+			&cli.StringFlag{Name: "url", Usage: "the fork's address the workflows name, https://<host>/<owner>/<repository> (default: from the checkout's origin)"},
+			&cli.BoolFlag{Name: "dry-run", Usage: "preview files, conflicts and remaining placeholders without writing project files"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			if cmd.NArg() < 1 || cmd.NArg() > 2 {
-				return fmt.Errorf("init takes <forge-ci URL> [directory]; the URL names the Forge CI repository "+
-					"to copy the examples from, for example https://github.com/diggsweden/forge-ci "+
-					"(see forge-ci init --help): %w", errs.ErrUsage)
+				return fmt.Errorf("init takes <forge-ci checkout> [directory]; the checkout is a local clone of Forge CI "+
+					"or of your organization's fork: %s (see forge-ci init --help): %w", cloneHint, errs.ErrUsage)
+			}
+
+			checkout := cmd.Args().Get(0)
+			if strings.Contains(checkout, "://") || strings.HasPrefix(checkout, "git@") {
+				return fmt.Errorf("init reads a local checkout, not %s: %s: %w", checkout, cloneHint, errs.ErrUsage)
+			}
+
+			if info, err := os.Stat(checkout); err != nil || !info.IsDir() {
+				return fmt.Errorf("%s is not a directory; init reads a local checkout of Forge CI: %s: %w", checkout, cloneHint, errs.ErrUsage)
 			}
 
 			dir := "."
@@ -98,7 +116,7 @@ EXAMPLES:
 			// error on purpose.
 			// nosemgrep: trailofbits.go.invalid-usage-of-modified-variable.invalid-usage-of-modified-variable
 			result, err := appinit.Run(ctx, appinit.Input{
-				Remote: remote, URL: cmd.Args().Get(0),
+				Checkout: open(checkout), URL: cmd.String("url"),
 				Ref: cmd.String("ref"), ReleasePolicy: cmd.String("release-policy"), Dir: dir, Example: example, DryRun: cmd.Bool("dry-run"),
 			})
 			if err != nil {
@@ -204,7 +222,7 @@ func report(out io.Writer, example string, result appinit.Result) {
 	}
 
 	_, _ = fmt.Fprintf(out, "%s\n\nProject directory: %s\nTemplate source: https://%s/%s\nRelease: %s\nResolved commit: %s\nForge: %s\nExample: %s\n",
-		title, result.Directory, result.Source.Host, result.Source.Repository, result.Source.Tag, result.Source.Commit, result.Forge, example)
+		title, result.Directory, result.Source.Host, result.Source.Repository, result.Source.Release(), result.Source.Commit, result.Forge, example)
 	if result.Defaults {
 		_, _ = fmt.Fprintf(out, "Template defaults: %s\n", domain.DefaultsFile)
 	}
@@ -220,7 +238,7 @@ func report(out io.Writer, example string, result appinit.Result) {
 
 	if len(result.Optional) > 0 {
 		_, _ = fmt.Fprintf(out, "\nOptional workflows in this example, not written: %s. Copy one from %s/%s/%s/ at %s if you want it.\n",
-			strings.Join(result.Optional, ", "), domain.ExamplesDir, example, domain.ForgeDir(result.Forge), result.Source.Tag)
+			strings.Join(result.Optional, ", "), domain.ExamplesDir, example, domain.ForgeDir(result.Forge), result.Source.Release())
 	}
 
 	_, _ = fmt.Fprintln(out, "\nLinter configuration: no Nanolinter or MegaLinter configuration is generated.")
@@ -229,11 +247,11 @@ func report(out io.Writer, example string, result appinit.Result) {
 	}
 
 	if result.DryRun {
-		_, _ = fmt.Fprintln(out, "\nNo project files were written. Templates were fetched into temporary storage.")
+		_, _ = fmt.Fprintln(out, "\nNo project files were written.")
 		if len(result.Conflicts) > 0 {
 			_, _ = fmt.Fprintln(out, "Initialization would refuse because destinations already exist. Review those files before proceeding.")
 		} else {
-			_, _ = fmt.Fprintf(out, "To generate these files, repeat the command without --dry-run, using --ref %s and --example %s.\n", result.Source.Tag, example)
+			_, _ = fmt.Fprintf(out, "To generate these files, repeat the command without --dry-run, using --ref %s and --example %s.\n", result.Source.Ref(), example)
 		}
 
 		return
@@ -293,17 +311,17 @@ func reportRemaining(out io.Writer, result appinit.Result) {
 	_, _ = fmt.Fprintln(out, "forge-ci doctor fails until they are filled; values only the release workflow reads warn until then.")
 }
 
-// forgeGuideLocation says where the per-forge guide for the pinned release
+// forgeGuideLocation says where the per-forge guide for the pinned commit
 // is. On github.com that is one URL; other forges lay out file URLs
-// differently, so there the repository, the tag and the path are named
-// instead. The tag pins the commit, so the commit hash is not repeated.
+// differently, so there the repository, the ref and the path are named
+// instead.
 func forgeGuideLocation(src domain.Source, forge string) string {
 	path := "docs/" + forge + ".md"
 	if src.Host == "github.com" {
-		return fmt.Sprintf("https://%s/%s/blob/%s/%s", src.Host, src.Repository, src.Tag, path)
+		return fmt.Sprintf("https://%s/%s/blob/%s/%s", src.Host, src.Repository, src.Ref(), path)
 	}
 
-	return fmt.Sprintf("%s in https://%s/%s at tag %s", path, src.Host, src.Repository, src.Tag)
+	return fmt.Sprintf("%s in https://%s/%s at %s", path, src.Host, src.Repository, src.Release())
 }
 
 func reportFiles(out io.Writer, result appinit.Result) {
@@ -343,17 +361,32 @@ func reportFiles(out io.Writer, result appinit.Result) {
 	}
 }
 
-// gitRemote reads the fork with git, anonymously.
-type gitRemote struct{}
+// gitCheckout reads a local checkout with git.
+type gitCheckout struct{ repo *git.Repo }
 
-func (gitRemote) VersionTags(ctx context.Context, repoURL string) ([]string, error) {
-	return git.New().RemoteReleaseTags(ctx, repoURL, runcontext.Credential{})
+func (c gitCheckout) Tags(ctx context.Context) ([]string, error) {
+	return c.repo.ListTags(ctx, "")
 }
 
-func (gitRemote) TagCommit(ctx context.Context, repoURL, tag string) (string, error) {
-	return git.New().RemoteTagCommit(ctx, repoURL, tag, runcontext.Credential{})
+func (c gitCheckout) Commit(ctx context.Context, ref string) (string, error) {
+	return c.repo.TagOrCommit(ctx, ref)
 }
 
-func (gitRemote) Export(ctx context.Context, repoURL, tag, dest string, paths []string) ([]string, error) {
-	return git.ExportAtTag(ctx, repoURL, tag, dest, paths)
+func (c gitCheckout) TagsAt(ctx context.Context, commit string) ([]string, error) {
+	return c.repo.TagsPointingAt(ctx, commit)
+}
+
+func (c gitCheckout) Export(ctx context.Context, commit, dest string, paths []string) ([]string, error) {
+	return c.repo.ExportCommit(ctx, commit, dest, paths)
+}
+
+// Origin is the origin remote's address. Git answers a remote it does not
+// know with the name itself.
+func (c gitCheckout) Origin(ctx context.Context) (string, error) {
+	origin, err := c.repo.RemoteURL(ctx)
+	if err == nil && origin == "origin" {
+		err = errNoOrigin
+	}
+
+	return origin, err
 }

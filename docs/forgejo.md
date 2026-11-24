@@ -11,7 +11,8 @@ runner, and what it does differently there, is in
 Pin a reviewed commit of the layer, and serve that commit, its engine binary
 and the signer image on your Forgejo instance: the upstream project publishes
 neither the binary package nor the signer image for your instance. `init`
-reads its examples and defaults from a release tag of the serving repository.
+reads its examples and defaults from a checkout of the serving repository, at
+the release tag it pins.
 
 ## What ships
 
@@ -197,18 +198,19 @@ beside the `uses:` line, and a variable can change without a commit.
 
 ### Quick start
 
-`forge-ci init <fork URL> --dry-run` previews the files, the placeholders
-left and every conflict with an existing file, without writing anything.
+`forge-ci init <fork checkout> --dry-run`, with a clone of the fork, previews
+the files, the placeholders left and every conflict with an existing file,
+without writing anything.
 
 Then run `forge-ci setup status`: it lists the steps from here to a first
 release, marks the ones the repository shows are done, and names the command
 for each. `forge-ci setup signer` writes `.forge-ci/allowed_signers`, the
 file the release verifies request tags against.
 
-The organization's fork can make `forge-ci init <fork URL>` write a
+The organization's fork can make `forge-ci init <fork checkout>` write a
 consumer's files with every pin filled in. The operator commits
-`.forge-ci/consumer-defaults.yml` to the fork; init reads it at the release
-tag it pins, never from a branch, and refuses unknown keys:
+`.forge-ci/consumer-defaults.yml` to the fork; init reads it at the commit it
+pins, never from the working tree, and refuses unknown keys:
 
 ```yaml
 forge: forgejo                       # required outside github.com
@@ -216,10 +218,11 @@ signer-image: <host>/<owner>/forge-ci-signer@sha256:<digest>
 cosign-public-key-sha256: <sha256 of the public key>
 ```
 
-A key left out leaves its placeholder, and init lists it. Consumers then run
-`forge-ci init https://<host>/<owner>/forge-ci` in their repository, adding
-`--release-policy fork:WORD` when the fork releases its own `vX.Y.Z-WORD.N`
-builds, so init pins the newest of those; by hand, the steps are these.
+A key left out leaves its placeholder, and init lists it. Consumers then
+clone the fork and run `forge-ci init <fork checkout>` in their repository,
+adding `--release-policy fork:WORD` when the fork releases its own
+`vX.Y.Z-WORD.N` builds, so init pins the newest of those; by hand, the steps
+are these.
 
 1. **Copy the two examples** of your ecosystem, `pullrequest-workflow.yml` and
    `release-workflow.yml` from `examples/<ecosystem>/forgejo/` (see the
@@ -2260,8 +2263,7 @@ Treat a pin update as one reviewed change:
    validation. Then verify a hosted pull request before the first release.
    Local tests alone do not prove the runner image, registry access or secrets.
 
-`forge-ci init https://FORGE_HOST/OWNER/REPOSITORY` works from a renamed
-copy too; its `.forge-ci/consumer-defaults.yml` presets the organization's images
+`forge-ci init` works from a checkout of a renamed copy too; its `.forge-ci/consumer-defaults.yml` presets the organization's images
 and trust values, as under [Quick start](#quick-start).
 
 What a copy cannot do, such as run on a runner that is neither linux/amd64

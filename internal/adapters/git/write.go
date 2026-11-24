@@ -320,7 +320,7 @@ func (r *Repo) effectiveRepositoryURL(ctx context.Context, repository string) (s
 func repositoryURLArgs(repository string) []string {
 	// Unlike remote get-url, this accepts both remote names and literal URLs,
 	// expands their fetch rewrites, and exits without contacting the repository.
-	return []string{"-c", hooksDisabledConfig, "ls-remote", "--get-url", "--", repository} //nolint:goconst // Native no-network repository-argument resolution.
+	return []string{"-c", hooksDisabledConfig, "ls-remote", "--get-url", "--", repository}
 }
 
 // CheckOriginPushDestination refuses split or multiple publication destinations.

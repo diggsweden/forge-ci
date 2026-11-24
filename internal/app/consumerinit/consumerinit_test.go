@@ -21,19 +21,26 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
 )
 
-// fakeRemote serves this repository's own examples and changelog
-// configurations as the pinned release, and the defaults file the case gives.
-type fakeRemote struct {
+// fakeCheckout serves this repository's own examples and changelog
+// configurations as the pinned commit, and the defaults file the case gives.
+// Every tag and every SHA names its one commit.
+type fakeCheckout struct {
 	tags        []string
-	defaults    string // empty: the fork has no defaults file
-	commit      string // empty: use the default SHA-1 fixture
-	noChangelog bool   // an older release without templates/gitcliff
+	tagsAt      []string // the tags on a SHA --ref names
+	defaults    string   // empty: the fork has no defaults file
+	commit      string   // empty: use the default SHA-1 fixture
+	origin      string   // empty: the checkout has no origin
+	noChangelog bool     // an older release without templates/gitcliff
 	fetchErr    error
 }
 
-func (f fakeRemote) VersionTags(context.Context, string) ([]string, error) { return f.tags, nil }
+func (f fakeCheckout) Tags(context.Context) ([]string, error) { return f.tags, nil }
 
-func (f fakeRemote) TagCommit(context.Context, string, string) (string, error) {
+func (f fakeCheckout) Commit(_ context.Context, ref string) (string, error) {
+	if !slices.Contains(f.tags, ref) && strings.Trim(ref, "0123456789abcdef") != "" {
+		return "", errors.New("unknown revision")
+	}
+
 	if f.commit != "" {
 		return f.commit, nil
 	}
@@ -41,7 +48,17 @@ func (f fakeRemote) TagCommit(context.Context, string, string) (string, error) {
 	return strings.Repeat("ab", 20), nil
 }
 
-func (f fakeRemote) Export(_ context.Context, _, _, dest string, _ []string) ([]string, error) {
+func (f fakeCheckout) TagsAt(context.Context, string) ([]string, error) { return f.tagsAt, nil }
+
+func (f fakeCheckout) Origin(context.Context) (string, error) {
+	if f.origin == "" {
+		return "", errors.New("no origin")
+	}
+
+	return f.origin, nil
+}
+
+func (f fakeCheckout) Export(_ context.Context, _, dest string, _ []string) ([]string, error) {
 	if f.fetchErr != nil {
 		return nil, f.fetchErr
 	}
@@ -124,14 +141,14 @@ func TestRunLeavesOnlyThePersonsChoices(t *testing.T) {
 func checkFilled(t *testing.T, forge provider.ForgeAPI, mirror, example string) {
 	t.Helper()
 
-	remote := fakeRemote{tags: []string{"v0.89.0", "v0.91.0", "v0.91.0-rc.1"}}
+	remote := fakeCheckout{tags: []string{"v0.89.0", "v0.91.0", "v0.91.0-rc.1"}}
 	if forge != provider.ForgeGitHub {
 		remote.defaults = strings.Replace(fullDefaults, "%s", string(forge), 1)
 	}
 
 	dir := t.TempDir()
 
-	result, err := appinit.Run(t.Context(), appinit.Input{Remote: remote, URL: mirror, Dir: dir, Example: example})
+	result, err := appinit.Run(t.Context(), appinit.Input{Checkout: remote, URL: mirror, Dir: dir, Example: example})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,13 +209,13 @@ func TestRunFromRenamedForgejoForkPreservesFullPins(t *testing.T) {
 			t.Parallel()
 
 			dir := t.TempDir()
-			remote := fakeRemote{
+			remote := fakeCheckout{
 				tags: []string{"v1.2.3"}, commit: commit,
 				defaults: strings.Replace(fullDefaults, "%s", "forgejo", 1),
 			}
 
 			result, err := appinit.Run(t.Context(), appinit.Input{
-				Remote: remote, URL: "https://forge.example/fixture/delivery-engine", Dir: dir, Example: "go-cli",
+				Checkout: remote, URL: "https://forge.example/fixture/delivery-engine", Dir: dir, Example: "go-cli",
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -254,14 +271,14 @@ func TestRunWritesWhatTheForgesReleaseReads(t *testing.T) {
 		t.Run(string(forge), func(t *testing.T) {
 			t.Parallel()
 
-			remote := fakeRemote{tags: []string{"v1.2.3"}}
+			remote := fakeCheckout{tags: []string{"v1.2.3"}}
 			if forge != provider.ForgeGitHub {
 				remote.defaults = "forge: " + string(forge) + "\n"
 			}
 
 			dir := t.TempDir()
 
-			result, err := appinit.Run(t.Context(), appinit.Input{Remote: remote, URL: tc.mirror, Dir: dir, Example: "go-service"})
+			result, err := appinit.Run(t.Context(), appinit.Input{Checkout: remote, URL: tc.mirror, Dir: dir, Example: "go-service"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -310,9 +327,9 @@ func TestRunKeepsExistingChangelogConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	remote := fakeRemote{tags: []string{"v1.2.3"}, defaults: "forge: gitlab\n"}
+	remote := fakeCheckout{tags: []string{"v1.2.3"}, defaults: "forge: gitlab\n"}
 
-	result, err := appinit.Run(t.Context(), appinit.Input{Remote: remote, URL: "https://gitlab.example/fixture/forge-ci", Dir: dir, Example: "go-cli"})
+	result, err := appinit.Run(t.Context(), appinit.Input{Checkout: remote, URL: "https://gitlab.example/fixture/forge-ci", Dir: dir, Example: "go-cli"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,9 +353,9 @@ func TestRunFromAReleaseWithoutChangelogConfiguration(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	remote := fakeRemote{tags: []string{"v1.2.3"}, defaults: "forge: gitlab\n", noChangelog: true}
+	remote := fakeCheckout{tags: []string{"v1.2.3"}, defaults: "forge: gitlab\n", noChangelog: true}
 
-	result, err := appinit.Run(t.Context(), appinit.Input{Remote: remote, URL: "https://gitlab.example/fixture/forge-ci", Dir: dir, Example: "go-cli"})
+	result, err := appinit.Run(t.Context(), appinit.Input{Checkout: remote, URL: "https://gitlab.example/fixture/forge-ci", Dir: dir, Example: "go-cli"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,8 +378,8 @@ func TestRunWritesNothingWhenATargetExists(t *testing.T) {
 	}
 
 	_, err := appinit.Run(t.Context(), appinit.Input{
-		Remote: fakeRemote{tags: []string{"v0.90.0"}},
-		URL:    "https://github.com/diggsweden/forge-ci", Dir: dir, Example: "go-cli",
+		Checkout: fakeCheckout{tags: []string{"v0.90.0"}},
+		URL:      "https://github.com/diggsweden/forge-ci", Dir: dir, Example: "go-cli",
 	})
 	if !errors.Is(err, errs.ErrUsage) {
 		t.Fatalf("err = %v, want a usage error", err)
@@ -390,8 +407,8 @@ func TestRunPreservesConsumerLinterConfigs(t *testing.T) {
 			}
 
 			_, err := appinit.Run(t.Context(), appinit.Input{
-				Remote: fakeRemote{tags: []string{"v0.90.0"}, defaults: strings.Replace(fullDefaults, "%s", forge, 1)},
-				URL:    "https://" + forge + ".com/fixture/forge-ci", Dir: dir, Example: "go-cli",
+				Checkout: fakeCheckout{tags: []string{"v0.90.0"}, defaults: strings.Replace(fullDefaults, "%s", forge, 1)},
+				URL:      "https://" + forge + ".com/fixture/forge-ci", Dir: dir, Example: "go-cli",
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -412,20 +429,20 @@ func TestResolveSourceRefusesWhatItCannotPin(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		url    string
-		remote fakeRemote
+		remote fakeCheckout
 	}{
-		"not https":                 {url: "http://github.com/diggsweden/forge-ci", remote: fakeRemote{tags: []string{"v1.0.0"}}},
-		"malformed URL":             {url: "https://%", remote: fakeRemote{tags: []string{"v1.0.0"}}},
-		"no repository path":        {url: "https://github.com/forge-ci", remote: fakeRemote{tags: []string{"v1.0.0"}}},
-		"no release tag":            {url: "https://github.com/diggsweden/forge-ci", remote: fakeRemote{tags: []string{"v1.0.0-rc.1"}}},
-		"fork without forge":        {url: "https://codefloe.com/itiquette/forge-ci", remote: fakeRemote{tags: []string{"v1.0.0"}}},
-		"defaults with unknown key": {url: "https://codefloe.com/itiquette/forge-ci", remote: fakeRemote{tags: []string{"v1.0.0"}, defaults: "forge: forgejo\nsigner: x\n"}},
+		"not https":                 {url: "http://github.com/diggsweden/forge-ci", remote: fakeCheckout{tags: []string{"v1.0.0"}}},
+		"malformed URL":             {url: "https://%", remote: fakeCheckout{tags: []string{"v1.0.0"}}},
+		"no repository path":        {url: "https://github.com/forge-ci", remote: fakeCheckout{tags: []string{"v1.0.0"}}},
+		"no release tag":            {url: "https://github.com/diggsweden/forge-ci", remote: fakeCheckout{tags: []string{"v1.0.0-rc.1"}}},
+		"fork without forge":        {url: "https://codefloe.com/itiquette/forge-ci", remote: fakeCheckout{tags: []string{"v1.0.0"}}},
+		"defaults with unknown key": {url: "https://codefloe.com/itiquette/forge-ci", remote: fakeCheckout{tags: []string{"v1.0.0"}, defaults: "forge: forgejo\nsigner: x\n"}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
 			for _, dryRun := range []bool{false, true} {
-				if _, err := appinit.Run(t.Context(), appinit.Input{Remote: tc.remote, URL: tc.url, Dir: t.TempDir(), Example: "go-cli", DryRun: dryRun}); err == nil {
+				if _, err := appinit.Run(t.Context(), appinit.Input{Checkout: tc.remote, URL: tc.url, Dir: t.TempDir(), Example: "go-cli", DryRun: dryRun}); err == nil {
 					t.Fatalf("dry-run=%t: resolved, want a refusal", dryRun)
 				}
 			}
@@ -438,9 +455,9 @@ func TestResolveSourceRefusesWhatItCannotPin(t *testing.T) {
 func TestRunPinsAForksOwnBuildUnderItsPolicy(t *testing.T) {
 	t.Parallel()
 
-	remote := fakeRemote{tags: []string{"v1.3.0", "v1.2.0-acme.2", "v1.2.0-acme.10", "v1.3.0-rc.1", "v1.3.0-other.1"}, defaults: "forge: forgejo\n"}
+	remote := fakeCheckout{tags: []string{"v1.3.0", "v1.2.0-acme.2", "v1.2.0-acme.10", "v1.3.0-rc.1", "v1.3.0-other.1"}, defaults: "forge: forgejo\n"}
 
-	result, err := appinit.Run(t.Context(), appinit.Input{Remote: remote, URL: "https://codefloe.com/itiquette/forge-ci", ReleasePolicy: "fork:acme", Dir: t.TempDir(), Example: "go-cli", DryRun: true})
+	result, err := appinit.Run(t.Context(), appinit.Input{Checkout: remote, URL: "https://codefloe.com/itiquette/forge-ci", ReleasePolicy: "fork:acme", Dir: t.TempDir(), Example: "go-cli", DryRun: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -450,9 +467,9 @@ func TestRunPinsAForksOwnBuildUnderItsPolicy(t *testing.T) {
 	}
 
 	for name, in := range map[string]appinit.Input{
-		"no fork build":   {Remote: fakeRemote{tags: []string{"v1.3.0"}, defaults: "forge: forgejo\n"}, ReleasePolicy: "fork:acme"},
-		"not a fork":      {Remote: remote, ReleasePolicy: "stable"},
-		"prerelease word": {Remote: remote, ReleasePolicy: "fork:rc"},
+		"no fork build":   {Checkout: fakeCheckout{tags: []string{"v1.3.0"}, defaults: "forge: forgejo\n"}, ReleasePolicy: "fork:acme"},
+		"not a fork":      {Checkout: remote, ReleasePolicy: "stable"},
+		"prerelease word": {Checkout: remote, ReleasePolicy: "fork:rc"},
 	} {
 		in.URL, in.Dir, in.Example, in.DryRun = "https://codefloe.com/itiquette/forge-ci", t.TempDir(), "go-cli", true
 		if _, err := appinit.Run(t.Context(), in); !errors.Is(err, errs.ErrUsage) {
@@ -470,8 +487,8 @@ func TestRunDryRunMatchesGeneratedProposal(t *testing.T) {
 
 			dir := filepath.Join(t.TempDir(), "new project")
 			input := appinit.Input{
-				Remote: fakeRemote{tags: []string{"v1.2.3"}, defaults: strings.Replace(fullDefaults, "%s", forge, 1)},
-				URL:    "https://" + forge + ".com/fixture/forge-ci", Dir: dir, Example: "go-cli", DryRun: true,
+				Checkout: fakeCheckout{tags: []string{"v1.2.3"}, defaults: strings.Replace(fullDefaults, "%s", forge, 1)},
+				URL:      "https://" + forge + ".com/fixture/forge-ci", Dir: dir, Example: "go-cli", DryRun: true,
 			}
 
 			preview, err := appinit.Run(t.Context(), input)
@@ -532,7 +549,7 @@ func TestRunDryRunReportsAllConflictsWithoutChangingFiles(t *testing.T) {
 	before := snapshotProject(t, dir)
 
 	result, err := appinit.Run(t.Context(), appinit.Input{
-		Remote: fakeRemote{tags: []string{"v1.2.3"}}, URL: "https://github.com/fixture/forge-ci",
+		Checkout: fakeCheckout{tags: []string{"v1.2.3"}}, URL: "https://github.com/fixture/forge-ci",
 		Dir: dir, Example: "go-cli", DryRun: true,
 	})
 	if !errors.Is(err, errs.ErrUsage) {
@@ -557,10 +574,10 @@ func TestRunDryRunErrorsDoNotLookLikeEmptySuccess(t *testing.T) {
 
 	for _, tc := range []struct {
 		name, example string
-		remote        fakeRemote
+		remote        fakeCheckout
 	}{
-		{name: "fetch_failure", example: "go-cli", remote: fakeRemote{tags: []string{"v1.2.3"}, fetchErr: fs.ErrPermission}},
-		{name: "missing_example", example: "missing-example", remote: fakeRemote{tags: []string{"v1.2.3"}}},
+		{name: "fetch_failure", example: "go-cli", remote: fakeCheckout{tags: []string{"v1.2.3"}, fetchErr: fs.ErrPermission}},
+		{name: "missing_example", example: "missing-example", remote: fakeCheckout{tags: []string{"v1.2.3"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -569,7 +586,7 @@ func TestRunDryRunErrorsDoNotLookLikeEmptySuccess(t *testing.T) {
 			before := snapshotProject(t, dir)
 
 			result, err := appinit.Run(t.Context(), appinit.Input{
-				Remote: tc.remote, URL: "https://github.com/fixture/forge-ci", Dir: dir, Example: tc.example, DryRun: true,
+				Checkout: tc.remote, URL: "https://github.com/fixture/forge-ci", Dir: dir, Example: tc.example, DryRun: true,
 			})
 			if err == nil || len(result.Written) != 0 || len(result.Proposed) != 0 {
 				t.Fatalf("failed preview returned success/proposed files: %+v, %v", result, err)
@@ -587,9 +604,9 @@ type projectEntry struct {
 	body string
 }
 
-type emptyRelease struct{ fakeRemote }
+type emptyRelease struct{ fakeCheckout }
 
-func (emptyRelease) Export(_ context.Context, _, _, dest string, _ []string) ([]string, error) {
+func (emptyRelease) Export(_ context.Context, _, dest string, _ []string) ([]string, error) {
 	if err := os.MkdirAll(filepath.Join(dest, "examples", "go-cli", "github"), 0o750); err != nil {
 		return nil, err
 	}
@@ -603,7 +620,7 @@ func TestRunDryRunRefusesEmptyExample(t *testing.T) {
 	dir := t.TempDir()
 
 	result, err := appinit.Run(t.Context(), appinit.Input{
-		Remote: emptyRelease{fakeRemote{tags: []string{"v1.2.3"}}}, URL: "https://github.com/fixture/forge-ci",
+		Checkout: emptyRelease{fakeCheckout{tags: []string{"v1.2.3"}}}, URL: "https://github.com/fixture/forge-ci",
 		Dir: dir, Example: "go-cli", DryRun: true,
 	})
 	if !errors.Is(err, errs.ErrUsage) || !strings.Contains(err.Error(), "no initialization files") || len(result.Written) != 0 {
@@ -652,21 +669,65 @@ func snapshotProject(t *testing.T, dir string) map[string]projectEntry {
 	return entries
 }
 
-type unreachableRemote struct{ fakeRemote }
-
-func (unreachableRemote) VersionTags(context.Context, string) ([]string, error) {
-	return nil, errors.New("git ls-remote: exit status 128")
-}
-
-// A URL git cannot read says what it has to be: off github.com, the
-// organization's fork. The cause stays wrapped.
-func TestRunSaysWhatTheURLMustBeWhenItCannotBeRead(t *testing.T) {
+// The workflows name the fork by the checkout's origin, an SSH address
+// read as the forge's web address; without an origin, --url is required.
+func TestRunNamesTheForkByTheCheckoutsOrigin(t *testing.T) {
 	t.Parallel()
 
-	_, err := appinit.Run(t.Context(), appinit.Input{
-		Remote: unreachableRemote{}, URL: "https://forge.example/org/forge-ci", Dir: t.TempDir(), Example: "go-cli",
+	result, err := appinit.Run(t.Context(), appinit.Input{
+		Checkout: fakeCheckout{tags: []string{"v1.0.0"}, defaults: "forge: forgejo\n", origin: "git@forge.example:org/forge-ci.git"},
+		Dir:      t.TempDir(), Example: "go-cli", DryRun: true,
 	})
-	if err == nil || !strings.Contains(err.Error(), "Forge CI fork") || !strings.Contains(err.Error(), "exit status 128") {
-		t.Fatalf("err = %v", err)
+	if err != nil || result.Source.Host != "forge.example" || result.Source.Repository != "org/forge-ci" {
+		t.Fatalf("source = %+v, %v", result.Source, err)
+	}
+
+	_, err = appinit.Run(t.Context(), appinit.Input{
+		Checkout: fakeCheckout{tags: []string{"v1.0.0"}, defaults: "forge: forgejo\n"}, Dir: t.TempDir(), Example: "go-cli", DryRun: true,
+	})
+	if !errors.Is(err, errs.ErrUsage) || !strings.Contains(err.Error(), "--url") {
+		t.Fatalf("no origin: %v, want a usage error naming --url", err)
+	}
+}
+
+// A commit SHA pins that commit. A release tag on it still names the
+// release; without one, GitLab's components take the commit as version.
+func TestRunPinsACommitSHA(t *testing.T) {
+	t.Parallel()
+
+	sha := strings.Repeat("cd", 20)
+
+	for name, tc := range map[string]struct {
+		tagsAt  []string
+		release string
+	}{
+		"released":   {tagsAt: []string{"v1.0.0"}, release: "v1.0.0"},
+		"unreleased": {release: "commit " + sha[:12]},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+			checkout := fakeCheckout{tags: []string{"v1.0.0"}, tagsAt: tc.tagsAt, commit: sha, defaults: "forge: gitlab\n"}
+
+			result, err := appinit.Run(t.Context(), appinit.Input{Checkout: checkout, URL: "https://gitlab.example.com/team/forge-ci", Ref: sha[:8], Dir: dir, Example: "go-cli"})
+			if err != nil || result.Source.Commit != sha || result.Source.Release() != tc.release {
+				t.Fatalf("source = %+v (%s), %v", result.Source, result.Source.Release(), err)
+			}
+
+			body, err := os.ReadFile(filepath.Join(dir, ".gitlab-ci.yml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			version := sha
+			if len(tc.tagsAt) > 0 {
+				version = "1.0.0"
+			}
+
+			if !strings.Contains(string(body), "/build-go@"+version+"\n") {
+				t.Fatalf("the component is not pinned to %s", version)
+			}
+		})
 	}
 }

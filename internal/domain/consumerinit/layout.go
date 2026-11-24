@@ -174,7 +174,7 @@ func Replacements(forge provider.ForgeAPI, example string, src Source, defaults 
 			add("diggsweden/forge-ci/", src.Repository+"/")
 		}
 
-		add("v0.90.0", src.Tag)
+		add("v0.90.0", src.Release())
 		add("PIN_FORGE_CI_SHA", src.Commit)
 	case provider.ForgeForgejo:
 		add("FORGE_HOST/OWNER/forge-ci-signer@sha256:PIN_SIGNER_IMAGE_DIGEST", defaults.SignerImage)
@@ -194,7 +194,8 @@ func Replacements(forge provider.ForgeAPI, example string, src Source, defaults 
 		add("server-url: https://gitlab.example.com", "server-url: https://"+src.Host)
 		add("gitlab.example.com/team/ci/forge-ci", src.Host+"/"+src.Repository)
 		add("team/ci/forge-ci", src.Repository)
-		add("@0.90.0", "@"+strings.TrimPrefix(src.Tag, "v"))
+		// A Catalog component takes a release's version or a commit SHA.
+		add("@0.90.0", "@"+strings.TrimPrefix(src.Ref(), "v"))
 		add("PIN_FORGE_CI_SHA", src.Commit)
 	case provider.ForgeLocal:
 	}

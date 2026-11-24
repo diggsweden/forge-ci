@@ -540,7 +540,7 @@ func rootCard(version string) string {
 	// The two commands to type are written in full so they can be pasted; the
 	// rest are names to recognise, listed bare as the sibling tools do. Every
 	// row fits an 80-column terminal, so the card is as tall as it looks.
-	fmt.Fprintf(&card, "  %-40s %s\n", "forge-ci init <forge-ci URL> --dry-run", "preview the first Forge CI files")
+	fmt.Fprintf(&card, "  %-40s %s\n", "forge-ci init <checkout> --dry-run", "preview the first Forge CI files")
 	fmt.Fprintf(&card, "  %-40s %s\n", "forge-ci doctor", "check the Forge CI configuration")
 	fmt.Fprintf(&card, "  %-40s %s\n", "forge-ci setup status", "what is left before a first release")
 	card.WriteString("\nALSO RUN DIRECTLY\n")

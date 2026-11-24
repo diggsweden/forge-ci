@@ -72,8 +72,8 @@ func checkCIWorkflowsPresent(root string) Check {
 			Name:     CheckCIWorkflows,
 			Severity: SeverityFail,
 			Message:  "no .github/workflows/*.yml, .forgejo/workflows/*.yml or .gitlab-ci.yml; nothing calls the reusable Forge CI workflows",
-			Remediation: "preview the workflows for this repository with `forge-ci init <forge-ci URL> --dry-run` " +
-				"(for example https://github.com/diggsweden/forge-ci), then run it without --dry-run",
+			Remediation: "preview the workflows for this repository with `forge-ci init <forge-ci checkout> --dry-run`, " +
+				"a clone of https://github.com/diggsweden/forge-ci or of your organization's fork, then run it without --dry-run",
 		}
 	}
 

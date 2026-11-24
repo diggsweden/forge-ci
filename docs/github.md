@@ -159,8 +159,8 @@ see the [Artifacts Reference](artifacts-reference.md).
 
 ## Getting started
 
-`forge-ci init https://github.com/diggsweden/forge-ci` in the repository does
-the CI-file setup for the example its build files imply (`--example` picks
+`forge-ci init ../forge-ci`, run in the repository with a clone of
+`https://github.com/diggsweden/forge-ci` beside it, does the CI-file setup for the example its build files imply (`--example` picks
 another): it writes the workflows and `.forge-ci/artifacts.yml`, pinned to
 the newest release, and never overwrites a file. It writes no Nanolinter or
 MegaLinter configuration: without one, the lint engine runs with its defaults

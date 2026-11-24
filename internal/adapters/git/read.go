@@ -200,7 +200,7 @@ func (r *Repo) RemoteTagCommitIfExists(ctx context.Context, remote, tag string, 
 }
 
 func remoteTagQueryArgs(repository, tag string, peel bool) []string {
-	args := []string{"ls-remote", "--tags", "--", repository} //nolint:goconst // Keep native argv and the original repository argument visible.
+	args := []string{"ls-remote", "--tags", "--", repository}
 	if peel {
 		args = append(args, refsTagsPrefix+tag+"^{}")
 	}
@@ -312,21 +312,13 @@ func (r *Repo) RemoteVersionTags(ctx context.Context, repoURL string, cred runco
 	return r.remoteTags(ctx, repoURL, cred, refsTagsPrefix+"v*")
 }
 
-// RemoteReleaseTags gathers prefixed and unprefixed version candidates for
-// initialization. Domain selection rejects non-stable or malformed versions.
-func (r *Repo) RemoteReleaseTags(ctx context.Context, repoURL string, cred runcontext.Credential) ([]string, error) {
-	return r.remoteTags(ctx, repoURL, cred, refsTagsPrefix+"v*", refsTagsPrefix+"[0-9]*")
-}
-
-func (r *Repo) remoteTags(ctx context.Context, repoURL string, cred runcontext.Credential, patterns ...string) ([]string, error) {
+func (r *Repo) remoteTags(ctx context.Context, repoURL string, cred runcontext.Credential, pattern string) ([]string, error) {
 	env, err := r.remoteAuthEnv(ctx, repoURL, cred)
 	if err != nil {
 		return nil, err
 	}
 
-	args := append([]string{"ls-remote", "--tags", "--refs", "--", repoURL}, patterns...)
-
-	out, err := r.runEnvOutput(ctx, env, args...)
+	out, err := r.runEnvOutput(ctx, env, "ls-remote", "--tags", "--refs", "--", repoURL, pattern)
 	if err != nil {
 		return nil, err
 	}

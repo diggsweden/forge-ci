@@ -58,8 +58,28 @@ func ParseDefaults(data []byte) (Defaults, error) {
 type Source struct {
 	Host       string // e.g. codefloe.com
 	Repository string // e.g. examplescope/forge-ci
-	Tag        string // e.g. v0.90.0
-	Commit     string // full commit SHA of Tag
+	Tag        string // e.g. v0.90.0; empty when the commit is no release
+	Commit     string // full commit SHA the consumer pins
+}
+
+// Ref is what pins the same commit again: the release tag, or the commit
+// when no release tag names it.
+func (src Source) Ref() string {
+	if src.Tag != "" {
+		return src.Tag
+	}
+
+	return src.Commit
+}
+
+// Release names what the consumer pins: the release tag, or the commit
+// when no release tag names it.
+func (src Source) Release() string {
+	if src.Tag != "" {
+		return src.Tag
+	}
+
+	return "commit " + src.Commit[:min(12, len(src.Commit))]
 }
 
 // examplesByType names the example each detected project type starts from.
@@ -192,7 +212,7 @@ func withoutComment(line string) string {
 func Hint(token string) string {
 	switch {
 	case token == "PIN_FORGE_CI_SHA":
-		return "the Forge CI commit the workflows pin; forge-ci init fills it with the commit of the release tag"
+		return "the Forge CI commit the workflows pin; forge-ci init fills it with the commit it pins"
 	case token == "PIN_GITHUB_COSIGN_PUBLIC_KEY_SHA256":
 		return "the SHA-256 of the reviewed COSIGN_PUBLIC_KEY (sha256sum cosign.pub); write the digest literally in the GitHub workflow, not in a variable"
 	case token == "PIN_SIGNER_IMAGE_DIGEST" || token == "PIN_COSIGN_PUBLIC_KEY_SHA256":
@@ -210,7 +230,7 @@ func Hint(token string) string {
 	case strings.HasPrefix(token, "FIXME"):
 		return "a value only you know; the comment above the line says which (bot-name: the release bot's display name)"
 	case token == "FORGE_HOST" || token == "OWNER/forge-ci":
-		return "your forge host and Forge CI fork; forge-ci init fills them from the URL it is given"
+		return "your forge host and Forge CI fork; forge-ci init fills them from the checkout's origin, or --url"
 	case strings.Contains(token, ".example."):
 		return "your own host: the forge, registry or package repository the line names"
 	case strings.HasPrefix(token, "com.example.myapp"):

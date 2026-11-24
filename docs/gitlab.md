@@ -75,17 +75,18 @@ protected variables (steps 3 to 6).
 
 `forge-ci init` writes no Nanolinter or MegaLinter configuration: without
 one, the lint engine uses its defaults and the component's required floor.
-Preview the files with `forge-ci init <fork URL> --dry-run`.
+Preview the files with `forge-ci init <fork checkout> --dry-run`, from a clone
+of the fork.
 
 Then run `forge-ci setup status`: it lists the steps from here to a first
 release, marks the ones the repository shows are done, and names the command
 for each. GitLab takes the allowed signers as the `release-request-allowed-signers`
 input, so run `forge-ci setup signer --dry-run` and paste the line it prints.
 
-The organization's fork can make `forge-ci init <fork URL>` write a
+The organization's fork can make `forge-ci init <fork checkout>` write a
 consumer's files with every pin filled in. The operator commits
-`.forge-ci/consumer-defaults.yml` to the fork; init reads it at the release
-tag it pins, never from a branch, and refuses unknown keys:
+`.forge-ci/consumer-defaults.yml` to the fork; init reads it at the commit it
+pins, never from the working tree, and refuses unknown keys:
 
 ```yaml
 forge: gitlab                       # required outside github.com
@@ -96,10 +97,11 @@ runtime-images:                                   # build components' runtime-im
   go: <registry>/forge-ci-runtime-go-1.27@sha256:<digest>   # by java, node, go, rust, android
 ```
 
-A key left out leaves its placeholder, and init lists it. Consumers then run
-`forge-ci init https://<host>/<owner>/forge-ci` in their repository, adding
-`--release-policy fork:WORD` when the fork releases its own `vX.Y.Z-WORD.N`
-builds, so init pins the newest of those; by hand, the steps are these.
+A key left out leaves its placeholder, and init lists it. Consumers then
+clone the fork and run `forge-ci init <fork checkout>` in their repository,
+adding `--release-policy fork:WORD` when the fork releases its own
+`vX.Y.Z-WORD.N` builds, so init pins the newest of those; by hand, the steps
+are these.
 
 1. **Host the components.** Put this repository on your instance (see
    [Forks](#forks)), and choose and authenticate the engine commit you will pin.

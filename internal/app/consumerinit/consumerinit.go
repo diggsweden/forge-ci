@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: EUPL-1.2 OR GPL-3.0-or-later
 
 // Package consumerinit writes a consumer's first Forge CI files: the
-// examples of the release it pins, read from the Forge CI fork at that
-// release, and filled with the values the fork's operator records there.
+// examples of the commit it pins, read from a local checkout of the Forge
+// CI fork at that commit, and filled with the values the fork's operator
+// records there.
 package consumerinit
 
 import (
@@ -11,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -24,26 +24,35 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/version"
 )
 
-// Remote reads a Forge CI fork without credentials.
-type Remote interface {
-	VersionTags(ctx context.Context, repoURL string) ([]string, error)
-	TagCommit(ctx context.Context, repoURL, tag string) (string, error)
-	// Export writes paths of the tag's tree into dest and returns those the
-	// tree does not have.
-	Export(ctx context.Context, repoURL, tag, dest string, paths []string) (missing []string, err error)
+// Checkout reads the committed history of a local Forge CI checkout,
+// never its working tree, and never the network.
+type Checkout interface {
+	Tags(ctx context.Context) ([]string, error)
+	// Commit is the commit a tag or a commit SHA names.
+	Commit(ctx context.Context, ref string) (string, error)
+	TagsAt(ctx context.Context, commit string) ([]string, error)
+	// Export writes paths of the commit's tree into dest and returns those
+	// the tree does not have.
+	Export(ctx context.Context, commit, dest string, paths []string) (missing []string, err error)
+	// Origin is the address of the checkout's origin remote.
+	Origin(ctx context.Context) (string, error)
 }
 
 // Input is one `forge-ci init` run.
 type Input struct {
-	Remote  Remote
-	URL     string // the Forge CI fork, https://host/owner/repo
-	Ref     string // release tag to pin; empty takes the highest stable X.Y.Z or vX.Y.Z
+	Checkout Checkout
+	// URL is the fork's web address the workflows name; empty takes the
+	// checkout's origin.
+	URL string
+	// Ref is a tag or a commit SHA to pin; empty takes the newest release
+	// tag under the release policy.
+	Ref string
 	// ReleasePolicy fork:WORD pins the fork's own newest vX.Y.Z-WORD.N
 	// build instead, the tag its release made; empty pins a stable tag.
 	ReleasePolicy string
-	Dir     string // the consumer's root
-	Example string // example to start from, e.g. go-cli
-	DryRun  bool   // render and inspect destinations without writing project files
+	Dir           string // the consumer's root
+	Example       string // example to start from, e.g. go-cli
+	DryRun        bool   // render and inspect destinations without writing project files
 }
 
 // Result says what was pinned, proposed and written, and what still needs review.
@@ -66,19 +75,31 @@ type Result struct {
 	Optional []string
 }
 
-// Run pins the fork's release, reads its examples and defaults at that
-// release, and writes the example's files for the consumer's forge. It
-// writes nothing in dry-run mode or when any target already exists. Dry runs
-// still acquire the remote templates in temporary storage.
+// Run pins a commit of the checkout, reads its examples and defaults at
+// that commit, and writes the example's files for the consumer's forge. It
+// writes nothing in dry-run mode or when any target already exists.
 func Run(ctx context.Context, in Input) (Result, error) {
-	repoURL, src, err := parseURL(in.URL)
+	tag, commit, err := pin(ctx, in.Checkout, in.Ref, in.ReleasePolicy)
 	if err != nil {
 		return Result{}, err
 	}
 
-	if src.Tag, src.Commit, err = pin(ctx, in.Remote, repoURL, in.Ref, in.ReleasePolicy); err != nil {
+	address := in.URL
+	if address == "" {
+		origin, err := in.Checkout.Origin(ctx)
+		if err != nil {
+			return Result{}, fmt.Errorf("the checkout has no origin remote to name the fork in the workflows; pass --url https://<host>/<owner>/<repository>: %w", errs.ErrUsage)
+		}
+
+		address = origin
+	}
+
+	src, err := domain.ParseForgeURL(address)
+	if err != nil {
 		return Result{}, err
 	}
+
+	src.Tag, src.Commit = tag, commit
 
 	snapshot, err := os.MkdirTemp("", "forge-ci-init-")
 	if err != nil {
@@ -87,7 +108,7 @@ func Run(ctx context.Context, in Input) (Result, error) {
 
 	defer func() { _ = os.RemoveAll(snapshot) }()
 
-	defaults, found, err := readRelease(ctx, in.Remote, repoURL, src.Tag, snapshot)
+	defaults, found, err := readRelease(ctx, in.Checkout, src, snapshot)
 	if err != nil {
 		return Result{}, err
 	}
@@ -187,83 +208,82 @@ func existingDestinations(dir string, proposed []string) ([]string, error) {
 	return conflicts, nil
 }
 
-// parseURL splits https://host/owner/repo into the URL git fetches from and
-// the host and repository path the examples are pinned to.
-func parseURL(raw string) (string, domain.Source, error) {
-	parsed, err := url.Parse(raw)
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
-		return "", domain.Source{}, fmt.Errorf("the Forge CI URL must be https://<host>/<owner>/<repository>, got %q: %w", raw, errs.ErrUsage)
+// pin returns the release tag and the commit to pin: the newest release
+// under the policy, the tag given, or the commit given and the release tag
+// on it, if any.
+func pin(ctx context.Context, checkout Checkout, ref, policy string) (string, string, error) {
+	tags, err := checkout.Tags(ctx)
+	if err != nil {
+		return "", "", err
 	}
 
-	repository := strings.TrimSuffix(strings.Trim(parsed.Path, "/"), ".git")
-	if !strings.Contains(repository, "/") {
-		return "", domain.Source{}, fmt.Errorf("the Forge CI URL must be https://<host>/<owner>/<repository>, got %q: %w", raw, errs.ErrUsage)
+	if policy, err = releasePolicy(policy); err != nil {
+		return "", "", err
 	}
 
-	return strings.TrimSuffix(raw, "/"), domain.Source{Host: parsed.Host, Repository: repository}, nil
-}
-
-// pin returns the release tag, the given one or the highest version the
-// policy admits, and the commit it names on the fork.
-func pin(ctx context.Context, remote Remote, repoURL, ref, policy string) (string, string, error) {
-	if policy != "" && (!strings.HasPrefix(policy, "fork:") || version.ValidateReleasePolicy(policy) != nil) {
-		return "", "", fmt.Errorf("init takes --release-policy fork:WORD, the policy of the fork's own builds (got %q): %w", policy, errs.ErrUsage)
-	}
-
-	tag := ref
-	if tag == "" {
-		tags, err := remote.VersionTags(ctx, repoURL)
-		if err != nil {
-			return "", "", unreachable(repoURL, err)
-		}
-
-		if tag, err = latestTag(repoURL, tags, policy); err != nil {
+	if ref == "" {
+		if ref, err = latestTag(tags, policy); err != nil {
 			return "", "", err
 		}
 	}
 
-	// Not unreachable: a missing --ref tag fails here too, with the same
-	// error class, and the fork hint would mislead it.
-	commit, err := remote.TagCommit(ctx, repoURL, tag)
+	commit, err := checkout.Commit(ctx, ref)
+	if err != nil {
+		return "", "", fmt.Errorf("--ref: %w: %w", err, errs.ErrUsage)
+	}
 
-	return tag, commit, err
+	if slices.Contains(tags, ref) {
+		return ref, commit, nil
+	}
+
+	// A commit pins as itself; a release tag on it still names the release.
+	on, err := checkout.TagsAt(ctx, commit)
+	if err != nil {
+		return "", "", err
+	}
+
+	tag, _ := latestTag(on, policy)
+
+	return tag, commit, nil
+}
+
+// releasePolicy is empty, which pins a stable tag, or fork:WORD.
+func releasePolicy(policy string) (string, error) {
+	if policy != "" && (!strings.HasPrefix(policy, "fork:") || version.ValidateReleasePolicy(policy) != nil) {
+		return "", fmt.Errorf("init takes --release-policy fork:WORD, the policy of the fork's own builds (got %q): %w", policy, errs.ErrUsage)
+	}
+
+	return policy, nil
 }
 
 // latestTag is the newest tag init pins: the fork's own vX.Y.Z-WORD.N
 // build under its fork:WORD policy, otherwise a stable X.Y.Z or vX.Y.Z.
-func latestTag(repoURL string, tags []string, policy string) (string, error) {
+func latestTag(tags []string, policy string) (string, error) {
 	if policy != "" {
 		if tag := version.LatestReleaseTag(tags, policy); tag != "" {
 			return tag, nil
 		}
 
-		return "", fmt.Errorf("%s has no vX.Y.Z-WORD.N release tag under release-policy %s; pass --ref: %w", repoURL, policy, errs.ErrUsage)
+		return "", fmt.Errorf("the checkout has no vX.Y.Z-WORD.N release tag under release-policy %s; pass --ref: %w", policy, errs.ErrUsage)
 	}
 
 	if tag := domain.LatestReleaseTag(tags); tag != "" {
 		return tag, nil
 	}
 
-	return "", fmt.Errorf("%s has no stable X.Y.Z or vX.Y.Z release tag; pass --ref: %w", repoURL, errs.ErrUsage)
+	return "", fmt.Errorf("the checkout has no stable X.Y.Z or vX.Y.Z release tag; fetch its tags, or pass --ref: %w", errs.ErrUsage)
 }
 
-// unreachable says what the URL has to be when git cannot read it: off
-// github.com, a Forge CI fork an operator keeps on the organization's forge.
-func unreachable(repoURL string, err error) error {
-	return fmt.Errorf("cannot read the release tags of %s; on a forge other than github.com it is your "+
-		"organization's Forge CI fork: ask its operator for the URL, or see forge-ci docs forgejo#quick-start: %w", repoURL, err)
-}
-
-// readRelease exports the release's examples, changelog configurations and
+// readRelease exports the commit's examples, changelog configurations and
 // defaults file into snapshot and parses the defaults, when there are any.
-func readRelease(ctx context.Context, remote Remote, repoURL, tag, snapshot string) (domain.Defaults, bool, error) {
-	missing, err := remote.Export(ctx, repoURL, tag, snapshot, []string{domain.ExamplesDir, domain.ChangelogDir, domain.DefaultsFile})
+func readRelease(ctx context.Context, checkout Checkout, src domain.Source, snapshot string) (domain.Defaults, bool, error) {
+	missing, err := checkout.Export(ctx, src.Commit, snapshot, []string{domain.ExamplesDir, domain.ChangelogDir, domain.DefaultsFile})
 	if err != nil {
 		return domain.Defaults{}, false, err
 	}
 
 	if slices.Contains(missing, domain.ExamplesDir) {
-		return domain.Defaults{}, false, fmt.Errorf("%s at %s has no %s/: it is not a Forge CI repository: %w", repoURL, tag, domain.ExamplesDir, errs.ErrUsage)
+		return domain.Defaults{}, false, fmt.Errorf("the checkout at %s has no %s/: it is not a Forge CI repository: %w", src.Release(), domain.ExamplesDir, errs.ErrUsage)
 	}
 
 	if slices.Contains(missing, domain.DefaultsFile) {

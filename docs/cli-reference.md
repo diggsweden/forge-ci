@@ -2772,50 +2772,54 @@ write a repository's first Forge CI files from an example
 
 ```
 Copies the example for the repository's ecosystem and forge into place,
-pinned to the newest release tag of the Forge CI repository the URL names.
-The examples and the values its operator records in .forge-ci/consumer-defaults.yml
-are read from that repository at that tag, so the files match the release
-they pin. github.com is GitHub; any other host is the forge that file
-names. Existing files are never overwritten. The report lists what is
-still left to fill in. On Forgejo and GitLab it also writes the release's
-changelog configuration to .forge-ci/gitcliff/, which their releases read,
-keeping any such file the repository already has.
+pinned to one commit of a local checkout of Forge CI or of your
+organization's fork. The examples and the values its operator records in
+.forge-ci/consumer-defaults.yml are read from that commit's history, never
+from the working tree or the network, so the files match what they pin.
+The workflows name the fork by the checkout's origin, or by --url.
+github.com is GitHub; any other host is the forge that file names.
+Existing files are never overwritten. The report lists what is still left
+to fill in. On Forgejo and GitLab it also writes the changelog
+configuration to .forge-ci/gitcliff/, which their releases read, keeping
+any such file the repository already has.
 Linter configuration is not generated.
 
-With --dry-run, render the same proposal and report existing-file conflicts
-without writing project files. Templates are still fetched into temporary
-storage. Conflicts return a nonzero status; unresolved placeholders are
-reported for review, not treated as proof that the workflows are ready to run.
+The commit is --ref, a tag or a commit SHA, else the newest stable X.Y.Z
+or vX.Y.Z tag the checkout has (fetch its tags first to see newer ones);
+if both spellings exist for the highest version, vX.Y.Z
+wins. A fork that releases its own vX.Y.Z-WORD.N builds passes
+--release-policy fork:WORD to pin the newest of those.
 
-Automatic selection accepts stable X.Y.Z and vX.Y.Z tags, excludes prereleases
-and build metadata, and keeps the exact tag name. If both spellings exist for
-the highest version, vX.Y.Z wins; use --ref to select the other explicitly.
+With --dry-run, render the same proposal and report existing-file conflicts
+without writing project files. Conflicts return a nonzero status;
+unresolved placeholders are reported for review, not treated as proof that
+the workflows are ready to run.
 
 EXAMPLES:
    # GitHub, from the published Forge CI:
-   forge-ci init https://github.com/diggsweden/forge-ci
+   git clone https://github.com/diggsweden/forge-ci
+   forge-ci init ./forge-ci
 
    # Forgejo or GitLab, from your organization's fork:
-   forge-ci init https://forge.example/examplescope/forge-ci
+   git clone https://forge.example/examplescope/forge-ci
+   forge-ci init ./forge-ci
 
-   # A fork that releases its own vX.Y.Z-acme.N builds:
-   forge-ci init https://forge.example/examplescope/forge-ci --release-policy fork:acme
+   # Preview a chosen example and tag without writing project files:
+   forge-ci init ./forge-ci --example go-service --ref v0.90.0 --dry-run
 
-   # Preview without writing project files:
-   forge-ci init https://github.com/diggsweden/forge-ci --example go-service --ref v0.90.0 --dry-run
-
-   # Another directory, a chosen example and tag:
-   forge-ci init https://github.com/diggsweden/forge-ci ../hello --example go-service --ref v0.90.0
+   # Another directory, pinned to a commit:
+   forge-ci init ./forge-ci ../hello --example go-service --ref 0123abcd
 ```
 
-**Usage:** `forge-ci init <forge-ci URL> [directory]`
+**Usage:** `forge-ci init <forge-ci checkout> [directory]`
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
 | `--example` | example to start from, one of android-app, cargo-app, go-cli, go-service, gradle-app, maven-app, npm-app (default: from the repository's build files) | string | `""` | n/a |
-| `--ref` | release tag to pin (default: the newest stable X.Y.Z or vX.Y.Z tag; v-prefixed wins ties) | string | `""` | n/a |
+| `--ref` | tag or commit SHA to pin (default: the newest stable X.Y.Z or vX.Y.Z tag; v-prefixed wins ties) | string | `""` | n/a |
 | `--release-policy` | fork:WORD pins the fork's newest vX.Y.Z-WORD.N build instead of a stable tag | string | `""` | n/a |
-| `--dry-run` | preview files, conflicts and remaining placeholders without writing project files; still fetches templates | bool | `false` | n/a |
+| `--url` | the fork's address the workflows name, https://<host>/<owner>/<repository> (default: from the checkout's origin) | string | `""` | n/a |
+| `--dry-run` | preview files, conflicts and remaining placeholders without writing project files | bool | `false` | n/a |
 
 ## `forge-ci lint`
 

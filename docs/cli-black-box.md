@@ -136,6 +136,8 @@ are exact.
 | CLI-08 | Every command with stdin closed / from an empty pipe. | No command blocks waiting for input; completes or fails with an actionable error (the CLI is non-interactive). |
 | CLI-09 | Invalid global enum values: `--log-level`, `--format`, `--provider`, `--runner` set to a bogus value. | Exit `2`; stderr names the accepted values. |
 | CLI-10 | SIGPIPE: pipe a machine-output command into a consumer that exits early (`… \| head -1`). | Clean exit; no panic, stack trace, or noisy broken-pipe diagnostic. |
+| CLI-11 | `forge-ci init` given a URL, or a path that is no directory. | Exit `2`; stderr names the `git clone` that makes a checkout; stdout empty; nothing written. |
+| CLI-12 | `forge-ci init <checkout>` with every connection refused, by default and with `--ref` an unreleased commit. | Exit `0`; files from the commit's history only, never uncommitted changes; the newest release tag, or the commit pinned in full; the fork named by the checkout's origin; the checkout's HEAD and status unchanged. |
 
 ## OUT-*: Output formats, streams, and CI sinks
 
@@ -245,7 +247,7 @@ CLI flag/env wiring, provider selection, or process exit-code wiring.
 A candidate should not ship unless these groups pass on at least one supported
 Linux architecture (isolated fixtures/caches, loopback mocks, fake secrets):
 
-- `CLI-01`–`CLI-10`
+- `CLI-01`–`CLI-12`
 - `OUT-01`–`OUT-06`
 - `FORGE-01`–`FORGE-04`
 - `ART-01`–`ART-05`
@@ -264,5 +266,6 @@ resource-limit handling, full arch/package matrix) is not run by any CI job.
 |---|---|
 | `internal/domain/errs` (`ExitCodeFromError`, `FromHTTPStatus`) | The exit-code ladder and HTTP-status mapping. |
 | `cmd/forge-ci/smoke_test.go` and `smoke_cli_contract_test.go` | The in-repo smoke harness, including binary `ART-01`–`ART-05`. |
+| `cmd/forge-ci/smoke_init_test.go` | Built-binary `init` from a local checkout, offline, for `CLI-11` and `CLI-12`. |
 | `cmd/forge-ci/smoke_git_credentials_test.go` | Built-binary rejection of literal Git-token flags, file-input discovery and read-failure boundaries for `SEC-02`. |
 | `test/live/conformance/artifact_test.go` | Opt-in named run-artifact round trip on Forgejo; not pattern or zero-match coverage. |

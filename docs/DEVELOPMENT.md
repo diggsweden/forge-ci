@@ -48,9 +48,9 @@ same command. Avoid `go install github.com/diggsweden/forge-ci/cmd/forge-ci@<ref
 for exact-commit builds: Go can resolve a SHA to the moving pre-release tag and
 reuse module contents cached before that tag moved.
 
-Use `forge-ci --help` to inspect the local interface. `forge-ci init` still
-requires a release tag and its examples on the repository it reads; it does not
-copy examples from your local checkout. For pre-release workflow evaluation,
+Use `forge-ci --help` to inspect the local interface. `forge-ci init <checkout>
+--ref <commit>` writes a consumer's files from any commit of your checkout,
+released or not, and pins that commit. For pre-release workflow evaluation,
 follow [Branch Testing](runtime-images.md#branch-testing) with the reviewed
 pre-release images, rather than substituting a moving ref into production.
 

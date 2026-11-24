@@ -199,7 +199,7 @@ func loadDoctorConfig(root, artifactsPath string, allowAutoDerive bool) (*config
 					Name:        checkConfigAutoDerives,
 					Severity:    SeverityFail,
 					Message:     deriveErr.Error(),
-					Remediation: "add a recognised manifest at the repository root, or run `forge-ci init <forge-ci URL> --dry-run` to preview an artifacts.yml",
+					Remediation: "add a recognised manifest at the repository root, or run `forge-ci init <forge-ci checkout> --dry-run` to preview an artifacts.yml",
 				}}, false
 			}
 
@@ -457,7 +457,7 @@ func checkArtifactsExists(path string) Check {
 			Name:     checkArtifactsYMLPresent,
 			Severity: SeverityFail,
 			Message:  path + " not found",
-			Remediation: "preview the files for this repository with `forge-ci init <forge-ci URL> --dry-run`, " +
+			Remediation: "preview the files for this repository with `forge-ci init <forge-ci checkout> --dry-run`, " +
 				"or write .forge-ci/artifacts.yml by hand",
 		}
 	}

@@ -12,15 +12,12 @@ import (
 	"github.com/diggsweden/forge-ci/internal/testutil/mockbinary"
 )
 
-func TestRemoteReleaseTags_PreservesBothNamesAndExistingVersionQuery(t *testing.T) {
+func TestRemoteVersionTags_ListsVPrefixedTags(t *testing.T) {
 	t.Parallel()
 
 	mock := mockbinary.New(t)
 	mock.Add("git", `
 case "$*" in
-  'ls-remote --tags --refs -- https://example.invalid/engine refs/tags/v* refs/tags/[0-9]*')
-    printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\trefs/tags/1.2.3\nbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\trefs/tags/v1.2.3\n'
-    ;;
   'ls-remote --tags --refs -- https://example.invalid/engine refs/tags/v*')
     printf 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\trefs/tags/v1.2.3\n'
     ;;
@@ -29,13 +26,8 @@ esac
 `)
 	repo := &adaptergit.Repo{GitBin: mock.Path("git")}
 
-	tags, err := repo.RemoteReleaseTags(t.Context(), "https://example.invalid/engine", runcontext.Credential{})
-	if err != nil || !slices.Equal(tags, []string{"1.2.3", "v1.2.3"}) {
-		t.Fatalf("initializer candidates = %v, %v; invocations: %+v", tags, err, mock.Invocations("git"))
-	}
-
-	tags, err = repo.RemoteVersionTags(t.Context(), "https://example.invalid/engine", runcontext.Credential{})
+	tags, err := repo.RemoteVersionTags(t.Context(), "https://example.invalid/engine", runcontext.Credential{})
 	if err != nil || !slices.Equal(tags, []string{"v1.2.3"}) {
-		t.Fatalf("existing version query changed = %v, %v", tags, err)
+		t.Fatalf("version tags = %v, %v; invocations: %+v", tags, err, mock.Invocations("git"))
 	}
 }

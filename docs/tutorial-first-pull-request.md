@@ -17,19 +17,20 @@ You need:
 - the `forge-ci` binary on your `PATH` (see [Install](../README.md#install));
 - a Git repository with one root manifest, here `go.mod`, pushed to GitHub,
   with a Git identity configured;
-- network access to `github.com`: `init` reads the examples from the Forge CI
-  release it pins.
+- network access to `github.com` to clone Forge CI; `init` then reads the
+  examples from that clone, offline.
 
 Run every command from the repository root.
 
 ## Step 1: preview what init would write
 
 ```bash
-forge-ci init https://github.com/diggsweden/forge-ci --dry-run
+git clone https://github.com/diggsweden/forge-ci ../forge-ci
+forge-ci init ../forge-ci --dry-run
 ```
 
-The URL is the Forge CI repository to copy the examples from, not your
-project's remote. The preview reads your build files, picks an example, pins
+The checkout is the Forge CI repository to copy the examples from, not your
+project. The preview reads your build files, picks an example, pins
 the newest release, and reports what it would do:
 
 ```text
@@ -60,7 +61,7 @@ How to fill them
   FIXME-release-bot    the release bot's email; it must be the principal of the bot key's line in .forge-ci/allowed_signers (forge-ci setup signer --principal <email> --public-key <bot key>.pub)
 forge-ci doctor fails until they are filled; values only the release workflow reads warn until then.
 
-No project files were written. Templates were fetched into temporary storage.
+No project files were written.
 ```
 
 Three things to check before going on:
@@ -76,7 +77,7 @@ Three things to check before going on:
 ## Step 2: write the files
 
 ```bash
-forge-ci init https://github.com/diggsweden/forge-ci
+forge-ci init ../forge-ci
 ```
 
 The report is the same as the preview, with `Created:` in place of

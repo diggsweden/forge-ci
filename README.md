@@ -38,16 +38,20 @@ Source builds are covered in [Development](docs/DEVELOPMENT.md).
 
 ### Write the CI files
 
-From your project's root, preview what `init` would write, then write it:
+From your project's root, clone Forge CI beside it, preview what `init`
+would write, then write it:
 
 ```bash
-forge-ci init https://github.com/diggsweden/forge-ci --dry-run
-forge-ci init https://github.com/diggsweden/forge-ci
+git clone https://github.com/diggsweden/forge-ci ../forge-ci
+forge-ci init ../forge-ci --dry-run
+forge-ci init ../forge-ci
 ```
 
-The URL is the **Forge CI template repository**, not your application's
-remote; use your organization's fork instead when it has one. It
-decides the generated CI layout: `init` does not infer the forge from your
+The checkout is the **Forge CI template repository**, not your application;
+clone your organization's fork instead when it has one. `init` reads only its
+committed history, so fetch an older clone's tags first, and names it in the
+workflows by its `origin`. It decides
+the generated CI layout: `init` does not infer the forge from your
 application's Git remote.
 
 | Your forge | Template source | Generated CI location |
