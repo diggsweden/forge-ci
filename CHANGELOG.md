@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.94.5] - 2026-11-24
+
+### Added
+
+- Add release-policy fork:WORD for a fork's builds
+
+### Changed
+
+- Refresh binary sums
+- Take a fork's release policy from its tags
+- Write from a local checkout, by tag or commit
+- Name the fork policies a tag list holds
+- Name the parent fetch verbs fetch-inputs
+- Fold setup-buildah into setup-image-builder
+- Rename runtime-publication to runtime-images
+- Call an organization's copy of Forge CI a fork
+- Give a fork its defaults example
+- Tell own pipelines by trigger, not a name list
+
+### Fixed
+
+- Never follow a link out of the exported tree
+- Report a Forgejo Buildah trial without a build pool
+- Let a fork release itself on Forgejo
+- Write the borrowed-objects file through the stage root
+
+### Removed
+
+- Remove snapshot-images context
+- Remove base-images freshness and import
+- Remove the layout input commands
+- Remove image push, manifest push and verify
+- Remove ref canonical, name and platform
+- Remove six helpers no workflow calls
+
 ## [0.94.4] - 2026-11-24
 
 ### Changed
@@ -83,6 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pin the squashed black-box main
 - Initial commit
 
+[0.94.5]: https://github.com/diggsweden/forge-ci/compare/v0.94.4..v0.94.5
 [0.94.4]: https://github.com/diggsweden/forge-ci/compare/v0.94.3..v0.94.4
 [0.94.3]: https://github.com/diggsweden/forge-ci/compare/v0.94.2..v0.94.3
 [0.94.2]: https://github.com/diggsweden/forge-ci/compare/v0.94.1..v0.94.2
