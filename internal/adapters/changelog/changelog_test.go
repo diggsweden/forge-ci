@@ -12,8 +12,12 @@ import (
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/adapters/changelog"
+	"github.com/diggsweden/forge-ci/internal/domain/version"
 	"github.com/diggsweden/forge-ci/internal/testutil/mockbinary"
 )
+
+// stableHistory is the history pattern every release policy but fork:WORD uses.
+var stableHistory = version.ReleaseHistoryPattern("")
 
 func TestRenderer_GitChglogArgsAndSecretScrub(t *testing.T) {
 	mock := mockbinary.New(t)
@@ -45,11 +49,11 @@ esac
 
 	renderer := &changelog.Renderer{UnsetEnv: []string{"SSH_SIGNING_KEY", "FORGEJO_TOKEN"}}
 
-	if err := renderer.RenderFull(context.Background(), "git-chglog", "full.yml", "v1.2.3", "CHANGELOG.md", "https://forgejo.example/owner/repository"); err != nil {
+	if err := renderer.RenderFull(context.Background(), "git-chglog", "full.yml", "v1.2.3", stableHistory, "CHANGELOG.md", "https://forgejo.example/owner/repository"); err != nil {
 		t.Fatal(err)
 	}
 
-	body, err := renderer.RenderBody(context.Background(), "git-chglog", "body.yml", "v1.2.3", "https://forgejo.example/owner/repository")
+	body, err := renderer.RenderBody(context.Background(), "git-chglog", "body.yml", "v1.2.3", stableHistory, "https://forgejo.example/owner/repository")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,11 +93,11 @@ esac
 	t.Chdir(t.TempDir())
 
 	r := changelog.New()
-	if err := r.RenderFull(context.Background(), "git-cliff", "cliff.toml", "v1.2.3", "CHANGELOG.md", "https://forgejo.example/owner/repository"); err != nil {
+	if err := r.RenderFull(context.Background(), "git-cliff", "cliff.toml", "v1.2.3", stableHistory, "CHANGELOG.md", "https://forgejo.example/owner/repository"); err != nil {
 		t.Fatal(err)
 	}
 
-	body, err := r.RenderBody(context.Background(), "git-cliff", "body.toml", "v1.2.3", "https://forgejo.example/owner/repository")
+	body, err := r.RenderBody(context.Background(), "git-cliff", "body.toml", "v1.2.3", stableHistory, "https://forgejo.example/owner/repository")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,14 +128,14 @@ func TestRenderer_BodyIsStdoutAlone(t *testing.T) {
 
 	renderer := &changelog.Renderer{GitCliffBin: mock.Path("git-cliff")}
 
-	body, err := renderer.RenderBody(context.Background(), "git-cliff", "cliff.toml", "v1.2.3", "")
+	body, err := renderer.RenderBody(context.Background(), "git-cliff", "cliff.toml", "v1.2.3", stableHistory, "")
 	if err != nil || body != "feat: body" {
 		t.Fatalf("body = %q, %v; want stdout alone", body, err)
 	}
 
 	mock.Add("git-cliff", `printf 'config error\n' >&2; exit 1`)
 
-	if _, err := renderer.RenderBody(context.Background(), "git-cliff", "cliff.toml", "v1.2.3", ""); err == nil || !strings.Contains(err.Error(), "config error") {
+	if _, err := renderer.RenderBody(context.Background(), "git-cliff", "cliff.toml", "v1.2.3", stableHistory, ""); err == nil || !strings.Contains(err.Error(), "config error") {
 		t.Fatalf("a failing renderer's stderr did not reach the error: %v", err)
 	}
 }

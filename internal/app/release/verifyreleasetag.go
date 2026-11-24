@@ -163,6 +163,9 @@ func VerifyReleaseTag(ctx context.Context, git tagVerifyGit, out io.Writer, in V
 		return fmt.Errorf("verify-release-tag: list remote tags: %w", err)
 	}
 
+	// A plain vX.Y.Z is superseded by stable tags only. Read the SemVer
+	// prerelease, not version.IsPrerelease: a fork's -WORD.N build must keep
+	// its fork:WORD policy here, or no later build of the fork would count.
 	latestPolicy := in.ReleasePolicy
 	if parsed.Prerelease == "" {
 		latestPolicy = version.ReleasePolicyStable

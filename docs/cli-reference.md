@@ -3135,6 +3135,9 @@ EXAMPLES:
    # Forgejo or GitLab, from your organization's fork:
    forge-ci init https://forge.example/examplescope/forge-ci
 
+   # A fork that releases its own vX.Y.Z-acme.N builds:
+   forge-ci init https://forge.example/examplescope/forge-ci --release-policy fork:acme
+
    # Preview without writing project files:
    forge-ci init https://github.com/diggsweden/forge-ci --example go-service --ref v0.90.0 --dry-run
 
@@ -3148,6 +3151,7 @@ EXAMPLES:
 |------|-------------|------|---------|----------|
 | `--example` | example to start from, one of android-app, cargo-app, go-cli, go-service, gradle-app, maven-app, npm-app (default: from the repository's build files) | string | `""` | n/a |
 | `--ref` | release tag to pin (default: the newest stable X.Y.Z or vX.Y.Z tag; v-prefixed wins ties) | string | `""` | n/a |
+| `--release-policy` | fork:WORD pins the fork's newest vX.Y.Z-WORD.N build instead of a stable tag | string | `""` | n/a |
 | `--dry-run` | preview files, conflicts and remaining placeholders without writing project files; still fetches templates | bool | `false` | n/a |
 
 ## `forge-ci lint`
@@ -3404,7 +3408,7 @@ refused. A --provider local run, as above, has no runners and passes none.
 | `--branch` | git branch the release is being built from | string | `""` | `$BRANCH` |
 | `--tag` | release tag (e.g. v1.2.3) (required) | string | `""` | `$TAG_NAME`, `$RELEASE_TAG`, `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
 | `--file-pattern` | git pathspecs the version-bump commit stages | string | `""` | `$FILE_PATTERN` |
-| `--release-policy` | accepted release versions: stable or stable-prerelease | string | `"stable"` | `$RELEASE_POLICY` |
+| `--release-policy` | accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N | string | `"stable"` | `$RELEASE_POLICY` |
 | `--release-publisher` | platform that publishes the release (github-cli, gitlab-cli, …) | string | `""` | `$RELEASE_PUBLISHER` |
 | `--release-require-allowlisted-signer` | require the tag signer to be allowlisted in .forge-ci/allowed_signers (SSH) or .forge-ci/allowed_gpg_keys.asc (GPG) | bool | `false` | `$RELEASE_REQUIRE_ALLOWLISTED_SIGNER` |
 | `--release-draft` | create the GitHub Release as a draft | bool | `false` | `$RELEASE_DRAFT` |
@@ -3968,7 +3972,7 @@ verify the signed request and prepared source before importing keys or executing
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--release-policy` | accepted release versions: stable or stable-prerelease | string | `"stable"` | `$RELEASE_POLICY` |
+| `--release-policy` | accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N | string | `"stable"` | `$RELEASE_POLICY` |
 | `--request-tag` | signed human release-request/vMAJOR.MINOR.PATCH tag | string | `""` | `$RELEASE_REQUEST_TAG` |
 | `--release-sha` | full prepared release commit SHA | string | `""` | `$RELEASE_SHA` |
 | `--authorization-dir` | reviewed checkout root holding .forge-ci signer allowlists | string | `"."` | `$FORGE_CI_AUTHORIZATION_DIR` |
@@ -3980,7 +3984,7 @@ verify and submit a signed Maven-layout bundle once, then observe its Central de
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--release-policy` | accepted release versions: stable or stable-prerelease | string | `"stable"` | `$RELEASE_POLICY` |
+| `--release-policy` | accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N | string | `"stable"` | `$RELEASE_POLICY` |
 | `--request-tag` | signed human release-request/vMAJOR.MINOR.PATCH tag | string | `""` | `$RELEASE_REQUEST_TAG` |
 | `--release-sha` | full prepared release commit SHA | string | `""` | `$RELEASE_SHA` |
 | `--authorization-dir` | reviewed checkout root holding .forge-ci signer allowlists | string | `"."` | `$FORGE_CI_AUTHORIZATION_DIR` |
@@ -4003,7 +4007,7 @@ EXAMPLE:
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--release-policy` | accepted release versions: stable or stable-prerelease | string | `"stable"` | `$RELEASE_POLICY` |
+| `--release-policy` | accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N | string | `"stable"` | `$RELEASE_POLICY` |
 | `--request-tag` | signed human release-request/vMAJOR.MINOR.PATCH tag | string | `""` | `$RELEASE_REQUEST_TAG` |
 | `--release-sha` | full prepared release commit SHA | string | `""` | `$RELEASE_SHA` |
 | `--authorization-dir` | reviewed checkout root holding .forge-ci signer allowlists | string | `"."` | `$FORGE_CI_AUTHORIZATION_DIR` |
@@ -4020,7 +4024,7 @@ sign exported Maven files without running Gradle or Maven
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--release-policy` | accepted release versions: stable or stable-prerelease | string | `"stable"` | `$RELEASE_POLICY` |
+| `--release-policy` | accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N | string | `"stable"` | `$RELEASE_POLICY` |
 | `--request-tag` | signed human release-request/vMAJOR.MINOR.PATCH tag | string | `""` | `$RELEASE_REQUEST_TAG` |
 | `--release-sha` | full prepared release commit SHA | string | `""` | `$RELEASE_SHA` |
 | `--authorization-dir` | reviewed checkout root holding .forge-ci signer allowlists | string | `"."` | `$FORGE_CI_AUTHORIZATION_DIR` |
@@ -4755,7 +4759,7 @@ EXAMPLES:
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--release-policy` | accepted release versions: stable or stable-prerelease | string | `"stable"` | `$RELEASE_POLICY` |
+| `--release-policy` | accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N | string | `"stable"` | `$RELEASE_POLICY` |
 | `--strategy` | reconcile publishes manifest/assets; recreate publishes an assembly; published versions are never replaced | string | `"reconcile"` | `$RELEASE_STRATEGY` |
 | `--tag` | tag the release is created from (e.g. v1.2.3) (required) | string | `""` | `$TAG_NAME`, `$RELEASE_TAG`, `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
 | `--repository` | "owner/repo" release repository (required) | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
@@ -4883,7 +4887,7 @@ export the sign-and-publish workflow env contract
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--release-policy` | accepted release versions: stable or stable-prerelease | string | `"stable"` | `$RELEASE_POLICY` |
+| `--release-policy` | accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N | string | `"stable"` | `$RELEASE_POLICY` |
 | `--release-sha` | prepared release commit SHA (required) | string | `""` | `$RELEASE_SHA` |
 | `--tag` | release tag permitted by release-policy (required) | string | `""` | `$TAG_NAME`, `$RELEASE_TAG`, `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
 | `--artifact-path` | artifact extraction path whose normalized value becomes DIST_DIR | string | `"dist/"` | `$ARTIFACT_PATH` |
@@ -5047,7 +5051,7 @@ EXAMPLE:
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--release-policy` | accepted release versions: stable or stable-prerelease | string | `"stable"` | `$RELEASE_POLICY` |
+| `--release-policy` | accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N | string | `"stable"` | `$RELEASE_POLICY` |
 | `--release-request` | release request tag (release-request/vMAJOR.MINOR.PATCH) (required) | string | `""` | `$RELEASE_REQUEST` |
 | `--tag` | final release tag permitted by release-policy (required) | string | `""` | `$TAG_NAME`, `$RELEASE_TAG`, `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
 | `--allowed-signers-file` | OpenSSH allowed_signers file for release-request SSH signatures (required unless --skip-signature) | string | `""` | `$RELEASE_REQUEST_ALLOWED_SIGNERS` |
@@ -5067,7 +5071,7 @@ EXAMPLE:
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--release-policy` | accepted release versions: stable or stable-prerelease | string | `"stable"` | `$RELEASE_POLICY` |
+| `--release-policy` | accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N | string | `"stable"` | `$RELEASE_POLICY` |
 | `--release-sha` | commit the release is built from | string | `""` | `$RELEASE_SHA` |
 | `--tag` | release tag (e.g. v1.2.3) | string | `""` | `$TAG_NAME`, `$RELEASE_TAG`, `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
 | `--repo-url` | remote repository URL for ls-remote (defaults to origin) | string | `""` | `$REPO_URL` |
@@ -5400,6 +5404,7 @@ EXAMPLE:
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
 | `--tag` | tag the release is anchored to (e.g. v1.2.3) | string | `""` | `$TAG_NAME`, `$RELEASE_TAG`, `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
+| `--release-policy` | accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N | string | `"stable"` | `$RELEASE_POLICY` |
 | `--commit` | commit SHA the tag points at | string | `""` | `$CI_COMMIT`, `$CI_COMMIT_SHA`, `$COMMIT_SHA`, `$FORGEJO_SHA`, `$GITHUB_SHA` |
 | `--ref-type` | trigger ref type (tag/branch/…) | string | `""` | `$REF_TYPE`, `$FORGEJO_REF_TYPE`, `$GITHUB_REF_TYPE` |
 | `--config-plan-json` | typed config-plan JSON used to describe targets in the summary | string | `""` | `$CONFIG_PLAN_JSON` |
@@ -6374,6 +6379,7 @@ EXAMPLE:
 | `--ref-type` | trigger ref type ("tag" required for releases) | string | `""` | `$REF_TYPE`, `$FORGEJO_REF_TYPE`, `$GITHUB_REF_TYPE` |
 | `--ref` | fully-qualified ref (refs/tags/X) for prefix verification | string | `""` | `$REF`, `$FORGEJO_REF`, `$GITHUB_REF` |
 | `--target-branch` | branch the tag commit must be reachable from | string | `""` | `$TARGET_BRANCH`, `$BRANCH` |
+| `--release-policy` | accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N | string | `"stable"` | `$RELEASE_POLICY` |
 | `--repository` | "owner/repo" on GitHub; "group/project[/sub]" on GitLab | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
 | `--require-allowlisted-signer` | require the tag signer to be allowlisted in .forge-ci/allowed_signers (SSH) or .forge-ci/allowed_gpg_keys.asc (GPG) | bool | `false` | `$REQUIRE_ALLOWLISTED_SIGNER` |
 | `--sign-artifacts` | release-artifact signing is enabled | bool | `false` | `$SIGN_ARTIFACTS` |
@@ -6472,7 +6478,7 @@ EXAMPLE:
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--release-policy` | accepted release versions: stable or stable-prerelease | string | `"stable"` | `$RELEASE_POLICY` |
+| `--release-policy` | accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N | string | `"stable"` | `$RELEASE_POLICY` |
 | `--tag` | final tag or release-request tag to validate (required) | string | `""` | `$TAG_NAME`, `$RELEASE_TAG`, `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
 | `--pattern` | optional additional anchored regex restriction; cannot widen release-policy | string | `""` | `$RELEASE_TAG_PATTERN` |
 
@@ -6507,6 +6513,7 @@ EXAMPLE:
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
 | `--tag` | tag name (e.g. v1.2.3) (required) | string | `""` | `$TAG_NAME`, `$RELEASE_TAG`, `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
+| `--release-policy` | accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N | string | `"stable"` | `$RELEASE_POLICY` |
 
 ### `forge-ci validate workflow`
 
@@ -6549,7 +6556,7 @@ EXAMPLE:
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--release-policy` | accepted release versions: stable or stable-prerelease | string | `"stable"` | n/a |
+| `--release-policy` | accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N | string | `"stable"` | n/a |
 | `--patch` | git diff the bump job uploaded (required) | string | `""` | n/a |
 | `--sha256` | sha256 the bump job reported for the patch (required) | string | `""` | n/a |
 | `--project-type` | ecosystem whose project files the patch may change (maven/npm/cargo) (required) | string | `""` | n/a |
@@ -6593,7 +6600,7 @@ apply every artifact mutation in a prepare-stage plan to one working tree
 | `--patch` | native version changes produced by a separate key-free job; never run native tools in this mode | string | `""` | n/a |
 | `--patch-sha256` | expected sha256 reported by the key-free patch job | string | `""` | n/a |
 | `--paths-file` | with --patch, file the paths the bump wrote besides CHANGELOG.md are written to, one per line, for commit-changelog-release --include-paths-file | string | `""` | n/a |
-| `--release-policy` | accepted release versions: stable or stable-prerelease | string | `"stable"` | `$RELEASE_POLICY` |
+| `--release-policy` | accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N | string | `"stable"` | `$RELEASE_POLICY` |
 | `--version` | release version without a leading v (required) | string | `""` | `$VERSION` |
 | `--changelog-file` | full changelog copied into each planned artifact directory | string | `"CHANGELOG.md"` | `$CHANGELOG_FILE` |
 | `--xcode-version-file` | xcconfig file holding MARKETING_VERSION | string | `""` | `$XCODE_VERSION_FILE` |
@@ -6611,7 +6618,7 @@ EXAMPLE:
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--release-policy` | accepted release versions: stable or stable-prerelease | string | `"stable"` | `$RELEASE_POLICY` |
+| `--release-policy` | accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N | string | `"stable"` | `$RELEASE_POLICY` |
 | `--tag` | final release tag to create under release-policy (required) | string | `""` | `$RELEASE_TAG`, `$TAG_NAME` |
 | `--repository` | repository in namespace/project form, including GitLab subgroups (required) | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
 | `--branch` | branch to push the signed changelog commit to | string | `"main"` | n/a |
@@ -6668,7 +6675,7 @@ EXAMPLE:
 | `--resolve-release-request` | resolve exactly one release-request/v* tag pointing at --revision (HEAD when omitted), ignoring the ambient ref name | bool | `false` | n/a |
 | `--revision` | git revision nominated for --resolve-release-request | string | `""` | n/a |
 | `--require-release-request` | reject refs outside release-request/vMAJOR.MINOR.PATCH | bool | `false` | `$RELEASE_CONTEXT_REQUIRE_REQUEST` |
-| `--release-policy` | accepted release versions: stable or stable-prerelease | string | `"stable"` | `$RELEASE_POLICY` |
+| `--release-policy` | accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N | string | `"stable"` | `$RELEASE_POLICY` |
 | `--trailer-mode` | commit trailer mode: default (Release-Authorized-By + Co-authored-by) or coauthor-only | string | `"default"` | `$RELEASE_CONTEXT_TRAILER_MODE` |
 
 ### `forge-ci version file-pattern`
@@ -6700,6 +6707,19 @@ EXAMPLE:
 | `--container-tag` | emit <base>-<sanitized-branch>-<shortsha>-snapshot as a bounded OCI tag | bool | `false` | n/a |
 | `--ref-name` | source branch / ref to sanitise into the snapshot-version suffix | string | `""` | `$REF_NAME`, `$CI_REF_NAME`, `$FORGEJO_REF_NAME`, `$GITHUB_REF_NAME` |
 
+### `forge-ci version history-pattern`
+
+print the tag regex that bounds changelog history under the release policy
+
+```
+EXAMPLE:
+   forge-ci version history-pattern --release-policy fork:example
+```
+
+| Flag | Description | Type | Default | Env vars |
+|------|-------------|------|---------|----------|
+| `--release-policy` | accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N | string | `"stable"` | `$RELEASE_POLICY` |
+
 ### `forge-ci version render-changelog`
 
 render CHANGELOG.md and commit-msg.txt with git-chglog or git-cliff
@@ -6714,7 +6734,7 @@ EXAMPLE:
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--release-policy` | accepted release versions: stable or stable-prerelease | string | `"stable"` | `$RELEASE_POLICY` |
+| `--release-policy` | accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N | string | `"stable"` | `$RELEASE_POLICY` |
 | `--changelog-creator` | changelog renderer: git-cliff or git-chglog (git-cliff cannot read SHA-256 repositories) | string | `"git-cliff"` | `$CHANGELOG_CREATOR` |
 | `--tag` | final release tag permitted by release-policy (required) | string | `""` | `$RELEASE_TAG`, `$TAG_NAME` |
 | `--repository-url` | canonical HTTPS web URL of the repository used for generated changelog links (required) | string | `""` | `$CHANGELOG_REPOSITORY_URL` |
@@ -6739,7 +6759,7 @@ EXAMPLE:
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--release-policy` | accepted release versions: stable or stable-prerelease | string | `"stable"` | `$RELEASE_POLICY` |
+| `--release-policy` | accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N | string | `"stable"` | `$RELEASE_POLICY` |
 | `--tag` | final release tag to create (e.g. v1.2.3) (required) | string | `""` | `$RELEASE_TAG`, `$TAG_NAME` |
 | `--no-sign` | skip GPG signing (intended for tests; production always signs) | bool | `false` | n/a |
 | `--signed` | create a signed tag; set TAG_RELEASE_SIGNED=false for unsigned annotated test tags | bool | `true` | `$TAG_RELEASE_SIGNED` |

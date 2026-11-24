@@ -38,7 +38,7 @@ spec:
   inputs:
     release-policy:
       default: stable
-      options: [stable, stable-prerelease]
+      regex: '^(stable|stable-prerelease|fork:[a-z][a-z0-9-]{0,31})$'
       description: Accepted signed release versions; snapshots remain a separate mode.
     stage:
       default: publish

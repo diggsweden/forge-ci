@@ -73,7 +73,8 @@ func CreateRelease(
 		return err
 	}
 
-	if parsed.Prerelease != "" {
+	prerelease := version.IsPrerelease(parsed, in.ReleasePolicy)
+	if prerelease {
 		makeLatest = provider.MakeLatestFalse
 	}
 
@@ -93,7 +94,7 @@ func CreateRelease(
 		Name:       releaseName,
 		NotesFile:  specNotesFile,
 		Draft:      in.Draft,
-		Prerelease: release.IsPrereleaseTag(in.Tag),
+		Prerelease: prerelease,
 		MakeLatest: makeLatest,
 		Assets:     assets,
 	}

@@ -51,6 +51,10 @@ type PrerequisitesInput struct {
 	Branch     string // target branch (inputs.branch)
 	Repository string // github.repository
 
+	// ReleasePolicy decides which tags are stable releases and changelog
+	// history boundaries (a fork's -WORD.N builds under fork:WORD).
+	ReleasePolicy string
+
 	// Policy flags from the release plan.
 	//
 	// RequireAllowlistedSigner gates the tag-signature check on the
@@ -357,10 +361,10 @@ func scheduleTagPrerequisites(
 	}
 
 	checks.run(ctx, group, "tag-format", func(_ context.Context, out *bytes.Buffer) error {
-		return TagFormat(out, TagFormatInput{Tag: formatTag})
+		return TagFormat(out, TagFormatInput{Tag: formatTag, ReleasePolicy: in.ReleasePolicy})
 	})
 	checks.run(ctx, group, "tag-uniqueness", func(checkCtx context.Context, out *bytes.Buffer) error {
-		return TagUniqueness(checkCtx, repo, out, TagUniquenessInput{Tag: in.Tag, IgnoreTag: ignoreCollidingTag})
+		return TagUniqueness(checkCtx, repo, out, TagUniquenessInput{Tag: in.Tag, IgnoreTag: ignoreCollidingTag, ReleasePolicy: in.ReleasePolicy})
 	})
 	checks.run(ctx, group, "tag-commit", func(checkCtx context.Context, out *bytes.Buffer) error {
 		return TagCommit(checkCtx, repo, out, TagCommitInput{

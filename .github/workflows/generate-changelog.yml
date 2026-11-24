@@ -17,7 +17,7 @@ on:
   workflow_call:
     inputs:
       release-policy:
-        description: "Accepted release versions: stable or stable-prerelease"
+        description: "Accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N"
         type: string
         default: "stable"
       branch:
@@ -114,7 +114,9 @@ jobs:
           # --tag: the final tag does not exist while the release prepares, so
           # git-cliff is told its name, as the Go adapter does; without it the
           # new section is "Unreleased".
-          stable='^v[0-9]+\.[0-9]+\.[0-9]+$'
+          # The engine owns which tags bound history: stable tags, and a
+          # fork's own builds under fork:WORD. It also checks the policy.
+          stable=$(forge-ci version history-pattern --release-policy "$RELEASE_POLICY")
           history="$stable"
           release_tag=()
           if [[ "$REF_TYPE" == tag && "$REF_NAME" == release-request/* ]]; then

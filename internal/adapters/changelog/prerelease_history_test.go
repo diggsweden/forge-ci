@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/adapters/changelog"
+	"github.com/diggsweden/forge-ci/internal/domain/version"
 	"github.com/diggsweden/forge-ci/internal/testutil/evidence"
 	"github.com/diggsweden/forge-ci/internal/testutil/mockbinary"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
@@ -69,7 +70,7 @@ func TestPrereleaseAndFinalNotesUsePreviousStableBoundary(t *testing.T) {
 
 			renderer := &changelog.Renderer{GitCliffBin: binary, GitChglogBin: binary}
 			for _, tag := range []string{"v1.0.0-beta.3", "v1.0.0"} {
-				notes, err := renderer.RenderBody(t.Context(), backend, config, tag, "https://example.invalid/owner/repo")
+				notes, err := renderer.RenderBody(t.Context(), backend, config, tag, stableHistory, "https://example.invalid/owner/repo")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -88,7 +89,7 @@ func TestPrereleaseAndFinalNotesUsePreviousStableBoundary(t *testing.T) {
 					git("tag", tag)
 
 					mock := mockbinary.New(t)
-					mock.Add("forge-ci", "exit 0") // Version admission is tested by the engine tests.
+					mock.Add("forge-ci", historyPatternMock(stableHistory)) // Version admission is tested by the engine tests.
 					mock.OnPath()
 
 					output := filepath.Join(root, "release-notes.md")
@@ -123,7 +124,7 @@ func TestPrereleaseAndFinalNotesUsePreviousStableBoundary(t *testing.T) {
 			git("tag", "-d", "v0.9.0")
 
 			for _, tag := range []string{"v1.0.0-beta.4", "v1.0.0"} {
-				notes, err := renderer.RenderBody(t.Context(), backend, config, tag, "https://example.invalid/owner/repo")
+				notes, err := renderer.RenderBody(t.Context(), backend, config, tag, stableHistory, "https://example.invalid/owner/repo")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -162,4 +163,99 @@ func releaseNotesWorkflowScript(t *testing.T) string {
 	t.Fatal("release-notes workflow step missing")
 
 	return ""
+}
+
+// A fork's builds bound its history under fork:WORD: the second build's notes
+// start after the first, and upstream's tag still bounds the first build.
+func TestForkBuildNotesStartAtThePreviousForkBuild(t *testing.T) {
+	forkHistory := version.ReleaseHistoryPattern("fork:acme")
+
+	for _, backend := range []string{"git-cliff", "git-chglog"} {
+		t.Run(backend, func(t *testing.T) {
+			binary := evidence.RequireWorkingTool(t, backend, "--help")
+
+			root := t.TempDir()
+			t.Chdir(root)
+
+			sequence := 0
+			git := func(args ...string) {
+				t.Helper()
+
+				sequence++
+				cmd := exec.CommandContext(t.Context(), "git", args...)
+
+				cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1", "GIT_AUTHOR_NAME=Fixture", "GIT_AUTHOR_EMAIL=fixture@example.invalid", "GIT_COMMITTER_NAME=Fixture", "GIT_COMMITTER_EMAIL=fixture@example.invalid", "GIT_AUTHOR_DATE="+fmt.Sprintf("2026-01-01T00:00:%02dZ", sequence), "GIT_COMMITTER_DATE="+fmt.Sprintf("2026-01-01T00:00:%02dZ", sequence))
+				if output, err := cmd.CombinedOutput(); err != nil {
+					t.Fatalf("git %v: %v\n%s", args, err, output)
+				}
+			}
+			git("init", "-q")
+			git("commit", "--allow-empty", "-qm", "feat: UPSTREAM_CHANGE")
+			git("tag", "v0.94.4")
+			git("commit", "--allow-empty", "-qm", "chore: OVERLAY_CHANGE")
+			git("tag", "v0.94.4-acme.1")
+			git("commit", "--allow-empty", "-qm", "fix: SECOND_BUILD_CHANGE")
+
+			config := filepath.Join(root, "config.toml")
+			body := "[changelog]\nbody = \"\"\"{{ version }}\\n{% for commit in commits %}{{ commit.message }}\\n{% endfor %}\"\"\"\n[git]\nconventional_commits = false\nfilter_unconventional = false\n"
+
+			if backend == "git-chglog" {
+				config = filepath.Join(root, "config.yml")
+				body = "style: github\ntemplate: CHANGELOG.tpl\ninfo:\n  title: Changes\noptions:\n  header:\n    pattern: '^(\\w+): (.*)$'\n    pattern_maps: [Type, Subject]\n  commit_groups:\n    group_by: Type\n"
+
+				if err := os.WriteFile(filepath.Join(root, "CHANGELOG.tpl"), []byte("{{range .Versions}}{{.Tag.Name}}\n{{range .CommitGroups}}{{range .Commits}}{{.Subject}}\n{{end}}{{end}}{{end}}"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			if err := os.WriteFile(config, []byte(body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			renderer := &changelog.Renderer{GitCliffBin: binary, GitChglogBin: binary}
+
+			notes, err := renderer.RenderBody(t.Context(), backend, config, "v0.94.4-acme.2", forkHistory, "https://example.invalid/owner/repo")
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if !strings.Contains(notes, "SECOND_BUILD_CHANGE") || strings.Contains(notes, "OVERLAY_CHANGE") || strings.Contains(notes, "UPSTREAM_CHANGE") {
+				t.Errorf("second build notes must hold only what followed the first build: %s", notes)
+			}
+
+			if backend != "git-cliff" {
+				return
+			}
+
+			git("tag", "v0.94.4-acme.2")
+
+			mock := mockbinary.New(t)
+			mock.Add("forge-ci", historyPatternMock(forkHistory)) // Version admission is tested by the engine tests.
+			mock.OnPath()
+
+			output := filepath.Join(root, "release-notes.md")
+			cmd := exec.CommandContext(t.Context(), testenv.GNUExecutable(t, "bash"), "-euo", "pipefail", "-c", releaseNotesWorkflowScript(t))
+
+			cmd.Env = append(os.Environ(), "CONFIG="+config, "ARGS=--latest", "OUTPUT="+output, "GITHUB_REPO=owner/repo", "REF_TYPE=tag", "REF_NAME=release-request/v0.94.4-acme.2", "RELEASE_POLICY=fork:acme")
+
+			if log, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("post-tag release notes: %v\n%s", err, log)
+			}
+
+			rendered, err := os.ReadFile(output)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if !strings.Contains(string(rendered), "SECOND_BUILD_CHANGE") || strings.Contains(string(rendered), "OVERLAY_CHANGE") {
+				t.Errorf("published second build notes: %s", rendered)
+			}
+		})
+	}
+}
+
+// historyPatternMock answers `forge-ci version history-pattern` with pattern,
+// as the engine does for the step's policy, and accepts every other call.
+func historyPatternMock(pattern string) string {
+	return `if [ "$1 $2" = "version history-pattern" ]; then printf '%s\n' '` + pattern + `'; fi; exit 0`
 }

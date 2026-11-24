@@ -15,7 +15,7 @@ spec:
     release-policy:
       description: Accepted release versions; classification comes from the signed tag.
       default: stable
-      options: [stable, stable-prerelease]
+      regex: '^(stable|stable-prerelease|fork:[a-z][a-z0-9-]{0,31})$'
     forge-ci-repository:
       regex: '^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)+$'
     consumer-project:

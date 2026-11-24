@@ -21,6 +21,7 @@ import (
 	domain "github.com/diggsweden/forge-ci/internal/domain/consumerinit"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
+	"github.com/diggsweden/forge-ci/internal/domain/version"
 )
 
 // Remote reads a Forge CI fork without credentials.
@@ -37,6 +38,9 @@ type Input struct {
 	Remote  Remote
 	URL     string // the Forge CI fork, https://host/owner/repo
 	Ref     string // release tag to pin; empty takes the highest stable X.Y.Z or vX.Y.Z
+	// ReleasePolicy fork:WORD pins the fork's own newest vX.Y.Z-WORD.N
+	// build instead, the tag its release made; empty pins a stable tag.
+	ReleasePolicy string
 	Dir     string // the consumer's root
 	Example string // example to start from, e.g. go-cli
 	DryRun  bool   // render and inspect destinations without writing project files
@@ -72,7 +76,7 @@ func Run(ctx context.Context, in Input) (Result, error) {
 		return Result{}, err
 	}
 
-	if src.Tag, src.Commit, err = pin(ctx, in.Remote, repoURL, in.Ref); err != nil {
+	if src.Tag, src.Commit, err = pin(ctx, in.Remote, repoURL, in.Ref, in.ReleasePolicy); err != nil {
 		return Result{}, err
 	}
 
@@ -199,9 +203,13 @@ func parseURL(raw string) (string, domain.Source, error) {
 	return strings.TrimSuffix(raw, "/"), domain.Source{Host: parsed.Host, Repository: repository}, nil
 }
 
-// pin returns the release tag, the given one or the highest stable version, and
-// the commit it names on the fork.
-func pin(ctx context.Context, remote Remote, repoURL, ref string) (string, string, error) {
+// pin returns the release tag, the given one or the highest version the
+// policy admits, and the commit it names on the fork.
+func pin(ctx context.Context, remote Remote, repoURL, ref, policy string) (string, string, error) {
+	if policy != "" && (!strings.HasPrefix(policy, "fork:") || version.ValidateReleasePolicy(policy) != nil) {
+		return "", "", fmt.Errorf("init takes --release-policy fork:WORD, the policy of the fork's own builds (got %q): %w", policy, errs.ErrUsage)
+	}
+
 	tag := ref
 	if tag == "" {
 		tags, err := remote.VersionTags(ctx, repoURL)
@@ -209,8 +217,8 @@ func pin(ctx context.Context, remote Remote, repoURL, ref string) (string, strin
 			return "", "", unreachable(repoURL, err)
 		}
 
-		if tag = domain.LatestReleaseTag(tags); tag == "" {
-			return "", "", fmt.Errorf("%s has no stable X.Y.Z or vX.Y.Z release tag; pass --ref: %w", repoURL, errs.ErrUsage)
+		if tag, err = latestTag(repoURL, tags, policy); err != nil {
+			return "", "", err
 		}
 	}
 
@@ -219,6 +227,24 @@ func pin(ctx context.Context, remote Remote, repoURL, ref string) (string, strin
 	commit, err := remote.TagCommit(ctx, repoURL, tag)
 
 	return tag, commit, err
+}
+
+// latestTag is the newest tag init pins: the fork's own vX.Y.Z-WORD.N
+// build under its fork:WORD policy, otherwise a stable X.Y.Z or vX.Y.Z.
+func latestTag(repoURL string, tags []string, policy string) (string, error) {
+	if policy != "" {
+		if tag := version.LatestReleaseTag(tags, policy); tag != "" {
+			return tag, nil
+		}
+
+		return "", fmt.Errorf("%s has no vX.Y.Z-WORD.N release tag under release-policy %s; pass --ref: %w", repoURL, policy, errs.ErrUsage)
+	}
+
+	if tag := domain.LatestReleaseTag(tags); tag != "" {
+		return tag, nil
+	}
+
+	return "", fmt.Errorf("%s has no stable X.Y.Z or vX.Y.Z release tag; pass --ref: %w", repoURL, errs.ErrUsage)
 }
 
 // unreachable says what the URL has to be when git cannot read it: off

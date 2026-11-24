@@ -191,6 +191,28 @@ func TestReleaseTagGuard_RequestTagOutputsBothValues(t *testing.T) {
 	}
 }
 
+// A fork requests its N-th build of an upstream version under fork:WORD.
+func TestReleaseTagGuard_AcceptsAForkBuildRequest(t *testing.T) {
+	t.Parallel()
+
+	sink := fakeoutputsink.New(t)
+
+	var out bytes.Buffer
+	if err := appvalidate.ReleaseTagGuard(context.Background(), sink, &out, appvalidate.ReleaseTagGuardInput{ReleasePolicy: "fork:itiquette", Tag: "release-request/v0.94.4-itiquette.1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := sink.Single("release-tag"); got != "v0.94.4-itiquette.1" {
+		t.Fatalf("release-tag = %q", got)
+	}
+
+	for _, tag := range []string{"release-request/v0.94.4", "release-request/v0.94.4-other.1"} {
+		if err := appvalidate.ReleaseTagGuard(context.Background(), fakeoutputsink.New(t), &out, appvalidate.ReleaseTagGuardInput{ReleasePolicy: "fork:itiquette", Tag: tag}); err == nil {
+			t.Fatalf("%s was admitted under fork:itiquette", tag)
+		}
+	}
+}
+
 func TestReleaseTagGuard_RejectsPrereleaseAndUnanchoredPattern(t *testing.T) {
 	t.Parallel()
 

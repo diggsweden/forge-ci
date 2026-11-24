@@ -73,6 +73,21 @@ func TestResolveReleasePolicy_PrereleaseTagNotStable(t *testing.T) {
 	}
 }
 
+// A fork's -WORD.N build is its latest release; its images keep the SemVer
+// reading, so the plan still skips the image promotion ladder for it.
+func TestResolveReleasePolicy_ForkBuildIsStable(t *testing.T) {
+	t.Parallel()
+
+	in := baseInputs()
+	in.RefName = "v0.94.4-itiquette.1"
+	in.ReleasePolicy = "fork:itiquette"
+
+	got := resolve(t, in)
+	if !got.MakeLatest || !got.Prerelease {
+		t.Errorf("fork build: MakeLatest=%t Prerelease=%t, want latest and the SemVer prerelease reading", got.MakeLatest, got.Prerelease)
+	}
+}
+
 func TestResolveReleasePolicy_StableRejectsPrerelease(t *testing.T) {
 	t.Parallel()
 

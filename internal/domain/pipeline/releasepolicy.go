@@ -71,9 +71,11 @@ func resolveReleasePolicy(in releasePolicyInputs) (ReleasePolicy, error) {
 		CreateRelease:            in.ReleasePublisher == "github-cli",
 		RequireAllowlistedSigner: in.AnyRequireAuthorization || in.ReleaseRequireAllowlistedSigner,
 		RunVersionBump:           VersionBumpRuns(in.ChangelogCreator == changelogCreatorGitCliff, in.ChangelogSkipVersionBump),
-		MakeLatest:               parsed.Prerelease == "",
-		Prerelease:               parsed.Prerelease != "",
-		CreateDraftRelease:       in.ReleaseDraft,
+		MakeLatest:               !version.IsPrerelease(parsed, in.ReleasePolicy),
+		// Prerelease is the SemVer reading the image and publication steps
+		// use: a fork's -WORD.N build is latest yet skips the image ladder.
+		Prerelease:         parsed.Prerelease != "",
+		CreateDraftRelease: in.ReleaseDraft,
 	}
 
 	effective, conflict, err := computeEffectiveSBOMs(in.ReleaseSBOMs, in.PipelineSBOMs)

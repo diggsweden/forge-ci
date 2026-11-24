@@ -10,17 +10,11 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/version"
 )
 
-// PrereleaseIdentifiers is the canonical list of pre-release tokens
-// recognised across the project. Single source of truth — both the
-// "tag carries a prerelease marker?" check here and the canonical-suffix
-// classification in domain/validate use this list.
-var PrereleaseIdentifiers = []string{"alpha", "beta", "rc", "dev", "snapshot", "SNAPSHOT"}
-
 // IsCanonicalPrerelease reports whether a validated SemVer prerelease is one
 // canonical identifier, optionally followed by one numeric component.
 func IsCanonicalPrerelease(prerelease string) bool {
 	identifier, sequence, hasSequence := strings.Cut(prerelease, ".")
-	if !slices.Contains(PrereleaseIdentifiers, identifier) {
+	if !slices.Contains(version.CanonicalPrereleaseIdentifiers, identifier) {
 		return false
 	}
 

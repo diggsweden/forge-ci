@@ -262,12 +262,16 @@ All three forge release layers use `release-policy`:
 | --- | --- |
 | `stable` (default) | `release-request/v1.0.0` |
 | `stable-prerelease` | Stable requests and versions such as `release-request/v1.0.0-beta.2` or `release-request/v1.0.0-rc.1` |
+| `fork:WORD` | Only a fork's own builds, `release-request/vX.Y.Z-WORD.N`, released as stable; see [Keeping a fork small](forgejo.md#keeping-a-fork-small) |
 
 The signed version decides whether a release is a prerelease; the policy
-only admits it. Invalid policies, malformed versions and build metadata are
-refused. Keep the policy in trusted workflow configuration: GitLab takes it
-from the external release policy, and Forgejo must pass the same value to the
-prepare and sign/publish workflows.
+only admits it, except that `fork:WORD` makes the fork's `-WORD.N` builds
+stable releases, marked latest. Their images get only the version tag: image
+steps read the version as SemVer does, so no `latest` image tag moves.
+Invalid policies, malformed versions and build metadata are refused. Keep
+the policy in trusted workflow configuration: GitLab takes it from the
+external release policy, and Forgejo must pass the same value to the prepare
+and sign/publish workflows.
 
 Prereleases use the same declared builds, signing backend, checksums, SBOMs
 and provenance as stable releases. They are immutable numbered releases, not

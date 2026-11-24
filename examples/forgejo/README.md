@@ -46,7 +46,10 @@ Before copying it to `.forgejo/workflows/self-release.yml`:
 
 - Copy [`.forge-ci/consumer-defaults.yml.example`](.forge-ci/consumer-defaults.yml.example)
   to `.forge-ci/consumer-defaults.yml` with the same signer and key checksum,
-  so `forge-ci init` hands consumers the fork's values.
+  so `forge-ci init --release-policy fork:WORD` hands consumers the fork's
+  values at its newest release.
+- Replace `FIXME` in `release-policy: fork:FIXME` with your fork's lowercase
+  word, the `WORD` of its `vX.Y.Z-WORD.N` releases.
 - Replace `FORGE_HOST`, `OWNER` and every `PIN_*` with your reviewed server,
   repository, immutable engine commit, signer digest and public-key checksum.
   The pinned engine's bootstrap packages and matching signer must already
@@ -72,8 +75,10 @@ Before copying it to `.forgejo/workflows/self-release.yml`:
   From the fork's root:
   `mise lock go aqua:goreleaser/goreleaser aqua:anchore/syft yq`.
 
-Push a signed annotated `release-request/vX.Y.Z` at the reviewed head of the
-configured release branch. The preparation workflow creates the final tag.
+Push a signed annotated `release-request/vX.Y.Z-WORD.N` at the reviewed head
+of the configured release branch: `vX.Y.Z` is the upstream version the fork
+carries, `N` counts the fork's builds of it from 1. The preparation workflow
+creates the final tag.
 Read back the release files and signatures. If publication fails after tagging,
 use [failed-release recovery](../../docs/failed-release-recovery.md); never
 move a published tag. GitHub and GitLab keep their existing release routes.

@@ -51,6 +51,7 @@ func New() *cli.Command {
 			bumpPlanCmd(),
 			applyBumpCmd(),
 			filePatternCmd(),
+			historyPatternCmd(),
 		},
 	}
 }
@@ -64,7 +65,7 @@ func bumpPlanCmd() *cli.Command {
 			&cli.StringFlag{Name: "patch", Usage: "native version changes produced by a separate key-free job; never run native tools in this mode"},
 			&cli.StringFlag{Name: "patch-sha256", Usage: "expected sha256 reported by the key-free patch job"},
 			&cli.StringFlag{Name: "paths-file", Usage: "with --patch, file the paths the bump wrote besides CHANGELOG.md are written to, one per line, for commit-changelog-release --include-paths-file"},
-			&cli.StringFlag{Name: "release-policy", Value: "stable", Sources: cli.EnvVars("RELEASE_POLICY"), Usage: "accepted release versions: stable or stable-prerelease"},
+			&cli.StringFlag{Name: "release-policy", Value: "stable", Sources: cli.EnvVars("RELEASE_POLICY"), Usage: "accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N"},
 			&cli.StringFlag{Name: flagVersion, Required: true, Sources: cli.EnvVars("VERSION"), Usage: "release version without a leading v"},
 			&cli.StringFlag{Name: "changelog-file", Value: defaultChangelogFile, Sources: cli.EnvVars("CHANGELOG_FILE"), Usage: "full changelog copied into each planned artifact directory"},
 			&cli.StringFlag{Name: "xcode-version-file", Sources: cli.EnvVars("XCODE_VERSION_FILE"), Usage: "xcconfig file holding MARKETING_VERSION"},

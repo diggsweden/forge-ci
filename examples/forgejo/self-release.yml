@@ -64,6 +64,8 @@ jobs:
     with:
       forge-ci-repository: https://FORGE_HOST/OWNER/forge-ci.git
       forge-ci-sha: PIN_FORGE_CI_SHA
+      # The fork's own builds, vX.Y.Z-WORD.N: the same WORD in both calls.
+      release-policy: fork:FIXME
       runs-on: ${{ vars.CI_RUNNER_LABEL }}
       signer-image: FORGE_HOST/OWNER/forge-ci-signer@sha256:PIN_SIGNER_IMAGE_DIGEST
       release-branch: ${{ vars.RELEASE_BRANCH }}
@@ -139,6 +141,8 @@ jobs:
     with:
       forge-ci-repository: https://FORGE_HOST/OWNER/forge-ci.git
       forge-ci-sha: PIN_FORGE_CI_SHA
+      # The fork's own builds, vX.Y.Z-WORD.N: the same WORD in both calls.
+      release-policy: fork:FIXME
       runs-on: ${{ vars.CI_RUNNER_LABEL }}
       signer-runs-on: ${{ vars.CI_RUNNER_LABEL }}
       signer-image: FORGE_HOST/OWNER/forge-ci-signer@sha256:PIN_SIGNER_IMAGE_DIGEST

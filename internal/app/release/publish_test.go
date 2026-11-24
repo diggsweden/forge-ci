@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,7 @@ import (
 
 	apprelease "github.com/diggsweden/forge-ci/internal/app/release"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
+	"github.com/diggsweden/forge-ci/internal/domain/provider"
 	"github.com/diggsweden/forge-ci/internal/testutil/fakeprovider"
 )
 
@@ -66,6 +68,30 @@ func TestPublishRelease_PassesEveryFieldThroughToTheProvider(t *testing.T) {
 
 	if !strings.Contains(out.String(), "Publishing release v1.2.3 with 1 asset(s)") {
 		t.Errorf("unexpected output: %q", out.String())
+	}
+}
+
+// The forge release follows the policy, not the dash: a fork's build is
+// latest and stable, the same tag under stable-prerelease is a prerelease.
+func TestPublishRelease_ForkBuildIsLatestUnderItsPolicy(t *testing.T) {
+	chdirTemp(t)
+	mustWrite(t, "dist/asset.tgz", "asset\n")
+	mustWrite(t, "dist/release-notes.md", "notes\n")
+
+	for policy, prerelease := range map[string]bool{"fork:itiquette": false, "stable-prerelease": true} {
+		prov := fakeprovider.New(t)
+
+		err := apprelease.PublishRelease(context.Background(), prov, io.Discard, apprelease.PublishReleaseInput{
+			Tag: "v0.94.4-itiquette.1", Repository: "owner/repo", ReleasePolicy: policy, ReleaseNotesFile: "dist/release-notes.md", Assets: []string{"dist/asset.tgz"},
+		})
+		if err != nil {
+			t.Fatalf("%s: %v", policy, err)
+		}
+
+		spec := prov.PublishReleaseCalls()[0].Spec
+		if spec.Prerelease != prerelease || (spec.MakeLatest == provider.MakeLatestTrue) == prerelease {
+			t.Errorf("%s: Prerelease=%t MakeLatest=%v", policy, spec.Prerelease, spec.MakeLatest)
+		}
 	}
 }
 

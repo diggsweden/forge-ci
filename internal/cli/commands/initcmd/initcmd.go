@@ -63,6 +63,9 @@ EXAMPLES:
    # Forgejo or GitLab, from your organization's fork:
    forge-ci init https://forge.example/examplescope/forge-ci
 
+   # A fork that releases its own vX.Y.Z-acme.N builds:
+   forge-ci init https://forge.example/examplescope/forge-ci --release-policy fork:acme
+
    # Preview without writing project files:
    forge-ci init https://github.com/diggsweden/forge-ci --example go-service --ref v0.90.0 --dry-run
 
@@ -71,6 +74,7 @@ EXAMPLES:
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "example", Usage: "example to start from, one of " + strings.Join(domain.Examples(), ", ") + " (default: from the repository's build files)"},
 			&cli.StringFlag{Name: "ref", Usage: "release tag to pin (default: the newest stable X.Y.Z or vX.Y.Z tag; v-prefixed wins ties)"},
+			&cli.StringFlag{Name: "release-policy", Usage: "fork:WORD pins the fork's newest vX.Y.Z-WORD.N build instead of a stable tag"},
 			&cli.BoolFlag{Name: "dry-run", Usage: "preview files, conflicts and remaining placeholders without writing project files; still fetches templates"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -95,7 +99,7 @@ EXAMPLES:
 			// nosemgrep: trailofbits.go.invalid-usage-of-modified-variable.invalid-usage-of-modified-variable
 			result, err := appinit.Run(ctx, appinit.Input{
 				Remote: remote, URL: cmd.Args().Get(0),
-				Ref: cmd.String("ref"), Dir: dir, Example: example, DryRun: cmd.Bool("dry-run"),
+				Ref: cmd.String("ref"), ReleasePolicy: cmd.String("release-policy"), Dir: dir, Example: example, DryRun: cmd.Bool("dry-run"),
 			})
 			if err != nil {
 				if result.DryRun && len(result.Conflicts) > 0 {

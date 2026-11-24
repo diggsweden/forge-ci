@@ -93,6 +93,11 @@ on:
         required: false
         default: false
         type: boolean
+      release-policy:
+        description: "Accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N; labels the release type in the summary"
+        required: false
+        default: "stable"
+        type: string
       branch:
         description: "Explicit target branch for release validation"
         required: true
@@ -211,6 +216,7 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
           REF: ${{ github.ref }}
           TARGET_BRANCH: ${{ inputs.branch }}
+          RELEASE_POLICY: ${{ inputs['release-policy'] }}
           REPOSITORY: ${{ github.repository }}
           REQUIRE_ALLOWLISTED_SIGNER: ${{ inputs['require-allowlisted-signer'] }}
           SIGN_ARTIFACTS: ${{ inputs['sign-artifacts'] }}
@@ -235,6 +241,7 @@ jobs:
         if: always()
         env:
           TAG_NAME: ${{ github.ref_name }}
+          RELEASE_POLICY: ${{ inputs['release-policy'] }}
           COMMIT_SHA: ${{ github.sha }}
           REF_TYPE: ${{ github.ref_type }}
           CONFIG_PLAN_JSON: ${{ inputs['config-plan-json'] }}

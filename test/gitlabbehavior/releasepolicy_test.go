@@ -20,7 +20,7 @@ func TestReleasePolicyComesFromTrustedInputNotAmbientVariables(t *testing.T) {
 		t.Fatal("cannot locate engine bootstrap boundary")
 	}
 
-	for _, policy := range []string{"stable", "stable-prerelease"} {
+	for _, policy := range []string{"stable", "stable-prerelease", "fork:itiquette"} {
 		t.Run(policy, func(t *testing.T) {
 			binding := gitlabrender.Script(t, "templates/release-jobs.yml", prefix, map[string]any{"release-policy": policy, "job-user": ""})
 			program := binding + `source "$1"

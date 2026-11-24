@@ -217,8 +217,9 @@ cosign-public-key-sha256: <sha256 of the public key>
 ```
 
 A key left out leaves its placeholder, and init lists it. Consumers then run
-`forge-ci init https://<host>/<owner>/forge-ci` in their repository; by hand,
-the steps are these.
+`forge-ci init https://<host>/<owner>/forge-ci` in their repository, adding
+`--release-policy fork:WORD` when the fork releases its own `vX.Y.Z-WORD.N`
+builds, so init pins the newest of those; by hand, the steps are these.
 
 1. **Copy the two examples** of your ecosystem, `pullrequest-workflow.yml` and
    `release-workflow.yml` from `examples/<ecosystem>/forgejo/` (see the
@@ -2214,6 +2215,21 @@ A fork that only adds files rebases onto upstream without conflicts:
   names who may request your releases.
 - `.goreleaser.yml` needs no edit; the release repository comes from the
   `origin` remote.
+- Tag your own releases `vX.Y.Z-WORD.N` on the upstream version they carry,
+  for example `v0.94.4-example.1`, and pass `release-policy: fork:example` to
+  both release workflows. `WORD` is lowercase and names your organization; `N`
+  counts your builds of that version from 1. The policy admits only these
+  tags, so upstream's `vX.Y.Z` is never released from the fork, and makes them
+  stable, latest releases. The tag is valid SemVer and a valid image tag, and
+  SemVer orders `.2` before `.10`. Other tools read the dash as a
+  prerelease, so consumers who update with Renovate add a rule that reads `N`
+  as a fourth number:
+
+  ```json
+  {"packageRules": [{"matchPackageNames": ["example/forge-ci"],
+    "versioning": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(-example\\.(?<build>\\d+))?$"}]}
+  ```
+
 - Send everything else upstream.
 
 The actionlint configuration accepts Forgejo full-URL action references only

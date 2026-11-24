@@ -25,9 +25,6 @@ const (
 // errUnsupportedBackend marks a backend name outside the supported set.
 var errUnsupportedBackend = errors.New("unsupported changelog backend")
 
-// stableTagPattern is the git-cliff --tag-pattern for stable release tags.
-const stableTagPattern = `^v[0-9]+\.[0-9]+\.[0-9]+$`
-
 // Renderer invokes git-chglog or git-cliff. The binary fields are test seams;
 // empty values use the conventional binary names.
 //
@@ -41,8 +38,10 @@ const stableTagPattern = `^v[0-9]+\.[0-9]+\.[0-9]+$`
 // would otherwise send it to the forge API for pull request metadata, which
 // the bundled templates never render.
 //
-// Both renderers use stable tags as history boundaries. A beta target gets
-// cumulative notes from the previous stable release, just like the final release.
+// Both renderers take the history boundary pattern from the caller
+// (version.ReleaseHistoryPattern): stable tags, so a beta target gets
+// cumulative notes from the previous stable release, just like the final
+// release; a fork's builds count too under its fork:WORD policy.
 type Renderer struct {
 	GitChglogBin string
 	GitCliffBin  string
@@ -53,14 +52,14 @@ type Renderer struct {
 func New() *Renderer { return &Renderer{} }
 
 // RenderFull writes the full changelog to outputPath using backend.
-func (r *Renderer) RenderFull(ctx context.Context, backend, config, tag, outputPath, repositoryURL string) error {
+func (r *Renderer) RenderFull(ctx context.Context, backend, config, tag, history, outputPath, repositoryURL string) error {
 	switch backend {
 	case backendGitChglog:
-		_, err := r.run(ctx, r.gitChglogBin(), "--config", config, "--repository-url", repositoryURL, "--tag-filter-pattern", stableTagPattern, "--next-tag", tag, "--output", outputPath)
+		_, err := r.run(ctx, r.gitChglogBin(), "--config", config, "--repository-url", repositoryURL, "--tag-filter-pattern", history, "--next-tag", tag, "--output", outputPath)
 
 		return err
 	case backendGitCliff:
-		_, err := r.run(ctx, r.gitCliffBin(), "--offline", "--config", config, "--tag-pattern", stableTagPattern, "--unreleased", "--tag", tag, "--output", outputPath)
+		_, err := r.run(ctx, r.gitCliffBin(), "--offline", "--config", config, "--tag-pattern", history, "--unreleased", "--tag", tag, "--output", outputPath)
 
 		return err
 	default:
@@ -69,12 +68,12 @@ func (r *Renderer) RenderFull(ctx context.Context, backend, config, tag, outputP
 }
 
 // RenderBody returns the release bump commit body using backend.
-func (r *Renderer) RenderBody(ctx context.Context, backend, config, tag, repositoryURL string) (string, error) {
+func (r *Renderer) RenderBody(ctx context.Context, backend, config, tag, history, repositoryURL string) (string, error) {
 	switch backend {
 	case backendGitChglog:
-		return r.run(ctx, r.gitChglogBin(), "--config", config, "--repository-url", repositoryURL, "--tag-filter-pattern", stableTagPattern, "--next-tag", tag, tag)
+		return r.run(ctx, r.gitChglogBin(), "--config", config, "--repository-url", repositoryURL, "--tag-filter-pattern", history, "--next-tag", tag, tag)
 	case backendGitCliff:
-		return r.run(ctx, r.gitCliffBin(), "--offline", "--config", config, "--tag-pattern", stableTagPattern, "--unreleased", "--tag", tag)
+		return r.run(ctx, r.gitCliffBin(), "--offline", "--config", config, "--tag-pattern", history, "--unreleased", "--tag", tag)
 	default:
 		return "", fmt.Errorf("%w %q", errUnsupportedBackend, backend)
 	}

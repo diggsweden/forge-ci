@@ -52,15 +52,17 @@ type gitOps interface {
 
 // TagUniquenessInput drives `validate tag-uniqueness`.
 type TagUniquenessInput struct {
-	Tag       string
-	IgnoreTag string
+	Tag           string
+	IgnoreTag     string
+	ReleasePolicy string // decides which tags bound changelog history
 }
 
-// TagUniqueness errors when one or more *other* stable release tags point at
-// the same commit. Used to guard against the git-cliff changelog issue
-// (orhun/git-cliff#1036). Only stable vMAJOR.MINOR.PATCH tags count: the
-// changelog renderer reads no others, so a release request, a pre-release or
-// Forge CI's own rolling pre-release tag on the commit is no collision.
+// TagUniqueness errors when one or more *other* release tags point at the same
+// commit. Used to guard against the git-cliff changelog issue
+// (orhun/git-cliff#1036). Only the tags that bound changelog history count
+// (version.IsReleaseHistoryTag): the renderer reads no others, so a release
+// request, a pre-release or Forge CI's own rolling pre-release tag on the
+// commit is no collision.
 func TagUniqueness(ctx context.Context, repo gitOps, out io.Writer, in TagUniquenessInput) error {
 	if in.Tag == "" {
 		return fmt.Errorf("usage: validate tag-uniqueness <tag-name>: %w", errs.ErrUsage)
@@ -81,7 +83,7 @@ func TagUniqueness(ctx context.Context, repo gitOps, out io.Writer, in TagUnique
 	}
 
 	others := slices.DeleteFunc(validate.FilterOutTag(all, in.Tag), func(tag string) bool {
-		return tag == in.IgnoreTag || !version.IsStableSemverTag(tag)
+		return tag == in.IgnoreTag || !version.IsReleaseHistoryTag(tag, in.ReleasePolicy)
 	})
 
 	if len(others) > 0 {

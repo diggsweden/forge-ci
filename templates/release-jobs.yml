@@ -6,7 +6,7 @@ spec:
   inputs:
     release-policy:
       default: stable
-      options: [stable, stable-prerelease]
+      regex: '^(stable|stable-prerelease|fork:[a-z][a-z0-9-]{0,31})$'
     engine-sha:
       regex: '^([0-9a-f]{40}|[0-9a-f]{64})$'
     engine-reference:

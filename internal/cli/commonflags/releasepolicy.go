@@ -9,6 +9,6 @@ import "github.com/urfave/cli/v3"
 func ReleasePolicy() *cli.StringFlag {
 	return &cli.StringFlag{
 		Name: "release-policy", Value: "stable", Sources: cli.EnvVars("RELEASE_POLICY"),
-		Usage: "accepted release versions: stable or stable-prerelease",
+		Usage: "accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N",
 	}
 }

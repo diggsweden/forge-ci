@@ -32,8 +32,8 @@ type changelogRenderGit interface {
 }
 
 type changelogRenderer interface {
-	RenderFull(ctx context.Context, backend, config, tag, outputPath, repositoryURL string) error
-	RenderBody(ctx context.Context, backend, config, tag, repositoryURL string) (string, error)
+	RenderFull(ctx context.Context, backend, config, tag, history, outputPath, repositoryURL string) error
+	RenderBody(ctx context.Context, backend, config, tag, history, repositoryURL string) (string, error)
 }
 
 // ChangelogRenderInput drives `forge-ci version render-changelog`.
@@ -145,7 +145,7 @@ func finalizeChangelogCommitFiles(ctx context.Context, repo changelogRenderGit, 
 
 // renderChangelogFull renders the full changelog file and reports its size.
 func renderChangelogFull(ctx context.Context, renderer changelogRenderer, out io.Writer, in ChangelogRenderInput) error {
-	if err := renderer.RenderFull(ctx, in.Backend, in.ChangelogConfig, in.Tag, in.ChangelogPath, in.RepositoryURL); err != nil {
+	if err := renderer.RenderFull(ctx, in.Backend, in.ChangelogConfig, in.Tag, domainversion.ReleaseHistoryPattern(in.ReleasePolicy), in.ChangelogPath, in.RepositoryURL); err != nil {
 		return fmt.Errorf("render-changelog: render %s with %s: %w", in.ChangelogPath, in.Backend, err)
 	}
 
@@ -162,7 +162,7 @@ func renderChangelogFull(ctx context.Context, renderer changelogRenderer, out io
 // writeCommitMessageFiles renders the commit body and writes the commit-body
 // and commit-message files consumed by the later signing step.
 func writeCommitMessageFiles(ctx context.Context, renderer changelogRenderer, in ChangelogRenderInput) error {
-	body, err := renderer.RenderBody(ctx, in.Backend, in.CommitBodyConfig, in.Tag, in.RepositoryURL)
+	body, err := renderer.RenderBody(ctx, in.Backend, in.CommitBodyConfig, in.Tag, domainversion.ReleaseHistoryPattern(in.ReleasePolicy), in.RepositoryURL)
 	if err != nil {
 		return fmt.Errorf("render-changelog: render commit body with %s: %w", in.Backend, err)
 	}

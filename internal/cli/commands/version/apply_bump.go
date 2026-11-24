@@ -32,7 +32,7 @@ EXAMPLE:
    forge-ci version apply-bump --project-type maven --version 1.2.3 \
      --patch version-bump.patch --sha256 <hex> --paths-file bump-paths.txt`,
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "release-policy", Value: "stable", Usage: "accepted release versions: stable or stable-prerelease"},
+			&cli.StringFlag{Name: "release-policy", Value: "stable", Usage: "accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N"},
 			&cli.StringFlag{Name: "patch", Required: true, Usage: "git diff the bump job uploaded"},
 			&cli.StringFlag{Name: "sha256", Required: true, Usage: "sha256 the bump job reported for the patch"},
 			&cli.StringFlag{Name: flagProjectType, Required: true, Usage: "ecosystem whose project files the patch may change (maven/npm/cargo)"},

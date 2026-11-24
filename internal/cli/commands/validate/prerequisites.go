@@ -13,6 +13,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/adapters/git"
 	appvalidate "github.com/diggsweden/forge-ci/internal/app/validate"
 	"github.com/diggsweden/forge-ci/internal/cli/cienv"
+	"github.com/diggsweden/forge-ci/internal/cli/commonflags"
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
 	"github.com/diggsweden/forge-ci/internal/runcontext"
 )
@@ -31,6 +32,7 @@ func prerequisitesCmd() *cli.Command {
 			&cli.StringFlag{Name: "ref-type", Sources: cienv.RefType(), Usage: "trigger ref type (\"tag\" required for releases)"},
 			&cli.StringFlag{Name: "ref", Sources: cienv.Ref(), Usage: "fully-qualified ref (refs/tags/X) for prefix verification"},
 			&cli.StringFlag{Name: "target-branch", Sources: cli.EnvVars("TARGET_BRANCH", "BRANCH"), Usage: "branch the tag commit must be reachable from"},
+			commonflags.ReleasePolicy(),
 			&cli.StringFlag{Name: "repository", Sources: cienv.Repository(), Usage: "\"owner/repo\" on GitHub; \"group/project[/sub]\" on GitLab"}, //nolint:goconst // test fixture / generic identifier — extracting would explode setup boilerplate.
 			&cli.BoolFlag{Name: "require-allowlisted-signer", Sources: cli.EnvVars("REQUIRE_ALLOWLISTED_SIGNER"), Usage: "require the tag signer to be allowlisted in .forge-ci/allowed_signers (SSH) or .forge-ci/allowed_gpg_keys.asc (GPG)"},
 			&cli.BoolFlag{Name: "sign-artifacts", Sources: cli.EnvVars("SIGN_ARTIFACTS"), Usage: "release-artifact signing is enabled"},
@@ -58,6 +60,7 @@ func prerequisitesCmd() *cli.Command {
 					RefType:                   cmd.String("ref-type"),
 					Ref:                       cmd.String("ref"),
 					Branch:                    cmd.String("target-branch"),
+					ReleasePolicy:             cmd.String("release-policy"),
 					Repository:                cmd.String("repository"),
 					RequireAllowlistedSigner:  cmd.Bool("require-allowlisted-signer"),
 					SignArtifacts:             cmd.Bool("sign-artifacts"),

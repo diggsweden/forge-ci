@@ -60,7 +60,8 @@ func RefType(out io.Writer, in RefTypeInput) error {
 
 // TagFormatInput drives `forge-ci validate tag-format`.
 type TagFormatInput struct {
-	Tag string
+	Tag           string
+	ReleasePolicy string // a fork's -WORD.N build is stable under fork:WORD
 }
 
 // TagFormat validates a release tag against the project's permissive
@@ -80,7 +81,7 @@ func TagFormat(out io.Writer, in TagFormatInput) error {
 	_, _ = fmt.Fprintf(out, "%s Valid semantic version tag\n", clicolor.Check(out))
 	_, _ = fmt.Fprintf(out, "   Version: %s.%s.%s\n", tf.Major, tf.Minor, tf.Patch)
 
-	if tf.IsStable() {
+	if parsed, ok := version.ParseSemverTag(in.Tag); tf.IsStable() || (ok && !version.IsPrerelease(parsed, in.ReleasePolicy)) {
 		_, _ = fmt.Fprintf(out, "   Type: Stable release\n")
 	} else {
 		_, _ = fmt.Fprintf(out, "   Pre-release: %s\n", tf.Prerelease)
@@ -89,7 +90,7 @@ func TagFormat(out io.Writer, in TagFormatInput) error {
 			_, _ = fmt.Fprintf(out, "   %s Pre-release identifier follows convention\n", clicolor.Check(out))
 		} else {
 			_, _ = fmt.Fprintf(out, "   ℹ️ Non-standard pre-release identifier: %s\n", tf.Prerelease)
-			_, _ = fmt.Fprintf(out, "      Standard identifiers: alpha, beta, rc, snapshot, SNAPSHOT, dev\n")
+			_, _ = fmt.Fprintf(out, "      Standard identifiers: %s\n", strings.Join(version.CanonicalPrereleaseIdentifiers, ", "))
 			_, _ = fmt.Fprintf(out, "      (Release will proceed - this is informational only)\n")
 		}
 	}

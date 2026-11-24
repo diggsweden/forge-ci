@@ -69,6 +69,26 @@ func TestTagUniqueness_FailsWhenCollisions(t *testing.T) {
 	}
 }
 
+// Under fork:WORD the fork's builds bound changelog history, so they collide;
+// under stable they are prereleases the renderer skips.
+func TestTagUniqueness_ForkBuildsCollideUnderTheirPolicy(t *testing.T) {
+	t.Parallel()
+
+	gitr, ig := newRealGit(t)
+	ig.AddTag("v1.0.0-acme.1", "main")
+	ig.AddTag("v1.0.0-acme.2", "second build on the same commit")
+
+	in := appvalidate.TagUniquenessInput{Tag: "v1.0.0-acme.2", ReleasePolicy: "fork:acme"}
+	if err := appvalidate.TagUniqueness(context.Background(), gitr, &bytes.Buffer{}, in); !errors.Is(err, errs.ErrValidation) {
+		t.Fatalf("fork:acme: err = %v, want ErrValidation", err)
+	}
+
+	in.ReleasePolicy = "stable"
+	if err := appvalidate.TagUniqueness(context.Background(), gitr, &bytes.Buffer{}, in); err != nil {
+		t.Fatalf("stable: err = %v, want no collision", err)
+	}
+}
+
 func TestTagUniqueness_IgnoreTagDoesNotHideOtherCollisions(t *testing.T) {
 	t.Parallel()
 

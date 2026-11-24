@@ -97,8 +97,9 @@ runtime-images:                                   # build components' runtime-im
 ```
 
 A key left out leaves its placeholder, and init lists it. Consumers then run
-`forge-ci init https://<host>/<owner>/forge-ci` in their repository; by hand,
-the steps are these.
+`forge-ci init https://<host>/<owner>/forge-ci` in their repository, adding
+`--release-policy fork:WORD` when the fork releases its own `vX.Y.Z-WORD.N`
+builds, so init pins the newest of those; by hand, the steps are these.
 
 1. **Host the components.** Put this repository on your instance (see
    [Forks](#forks)), and choose and authenticate the engine commit you will pin.

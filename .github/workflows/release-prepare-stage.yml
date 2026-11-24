@@ -13,7 +13,7 @@ on:
       canonical-producer-engine-commit: {type: string, required: false, default: ""}
       canonical-producer-result: {type: string, required: false, default: ""}
       release-policy:
-        description: "Accepted release versions: stable or stable-prerelease"
+        description: "Accepted release versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N"
         type: string
         default: "stable"
       branch:

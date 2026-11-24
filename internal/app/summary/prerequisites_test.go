@@ -126,12 +126,15 @@ func TestPrerequisites_PrereleaseTags(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name string
-		tag  string
-		want string
+		name   string
+		tag    string
+		policy string
+		want   string
 	}{
 		{name: "rc", tag: "v1.0.0-rc.2", want: "| Release Type | 🚧 Pre-release | `rc` version |"},
 		{name: "alpha", tag: "v1.0.0-alpha", want: "| Release Type | 🚧 Pre-release | `alpha` version |"},
+		{name: "fork_build", tag: "v1.0.0-acme.1", policy: "fork:acme", want: "| Release Type | 🎯 Stable | Production release |"},
+		{name: "fork_build_without_its_policy", tag: "v1.0.0-acme.1", policy: "stable-prerelease", want: "| Release Type | 🚧 Pre-release | `acme` version |"},
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -140,9 +143,10 @@ func TestPrerequisites_PrereleaseTags(t *testing.T) {
 			sink := &fakeSummarySink{}
 
 			err := appsummary.Prerequisites(context.Background(), sink, &fakeGitInfo{}, appsummary.PrerequisitesSummaryInput{
-				TagName: testCase.tag,
-				RefType: provider.RefTypeTag,
-				Now:     fixedNow(),
+				TagName:       testCase.tag,
+				ReleasePolicy: testCase.policy,
+				RefType:       provider.RefTypeTag,
+				Now:           fixedNow(),
 			})
 			if err != nil {
 				t.Fatal(err)

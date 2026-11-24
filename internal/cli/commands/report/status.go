@@ -166,6 +166,7 @@ func statusPrerequisitesCmd() *cli.Command {
    forge-ci report status prerequisites --tag v1.2.3 --ref-type tag --job-status success`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "tag", Sources: cienv.Tag(), Usage: "tag the release is anchored to (e.g. v1.2.3)"},
+			commonflags.ReleasePolicy(),
 			&cli.StringFlag{Name: "commit", Sources: cienv.Commit(), Usage: "commit SHA the tag points at"},
 			&cli.StringFlag{Name: "ref-type", Sources: cienv.RefType(), Usage: "trigger ref type (tag/branch/…)"},
 			&cli.StringFlag{Name: "config-plan-json", Sources: cli.EnvVars("CONFIG_PLAN_JSON"), Usage: "typed config-plan JSON used to describe targets in the summary"},
@@ -188,6 +189,7 @@ func statusPrerequisitesCmd() *cli.Command {
 			return deps.FromCmd(ctx, cmd, func(d *deps.Deps) error {
 				return appsummary.Prerequisites(ctx, d.SummarySink, git.New(), appsummary.PrerequisitesSummaryInput{
 					TagName:                  cmd.String("tag"),
+					ReleasePolicy:            cmd.String("release-policy"),
 					CommitSHA:                cmd.String("commit"),
 					RefType:                  provider.RefType(cmd.String("ref-type")),
 					ConfigPlanJSON:           cmd.String("config-plan-json"),

@@ -433,6 +433,34 @@ func TestResolveSourceRefusesWhatItCannotPin(t *testing.T) {
 	}
 }
 
+// A fork's release makes vX.Y.Z-WORD.N tags, and under its policy init pins
+// the newest of those, never upstream's plain tag that the fork carries.
+func TestRunPinsAForksOwnBuildUnderItsPolicy(t *testing.T) {
+	t.Parallel()
+
+	remote := fakeRemote{tags: []string{"v1.3.0", "v1.2.0-acme.2", "v1.2.0-acme.10", "v1.3.0-rc.1", "v1.3.0-other.1"}, defaults: "forge: forgejo\n"}
+
+	result, err := appinit.Run(t.Context(), appinit.Input{Remote: remote, URL: "https://codefloe.com/itiquette/forge-ci", ReleasePolicy: "fork:acme", Dir: t.TempDir(), Example: "go-cli", DryRun: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result.Source.Tag != "v1.2.0-acme.10" {
+		t.Fatalf("pinned %s, want v1.2.0-acme.10", result.Source.Tag)
+	}
+
+	for name, in := range map[string]appinit.Input{
+		"no fork build":   {Remote: fakeRemote{tags: []string{"v1.3.0"}, defaults: "forge: forgejo\n"}, ReleasePolicy: "fork:acme"},
+		"not a fork":      {Remote: remote, ReleasePolicy: "stable"},
+		"prerelease word": {Remote: remote, ReleasePolicy: "fork:rc"},
+	} {
+		in.URL, in.Dir, in.Example, in.DryRun = "https://codefloe.com/itiquette/forge-ci", t.TempDir(), "go-cli", true
+		if _, err := appinit.Run(t.Context(), in); !errors.Is(err, errs.ErrUsage) {
+			t.Errorf("%s: %v, want a usage refusal", name, err)
+		}
+	}
+}
+
 func TestRunDryRunMatchesGeneratedProposal(t *testing.T) {
 	t.Parallel()
 

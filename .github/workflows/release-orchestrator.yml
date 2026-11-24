@@ -80,7 +80,7 @@ on:
         type: string
       # === SHARED CONFIGURATION ===
       release-policy:
-        description: "Accepted signed request versions: stable or stable-prerelease. Classification comes from the version tag."
+        description: "Accepted signed request versions: stable, stable-prerelease, or fork:WORD for a fork's vX.Y.Z-WORD.N. Classification comes from the version tag."
         required: false
         default: "stable"
         type: string
@@ -606,6 +606,7 @@ jobs:
     uses: ./.github/workflows/validate-release-prerequisites.yml
     with:
       enforce-reproducible-builds: ${{ inputs['enforce-reproducible-builds'] }}
+      release-policy: ${{ inputs['release-policy'] }}
       forge-ci-sha: ${{ inputs['forge-ci-sha'] }}
       config-plan-json: ${{ needs.parse-config.outputs.config-plan-json }}
       has-cargo-publish-target: ${{ fromJson(needs.parse-config.outputs['publish-stage-plan-json']).targets.cargo_container_first.runs || fromJson(needs.parse-config.outputs['build-stage-plan-json']).targets.cargo.runs }}

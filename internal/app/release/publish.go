@@ -79,7 +79,9 @@ func PublishRelease(ctx context.Context, pub provider.ReleasePublisher, out io.W
 	_, _ = fmt.Fprintf(out, "Publishing release %s with %d asset(s)\n", tag, len(assets))
 
 	latest := provider.MakeLatestTrue
-	if parsed.Prerelease != "" {
+
+	prerelease := version.IsPrerelease(parsed, in.ReleasePolicy)
+	if prerelease {
 		latest = provider.MakeLatestFalse
 	}
 
@@ -89,7 +91,7 @@ func PublishRelease(ctx context.Context, pub provider.ReleasePublisher, out io.W
 		Name:       releaseName,
 		NotesFile:  notesFile,
 		Draft:      in.Draft,
-		Prerelease: parsed.Prerelease != "",
+		Prerelease: prerelease,
 		MakeLatest: latest,
 		Assets:     assets,
 	})

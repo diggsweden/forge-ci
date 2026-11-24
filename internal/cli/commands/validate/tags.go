@@ -98,10 +98,11 @@ func tagUniquenessCmd() *cli.Command {
 				Sources:  cienv.Tag(),
 				Usage:    "tag name (e.g. v1.2.3)",
 			},
+			commonflags.ReleasePolicy(),
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return appvalidate.TagUniqueness(ctx, git.New(), os.Stderr,
-				appvalidate.TagUniquenessInput{Tag: cmd.String("tag")})
+				appvalidate.TagUniquenessInput{Tag: cmd.String("tag"), ReleasePolicy: cmd.String("release-policy")})
 		},
 	}
 }

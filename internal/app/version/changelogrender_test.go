@@ -57,7 +57,7 @@ type fakeChangelogRenderer struct {
 	bodyRepositoryURL string
 }
 
-func (f *fakeChangelogRenderer) RenderFull(_ context.Context, backend, _, tag, outputPath, repositoryURL string) error {
+func (f *fakeChangelogRenderer) RenderFull(_ context.Context, backend, _, tag, _, outputPath, repositoryURL string) error {
 	f.backend = backend
 	f.fullTag = tag
 	f.fullRepositoryURL = repositoryURL
@@ -65,7 +65,7 @@ func (f *fakeChangelogRenderer) RenderFull(_ context.Context, backend, _, tag, o
 	return os.WriteFile(outputPath, []byte("# Release\n\nChanges\n"), 0o600)
 }
 
-func (f *fakeChangelogRenderer) RenderBody(_ context.Context, _, _, tag, repositoryURL string) (string, error) {
+func (f *fakeChangelogRenderer) RenderBody(_ context.Context, _, _, tag, _, repositoryURL string) (string, error) {
 	f.bodyTag = tag
 	f.bodyRepositoryURL = repositoryURL
 

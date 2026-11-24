@@ -32,7 +32,7 @@ type recordingChangelogRenderer struct {
 
 var errRendererRefused = errors.New("renderer refused")
 
-func (r *recordingChangelogRenderer) RenderFull(_ context.Context, backend, config, tag, outputPath, repositoryURL string) error {
+func (r *recordingChangelogRenderer) RenderFull(_ context.Context, backend, config, tag, _, outputPath, repositoryURL string) error {
 	r.calls = append(r.calls, renderCall{"full", backend, config, tag, outputPath, repositoryURL})
 	if r.failOn == "full" {
 		return errRendererRefused
@@ -41,7 +41,7 @@ func (r *recordingChangelogRenderer) RenderFull(_ context.Context, backend, conf
 	return os.WriteFile(outputPath, []byte("# Changelog\n\n## v1.2.3\n"), 0o600)
 }
 
-func (r *recordingChangelogRenderer) RenderBody(_ context.Context, backend, config, tag, repositoryURL string) (string, error) {
+func (r *recordingChangelogRenderer) RenderBody(_ context.Context, backend, config, tag, _, repositoryURL string) (string, error) {
 	r.calls = append(r.calls, renderCall{"body", backend, config, tag, "", repositoryURL})
 	if r.failOn == "body" {
 		return "", errRendererRefused

@@ -19,6 +19,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
 	domainsummary "github.com/diggsweden/forge-ci/internal/domain/summary"
 	"github.com/diggsweden/forge-ci/internal/domain/validate"
+	"github.com/diggsweden/forge-ci/internal/domain/version"
 	"github.com/diggsweden/forge-ci/internal/listval"
 )
 
@@ -38,6 +39,7 @@ type gitInfoOps interface {
 // / secrets status / job status / validation results / footer).
 type PrerequisitesSummaryInput struct {
 	TagName                  string
+	ReleasePolicy            string // labels the release type, as the release decides it
 	CommitSHA                string
 	RefType                  provider.RefType
 	ConfigPlanJSON           string
@@ -353,7 +355,7 @@ func writeValidationResults(builder *strings.Builder, in PrerequisitesSummaryInp
 		row("Tag Type", "Unconfirmed", "Object type is not verified by this summary")
 		row("Tag Signature", "Unconfirmed", "Signature presence is not verification; see the prerequisite job result")
 
-		if tag != nil && tag.Prerelease != "" {
+		if parsed, ok := version.ParseSemverTag(in.TagName); tag != nil && ok && version.IsPrerelease(parsed, in.ReleasePolicy) {
 			identifier, _, _ := strings.Cut(tag.Prerelease, ".")
 			row("Release Type", "🚧 Pre-release", fmt.Sprintf("`%s` version", identifier))
 		} else {
