@@ -1087,8 +1087,13 @@ func openConsumer(ctx context.Context, git layerGit, root, stage string) (Consum
 
 	// The borrowed objects are read in place; nothing is copied or written
 	// back.
-	alternates := filepath.Join(stage, "objects", "info", "alternates")
-	if err := os.WriteFile(alternates, []byte(facts[2]+"\n"), 0o600); err != nil { //nolint:gosec // stage is the caller's fresh temporary directory; the path below it is fixed.
+	stageRoot, err := os.OpenRoot(stage)
+	if err != nil {
+		return Consumer{}, fmt.Errorf("borrow the checkout's objects: %w", err)
+	}
+
+	writeErr := stageRoot.WriteFile(filepath.Join("objects", "info", "alternates"), []byte(facts[2]+"\n"), 0o600)
+	if err := errors.Join(writeErr, stageRoot.Close()); err != nil {
 		return Consumer{}, fmt.Errorf("borrow the checkout's objects: %w", err)
 	}
 
