@@ -2012,40 +2012,7 @@ prepare the GitHub workflows' isolated native Kaniko Docker action; no build or 
 
 ### `forge-ci container ref`
 
-image-reference helpers: canonicalize, strip to name, resolve per-platform digests, compose from repo context
-
-#### `forge-ci container ref canonical`
-
-canonicalize a Docker image reference for digest-pinned Buildah use
-
-| Flag | Description | Type | Default | Env vars |
-|------|-------------|------|---------|----------|
-| `--ref` | image reference (required) | string | `""` | `$IMAGE_REF` |
-
-#### `forge-ci container ref name`
-
-print an image repository/name with any tag or digest removed
-
-| Flag | Description | Type | Default | Env vars |
-|------|-------------|------|---------|----------|
-| `--ref` | image reference (required) | string | `""` | `$IMAGE_REF` |
-
-#### `forge-ci container ref platform`
-
-resolve an image index reference to one platform's digest-pinned ref
-
-```
-Fetches the raw manifest for --ref. Plain single-platform manifests
-return the canonical ref unchanged; multi-platform indexes return image@digest for
-the requested --platform. --auth-file accepts the Docker/containers auth config
-written by `container login`.
-```
-
-| Flag | Description | Type | Default | Env vars |
-|------|-------------|------|---------|----------|
-| `--ref` | image tag or digest ref to inspect (required) | string | `""` | `$IMAGE_REF` |
-| `--platform` | target platform: os/arch or os/arch/variant (required) | string | `""` | `$PLATFORM` |
-| `--auth-file` | Docker-compatible registry auth config | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
+image-reference helpers: compose a canonical reference from repo context
 
 #### `forge-ci container ref resolve`
 

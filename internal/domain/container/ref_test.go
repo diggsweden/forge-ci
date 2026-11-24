@@ -125,6 +125,15 @@ func TestCanonicalImageRef_RejectsMalformedOCIReferences(t *testing.T) {
 	}
 }
 
+func TestCanonicalImageRef_RefusesAnotherTransport(t *testing.T) {
+	t.Parallel()
+
+	_, err := container.CanonicalImageRef("oci://example.invalid/app:tag")
+	if !errors.Is(err, errs.ErrUsage) || !strings.Contains(err.Error(), "transport other than docker://") {
+		t.Fatalf("err = %v, want ErrUsage naming the transport", err)
+	}
+}
+
 func TestStripTag_RemovesTheTagAndKeepsAHostPort(t *testing.T) {
 	t.Parallel()
 

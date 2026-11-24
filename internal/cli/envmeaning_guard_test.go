@@ -184,8 +184,7 @@ func sharedEnvSpellings() map[string]sharedEnvSpelling {
 		"IMAGE_REF": {Canonical: "image-ref", Why: imageRef, Sites: []string{
 			"forge-ci container image push --destination", "forge-ci container manifest push --destination",
 			"forge-ci container manifest digest --ref",
-			"forge-ci container ref canonical --ref", "forge-ci container ref name --ref",
-			"forge-ci container ref platform --ref", "forge-ci container release-images validate --ref",
+			"forge-ci container release-images validate --ref",
 		}},
 		"JOB_STATUS": {Canonical: "job-status", Why: "the runner's job status",
 			Sites: []string{"forge-ci report job-result --status"}},

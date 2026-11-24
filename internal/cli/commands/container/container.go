@@ -10,8 +10,7 @@
 //   - manifest.go — `manifest <digest|inspect|merge|push>`
 //   - container.go (this file) — flat ops: platform-plan, metadata,
 //     write-digest-marker
-//   - refhelpers.go — `ref <canonical|name|platform|resolve>` image-reference
-//     projections
+//   - refhelpers.go — `ref resolve`
 //   - tarball.go  — `extract-npm-tarball`
 //   - binaries.go — `suffix-extracted-binaries`
 //   - materialize_build_secrets.go — unpack the build-secrets envelope

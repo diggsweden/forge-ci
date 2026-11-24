@@ -20,6 +20,11 @@ import (
 	"github.com/diggsweden/forge-ci/internal/pathsafe"
 )
 
+// RawManifestRegistry fetches the manifest JSON served for an image reference.
+type RawManifestRegistry interface {
+	Manifest(ctx context.Context, ref string) ([]byte, error)
+}
+
 // ManifestRegistry is the registry surface the manifest helpers need: digest
 // resolution, raw-manifest fetch, and multi-platform index assembly. It is
 // implemented by internal/adapters/ociregistry (daemonless

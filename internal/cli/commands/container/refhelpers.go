@@ -5,103 +5,22 @@ package container
 
 import (
 	"context"
-	"fmt"
-	"os"
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
 	"github.com/diggsweden/forge-ci/internal/cli/cienv"
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
-	"github.com/diggsweden/forge-ci/internal/cli/regflags"
 )
 
-// refGroup wires `forge-ci container ref <verb>` — projections of one
-// parsed image-reference concept. canonical/name are pure string math over an
-// existing ref, platform additionally does registry I/O to pick a
-// per-platform digest, and resolve composes a new canonical reference from CI
-// repository context instead of parsing one.
+// refGroup wires `forge-ci container ref resolve`, which composes a canonical
+// image reference from CI repository context.
 func refGroup() *cli.Command {
 	return &cli.Command{
 		Name:  "ref",
-		Usage: "image-reference helpers: canonicalize, strip to name, resolve per-platform digests, compose from repo context",
+		Usage: "image-reference helpers: compose a canonical reference from repo context",
 		Commands: []*cli.Command{
-			refCanonicalCmd(),
-			refNameCmd(),
-			refPlatformCmd(),
 			refResolveCmd(),
-		},
-	}
-}
-
-func refCanonicalCmd() *cli.Command {
-	return &cli.Command{
-		Name:  "canonical",
-		Usage: "canonicalize a Docker image reference for digest-pinned Buildah use",
-		Flags: []cli.Flag{
-			&cli.StringFlag{Name: flagRef, Required: true, Sources: cli.EnvVars("IMAGE_REF"), Usage: "image reference"},
-		},
-		Action: func(_ context.Context, cmd *cli.Command) error {
-			value, err := appcontainer.CanonicalRef(cmd.String(flagRef))
-			if err != nil {
-				return err
-			}
-
-			_, _ = fmt.Fprintln(os.Stdout, value)
-
-			return nil
-		},
-	}
-}
-
-func refNameCmd() *cli.Command {
-	return &cli.Command{
-		Name:  subCmdName,
-		Usage: "print an image repository/name with any tag or digest removed",
-		Flags: []cli.Flag{
-			&cli.StringFlag{Name: flagRef, Required: true, Sources: cli.EnvVars("IMAGE_REF"), Usage: "image reference"},
-		},
-		Action: func(_ context.Context, cmd *cli.Command) error {
-			value, err := appcontainer.ImageNameForRef(cmd.String(flagRef))
-			if err != nil {
-				return err
-			}
-
-			_, _ = fmt.Fprintln(os.Stdout, value)
-
-			return nil
-		},
-	}
-}
-
-func refPlatformCmd() *cli.Command {
-	return &cli.Command{
-		Name:  "platform",
-		Usage: "resolve an image index reference to one platform's digest-pinned ref",
-		Description: `Fetches the raw manifest for --ref. Plain single-platform manifests
-return the canonical ref unchanged; multi-platform indexes return image@digest for
-the requested --platform. --auth-file accepts the Docker/containers auth config
-written by ` + "`container login`" + `.`,
-		Flags: []cli.Flag{
-			&cli.StringFlag{Name: flagRef, Required: true, Sources: cli.EnvVars("IMAGE_REF"), Usage: "image tag or digest ref to inspect"},
-			&cli.StringFlag{Name: flagPlatform, Required: true, Sources: cli.EnvVars("PLATFORM"), Usage: "target platform: os/arch or os/arch/variant"},
-			regflags.AuthFile(regflags.AuthFileOpts{Usage: "Docker-compatible registry auth config"}),
-		},
-		Action: func(ctx context.Context, cmd *cli.Command) error {
-			registry := ociregistry.WithAuthFile(cmd.String(flagAuthFile))
-
-			value, err := appcontainer.PlatformRef(ctx, registry, appcontainer.PlatformRefInput{
-				Ref:      cmd.String(flagRef),
-				Platform: cmd.String(flagPlatform),
-			})
-			if err != nil {
-				return err
-			}
-
-			_, _ = fmt.Fprintln(os.Stdout, value)
-
-			return nil
 		},
 	}
 }
