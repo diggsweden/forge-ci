@@ -14,6 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/diggsweden/forge-ci/internal/domain/runners"
+	"github.com/diggsweden/forge-ci/internal/domain/validate"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
@@ -193,7 +194,7 @@ func TestCallerRunnerSignersAreHeldToTheAllowlist(t *testing.T) {
 	for path, jobs := range workflows {
 		// This repository's own pipelines are entry points: they have no
 		// caller to take the list from, and keep the default.
-		if strings.HasPrefix(filepath.Base(path), "self-") {
+		if validate.OwnPipeline(path) {
 			continue
 		}
 

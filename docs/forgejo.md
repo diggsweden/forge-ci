@@ -2172,10 +2172,13 @@ action from, and a workflow from the owner of the repository it cloned.
 ### Maintaining your own CI and release configuration
 
 Upstream `.forgejo/workflows` holds the reusable layer and one own entry
-point, `self-pullrequest.yml`. `test/forgejoguard` treats every other file
-there as a layer workflow: it must start only through `workflow_call` and name
-no organization. Three exact names are the repository's own entry points and
-may name your organization and pin your images:
+point, `self-pullrequest.yml`. The forge calls only a `workflow_call`
+workflow, and the guards (`test/forgejoguard`, `test/workflowguard`) hold the
+file name to that trigger: a `self-*.yml` workflow is the repository's own
+pipeline, which no consumer calls, may name your organization and pin your
+images, and must not take `workflow_call`; every other file is a layer
+workflow, starts only through `workflow_call` and names no organization. A
+layer workflow cannot become an own pipeline without a rename.
 
 | File in `.forgejo/workflows/` | Source | Purpose |
 |---|---|---|
@@ -2183,12 +2186,11 @@ may name your organization and pin your images:
 | `self-release.yml` | copy of [`examples/forgejo/self-release.yml`](../examples/forgejo/self-release.yml) | releases the CLI archives |
 | `self-runtime-images.yml` | copy of [`examples/forgejo/self-runtime-images.yml`](../examples/forgejo/self-runtime-images.yml) | publishes the runtime images |
 
-Copy the two examples under those names and fill in their placeholders; the
+Copy the examples under those names and fill in their placeholders; the
 [examples README](../examples/forgejo/README.md) lists them. The guards then
-hold the release copy to the example's shape and both copies to one engine
-commit, with no change to the tests. A workflow under any other name is still a layer
-workflow to the guards; exempt such a file by its exact path in your copy of
-the guards, never by a pattern. Run your own workflows on
+hold the release copy to the example's shape and every own pipeline to one
+engine commit, with no change to the tests. Add any other pipeline of your own
+as another `self-*.yml`. Run your own workflows on
 `${{ fromJSON(vars.CI_RUNNER_LABEL) }}`, or pass that variable as `runs-on` to
 a reusable workflow, and keep your organization's repository, signer-image and
 trust coordinates in those files only; the reusable layer stays

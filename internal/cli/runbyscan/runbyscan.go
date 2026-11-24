@@ -17,6 +17,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/diggsweden/forge-ci/internal/domain/validate"
 )
 
 // Dirs are the repository directories whose files call the binary as a
@@ -66,7 +68,10 @@ func Scan(root string, paths []string) (map[string][]string, error) {
 				return nil
 			}
 
-			if OwnPipeline(entry.Name()) {
+			// Own pipelines (self-*.yml) are no consumer's to call, so RUN BY
+			// leaves them out; that keeps the table, and the binary, the same in a
+			// mirror that adds its own.
+			if validate.OwnPipeline(entry.Name()) {
 				return nil
 			}
 
@@ -100,15 +105,6 @@ func Scan(root string, paths []string) (map[string][]string, error) {
 	}
 
 	return found, nil
-}
-
-// OwnPipeline reports whether a workflow file is one of the hosting
-// repository's own pipelines (self-*.yml) rather than something a consumer
-// calls. RUN BY tells a consumer where a step runs for them, so these are left
-// out; that also keeps the table, and with it the binary, the same in a
-// mirror that adds its own self-release caller.
-func OwnPipeline(name string) bool {
-	return strings.HasPrefix(name, "self-")
 }
 
 // Invoked returns the known command paths body invokes: the longest run of

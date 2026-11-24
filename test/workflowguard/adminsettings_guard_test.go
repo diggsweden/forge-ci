@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/diggsweden/forge-ci/internal/domain/validate"
 	"github.com/diggsweden/forge-ci/internal/testutil/isolatedenv"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 	"gopkg.in/yaml.v3"
@@ -83,7 +84,7 @@ func adminSources(t *testing.T) []adminSource {
 
 	for _, dir := range []string{".github/workflows", ".forgejo/workflows"} {
 		for _, path := range yamlFiles(t, dir) {
-			if strings.HasPrefix(path[strings.LastIndex(path, "/")+1:], "self-") {
+			if validate.OwnPipeline(path) {
 				continue
 			}
 
@@ -356,7 +357,7 @@ func TestAdministratorSettingsAreForwardedToEveryCallee(t *testing.T) {
 	forwarded := 0
 
 	for _, path := range yamlFiles(t, ".github/workflows") {
-		if strings.HasPrefix(path[strings.LastIndex(path, "/")+1:], "self-") {
+		if validate.OwnPipeline(path) {
 			continue
 		}
 

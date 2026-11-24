@@ -11,6 +11,7 @@ import (
 
 	"github.com/goccy/go-yaml/ast"
 
+	"github.com/diggsweden/forge-ci/internal/domain/validate"
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
@@ -21,24 +22,17 @@ const selfBuildWorkflow = ".forgejo/workflows/self-pullrequest.yml"
 var selfEntryPointExamples = []string{"examples/forgejo/self-release.yml", "examples/forgejo/self-runtime-images.yml"}
 
 // isSelfEntryPoint reports whether a repository-relative path is one of the
-// hosting repository's own entry points: a workflow the repository starts
-// itself and no consumer calls. They are exact names, never a pattern:
-// upstream ships the self-build, and a mirror adds the release and runtime
-// callers under the names of their examples. Such a file is a consumer of the
-// layer, so it may name its own organization and pin its own images.
+// hosting repository's own entry points: a self-*.yml workflow the repository
+// starts itself and no consumer calls. Upstream ships the self-build; a mirror
+// adds its own, the release and runtime callers from the examples among them,
+// with no change here. Such a file is a consumer of the layer, so it may name
+// its own organization and pin its own images. Name and trigger are held to
+// agree (TestOwnPipelineNamesMatchTheirTriggers), so a layer workflow cannot
+// become one without a rename.
 func isSelfEntryPoint(path string) bool {
 	path = filepath.ToSlash(path)
-	if path == selfBuildWorkflow {
-		return true
-	}
 
-	for _, example := range selfEntryPointExamples {
-		if path == ".forgejo/workflows/"+filepath.Base(example) {
-			return true
-		}
-	}
-
-	return false
+	return filepath.ToSlash(filepath.Dir(path)) == ".forgejo/workflows" && validate.OwnPipeline(path)
 }
 
 // The repository's own entry points are consumers, not callable layer components.
@@ -310,22 +304,35 @@ func TestSelfEntryPointsPinOneEngineCommit(t *testing.T) {
 	}
 }
 
-func TestSelfEntryPointsAreExactNames(t *testing.T) {
+func TestSelfEntryPointsAreSelfWorkflows(t *testing.T) {
 	t.Parallel()
 
 	for path, want := range map[string]bool{
-		".forgejo/workflows/self-pullrequest.yml":    true,
-		".forgejo/workflows/self-release.yml":        true,
-		".forgejo/workflows/self-runtime-images.yml": true,
-		".forgejo/workflows/self-anything.yml":       false,
-		".forgejo/workflows/prepare-release.yml":     false,
-		".forgejo/workflows/runtime-images.yml":      false,
-		".forgejo/actions/self-release/action.yml":   false,
-		"examples/forgejo/self-release.yml":          false,
-		".github/workflows/self-release.yml":         false,
+		".forgejo/workflows/self-pullrequest.yml":  true,
+		".forgejo/workflows/self-release.yml":      true,
+		".forgejo/workflows/self-signer-image.yml": true,
+		".forgejo/workflows/prepare-release.yml":   false,
+		".forgejo/workflows/runtime-images.yml":    false,
+		".forgejo/actions/self-release/action.yml": false,
+		"examples/forgejo/self-release.yml":        false,
+		".github/workflows/self-release.yml":       false,
 	} {
 		if isSelfEntryPoint(path) != want {
 			t.Errorf("isSelfEntryPoint(%q) = %t, want %t", path, !want, want)
+		}
+	}
+}
+
+// The forge calls only a workflow_call workflow, so that trigger is what makes
+// a file part of the layer. A self-*.yml name must say the same: otherwise a
+// layer workflow whose workflow_call gave way to a push would start here, with
+// this repository's secrets, as an own pipeline.
+func TestOwnPipelineNamesMatchTheirTriggers(t *testing.T) {
+	t.Parallel()
+
+	for _, path := range allWorkflows(t) {
+		if mismatch := validate.OwnPipelineMismatch(path, reporoot.ReadFile(t, path)); mismatch != "" {
+			t.Errorf("%s: %s", path, mismatch)
 		}
 	}
 }

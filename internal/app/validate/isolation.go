@@ -297,32 +297,12 @@ func callsWorkflowFile(body []byte, root, subject, target string) bool {
 // any of the scalar, list and mapping forms of on:. A file that does not
 // parse, or names no trigger, is not.
 func onlyCalled(body []byte) bool {
-	var doc struct {
-		On yaml.Node `yaml:"on"`
-	}
-
-	if err := yaml.Unmarshal(body, &doc); err != nil {
+	triggers, err := validate.WorkflowTriggers(body)
+	if err != nil || len(triggers) == 0 {
 		return false
 	}
 
-	var triggers []string
-
-	switch doc.On.Kind {
-	case yaml.ScalarNode:
-		triggers = []string{doc.On.Value}
-	case yaml.SequenceNode:
-		for _, item := range doc.On.Content {
-			triggers = append(triggers, item.Value)
-		}
-	case yaml.MappingNode:
-		for i := 0; i < len(doc.On.Content); i += 2 {
-			triggers = append(triggers, doc.On.Content[i].Value)
-		}
-	default:
-		return false
-	}
-
-	return len(triggers) > 0 && !slices.ContainsFunc(triggers, func(trigger string) bool { return trigger != "workflow_call" })
+	return !slices.ContainsFunc(triggers, func(trigger string) bool { return trigger != "workflow_call" })
 }
 
 // releaseRuleViolations holds each release workflow to the release rules,
