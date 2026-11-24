@@ -46,8 +46,8 @@ Before copying it to `.forgejo/workflows/self-release.yml`:
 
 - Copy [`.forge-ci/consumer-defaults.yml.example`](.forge-ci/consumer-defaults.yml.example)
   to `.forge-ci/consumer-defaults.yml` with the same signer and key checksum,
-  so `forge-ci init --release-policy fork:WORD` hands consumers the fork's
-  values at its newest release.
+  so `forge-ci init` hands consumers the fork's values at its newest
+  release.
 - Replace `FIXME` in `release-policy: fork:FIXME` with your fork's lowercase
   word, the `WORD` of its `vX.Y.Z-WORD.N` releases.
 - Replace `FORGE_HOST`, `OWNER` and every `PIN_*` with your reviewed server,

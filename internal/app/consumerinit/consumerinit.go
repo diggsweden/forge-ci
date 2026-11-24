@@ -24,6 +24,8 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/version"
 )
 
+var errSeveralForks = errors.New("the checkout has the builds of several forks")
+
 // Checkout reads the committed history of a local Forge CI checkout,
 // never its working tree, and never the network.
 type Checkout interface {
@@ -47,8 +49,8 @@ type Input struct {
 	// Ref is a tag or a commit SHA to pin; empty takes the newest release
 	// tag under the release policy.
 	Ref string
-	// ReleasePolicy fork:WORD pins the fork's own newest vX.Y.Z-WORD.N
-	// build instead, the tag its release made; empty pins a stable tag.
+	// ReleasePolicy is stable or fork:WORD; empty takes fork:WORD when the
+	// checkout's fork builds name exactly one WORD, otherwise stable.
 	ReleasePolicy string
 	Dir           string // the consumer's root
 	Example       string // example to start from, e.g. go-cli
@@ -217,7 +219,12 @@ func pin(ctx context.Context, checkout Checkout, ref, policy string) (string, st
 		return "", "", err
 	}
 
-	if policy, err = releasePolicy(policy); err != nil {
+	policy, err = releasePolicy(tags, policy)
+	if ref != "" && errors.Is(err, errSeveralForks) {
+		err = nil // a given ref needs no choice among the forks
+	}
+
+	if err != nil {
 		return "", "", err
 	}
 
@@ -247,13 +254,28 @@ func pin(ctx context.Context, checkout Checkout, ref, policy string) (string, st
 	return tag, commit, nil
 }
 
-// releasePolicy is empty, which pins a stable tag, or fork:WORD.
-func releasePolicy(policy string) (string, error) {
-	if policy != "" && (!strings.HasPrefix(policy, "fork:") || version.ValidateReleasePolicy(policy) != nil) {
-		return "", fmt.Errorf("init takes --release-policy fork:WORD, the policy of the fork's own builds (got %q): %w", policy, errs.ErrUsage)
+// releasePolicy is the given policy, else the one the checkout's tags show:
+// fork:WORD when its fork builds name one WORD, stable when they name none.
+func releasePolicy(tags []string, policy string) (string, error) {
+	switch {
+	case policy == version.ReleasePolicyStable:
+		return "", nil
+	case policy != "":
+		if !strings.HasPrefix(policy, "fork:") || version.ValidateReleasePolicy(policy) != nil {
+			return "", fmt.Errorf("--release-policy is stable or fork:WORD, the policy of the fork's own builds (got %q): %w", policy, errs.ErrUsage)
+		}
+
+		return policy, nil
 	}
 
-	return policy, nil
+	switch forks := version.ForkPolicies(tags); len(forks) {
+	case 0:
+		return "", nil
+	case 1:
+		return forks[0], nil
+	default:
+		return "", fmt.Errorf("%w, %s; choose one with --release-policy: %w", errSeveralForks, strings.Join(forks, ", "), errs.ErrUsage)
+	}
 }
 
 // latestTag is the newest tag init pins: the fork's own vX.Y.Z-WORD.N

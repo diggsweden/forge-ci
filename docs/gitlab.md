@@ -98,10 +98,10 @@ runtime-images:                                   # build components' runtime-im
 ```
 
 A key left out leaves its placeholder, and init lists it. Consumers then
-clone the fork and run `forge-ci init <fork checkout>` in their repository,
-adding `--release-policy fork:WORD` when the fork releases its own
-`vX.Y.Z-WORD.N` builds, so init pins the newest of those; by hand, the steps
-are these.
+clone the fork and run `forge-ci init <fork checkout>` in their repository.
+When the fork's tags hold its own `vX.Y.Z-WORD.N` builds, init takes
+`fork:WORD` from them and pins the newest; `--release-policy` chooses
+another. By hand, the steps are these.
 
 1. **Host the components.** Put this repository on your instance (see
    [Forks](#forks)), and choose and authenticate the engine commit you will pin.

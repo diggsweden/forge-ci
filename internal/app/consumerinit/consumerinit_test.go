@@ -468,7 +468,7 @@ func TestRunPinsAForksOwnBuildUnderItsPolicy(t *testing.T) {
 
 	for name, in := range map[string]appinit.Input{
 		"no fork build":   {Checkout: fakeCheckout{tags: []string{"v1.3.0"}, defaults: "forge: forgejo\n"}, ReleasePolicy: "fork:acme"},
-		"not a fork":      {Checkout: remote, ReleasePolicy: "stable"},
+		"not a policy":    {Checkout: remote, ReleasePolicy: "stable-prerelease"},
 		"prerelease word": {Checkout: remote, ReleasePolicy: "fork:rc"},
 	} {
 		in.URL, in.Dir, in.Example, in.DryRun = "https://codefloe.com/itiquette/forge-ci", t.TempDir(), "go-cli", true
@@ -727,6 +727,44 @@ func TestRunPinsACommitSHA(t *testing.T) {
 
 			if !strings.Contains(string(body), "/build-go@"+version+"\n") {
 				t.Fatalf("the component is not pinned to %s", version)
+			}
+		})
+	}
+}
+
+// Without --release-policy, a checkout whose tags hold one fork's builds
+// pins that fork's newest build; several forks need a choice.
+func TestRunTakesTheForkPolicyItsTagsShow(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct {
+		tags        []string
+		policy, ref string
+		want        string
+	}{
+		"upstream":                   {tags: []string{"v1.3.0", "v1.3.0-rc.1"}, want: "v1.3.0"},
+		"one fork":                   {tags: []string{"v1.3.0", "v1.2.0-acme.2"}, want: "v1.2.0-acme.2"},
+		"stable override":            {tags: []string{"v1.3.0", "v1.2.0-acme.2"}, policy: "stable", want: "v1.3.0"},
+		"several forks":              {tags: []string{"v1.2.0-acme.1", "v1.2.0-other.1"}},
+		"several forks, a given tag": {tags: []string{"v1.0.0", "v1.2.0-acme.1", "v1.2.0-other.1"}, ref: "v1.0.0", want: "v1.0.0"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			result, err := appinit.Run(t.Context(), appinit.Input{
+				Checkout: fakeCheckout{tags: tc.tags, defaults: "forge: forgejo\n"}, URL: "https://codefloe.com/itiquette/forge-ci",
+				ReleasePolicy: tc.policy, Ref: tc.ref, Dir: t.TempDir(), Example: "go-cli", DryRun: true,
+			})
+			if tc.want == "" {
+				if !errors.Is(err, errs.ErrUsage) || !strings.Contains(err.Error(), "fork:acme, fork:other") {
+					t.Fatalf("err = %v, want a refusal naming both forks", err)
+				}
+
+				return
+			}
+
+			if err != nil || result.Source.Tag != tc.want {
+				t.Fatalf("pinned %q, %v; want %s", result.Source.Tag, err, tc.want)
 			}
 		})
 	}

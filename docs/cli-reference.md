@@ -2784,11 +2784,13 @@ configuration to .forge-ci/gitcliff/, which their releases read, keeping
 any such file the repository already has.
 Linter configuration is not generated.
 
-The commit is --ref, a tag or a commit SHA, else the newest stable X.Y.Z
-or vX.Y.Z tag the checkout has (fetch its tags first to see newer ones);
-if both spellings exist for the highest version, vX.Y.Z
-wins. A fork that releases its own vX.Y.Z-WORD.N builds passes
---release-policy fork:WORD to pin the newest of those.
+The commit is --ref, a tag or a commit SHA, else the newest release tag
+the checkout has: fetch its tags first to see newer ones.
+A fork's vX.Y.Z-WORD.N builds are its releases: when the checkout's tags
+hold one fork's builds, init takes their release policy, fork:WORD, by
+itself; --release-policy stable or fork:WORD chooses another. Under
+stable, init takes stable X.Y.Z and vX.Y.Z tags; if both spellings exist
+for the highest version, vX.Y.Z wins.
 
 With --dry-run, render the same proposal and report existing-file conflicts
 without writing project files. Conflicts return a nonzero status;
@@ -2816,8 +2818,8 @@ EXAMPLES:
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
 | `--example` | example to start from, one of android-app, cargo-app, go-cli, go-service, gradle-app, maven-app, npm-app (default: from the repository's build files) | string | `""` | n/a |
-| `--ref` | tag or commit SHA to pin (default: the newest stable X.Y.Z or vX.Y.Z tag; v-prefixed wins ties) | string | `""` | n/a |
-| `--release-policy` | fork:WORD pins the fork's newest vX.Y.Z-WORD.N build instead of a stable tag | string | `""` | n/a |
+| `--ref` | tag or commit SHA to pin (default: the newest release tag under the release policy) | string | `""` | n/a |
+| `--release-policy` | stable, or fork:WORD for a fork's vX.Y.Z-WORD.N builds (default: fork:WORD when the checkout holds one fork's builds, else stable) | string | `""` | n/a |
 | `--url` | the fork's address the workflows name, https://<host>/<owner>/<repository> (default: from the checkout's origin) | string | `""` | n/a |
 | `--dry-run` | preview files, conflicts and remaining placeholders without writing project files | bool | `false` | n/a |
 
