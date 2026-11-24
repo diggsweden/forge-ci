@@ -1366,29 +1366,6 @@ copy selected executables from the retained image filesystem without rebuilding
 | `--output-dir` | directory receiving unique executable basenames; existing files are never overwritten (required) | string | `""` | n/a |
 | `--paths` | comma/space-separated regular-file paths inside the image (required) | string | `""` | `$EXTRACT_BINARY_PATHS` |
 
-#### `forge-ci container layout fetch-input`
-
-fetch a pinned private parent into a run-scoped artifact without running consumer code
-
-| Flag | Description | Type | Default | Env vars |
-|------|-------------|------|---------|----------|
-| `--image-ref` | digest-pinned parent image from the admitted build policy (required) | string | `""` | n/a |
-| `--platform` | linux/amd64 or linux/arm64 (required) | string | `""` | n/a |
-| `--layout-dir` | single-platform input layout directory (required) | string | `""` | n/a |
-| `--auth-file` | Sets auth file. | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
-
-#### `forge-ci container layout import-input`
-
-verify and import a retained parent into native Buildah storage without registry credentials
-
-| Flag | Description | Type | Default | Env vars |
-|------|-------------|------|---------|----------|
-| `--image-ref` | digest-pinned parent image from the admitted build policy (required) | string | `""` | n/a |
-| `--platform` | linux/amd64 or linux/arm64 (required) | string | `""` | n/a |
-| `--layout-dir` | single-platform input layout directory (required) | string | `""` | n/a |
-| `--image-builder` | image builder type: buildah (default; rootless, needs user namespaces) or kaniko (for a pool that denies them; runs as root in the job image CI_IMAGE_BUILDER_JOB_IMAGE names, builds to a layout, exports a stage's files in local mode, no load mode, no build secrets). Set CI_IMAGE_BUILDER on the repository to select it. | string | `"buildah"` | `$CI_IMAGE_BUILDER` |
-| `--kaniko-executor` | path of the kaniko executor (default /kaniko/executor) | string | `""` | `$KANIKO_EXECUTOR` |
-
 #### `forge-ci container layout publish`
 
 verify the complete staged platform set before uploading any image
@@ -1422,16 +1399,6 @@ Run after the configured build/scan succeeds, then upload the complete directory
 | `--source-sha` | full source commit; must match the OCI revision label (required) | string | `""` | `$SOURCE_SHA` |
 | `--layout-dir` | directory produced by container build --mode oci (required) | string | `""` | n/a |
 | `--platform` | expected linux/amd64 or linux/arm64 (required) | string | `""` | `$PLATFORM` |
-
-#### `forge-ci container layout verify-input`
-
-verify downloaded parent bytes against independently pinned source and platform, offline
-
-| Flag | Description | Type | Default | Env vars |
-|------|-------------|------|---------|----------|
-| `--image-ref` | digest-pinned parent image from the admitted build policy (required) | string | `""` | n/a |
-| `--platform` | linux/amd64 or linux/arm64 (required) | string | `""` | n/a |
-| `--layout-dir` | single-platform input layout directory (required) | string | `""` | n/a |
 
 ### `forge-ci container ledger`
 

@@ -66,24 +66,6 @@ func TestStageArchitectureCacheUsesExplicitAuthWithoutAmbientFallback(t *testing
 	ambient := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(ambient, "config.json"), credentials, 0o600))
 	t.Setenv("DOCKER_CONFIG", ambient)
-	t.Run("private-parent-artifact", func(t *testing.T) {
-		digest, err := image.Digest()
-		require.NoError(t, err)
-
-		ref := repository + "@" + digest.String()
-		directory := filepath.Join(t.TempDir(), "parent")
-		fetch := layoutFetchInputCmd()
-		require.NoError(t, fetch.Run(t.Context(), []string{fetch.Name,
-			"--image-ref", ref, "--platform", "linux/" + runtime.GOARCH,
-			"--layout-dir", directory, "--auth-file", authFile}))
-		// Verification receives no credentials and must issue no registry calls.
-		before := authenticated.Load()
-		verify := layoutVerifyInputCmd()
-		require.NoError(t, verify.Run(t.Context(), []string{verify.Name,
-			"--image-ref", ref, "--platform", "linux/" + runtime.GOARCH,
-			"--layout-dir", directory}))
-		require.Equal(t, before, authenticated.Load())
-	})
 
 	for _, explicit := range []bool{false, true} {
 		t.Run(fmt.Sprintf("explicit=%t", explicit), func(t *testing.T) {

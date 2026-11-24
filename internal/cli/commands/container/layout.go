@@ -6,18 +6,15 @@ package container
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"time"
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/diggsweden/forge-ci/internal/adapters/buildah"
 	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
 	"github.com/diggsweden/forge-ci/internal/cli/regflags"
-	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/listval"
 )
 
@@ -27,67 +24,7 @@ const (
 )
 
 func layoutGroup() *cli.Command {
-	return &cli.Command{Name: "layout", Usage: "record and publish OCI artifacts across a build/scan job barrier", Commands: []*cli.Command{layoutRecordCmd(), layoutPublishCmd(), layoutExtractFilesCmd(), layoutFetchInputCmd(), layoutVerifyInputCmd(), layoutImportInputCmd()}}
-}
-
-func layoutImportInputCmd() *cli.Command {
-	return &cli.Command{
-		Name: "import-input", Usage: "verify and import a retained parent into native Buildah storage without registry credentials",
-		Flags: append(layoutRegistryInputFlags(), imageBuilderFlags()...),
-		Action: func(ctx context.Context, cmd *cli.Command) error {
-			builder, err := imageBuilderFromCmd(cmd)
-			if err != nil {
-				return err
-			}
-
-			loader, ok := builder.(*buildah.Adapter)
-			if !ok {
-				return fmt.Errorf("input layout import requires Buildah: %w", errs.ErrUsage)
-			}
-
-			local, err := appcontainer.ImportRegistryInput(ctx, ociregistry.NewAnonymous(), loader, os.Stderr, cmd.String(flagImageRef), cmd.String(flagPlatform), cmd.String(flagLayoutDir))
-			if err != nil {
-				return err
-			}
-
-			return deps.FromCmd(ctx, cmd, func(dep *deps.Deps) error { return dep.OutputSink.Set(ctx, "image-ref", local) })
-		},
-	}
-}
-
-func layoutRegistryInputFlags() []cli.Flag {
-	return []cli.Flag{
-		&cli.StringFlag{Name: flagImageRef, Required: true, Usage: "digest-pinned parent image from the admitted build policy"},
-		&cli.StringFlag{Name: flagPlatform, Required: true, Usage: "linux/amd64 or linux/arm64"},
-		&cli.StringFlag{Name: flagLayoutDir, Required: true, Usage: "single-platform input layout directory"},
-	}
-}
-
-func layoutFetchInputCmd() *cli.Command {
-	return &cli.Command{
-		Name: "fetch-input", Usage: "fetch a pinned private parent into a run-scoped artifact without running consumer code",
-		Flags: append(layoutRegistryInputFlags(), regflags.AuthFile(regflags.AuthFileOpts{})),
-		Action: func(ctx context.Context, cmd *cli.Command) error {
-			registry := ociregistry.NewAnonymous()
-			if authFile := cmd.String(flagAuthFile); authFile != "" {
-				registry = ociregistry.WithAuthFile(authFile)
-			}
-
-			return appcontainer.FetchRegistryInput(ctx, registry, cmd.String(flagImageRef), cmd.String(flagPlatform), cmd.String(flagLayoutDir))
-		},
-	}
-}
-
-func layoutVerifyInputCmd() *cli.Command {
-	return &cli.Command{
-		Name: "verify-input", Usage: "verify downloaded parent bytes against independently pinned source and platform, offline",
-		Flags: layoutRegistryInputFlags(),
-		Action: func(ctx context.Context, cmd *cli.Command) error {
-			_, err := appcontainer.VerifyRegistryInput(ctx, ociregistry.NewAnonymous(), cmd.String(flagImageRef), cmd.String(flagPlatform), cmd.String(flagLayoutDir))
-
-			return err
-		},
-	}
+	return &cli.Command{Name: "layout", Usage: "record and publish OCI artifacts across a build/scan job barrier", Commands: []*cli.Command{layoutRecordCmd(), layoutPublishCmd(), layoutExtractFilesCmd()}}
 }
 
 func layoutExtractFilesCmd() *cli.Command {
