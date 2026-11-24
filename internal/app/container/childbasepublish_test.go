@@ -78,13 +78,13 @@ func TestChildBasePublicationBindsCanonicalSignedLineage(t *testing.T) {
 				return
 			}
 
-			imported := importPublishedBasePayload(t, fixture)
-			require.Equal(t, map[string]any{"ref": parent.Ref, "input_id": parent.InputID}, imported[0].Provenance["parent_base"])
-			sign := rootBaseSigningInput(t, fixture, imported)
+			admitted := admitPublishedBasePayload(t, fixture)
+			require.Equal(t, map[string]any{"ref": parent.Ref, "input_id": parent.InputID}, admitted[0].Provenance["parent_base"])
+			sign := rootBaseSigningInput(t, fixture, admitted)
 			evidence, syft := &rootBaseEvidence{}, &fakeLedgerSyft{}
 
 			if scenario == "tampered SBOM" {
-				require.NoError(t, os.WriteFile(filepath.Join("verified", imported[0].SBOM), []byte(`{}`), 0o600))
+				require.NoError(t, os.WriteFile(filepath.Join("verified", admitted[0].SBOM), []byte(`{}`), 0o600))
 				require.Error(t, appcontainer.SignLedgerImages(t.Context(), evidence, syft, fixture.registry, io.Discard, io.Discard, sign))
 				require.Empty(t, evidence.signs)
 				require.Empty(t, evidence.attests)
@@ -95,7 +95,7 @@ func TestChildBasePublicationBindsCanonicalSignedLineage(t *testing.T) {
 			require.NoError(t, appcontainer.SignLedgerImages(t.Context(), evidence, syft, fixture.registry, io.Discard, io.Discard, sign))
 			require.Empty(t, syft.targets)
 
-			producerSBOM, err := os.ReadFile("payload/" + imported[0].SBOM)
+			producerSBOM, err := os.ReadFile("payload/" + admitted[0].SBOM)
 			require.NoError(t, err)
 			require.Equal(t, producerSBOM, evidence.attests[0].predicate)
 			require.Contains(t, string(evidence.attests[1].predicate), parent.InputID)
@@ -103,7 +103,7 @@ func TestChildBasePublicationBindsCanonicalSignedLineage(t *testing.T) {
 
 			// Fixture setup only: expose a final tag so the existing verifier can
 			// check signed lineage. This does not prove expected-parent promotion.
-			require.NoError(t, fixture.registry.CopyTag(t.Context(), imported[0].Ref, imported[0].FinalTag))
+			require.NoError(t, fixture.registry.CopyTag(t.Context(), admitted[0].Ref, admitted[0].FinalTag))
 			before := len(fixture.registry.writes)
 
 			if scenario == "wrong expected parent ref" {
@@ -115,13 +115,13 @@ func TestChildBasePublicationBindsCanonicalSignedLineage(t *testing.T) {
 			}
 
 			result, err := appbaseimages.VerifyExistingBaseImages(t.Context(), fixture.registry, evidence, io.Discard, appbaseimages.BaseImageVerifyExistingInput{
-				Flavors: []string{"core"}, BaseInputs: []appbaseimages.BaseInput{{Flavor: "core", BaseInputID: imported[0].BaseInputID, ParentBase: &parent}},
+				Flavors: []string{"core"}, BaseInputs: []appbaseimages.BaseInput{{Flavor: "core", BaseInputID: admitted[0].BaseInputID, ParentBase: &parent}},
 				ExpectedRepository: sign.ExpectedImageRepository, ExpectedSource: "https://source.example/org/app", ExpectedWorkflow: "bases.yml", CosignPublicKey: "inert-key",
 			})
 			if scenario == "valid" {
 				require.NoError(t, err)
 				require.True(t, result.AllFound)
-				require.Contains(t, result.AllImagesJSON, imported[0].Ref)
+				require.Contains(t, result.AllImagesJSON, admitted[0].Ref)
 			} else {
 				require.ErrorIs(t, err, errs.ErrValidation)
 				require.False(t, result.AllFound)

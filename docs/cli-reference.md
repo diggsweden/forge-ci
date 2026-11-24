@@ -877,54 +877,6 @@ verified statement; it does not authenticate a parent.
 | `--ledger` | base-image ledger to project (required) | string | `""` | n/a |
 | `--expected-repository` | exact base-image repository of every ledger ref and tag (required) | string | `""` | n/a |
 
-#### `forge-ci container base-images freshness`
-
-compare pinned base-image digests with their upstream source tags
-
-```
-Resolves each check's moving source tag in the registry and compares it
-with the digest the repo actually pins, emitting a stale-count output.
-Config errors (unpinned refs, malformed source tags) always fail.
-
---enforce=true is the scheduled-cron mode: stale or unfetchable digests
-fail the run. --enforce=false is the release-path mode: pins are for
-reproducibility, so drift and registry blips only warn — currency stays
-enforced out of band by the cron and renovate.
-
-EXAMPLE:
-   forge-ci container base-images freshness --enforce=false --checks-json '[
-     {"name":"DEBIAN_IMAGE",
-      "pinned-ref":"docker.io/library/debian:trixie-slim@sha256:<hex>",
-      "source-tag":"docker.io/library/debian:trixie-slim"}]'
-```
-
-| Flag | Description | Type | Default | Env vars |
-|------|-------------|------|---------|----------|
-| `--checks-json` | JSON array of checks: [{"name":..., "pinned-ref":..., "source-tag":...}] (required) | string | `""` | `$FRESHNESS_CHECKS_JSON` |
-| `--enforce` | fail on stale or unfetchable digests (false: warn only; config errors still fail) | bool | `true` | `$FRESHNESS_ENFORCE` |
-
-#### `forge-ci container base-images import`
-
-copy unsigned base digests from staging to a separate publication repository
-
-```
-Admits a nonempty base-only ledger and its content-addressed tags before login. Copies only immutable image digests to staging candidates, without signatures or final tags. Preserves base identities, SBOM pins and lineage; conflicting candidates refuse. The registry login goes to the expected publication repository's host.
-```
-
-| Flag | Description | Type | Default | Env vars |
-|------|-------------|------|---------|----------|
-| `--server-url` | forge server URL used to derive the registry host and expected source | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
-| `--repository` | owner/repo used to derive the expected source and base-image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
-| `--repository-suffix` | optional suffix appended to the repository package name, e.g. -base | string | `""` | `$REPOSITORY_SUFFIX` |
-| `--expected-repository` | exact base-image repository allowed for tags/refs (default: host/lower(owner/repo)<suffix>); the registry login goes to its host | string | `""` | `$EXPECTED_REPOSITORY`, `$BASE_IMAGES_EXPECTED_REPOSITORY` |
-| `--registry` | the forge's own registry host, when it is not the host of --server-url (GitLab's $CI_REGISTRY); the login goes to the image repository's host, and a repository on any other host has its tags deleted through that registry | string | `""` | `$CONTAINER_REGISTRY` |
-| `--ledger` | unsigned source base-image ledger (required) | string | `""` | n/a |
-| `--source-repository` | exact staging image repository allowed in the source ledger (required) | string | `""` | n/a |
-| `--output-ledger` | new publication ledger under --dist-dir; never replaces the source ledger (required) | string | `""` | n/a |
-| `--dist-dir` | artifact root containing both ledgers | string | `"dist"` | n/a |
-| `--registry-username` | registry username; the password is read from --registry-password-file or $REGISTRY_TOKEN / $REGISTRY_PASSWORD | string | `""` | `$REGISTRY_USER` |
-| `--registry-password-file` | file containing the registry password/token ("-" reads stdin); defaults to $REGISTRY_TOKEN then $REGISTRY_PASSWORD. The password never appears in argv. | string | `""` | n/a |
-
 #### `forge-ci container base-images promote`
 
 verify base-image evidence and promote candidate refs to immutable final tags; on Forgejo, link the promoted images to the repository
@@ -1085,7 +1037,7 @@ planned unchecked: without any --runner-input the plan is refused.
 scan/gate all root layouts, publish unsigned candidates and write a canonical payload
 
 ```
-Output is a new workspace containing dist/base-images.json and premade-sboms/. Transport and verify the entire workspace with release dist-digest/validate-dist --canonical-payload before trusted base-images import/sign/promote. No final tags or signatures are produced here.
+Output is a new workspace containing dist/base-images.json and premade-sboms/. Transport and verify the entire workspace with release dist-digest/validate-dist --canonical-payload before trusted base-images sign/promote. No final tags or signatures are produced here.
 ```
 
 | Flag | Description | Type | Default | Env vars |

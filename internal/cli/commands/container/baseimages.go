@@ -72,7 +72,6 @@ candidate images to immutable final base tags. Checkout and pinned-binary
 bootstrap remain owned by the caller.`,
 		Commands: []*cli.Command{
 			rootBaseGroup(),
-			baseImagesImportCmd(),
 			baseImagesSignCmd(),
 			baseImagesVerifyCmd(),
 			baseImagesAuthenticateParentCmd(),
@@ -81,7 +80,6 @@ bootstrap remain owned by the caller.`,
 			baseImagesDeclaredInputsCmd(),
 			baseImagesCleanupCmd(),
 			baseImagesPruneCmd(),
-			baseImagesFreshnessCmd(),
 		},
 	}
 }

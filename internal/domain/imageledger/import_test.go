@@ -62,6 +62,7 @@ func TestImportReleaseImagesRefusesScopeAndConflictsBeforeCopy(t *testing.T) {
 		"foreign source":          func(entries []imageledger.Entry) { entries[1].Ref = "registry.example.test/other/image@" + goodDigest },
 		"conflicting destination": func(entries []imageledger.Entry) { entries[1].FinalTag = entries[0].FinalTag },
 		"wrong release":           func(entries []imageledger.Entry) { entries[1].FinalTag = importSource + ":v9.0.0" },
+		"base image":              func(entries []imageledger.Entry) { entries[1].ImageKind = imageledger.ImageKindBase },
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

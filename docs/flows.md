@@ -58,7 +58,7 @@ runner extracts the files itself.
 | Group | Images | Addressed by | Lifecycle |
 |---|---|---|---|
 | `release-images` | what a release publishes | the release tag | staging → final + moving, with rollback |
-| `base-images` | what those are built **FROM** | a content hash, `base-input-id` | staging → immutable final, plus freshness and retention |
+| `base-images` | what those are built **FROM** | a content hash, `base-input-id` | staging → immutable final, plus retention |
 | `ledger` | the record of the above | — | add, merge, validate |
 
 A "base image" here is your project's own base layer, not the

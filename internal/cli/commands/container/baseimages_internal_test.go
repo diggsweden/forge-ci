@@ -20,7 +20,7 @@ func TestBaseImagesGroupExposesWorkflowCommands(t *testing.T) {
 		found[cmd.Name] = true
 	}
 
-	for _, name := range []string{"sign", "validate", "authenticate-parent", "promote", "cleanup", "prune", "freshness"} {
+	for _, name := range []string{"sign", "validate", "authenticate-parent", "promote", "cleanup", "prune"} {
 		if !found[name] {
 			t.Errorf("base-images command %q not exposed", name)
 		}

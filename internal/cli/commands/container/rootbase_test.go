@@ -103,7 +103,7 @@ func nativeBaseCLIJourney(t *testing.T, child bool) {
 	t.Cleanup(func() { remote.DefaultTransport = defaultTransport })
 
 	host := strings.TrimPrefix(server.URL, "https://")
-	source, destination := host+"/build/bases", host+"/publication/bases"
+	repository := host + "/build/bases"
 
 	id, revision := strings.Repeat("a", 64), strings.Repeat("b", 40)
 	for key, value := range map[string]string{
@@ -122,9 +122,9 @@ func nativeBaseCLIJourney(t *testing.T, child bool) {
 
 	plan := pipeline.ReleaseImagesPlan{
 		Images: []pipeline.ReleaseImage{{Name: "root", Role: "base", ImageKind: "base", Flavor: "opaque", BaseInputID: id,
-			ImageRepository: source, FinalTagName: id + "-opaque", CandidateTag: "staging-" + id + "-opaque", Archs: "amd64", Scan: true}},
+			ImageRepository: repository, FinalTagName: id + "-opaque", CandidateTag: "staging-" + id + "-opaque", Archs: "amd64", Scan: true}},
 		Builds: []pipeline.ReleaseImageBuild{{Name: "root", Arch: "amd64", Platform: "linux/amd64", ContainerFile: "Containerfile", Context: ".",
-			ImageRepository: source, FinalTagName: id + "-opaque", CandidateTag: "staging-" + id + "-opaque"}},
+			ImageRepository: repository, FinalTagName: id + "-opaque", CandidateTag: "staging-" + id + "-opaque"}},
 	}
 	body, err := json.Marshal(plan)
 	require.NoError(t, err)
@@ -229,7 +229,7 @@ fi`, captured, captured+".sbom", captured))
 	}
 
 	job := make([]string, 0, 10+len(extra))
-	job = append(job, "--image-repository", source, "--release-tag", "v1.2.3", "--release-sha", checkoutSHA,
+	job = append(job, "--image-repository", repository, "--release-tag", "v1.2.3", "--release-sha", checkoutSHA,
 		"--server-url", "https://source.example", "--repository", "org/app")
 	job = append(job, extra...)
 
@@ -420,13 +420,10 @@ fi`, captured, captured+".sbom", captured))
 	write("download/premade-sboms/base-sbom-opaque.cyclonedx.json", []byte("changed after admission"))
 
 	common := []string{"--server-url", "https://source.example", "--repository", "org/app", "--registry", host,
-		"--expected-repository", destination, "--registry-username", "inert"}
-	run(append([]string{"container", "base-images", "import", "--ledger", "verified/dist/base-images.json", "--dist-dir", "verified/dist",
-		"--source-repository", source, "--output-ledger", "verified/dist/base-images-publication.json"}, common...)...)
-
+		"--expected-repository", repository, "--registry-username", "inert"}
 	before := len(bins.Invocations("syft"))
 
-	run(append([]string{"container", "base-images", "sign", "--ledger", "verified/dist/base-images-publication.json", "--evidence-root", "verified",
+	run(append([]string{"container", "base-images", "sign", "--ledger", "verified/dist/base-images.json", "--evidence-root", "verified",
 		"--workflow", "bases.yml", "--source-sha", checkoutSHA, "--started-on", baseStartedOn, "--method", "kms", "--key", "env://COSIGN_KEY"}, common...)...)
 	require.Len(t, bins.Invocations("syft"), before, "trusted signer must not rescan")
 
@@ -439,15 +436,15 @@ fi`, captured, captured+".sbom", captured))
 
 	keyHash := fmt.Sprintf("%x", sha256.Sum256([]byte("inert-public-key")))
 	if child {
-		verifyChildCLI(t, run, bins, parent, destination, id, keyHash, common)
+		verifyChildCLI(t, run, bins, parent, repository, id, keyHash, common)
 
 		return
 	}
 
-	inputs := strings.TrimSpace(run("container", "base-images", "declared-inputs", "--ledger", "verified/dist/base-images.json", "--expected-repository", source))
+	inputs := strings.TrimSpace(run("container", "base-images", "declared-inputs", "--ledger", "verified/dist/base-images.json", "--expected-repository", repository))
 	require.JSONEq(t, `[{"flavor":"opaque","base_input_id":"`+id+`"}]`, inputs)
 
-	output := run(append([]string{"container", "base-images", "promote", "--ledger", "verified/dist/base-images-publication.json", "--base-inputs-json", inputs,
+	output := run(append([]string{"container", "base-images", "promote", "--ledger", "verified/dist/base-images.json", "--base-inputs-json", inputs,
 		"--expected-workflow", "bases.yml", "--cosign-public-key-path", "trusted.pub", "--cosign-public-key-sha256", keyHash}, common...)...)
 
 	var result struct {
@@ -462,9 +459,9 @@ fi`, captured, captured+".sbom", captured))
 	require.NoError(t, json.Unmarshal([]byte(result.Images), &refs))
 	require.Len(t, refs, 1)
 	require.Equal(t, id, refs[0].ID)
-	require.True(t, strings.HasPrefix(refs[0].Ref, destination+"@sha256:"))
+	require.True(t, strings.HasPrefix(refs[0].Ref, repository+"@sha256:"))
 
-	final, err := ociregistry.NewAnonymous().ResolveDigest(t.Context(), destination+":"+id+"-opaque")
+	final, err := ociregistry.NewAnonymous().ResolveDigest(t.Context(), repository+":"+id+"-opaque")
 	require.NoError(t, err)
-	require.Equal(t, destination+"@"+final, refs[0].Ref)
+	require.Equal(t, repository+"@"+final, refs[0].Ref)
 }

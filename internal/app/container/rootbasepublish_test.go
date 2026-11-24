@@ -454,15 +454,15 @@ func (e *rootBaseEvidence) VerifyAttestationOutput(ctx context.Context, in domai
 	return errs.ErrValidation
 }
 
-func importRootBasePayload(t *testing.T, fixture *rootBaseFixture) []imageledger.Entry {
+func admitRootBasePayload(t *testing.T, fixture *rootBaseFixture) []imageledger.Entry {
 	t.Helper()
 
 	require.NoError(t, fixture.publish(t.Context()))
 
-	return importPublishedBasePayload(t, fixture)
+	return admitPublishedBasePayload(t, fixture)
 }
 
-func importPublishedBasePayload(t *testing.T, fixture *rootBaseFixture) []imageledger.Entry {
+func admitPublishedBasePayload(t *testing.T, fixture *rootBaseFixture) []imageledger.Entry {
 	t.Helper()
 
 	digest, err := apprelease.CanonicalPayloadDigest("payload")
@@ -484,28 +484,21 @@ func importPublishedBasePayload(t *testing.T, fixture *rootBaseFixture) []imagel
 	entries, err := appbaseimages.AdmitBaseImageLedger(body, fixture.in.ExpectedRepository)
 	require.NoError(t, err)
 
-	destination := "publication.example/org/base"
-	imported, err := imageledger.ImportBaseImages(t.Context(), fixture.registry, entries, fixture.in.ExpectedRepository, destination)
-	require.NoError(t, err)
-	require.Equal(t, entries[0].SBOMSHA256, imported[0].SBOMSHA256)
-	require.Equal(t, entries[0].Provenance, imported[0].Provenance)
-	require.NotContains(t, fixture.registry.raw, imported[0].FinalTag)
-
-	return imported
+	return entries
 }
 
-func rootBaseSigningInput(t *testing.T, f *rootBaseFixture, imported []imageledger.Entry) appcontainer.SignLedgerImagesInput {
+func rootBaseSigningInput(t *testing.T, f *rootBaseFixture, admitted []imageledger.Entry) appcontainer.SignLedgerImagesInput {
 	t.Helper()
 
 	statement, err := appbaseimages.BaseImageProvenance(appbaseimages.BaseImageProvenanceInput{
-		Entries: imported, RepositoryURL: "https://source.example/org/app", Ref: "refs/heads/main", SourceSHA: f.in.SourceSHA,
+		Entries: admitted, RepositoryURL: "https://source.example/org/app", Ref: "refs/heads/main", SourceSHA: f.in.SourceSHA,
 		Workflow: "bases.yml", BuilderID: "inert-builder", InvocationID: "inert-invocation", StartedOn: "2026-01-01T00:00:00Z",
 	})
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile("statement.json", statement, 0o600))
 
-	sign := signInput(t, imported[0])
-	sign.EvidenceRoot, sign.Entries, sign.ExpectedImageRepository = "verified", imported, domaincontainer.StripTagOrDigest(imported[0].Ref)
+	sign := signInput(t, admitted[0])
+	sign.EvidenceRoot, sign.Entries, sign.ExpectedImageRepository = "verified", admitted, domaincontainer.StripTagOrDigest(admitted[0].Ref)
 	sign.PredicatePath, sign.PredicateEnvelopePath = "", "statement.json"
 	sign.SBOMPathPattern = `^premade-sboms/base-sbom-[-A-Za-z0-9_.]+[.]cyclonedx[.]json$`
 
@@ -514,17 +507,17 @@ func rootBaseSigningInput(t *testing.T, f *rootBaseFixture, imported []imageledg
 
 func TestRootBasePublicationTrustedBoundaryJourney(t *testing.T) {
 	fixture := newRootBaseFixture(t)
-	imported := importRootBasePayload(t, fixture)
-	sign := rootBaseSigningInput(t, fixture, imported)
+	admitted := admitRootBasePayload(t, fixture)
+	sign := rootBaseSigningInput(t, fixture, admitted)
 	evidence, syft := &rootBaseEvidence{}, &fakeLedgerSyft{}
 	require.NoError(t, appcontainer.SignLedgerImages(t.Context(), evidence, syft, fixture.registry, io.Discard, io.Discard, sign))
 	require.Empty(t, syft.targets, "trusted signer must not rescan")
 
-	producerSBOM, err := os.ReadFile("payload/" + imported[0].SBOM)
+	producerSBOM, err := os.ReadFile("payload/" + admitted[0].SBOM)
 	require.NoError(t, err)
 	require.Equal(t, producerSBOM, evidence.attests[0].predicate)
 
-	publication, err := imageledger.Marshal(imported)
+	publication, err := imageledger.Marshal(admitted)
 	require.NoError(t, err)
 
 	destination := sign.ExpectedImageRepository
@@ -538,9 +531,9 @@ func TestRootBasePublicationTrustedBoundaryJourney(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	final, err := fixture.registry.ResolveDigest(t.Context(), imported[0].FinalTag)
+	final, err := fixture.registry.ResolveDigest(t.Context(), admitted[0].FinalTag)
 	require.NoError(t, err)
-	require.Equal(t, imported[0].Digest, final)
+	require.Equal(t, admitted[0].Digest, final)
 }
 
 func TestRootBasePublicationRejectsPayloadMutations(t *testing.T) {
@@ -576,8 +569,8 @@ func TestRootBasePublicationRejectsSignerMutations(t *testing.T) {
 	for _, mutation := range []string{"wrong pin", "missing pin", "traversal", "missing file", "linked file"} {
 		t.Run(mutation, func(t *testing.T) {
 			fixture := newRootBaseFixture(t)
-			imported := importRootBasePayload(t, fixture)
-			sign := rootBaseSigningInput(t, fixture, imported)
+			admitted := admitRootBasePayload(t, fixture)
+			sign := rootBaseSigningInput(t, fixture, admitted)
 
 			switch mutation {
 			case "wrong pin":
@@ -599,19 +592,19 @@ func TestRootBasePublicationRejectsSignerMutations(t *testing.T) {
 			require.Empty(t, evidence.signs)
 			require.Empty(t, evidence.attests)
 			require.Empty(t, syft.targets)
-			require.Len(t, fixture.registry.writes, 4, "only unsigned source publication and import")
+			require.Len(t, fixture.registry.writes, 3, "only the unsigned source publication")
 		})
 	}
 }
 
 func TestRootBasePublicationRefusesConflictingPromotion(t *testing.T) {
 	fixture := newRootBaseFixture(t)
-	imported := importRootBasePayload(t, fixture)
-	sign := rootBaseSigningInput(t, fixture, imported)
+	admitted := admitRootBasePayload(t, fixture)
+	sign := rootBaseSigningInput(t, fixture, admitted)
 	evidence := &rootBaseEvidence{}
 	require.NoError(t, appcontainer.SignLedgerImages(t.Context(), evidence, &fakeLedgerSyft{}, fixture.registry, io.Discard, io.Discard, sign))
 
-	publication, err := imageledger.Marshal(imported)
+	publication, err := imageledger.Marshal(admitted)
 	require.NoError(t, err)
 
 	images, err := appbaseimages.PromotionImagesFromLedger(publication, sign.ExpectedImageRepository)
@@ -619,11 +612,11 @@ func TestRootBasePublicationRefusesConflictingPromotion(t *testing.T) {
 	inputs, err := appbaseimages.BaseInputsFromLedger(publication, sign.ExpectedImageRepository)
 	require.NoError(t, err)
 
-	fixture.registry.raw[imported[0].FinalTag] = []byte(`{"different":"immutable destination"}`)
+	fixture.registry.raw[admitted[0].FinalTag] = []byte(`{"different":"immutable destination"}`)
 	_, err = appbaseimages.PromoteBaseImages(t.Context(), fixture.registry, evidence, io.Discard, appbaseimages.BaseImagePromoteInput{
 		Images: images, BaseInputs: inputs, ExpectedRepository: sign.ExpectedImageRepository, ExpectedSource: "https://source.example/org/app", ExpectedWorkflow: "bases.yml", CosignPublicKey: "inert-public-key",
 	})
 	require.ErrorIs(t, err, errs.ErrValidation)
 	require.ErrorContains(t, err, "immutable final base tag already exists with a different digest")
-	require.Len(t, fixture.registry.writes, 4, "no promotion copy after immutable conflict")
+	require.Len(t, fixture.registry.writes, 3, "no promotion copy after immutable conflict")
 }

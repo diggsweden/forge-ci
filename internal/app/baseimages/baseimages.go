@@ -125,8 +125,8 @@ type baseImageRegistry interface {
 	CopyTag(ctx context.Context, source, dest string) error
 }
 
-// imageDigestResolver is the registry surface base-image cleanup and
-// freshness checks share: resolve a tag or ref to its manifest digest.
+// imageDigestResolver is the registry surface base-image cleanup uses:
+// resolve a tag or ref to its manifest digest.
 type imageDigestResolver interface {
 	ResolveDigest(ctx context.Context, ref string) (string, error)
 }

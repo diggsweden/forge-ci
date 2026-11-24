@@ -228,7 +228,7 @@ func releaseImageSBOMFile(in PublishReleaseImagesInput, image pipeline.ReleaseIm
 
 // ValidateNativeReleaseImagesPlan retains the base refusal until native jobs
 // carry a separate base ledger and its canonical premade-sboms/ evidence through
-// the dist-only handoff and the trusted base-images import/sign path.
+// the dist-only handoff and the trusted base-images sign path.
 func ValidateNativeReleaseImagesPlan(plan pipeline.ReleaseImagesPlan) error {
 	for _, image := range plan.Images {
 		if image.ImageKind == string(imageledger.ImageKindBase) {

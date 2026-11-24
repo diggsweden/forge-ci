@@ -16,67 +16,7 @@ import (
 
 	domaincontainer "github.com/diggsweden/forge-ci/internal/domain/container"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
-	"github.com/diggsweden/forge-ci/internal/testutil/fakeoutputsink"
 )
-
-func TestFreshnessBoundary_CompleteValidationAndResolution(t *testing.T) {
-	t.Parallel()
-
-	const repo = "registry.example/owner/base"
-
-	digest := "sha256:" + strings.Repeat("a", 64)
-	checks := []FreshnessCheck{
-		{Name: "FIRST", PinnedRef: repo + "@" + digest, SourceTag: repo + ":first"},
-		{Name: "SECOND", PinnedRef: repo + "@" + digest, SourceTag: repo + ":second"},
-		{Name: "THIRD", PinnedRef: repo + "@" + digest, SourceTag: repo + ":third"},
-	}
-
-	for _, kind := range []string{"valid", "label", "pinned", "source", "returned"} {
-		t.Run(kind, func(t *testing.T) {
-			t.Parallel()
-
-			items := slices.Clone(checks)
-
-			switch kind {
-			case "label":
-				items[1].Name = "unsafe\x1b[2J"
-			case "pinned":
-				items[1].PinnedRef = repo + "@sha256:bad"
-			case "source":
-				items[1].SourceTag = "owner/base:tag"
-			}
-
-			body, err := json.Marshal(items)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			registry := &fakeBaseImageRegistry{digests: map[string]string{repo + ":first": digest, repo + ":second": "sha256:" + strings.Repeat("b", 64), repo + ":third": "sha256:" + strings.Repeat("c", 64)}}
-			if kind == "returned" {
-				registry.digests[repo+":second"] = "sha256:bad\noutput"
-			}
-
-			sink := fakeoutputsink.New(t)
-
-			var out, stderr bytes.Buffer
-
-			err = CheckFreshness(t.Context(), registry, sink, &out, &stderr, CheckFreshnessInput{ChecksJSON: string(body)})
-			if kind == "valid" {
-				if err != nil || sink.Single("stale-count") != "2" || !slices.Equal(registry.resolved, []string{repo + ":first", repo + ":second", repo + ":third"}) || !strings.Contains(out.String(), "FIRST digest is current") || !strings.Contains(stderr.String(), "SECOND digest is stale") || !strings.Contains(stderr.String(), "THIRD digest is stale") {
-					t.Fatalf("err=%v calls=%v output=%s/%s", err, registry.resolved, &out, &stderr)
-				}
-			} else {
-				if err == nil || len(sink.Keys()) != 0 || out.Len() != 0 || stderr.Len() != 0 {
-					t.Fatalf("err=%v outputs=%v text=%s/%s", err, sink.Keys(), &out, &stderr)
-				}
-
-				if kind != "returned" && len(registry.resolved) != 0 {
-					t.Fatalf("resolver reached invalid input: %v", registry.resolved)
-				}
-			}
-		})
-	}
-}
 
 type boundaryVerifier struct {
 	*fakeBaseImageVerifier

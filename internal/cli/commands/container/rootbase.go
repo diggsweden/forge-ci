@@ -208,7 +208,7 @@ func rootBasePublishCmd() *cli.Command {
 	return &cli.Command{
 		Name:        subCmdPublish,
 		Usage:       "scan/gate all root layouts, publish unsigned candidates and write a canonical payload",
-		Description: "Output is a new workspace containing dist/base-images.json and premade-sboms/. Transport and verify the entire workspace with release dist-digest/validate-dist --canonical-payload before trusted base-images import/sign/promote. No final tags or signatures are produced here.",
+		Description: "Output is a new workspace containing dist/base-images.json and premade-sboms/. Transport and verify the entire workspace with release dist-digest/validate-dist --canonical-payload before trusted base-images sign/promote. No final tags or signatures are produced here.",
 		Flags:       baseStagePublishFlags(),
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			plan, err := readRootBasePlanFile(cmd)

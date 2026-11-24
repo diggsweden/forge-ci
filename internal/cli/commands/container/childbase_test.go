@@ -28,7 +28,7 @@ import (
 func verifyChildCLI(t *testing.T, run func(...string) string, bins *mockbinary.Mock, parent appbaseimages.BaseImageParent, destination, id, keyHash string, common []string) {
 	t.Helper()
 
-	body, err := os.ReadFile("verified/dist/base-images-publication.json")
+	body, err := os.ReadFile("verified/dist/base-images.json")
 	require.NoError(t, err)
 	entries, err := imageledger.Parse(body)
 	require.NoError(t, err)
