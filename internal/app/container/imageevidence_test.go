@@ -22,62 +22,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type fakeImageEvidenceBuildah struct {
-	imageRef       string
-	layout         string
-	manifest       string
-	manifestLayout string
-	fail           bool
-}
-
-func (f *fakeImageEvidenceBuildah) ExportLocalImageToLayout(_ context.Context, imageRef, layoutDir string, _ io.Writer) error {
-	f.imageRef = imageRef
-
-	f.layout = layoutDir
-	if f.fail {
-		return errors.New("buildah failed")
-	}
-
-	return os.WriteFile(filepath.Join(layoutDir, "index.json"), []byte("{}"), 0o600)
-}
-
-func (f *fakeImageEvidenceBuildah) ExportLocalManifestToLayout(_ context.Context, manifest, layoutDir string, _ io.Writer) error {
-	f.manifest = manifest
-
-	f.manifestLayout = layoutDir
-	if f.fail {
-		return errors.New("buildah failed")
-	}
-
-	return os.WriteFile(filepath.Join(layoutDir, "index.json"), []byte("{}"), 0o600)
-}
-
 type fakeImageEvidenceCopy struct {
 	sourceLayout string
-	ref          string
-	digest       string
 	destLayout   string
 	osName       string
 	arch         string
 }
 
 type fakeImageEvidenceCopier struct {
-	localCopies    []fakeImageEvidenceCopy
-	registryCopies []fakeImageEvidenceCopy
-	fail           bool
+	localCopies []fakeImageEvidenceCopy
+	fail        bool
 }
 
 func (f *fakeImageEvidenceCopier) CopyOCILayoutToOCILayout(_ context.Context, sourceLayout, destLayout, osName, arch string) error {
 	f.localCopies = append(f.localCopies, fakeImageEvidenceCopy{sourceLayout: sourceLayout, destLayout: destLayout, osName: osName, arch: arch})
-	if f.fail {
-		return errors.New("copy failed")
-	}
-
-	return os.WriteFile(filepath.Join(destLayout, "index.json"), []byte("{}"), 0o600)
-}
-
-func (f *fakeImageEvidenceCopier) CopyDockerDigestToOCILayout(_ context.Context, ref, digest, destLayout, osName, arch string) error {
-	f.registryCopies = append(f.registryCopies, fakeImageEvidenceCopy{ref: ref, digest: digest, destLayout: destLayout, osName: osName, arch: arch})
 	if f.fail {
 		return errors.New("copy failed")
 	}
@@ -135,7 +93,7 @@ func (f *fakeImageEvidenceTrivy) RunInherit(_ context.Context, _, stderr io.Writ
 }
 
 type fakeImageEvidenceSyft struct {
-	target     string // the last target, for single-platform tests
+	target     string // the last target
 	targets    []string
 	outputs    map[string]string
 	noOutput   bool
@@ -184,11 +142,10 @@ func TestImageEvidence_OCILayoutScansAndWritesOptionalSBOM(t *testing.T) {
 	trivy := &fakeImageEvidenceTrivy{}
 	syft := &fakeImageEvidenceSyft{}
 
-	if err := appcontainer.ImageEvidence(context.Background(), &fakeImageEvidenceBuildah{}, &fakeImageEvidenceCopier{}, trivy, syft, io.Discard, io.Discard, appcontainer.ImageEvidenceInput{
-		OCILayout:    layout,
-		TrivyOutput:  trivyOut,
-		SBOMOutput:   sbomOut,
-		TrivyTimeout: "7m",
+	if err := appcontainer.ImageEvidence(context.Background(), &fakeImageEvidenceCopier{}, trivy, syft, io.Discard, io.Discard, appcontainer.ImageEvidenceInput{
+		OCILayout:   layout,
+		TrivyOutput: trivyOut,
+		SBOMOutput:  sbomOut,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +154,7 @@ func TestImageEvidence_OCILayoutScansAndWritesOptionalSBOM(t *testing.T) {
 	assertPrivateEvidenceOutput(t, stagedTrivy, trivyOut)
 
 	wantArgs := slices.Concat(
-		[]string{"image", "--input", layout, "--scanners", "vuln", "--skip-version-check", "--timeout", "7m", "--format", "json", "--output", stagedTrivy},
+		[]string{"image", "--input", layout, "--scanners", "vuln", "--skip-version-check", "--timeout", "30m", "--format", "json", "--output", stagedTrivy},
 		security.TrivyDBSourceArgs(),
 	)
 
@@ -209,37 +166,6 @@ func TestImageEvidence_OCILayoutScansAndWritesOptionalSBOM(t *testing.T) {
 
 	if syft.target != "oci-dir:"+layout {
 		t.Fatalf("syft target=%q outputs=%v", syft.target, syft.outputs)
-	}
-}
-
-func TestImageEvidence_LocalImageExportsTemporaryLayoutAndCleansUp(t *testing.T) {
-	t.Parallel()
-	work := t.TempDir()
-	buildah := &fakeImageEvidenceBuildah{}
-	trivy := &fakeImageEvidenceTrivy{}
-
-	if err := appcontainer.ImageEvidence(context.Background(), buildah, &fakeImageEvidenceCopier{}, trivy, &fakeImageEvidenceSyft{}, io.Discard, io.Discard, appcontainer.ImageEvidenceInput{
-		LocalImageRef: "localhost/example:test",
-		TrivyOutput:   filepath.Join(work, "trivy.json"),
-		TempDir:       work,
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	if buildah.imageRef != "localhost/example:test" || buildah.layout == "" {
-		t.Fatalf("buildah image=%q layout=%q", buildah.imageRef, buildah.layout)
-	}
-
-	if !strings.HasPrefix(buildah.layout, work+string(os.PathSeparator)) {
-		t.Fatalf("layout %q not under temp root %q", buildah.layout, work)
-	}
-
-	if _, err := os.Stat(buildah.layout); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("temporary layout still exists or unexpected stat err: %v", err)
-	}
-
-	if len(trivy.args) < 3 || trivy.args[2] != buildah.layout {
-		t.Fatalf("trivy args did not scan exported layout: %v", trivy.args)
 	}
 }
 
@@ -263,7 +189,7 @@ func TestImageEvidence_ValidatesReportBeforePublication(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			root := t.TempDir()
+			root, layout := t.TempDir(), t.TempDir()
 
 			trivyPath, sbomPath := filepath.Join(root, "trivy.json"), filepath.Join(root, "sbom.json")
 			for _, path := range []string{trivyPath, sbomPath} {
@@ -271,24 +197,20 @@ func TestImageEvidence_ValidatesReportBeforePublication(t *testing.T) {
 			}
 
 			before := snapshotContainerTree(t, root)
-			buildah := &fakeImageEvidenceBuildah{}
 			trivy, syft := &fakeImageEvidenceTrivy{jsonBody: tc.body}, &fakeImageEvidenceSyft{}
 
 			var out bytes.Buffer
 
-			err := appcontainer.ImageEvidence(t.Context(), buildah, nil, trivy, syft, &out, &out, appcontainer.ImageEvidenceInput{LocalImageRef: "localhost/app:test", TrivyOutput: trivyPath, SBOMOutput: sbomPath, TempDir: root})
+			err := appcontainer.ImageEvidence(t.Context(), nil, trivy, syft, &out, &out, appcontainer.ImageEvidenceInput{OCILayout: layout, TrivyOutput: trivyPath, SBOMOutput: sbomPath})
 			require.Len(t, trivy.calls, 1)
-			require.NotEmpty(t, buildah.layout)
-			_, statErr := os.Stat(buildah.layout)
-			require.ErrorIs(t, statErr, os.ErrNotExist)
 			staged := trivyArg(t, trivy.args, "--output")
 			require.NotEqual(t, trivyPath, staged)
-			_, statErr = os.Stat(filepath.Dir(staged))
+			_, statErr := os.Stat(filepath.Dir(staged))
 			require.ErrorIs(t, statErr, os.ErrNotExist)
 
 			if tc.valid {
 				require.NoError(t, err)
-				require.Equal(t, []string{"oci-dir:" + buildah.layout}, syft.targets)
+				require.Equal(t, []string{"oci-dir:" + layout}, syft.targets)
 
 				body, readErr := os.ReadFile(trivyPath)
 				require.NoError(t, readErr)
@@ -320,19 +242,13 @@ func TestImageEvidence_ValidatesReportBeforePublication(t *testing.T) {
 }
 
 // assertNoEvidenceToolsRan requires that a refused input reached none of the
-// four tools. Each rejection test used to check a different subset -- one
-// looked at the image export and trivy, the other at the manifest export,
-// copier and trivy -- and neither looked at syft, so an input refused only
-// after an SBOM had been generated would have passed both.
-func assertNoEvidenceToolsRan(t *testing.T, buildah *fakeImageEvidenceBuildah, copier *fakeImageEvidenceCopier, trivy *fakeImageEvidenceTrivy, syft *fakeImageEvidenceSyft) {
+// three tools, so an input refused only after a copy, a scan or an SBOM would
+// fail.
+func assertNoEvidenceToolsRan(t *testing.T, copier *fakeImageEvidenceCopier, trivy *fakeImageEvidenceTrivy, syft *fakeImageEvidenceSyft) {
 	t.Helper()
 
-	if buildah.imageRef != "" || buildah.manifest != "" {
-		t.Errorf("buildah exported before validation: image=%q manifest=%q", buildah.imageRef, buildah.manifest)
-	}
-
-	if len(copier.localCopies) != 0 || len(copier.registryCopies) != 0 {
-		t.Errorf("copier copied before validation: local=%+v registry=%+v", copier.localCopies, copier.registryCopies)
+	if len(copier.localCopies) != 0 {
+		t.Errorf("copier copied before validation: %+v", copier.localCopies)
 	}
 
 	if len(trivy.calls) != 0 {
@@ -359,7 +275,6 @@ func TestImageEvidence_RejectsInvalidInputsBeforeTools(t *testing.T) {
 		want error
 	}{
 		{name: "no source", in: appcontainer.ImageEvidenceInput{TrivyOutput: filepath.Join(work, "trivy.json")}, want: errs.ErrUsage},
-		{name: "two sources", in: appcontainer.ImageEvidenceInput{OCILayout: layout, LocalImageRef: "local:test", TrivyOutput: filepath.Join(work, "trivy.json")}, want: errs.ErrUsage},
 		{name: "no trivy output", in: appcontainer.ImageEvidenceInput{OCILayout: layout, SBOMOutput: filepath.Join(work, "sbom.json")}, want: errs.ErrUsage},
 		{name: "missing layout", in: appcontainer.ImageEvidenceInput{OCILayout: filepath.Join(work, "missing"), TrivyOutput: filepath.Join(work, "trivy.json")}, want: errs.ErrMissingInput},
 	}
@@ -368,24 +283,23 @@ func TestImageEvidence_RejectsInvalidInputsBeforeTools(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			buildah := &fakeImageEvidenceBuildah{}
 			copier := &fakeImageEvidenceCopier{}
 			trivy := &fakeImageEvidenceTrivy{}
 			syft := &fakeImageEvidenceSyft{}
 
-			err := appcontainer.ImageEvidence(context.Background(), buildah, copier, trivy, syft, io.Discard, io.Discard, tt.in)
+			err := appcontainer.ImageEvidence(context.Background(), copier, trivy, syft, io.Discard, io.Discard, tt.in)
 			if !errors.Is(err, tt.want) {
 				t.Fatalf("err = %v, want %v", err, tt.want)
 			}
 
-			assertNoEvidenceToolsRan(t, buildah, copier, trivy, syft)
+			assertNoEvidenceToolsRan(t, copier, trivy, syft)
 		})
 	}
 }
 
 // TestImageEvidence_ScansEachPlatformFromItsOwnLayout covers a multi-arch run
-// from a local manifest: the manifest is exported once, split into a layout per
-// platform, and each platform is scanned from its own layout.
+// from a scan layout: the layout is split into a layout per platform, and each
+// platform is scanned from its own layout.
 //
 // That last part is the claim worth having. Per-platform output files prove
 // only that each scan was told where to write; scanning one platform's layout
@@ -394,58 +308,50 @@ func TestImageEvidence_RejectsInvalidInputsBeforeTools(t *testing.T) {
 func TestImageEvidence_ScansEachPlatformFromItsOwnLayout(t *testing.T) {
 	t.Parallel()
 	work := t.TempDir()
-	buildah := &fakeImageEvidenceBuildah{}
+
+	scanLayout := filepath.Join(work, "scan-layout")
+	if err := os.Mkdir(scanLayout, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
 	copier := &fakeImageEvidenceCopier{}
 	trivy := &fakeImageEvidenceTrivy{}
-	syft := &fakeImageEvidenceSyft{}
 
-	err := appcontainer.ImageEvidence(context.Background(), buildah, copier, trivy, syft, io.Discard, io.Discard, appcontainer.ImageEvidenceInput{
-		LocalManifest:       "localhost/example:candidate",
-		RegistryRef:         "registry.example/owner/example:final",
-		Digest:              "sha256:" + strings.Repeat("a", 64),
+	err := appcontainer.ImageEvidence(context.Background(), copier, trivy, nil, io.Discard, io.Discard, appcontainer.ImageEvidenceInput{
+		ScanLayout:          scanLayout,
 		Platforms:           []string{"linux/amd64", "linux/arm64"},
 		TrivyOutputTemplate: filepath.Join(work, "trivy-{arch}.json"),
-		SBOMOutputTemplate:  filepath.Join(work, "sbom-{platform}.json"),
-		TempDir:             work,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Run("exports the local manifest and does not reach for the registry", func(t *testing.T) {
+	t.Run("splits the scan layout into one layout per platform", func(t *testing.T) {
 		t.Parallel()
 
-		if buildah.manifest != "localhost/example:candidate" || buildah.manifestLayout == "" {
-			t.Errorf("buildah manifest=%q layout=%q", buildah.manifest, buildah.manifestLayout)
-		}
-
-		if len(copier.registryCopies) != 0 {
-			t.Errorf("registry fallback used despite a local manifest: %+v", copier.registryCopies)
-		}
-	})
-
-	t.Run("splits the manifest into one layout per platform", func(t *testing.T) {
-		t.Parallel()
-
-		assertPlatformLayouts(t, buildah.manifestLayout, copier.localCopies)
+		assertPlatformLayouts(t, scanLayout, copier.localCopies)
 	})
 
 	t.Run("scans each platform from the layout made for it", func(t *testing.T) {
 		t.Parallel()
 
-		assertPerPlatformScans(t, trivy, syft, copier.localCopies, work)
+		assertPerPlatformScans(t, trivy, copier.localCopies, work)
 	})
 
-	t.Run("writes the evidence and removes every temporary layout", func(t *testing.T) {
+	t.Run("writes the evidence, removes every temporary layout and keeps the caller's", func(t *testing.T) {
 		t.Parallel()
 
-		assertEvidenceWrittenAndCleanedUp(t, buildah.manifestLayout, copier.localCopies, work)
+		assertEvidenceWrittenAndCleanedUp(t, copier.localCopies, work)
+
+		if _, err := os.Stat(scanLayout); err != nil {
+			t.Errorf("caller-owned scan layout was removed: %v", err)
+		}
 	})
 }
 
 // assertPlatformLayouts requires one layout per platform, each split from the
-// single exported manifest layout.
-func assertPlatformLayouts(t *testing.T, manifestLayout string, copies []fakeImageEvidenceCopy) {
+// caller's scan layout.
+func assertPlatformLayouts(t *testing.T, scanLayout string, copies []fakeImageEvidenceCopy) {
 	t.Helper()
 
 	if len(copies) != 2 {
@@ -453,8 +359,8 @@ func assertPlatformLayouts(t *testing.T, manifestLayout string, copies []fakeIma
 	}
 
 	for index, arch := range []string{"amd64", "arm64"} {
-		if copies[index].sourceLayout != manifestLayout {
-			t.Errorf("copy[%d] source = %q, want the exported manifest layout %q", index, copies[index].sourceLayout, manifestLayout)
+		if copies[index].sourceLayout != scanLayout {
+			t.Errorf("copy[%d] source = %q, want the scan layout %q", index, copies[index].sourceLayout, scanLayout)
 		}
 
 		if copies[index].osName != "linux" || copies[index].arch != arch {
@@ -466,15 +372,11 @@ func assertPlatformLayouts(t *testing.T, manifestLayout string, copies []fakeIma
 // assertPerPlatformScans ties every scan back to the layout built for that
 // architecture. Per-platform output files prove only that each scan was told
 // where to write; scanning one platform twice writes both files just as well.
-func assertPerPlatformScans(t *testing.T, trivy *fakeImageEvidenceTrivy, syft *fakeImageEvidenceSyft, copies []fakeImageEvidenceCopy, work string) {
+func assertPerPlatformScans(t *testing.T, trivy *fakeImageEvidenceTrivy, copies []fakeImageEvidenceCopy, work string) {
 	t.Helper()
 
 	if len(trivy.calls) != 2 || len(copies) != 2 {
 		t.Fatalf("trivy calls = %d, copies = %d, want 2 of each", len(trivy.calls), len(copies))
-	}
-
-	if len(syft.targets) != 2 {
-		t.Fatalf("syft targets = %v, want one per platform", syft.targets)
 	}
 
 	for index, arch := range []string{"amd64", "arm64"} {
@@ -491,35 +393,30 @@ func assertPerPlatformScans(t *testing.T, trivy *fakeImageEvidenceTrivy, syft *f
 		}
 
 		assertPrivateEvidenceOutput(t, trivyArg(t, trivy.calls[index], "--output"), filepath.Join(work, "trivy-"+arch+".json"))
-
-		if want := "oci-dir:" + layout; syft.targets[index] != want {
-			t.Errorf("syft scanned %q for %s, want %q", syft.targets[index], arch, want)
-		}
 	}
 }
 
 // assertEvidenceWrittenAndCleanedUp checks the evidence files exist and that no
 // temporary layout survives. The layouts are working copies of a whole image;
 // leaving them behind fills the runner's disk one release at a time.
-func assertEvidenceWrittenAndCleanedUp(t *testing.T, manifestLayout string, copies []fakeImageEvidenceCopy, work string) {
+func assertEvidenceWrittenAndCleanedUp(t *testing.T, copies []fakeImageEvidenceCopy, work string) {
 	t.Helper()
 
-	for _, name := range []string{"trivy-amd64.json", "trivy-arm64.json", "sbom-linux-amd64.json", "sbom-linux-arm64.json"} {
+	for _, name := range []string{"trivy-amd64.json", "trivy-arm64.json"} {
 		if _, err := os.Stat(filepath.Join(work, name)); err != nil {
 			t.Errorf("evidence %s missing: %v", name, err)
 		}
 	}
 
-	layouts := make([]string, 0, 1+len(copies))
-	layouts = append(layouts, manifestLayout)
+	assertTemporaryLayoutsRemoved(t, copies)
+}
+
+func assertTemporaryLayoutsRemoved(t *testing.T, copies []fakeImageEvidenceCopy) {
+	t.Helper()
 
 	for _, copied := range copies {
-		layouts = append(layouts, copied.destLayout)
-	}
-
-	for _, layout := range layouts {
-		if _, err := os.Stat(layout); !errors.Is(err, os.ErrNotExist) {
-			t.Errorf("temporary layout %s was not cleaned up: %v", layout, err)
+		if _, err := os.Stat(copied.destLayout); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("temporary layout %s was not cleaned up: %v", copied.destLayout, err)
 		}
 	}
 }
@@ -539,154 +436,6 @@ func trivyArg(t *testing.T, args []string, flag string) string {
 	return ""
 }
 
-func TestImageEvidence_MultiArchPrefersScanLayoutOverOtherSources(t *testing.T) {
-	t.Parallel()
-	work := t.TempDir()
-
-	scanLayout := filepath.Join(work, "scan-layout")
-	if err := os.Mkdir(scanLayout, 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	buildah := &fakeImageEvidenceBuildah{}
-	copier := &fakeImageEvidenceCopier{}
-
-	err := appcontainer.ImageEvidence(context.Background(), buildah, copier, &fakeImageEvidenceTrivy{}, &fakeImageEvidenceSyft{}, io.Discard, io.Discard, appcontainer.ImageEvidenceInput{
-		ScanLayout:          scanLayout,
-		LocalManifest:       "localhost/ignored:candidate",
-		RegistryRef:         "registry.example/owner/example:final",
-		Digest:              "sha256:" + strings.Repeat("a", 64),
-		Platforms:           []string{"linux/amd64"},
-		TrivyOutputTemplate: filepath.Join(work, "trivy-{arch}.json"),
-		TempDir:             work,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if buildah.manifest != "" {
-		t.Fatalf("buildah local manifest was exported despite scan layout: %q", buildah.manifest)
-	}
-
-	if len(copier.registryCopies) != 0 {
-		t.Fatalf("registry fallback used despite scan layout: %+v", copier.registryCopies)
-	}
-
-	if len(copier.localCopies) != 1 || copier.localCopies[0].sourceLayout != scanLayout {
-		t.Fatalf("local copies = %+v, want source %q", copier.localCopies, scanLayout)
-	}
-
-	if _, err := os.Stat(scanLayout); err != nil {
-		t.Fatalf("caller-owned scan layout was removed: %v", err)
-	}
-}
-
-func TestImageEvidence_MultiArchRegistryDigestFallback(t *testing.T) {
-	t.Parallel()
-	work := t.TempDir()
-	copier := &fakeImageEvidenceCopier{}
-
-	err := appcontainer.ImageEvidence(context.Background(), &fakeImageEvidenceBuildah{}, copier, &fakeImageEvidenceTrivy{}, &fakeImageEvidenceSyft{}, io.Discard, io.Discard, appcontainer.ImageEvidenceInput{
-		RegistryRef:         "registry.example/owner/example:final",
-		Digest:              "sha256:" + strings.Repeat("a", 64),
-		Platforms:           []string{"linux/amd64"},
-		TrivyOutputTemplate: filepath.Join(work, "trivy-{platform}.json"),
-		TempDir:             work,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(copier.localCopies) != 0 {
-		t.Fatalf("local source used for registry fallback: %+v", copier.localCopies)
-	}
-
-	if len(copier.registryCopies) != 1 {
-		t.Fatalf("registry copies = %d, want 1", len(copier.registryCopies))
-	}
-
-	copied := copier.registryCopies[0]
-	if copied.ref != "registry.example/owner/example:final" || copied.digest != "sha256:"+strings.Repeat("a", 64) || copied.osName != "linux" || copied.arch != "amd64" {
-		t.Fatalf("registry copy = %+v", copied)
-	}
-
-	if _, err := os.Stat(filepath.Join(work, "trivy-linux-amd64.json")); err != nil {
-		t.Fatalf("trivy output missing: %v", err)
-	}
-}
-
-// TestImageEvidence_ScansTheRegistryImageItPulled covers the registry fallback:
-// with no local image or manifest, the named platform is copied out of the
-// registry by digest into a temporary layout, scanned there, and the layout
-// removed.
-//
-// The scans are tied to that layout. Finding the trivy output and the SBOM
-// output only shows each tool was told where to write -- the same gap its
-// multi-arch sibling had until 22ccc7b0, closed here too.
-func TestImageEvidence_ScansTheRegistryImageItPulled(t *testing.T) {
-	t.Parallel()
-	work := t.TempDir()
-	copier := &fakeImageEvidenceCopier{}
-	trivy := &fakeImageEvidenceTrivy{}
-	syft := &fakeImageEvidenceSyft{}
-	digest := "sha256:" + strings.Repeat("d", 64)
-	trivyOutput := filepath.Join(work, "trivy.json")
-	sbomOutput := filepath.Join(work, "sbom.json")
-
-	err := appcontainer.ImageEvidence(context.Background(), &fakeImageEvidenceBuildah{}, copier, trivy, syft, io.Discard, io.Discard, appcontainer.ImageEvidenceInput{
-		RegistryDigestRef: "registry.example/owner/example@" + digest,
-		Platforms:         []string{"linux/amd64"},
-		TrivyOutput:       trivyOutput,
-		SBOMOutput:        sbomOutput,
-		TempDir:           work,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(copier.registryCopies) != 1 {
-		t.Fatalf("registry copies = %+v, want exactly one", copier.registryCopies)
-	}
-
-	copied := copier.registryCopies[0]
-
-	// Pulled by digest, with the tag stripped: what is scanned is the image
-	// the digest names, not whatever the tag points at now.
-	if copied.ref != "registry.example/owner/example" || copied.digest != digest {
-		t.Errorf("copied %s@%s, want registry.example/owner/example@%s", copied.ref, copied.digest, digest)
-	}
-
-	if copied.osName != "linux" || copied.arch != "amd64" {
-		t.Errorf("copied platform = %s/%s, want linux/amd64", copied.osName, copied.arch)
-	}
-
-	if len(trivy.calls) != 1 {
-		t.Fatalf("trivy calls = %d, want exactly one", len(trivy.calls))
-	}
-
-	if got := trivyArg(t, trivy.calls[0], "--input"); got != copied.destLayout {
-		t.Errorf("trivy scanned %q, want the layout pulled for it %q", got, copied.destLayout)
-	}
-
-	if got := trivyArg(t, trivy.calls[0], "--platform"); got != "linux/amd64" {
-		t.Errorf("trivy scanned platform %q, want the one pulled, linux/amd64", got)
-	}
-
-	assertPrivateEvidenceOutput(t, trivyArg(t, trivy.calls[0], "--output"), trivyOutput)
-
-	if want := []string{"oci-dir:" + copied.destLayout}; !slices.Equal(syft.targets, want) {
-		t.Errorf("syft scanned %v, want %v", syft.targets, want)
-	}
-
-	assertPrivateEvidenceOutput(t, syft.outputs["cyclonedx-json"], sbomOutput)
-
-	// A whole image was unpacked to scan it; leaving it behind fills the
-	// runner's disk one release at a time.
-	if _, err := os.Stat(copied.destLayout); !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("temporary registry layout was not cleaned up: %v", err)
-	}
-}
-
 func TestImageEvidence_RejectsInvalidMultiArchInputsBeforeTools(t *testing.T) {
 	t.Parallel()
 	work := t.TempDir()
@@ -701,31 +450,31 @@ func TestImageEvidence_RejectsInvalidMultiArchInputsBeforeTools(t *testing.T) {
 		in   appcontainer.ImageEvidenceInput
 		want error
 	}{
-		{name: "no multi source", in: appcontainer.ImageEvidenceInput{Platforms: []string{"linux/amd64"}, TrivyOutputTemplate: filepath.Join(work, "trivy-{arch}.json")}, want: errs.ErrUsage},
-		{name: "no platforms", in: appcontainer.ImageEvidenceInput{LocalManifest: "local", TrivyOutputTemplate: filepath.Join(work, "trivy-{arch}.json")}, want: errs.ErrUsage},
-		{name: "constant template", in: appcontainer.ImageEvidenceInput{LocalManifest: "local", Platforms: []string{"linux/amd64"}, TrivyOutputTemplate: filepath.Join(work, "trivy.json")}, want: errs.ErrUsage},
-		{name: "duplicate template", in: appcontainer.ImageEvidenceInput{LocalManifest: "local", Platforms: []string{"linux/amd64", "windows/amd64"}, TrivyOutputTemplate: filepath.Join(work, "trivy-{arch}.json")}, want: errs.ErrUsage},
-		{name: "invalid platform", in: appcontainer.ImageEvidenceInput{LocalManifest: "local", Platforms: []string{"amd64"}, TrivyOutputTemplate: filepath.Join(work, "trivy-{arch}.json")}, want: errs.ErrUsage},
-		{name: "mixed single and multi flags", in: appcontainer.ImageEvidenceInput{OCILayout: layout, LocalManifest: "local", Platforms: []string{"linux/amd64"}, TrivyOutputTemplate: filepath.Join(work, "trivy-{arch}.json")}, want: errs.ErrUsage},
+		{name: "no scan layout", in: appcontainer.ImageEvidenceInput{Platforms: []string{"linux/amd64"}, TrivyOutputTemplate: filepath.Join(work, "trivy-{arch}.json")}, want: errs.ErrUsage},
+		{name: "no platforms", in: appcontainer.ImageEvidenceInput{ScanLayout: layout, TrivyOutputTemplate: filepath.Join(work, "trivy-{arch}.json")}, want: errs.ErrUsage},
+		{name: "no template", in: appcontainer.ImageEvidenceInput{ScanLayout: layout, Platforms: []string{"linux/amd64"}}, want: errs.ErrUsage},
+		{name: "constant template", in: appcontainer.ImageEvidenceInput{ScanLayout: layout, Platforms: []string{"linux/amd64"}, TrivyOutputTemplate: filepath.Join(work, "trivy.json")}, want: errs.ErrUsage},
+		{name: "duplicate template", in: appcontainer.ImageEvidenceInput{ScanLayout: layout, Platforms: []string{"linux/amd64", "windows/amd64"}, TrivyOutputTemplate: filepath.Join(work, "trivy-{arch}.json")}, want: errs.ErrUsage},
+		{name: "colliding template", in: appcontainer.ImageEvidenceInput{ScanLayout: layout, Platforms: []string{"linux/amd64", "windows/amd64"}, TrivyOutputTemplate: filepath.Join(work, "{platform}") + "/../trivy-{arch}.json"}, want: errs.ErrUsage},
+		{name: "invalid platform", in: appcontainer.ImageEvidenceInput{ScanLayout: layout, Platforms: []string{"amd64"}, TrivyOutputTemplate: filepath.Join(work, "trivy-{arch}.json")}, want: errs.ErrUsage},
+		{name: "mixed single and multi flags", in: appcontainer.ImageEvidenceInput{OCILayout: layout, ScanLayout: layout, Platforms: []string{"linux/amd64"}, TrivyOutputTemplate: filepath.Join(work, "trivy-{arch}.json")}, want: errs.ErrUsage},
 		{name: "missing scan layout", in: appcontainer.ImageEvidenceInput{ScanLayout: filepath.Join(work, "missing"), Platforms: []string{"linux/amd64"}, TrivyOutputTemplate: filepath.Join(work, "trivy-{arch}.json")}, want: errs.ErrMissingInput},
-		{name: "invalid registry digest ref", in: appcontainer.ImageEvidenceInput{RegistryDigestRef: "registry.example/owner/example:tag", Platforms: []string{"linux/amd64"}, TrivyOutputTemplate: filepath.Join(work, "trivy-{arch}.json")}, want: errs.ErrUsage},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			buildah := &fakeImageEvidenceBuildah{}
 			copier := &fakeImageEvidenceCopier{}
 			trivy := &fakeImageEvidenceTrivy{}
 			syft := &fakeImageEvidenceSyft{}
 
-			err := appcontainer.ImageEvidence(context.Background(), buildah, copier, trivy, syft, io.Discard, io.Discard, tt.in)
+			err := appcontainer.ImageEvidence(context.Background(), copier, trivy, syft, io.Discard, io.Discard, tt.in)
 			if !errors.Is(err, tt.want) {
 				t.Fatalf("err = %v, want %v", err, tt.want)
 			}
 
-			assertNoEvidenceToolsRan(t, buildah, copier, trivy, syft)
+			assertNoEvidenceToolsRan(t, copier, trivy, syft)
 		})
 	}
 }
@@ -741,14 +490,9 @@ func TestImageEvidence_OnePlatformFailingLeavesItsPeersAndNoLayouts(t *testing.T
 
 	input := func(work string) appcontainer.ImageEvidenceInput {
 		return appcontainer.ImageEvidenceInput{
-			LocalManifest:       "localhost/example:candidate",
+			ScanLayout:          filepath.Join(work, "scan-layout"),
 			Platforms:           []string{"linux/amd64", "linux/arm64", "linux/s390x"},
 			TrivyOutputTemplate: filepath.Join(work, "evidence", "trivy-{arch}.json"),
-			SBOMOutputTemplate:  filepath.Join(work, "evidence", "sbom-{arch}.json"),
-			TempDir:             filepath.Join(work, "tmp"),
-			// One attempt per platform: this test is about a scan that
-			// stays failed, not about the retry around it.
-			TrivyAttempts: 1,
 		}
 	}
 
@@ -757,7 +501,7 @@ func TestImageEvidence_OnePlatformFailingLeavesItsPeersAndNoLayouts(t *testing.T
 
 		work := t.TempDir()
 		require.NoError(t, os.MkdirAll(filepath.Join(work, "evidence"), 0o750))
-		require.NoError(t, os.MkdirAll(filepath.Join(work, "tmp"), 0o750))
+		require.NoError(t, os.MkdirAll(filepath.Join(work, "scan-layout"), 0o750))
 
 		return work
 	}
@@ -767,16 +511,16 @@ func TestImageEvidence_OnePlatformFailingLeavesItsPeersAndNoLayouts(t *testing.T
 
 		work := prepare(t)
 		copier := &fakeImageEvidenceCopier{}
+		// The failures say nothing of the network, so none is retried: this
+		// test is about a scan that stays failed, not the retry around it.
 		trivy := &fakeImageEvidenceTrivy{codes: []int{3, 0, 5}}
-		syft := &fakeImageEvidenceSyft{}
 
-		err := appcontainer.ImageEvidence(context.Background(), &fakeImageEvidenceBuildah{}, copier, trivy, syft, io.Discard, io.Discard, input(work))
+		err := appcontainer.ImageEvidence(context.Background(), copier, trivy, nil, io.Discard, io.Discard, input(work))
 		require.ErrorIs(t, err, errs.ErrValidation)
 		require.Contains(t, err.Error(), "exited with status 3")
 		require.NotContains(t, err.Error(), "status 5")
 
 		require.Len(t, trivy.calls, 3, "every platform is scanned")
-		require.Equal(t, []string{"oci-dir:" + copier.localCopies[1].destLayout}, syft.targets, "only the platform whose scan passed gets an SBOM")
 
 		entries, readErr := os.ReadDir(filepath.Join(work, "evidence"))
 		require.NoError(t, readErr)
@@ -786,11 +530,9 @@ func TestImageEvidence_OnePlatformFailingLeavesItsPeersAndNoLayouts(t *testing.T
 			names = append(names, entry.Name())
 		}
 
-		require.ElementsMatch(t, []string{"trivy-arm64.json", "sbom-arm64.json"}, names)
-
-		tmp, tmpErr := os.ReadDir(filepath.Join(work, "tmp"))
-		require.NoError(t, tmpErr)
-		require.Empty(t, tmp, "temporary layouts survived")
+		require.ElementsMatch(t, []string{"trivy-arm64.json"}, names)
+		require.Len(t, copier.localCopies, 3)
+		assertTemporaryLayoutsRemoved(t, copier.localCopies)
 	})
 
 	t.Run("layout extraction failure", func(t *testing.T) {
@@ -800,40 +542,35 @@ func TestImageEvidence_OnePlatformFailingLeavesItsPeersAndNoLayouts(t *testing.T
 		copier := &fakeImageEvidenceCopier{fail: true}
 		trivy := &fakeImageEvidenceTrivy{}
 
-		err := appcontainer.ImageEvidence(context.Background(), &fakeImageEvidenceBuildah{}, copier, trivy, &fakeImageEvidenceSyft{}, io.Discard, io.Discard, input(work))
+		err := appcontainer.ImageEvidence(context.Background(), copier, trivy, nil, io.Discard, io.Discard, input(work))
 		require.Error(t, err)
 		require.Len(t, copier.localCopies, 1, "extraction failure aborts before the next platform")
 		require.Empty(t, trivy.calls)
-
-		tmp, tmpErr := os.ReadDir(filepath.Join(work, "tmp"))
-		require.NoError(t, tmpErr)
-		require.Empty(t, tmp, "temporary layouts survived")
+		assertTemporaryLayoutsRemoved(t, copier.localCopies)
 	})
 }
 
 // Trivy's database download fails transiently, so a scan the network stopped
-// is run again within the attempt bound: a later success publishes the report
-// of the attempt that passed, an exhausted bound returns the last failure as
-// an unavailable dependency and publishes nothing, and a report left by a
-// failed attempt is gone before the next one starts. A scan Trivy fails for a
-// reason of its own is returned from the first attempt as Trivy's failure.
+// is run again, three times in all: a later success publishes the report of
+// the attempt that passed, an exhausted bound returns the last failure as an
+// unavailable dependency and publishes nothing, and a report left by a failed
+// attempt is gone before the next one starts. A scan Trivy fails for a reason
+// of its own is returned from the first attempt as Trivy's failure.
 func TestImageEvidence_RetriesAFailedScanWithinTheAttemptBound(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
 		name      string
 		codes     []int
-		attempts  int
 		wantCalls int
 		wantErr   string
 		said      string
 		wantClass error
 	}{
-		{name: "passes on the third attempt", codes: []int{1, 2, 0}, attempts: 3, wantCalls: 3, said: trivyOffline},
-		{name: "bound exhausted", codes: []int{1, 2, 3}, attempts: 3, wantCalls: 3, wantErr: "exited with status 3", said: trivyOffline, wantClass: errs.ErrDependencyUnavailable},
-		{name: "one attempt", codes: []int{4, 0}, attempts: 1, wantCalls: 1, wantErr: "exited with status 4", said: trivyOffline, wantClass: errs.ErrDependencyUnavailable},
-		{name: "a failure that is not the network", codes: []int{1, 0}, attempts: 3, wantCalls: 1, wantErr: "exited with status 1", said: "FATAL\tFatal error\trun error: image scan error: unable to initialize the scanner\n", wantClass: errs.ErrValidation},
-		{name: "a failure that says nothing", codes: []int{1, 0}, attempts: 3, wantCalls: 1, wantErr: "exited with status 1", wantClass: errs.ErrValidation},
+		{name: "passes on the third attempt", codes: []int{1, 2, 0}, wantCalls: 3, said: trivyOffline},
+		{name: "bound exhausted", codes: []int{1, 2, 3}, wantCalls: 3, wantErr: "exited with status 3", said: trivyOffline, wantClass: errs.ErrDependencyUnavailable},
+		{name: "a failure that is not the network", codes: []int{1, 0}, wantCalls: 1, wantErr: "exited with status 1", said: "FATAL\tFatal error\trun error: image scan error: unable to initialize the scanner\n", wantClass: errs.ErrValidation},
+		{name: "a failure that says nothing", codes: []int{1, 0}, wantCalls: 1, wantErr: "exited with status 1", wantClass: errs.ErrValidation},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -847,8 +584,8 @@ func TestImageEvidence_RetriesAFailedScanWithinTheAttemptBound(t *testing.T) {
 
 			var out bytes.Buffer
 
-			err := appcontainer.ImageEvidence(t.Context(), nil, nil, trivy, nil, &out, io.Discard, appcontainer.ImageEvidenceInput{
-				OCILayout: layout, TrivyOutput: trivyPath, TrivyAttempts: tc.attempts, TrivyRetryDelay: time.Millisecond,
+			err := appcontainer.ImageEvidence(t.Context(), nil, trivy, nil, &out, io.Discard, appcontainer.ImageEvidenceInput{
+				OCILayout: layout, TrivyOutput: trivyPath, TrivyRetryDelay: time.Millisecond,
 			})
 			require.Len(t, trivy.calls, tc.wantCalls)
 			require.Equal(t, tc.wantCalls-1, strings.Count(out.String(), "retrying in"), out.String())
@@ -876,8 +613,7 @@ func (u *unstartableImageEvidenceTrivy) RunInherit(context.Context, io.Writer, i
 	return -1, errs.ErrDependencyUnavailable
 }
 
-// A scanner that cannot be started is not a transient failure, and a
-// negative bound is refused before any tool runs.
+// A scanner that cannot be started is not a transient failure.
 func TestImageEvidence_DoesNotRetryWhatRetryingCannotFix(t *testing.T) {
 	t.Parallel()
 
@@ -885,18 +621,9 @@ func TestImageEvidence_DoesNotRetryWhatRetryingCannotFix(t *testing.T) {
 	trivyPath := filepath.Join(t.TempDir(), "trivy.json")
 
 	missing := &unstartableImageEvidenceTrivy{}
-	err := appcontainer.ImageEvidence(t.Context(), nil, nil, missing, nil, io.Discard, io.Discard, appcontainer.ImageEvidenceInput{
-		OCILayout: layout, TrivyOutput: trivyPath, TrivyAttempts: 3, TrivyRetryDelay: time.Millisecond,
+	err := appcontainer.ImageEvidence(t.Context(), nil, missing, nil, io.Discard, io.Discard, appcontainer.ImageEvidenceInput{
+		OCILayout: layout, TrivyOutput: trivyPath, TrivyRetryDelay: time.Millisecond,
 	})
 	require.ErrorIs(t, err, errs.ErrDependencyUnavailable)
 	require.Equal(t, 1, missing.calls)
-
-	for _, in := range []appcontainer.ImageEvidenceInput{
-		{OCILayout: layout, TrivyOutput: trivyPath, TrivyAttempts: -1},
-		{OCILayout: layout, TrivyOutput: trivyPath, TrivyRetryDelay: -time.Second},
-	} {
-		trivy := &fakeImageEvidenceTrivy{}
-		require.ErrorIs(t, appcontainer.ImageEvidence(t.Context(), nil, nil, trivy, nil, io.Discard, io.Discard, in), errs.ErrUsage)
-		require.Empty(t, trivy.calls)
-	}
 }

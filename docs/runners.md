@@ -370,11 +370,10 @@ between the two.
 What kaniko does not do, and the engine refuses by name instead of working
 around:
 
-- **No local image store.** `container build --mode load`,
-  `container build-push-oci-image`'s manifest-list build, `image push`, `manifest push`
-  and local `image evidence` need Buildah. A smoke test with `podman run`
-  cannot run on such a pool either; a consumer that smoke-tests records the
-  test as not run, never silently.
+- **No local image store.** `container build --mode load` and
+  `container build-push-oci-image`'s manifest-list build need Buildah. A
+  smoke test with `podman run` cannot run on such a pool either; a consumer
+  that smoke-tests records the test as not run, never silently.
 - **No build secrets.** kaniko keeps a `--secret` recoverable by later `RUN`
   steps of the same build, so the adapter refuses them. A build that needs a
   secret uses Buildah.

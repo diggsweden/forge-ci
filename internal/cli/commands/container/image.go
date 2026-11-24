@@ -7,11 +7,9 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/diggsweden/forge-ci/internal/adapters/buildah"
 	"github.com/diggsweden/forge-ci/internal/adapters/ociregistry"
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
 	"github.com/diggsweden/forge-ci/internal/cli/deps"
@@ -23,50 +21,7 @@ func imageGroup() *cli.Command {
 		Name:  flagImage,
 		Usage: "single-image registry operations",
 		Commands: []*cli.Command{
-			imagePushCmd(),
 			imageUsableDigestCmd(),
-		},
-	}
-}
-
-func imagePushCmd() *cli.Command {
-	return &cli.Command{
-		Name:  "push",
-		Usage: "push a local Buildah image to a registry ref and print the verified digest",
-		Description: `Pushes one local Buildah image to --destination, verifies the
-raw manifest digest now served by the registry, emits digest/ref outputs, and
-prints the verified digest to stdout for shell command substitution. The registry
-digest must match the exported OCI layout. Push retries reuse that same layout.`,
-		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "local-image", Required: true, Sources: cli.EnvVars("LOCAL_IMAGE"), Usage: "local Buildah image name/ref to push"},
-			&cli.StringFlag{Name: "destination", Required: true, Sources: cli.EnvVars("DESTINATION_REF", "IMAGE_REF"), Usage: "registry image ref to push, e.g. registry.example/owner/app:staging-amd64"},
-			regflags.AuthFile(regflags.AuthFileOpts{Usage: "registry auth file for export, publication and digest verification"}),
-			regflags.TLSVerify(regflags.TLSVerifyOpts{Env: "IMAGE_PUSH_TLS_VERIFY"}),
-			&cli.IntFlag{Name: flagRetryAttempts, Value: 3, Sources: cli.EnvVars("IMAGE_PUSH_RETRY_ATTEMPTS"), Usage: "push and registry digest read attempts"},
-			&cli.IntFlag{Name: flagRetryDelaySeconds, Value: 15, Sources: cli.EnvVars("IMAGE_PUSH_RETRY_DELAY_SECONDS"), Usage: "base delay between retry attempts"},
-		},
-		Action: func(ctx context.Context, cmd *cli.Command) error {
-			return deps.FromCmd(ctx, cmd, func(dep *deps.Deps) error {
-				auth := regflags.Resolve(cmd)
-
-				registry := ociregistry.WithAuthFileAndTLS(auth.AuthFile, auth.TLSVerify != tlsVerifyDisabled)
-
-				result, err := appcontainer.PushImage(ctx, buildah.New(), registry, dep.OutputSink, os.Stderr, appcontainer.PushImageInput{
-					LocalImage:    cmd.String("local-image"),
-					Destination:   cmd.String("destination"),
-					AuthFile:      auth.AuthFile,
-					TLSVerify:     auth.TLSVerify,
-					RetryAttempts: cmd.Int(flagRetryAttempts),
-					RetryDelay:    time.Duration(cmd.Int(flagRetryDelaySeconds)) * time.Second,
-				})
-				if err != nil {
-					return err
-				}
-
-				_, _ = fmt.Fprintln(os.Stdout, result.Digest)
-
-				return nil
-			})
 		},
 	}
 }

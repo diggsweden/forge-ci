@@ -13,43 +13,37 @@ import (
 	"github.com/diggsweden/forge-ci/internal/testutil/testenv"
 )
 
-func TestMultiarchCommandsShareArchitectureEnvironmentAndFlagPrecedence(t *testing.T) {
-	for _, makeCommand := range []func() *cli.Command{signerImageAssembleCmd, multiarchImageVerifyCmd} {
-		for _, testCase := range []struct {
-			name string
-			env  string
-			flag string
-			want string
-		}{
-			{name: "arm64 environment", env: "arm64", want: "arm64"},
-			{name: "both environment", env: "amd64\narm64", want: "amd64\narm64"},
-			{name: "flag overrides environment", env: "arm64", flag: "amd64", want: "amd64"},
-		} {
-			command := makeCommand()
-			t.Run(command.Name+"/"+testCase.name, func(t *testing.T) {
-				env := testenv.New(t)
-				env.Setenv("IMAGE_ARCHS", testCase.env)
+func TestMultiarchAssembleTakesArchitecturesFromEnvironmentOrFlag(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		env  string
+		flag string
+		want string
+	}{
+		{name: "arm64 environment", env: "arm64", want: "arm64"},
+		{name: "both environment", env: "amd64\narm64", want: "amd64\narm64"},
+		{name: "flag overrides environment", env: "arm64", flag: "amd64", want: "amd64"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			env := testenv.New(t)
+			env.Setenv("IMAGE_ARCHS", testCase.env)
 
-				var got string
+			var got string
 
-				command.Action = func(_ context.Context, parsed *cli.Command) error {
-					got = parsed.String("archs")
+			command := signerImageAssembleCmd()
+			command.Action = func(_ context.Context, parsed *cli.Command) error {
+				got = parsed.String("archs")
 
-					return nil
-				}
+				return nil
+			}
 
-				args := []string{command.Name}
-				if command.Name == "verify" {
-					args = append(args, "--ref", "fixture-ref")
-				}
+			args := []string{command.Name}
+			if testCase.flag != "" {
+				args = append(args, "--archs", testCase.flag)
+			}
 
-				if testCase.flag != "" {
-					args = append(args, "--archs", testCase.flag)
-				}
-
-				require.NoError(t, command.Run(t.Context(), args))
-				require.Equal(t, testCase.want, got)
-			})
-		}
+			require.NoError(t, command.Run(t.Context(), args))
+			require.Equal(t, testCase.want, got)
+		})
 	}
 }

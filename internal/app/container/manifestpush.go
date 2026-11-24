@@ -20,35 +20,6 @@ import (
 	"github.com/diggsweden/forge-ci/internal/retry"
 )
 
-// ManifestPushTool is the Buildah surface needed to push a local manifest list.
-type ManifestPushTool interface {
-	ExportManifestToLayout(ctx context.Context, authFile string, tlsVerify bool, manifest, layoutDir string, out io.Writer) error
-	RemoveLocalManifest(ctx context.Context, manifest string, out io.Writer) error
-}
-
-// ManifestPublishRegistry publishes a complete exported index and reads it back.
-type ManifestPublishRegistry interface {
-	RawManifestRegistry
-	PushIndexLayout(ctx context.Context, layoutDir, destination string) (string, error)
-}
-
-// PushManifestInput drives `container manifest push`.
-type PushManifestInput struct {
-	LocalManifest string
-	Destination   string
-	AuthFile      string
-	TLSVerify     string
-	RemoveLocal   bool
-	RetryAttempts int
-	RetryDelay    time.Duration
-}
-
-// PushManifestOutput is the pushed manifest digest and digest-pinned ref.
-type PushManifestOutput struct {
-	Digest string
-	Ref    string
-}
-
 // PushedManifestDigestInput drives `container manifest digest`.
 type PushedManifestDigestInput struct {
 	Ref           string
@@ -61,49 +32,6 @@ type PushedManifestDigestInput struct {
 type PushedManifestDigestOutput struct {
 	Digest string
 	Ref    string
-}
-
-// PushManifest pushes a local Buildah manifest list to a registry ref, verifies
-// the digest the registry serves, and emits digest/ref outputs.
-func PushManifest(ctx context.Context, tool ManifestPushTool, registry ManifestPublishRegistry, sink ci.OutputSink, out io.Writer, in PushManifestInput) (*PushManifestOutput, error) {
-	if err := validatePushManifestInput(tool, registry, in); err != nil {
-		return nil, err
-	}
-
-	layoutDir, err := os.MkdirTemp("", "forge-ci-manifest-push-*")
-	if err != nil {
-		return nil, fmt.Errorf("create manifest publication layout: %w", err)
-	}
-	defer func() { _ = os.RemoveAll(layoutDir) }()
-
-	if exportErr := tool.ExportManifestToLayout(ctx, in.AuthFile, in.TLSVerify == tlsVerifyTrue, in.LocalManifest, layoutDir, out); exportErr != nil {
-		return nil, exportErr
-	}
-
-	layoutDigest, err := retry.Do(ctx, out, retry.Attempts(in.RetryAttempts, defaultBuildPushRetryAttempts), retry.Delay(in.RetryDelay, defaultBuildPushRetryDelay), func() (string, error) {
-		return registry.PushIndexLayout(ctx, layoutDir, in.Destination)
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	registryDigest, err := verifyPublishedLayout(ctx, registry, out, in.Destination, layoutDigest, in.RetryAttempts, in.RetryDelay)
-	if err != nil {
-		return nil, err
-	}
-
-	if in.RemoveLocal {
-		if removeErr := tool.RemoveLocalManifest(ctx, in.LocalManifest, out); removeErr != nil {
-			return nil, fmt.Errorf("remove published local manifest: %w", removeErr)
-		}
-	}
-
-	result := &PushManifestOutput{Digest: registryDigest, Ref: domaincontainer.StripDigest(in.Destination) + "@" + registryDigest}
-	if outputErr := emitPublishedReference(ctx, sink, result.Digest, result.Ref); outputErr != nil {
-		return nil, outputErr
-	}
-
-	return result, nil
 }
 
 // ResolvePushedManifestDigest resolves the registry-served raw manifest digest
@@ -150,35 +78,6 @@ func ResolvePushedManifestDigest(ctx context.Context, registry RawManifestRegist
 	return result, nil
 }
 
-func validatePushManifestInput(tool ManifestPushTool, registry RawManifestRegistry, in PushManifestInput) error {
-	if tool == nil {
-		return fmt.Errorf("container manifest push: buildah adapter is required: %w", errs.ErrUsage)
-	}
-
-	if registry == nil {
-		return fmt.Errorf("container manifest push: registry adapter is required: %w", errs.ErrUsage)
-	}
-
-	if canonical, err := domaincontainer.CanonicalImageRef(in.LocalManifest); err != nil || canonical != in.LocalManifest {
-		return fmt.Errorf("container manifest push: local manifest must be a safe OCI reference: %w", errs.ErrUsage)
-	}
-
-	if strings.TrimSpace(in.Destination) == "" || strings.ContainsAny(in.Destination, " \t\n\r") {
-		return fmt.Errorf("container manifest push: destination ref is empty or unsafe: %w", errs.ErrUsage)
-	}
-
-	if _, err := domaincontainer.CanonicalImageRef(in.Destination); err != nil {
-		return err
-	}
-
-	switch in.TLSVerify {
-	case tlsVerifyTrue, tlsVerifyFalse:
-		return nil
-	default:
-		return fmt.Errorf("container manifest push: tls-verify must be 'true' or 'false', got %q: %w", in.TLSVerify, errs.ErrUsage)
-	}
-}
-
 func validatePushedManifestDigestInput(registry RawManifestRegistry, in PushedManifestDigestInput) error {
 	if registry == nil {
 		return fmt.Errorf("container manifest digest: registry adapter is required: %w", errs.ErrUsage)
@@ -189,18 +88,6 @@ func validatePushedManifestDigestInput(registry RawManifestRegistry, in PushedMa
 	}
 
 	return nil
-}
-
-func emitPublishedReference(ctx context.Context, sink ci.OutputSink, digest, ref string) error {
-	if sink == nil {
-		return nil
-	}
-
-	if err := sink.Set(ctx, outputKeyDigest, digest); err != nil {
-		return err
-	}
-
-	return sink.Set(ctx, "ref", ref)
 }
 
 // A publisher's content digest is mandatory. The optional legacy digest-file

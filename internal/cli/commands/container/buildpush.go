@@ -99,7 +99,7 @@ scope (flag > plan > env > default).`,
 				scanner := trivy.New()
 				annot := deps.Annotator(cmd)
 				checkLayout := func(scanContext context.Context, layout string, platforms []string) error {
-					return appcontainer.ImageEvidence(scanContext, nil, registry, scanner, nil, os.Stderr, os.Stderr,
+					return appcontainer.ImageEvidence(scanContext, registry, scanner, nil, os.Stderr, os.Stderr,
 						appcontainer.ImageEvidenceInput{ScanLayout: layout, Platforms: platforms, TrivyOutputTemplate: template,
 							Gate: publicationGate(scanner, annot)})
 				}

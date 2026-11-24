@@ -184,7 +184,7 @@ func (e *StagedLayoutEvidence) check(ctx context.Context, out io.Writer, inputs 
 	for idx, in := range inputs {
 		platform := platforms[idx]
 
-		err := ImageEvidence(ctx, nil, nil, e.Trivy, e.Syft, out, e.Stderr, ImageEvidenceInput{
+		err := ImageEvidence(ctx, nil, e.Trivy, e.Syft, out, e.Stderr, ImageEvidenceInput{
 			OCILayout:   in.Directory,
 			TrivyOutput: renderImageEvidenceTemplate(e.TrivyOutputTemplate, platform),
 			SBOMOutput:  renderImageEvidenceTemplate(e.SBOMOutputTemplate, platform),

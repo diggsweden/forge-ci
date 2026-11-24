@@ -311,7 +311,7 @@ func TestBuildTimestamp_InheritedEpoch_WithRealBuildah(t *testing.T) {
 	}
 
 	dest := t.TempDir()
-	if err := adapter.ExportLocalManifestToLayout(t.Context(), "localhost/timestamp-regression:list", dest, os.Stderr); err != nil {
+	if err := adapter.ExportManifestToLayout(t.Context(), "", true, "localhost/timestamp-regression:list", dest, os.Stderr); err != nil {
 		t.Fatal(err)
 	}
 

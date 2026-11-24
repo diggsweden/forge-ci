@@ -14,15 +14,6 @@ func (a *Adapter) ExportLocalImageToLayout(ctx context.Context, imageRef, layout
 	return a.run(ctx, out, a.global("push", imageRef, "oci:"+layoutDir+":scan")...)
 }
 
-// ExportImageToLayout keeps the caller's explicit registry policy during export.
-// The destination is local OCI storage, never a docker:// registry write.
-func (a *Adapter) ExportImageToLayout(ctx context.Context, authFile string, tlsVerify bool, image, layoutDir string, out io.Writer) error {
-	args := append(a.global("push"), exportAuthArgs(authFile, tlsVerify)...)
-	args = append(args, image, "oci:"+layoutDir+":scan")
-
-	return a.runWithEnv(ctx, out, registryAuthEnv(authFile), args...)
-}
-
 // ExportManifestToLayout includes all platforms; remote children, if needed,
 // use the same auth file and TLS policy as the subsequent registry publication.
 func (a *Adapter) ExportManifestToLayout(ctx context.Context, authFile string, tlsVerify bool, manifest, layoutDir string, out io.Writer) error {
@@ -30,16 +21,6 @@ func (a *Adapter) ExportManifestToLayout(ctx context.Context, authFile string, t
 	args = append(args, manifest, "oci:"+layoutDir+":scan")
 
 	return a.runWithEnv(ctx, out, registryAuthEnv(authFile), args...)
-}
-
-// RemoveLocalManifest runs only after the caller has verified publication.
-func (a *Adapter) RemoveLocalManifest(ctx context.Context, manifest string, out io.Writer) error {
-	return a.run(ctx, out, a.global("manifest", "rm", manifest)...)
-}
-
-// ExportLocalManifestToLayout exports a local Buildah manifest list to an OCI layout.
-func (a *Adapter) ExportLocalManifestToLayout(ctx context.Context, manifest, layoutDir string, out io.Writer) error {
-	return a.run(ctx, out, a.global("manifest", "push", "--all", manifest, "oci:"+layoutDir+":scan")...)
 }
 
 func exportAuthArgs(authFile string, tlsVerify bool) []string {

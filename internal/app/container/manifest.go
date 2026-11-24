@@ -25,6 +25,19 @@ type RawManifestRegistry interface {
 	Manifest(ctx context.Context, ref string) ([]byte, error)
 }
 
+// ImagePublishRegistry publishes the exported bytes of one image and supplies
+// their read-back.
+type ImagePublishRegistry interface {
+	RawManifestRegistry
+	PushLayout(ctx context.Context, layoutDir, destination string) (string, error)
+}
+
+// ManifestPublishRegistry publishes a complete exported index and reads it back.
+type ManifestPublishRegistry interface {
+	RawManifestRegistry
+	PushIndexLayout(ctx context.Context, layoutDir, destination string) (string, error)
+}
+
 // ManifestRegistry is the registry surface the manifest helpers need: digest
 // resolution, raw-manifest fetch, and multi-platform index assembly. It is
 // implemented by internal/adapters/ociregistry (daemonless

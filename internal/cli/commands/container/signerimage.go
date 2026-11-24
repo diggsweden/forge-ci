@@ -50,7 +50,6 @@ upload. Without these flags the existing immediate-publish behavior is retained.
 		Commands: []*cli.Command{
 			signerImageBuildArchCmd(),
 			signerImageAssembleCmd(),
-			multiarchImageVerifyCmd(),
 		},
 	}
 }

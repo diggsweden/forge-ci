@@ -1334,26 +1334,6 @@ EXAMPLE:
 
 single-image registry operations
 
-#### `forge-ci container image push`
-
-push a local Buildah image to a registry ref and print the verified digest
-
-```
-Pushes one local Buildah image to --destination, verifies the
-raw manifest digest now served by the registry, emits digest/ref outputs, and
-prints the verified digest to stdout for shell command substitution. The registry
-digest must match the exported OCI layout. Push retries reuse that same layout.
-```
-
-| Flag | Description | Type | Default | Env vars |
-|------|-------------|------|---------|----------|
-| `--local-image` | local Buildah image name/ref to push (required) | string | `""` | `$LOCAL_IMAGE` |
-| `--destination` | registry image ref to push, e.g. registry.example/owner/app:staging-amd64 (required) | string | `""` | `$DESTINATION_REF`, `$IMAGE_REF` |
-| `--auth-file` | registry auth file for export, publication and digest verification | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
-| `--tls-verify` | verify registry TLS certificates: true or false | string | `"true"` | `$IMAGE_PUSH_TLS_VERIFY` |
-| `--retry-attempts` | push and registry digest read attempts | int | `3` | `$IMAGE_PUSH_RETRY_ATTEMPTS` |
-| `--retry-delay-seconds` | base delay between retry attempts | int | `15` | `$IMAGE_PUSH_RETRY_DELAY_SECONDS` |
-
 #### `forge-ci container image usable-digest`
 
 print an existing image digest only when architecture and labels match
@@ -1671,7 +1651,7 @@ EXAMPLES:
 
 ### `forge-ci container manifest`
 
-inspect, digest, merge, and push container manifests
+inspect, digest, merge, and tag container manifests
 
 #### `forge-ci container manifest digest`
 
@@ -1723,27 +1703,6 @@ EXAMPLE:
 | `--image-name` | base image name (without tag) the manifest list points to | string | `""` | `$IMAGE_NAME` |
 | `--tags` | newline-separated tags to publish for the manifest list | string | `""` | `$TAGS` |
 | `--digests-dir` | directory holding the per-arch digest marker files | string | `"/tmp/digests"` | `$DIGESTS_DIR` |
-
-#### `forge-ci container manifest push`
-
-push a local Buildah manifest list to a registry ref and print the verified digest
-
-```
-Pushes a local Buildah manifest list to --destination, verifies
-the digest now served by the registry, emits digest/ref outputs, and prints the
-verified digest to stdout for shell command substitution. The registry digest is
-checked against the exported OCI index. Push retries reuse that same index.
-```
-
-| Flag | Description | Type | Default | Env vars |
-|------|-------------|------|---------|----------|
-| `--local-manifest` | local Buildah manifest list name to push (required) | string | `""` | `$LOCAL_MANIFEST` |
-| `--destination` | registry image ref to push, e.g. registry.example/owner/app:staging-v1 (required) | string | `""` | `$DESTINATION_REF`, `$IMAGE_REF` |
-| `--auth-file` | registry auth file for export, publication and digest verification | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
-| `--tls-verify` | verify registry TLS certificates: true or false | string | `"true"` | `$MANIFEST_PUSH_TLS_VERIFY` |
-| `--remove-local` | remove the local Buildah manifest after successful publication and digest verification | bool | `false` | `$MANIFEST_PUSH_REMOVE_LOCAL` |
-| `--retry-attempts` | push and registry digest read attempts | int | `3` | `$MANIFEST_PUSH_RETRY_ATTEMPTS` |
-| `--retry-delay-seconds` | base delay between retry attempts | int | `15` | `$MANIFEST_PUSH_RETRY_DELAY_SECONDS` |
 
 #### `forge-ci container manifest tag`
 
@@ -1899,26 +1858,6 @@ architecture builds on a native runner, never under CPU emulation.
 | `--cache-tag` | with --stage: reuse a bounded architecture slot in the image repository after checking its platform, revision and --require-label values; uses --auth-file when supplied, otherwise reads anonymously | string | `""` | n/a |
 | `--require-label` | required cache child config label as key=value (repeatable) | string | `""` | n/a |
 | `--metadata-dir` | directory for <name>-<arch>.json (default <name>-arch-<arch>) | string | `""` | `$IMAGE_METADATA_DIR` |
-
-#### `forge-ci container multiarch-image verify`
-
-verify an existing digest-pinned index against the complete architecture metadata set without publishing
-
-| Flag | Description | Type | Default | Env vars |
-|------|-------------|------|---------|----------|
-| `--auth-file` | registry auth file used by buildah and the registry client; build-arch --stage pulls anonymously without one | string | `""` | `$FORGE_CI_IMAGE_AUTH_FILE` |
-| `--source-sha` | git commit SHA for the OCI revision label and default tag naming | string | `""` | `$SOURCE_SHA` |
-| `--server-url` | forge server URL used to derive the registry/repository | string | `""` | `$CI_SERVER_URL`, `$FORGEJO_SERVER_URL`, `$FORGEJO_SERVER`, `$GITHUB_SERVER_URL` |
-| `--repository` | owner/repo used to derive the image repository | string | `""` | `$REPOSITORY`, `$CI_REPO`, `$CI_PROJECT_PATH`, `$FORGEJO_REPOSITORY`, `$FORGEJO_REPO`, `$GITHUB_REPOSITORY` |
-| `--repository-suffix` | suffix for the derived image repository (e.g. -signer); unused with --image-repository | string | `""` | `$IMAGE_REPOSITORY_SUFFIX` |
-| `--image-repository` | full destination OCI repository without a tag or digest; overrides the derived destination, preserving source labels | string | `""` | `$IMAGE_REPOSITORY` |
-| `--tag-prefix` | prefix prepended to the source-SHA image and manifest tags (e.g. signer-) | string | `""` | `$IMAGE_TAG_PREFIX` |
-| `--tag` | explicit index tag name instead of tag-prefix + source-sha; architecture tags append -<arch>; mutually exclusive with tag-prefix | string | `""` | n/a |
-| `--name` | basename for the per-arch/manifest metadata files and dirs shared across the two phases | string | `"image"` | `$IMAGE_METADATA_NAME` |
-| `--ref` | tag-free digest-pinned index reference (required) | string | `""` | n/a |
-| `--archs` | newline-separated architectures to include | string | `"amd64\narm64"` | `$IMAGE_ARCHS` |
-| `--require-label` | required child config label as key=value (repeatable) | string | `""` | n/a |
-| `--manifest-output` | optional file for exact verified index bytes; '-' is not supported; no registry writes | string | `""` | n/a |
 
 ### `forge-ci container package-retention`
 

@@ -93,22 +93,10 @@ index's digest. `--manifest-output` retains the exact checked bytes, without
 JSON re-encoding or an added newline, for the offline SBOM step. An output
 path that aliases an input, a directory or a symlink is refused.
 
-## Verify a reused index
-
-`container multiarch-image verify` takes the same metadata, tag, architecture,
-repository and label inputs, plus `--ref` with the tag-free index digest
-reference. It performs no registry writes. A mutable tag is refused.
-
-It checks the actual child platforms, the index's byte digest and the exact
-platform/child set. Missing, extra, repeated and substituted children fail.
-A single-image manifest is accepted only when its bytes are the sole expected
-child. `--manifest-output` is optional; without it no metadata file is written.
-The operation emits `image-ref` and `image-digest` CI outputs after validation.
-Assembly and verification both read `IMAGE_ARCHS`; an explicit `--archs` value
-takes precedence. Push-retry flags belong to the publishing commands only.
+Assembly reads `IMAGE_ARCHS`; an explicit `--archs` value takes precedence.
+Push-retry flags belong to the publishing commands only.
 
 The current native build/assembly interface supports Linux AMD64 and ARM64.
-Index verification does not execute either architecture's code.
 
 ## Compose the index SBOM
 
@@ -176,8 +164,8 @@ its native BOM by file name, the base name of `file`, with the BOM's
 SHA-256. Native package graphs and
 `bom-ref` values are not merged or rewritten. The command checks CycloneDX
 headers and byte bindings, not full schema validity or inventory accuracy.
-Use checked assembly or verification to establish actual child config identity
-before composing from an index snapshot.
+Use checked assembly to establish actual child config identity before
+composing from an index snapshot.
 
 A reference is a plain file name, not a location: a name with a path, a
 scheme or a query is refused, and so are two platforms with one name. The

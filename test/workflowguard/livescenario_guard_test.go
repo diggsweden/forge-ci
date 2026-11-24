@@ -54,7 +54,7 @@ var buildahNamed = map[string]string{
 }
 
 // buildahLiteral names Buildah as a build step in a fixture.
-var buildahLiterals = []string{"setup-buildah", "buildah build", "manifest push --local-manifest"}
+var buildahLiterals = []string{"setup-buildah", "buildah build"}
 
 type liveFinding struct {
 	path string

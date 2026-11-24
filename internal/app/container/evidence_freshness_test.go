@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -31,24 +30,17 @@ func assertPrivateEvidenceOutput(t *testing.T, staged, published string) {
 func TestEvidenceBoundary_RefusesCollisionsBeforeTools(t *testing.T) {
 	t.Parallel()
 
-	for _, multi := range []bool{false, true} {
-		root := t.TempDir()
-		buildah, copier := &fakeImageEvidenceBuildah{}, &fakeImageEvidenceCopier{}
-		trivy, syft := &fakeImageEvidenceTrivy{}, &fakeImageEvidenceSyft{}
+	root := t.TempDir()
+	copier := &fakeImageEvidenceCopier{}
+	trivy, syft := &fakeImageEvidenceTrivy{}, &fakeImageEvidenceSyft{}
 
-		in := appcontainer.ImageEvidenceInput{LocalImageRef: "localhost/app:v1", TrivyOutput: filepath.Join(root, "report.json"), SBOMOutput: root + "/./report.json", TempDir: root}
-		if multi {
-			in = appcontainer.ImageEvidenceInput{LocalManifest: "localhost/app:v1", Platforms: []string{"linux/amd64", "linux/arm64"}, TrivyOutputTemplate: root + "/report-{arch}.json", SBOMOutputTemplate: root + "/./report-{arch}.json", TempDir: root}
-		}
+	in := appcontainer.ImageEvidenceInput{OCILayout: root, TrivyOutput: filepath.Join(root, "report.json"), SBOMOutput: root + "/./report.json"}
 
-		err := appcontainer.ImageEvidence(t.Context(), buildah, copier, trivy, syft, io.Discard, io.Discard, in)
-		require.ErrorIs(t, err, errs.ErrUsage)
-		require.Empty(t, buildah.imageRef)
-		require.Empty(t, buildah.manifest)
-		require.Empty(t, copier.registryCopies)
-		require.Empty(t, trivy.calls)
-		require.Empty(t, syft.targets)
-	}
+	err := appcontainer.ImageEvidence(t.Context(), copier, trivy, syft, io.Discard, io.Discard, in)
+	require.ErrorIs(t, err, errs.ErrUsage)
+	require.Empty(t, copier.localCopies)
+	require.Empty(t, trivy.calls)
+	require.Empty(t, syft.targets)
 }
 
 func TestEvidenceBoundary_RequiresFreshCompleteReports(t *testing.T) {
@@ -73,7 +65,7 @@ func TestEvidenceBoundary_RequiresFreshCompleteReports(t *testing.T) {
 				syft.jsonBody = `{"bomFormat":"SPDX","specVersion":"1.6","version":1}`
 			}
 
-			err := appcontainer.ImageEvidence(t.Context(), nil, nil, trivy, syft, io.Discard, io.Discard, appcontainer.ImageEvidenceInput{OCILayout: layout, TrivyOutput: trivyPath, SBOMOutput: sbomPath})
+			err := appcontainer.ImageEvidence(t.Context(), nil, trivy, syft, io.Discard, io.Discard, appcontainer.ImageEvidenceInput{OCILayout: layout, TrivyOutput: trivyPath, SBOMOutput: sbomPath})
 			if kind != "success" {
 				require.ErrorIs(t, err, errs.ErrMalformedInput)
 				require.Equal(t, before, snapshotContainerTree(t, root))
@@ -85,17 +77,5 @@ func TestEvidenceBoundary_RequiresFreshCompleteReports(t *testing.T) {
 				assertPrivateEvidenceOutput(t, trivyArg(t, trivy.args, "--output"), trivyPath)
 			}
 		})
-	}
-}
-
-func TestEvidenceBoundary_ValidatesSeparateRegistryInputs(t *testing.T) {
-	t.Parallel()
-
-	for _, pair := range [][2]string{{"https://registry.example/app", "sha256:" + strings.Repeat("a", 64)}, {"registry.example/app", "sha256:bad"}, {"registry.example/a/../app", "sha256:" + strings.Repeat("a", 64)}} {
-		root := t.TempDir()
-		copier := &fakeImageEvidenceCopier{}
-		err := appcontainer.ImageEvidence(t.Context(), nil, copier, &fakeImageEvidenceTrivy{}, &fakeImageEvidenceSyft{}, io.Discard, io.Discard, appcontainer.ImageEvidenceInput{RegistryRef: pair[0], Digest: pair[1], Platforms: []string{"linux/amd64"}, TrivyOutputTemplate: root + "/report-{arch}.json", TempDir: root})
-		require.ErrorIs(t, err, errs.ErrUsage)
-		require.Empty(t, copier.registryCopies)
 	}
 }

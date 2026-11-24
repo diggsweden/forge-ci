@@ -6,7 +6,6 @@ package buildah_test
 import (
 	"context"
 	"errors"
-	"io"
 	"strings"
 	"testing"
 
@@ -44,78 +43,45 @@ func TestPublicationExportsKeepAuthTLSAndLocalDestination(t *testing.T) {
 	t.Parallel()
 
 	for _, verify := range []bool{true, false} {
-		for _, manifest := range []bool{true, false} {
-			bins := mockbinary.New(t)
-			bins.Add("buildah", `printf 'ARGV %s\nREGISTRY_AUTH_FILE=%s\n' "$*" "${REGISTRY_AUTH_FILE:-<unset>}" >&2`)
-			adapter := &buildah.Adapter{Bin: bins.Path("buildah")}
-
-			var (
-				log strings.Builder
-				err error
-			)
-			if manifest {
-				err = adapter.ExportManifestToLayout(t.Context(), "/tmp/auth.json", verify, "localhost/app:list", "/tmp/layout", &log)
-			} else {
-				err = adapter.ExportImageToLayout(t.Context(), "/tmp/auth.json", verify, "localhost/app:arch", "/tmp/layout", &log)
-			}
-
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			tlsFlag := "--tls-verify=false"
-			if verify {
-				tlsFlag = "--tls-verify=true"
-			}
-
-			for _, want := range []string{tlsFlag, "--authfile /tmp/auth.json", "REGISTRY_AUTH_FILE=/tmp/auth.json", "oci:/tmp/layout:scan"} {
-				if !strings.Contains(log.String(), want) {
-					t.Errorf("missing %q: %s", want, log.String())
-				}
-			}
-
-			if strings.Contains(log.String(), "docker://") || strings.Contains(log.String(), "--rm") || strings.Contains(log.String(), "--all") != manifest {
-				t.Fatal("export published, removed, or lost a platform")
-			}
-		}
-	}
-}
-
-func TestRemoveLocalManifestPropagatesFailure(t *testing.T) {
-	t.Parallel()
-	bins := mockbinary.New(t)
-	bins.Add("buildah", "exit 7")
-
-	if err := (&buildah.Adapter{Bin: bins.Path("buildah")}).RemoveLocalManifest(t.Context(), "localhost/app:list", io.Discard); err == nil {
-		t.Fatal("cleanup failure swallowed")
-	}
-}
-
-func TestExportLocalToLayout_ArgvShape(t *testing.T) {
-	t.Parallel()
-
-	for _, test := range []struct {
-		call func(*buildah.Adapter, *strings.Builder) error
-		want string
-	}{
-		{func(a *buildah.Adapter, log *strings.Builder) error {
-			return a.ExportLocalImageToLayout(context.Background(), "localhost/app:arch", "/tmp/layout", log)
-		}, "push localhost/app:arch oci:/tmp/layout:scan"},
-		{func(a *buildah.Adapter, log *strings.Builder) error {
-			return a.ExportLocalManifestToLayout(context.Background(), "localhost/app:list", "/tmp/layout", log)
-		}, "manifest push --all localhost/app:list oci:/tmp/layout:scan"},
-	} {
 		bins := mockbinary.New(t)
-		bins.Add("buildah", `printf 'ARGV %s\n' "$*" >&2`)
+		bins.Add("buildah", `printf 'ARGV %s\nREGISTRY_AUTH_FILE=%s\n' "$*" "${REGISTRY_AUTH_FILE:-<unset>}" >&2`)
+		adapter := &buildah.Adapter{Bin: bins.Path("buildah")}
 
 		var log strings.Builder
-		if err := test.call(&buildah.Adapter{Bin: bins.Path("buildah")}, &log); err != nil {
+		if err := adapter.ExportManifestToLayout(t.Context(), "/tmp/auth.json", verify, "localhost/app:list", "/tmp/layout", &log); err != nil {
 			t.Fatal(err)
 		}
 
-		if got := strings.TrimSpace(strings.TrimPrefix(log.String(), "ARGV")); got != test.want {
-			t.Errorf("got %q, want %q", got, test.want)
+		tlsFlag := "--tls-verify=false"
+		if verify {
+			tlsFlag = "--tls-verify=true"
 		}
+
+		for _, want := range []string{tlsFlag, "--authfile /tmp/auth.json", "REGISTRY_AUTH_FILE=/tmp/auth.json", "oci:/tmp/layout:scan"} {
+			if !strings.Contains(log.String(), want) {
+				t.Errorf("missing %q: %s", want, log.String())
+			}
+		}
+
+		if strings.Contains(log.String(), "docker://") || strings.Contains(log.String(), "--rm") || !strings.Contains(log.String(), "--all") {
+			t.Fatal("export published, removed, or lost a platform")
+		}
+	}
+}
+
+func TestExportLocalImageToLayout_ArgvShape(t *testing.T) {
+	t.Parallel()
+
+	bins := mockbinary.New(t)
+	bins.Add("buildah", `printf 'ARGV %s\n' "$*" >&2`)
+
+	var log strings.Builder
+	if err := (&buildah.Adapter{Bin: bins.Path("buildah")}).ExportLocalImageToLayout(context.Background(), "localhost/app:arch", "/tmp/layout", &log); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, want := strings.TrimSpace(strings.TrimPrefix(log.String(), "ARGV")), "push localhost/app:arch oci:/tmp/layout:scan"; got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
 

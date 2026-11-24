@@ -15,7 +15,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
-func TestMultiarchCommandRejectsConflictingTagAndMalformedLabelsBeforeIO(t *testing.T) {
+func TestMultiarchAssembleRejectsConflictingTagAndMalformedLabelsBeforeIO(t *testing.T) {
 	auth := filepath.Join(t.TempDir(), "auth.json")
 	require.NoError(t, os.WriteFile(auth, []byte(`{"auths":{}}`), 0o600))
 	base := []string{"container", "multiarch-image", "assemble", "--auth-file", auth, "--source-sha", strings.Repeat("a", 64), "--server-url", "https://forge.invalid", "--repository", "acme/widget", "--image-repository", "registry.invalid/acme/widget"}
@@ -30,9 +30,6 @@ func TestMultiarchCommandRejectsConflictingTagAndMalformedLabelsBeforeIO(t *test
 		err := containercmd.New().Run(t.Context(), args)
 		require.ErrorIs(t, err, errs.ErrUsage)
 	}
-
-	err := containercmd.New().Run(t.Context(), []string{"container", "multiarch-image", "verify", "--ref", "registry.invalid/acme/widget:mutable"})
-	require.ErrorIs(t, err, errs.ErrUsage)
 }
 
 // Publishing staged layouts always scans them; the caller cannot leave the
@@ -61,21 +58,14 @@ func TestBuildPushOCIImageRequiresTheScan(t *testing.T) {
 	require.Contains(t, err.Error(), "administrator policy")
 }
 
-func TestMultiarchCommandsRejectStdoutSnapshotsBeforeReadingMetadata(t *testing.T) {
+func TestMultiarchAssembleRejectsStdoutSnapshotsBeforeReadingMetadata(t *testing.T) {
 	auth := filepath.Join(t.TempDir(), "auth.json")
 	require.NoError(t, os.WriteFile(auth, []byte(`{"auths":{}}`), 0o600))
 
-	for _, command := range []string{"assemble", "verify"} {
-		args := []string{"container", "multiarch-image", command, "--auth-file", auth,
-			"--source-sha", strings.Repeat("a", 40), "--server-url", "https://forge.invalid",
-			"--repository", "acme/widget", "--image-repository", "registry.invalid/acme/widget",
-			"--manifest-output", "-"}
-		if command == "verify" {
-			args = append(args, "--ref", "registry.invalid/acme/widget@sha256:"+strings.Repeat("1", 64))
-		}
-
-		err := containercmd.New().Run(t.Context(), args)
-		require.ErrorIs(t, err, errs.ErrUsage)
-		require.Contains(t, err.Error(), "stdout (-) is not supported")
-	}
+	err := containercmd.New().Run(t.Context(), []string{"container", "multiarch-image", "assemble", "--auth-file", auth,
+		"--source-sha", strings.Repeat("a", 40), "--server-url", "https://forge.invalid",
+		"--repository", "acme/widget", "--image-repository", "registry.invalid/acme/widget",
+		"--manifest-output", "-"})
+	require.ErrorIs(t, err, errs.ErrUsage)
+	require.Contains(t, err.Error(), "stdout (-) is not supported")
 }

@@ -6,8 +6,8 @@
 // Subcommand tree:
 //
 //   - validate.go — `validate <artifacts|containerfile|namespace>`
-//   - image.go — `image <push>`
-//   - manifest.go — `manifest <digest|inspect|merge|push>`
+//   - image.go — `image usable-digest`
+//   - manifest.go — `manifest <digest|inspect|merge|tag>`
 //   - container.go (this file) — flat ops: platform-plan, metadata,
 //     write-digest-marker
 //   - refhelpers.go — `ref resolve`

@@ -16,34 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPushReferenceBoundary_RejectsUnsafeLocalNames(t *testing.T) {
-	t.Parallel()
-
-	for _, ref := range []string{"bad ref", "localhost/app\n--flag", "https://registry.example/app", "localhost/a/../app"} {
-		raw := []byte(`{"schemaVersion":2}`)
-		tool := &fakeImagePushTool{}
-		_, err := appcontainer.PushImage(t.Context(), tool, &fakeManifestPushRegistry{raw: raw}, nil, io.Discard, appcontainer.PushImageInput{LocalImage: ref, Destination: "registry.example/app:v1", TLSVerify: "true", RetryAttempts: 1})
-		require.ErrorIs(t, err, errs.ErrUsage)
-		require.Empty(t, tool.exports)
-	}
-}
-
-func TestPushReferenceBoundary_ProducesOneDigestSuffix(t *testing.T) {
-	t.Parallel()
-
-	raw := []byte(`{"schemaVersion":2}`)
-	digest := manifestTestDigest(raw)
-	tool := &fakeManifestPushTool{}
-	got, err := appcontainer.PushManifest(t.Context(), tool, &fakeManifestPushRegistry{raw: raw}, nil, io.Discard, appcontainer.PushManifestInput{LocalManifest: "localhost/app:v1", Destination: "registry.example/app@" + digest, TLSVerify: "true"})
-	require.NoError(t, err)
-	require.Equal(t, "registry.example/app@"+digest, got.Ref)
-
-	image, err := appcontainer.PushImage(t.Context(), &fakeImagePushTool{}, &fakeManifestPushRegistry{raw: raw}, nil, io.Discard,
-		appcontainer.PushImageInput{LocalImage: "localhost/app:v1", Destination: "registry.example/app:v1@" + digest, TLSVerify: "true"})
-	require.NoError(t, err)
-	require.Equal(t, "registry.example/app:v1@"+digest, image.Ref)
-}
-
 func TestSignerMetadataBoundary_PreflightsAllArchitectureBindings(t *testing.T) {
 	for _, kind := range []string{"duplicate-digest", "duplicate-arch", "arch", "digest", "tag"} {
 		t.Run(kind, func(t *testing.T) {
