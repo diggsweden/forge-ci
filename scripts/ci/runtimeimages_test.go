@@ -21,7 +21,7 @@ import (
 const runtimeExtractDouble = `#!/bin/sh
 set -eu
 case "$1 $2" in
-"container runtime-publication")
+"container runtime-images")
   if [ "$3" = plan ]; then
     jq '{target:"go",name:"forge-ci-runtime-go-1.27",archs:["amd64"],repository:(.ref|split("@")[0]),tag:"staging-123-1-aaaaaaaaaaaa",candidates:[{arch:"amd64",ref:.ref}]}' runtime-go-arch-amd64/runtime-go-amd64.json
     exit 0
@@ -96,7 +96,7 @@ func TestRuntimePlanDelegatesArgumentsAndExitStatus(t *testing.T) {
 				data, readErr := os.ReadFile(record)
 				require.NoError(t, readErr)
 				require.Equal(t, []string{
-					"container", "runtime-publication", mode, "--roster", "containers/runtime/images.json",
+					"container", "runtime-images", mode, "--roster", "containers/runtime/images.json",
 					"--platform-matrix", platforms, "--image-namespace", "registry.example/acme",
 					"--source-sha", strings.TrimSpace(string(sha)), "--checked-out-sha", strings.TrimSpace(string(sha)),
 					"--run-id", "123-1", "--publication-ref", "refs/heads/main",
@@ -118,7 +118,7 @@ func TestRuntimeBuildAndAssemblyStopAtGoProjectionRefusal(t *testing.T) {
 				"git": "#!/bin/sh\nprintf '%s\\n' \"$SOURCE_SHA\"\n",
 				"forge-ci": `#!/bin/sh
 set -eu
-test "$1 $2 $3" = 'container runtime-publication plan' || { touch "$UNEXPECTED_EFFECT"; exit 99; }
+test "$1 $2 $3" = 'container runtime-images plan' || { touch "$UNEXPECTED_EFFECT"; exit 99; }
 printf '%s\n' "$@" >"$ARGUMENT_RECORD"
 exit 78
 `,
@@ -161,7 +161,7 @@ func TestRuntimeBuildRetainsVerifiedEngineForMetadataUpload(t *testing.T) {
 			require.NoError(t, os.WriteFile(original, []byte(`#!/bin/sh
 set -eu
 case "$1 $2 $3" in
-  'container runtime-publication plan')
+  'container runtime-images plan')
     printf '%s\n' '{"repository":"registry.example/acme/runtime","tag":"staging-test","name":"runtime"}' ;;
   'container multiarch-image build-arch')
     if [ "$CI_IMAGE_BUILDER" = kaniko ]; then
@@ -223,7 +223,7 @@ func TestRuntimeStageCLIVerifiesBeforeStaging(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "runtime-cli"), 0o750))
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "tools"), 0o750))
 	require.NoError(t, os.WriteFile(filepath.Join(root, "tools/forge-ci"), []byte(`#!/bin/sh
-test "$*" = 'container runtime-publication verify-cli --arch amd64 --file runtime-cli/forge-ci-amd64' || exit 99
+test "$*" = 'container runtime-images verify-cli --arch amd64 --file runtime-cli/forge-ci-amd64' || exit 99
 exit "$CLI_STATUS"
 `), 0o700))
 
@@ -351,7 +351,7 @@ func TestRuntimeAssemblyStopsOnARefusedScanAfterKeepingItsReports(t *testing.T) 
 set -eu
 printf '%s\n' "$*" >> "$CALLS"
 case "$1 $2" in
-"container runtime-publication")
+"container runtime-images")
   test "$3" != plan || printf '%s\n' "$PLAN"
   ;;
 "security scan")

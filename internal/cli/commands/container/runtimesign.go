@@ -17,13 +17,13 @@ import (
 	domainrelease "github.com/diggsweden/forge-ci/internal/domain/release"
 )
 
-func runtimePublicationSignCmd() *cli.Command {
+func runtimeImagesSignCmd() *cli.Command {
 	return &cli.Command{
 		Name: "sign", Usage: "verify retained runtime evidence, recursively sign its index and attest native SBOMs and source provenance",
 		Description: "Run from the downloaded evidence directory containing image.json, sboms.sha256, sbom-<arch>.json and per-architecture metadata. All native SBOMs and the exact index are validated before the first signing mutation; no SBOM is generated here.",
 		Flags: append(append(append(signerImageSourceFlags(), multiarchImageParamFlags()...), signflags.Cosign(signflags.CosignOpts{MethodNote: cosignMethodNoteGPG})...),
 			multiarchImageArchsFlag(),
-			runtimePublicationBranchFlag(),
+			runtimeImagesBranchFlag(),
 			&cli.StringFlag{Name: flagFlavor, Required: true, Usage: "product runtime target recorded in the source provenance"},
 		),
 		Action: func(ctx context.Context, cmd *cli.Command) error {

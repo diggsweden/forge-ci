@@ -12,8 +12,8 @@ fail() {
   exit 1
 }
 
-runtime_publication() {
-  forge-ci container runtime-publication "$@" --roster "$roster" \
+runtime_images() {
+  forge-ci container runtime-images "$@" --roster "$roster" \
     --platform-matrix "${PLATFORM_MATRIX:?}" --image-namespace "${RUNTIME_IMAGE_NAMESPACE:?}" \
     --source-sha "${SOURCE_SHA:?}" --checked-out-sha "$(git rev-parse HEAD)" \
     --run-id "${RUNTIME_RUN_ID:?}" --publication-ref "${PUBLICATION_REF:?}"
@@ -29,7 +29,7 @@ download_metadata() {
 # The Go owner inspects retained bytes without running candidate tools and
 # owns its temporary files independently of the scanner's authentication.
 verify_runtime_cli() {
-  forge-ci container runtime-publication verify-cli --arch "${1:?}" \
+  forge-ci container runtime-images verify-cli --arch "${1:?}" \
     --image-ref "${2:?}" --auth-file "${REGISTRY_AUTH_FILE:?}"
 }
 
@@ -40,17 +40,17 @@ verify_smoke() (
   work=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/runtime-smoke-check.XXXXXX")
   trap 'rm -rf -- "$work"' EXIT
   forge-ci artifact download --name "runtime-smoke-$target-$arch" --dir "$work/receipt"
-  forge-ci container runtime-publication verify-smoke --receipt "$work/receipt/receipt.json" \
+  forge-ci container runtime-images verify-smoke --receipt "$work/receipt/receipt.json" \
     --source-sha "${SOURCE_SHA:?}" --target "$target" --arch "$arch" --image-ref "$ref"
 )
 
 case "${1:-}" in
 plan | collect)
-  runtime_publication "$1"
+  runtime_images "$1"
   ;;
 stage-cli)
   arch=${2:?}
-  forge-ci container runtime-publication verify-cli --arch "$arch" --file "runtime-cli/forge-ci-$arch"
+  forge-ci container runtime-images verify-cli --arch "$arch" --file "runtime-cli/forge-ci-$arch"
   mkdir -p cli-prebuilt
   install -m 0755 "runtime-cli/forge-ci-$arch" cli-prebuilt/forge-ci
   ;;
@@ -62,7 +62,7 @@ verify-smoke)
   ;;
 build)
   target=${2:?} arch=${3:?}
-  image=$(runtime_publication plan --target "$target" --arch "$arch")
+  image=$(runtime_images plan --target "$target" --arch "$arch")
   repo=$(jq -er .repository <<<"$image")
   tag=$(jq -er .tag <<<"$image")
   created=$(git show -s --format=%cI "$SOURCE_SHA")
@@ -88,7 +88,7 @@ build)
   ;;
 assemble)
   target=${2:?}
-  image=$(runtime_publication plan --target "$target")
+  image=$(runtime_images plan --target "$target")
   repo=$(jq -er .repository <<<"$image")
   tag=$(jq -er .tag <<<"$image")
   archs=$(jq -er '.archs[]' <<<"$image")
@@ -100,7 +100,7 @@ assemble)
   trap 'rm -rf -- "$DOCKER_CONFIG"' EXIT
   install -m 0600 "${REGISTRY_AUTH_FILE:?}" "$DOCKER_CONFIG/config.json"
   download_metadata "$target" "$archs"
-  image=$(runtime_publication plan --target "$target" --metadata-root "$PWD")
+  image=$(runtime_images plan --target "$target" --metadata-root "$PWD")
   # Check every architecture before scanning or publishing a combined index.
   while read -r arch; do
     ref=$(jq -er --arg arch "$arch" '.candidates[] | select(.arch == $arch) | .ref' <<<"$image")

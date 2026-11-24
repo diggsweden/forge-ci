@@ -23,7 +23,7 @@ func TestRuntimeMatrixCommandWritesSelectedNativeMatricesWithoutPublicationAutho
 	t.Setenv("GITHUB_ACTIONS", "true")
 	t.Setenv("GITHUB_OUTPUT", output)
 	t.Setenv("GITHUB_REF", "refs/pull/1/merge")
-	require.NoError(t, runtimePublicationCmd().Run(t.Context(), []string{"runtime-publication", "matrix", "--roster", roster, "--release-platforms", "linux/arm64"}))
+	require.NoError(t, runtimeImagesCmd().Run(t.Context(), []string{"runtime-images", "matrix", "--roster", roster, "--release-platforms", "linux/arm64"}))
 
 	body, err := os.ReadFile(output)
 	require.NoError(t, err)

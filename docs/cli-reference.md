@@ -2234,11 +2234,11 @@ reattestable.
 | `--identity-source` | OCI org.opencontainers.image.source expected for --allow-reattest; defaults to --expected-source | string | `""` | n/a |
 | `--auth-file` | Docker/containers auth config for registry label and attestation reads and cosign verification | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
 
-### `forge-ci container runtime-publication`
+### `forge-ci container runtime-images`
 
 source-bound native runtime publication
 
-#### `forge-ci container runtime-publication collect`
+#### `forge-ci container runtime-images collect`
 
 download and validate native candidate metadata before emitting the smoke matrix
 
@@ -2253,16 +2253,16 @@ download and validate native candidate metadata before emitting the smoke matrix
 | `--publication-ref` | full ref of the source being built (required) | string | `""` | n/a |
 | `--publication-branch` | protected publication branch selected by the reviewed caller | string | `"main"` | `$RUNTIME_PUBLICATION_BRANCH` |
 
-#### `forge-ci container runtime-publication download-digests`
+#### `forge-ci container runtime-images download-digests`
 
 require each selected architecture's exact runtime digest artifact before merge
 
 | Flag | Description | Type | Default | Env vars |
 |------|-------------|------|---------|----------|
-| `--image-json` | one image-matrix row from runtime-publication matrix (required) | string | `""` | n/a |
+| `--image-json` | one image-matrix row from runtime-images matrix (required) | string | `""` | n/a |
 | `--dir` | new directory for the complete digest marker set (required) | string | `""` | n/a |
 
-#### `forge-ci container runtime-publication matrix`
+#### `forge-ci container runtime-images matrix`
 
 select native build and nonempty image matrices without publication authority
 
@@ -2272,7 +2272,7 @@ select native build and nonempty image matrices without publication authority
 | `--platforms` | declared native platforms | string | `"linux/amd64,linux/arm64"` | n/a |
 | `--release-platforms` | optional subset of the declared platforms | string | `""` | n/a |
 
-#### `forge-ci container runtime-publication plan`
+#### `forge-ci container runtime-images plan`
 
 validate the complete product roster and emit native build/image matrices
 
@@ -2290,7 +2290,7 @@ validate the complete product roster and emit native build/image matrices
 | `--arch` | with target: require and select one declared native architecture | string | `""` | n/a |
 | `--metadata-root` | with target: validate all selected native metadata under this directory before emitting candidate refs | string | `""` | n/a |
 
-#### `forge-ci container runtime-publication promote`
+#### `forge-ci container runtime-images promote`
 
 verify native signatures and the publication branch head before promoting the exact runtime index
 
@@ -2314,7 +2314,7 @@ Run from the downloaded evidence directory. Requires a provider with authenticat
 | `--archs` | newline-separated architectures to include | string | `"amd64\narm64"` | `$IMAGE_ARCHS` |
 | `--publication-branch` | protected publication branch selected by the reviewed caller | string | `"main"` | `$RUNTIME_PUBLICATION_BRANCH` |
 
-#### `forge-ci container runtime-publication sign`
+#### `forge-ci container runtime-images sign`
 
 verify retained runtime evidence, recursively sign its index and attest native SBOMs and source provenance
 
@@ -2343,7 +2343,7 @@ Run from the downloaded evidence directory containing image.json, sboms.sha256, 
 | `--publication-branch` | protected publication branch selected by the reviewed caller | string | `"main"` | `$RUNTIME_PUBLICATION_BRANCH` |
 | `--flavor` | product runtime target recorded in the source provenance (required) | string | `""` | n/a |
 
-#### `forge-ci container runtime-publication verify-cli`
+#### `forge-ci container runtime-images verify-cli`
 
 verify downloaded or baked CLI bytes against the source checksum without executing them
 
@@ -2355,7 +2355,7 @@ verify downloaded or baked CLI bytes against the source checksum without executi
 | `--image-ref` | digest-pinned retained runtime image (exclusive with file) | string | `""` | n/a |
 | `--auth-file` | Sets auth file. | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
 
-#### `forge-ci container runtime-publication verify-smoke`
+#### `forge-ci container runtime-images verify-smoke`
 
 verify a native smoke receipt matches the exact source and candidate digest
 

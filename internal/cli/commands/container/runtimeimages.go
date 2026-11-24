@@ -17,10 +17,10 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
-func runtimePublicationCmd() *cli.Command {
+func runtimeImagesCmd() *cli.Command {
 	return &cli.Command{
-		Name: "runtime-publication", Usage: "source-bound native runtime publication",
-		Commands: []*cli.Command{runtimeMatrixCmd(), runtimeDigestsCmd(), runtimePublicationPlanCmd(), runtimePublicationCollectCmd(), runtimePublicationSignCmd(), runtimePublicationPromoteCmd(), runtimePublicationVerifySmokeCmd(), runtimePublicationVerifyCLICmd()},
+		Name: "runtime-images", Usage: "source-bound native runtime publication",
+		Commands: []*cli.Command{runtimeMatrixCmd(), runtimeDigestsCmd(), runtimeImagesPlanCmd(), runtimeImagesCollectCmd(), runtimeImagesSignCmd(), runtimeImagesPromoteCmd(), runtimeImagesVerifySmokeCmd(), runtimeImagesVerifyCLICmd()},
 	}
 }
 
@@ -44,7 +44,7 @@ func runtimeDigestsCmd() *cli.Command {
 	return &cli.Command{
 		Name: "download-digests", Usage: "require each selected architecture's exact runtime digest artifact before merge",
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "image-json", Required: true, Usage: "one image-matrix row from runtime-publication matrix"},
+			&cli.StringFlag{Name: "image-json", Required: true, Usage: "one image-matrix row from runtime-images matrix"},
 			&cli.StringFlag{Name: "dir", Required: true, Usage: "new directory for the complete digest marker set"},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -60,7 +60,7 @@ func runtimeDigestsCmd() *cli.Command {
 	}
 }
 
-func runtimePublicationVerifyCLICmd() *cli.Command {
+func runtimeImagesVerifyCLICmd() *cli.Command {
 	return &cli.Command{
 		Name: "verify-cli", Usage: "verify downloaded or baked CLI bytes against the source checksum without executing them",
 		Flags: []cli.Flag{
@@ -76,16 +76,16 @@ func runtimePublicationVerifyCLICmd() *cli.Command {
 	}
 }
 
-func runtimePublicationPlanCmd() *cli.Command {
+func runtimeImagesPlanCmd() *cli.Command {
 	return &cli.Command{
 		Name: "plan", Usage: "validate the complete product roster and emit native build/image matrices",
-		Flags: append(runtimePublicationFlags(),
+		Flags: append(runtimeImagesFlags(),
 			&cli.StringFlag{Name: flagTarget, Usage: "project one admitted target as JSON instead of emitting workflow matrices"},
 			&cli.StringFlag{Name: flagArch, Usage: "with target: require and select one declared native architecture"},
 			&cli.StringFlag{Name: "metadata-root", Usage: "with target: validate all selected native metadata under this directory before emitting candidate refs"}),
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			if cmd.String(flagTarget) != "" {
-				return appcontainer.PlanRuntimeTarget(ctx, os.Stdout, runtimePublicationInput(cmd), cmd.String(flagTarget), cmd.String(flagArch), cmd.String("metadata-root"))
+				return appcontainer.PlanRuntimeTarget(ctx, os.Stdout, runtimeImagesInput(cmd), cmd.String(flagTarget), cmd.String(flagArch), cmd.String("metadata-root"))
 			}
 
 			if cmd.IsSet(flagArch) || cmd.IsSet("metadata-root") {
@@ -93,16 +93,16 @@ func runtimePublicationPlanCmd() *cli.Command {
 			}
 
 			return deps.FromCmd(ctx, cmd, func(dep *deps.Deps) error {
-				return appcontainer.PlanRuntimePublication(ctx, dep.OutputSink, runtimePublicationInput(cmd))
+				return appcontainer.PlanRuntimePublication(ctx, dep.OutputSink, runtimeImagesInput(cmd))
 			})
 		},
 	}
 }
 
-func runtimePublicationCollectCmd() *cli.Command {
+func runtimeImagesCollectCmd() *cli.Command {
 	return &cli.Command{
 		Name: "collect", Usage: "download and validate native candidate metadata before emitting the smoke matrix",
-		Flags: runtimePublicationFlags(),
+		Flags: runtimeImagesFlags(),
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return deps.FromCmd(ctx, cmd, func(dep *deps.Deps) error {
 				downloader, err := dep.RequireRunArtifactDownloader()
@@ -110,13 +110,13 @@ func runtimePublicationCollectCmd() *cli.Command {
 					return err
 				}
 
-				return appcontainer.CollectRuntimePublication(ctx, downloader, dep.OutputSink, ".", runtimePublicationInput(cmd))
+				return appcontainer.CollectRuntimePublication(ctx, downloader, dep.OutputSink, ".", runtimeImagesInput(cmd))
 			})
 		},
 	}
 }
 
-func runtimePublicationFlags() []cli.Flag {
+func runtimeImagesFlags() []cli.Flag {
 	return []cli.Flag{
 		&cli.StringFlag{Name: "roster", Value: "containers/runtime/images.json", Usage: "product-owned runtime roster JSON"},
 		&cli.StringFlag{Name: "platform-matrix", Required: true, Usage: "matrix-json from container platform-plan"},
@@ -125,15 +125,15 @@ func runtimePublicationFlags() []cli.Flag {
 		&cli.StringFlag{Name: "checked-out-sha", Required: true, Usage: "observed checkout commit"},
 		&cli.StringFlag{Name: "run-id", Required: true, Usage: "numeric run-attempt identity, for example 123-1"},
 		&cli.StringFlag{Name: "publication-ref", Required: true, Usage: "full ref of the source being built"},
-		runtimePublicationBranchFlag(),
+		runtimeImagesBranchFlag(),
 	}
 }
 
-func runtimePublicationBranchFlag() cli.Flag {
+func runtimeImagesBranchFlag() cli.Flag {
 	return &cli.StringFlag{Name: "publication-branch", Value: "main", Sources: cli.EnvVars("RUNTIME_PUBLICATION_BRANCH"), Usage: "protected publication branch selected by the reviewed caller"}
 }
 
-func runtimePublicationInput(cmd *cli.Command) appcontainer.RuntimePublicationInput {
+func runtimeImagesInput(cmd *cli.Command) appcontainer.RuntimePublicationInput {
 	return appcontainer.RuntimePublicationInput{
 		RosterFile: cmd.String("roster"), PlatformMatrix: cmd.String("platform-matrix"),
 		Namespace: cmd.String("image-namespace"), SourceSHA: cmd.String(flagSourceSHA),

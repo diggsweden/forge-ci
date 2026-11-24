@@ -11,7 +11,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func runtimePublicationVerifySmokeCmd() *cli.Command {
+func runtimeImagesVerifySmokeCmd() *cli.Command {
 	return &cli.Command{
 		Name: "verify-smoke", Usage: "verify a native smoke receipt matches the exact source and candidate digest",
 		Flags: []cli.Flag{

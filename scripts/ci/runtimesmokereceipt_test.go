@@ -58,7 +58,7 @@ fi
 			args := strings.Split(strings.TrimSpace(string(forwarded)), "\n")
 			require.Len(t, args, 13)
 			require.True(t, strings.HasPrefix(args[4], filepath.Join(root, "runtime-smoke-check.")))
-			require.Equal(t, []string{"container", "runtime-publication", "verify-smoke", "--receipt", args[4], "--source-sha", strings.Repeat("a", 40), "--target", "full", "--arch", "amd64", "--image-ref", ref}, args)
+			require.Equal(t, []string{"container", "runtime-images", "verify-smoke", "--receipt", args[4], "--source-sha", strings.Repeat("a", 40), "--target", "full", "--arch", "amd64", "--image-ref", ref}, args)
 
 			leftovers, err := filepath.Glob(filepath.Join(root, "runtime-smoke-check.*"))
 			require.NoError(t, err)

@@ -19,11 +19,11 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 )
 
-func runtimePublicationPromoteCmd() *cli.Command {
+func runtimeImagesPromoteCmd() *cli.Command {
 	return &cli.Command{
 		Name: "promote", Usage: "verify native signatures and the publication branch head before promoting the exact runtime index",
 		Description: "Run from the downloaded evidence directory. Requires a provider with authenticated branch-head resolution (currently Forgejo). Writes published-ref.txt only after the destination serves the signed digest. No signing key is accepted.",
-		Flags:       append(append(append(signerImageSourceFlags(), multiarchImageParamFlags()...), baseImagesPublicKeyFlags()...), multiarchImageArchsFlag(), runtimePublicationBranchFlag()),
+		Flags:       append(append(append(signerImageSourceFlags(), multiarchImageParamFlags()...), baseImagesPublicKeyFlags()...), multiarchImageArchsFlag(), runtimeImagesBranchFlag()),
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			if !domaincontainer.ValidSHA256Hex(cmd.String("cosign-public-key-sha256")) {
 				return fmt.Errorf("runtime promotion requires the reviewed Cosign public-key digest: %w", errs.ErrValidation)

@@ -699,7 +699,7 @@ jobs:
         run: |
           set -euo pipefail
           archs=$(jq -er '.[]' <<<"$ARCHS_JSON")
-          forge-ci container runtime-publication sign --auth-file "$REGISTRY_AUTH_FILE" \
+          forge-ci container runtime-images sign --auth-file "$REGISTRY_AUTH_FILE" \
             --source-sha "$SOURCE_SHA" --server-url "$FORGEJO_SERVER" --repository "$FORGEJO_REPO" \
             --image-repository "$IMAGE_REPOSITORY" --tag "$CANDIDATE_TAG" \
             --name "runtime-$TARGET" --archs "$archs" --flavor "$TARGET" \
@@ -772,7 +772,7 @@ jobs:
           public_key=$(printf '%s' "$TRUSTED_KEY_INPUT")
           printf '%s\n' "$public_key" >cosign.pub
           archs=$(jq -r '.[]' <<<"$ARCHS_JSON")
-          forge-ci container runtime-publication promote --auth-file "$REGISTRY_AUTH_FILE" \
+          forge-ci container runtime-images promote --auth-file "$REGISTRY_AUTH_FILE" \
             --source-sha "$SOURCE_SHA" --server-url "$FORGEJO_SERVER" --repository "$FORGEJO_REPO" \
             --image-repository "$IMAGE_REPOSITORY" --tag "$CANDIDATE_TAG" \
             --name "runtime-$TARGET" --archs "$archs" \

@@ -60,10 +60,10 @@ func TestRuntimePublicationBarriersAndSigningBoundary(t *testing.T) {
 			}
 
 			if name == "sign" {
-				require.Contains(t, text, "runtime-publication sign", "Go signing must verify the entire index and evidence before signing")
+				require.Contains(t, text, "runtime-images sign", "Go signing must verify the entire index and evidence before signing")
 				require.NotContains(t, text, "while read", "native evidence/signing iteration belongs in Go")
 			} else {
-				require.Contains(t, text, "runtime-publication promote", "Go promotion must verify evidence, freshness and promoted bytes")
+				require.Contains(t, text, "runtime-images promote", "Go promotion must verify evidence, freshness and promoted bytes")
 			}
 		}
 	}
@@ -75,7 +75,7 @@ func TestRuntimePublicationBarriersAndSigningBoundary(t *testing.T) {
 	require.Equal(t, "${{ needs.coordinates.outputs.builder }}", scalarString(mappingValue(mappingValue(runtimeWorkflow.jobs["build"].node, "env"), "CI_IMAGE_BUILDER")))
 	require.Contains(t, buildRunners, runtimeWorkflow.jobs["build"].runsOn())
 	require.Equal(t, runtimeSmokeRunner, runtimeWorkflow.jobs["smoke"].runsOn())
-	require.Contains(t, runtimeWorkflow.jobs["publish"].node.String(), "runtime-publication promote")
+	require.Contains(t, runtimeWorkflow.jobs["publish"].node.String(), "runtime-images promote")
 	require.NotContains(t, runtimeWorkflow.jobs["publish"].node.String(), "--no-creds")
 	require.NotContains(t, runtimeWorkflow.jobs["publish"].node.String(), "git ls-remote")
 	require.NotContains(t, runtimeWorkflow.jobs["publish"].node.String(), "curl --config -", "authenticated API effects belong to the provider adapter")
@@ -211,7 +211,7 @@ func TestRuntimePublicationPromotionDelegatesCoordinatesAndStatus(t *testing.T) 
 
 			body, err := os.ReadFile(record)
 			require.NoError(t, err)
-			require.Equal(t, []string{"container", "runtime-publication", "promote", "--auth-file", "auth with spaces.json",
+			require.Equal(t, []string{"container", "runtime-images", "promote", "--auth-file", "auth with spaces.json",
 				"--source-sha", strings.Repeat("a", 40), "--server-url", "https://forge.example", "--repository", "acme/widget",
 				"--image-repository", "registry.example/acme/runtime", "--tag", "staging-123-1", "--name", "runtime-go",
 				"--archs", "amd64\narm64", "--cosign-public-key-path", "cosign.pub", "--cosign-public-key-sha256", strings.Repeat("b", 64)}, strings.Split(strings.TrimSuffix(string(body), "\x00"), "\x00"))
@@ -340,7 +340,7 @@ func TestRuntimeFlavoursMatchTheGitHubPublisherAndContainerfile(t *testing.T) {
 		require.Equal(t, "${{ fromJSON(needs.platforms.outputs."+output+") }}", scalarString(matrix))
 	}
 
-	require.Contains(t, string(reporoot.ReadFile(t, ".github/workflows/self-runtime-container.yml")), "container runtime-publication matrix")
+	require.Contains(t, string(reporoot.ReadFile(t, ".github/workflows/self-runtime-container.yml")), "container runtime-images matrix")
 
 	for _, image := range roster {
 		require.Contains(t, containerfile, " AS "+image.Target+"\n")

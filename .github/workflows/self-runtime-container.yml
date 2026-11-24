@@ -278,7 +278,7 @@ jobs:
           set -euo pipefail
           mkdir -p cli-prebuilt
           bash scripts/ci/engine-binary.sh stage amd64 engine-cli cli-prebuilt/forge-ci
-          cli-prebuilt/forge-ci container runtime-publication matrix --platforms "${RUNTIME_PLATFORMS}" --release-platforms "${RELEASE_PLATFORMS}"
+          cli-prebuilt/forge-ci container runtime-images matrix --platforms "${RUNTIME_PLATFORMS}" --release-platforms "${RELEASE_PLATFORMS}"
   # Publish phase 1: build each (target, platform) leg natively on a runner of
   # its architecture; no QEMU emulation. Each leg pushes by digest only; tags
   # are applied later by publish-merge.
@@ -559,7 +559,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUNTIME_IMAGE_JSON: ${{ toJSON(matrix) }}
-        run: forge-ci container runtime-publication download-digests --image-json "$RUNTIME_IMAGE_JSON" --dir /tmp/digests
+        run: forge-ci container runtime-images download-digests --image-json "$RUNTIME_IMAGE_JSON" --dir /tmp/digests
       - name: Log in to GHCR
         env:
           CONTAINER_REGISTRY: ghcr.io

@@ -42,7 +42,7 @@ func TestRuntimeSigningUsesFullRunnerRef(t *testing.T) {
 			require.NoError(t, os.WriteFile(authFile, []byte(`{"auths":{}}`), 0o600))
 
 			// An invalid SHA stops the command before registry or signing calls.
-			err := runtimePublicationSignCmd().Run(t.Context(), []string{"sign", "--flavor", "go", "--method", "kms",
+			err := runtimeImagesSignCmd().Run(t.Context(), []string{"sign", "--flavor", "go", "--method", "kms",
 				"--key", "env://COSIGN_KEY", "--auth-file", authFile, "--source-sha", "invalid"})
 			require.ErrorIs(t, err, errs.ErrValidation)
 

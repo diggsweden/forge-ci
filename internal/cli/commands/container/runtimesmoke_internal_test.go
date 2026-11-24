@@ -29,12 +29,12 @@ func TestRuntimeSmokeCommandForwardsAllExpectedIdentities(t *testing.T) {
 	}
 
 	args := []string{"verify-smoke", "--receipt", file, "--source-sha", expected.Source, "--target", expected.Target, "--arch", expected.Arch, "--image-ref", expected.Ref}
-	if err := runtimePublicationVerifySmokeCmd().Run(t.Context(), args); err != nil {
+	if err := runtimeImagesVerifySmokeCmd().Run(t.Context(), args); err != nil {
 		t.Fatal(err)
 	}
 
 	args[len(args)-1] = "registry.example/owner/runtime@sha256:" + strings.Repeat("c", 64)
-	if err := runtimePublicationVerifySmokeCmd().Run(t.Context(), args); err == nil {
+	if err := runtimeImagesVerifySmokeCmd().Run(t.Context(), args); err == nil {
 		t.Fatal("substituted digest passed CLI verification")
 	}
 }
