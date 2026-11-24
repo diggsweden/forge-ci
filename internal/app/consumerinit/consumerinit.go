@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: EUPL-1.2 OR GPL-3.0-or-later
 
 // Package consumerinit writes a consumer's first Forge CI files: the
-// examples of the release it pins, read from the Forge CI mirror at that
-// release, and filled with the values the mirror's operator records there.
+// examples of the release it pins, read from the Forge CI fork at that
+// release, and filled with the values the fork's operator records there.
 package consumerinit
 
 import (
@@ -23,7 +23,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/provider"
 )
 
-// Remote reads a Forge CI mirror without credentials.
+// Remote reads a Forge CI fork without credentials.
 type Remote interface {
 	VersionTags(ctx context.Context, repoURL string) ([]string, error)
 	TagCommit(ctx context.Context, repoURL, tag string) (string, error)
@@ -35,7 +35,7 @@ type Remote interface {
 // Input is one `forge-ci init` run.
 type Input struct {
 	Remote  Remote
-	URL     string // the Forge CI mirror, https://host/owner/repo
+	URL     string // the Forge CI fork, https://host/owner/repo
 	Ref     string // release tag to pin; empty takes the highest stable X.Y.Z or vX.Y.Z
 	Dir     string // the consumer's root
 	Example string // example to start from, e.g. go-cli
@@ -48,7 +48,7 @@ type Result struct {
 	DryRun    bool
 	Forge     provider.ForgeAPI
 	Source    domain.Source
-	Defaults  bool // the mirror has a defaults file at the pinned tag
+	Defaults  bool // the fork has a defaults file at the pinned tag
 	Written   []string
 	Proposed  []string
 	Kept      []string // existing files init keeps rather than refuses, such as the changelog configuration
@@ -62,7 +62,7 @@ type Result struct {
 	Optional []string
 }
 
-// Run pins the mirror's release, reads its examples and defaults at that
+// Run pins the fork's release, reads its examples and defaults at that
 // release, and writes the example's files for the consumer's forge. It
 // writes nothing in dry-run mode or when any target already exists. Dry runs
 // still acquire the remote templates in temporary storage.
@@ -200,7 +200,7 @@ func parseURL(raw string) (string, domain.Source, error) {
 }
 
 // pin returns the release tag, the given one or the highest stable version, and
-// the commit it names on the mirror.
+// the commit it names on the fork.
 func pin(ctx context.Context, remote Remote, repoURL, ref string) (string, string, error) {
 	tag := ref
 	if tag == "" {
@@ -215,17 +215,17 @@ func pin(ctx context.Context, remote Remote, repoURL, ref string) (string, strin
 	}
 
 	// Not unreachable: a missing --ref tag fails here too, with the same
-	// error class, and the mirror hint would mislead it.
+	// error class, and the fork hint would mislead it.
 	commit, err := remote.TagCommit(ctx, repoURL, tag)
 
 	return tag, commit, err
 }
 
 // unreachable says what the URL has to be when git cannot read it: off
-// github.com, a Forge CI mirror an operator keeps on the organization's forge.
+// github.com, a Forge CI fork an operator keeps on the organization's forge.
 func unreachable(repoURL string, err error) error {
 	return fmt.Errorf("cannot read the release tags of %s; on a forge other than github.com it is your "+
-		"organization's Forge CI mirror: ask its operator for the URL, or see forge-ci docs forgejo#quick-start: %w", repoURL, err)
+		"organization's Forge CI fork: ask its operator for the URL, or see forge-ci docs forgejo#quick-start: %w", repoURL, err)
 }
 
 // readRelease exports the release's examples, changelog configurations and

@@ -70,7 +70,7 @@ func Scan(root string, paths []string) (map[string][]string, error) {
 
 			// Own pipelines (self-*.yml) are no consumer's to call, so RUN BY
 			// leaves them out; that keeps the table, and the binary, the same in a
-			// mirror that adds its own.
+			// fork that adds its own.
 			if validate.OwnPipeline(entry.Name()) {
 				return nil
 			}

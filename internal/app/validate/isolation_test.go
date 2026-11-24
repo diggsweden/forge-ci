@@ -433,7 +433,7 @@ func TestIsolation_FindsTheReleaseWorkflows(t *testing.T) {
 			files: map[string]string{"release.yml": strings.ReplaceAll(forgejoIsolationCleanWorkflow, "examplescope/ci-layer", "other/ci-layer")},
 			want:  []string{"no workflow under .forgejo/workflows calls examplescope/ci-layer's"},
 		},
-		// The layer's own reusable workflows in a mirror that releases
+		// The layer's own reusable workflows in a fork that releases
 		// itself: they run only when called, and nothing here calls them, so
 		// this repository's keys never reach them.
 		"a reusable workflow nothing here calls": {

@@ -55,7 +55,7 @@ func TestUnitNamesActionsByDirectory(t *testing.T) {
 }
 
 // A repository's own pipelines are not something a consumer calls, and a
-// mirror adds its own: neither may change the table.
+// fork adds its own: neither may change the table.
 func TestScanLeavesOutOwnPipelines(t *testing.T) {
 	t.Parallel()
 

@@ -66,7 +66,7 @@ No project files were written. Templates were fetched into temporary storage.
 Three things to check before going on:
 
 - **Forge** says `github`, because the URL is on `github.com`. On another host,
-  the forge comes from the mirror's `.forge-ci/consumer-defaults.yml`.
+  the forge comes from the fork's `.forge-ci/consumer-defaults.yml`.
 - **Example** matches your project. `go-cli` is a binary shipped as release
   files; a service shipped as a container is `go-service`. Pass
   `--example go-service` to choose it.

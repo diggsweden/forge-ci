@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 # SPDX-License-Identifier: CC0-1.0
-# Opt-in self-release for a Forge CI mirror. Copy to .forgejo/workflows only
+# Opt-in self-release for a Forge CI fork. Copy to .forgejo/workflows only
 # after replacing FORGE_HOST, OWNER and every PIN_* with reviewed coordinates.
 # Publish the pinned bootstrap binaries and matching signer before activation.
 name: Release Forge CI

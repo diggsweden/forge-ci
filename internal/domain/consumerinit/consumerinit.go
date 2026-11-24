@@ -20,12 +20,12 @@ import (
 	"github.com/diggsweden/forge-ci/internal/domain/projecttype"
 )
 
-// DefaultsFile is where an operator's Forge CI mirror records the values
-// every consumer of that mirror pins. It is read at the pinned commit only.
+// DefaultsFile is where an operator's Forge CI fork records the values
+// every consumer of that fork pins. It is read at the pinned commit only.
 const DefaultsFile = ".forge-ci/consumer-defaults.yml"
 
 // Defaults is the operator's defaults file. Every key is optional except
-// forge on a mirror outside github.com; a missing value leaves its
+// forge on a fork outside github.com; a missing value leaves its
 // placeholder in the written files, and the report names it.
 type Defaults struct {
 	Forge                 string            `yaml:"forge"`
@@ -53,7 +53,7 @@ func ParseDefaults(data []byte) (Defaults, error) {
 	return defaults, nil
 }
 
-// Source is the Forge CI mirror a consumer pins: its host and repository
+// Source is the Forge CI fork a consumer pins: its host and repository
 // path, the release tag and the commit it names.
 type Source struct {
 	Host       string // e.g. codefloe.com
@@ -196,7 +196,7 @@ func Hint(token string) string {
 	case token == "PIN_GITHUB_COSIGN_PUBLIC_KEY_SHA256":
 		return "the SHA-256 of the reviewed COSIGN_PUBLIC_KEY (sha256sum cosign.pub); write the digest literally in the GitHub workflow, not in a variable"
 	case token == "PIN_SIGNER_IMAGE_DIGEST" || token == "PIN_COSIGN_PUBLIC_KEY_SHA256":
-		return "your Forge CI mirror's signer image and Cosign key digest; its operator records them as signer-image and " +
+		return "your Forge CI fork's signer image and Cosign key digest; its operator records them as signer-image and " +
 			"cosign-public-key-sha256 in " + DefaultsFile + " so that forge-ci init fills them"
 	case token == "PIN_DIGEST":
 		return "the lint image's digest: forge-ci container manifest digest --anonymous --ref <image>:<tag>, then write @sha256:<digest>"
@@ -210,7 +210,7 @@ func Hint(token string) string {
 	case strings.HasPrefix(token, "FIXME"):
 		return "a value only you know; the comment above the line says which (bot-name: the release bot's display name)"
 	case token == "FORGE_HOST" || token == "OWNER/forge-ci":
-		return "your forge host and Forge CI mirror; forge-ci init fills them from the URL it is given"
+		return "your forge host and Forge CI fork; forge-ci init fills them from the URL it is given"
 	case strings.Contains(token, ".example."):
 		return "your own host: the forge, registry or package repository the line names"
 	case strings.HasPrefix(token, "com.example.myapp"):

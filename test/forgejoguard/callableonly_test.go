@@ -17,13 +17,13 @@ import (
 
 const selfBuildWorkflow = ".forgejo/workflows/self-pullrequest.yml"
 
-// selfEntryPointExamples are the callers a mirror copies to .forgejo/workflows
+// selfEntryPointExamples are the callers a fork copies to .forgejo/workflows
 // to release Forge CI itself and publish its runtime images.
 var selfEntryPointExamples = []string{"examples/forgejo/self-release.yml", "examples/forgejo/self-runtime-images.yml"}
 
 // isSelfEntryPoint reports whether a repository-relative path is one of the
 // hosting repository's own entry points: a self-*.yml workflow the repository
-// starts itself and no consumer calls. Upstream ships the self-build; a mirror
+// starts itself and no consumer calls. Upstream ships the self-build; a fork
 // adds its own, the release and runtime callers from the examples among them,
 // with no change here. Such a file is a consumer of the layer, so it may name
 // its own organization and pin its own images. Name and trigger are held to
@@ -142,7 +142,7 @@ func TestSelfBuildIsTheOnlyUnprivilegedLocalEntryPoint(t *testing.T) {
 	}
 }
 
-// The example, and the copy a mirror installs from it, keep the same shape. The
+// The example, and the copy a fork installs from it, keep the same shape. The
 // example pins a placeholder; an installed copy pins a full commit.
 func TestSelfReleaseSeparatesBuildFromPublication(t *testing.T) {
 	t.Parallel()

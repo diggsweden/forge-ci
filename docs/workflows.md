@@ -61,7 +61,7 @@ leave an old name silently at its default: check a Forgejo caller by hand.
 | GitLab | `request-allowed-signers` | `release-request-allowed-signers` |
 | GitLab | `request-tag` (`publish-maven-central`) | `release-request-tag` |
 | CLI | `--forge-ci-binary-ref`, `FORGE_CI_BINARY_REF` | `--forge-ci-sha`, `FORGE_CI_SHA` |
-| A mirror's own pipeline | variable `RUNTIME_IMAGE_NAMESPACE` | `FORGE_CI_IMAGE_NAMESPACE` |
+| A fork's own pipeline | variable `RUNTIME_IMAGE_NAMESPACE` | `FORGE_CI_IMAGE_NAMESPACE` |
 
 Names that stay apart, on purpose: `runs-on` on GitHub and Forgejo and
 `runner-tags` on GitLab are each forge's own word for its own mechanism.
@@ -70,7 +70,7 @@ workflow's `release-` group; a build's `enable-build-sbom` and Android's
 `enable-signing` switch other things. Forgejo's `dist-digest` is the unsigned
 hand-off digest, `release-dist-digest` the signed one.
 
-A mirror's `self-release.yml` now reads the release branch from the
+A fork's `self-release.yml` now reads the release branch from the
 `RELEASE_BRANCH` variable; unset, it is the default branch.
 
 ## Pull Request Workflow Architecture

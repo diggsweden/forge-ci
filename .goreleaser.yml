@@ -132,7 +132,7 @@ snapshot:
 
 release:
   # No owner or name: GoReleaser reads them from the origin remote, so a fork
-  # or mirror releases to itself without editing this file.
+  # releases to itself without editing this file.
   draft: false
   prerelease: auto
 

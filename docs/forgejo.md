@@ -197,7 +197,7 @@ beside the `uses:` line, and a variable can change without a commit.
 
 ### Quick start
 
-`forge-ci init <mirror URL> --dry-run` previews the files, the placeholders
+`forge-ci init <fork URL> --dry-run` previews the files, the placeholders
 left and every conflict with an existing file, without writing anything.
 
 Then run `forge-ci setup status`: it lists the steps from here to a first
@@ -205,9 +205,9 @@ release, marks the ones the repository shows are done, and names the command
 for each. `forge-ci setup signer` writes `.forge-ci/allowed_signers`, the
 file the release verifies request tags against.
 
-The organization's mirror can make `forge-ci init <mirror URL>` write a
+The organization's fork can make `forge-ci init <fork URL>` write a
 consumer's files with every pin filled in. The operator commits
-`.forge-ci/consumer-defaults.yml` to the mirror; init reads it at the release
+`.forge-ci/consumer-defaults.yml` to the fork; init reads it at the release
 tag it pins, never from a branch, and refuses unknown keys:
 
 ```yaml
@@ -299,7 +299,7 @@ the caller passes them by name. Never use `secrets: inherit`.
 | `release-images.yml` | Builds the release images `artifacts.yml` declares, one native job per container and architecture, with the organization's image builder; scans each, publishes it under its staging tag and records it for the signer. See [Release images](#release-images). | `RELEASE_REGISTRY_TOKEN`, in the publish job only |
 | `snapshot-images.yml` | Builds and publishes the unsigned snapshot images of a branch. See [Snapshots](#snapshots). | `SNAPSHOT_REGISTRY_PASSWORD` |
 | `package-retention.yml` | Previews which old GHCR package versions a retention rule would delete, and deletes them only with `dry-run: false`. See [GHCR package retention](#ghcr-package-retention). | `RELEASE_REGISTRY_TOKEN` |
-| `runtime-images.yml` | Publishes the runtime images from a mirror. See [Forgejo runtime publication](runtime-images.md#forgejo-runtime-publication). | `RELEASE_REGISTRY_TOKEN`, Cosign, optional `CI_RUNNER_LENDER_TOKEN` |
+| `runtime-images.yml` | Publishes the runtime images from a fork. See [Forgejo runtime publication](runtime-images.md#forgejo-runtime-publication). | `RELEASE_REGISTRY_TOKEN`, Cosign, optional `CI_RUNNER_LENDER_TOKEN` |
 
 Each workflow's `inputs:` block is its reference: every input carries a
 description. The inputs they share:

@@ -6,7 +6,7 @@ a consumer. The consumer callers live with their ecosystem:
 [Cargo](../cargo-app/forgejo/); see the [examples index](../README.md).
 
 [`signer-image.yml`](signer-image.yml) is the main file here. One repository
-of your organization runs it (in the mirror itself, install it as
+of your organization runs it (in the fork itself, install it as
 `.forgejo/workflows/self-signer-image.yml`: every `self-*.yml` file is an own
 pipeline), at the commit of `forge-ci` your consumers pin.
 Its first job publishes the layer's binary for that commit to your instance,
@@ -23,10 +23,10 @@ image, and prints the digest to pin as `CI_IMAGE_BUILDER_JOB_IMAGE` with
 `CI_IMAGE_BUILDER=kaniko`.
 
 [`self-runtime-images.yml`](self-runtime-images.yml) is an opt-in runtime
-publisher for a Forge CI mirror, sharing upstream's Containerfile and smoke
+publisher for a Forge CI fork, sharing upstream's Containerfile and smoke
 checks. It starts by manual dispatch only; its header shows the push and
 weekly triggers to add. Replace
-its placeholders: `PIN_FORGE_CI_SHA` is the mirror's published immutable
+its placeholders: `PIN_FORGE_CI_SHA` is the fork's published immutable
 engine revision. Configure the image namespace, reviewed digest-pinned signer
 and Go build images, native runner pools, registry credentials and public-key
 digest as described in [Runtime images](../../docs/runtime-images.md#configuration).
@@ -35,7 +35,7 @@ digest as described in [Runtime images](../../docs/runtime-images.md#configurati
 consumer-pin matrix using that namespace and registry account. It deletes only
 with `dry-run: false`. Copy either example into `.forgejo/workflows/` only after configuration.
 
-## Releasing a Forge CI mirror
+## Releasing a Forge CI fork
 
 [`self-release.yml`](self-release.yml) is an opt-in caller for publishing Forge
 CI's own CLI archives on Forgejo. It composes the existing preparation,
@@ -46,7 +46,7 @@ Before copying it to `.forgejo/workflows/self-release.yml`:
 
 - Copy [`.forge-ci/consumer-defaults.yml.example`](.forge-ci/consumer-defaults.yml.example)
   to `.forge-ci/consumer-defaults.yml` with the same signer and key checksum,
-  so `forge-ci init` hands consumers the mirror's values.
+  so `forge-ci init` hands consumers the fork's values.
 - Replace `FORGE_HOST`, `OWNER` and every `PIN_*` with your reviewed server,
   repository, immutable engine commit, signer digest and public-key checksum.
   The pinned engine's bootstrap packages and matching signer must already
@@ -69,7 +69,7 @@ Before copying it to `.forgejo/workflows/self-release.yml`:
   `mise-locked: 'true'`; the candidate installs the full build tool set before
   preparation can create the final tag. Do not generate the lock during a
   release request or switch to an unlocked install to bypass a missing lock.
-  From the mirror's root:
+  From the fork's root:
   `mise lock go aqua:goreleaser/goreleaser aqua:anchore/syft yq`.
 
 Push a signed annotated `release-request/vX.Y.Z` at the reviewed head of the

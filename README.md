@@ -46,17 +46,17 @@ forge-ci init https://github.com/diggsweden/forge-ci
 ```
 
 The URL is the **Forge CI template repository**, not your application's
-remote; use your organization's fork or mirror instead when it has one. It
+remote; use your organization's fork instead when it has one. It
 decides the generated CI layout: `init` does not infer the forge from your
 application's Git remote.
 
 | Your forge | Template source | Generated CI location |
 |---|---|---|
 | GitHub | A Forge CI repository on `github.com` | `.github/workflows/` |
-| GitLab | Your instance's Forge CI mirror, declaring `forge: gitlab` | `.gitlab-ci.yml` |
-| Forgejo | Your instance's Forge CI mirror, declaring `forge: forgejo` | `.forgejo/workflows/` |
+| GitLab | Your instance's Forge CI fork, declaring `forge: gitlab` | `.gitlab-ci.yml` |
+| Forgejo | Your instance's Forge CI fork, declaring `forge: forgejo` | `.forgejo/workflows/` |
 
-Outside `github.com`, the mirror's operator must put that `forge` value in
+Outside `github.com`, the fork's operator must put that `forge` value in
 `.forge-ci/consumer-defaults.yml` at the selected release tag; the
 [GitLab](docs/gitlab.md#getting-started) and
 [Forgejo](docs/forgejo.md#getting-started) guides say how. Without it,

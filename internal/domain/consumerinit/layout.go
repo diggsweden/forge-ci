@@ -31,7 +31,7 @@ func ResolveForge(host string, defaults Defaults) (provider.ForgeAPI, error) {
 	case provider.ForgeGitLab.String():
 		return provider.ForgeGitLab, nil
 	case "":
-		return "", fmt.Errorf("%s is not github.com and its %s names no forge: the mirror's operator adds `forge: forgejo` or `forge: gitlab`: %w",
+		return "", fmt.Errorf("%s is not github.com and its %s names no forge: the fork's operator adds `forge: forgejo` or `forge: gitlab`: %w",
 			host, DefaultsFile, errs.ErrInvalidConfig)
 	default:
 		return "", fmt.Errorf("%s: forge %q is not forgejo or gitlab: %w", DefaultsFile, defaults.Forge, errs.ErrInvalidConfig)
@@ -129,7 +129,7 @@ func ForgeDir(forge provider.ForgeAPI) string {
 }
 
 // runtimeImagePlaceholders are the GitLab examples' build images, which a
-// mirror's runtime-images fill by toolchain family.
+// fork's runtime-images fill by toolchain family.
 var runtimeImagePlaceholders = []struct{ family, placeholder string }{
 	{"java", "ghcr.io/diggsweden/forge-ci-runtime-java-25@sha256:PIN_JAVA_IMAGE_DIGEST"},
 	{"node", "ghcr.io/diggsweden/forge-ci-runtime-node-24@sha256:PIN_NODE_IMAGE_DIGEST"},
@@ -151,7 +151,7 @@ func Replacements(forge provider.ForgeAPI, example string, src Source, defaults 
 		}
 	}
 
-	// Documentation follows the selected source commit, including mirrors whose
+	// Documentation follows the selected source commit, including forks whose
 	// commits do not exist on GitHub. Replace the whole URL before its parts.
 	if src.Host != "" && src.Repository != "" {
 		browse := "/blob/"

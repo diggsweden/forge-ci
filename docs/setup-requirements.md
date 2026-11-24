@@ -18,7 +18,7 @@ forge-ci --json doctor --requirements
 
 The report recognizes the GitHub release orchestrator, the Forgejo release
 preparation and signing workflows, and a direct include of GitLab's `release`
-component. `--forge-ci-repository owner/repository` names a mirror's
+component. `--forge-ci-repository owner/repository` names a fork's
 repository. It does not expand indirect GitLab includes or custom jobs, and
 it warns instead of evaluating expressions, aliases or malformed YAML. It
 does not cover the mobile publishers or backend-specific KMS authentication;

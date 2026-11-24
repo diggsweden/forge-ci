@@ -17,7 +17,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
-// A fork or mirror builds its own release from this file unchanged: the
+// A fork builds its own release from this file unchanged: the
 // repository comes from the origin remote, never from a name written here.
 func TestGoReleaserRootNamesNoRepository(t *testing.T) {
 	body, err := os.ReadFile(filepath.Join(reporoot.Path(t), ".goreleaser.yml"))

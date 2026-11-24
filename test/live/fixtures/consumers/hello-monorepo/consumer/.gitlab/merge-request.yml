@@ -16,7 +16,7 @@
 #                                             included by full commit SHA
 #   PIN_DIGEST                                digest of the reviewed lint image
 #   PIN_JAVA_IMAGE_DIGEST                     digests of the reviewed Forge CI
-#   PIN_NODE_IMAGE_DIGEST                     runtime images, or of your mirror
+#   PIN_NODE_IMAGE_DIGEST                     runtime images, or of your fork
 #
 # Releases run from a separate, pinned policy project that includes the
 # `release` component; see

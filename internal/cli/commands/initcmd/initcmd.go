@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: EUPL-1.2 OR GPL-3.0-or-later
 
 // Package initcmd wires `forge-ci init`: a repository's first Forge CI
-// files, from the selected release's examples, pinned to a Forge CI mirror.
+// files, from the selected release's examples, pinned to a Forge CI fork.
 package initcmd
 
 import (
@@ -60,7 +60,7 @@ EXAMPLES:
    # GitHub, from the published Forge CI:
    forge-ci init https://github.com/diggsweden/forge-ci
 
-   # Forgejo or GitLab, from your organization's mirror:
+   # Forgejo or GitLab, from your organization's fork:
    forge-ci init https://forge.example/examplescope/forge-ci
 
    # Preview without writing project files:
@@ -339,7 +339,7 @@ func reportFiles(out io.Writer, result appinit.Result) {
 	}
 }
 
-// gitRemote reads the mirror with git, anonymously.
+// gitRemote reads the fork with git, anonymously.
 type gitRemote struct{}
 
 func (gitRemote) VersionTags(ctx context.Context, repoURL string) ([]string, error) {

@@ -11,7 +11,7 @@ import (
 	"github.com/diggsweden/forge-ci/internal/testutil/reporoot"
 )
 
-// A mirror copies the defaults example to .forge-ci/consumer-defaults.yml;
+// A fork copies the defaults example to .forge-ci/consumer-defaults.yml;
 // init parses that file strictly, so the example must parse the same way and
 // carry the placeholders init's Forgejo substitutions name.
 func TestConsumerDefaultsExampleParses(t *testing.T) {

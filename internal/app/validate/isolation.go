@@ -240,7 +240,7 @@ func notIn(files, others []releaseFile) []releaseFile {
 // calls, by path or by a full reference to any repository but the subject.
 // Such a file never runs with this repository's secrets: a caller in another
 // repository hands it that repository's. They are the layer's own reusable
-// workflows when the directory is the layer's, as in a mirror that releases
+// workflows when the directory is the layer's, as in a fork that releases
 // itself; its callers reach them only through the subject at the pin, which
 // runs the pinned layer, not this copy. Any other call makes the file one the
 // boundary holds again.

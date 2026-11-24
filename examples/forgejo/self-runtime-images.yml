@@ -4,7 +4,7 @@
 # matching signer before replacing these immutable-pin placeholders.
 name: Runtime images
 on:
-  # Manual by default: publishing images is a deliberate step for a mirror.
+  # Manual by default: publishing images is a deliberate step for a fork.
   # To publish on source changes and weekly as well, add these triggers:
   #
   #   push:

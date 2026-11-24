@@ -34,7 +34,7 @@ In every workflow of the directory, no job may reach a signing secret,
 directly or through the workflow env it inherits, but a call of one of the
 layer's signer workflows. A workflow whose one trigger is workflow_call and
 that no workflow of the directory calls is exempt: it never runs with this
-repository's secrets (the layer's own workflows, in a mirror that releases
+repository's secrets (the layer's own workflows, in a fork that releases
 itself). In the release workflows, no job may pass
 secrets: inherit, every actions/checkout step must set
 persist-credentials: false, every setup-toolchain step cache: false, and a
