@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+# SPDX-License-Identifier: CC0-1.0
+#
+# What `forge-ci init <mirror URL>` hands this mirror's consumers. Copy to
+# .forge-ci/consumer-defaults.yml and replace FORGE_HOST, OWNER and every
+# PIN_* with the reviewed values the mirror's own callers use. init reads it
+# at the release tag a consumer pins and refuses unknown keys; a key left
+# out leaves its placeholder in the consumer's files, and init lists it.
+forge: forgejo
+signer-image: FORGE_HOST/OWNER/forge-ci-signer@sha256:PIN_SIGNER_IMAGE_DIGEST
+cosign-public-key-sha256: PIN_COSIGN_PUBLIC_KEY_SHA256

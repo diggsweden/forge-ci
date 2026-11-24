@@ -6,7 +6,9 @@ a consumer. The consumer callers live with their ecosystem:
 [Cargo](../cargo-app/forgejo/); see the [examples index](../README.md).
 
 [`signer-image.yml`](signer-image.yml) is the main file here. One repository
-of your organization runs it, at the commit of `forge-ci` your consumers pin.
+of your organization runs it (in the mirror itself, install it as
+`.forgejo/workflows/self-signer-image.yml`: every `self-*.yml` file is an own
+pipeline), at the commit of `forge-ci` your consumers pin.
 Its first job publishes the layer's binary for that commit to your instance,
 without which no job of the layer runs. The others build and publish the
 signer image, for linux/amd64 and linux/arm64, and output the digest-pinned
@@ -42,6 +44,9 @@ change the root GoReleaser configuration or publish runtime images.
 
 Before copying it to `.forgejo/workflows/self-release.yml`:
 
+- Copy [`.forge-ci/consumer-defaults.yml.example`](.forge-ci/consumer-defaults.yml.example)
+  to `.forge-ci/consumer-defaults.yml` with the same signer and key checksum,
+  so `forge-ci init` hands consumers the mirror's values.
 - Replace `FORGE_HOST`, `OWNER` and every `PIN_*` with your reviewed server,
   repository, immutable engine commit, signer digest and public-key checksum.
   The pinned engine's bootstrap packages and matching signer must already
@@ -64,6 +69,8 @@ Before copying it to `.forgejo/workflows/self-release.yml`:
   `mise-locked: 'true'`; the candidate installs the full build tool set before
   preparation can create the final tag. Do not generate the lock during a
   release request or switch to an unlocked install to bypass a missing lock.
+  From the mirror's root:
+  `mise lock go aqua:goreleaser/goreleaser aqua:anchore/syft yq`.
 
 Push a signed annotated `release-request/vX.Y.Z` at the reviewed head of the
 configured release branch. The preparation workflow creates the final tag.
