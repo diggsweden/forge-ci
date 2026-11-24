@@ -4,6 +4,7 @@
 package version_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/diggsweden/forge-ci/internal/domain/version"
@@ -45,5 +46,19 @@ func TestLatestReleaseTagUsesSemverAndPolicy(t *testing.T) {
 
 	if got := version.LatestReleaseTag(tags, "stable"); got != "v0.9.0" {
 		t.Fatalf("latest stable = %s", got)
+	}
+}
+
+// A fork build is vX.Y.Z-WORD.N with a word a fork policy admits:
+// prerelease words, a missing or zero-led number and build metadata are not.
+func TestForkPolicies(t *testing.T) {
+	t.Parallel()
+
+	got := version.ForkPolicies([]string{
+		"v1.0.0", "v1.0.0-pre", "v1.0.0-rc.1", "v1.0.0-acme.1", "v1.1.0-acme.2", "v1.0.0-other.3",
+		"v1.0.0-zeta.01", "v1.0.0-beta.2", "v1.0.0-solo", "1.0.0-plain.1", "v1.0.0-meta.1+build",
+	})
+	if want := []string{"fork:acme", "fork:other"}; !slices.Equal(got, want) {
+		t.Fatalf("ForkPolicies = %v, want %v", got, want)
 	}
 }

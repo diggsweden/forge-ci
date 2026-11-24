@@ -57,6 +57,29 @@ func isForkBuild(prerelease, policy string) bool {
 	return ok && forkNumberPattern.MatchString(n)
 }
 
+// ForkPolicies returns, sorted, the fork:WORD policy of every fork build
+// among tags: a vX.Y.Z-WORD.N tag whose WORD a fork policy admits, which no
+// prerelease word such as rc is.
+func ForkPolicies(tags []string) []string {
+	var policies []string
+
+	for _, tag := range tags {
+		parsed, ok := ParseSemverTag(tag)
+		if !ok || parsed.Build != "" {
+			continue
+		}
+
+		word, _, _ := strings.Cut(parsed.Prerelease, ".")
+		if policy := releasePolicyForkPrefix + word; isForkBuild(parsed.Prerelease, policy) {
+			policies = append(policies, policy)
+		}
+	}
+
+	slices.Sort(policies)
+
+	return slices.Compact(policies)
+}
+
 // IsPrerelease reports whether an admitted release version is a prerelease
 // under policy: the one answer every release step asks. A fork's -WORD.N
 // build is stable under its fork:WORD policy; without a policy ("") any
