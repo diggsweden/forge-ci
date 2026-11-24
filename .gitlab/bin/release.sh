@@ -1124,7 +1124,7 @@ rc_base_build() {
       fi
       # shellcheck source=.engine/bin/lib-parent-pull.sh
       source "${RC_HELPERS_DIR:?}/.engine/bin/lib-parent-pull.sh" || exit
-      forge_ci_pull_parent "${pull_token}" rc_engine container base-images child-base fetch "${rc_base_args[@]}" \
+      forge_ci_pull_parent "${pull_token}" rc_engine container base-images child-base fetch-inputs "${rc_base_args[@]}" \
         --parent-base-json "${rc_parent_json}" --inputs-dir registry-inputs
     fi
   ) || return

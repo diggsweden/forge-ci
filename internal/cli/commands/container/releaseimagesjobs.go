@@ -65,7 +65,7 @@ EXAMPLE:
 			&cli.StringFlag{Name: flagSourceDir, Value: ".", Usage: "release checkout the plan's Containerfile and context paths are relative to"},
 			&cli.StringFlag{Name: flagCreated, Required: true, Usage: "org.opencontainers.image.created value: the release commit's time, so the label names the source, not the build"},
 			&cli.StringFlag{Name: flagMetadataDir, Required: true, Usage: "directory the staged <name>-arch-<arch> layouts are written under; keep it outside the build context"},
-			&cli.StringFlag{Name: flagInputsDir, Usage: "secret-free prepared inputs root, with a <name>-arch-<arch> fetch-build-inputs directory for every build"},
+			&cli.StringFlag{Name: flagInputsDir, Usage: "secret-free prepared inputs root, with a <name>-arch-<arch> fetch-inputs directory for every build"},
 			&cli.StringFlag{Name: flagImage, Usage: "build only this planned image of --arch, for a job per image; an image the plan does not build on --arch is refused"},
 		), imageBuilderFlags()...),
 		Action: func(ctx context.Context, cmd *cli.Command) error {

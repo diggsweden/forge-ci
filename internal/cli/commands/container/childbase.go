@@ -28,7 +28,7 @@ func childBaseGroup() *cli.Command {
 	plan.Usage = "admit one cold child BASE, or several siblings, against one explicit caller-verified parent"
 	build := nativeImagesBuildCmd(readChildBasePlanFile)
 	build.Usage = "build the stage's child BASE images of one architecture using secret-free prepared parent inputs"
-	build.Description = "Requires --inputs-dir from the existing release-images fetch-build-inputs boundary. No registry fetch credentials or parent authentication run in the builder: Buildah imports the verified parent layout into its store, kaniko reads it from its base-image cache."
+	build.Description = "Requires --inputs-dir from the existing release-images fetch-inputs boundary. No registry fetch credentials or parent authentication run in the builder: Buildah imports the verified parent layout into its store, kaniko reads it from its base-image cache."
 
 	for _, command := range []*cli.Command{plan, build} {
 		command.Flags = append(command.Flags, parentBaseFlag())
@@ -87,7 +87,7 @@ func readChildBasePlanFile(cmd *cli.Command) (pipeline.ReleaseImagesPlan, error)
 // call, for layers that schedule a stage instead of one job per build.
 func childBaseFetchCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "fetch",
+		Name:  "fetch-inputs",
 		Usage: "fetch the pinned parent of every build of the stage, without running consumer code",
 		Description: `Admits the plan against --parent-base-json, then fetches each build's
 registry inputs into <inputs-dir>/<name>-arch-<arch>, the directory child-base

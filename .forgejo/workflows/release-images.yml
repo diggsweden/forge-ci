@@ -406,7 +406,7 @@ jobs:
             --registry-username "${REGISTRY_USER:?}" \
             --registry-password-file - --auth-file "${auth_file}"
           unset registry_token
-          run_forge_ci container release-images fetch-build-inputs \
+          run_forge_ci container release-images fetch-inputs \
             --build-json "${BUILD_JSON:?}" --release-sha "${RELEASE_SHA:?}" \
             --server-url "${FORGEJO_SERVER:?}" --repository "${FORGEJO_REPO:?}" \
             --inputs-dir registry-inputs --auth-file "${auth_file}"

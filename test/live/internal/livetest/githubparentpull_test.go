@@ -106,7 +106,7 @@ jobs:
           test -s pulled/PARENT_IMAGE/index.json
           jq -e '.imageLayoutVersion == "1.0.0"' pulled/PARENT_IMAGE/oci-layout
           wrong=$(jq -c '.ref |= sub("sha256:[0-9a-f]+$"; "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")' <<< "$PROJECTION")
-          if ./fixture-engine container release-images fetch-build-inputs --build-json "$BUILD" --parent-base-json "$wrong" --release-sha "$GITHUB_SHA" --server-url "$GITHUB_SERVER_URL" --repository "$GITHUB_REPOSITORY" --inputs-dir refused; then
+          if ./fixture-engine container release-images fetch-inputs --build-json "$BUILD" --parent-base-json "$wrong" --release-sha "$GITHUB_SHA" --server-url "$GITHUB_SERVER_URL" --repository "$GITHUB_REPOSITORY" --inputs-dir refused; then
             exit 1
           fi
           test ! -e refused

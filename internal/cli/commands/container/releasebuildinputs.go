@@ -58,7 +58,7 @@ func releaseBuildFromJSON(cmd *cli.Command) (pipeline.ReleaseImageBuild, error) 
 
 func releaseImagesFetchBuildInputsCmd() *cli.Command {
 	return &cli.Command{
-		Name: "fetch-build-inputs", Usage: "fetch planned cache and pinned parents without running consumer code",
+		Name: "fetch-inputs", Usage: "fetch planned cache and pinned parents without running consumer code",
 		Description: "--inputs-dir must not exist yet; its missing parents are created, so a build's inputs/<name>-arch-<arch> can be named directly.",
 		Flags:       append(append(releaseBuildInputFlags(), registryPullFlags()...), parentBaseProjectionFlag(false)),
 		Action: func(ctx context.Context, cmd *cli.Command) error {

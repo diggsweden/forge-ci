@@ -81,7 +81,7 @@ func TestPrivateRegistryFetchIsSeparatedFromConsumerBuild(t *testing.T) {
 				t.Errorf("%s: isolated fetch must not execute consumer actions", tc.file)
 			}
 
-			if strings.Contains(run, "release-images fetch-build-inputs") {
+			if strings.Contains(run, "release-images fetch-inputs") {
 				fetchCommand = true
 
 				if !strings.Contains(run, `unset REGISTRY_TOKEN`) || !strings.Contains(run, `unset registry_token`) || !strings.Contains(run, `trap 'rm -f -- "${auth_file}"' EXIT`) {
@@ -196,7 +196,7 @@ func checkBaseParentPull(t *testing.T, file string) {
 	for stepIndex, step := range workflow.jobs["build"].steps() {
 		run := scalarString(mappingValue(step, "run"))
 		switch {
-		case strings.Contains(run, "release-images fetch-build-inputs"):
+		case strings.Contains(run, "release-images fetch-inputs"):
 			fetch = stepIndex
 
 			env := mappingValue(step, "env")

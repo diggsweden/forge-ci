@@ -47,6 +47,6 @@ runs:
         unset PARENT_REGISTRY_READ_TOKEN
         # shellcheck source=.engine/bin/lib-parent-pull.sh
         source "${GITHUB_ACTION_PATH:?}/../../../.engine/bin/lib-parent-pull.sh"
-        forge_ci_pull_parent "$token" "${ENGINE:?}" container release-images fetch-build-inputs \
+        forge_ci_pull_parent "$token" "${ENGINE:?}" container release-images fetch-inputs \
           --build-json "${BUILD_JSON:?}" --parent-base-json "${PARENT_BASE_JSON:?}" --release-sha "${RELEASE_SHA:?}" \
           --server-url "${GITHUB_SERVER_URL:?}" --repository "${GITHUB_REPOSITORY:?}" --inputs-dir "${INPUTS_DIR:?}"

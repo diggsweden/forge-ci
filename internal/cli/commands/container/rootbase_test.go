@@ -327,7 +327,7 @@ fi`, captured, captured+".sbom", captured))
 
 		// One call fetches the parent of every build of the stage, into the
 		// directories the build reads; the per-build verb fetches the same.
-		run(append([]string{"container", "base-images", stage, "fetch", "--plan", "plan.json", "--inputs-dir", "stage-inputs", "--auth-file", "auth.json"}, job...)...)
+		run(append([]string{"container", "base-images", stage, "fetch-inputs", "--plan", "plan.json", "--inputs-dir", "stage-inputs", "--auth-file", "auth.json"}, job...)...)
 		require.DirExists(t, "stage-inputs/root-arch-amd64/PARENT_IMAGE")
 
 		buildJSON, encodeErr := json.Marshal(plan.Builds[0])
@@ -335,7 +335,7 @@ fi`, captured, captured+".sbom", captured))
 		projection, encodeErr := json.Marshal(parent)
 		require.NoError(t, encodeErr)
 
-		fetch := []string{"container", "release-images", "fetch-build-inputs", "--build-json", string(buildJSON), "--release-sha", checkoutSHA,
+		fetch := []string{"container", "release-images", "fetch-inputs", "--build-json", string(buildJSON), "--release-sha", checkoutSHA,
 			"--server-url", "https://source.example", "--repository", "org/app", "--parent-base-json", string(projection)}
 
 		privateParent.Store(true)

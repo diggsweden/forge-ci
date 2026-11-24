@@ -731,7 +731,7 @@ The protected caller must independently verify the parent with Cosign, its trust
 build the stage's child BASE images of one architecture using secret-free prepared parent inputs
 
 ```
-Requires --inputs-dir from the existing release-images fetch-build-inputs boundary. No registry fetch credentials or parent authentication run in the builder: Buildah imports the verified parent layout into its store, kaniko reads it from its base-image cache.
+Requires --inputs-dir from the existing release-images fetch-inputs boundary. No registry fetch credentials or parent authentication run in the builder: Buildah imports the verified parent layout into its store, kaniko reads it from its base-image cache.
 ```
 
 | Flag | Description | Type | Default | Env vars |
@@ -747,14 +747,14 @@ Requires --inputs-dir from the existing release-images fetch-build-inputs bounda
 | `--source-dir` | release checkout the plan's Containerfile and context paths are relative to | string | `"."` | n/a |
 | `--created` | org.opencontainers.image.created value: the release commit's time, so the label names the source, not the build (required) | string | `""` | n/a |
 | `--metadata-dir` | directory the staged <name>-arch-<arch> layouts are written under; keep it outside the build context (required) | string | `""` | n/a |
-| `--inputs-dir` | secret-free prepared inputs root, with a <name>-arch-<arch> fetch-build-inputs directory for every build | string | `""` | n/a |
+| `--inputs-dir` | secret-free prepared inputs root, with a <name>-arch-<arch> fetch-inputs directory for every build | string | `""` | n/a |
 | `--image` | build only this planned image of --arch, for a job per image; an image the plan does not build on --arch is refused | string | `""` | n/a |
 | `--image-builder` | image builder type: buildah (default; rootless, needs user namespaces) or kaniko (for a pool that denies them; runs as root in the job image CI_IMAGE_BUILDER_JOB_IMAGE names, builds to a layout, exports a stage's files in local mode, no load mode, no build secrets). Set CI_IMAGE_BUILDER on the repository to select it. | string | `"buildah"` | `$CI_IMAGE_BUILDER` |
 | `--kaniko-executor` | path of the kaniko executor (default /kaniko/executor) | string | `""` | `$KANIKO_EXECUTOR` |
 | `--parent-base-json` | explicit caller-verified immediate parent as {ref: digest-pinned-ref, input_id: opaque-sha256-ID}; not producer authentication (required) | string | `""` | n/a |
 | `--stage-flavors` | the stage's flavors, separated by commas; a plan with another set of flavors is refused | string | `""` | n/a |
 
-##### `forge-ci container base-images child-base fetch`
+##### `forge-ci container base-images child-base fetch-inputs`
 
 fetch the pinned parent of every build of the stage, without running consumer code
 
@@ -1002,7 +1002,7 @@ Builds a plan admitted by root-base plan using the existing native builder. Pare
 | `--source-dir` | release checkout the plan's Containerfile and context paths are relative to | string | `"."` | n/a |
 | `--created` | org.opencontainers.image.created value: the release commit's time, so the label names the source, not the build (required) | string | `""` | n/a |
 | `--metadata-dir` | directory the staged <name>-arch-<arch> layouts are written under; keep it outside the build context (required) | string | `""` | n/a |
-| `--inputs-dir` | secret-free prepared inputs root, with a <name>-arch-<arch> fetch-build-inputs directory for every build | string | `""` | n/a |
+| `--inputs-dir` | secret-free prepared inputs root, with a <name>-arch-<arch> fetch-inputs directory for every build | string | `""` | n/a |
 | `--image` | build only this planned image of --arch, for a job per image; an image the plan does not build on --arch is refused | string | `""` | n/a |
 | `--image-builder` | image builder type: buildah (default; rootless, needs user namespaces) or kaniko (for a pool that denies them; runs as root in the job image CI_IMAGE_BUILDER_JOB_IMAGE names, builds to a layout, exports a stage's files in local mode, no load mode, no build secrets). Set CI_IMAGE_BUILDER on the repository to select it. | string | `"buildah"` | `$CI_IMAGE_BUILDER` |
 | `--kaniko-executor` | path of the kaniko executor (default /kaniko/executor) | string | `""` | `$KANIKO_EXECUTOR` |
@@ -1933,7 +1933,7 @@ EXAMPLE:
 | `--source-dir` | release checkout the plan's Containerfile and context paths are relative to | string | `"."` | n/a |
 | `--created` | org.opencontainers.image.created value: the release commit's time, so the label names the source, not the build (required) | string | `""` | n/a |
 | `--metadata-dir` | directory the staged <name>-arch-<arch> layouts are written under; keep it outside the build context (required) | string | `""` | n/a |
-| `--inputs-dir` | secret-free prepared inputs root, with a <name>-arch-<arch> fetch-build-inputs directory for every build | string | `""` | n/a |
+| `--inputs-dir` | secret-free prepared inputs root, with a <name>-arch-<arch> fetch-inputs directory for every build | string | `""` | n/a |
 | `--image` | build only this planned image of --arch, for a job per image; an image the plan does not build on --arch is refused | string | `""` | n/a |
 | `--image-builder` | image builder type: buildah (default; rootless, needs user namespaces) or kaniko (for a pool that denies them; runs as root in the job image CI_IMAGE_BUILDER_JOB_IMAGE names, builds to a layout, exports a stage's files in local mode, no load mode, no build secrets). Set CI_IMAGE_BUILDER on the repository to select it. | string | `"buildah"` | `$CI_IMAGE_BUILDER` |
 | `--kaniko-executor` | path of the kaniko executor (default /kaniko/executor) | string | `""` | `$KANIKO_EXECUTOR` |
@@ -1976,7 +1976,7 @@ delete release candidate tags after verified final/moving promotion; on Forgejo,
 | `--provider-token-file` | file containing the provider/package-API token ("-" reads stdin); defaults to $FORGE_CI_PACKAGE_API_TOKEN, then the detected forge's own token variable ($FORGEJO_TOKEN or $GITEA_TOKEN on Forgejo, $GITLAB_TOKEN on GitLab); another forge's token is never used. The token never appears in argv. | string | `""` | n/a |
 | `--dry-run` | preview registry mutations (copies/deletes) without performing them | bool | `false` | n/a |
 
-#### `forge-ci container release-images fetch-build-inputs`
+#### `forge-ci container release-images fetch-inputs`
 
 fetch planned cache and pinned parents without running consumer code
 

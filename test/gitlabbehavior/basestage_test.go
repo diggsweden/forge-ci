@@ -115,7 +115,7 @@ rc_engine() {
   *'base-images authenticate-parent '*) cat -- "${CI_PROJECT_DIR}/_release-base-promote/base.json" ;;
   *'base-images select-parent '*) cat parent-bases.json ;;
   *'release validate-dist '*) mkdir -p verified-payload/dist && : >verified-payload/dist/base-images.json ;;
-  *'child-base fetch '*)
+  *'child-base fetch-inputs '*)
     if [[ "$*" = *'--parent-registry-password-file -'* ]]; then
       [ "$(cat)" = read-only-fixture ] || return 1
       printf 'scoped pull received credential on stdin\n' >>"${ENGINE_LOG}"
@@ -266,7 +266,7 @@ func TestBaseChildIsPlannedAndBuiltOnlyOnItsVerifiedParent(t *testing.T) {
 		"build pulls on the verified projection alone": {
 			call:  "rc_base_build 'tools+debug' 'base'",
 			given: map[string]string{"_release-base-parent/parent-base.json": baseProjection},
-			calls: []string{"container base-images child-base fetch --plan ", " --parent-base-json " + baseProjection + " --inputs-dir registry-inputs", "container base-images child-base build --parent-base-json " + baseProjection + " --inputs-dir registry-inputs --plan ", " --stage-flavors tools,debug "},
+			calls: []string{"container base-images child-base fetch-inputs --plan ", " --parent-base-json " + baseProjection + " --inputs-dir registry-inputs", "container base-images child-base build --parent-base-json " + baseProjection + " --inputs-dir registry-inputs --plan ", " --stage-flavors tools,debug "},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

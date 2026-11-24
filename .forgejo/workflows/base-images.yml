@@ -392,7 +392,7 @@ jobs:
           unset PARENT_REGISTRY_READ_TOKEN
           # shellcheck source=.engine/bin/lib-parent-pull.sh
           source "${HELPERS_DIR:?}/.engine/bin/lib-parent-pull.sh"
-          forge_ci_pull_parent "$token" run_forge_ci container release-images fetch-build-inputs \
+          forge_ci_pull_parent "$token" run_forge_ci container release-images fetch-inputs \
             --build-json "${BUILD_JSON:?}" --parent-base-json "${PARENT_BASE_JSON:?}" --release-sha "${RELEASE_SHA:?}" \
             --server-url "${FORGEJO_SERVER:?}" --repository "${FORGEJO_REPO:?}" \
             --inputs-dir "registry-inputs/${IMAGE_NAME:?}-arch-${IMAGE_ARCH:?}"
