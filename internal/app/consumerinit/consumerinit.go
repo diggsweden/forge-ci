@@ -110,7 +110,16 @@ func Run(ctx context.Context, in Input) (Result, error) {
 
 	defer func() { _ = os.RemoveAll(snapshot) }()
 
-	defaults, found, err := readRelease(ctx, in.Checkout, src, snapshot)
+	// The fork's tree may hold symbolic links; reading through the root
+	// keeps every one inside the snapshot.
+	root, err := os.OpenRoot(snapshot)
+	if err != nil {
+		return Result{}, err
+	}
+
+	defer func() { _ = root.Close() }()
+
+	defaults, found, err := readRelease(ctx, in.Checkout, src, snapshot, root.FS())
 	if err != nil {
 		return Result{}, err
 	}
@@ -122,7 +131,7 @@ func Run(ctx context.Context, in Input) (Result, error) {
 
 	result := Result{DryRun: in.DryRun, Forge: forge, Source: src, Defaults: found, Remaining: map[string][]domain.Placeholder{}}
 
-	return initializeFiles(os.DirFS(snapshot), in, defaults, result)
+	return initializeFiles(root.FS(), in, defaults, result)
 }
 
 func initializeFiles(release fs.FS, in Input, defaults domain.Defaults, result Result) (Result, error) {
@@ -297,8 +306,9 @@ func latestTag(tags []string, policy string) (string, error) {
 }
 
 // readRelease exports the commit's examples, changelog configurations and
-// defaults file into snapshot and parses the defaults, when there are any.
-func readRelease(ctx context.Context, checkout Checkout, src domain.Source, snapshot string) (domain.Defaults, bool, error) {
+// defaults file into snapshot and parses the defaults, when there are any,
+// read through release, the snapshot's file system.
+func readRelease(ctx context.Context, checkout Checkout, src domain.Source, snapshot string, release fs.FS) (domain.Defaults, bool, error) {
 	missing, err := checkout.Export(ctx, src.Commit, snapshot, []string{domain.ExamplesDir, domain.ChangelogDir, domain.DefaultsFile})
 	if err != nil {
 		return domain.Defaults{}, false, err
@@ -312,7 +322,7 @@ func readRelease(ctx context.Context, checkout Checkout, src domain.Source, snap
 		return domain.Defaults{}, false, nil
 	}
 
-	data, err := fs.ReadFile(os.DirFS(snapshot), domain.DefaultsFile)
+	data, err := fs.ReadFile(release, domain.DefaultsFile)
 	if err != nil {
 		return domain.Defaults{}, false, err
 	}

@@ -769,3 +769,47 @@ func TestRunTakesTheForkPolicyItsTagsShow(t *testing.T) {
 		})
 	}
 }
+
+// symlinkCheckout's tree links a workflow to a file outside the export, as a
+// fork's tree could.
+type symlinkCheckout struct {
+	fakeCheckout
+
+	target string
+}
+
+func (c symlinkCheckout) Export(ctx context.Context, commit, dest string, paths []string) ([]string, error) {
+	missing, err := c.fakeCheckout.Export(ctx, commit, dest, paths)
+	if err != nil {
+		return nil, err
+	}
+
+	link := filepath.Join(dest, "examples", "go-cli", "github", "pullrequest-workflow.yml")
+	if err := os.Remove(link); err != nil {
+		return nil, err
+	}
+
+	return missing, os.Symlink(c.target, link)
+}
+
+// A link in the fork's tree that leaves the export is never followed, so no
+// file of the person's machine lands in their repository.
+func TestRunNeverFollowsALinkOutOfTheExport(t *testing.T) {
+	t.Parallel()
+
+	secret := filepath.Join(t.TempDir(), "id_ed25519")
+	if err := os.WriteFile(secret, []byte("PRIVATE KEY"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := t.TempDir()
+	checkout := symlinkCheckout{tags: []string{"v1.0.0"}, target: secret}
+
+	if _, err := appinit.Run(t.Context(), appinit.Input{Checkout: checkout, URL: "https://github.com/diggsweden/forge-ci", Dir: dir, Example: "go-cli"}); err == nil {
+		t.Fatal("init followed a link out of the export")
+	}
+
+	if written, _ := os.ReadFile(filepath.Join(dir, ".github", "workflows", "pullrequest-workflow.yml")); strings.Contains(string(written), "PRIVATE KEY") {
+		t.Fatal("a file outside the export landed in the repository")
+	}
+}
