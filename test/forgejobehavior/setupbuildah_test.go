@@ -44,7 +44,7 @@ func TestSetupBuildah(t *testing.T) {
 				"CONTAINER_STORAGE_PRINT_STORE=true", "CONTAINER_STORAGE_SUMMARY=false",
 			},
 			[]string{
-				"container", "setup-buildah", "--install-packages=false", "--probe-build=true", "--print-store=true",
+				"container", "setup-image-builder", "--image-builder", "buildah", "--install-packages=false", "--probe-build=true", "--print-store=true",
 				"--summary=false", "--extra-packages", "jq\nskopeo",
 			},
 		},
@@ -52,7 +52,7 @@ func TestSetupBuildah(t *testing.T) {
 			"defaults unset inputs and passes empty extra packages",
 			nil,
 			[]string{
-				"container", "setup-buildah", "--install-packages=true", "--probe-build=true", "--print-store=false",
+				"container", "setup-image-builder", "--image-builder", "buildah", "--install-packages=true", "--probe-build=true", "--print-store=false",
 				"--summary=false", "--extra-packages", "",
 			},
 		},

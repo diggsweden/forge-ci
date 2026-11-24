@@ -48,7 +48,7 @@ type PackageInstaller interface {
 	Install(ctx context.Context, packages []string, out io.Writer) error
 }
 
-// SetupBuildahInput drives `container setup-buildah`.
+// SetupBuildahInput drives the Buildah half of `container setup-image-builder`.
 type SetupBuildahInput struct {
 	ExtraPackages   string
 	InstallPackages bool

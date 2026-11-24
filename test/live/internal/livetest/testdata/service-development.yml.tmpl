@@ -38,7 +38,7 @@ jobs:
         with:
           ref: ${{ needs.snapshot.outputs.source-sha }}
       - name: Prepare isolated runtime tools
-        run: forge-ci container setup-buildah --extra-packages "podman jq nftables" --print-store=false --summary=false
+        run: forge-ci container setup-image-builder --image-builder buildah --extra-packages "podman jq nftables" --print-store=false --summary=false
       - name: Pull the immutable published digest
         env:
           IMAGES_JSON: ${{ needs.snapshot.outputs.container-images-json }}

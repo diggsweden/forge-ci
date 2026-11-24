@@ -2367,16 +2367,17 @@ verify a native smoke receipt matches the exact source and candidate digest
 | `--arch` | expected native architecture, amd64 or arm64 (required) | string | `""` | n/a |
 | `--image-ref` | expected digest-pinned candidate image (required) | string | `""` | n/a |
 
-### `forge-ci container setup-buildah`
+### `forge-ci container setup-image-builder`
 
-install Buildah runtime packages and configure job-local storage
+set up Buildah or admit a digest-pinned native Kaniko job image
 
 ```
-Installs missing buildah, fuse-overlayfs, netavark and aardvark-dns packages when requested,
-writes a job-local containers storage config, prefers overlay/fuse-overlayfs only
-after buildah info and an optional layered build probe succeed, and falls back to
-vfs. Emits CONTAINERS_STORAGE_CONF and TMPDIR to the runner env file for later CI
-steps.
+--image-builder buildah (the default; CI_IMAGE_BUILDER sets it) installs
+missing buildah, fuse-overlayfs, netavark and aardvark-dns packages when
+requested, writes a job-local containers storage config, prefers
+overlay/fuse-overlayfs only after buildah info and an optional layered build
+probe succeed, and falls back to vfs. Emits CONTAINERS_STORAGE_CONF and TMPDIR
+to the runner env file for later CI steps.
 
 Networking helpers are required independently of the storage driver. netavark
 provides container networking and aardvark-dns provides its DNS support. Helpers
@@ -2391,29 +2392,12 @@ shared /tmp or /var/tmp, and must remain below it. The runner env file may live
 anywhere but must be a regular file. Unsafe paths are refused before package
 installation or Buildah invocation.
 
+--image-builder kaniko installs nothing: Kaniko is already provisioned in the
+job image, so verify its digest, native architecture and engine source/title
+labels.
+
 EXAMPLE:
-   forge-ci container setup-buildah --extra-packages "jq skopeo" --summary
-```
-
-| Flag | Description | Type | Default | Env vars |
-|------|-------------|------|---------|----------|
-| `--extra-packages` | whitespace-separated additional apt packages to install | string | `""` | `$SETUP_BUILDAH_EXTRA_PACKAGES` |
-| `--install-packages` | install missing buildah/fuse-overlayfs/netavark/aardvark-dns/extra packages with apt-get | bool | `true` | `$SETUP_BUILDAH_INSTALL_PACKAGES` |
-| `--probe-build` | validate storage with a layered build probe that writes into a directory its base image owns | bool | `true` | `$SETUP_BUILDAH_PROBE_BUILD` |
-| `--print-store` | print selected buildah storage details after setup | bool | `false` | `$CONTAINER_STORAGE_PRINT_STORE` |
-| `--summary` | append selected storage details to the step summary | bool | `false` | `$CONTAINER_STORAGE_SUMMARY` |
-| `--storage-conf` | containers storage config path (default: $RUNNER_TEMP/containers-storage.conf) | string | `""` | `$CONTAINERS_STORAGE_CONF` |
-| `--storage-root` | containers storage root path (default: $RUNNER_TEMP/containers-storage) | string | `""` | `$CONTAINER_STORAGE_ROOT` |
-| `--container-tmpdir` | job-local temp directory (default: $RUNNER_TEMP/container-tmp) | string | `""` | `$CONTAINER_TMPDIR` |
-| `--temp-dir` | existing scratch parent for a private storage directory; job-specific when storage overrides are set (required) | string | `""` | `$CI_TEMP_DIR`, `$RUNNER_TEMP` |
-| `--env-file` | runner env file receiving CONTAINERS_STORAGE_CONF and TMPDIR | string | `""` | `$FORGEJO_ENV`, `$GITHUB_ENV` |
-
-### `forge-ci container setup-image-builder`
-
-set up Buildah or admit a digest-pinned native Kaniko job image
-
-```
-Reuses setup-buildah for local storage and package setup. Kaniko is already provisioned in the job image: verify its digest, native architecture and engine source/title labels without installing Buildah.
+   forge-ci container setup-image-builder --image-builder buildah --extra-packages "jq skopeo" --summary
 ```
 
 | Flag | Description | Type | Default | Env vars |

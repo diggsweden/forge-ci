@@ -72,7 +72,7 @@ func New() *cli.Command {
 		Name:  "container",
 		Usage: "container-image helpers (name resolution, manifests, namespace policy, tag/label metadata, …)",
 		Commands: slices.Concat(
-			cmdmeta.WithCategory("Build & sign", setupBuildahCmd(), setupImageBuilderCmd(), buildCmd(), buildPushOCIImageCmd(), imageGroup(), layoutGroup(), signerImageGroup(), loginCmd(), signCmd(), attestCmd()),
+			cmdmeta.WithCategory("Build & sign", setupImageBuilderCmd(), buildCmd(), buildPushOCIImageCmd(), imageGroup(), layoutGroup(), signerImageGroup(), loginCmd(), signCmd(), attestCmd()),
 			cmdmeta.WithCategory("Image metadata & manifests", builderIdentityCmd(), refGroup(), metadataCmd(), platformPlanCmd(), manifestGroup(), writeDigestMarkerCmd()),
 			cmdmeta.WithCategory("Release promotion", ledgerGroup(), releaseImagesGroup(), snapshotImagesGroup(), bases, packageRetentionCmd(), runtimeImagesCmd()),
 			cmdmeta.WithCategory("Validation", validateGroup()),

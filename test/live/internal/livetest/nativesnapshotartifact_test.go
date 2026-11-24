@@ -133,7 +133,7 @@ func TestGitLabSnapshotBuilderCapability(t *testing.T) {
       export FORGE_CI_REPOSITORY_URL="$CI_SERVER_URL/$CI_PROJECT_PATH.git"
       source helpers/.engine/bin/lib-forge-ci.sh
       fetch_forge_ci
-      run_forge_ci container setup-buildah --install-packages=true --probe-build=true --print-store=false --summary=false
+      run_forge_ci container setup-image-builder --image-builder buildah --install-packages=true --probe-build=true --print-store=false --summary=false
       printf 'NATIVE_AMD64_LAYERED_BUILDER_PASSED\n'
 `, string(tags), snapshotNativeToolsImage, sha)
 	if status := RunWorkflow(t, target, repo, "snapshot-builder-probe", workflow); status != "success" {

@@ -12,11 +12,11 @@
 # Buildah runs as root inside the job container with chroot isolation, so a
 # RUN step needs no privilege the container lacks. Its storage defaults to
 # vfs, which works on any filesystem under the container;
-# `forge-ci container setup-buildah` replaces it with a job-local
-# configuration and prefers overlay where a probe build passes. Everything
-# Buildah needs comes from Debian's packages, so setup-buildah has nothing to
-# install: netavark for the build container's network, aardvark-dns for its
-# DNS, fuse-overlayfs for overlay storage without kernel overlay. The engine
+# `forge-ci container setup-image-builder --image-builder buildah` replaces
+# it with a job-local configuration and prefers overlay where a probe build
+# passes. Everything Buildah needs comes from Debian's packages, so that setup
+# has nothing to install: netavark for the build container's network,
+# aardvark-dns for its DNS, fuse-overlayfs for overlay storage without kernel overlay. The engine
 # itself is fetched and verified by the job, as everywhere else; git, curl
 # and jq serve that fetch and the release checkout.
 #

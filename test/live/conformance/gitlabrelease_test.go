@@ -181,7 +181,7 @@ func TestGitLabRelease_BuildImageCapability(t *testing.T) {
 const gitlabBuildImageProbe = `work=$(mktemp -d /tmp/build-image-probe.XXXXXXXX)
 trap 'rm -rf -- "${work}"' EXIT
 export CONTAINERS_STORAGE_CONF="${work}/storage.conf" TMPDIR="${work}/tmp" CI_OUTPUT="${work}/outputs"
-./forge-ci container setup-buildah --install-packages=false \
+./forge-ci container setup-image-builder --image-builder buildah --install-packages=false \
   --temp-dir "${work}" --storage-conf "${CONTAINERS_STORAGE_CONF}" \
   --storage-root "${work}/storage" --container-tmpdir "${TMPDIR}" --env-file "${work}/runtime.env"
 mkdir "${work}/context"

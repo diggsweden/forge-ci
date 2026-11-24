@@ -188,7 +188,7 @@ func TestForgeCIInvocationsAreExtractable(t *testing.T) {
 	for verb, flag := range map[string]string{
 		"validate isolation":               "--signing-secret",
 		"version commit-changelog-release": "--git-url",
-		"container setup-buildah":          "--extra-packages",
+		"container setup-image-builder":    "--extra-packages",
 		"container ledger promote":         "--stage",                  // a GitHub workflow
 		"security report to-gitlab-sast":   "--output",                 // a GitLab component
 		"container release-images import":  "--destination-repository", // the GitLab release script

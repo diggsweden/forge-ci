@@ -32,8 +32,9 @@ var shippedCITrees = []string{".forgejo", ".github", ".gitlab", "templates", "ex
 var demoTrees = []string{"examples", "test/live/fixtures/consumers"}
 
 // buildahHardWired names Buildah directly: the Forgejo setup-buildah action,
-// the engine's setup-buildah verb, or the bootstrap installer.
-var buildahHardWired = regexp.MustCompile(`/setup-buildah@|/setup-buildah\b\s*$|container setup-buildah\b|install-buildah\.sh`)
+// the engine's builder setup with Buildah written out, or the bootstrap
+// installer.
+var buildahHardWired = regexp.MustCompile(`/setup-buildah@|/setup-buildah\b\s*$|container setup-image-builder\b.*--image-builder[= ]["']?buildah\b|install-buildah\.sh`)
 
 // buildahAllowed is every place that may name Buildah directly, and why: the
 // builder selection itself, which prepares Buildah when CI_IMAGE_BUILDER
@@ -356,7 +357,8 @@ type ciLine struct {
 }
 
 // shippedCILines returns every non-comment line of the YAML and shell files
-// under the trees.
+// under the trees. A line continued with a trailing backslash is joined with
+// the next, under its first line's number, so a command is read whole.
 func shippedCILines(t *testing.T, root string, trees []string) []ciLine {
 	t.Helper()
 
@@ -378,11 +380,33 @@ func shippedCILines(t *testing.T, root string, trees []string) []ciLine {
 			body, readErr := os.ReadFile(path)
 			require.NoError(t, readErr)
 
+			var (
+				pending ciLine
+				joining bool
+			)
+
 			scanner := bufio.NewScanner(bytes.NewReader(body))
 			for number := 1; scanner.Scan(); number++ {
-				if text := scanner.Text(); !strings.HasPrefix(strings.TrimSpace(text), "#") {
-					lines = append(lines, ciLine{path: filepath.ToSlash(rel), number: number, text: text})
+				text := scanner.Text()
+				if !joining && strings.HasPrefix(strings.TrimSpace(text), "#") {
+					continue
 				}
+
+				if joining {
+					pending.text += " " + strings.TrimSpace(text)
+				} else {
+					pending = ciLine{path: filepath.ToSlash(rel), number: number, text: text}
+				}
+
+				if joining = strings.HasSuffix(pending.text, "\\"); joining {
+					pending.text = strings.TrimSuffix(pending.text, "\\")
+				} else {
+					lines = append(lines, pending)
+				}
+			}
+
+			if joining {
+				lines = append(lines, pending)
 			}
 
 			return scanner.Err()
@@ -390,4 +414,29 @@ func shippedCILines(t *testing.T, root string, trees []string) []ciLine {
 	}
 
 	return lines
+}
+
+// The guard reads a command whole, whatever its flag order or line breaks,
+// and leaves the builder selection alone.
+func TestBuildahHardWiredReadsCommandsWhole(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "ci"), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "ci", "build.sh"), []byte(`forge-ci container setup-image-builder --install-packages=true --image-builder buildah
+forge-ci container setup-image-builder \
+  --image-builder 'buildah'
+forge-ci container setup-image-builder \
+  --image-builder "${CI_IMAGE_BUILDER:-buildah}"
+`), 0o600))
+
+	var matched []int
+
+	for _, line := range shippedCILines(t, root, []string{"ci"}) {
+		if buildahHardWired.MatchString(line.text) {
+			matched = append(matched, line.number)
+		}
+	}
+
+	require.Equal(t, []int{1, 2}, matched)
 }

@@ -507,7 +507,7 @@ jobs:
             --input "${RUNNER_TEMP}/snapshot-context"
       - name: Prepare native image builder
         if: ${{ needs.plan.outputs.builder == 'buildah' }}
-        run: forge-ci container setup-buildah --install-packages=true --probe-build=true --print-store=false --summary=false
+        run: forge-ci container setup-image-builder --image-builder buildah --install-packages=true --probe-build=true --print-store=false --summary=false
       - name: Admit and prepare isolated native Kaniko action
         id: kaniko-action
         if: ${{ needs.plan.outputs.builder == 'kaniko' }}
