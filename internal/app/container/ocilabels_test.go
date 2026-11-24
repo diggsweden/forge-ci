@@ -4,118 +4,14 @@
 package container_test
 
 import (
-	"context"
 	"errors"
-	"slices"
 	"strings"
 	"testing"
 
 	appcontainer "github.com/diggsweden/forge-ci/internal/app/container"
-	domaincontainer "github.com/diggsweden/forge-ci/internal/domain/container"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
 	"github.com/diggsweden/forge-ci/internal/domain/pipeline"
 )
-
-type fakeLabelsRegistry struct {
-	ref    string
-	labels map[string]string
-	err    error
-	calls  int
-}
-
-func (f *fakeLabelsRegistry) Labels(_ context.Context, ref string) (map[string]string, error) {
-	f.ref = ref
-	f.calls++
-
-	return f.labels, f.err
-}
-
-func TestOCIReleaseLabelFlags_EmitsBuildahTokensAndDefaultsDocumentation(t *testing.T) {
-	t.Parallel()
-
-	got, err := appcontainer.OCIReleaseLabelFlags(appcontainer.OCIReleaseLabelsInput{
-		Title:       "myapp",
-		Version:     "v0.7.9",
-		Revision:    strings.Repeat("a", 40),
-		RefName:     "v0.7.9-alpine",
-		Description: "Small lint image",
-		Licenses:    "EUPL-1.2",
-		Vendor:      "Example",
-		Authors:     "The Example Authors",
-		Created:     "2026-06-30T12:34:56Z",
-		Source:      "https://forge.example/Examplescope/myapp",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	want := []string{
-		"--label", "org.opencontainers.image.title=myapp",
-		"--label", "org.opencontainers.image.version=v0.7.9",
-		"--label", "org.opencontainers.image.created=2026-06-30T12:34:56Z",
-		"--label", "org.opencontainers.image.revision=" + strings.Repeat("a", 40),
-		"--label", "org.opencontainers.image.ref.name=v0.7.9-alpine",
-		"--label", "org.opencontainers.image.source=https://forge.example/Examplescope/myapp",
-		"--label", "org.opencontainers.image.url=https://forge.example/Examplescope/myapp",
-		"--label", "org.opencontainers.image.documentation=https://forge.example/Examplescope/myapp#readme",
-		"--label", "org.opencontainers.image.description=Small lint image",
-		"--label", "org.opencontainers.image.licenses=EUPL-1.2",
-		"--label", "org.opencontainers.image.vendor=Example",
-		"--label", "org.opencontainers.image.authors=The Example Authors",
-	}
-
-	if !slices.Equal(got, want) {
-		t.Fatalf("label flags = %#v, want %#v", got, want)
-	}
-}
-
-// TestOCIReleaseLabelFlags_OmitsOptionalLabelsWithNoValue covers the other half
-// of the builder's rule. The eight required labels are refused when empty; the
-// four optional ones are left out instead, so an image never carries a label
-// claiming its description or licence is the empty string.
-//
-// Only the refusing half had a test.
-func TestOCIReleaseLabelFlags_OmitsOptionalLabelsWithNoValue(t *testing.T) {
-	t.Parallel()
-
-	got, err := appcontainer.OCIReleaseLabelFlags(appcontainer.OCIReleaseLabelsInput{
-		OCILabels: domaincontainer.OCILabels{
-			Title:    "myapp",
-			Version:  "v0.7.9",
-			Revision: strings.Repeat("a", 40),
-			RefName:  "v0.7.9-alpine",
-			// Description, Licenses, Vendor and Authors deliberately unset.
-		},
-		Created: "2026-06-30T12:34:56Z",
-		Source:  "https://forge.example/Examplescope/myapp",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	want := []string{
-		"--label", "org.opencontainers.image.title=myapp",
-		"--label", "org.opencontainers.image.version=v0.7.9",
-		"--label", "org.opencontainers.image.created=2026-06-30T12:34:56Z",
-		"--label", "org.opencontainers.image.revision=" + strings.Repeat("a", 40),
-		"--label", "org.opencontainers.image.ref.name=v0.7.9-alpine",
-		"--label", "org.opencontainers.image.source=https://forge.example/Examplescope/myapp",
-		"--label", "org.opencontainers.image.url=https://forge.example/Examplescope/myapp",
-		"--label", "org.opencontainers.image.documentation=https://forge.example/Examplescope/myapp#readme",
-	}
-	if !slices.Equal(got, want) {
-		t.Errorf("label flags = %#v\nwant %#v", got, want)
-	}
-}
-
-func TestOCIReleaseLabelFlags_RejectsMissingRequiredLabel(t *testing.T) {
-	t.Parallel()
-
-	_, err := appcontainer.OCIReleaseLabelFlags(appcontainer.OCIReleaseLabelsInput{})
-	if !errors.Is(err, errs.ErrUsage) || !strings.Contains(err.Error(), "org.opencontainers.image.title") {
-		t.Fatalf("err = %v, want missing title usage error", err)
-	}
-}
 
 // TestOCIReleaseIdentityMatches_ToleratesCaseOnlyInTheSource pins how much
 // drift this predicate forgives. The source is compared case-insensitively,
@@ -223,47 +119,6 @@ func TestOCIReleaseIdentityMatches_RejectsIncompleteExpectedIdentity(t *testing.
 	}
 }
 
-func TestOCIImageLabelsJSON_FetchesCompactLabelsObject(t *testing.T) {
-	t.Parallel()
-
-	registry := &fakeLabelsRegistry{labels: map[string]string{
-		"org.opencontainers.image.revision": "abc123",
-		"org.opencontainers.image.version":  "v1.2.3",
-	}}
-
-	got, err := appcontainer.OCIImageLabelsJSON(context.Background(), registry, "example.invalid/ns/app:v1.2.3")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if got != `{"org.opencontainers.image.revision":"abc123","org.opencontainers.image.version":"v1.2.3"}` {
-		t.Fatalf("labels JSON = %s", got)
-	}
-
-	if registry.ref != "example.invalid/ns/app:v1.2.3" {
-		t.Fatalf("registry ref = %q", registry.ref)
-	}
-}
-
-// TestOCIImageLabelsJSON_UnlabelledImageIsAnEmptyObject covers an image that
-// carries no labels. The registry adapter returns a nil map and the JSON must
-// still be an object: a consumer decoding `null` into a map gets nil and reads
-// every label as absent-and-empty, which is indistinguishable from an image
-// whose labels were all blank. The code converts explicitly, and nothing
-// checked it.
-func TestOCIImageLabelsJSON_UnlabelledImageIsAnEmptyObject(t *testing.T) {
-	t.Parallel()
-
-	got, err := appcontainer.OCIImageLabelsJSON(context.Background(), &fakeLabelsRegistry{}, "example.invalid/ns/app:v1.2.3")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if got != `{}` {
-		t.Errorf("labels JSON = %s, want an empty object", got)
-	}
-}
-
 // validOCIReleaseLabelsInput is a complete input, so each case below can remove
 // exactly one field.
 func validOCIReleaseLabelsInput() appcontainer.OCIReleaseLabelsInput {
@@ -347,54 +202,6 @@ func TestOCIReleaseLabels_RefusesMultilineValues(t *testing.T) {
 			t.Errorf("err = %v, want it to name the single-line rule", err)
 		}
 	}
-}
-
-// TestOCIImageLabelsJSON_RefusesBadInputWithoutTouchingTheRegistry is the same
-// rule on the label reader, whose refusals had no coverage at all.
-func TestOCIImageLabelsJSON_RefusesBadInputWithoutTouchingTheRegistry(t *testing.T) {
-	t.Parallel()
-
-	t.Run("a blank ref", func(t *testing.T) {
-		t.Parallel()
-
-		registry := &fakeLabelsRegistry{}
-
-		got, err := appcontainer.OCIImageLabelsJSON(context.Background(), registry, "")
-		if !errors.Is(err, errs.ErrUsage) {
-			t.Fatalf("err = %v, want ErrUsage", err)
-		}
-
-		if got != "" {
-			t.Errorf("a refused call returned %q", got)
-		}
-
-		if registry.calls != 0 {
-			t.Errorf("the registry was queried %d time(s) for a blank ref", registry.calls)
-		}
-	})
-
-	t.Run("a nil registry", func(t *testing.T) {
-		t.Parallel()
-
-		if _, err := appcontainer.OCIImageLabelsJSON(context.Background(), nil, "ghcr.io/org/app:v1"); !errors.Is(err, errs.ErrUsage) {
-			t.Errorf("err = %v, want ErrUsage", err)
-		}
-	})
-
-	t.Run("the registry itself fails", func(t *testing.T) {
-		t.Parallel()
-
-		registry := &fakeLabelsRegistry{err: errRegistryUnreachable}
-
-		got, err := appcontainer.OCIImageLabelsJSON(context.Background(), registry, "ghcr.io/org/app:v1")
-		if !errors.Is(err, errRegistryUnreachable) {
-			t.Fatalf("err = %v, want the registry's own cause", err)
-		}
-
-		if got != "" {
-			t.Errorf("a failed read returned %q", got)
-		}
-	})
 }
 
 // Every label a release image is built with from its source is one the

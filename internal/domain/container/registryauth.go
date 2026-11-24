@@ -53,40 +53,6 @@ func MergeAuth(existing []byte, registry, username, password string) ([]byte, er
 	return json.MarshalIndent(root, "", "  ")
 }
 
-// RemoveAuth deletes registry's credential from an OCI auth config document,
-// the inverse of MergeAuth. Other registries and fields are preserved. It
-// reports whether an entry was actually removed (false when the config is
-// empty or holds no credential for registry) so callers can stay idempotent —
-// a logout for a registry that was never logged in is a successful no-op, not
-// a rewrite. The password is never touched, so nothing sensitive is echoed.
-// On a no-op, including missing or non-object auths, existing is returned
-// byte-for-byte. Non-object document roots are rejected as in MergeAuth.
-func RemoveAuth(existing []byte, registry string) ([]byte, bool, error) {
-	if registry == "" {
-		return nil, false, fmt.Errorf("registry is required: %w", errs.ErrUsage)
-	}
-
-	root, err := parseAuthConfig(existing)
-	if err != nil {
-		return nil, false, err
-	}
-
-	auths, _ := root["auths"].(map[string]any)
-	if _, ok := auths[registry]; !ok {
-		return existing, false, nil
-	}
-
-	delete(auths, registry)
-	root["auths"] = auths
-
-	out, err := json.MarshalIndent(root, "", "  ")
-	if err != nil {
-		return nil, false, fmt.Errorf("encode auth config: %w", err)
-	}
-
-	return out, true, nil
-}
-
 func parseAuthConfig(existing []byte) (map[string]any, error) {
 	root := map[string]any{}
 	if len(bytes.TrimSpace(existing)) == 0 {

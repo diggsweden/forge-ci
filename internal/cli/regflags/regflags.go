@@ -36,7 +36,7 @@ const (
 // signer-secret hygiene list in the container package must scrub it.
 const (
 	// DefaultAuthFileEnv sources --auth-file unless the verb overrides it
-	// (signer-image verbs) or drops it (login/logout).
+	// (signer-image verbs) or drops it (login).
 	DefaultAuthFileEnv = "FORGE_CI_REGISTRY_AUTH_FILE"
 	// EnvUser is the single --registry-username env source.
 	EnvUser = "REGISTRY_USER"

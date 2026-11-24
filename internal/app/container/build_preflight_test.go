@@ -40,7 +40,7 @@ func TestOCIReleaseLabels_RejectsLineBreaksInEveryField(t *testing.T) {
 
 				in := appcontainer.OCIReleaseLabelsInput{Title: "title", Version: "version", Revision: "revision", RefName: "ref", Source: "source", Created: "created"}
 				set(&in, "value"+control+"--another-argument")
-				flags, err := appcontainer.OCIReleaseLabelFlags(in)
+				flags, err := appcontainer.OCIReleaseLabels(in)
 				require.ErrorIs(t, err, errs.ErrUsage)
 				require.Nil(t, flags)
 			})

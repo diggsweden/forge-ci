@@ -103,22 +103,6 @@ func OCIReleaseLabels(in OCIReleaseLabelsInput) ([]string, error) {
 	return labels, nil
 }
 
-// OCIReleaseLabelFlags returns OCIReleaseLabels as Buildah-compatible
-// alternating --label / key=value argv tokens.
-func OCIReleaseLabelFlags(in OCIReleaseLabelsInput) ([]string, error) {
-	labels, err := OCIReleaseLabels(in)
-	if err != nil {
-		return nil, err
-	}
-
-	flags := make([]string, 0, len(labels)*2)
-	for _, label := range labels {
-		flags = append(flags, "--label", label)
-	}
-
-	return flags, nil
-}
-
 // OCIReleaseIdentityMatches returns true when labelsJSON identifies the
 // expected release identity.
 func OCIReleaseIdentityMatches(labelsJSON string, in OCIReleaseIdentityInput) (bool, error) {
@@ -146,32 +130,4 @@ func OCIReleaseIdentityMatches(labelsJSON string, in OCIReleaseIdentityInput) (b
 		labels["org.opencontainers.image.version"] == in.Version &&
 		labels["org.opencontainers.image.ref.name"] == in.RefName &&
 		strings.EqualFold(labels["org.opencontainers.image.source"], in.Source), nil
-}
-
-// OCIImageLabelsJSON fetches an image's config labels and returns a compact JSON
-// object for shell consumers that need the old oci_image_labels_json contract.
-func OCIImageLabelsJSON(ctx context.Context, registry OCIImageLabelsRegistry, ref string) (string, error) {
-	if registry == nil {
-		return "", fmt.Errorf("registry is required: %w", errs.ErrUsage)
-	}
-
-	if ref == "" {
-		return "", fmt.Errorf("image ref is required: %w", errs.ErrUsage)
-	}
-
-	labels, err := registry.Labels(ctx, ref)
-	if err != nil {
-		return "", err
-	}
-
-	if labels == nil {
-		labels = map[string]string{}
-	}
-
-	raw, err := json.Marshal(labels)
-	if err != nil {
-		return "", fmt.Errorf("encode OCI labels JSON: %w", err)
-	}
-
-	return string(raw), nil
 }

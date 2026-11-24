@@ -17,26 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestContainerfileBoundary_StopsBeforeLateOnlyARG(t *testing.T) {
-	t.Parallel()
-
-	for _, from := range []string{"FROM alpine", "from alpine", "FrOm alpine", "FROM\talpine", " \tFROM alpine"} {
-		t.Run(from, func(t *testing.T) {
-			t.Parallel()
-
-			path := filepath.Join(t.TempDir(), "Containerfile")
-			require.NoError(t, os.WriteFile(path, []byte(from+"\nARG BASE=late\n"), 0o600))
-			got, err := appcontainer.ContainerfileArgDefault(appcontainer.ContainerfileArgDefaultInput{File: path, Name: "BASE"})
-			require.ErrorIs(t, err, errs.ErrValidation)
-			require.Empty(t, got)
-			require.NoError(t, os.WriteFile(path, []byte("ARG BASE=early\n"+from+"\nARG BASE=late\n"), 0o600))
-			got, err = appcontainer.ContainerfileArgDefault(appcontainer.ContainerfileArgDefaultInput{File: path, Name: "BASE"})
-			require.NoError(t, err)
-			require.Equal(t, "early", got)
-		})
-	}
-}
-
 func TestBinaryBoundary_RefusesNamedDirectoriesAndAliases(t *testing.T) {
 	t.Parallel()
 

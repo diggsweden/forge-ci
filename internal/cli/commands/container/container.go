@@ -11,7 +11,7 @@
 //   - container.go (this file) — flat ops: platform-plan, metadata,
 //     write-digest-marker
 //   - refhelpers.go — `ref <canonical|name|platform|resolve>` image-reference
-//     projections + containerfile-arg-default
+//     projections
 //   - tarball.go  — `extract-npm-tarball`
 //   - binaries.go — `suffix-extracted-binaries`
 //   - materialize_build_secrets.go — unpack the build-secrets envelope
@@ -73,8 +73,8 @@ func New() *cli.Command {
 		Name:  "container",
 		Usage: "container-image helpers (name resolution, manifests, namespace policy, tag/label metadata, …)",
 		Commands: slices.Concat(
-			cmdmeta.WithCategory("Build & sign", setupBuildahCmd(), setupImageBuilderCmd(), buildCmd(), buildPushOCIImageCmd(), imageGroup(), layoutGroup(), signerImageGroup(), loginCmd(), logoutCmd(), signCmd(), attestCmd()),
-			cmdmeta.WithCategory("Image metadata & manifests", builderIdentityCmd(), refGroup(), metadataCmd(), containerfileArgDefaultCmd(), releaseLabelsCmd(), releaseIdentityMatchesCmd(), imageLabelsJSONCmd(), imageEvidenceCmd(), platformPlanCmd(), manifestGroup(), writeDigestMarkerCmd()),
+			cmdmeta.WithCategory("Build & sign", setupBuildahCmd(), setupImageBuilderCmd(), buildCmd(), buildPushOCIImageCmd(), imageGroup(), layoutGroup(), signerImageGroup(), loginCmd(), signCmd(), attestCmd()),
+			cmdmeta.WithCategory("Image metadata & manifests", builderIdentityCmd(), refGroup(), metadataCmd(), platformPlanCmd(), manifestGroup(), writeDigestMarkerCmd()),
 			cmdmeta.WithCategory("Release promotion", ledgerGroup(), releaseImagesGroup(), snapshotImagesGroup(), bases, packageRetentionCmd(), runtimePublicationCmd()),
 			cmdmeta.WithCategory("Validation", validateGroup()),
 			cmdmeta.WithCategory("Workflow plumbing", prepareKanikoActionCmd(), materializeBuildSecretsCmd(), extractNPMTarballCmd(), suffixBinariesCmd()),
@@ -320,31 +320,6 @@ func registryLoginCredentials(cmd *cli.Command, registry, username, password str
 	}
 
 	return username, forgeToken, nil
-}
-
-func logoutCmd() *cli.Command {
-	return &cli.Command{
-		Name:  "logout",
-		Usage: "remove a registry's credential from the shared OCI auth config (the inverse of login) — for long-lived self-hosted runners where the auth file outlives the job",
-		Description: `Deletes the {"auths":{"<registry>":…}} entry from $REGISTRY_AUTH_FILE /
-$DOCKER_CONFIG/config.json / ~/.docker/config.json (first that applies),
-preserving every other registry's credential. Idempotent: a missing config or
-an absent entry is a successful no-op, so it is safe under "if: always()".
-
-EXAMPLES:
-   forge-ci container logout --registry ghcr.io
-   forge-ci container logout   # defaults to $CONTAINER_REGISTRY, else ` + domaincontainer.DefaultRegistry,
-		Flags: []cli.Flag{
-			&cli.StringFlag{Name: flagRegistry, Value: domaincontainer.DefaultRegistry, Sources: cli.EnvVars("CONTAINER_REGISTRY"), Usage: "registry host to log out of (e.g. ghcr.io, forge.example)"},
-			&cli.StringFlag{Name: flagAuthFile, Usage: "override the auth config path (default: $REGISTRY_AUTH_FILE, else $DOCKER_CONFIG/config.json, else ~/.docker/config.json)"},
-		},
-		Action: func(_ context.Context, cmd *cli.Command) error {
-			return appcontainer.RegistryLogout(os.Stderr, appcontainer.RegistryLogoutInput{
-				Registry: cmd.String(flagRegistry),
-				AuthFile: cmd.String(flagAuthFile),
-			})
-		},
-	}
 }
 
 func writeDigestMarkerCmd() *cli.Command {

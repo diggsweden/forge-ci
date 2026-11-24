@@ -134,57 +134,6 @@ func TestMergeAuth_RejectsMissingFields(t *testing.T) {
 	}
 }
 
-func TestRemoveAuth_RemovesTargetPreservesOthers(t *testing.T) {
-	t.Parallel()
-
-	existing := []byte(`{"auths":{"ghcr.io":{"auth":"gone"},"forge.example":{"auth":"keep","email":"fixture@example.invalid","counter":9007199254740993}},"credsStore":"x"}`)
-
-	out, removed, err := container.RemoveAuth(existing, "ghcr.io")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !removed {
-		t.Fatal("removed = false, want true (ghcr.io was present)")
-	}
-
-	var doc struct {
-		Auths map[string]json.RawMessage `json:"auths"`
-	}
-	if err := json.Unmarshal(out, &doc); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, present := doc.Auths["ghcr.io"]; present {
-		t.Error("ghcr.io key is still present")
-	}
-
-	assertAuthJSON(t, out, `{"auths":{"forge.example":{"auth":"keep","counter":9007199254740993,"email":"fixture@example.invalid"}},"credsStore":"x"}`)
-}
-
-func TestRemoveAuth_AbsentEntryAndEmptyAreNoOps(t *testing.T) {
-	t.Parallel()
-
-	for _, existing := range [][]byte{
-		nil, {}, []byte(" \n\t"), []byte(`{}`), []byte(`{"auths":{}}`),
-		[]byte(" {\"auths\": {\"ghcr.io\": {\"auth\": \"keep\"}}, \"counter\": 9007199254740993}\n"),
-	} {
-		out, removed, err := container.RemoveAuth(existing, "forge.example")
-		if !bytes.Equal(out, existing) || (out == nil) != (existing == nil) || removed || err != nil {
-			t.Errorf("no-op: out=%q removed=%v err=%v, want original %q/false/nil", out, removed, err, existing)
-		}
-	}
-}
-
-func TestRemoveAuth_RejectsEmptyRegistry(t *testing.T) {
-	t.Parallel()
-
-	out, removed, err := container.RemoveAuth([]byte(`{"auths":{}}`), "")
-	if out != nil || removed || !errors.Is(err, errs.ErrUsage) {
-		t.Errorf("empty registry: out=%q removed=%v err=%v, want nil/false/ErrUsage", out, removed, err)
-	}
-}
-
 func TestAuth_RejectsNonObjectAndMalformedDocuments(t *testing.T) {
 	t.Parallel()
 
@@ -196,11 +145,6 @@ func TestAuth_RejectsNonObjectAndMalformedDocuments(t *testing.T) {
 			if out != nil || !errors.Is(err, errs.ErrMalformedInput) {
 				t.Errorf("merge: out=%q err=%v, want nil/ErrMalformedInput", out, err)
 			}
-
-			out, removed, err := container.RemoveAuth([]byte(existing), "ghcr.io")
-			if out != nil || removed || !errors.Is(err, errs.ErrMalformedInput) {
-				t.Errorf("remove: out=%q removed=%v err=%v, want nil/false/ErrMalformedInput", out, removed, err)
-			}
 		})
 	}
 }
@@ -211,7 +155,7 @@ func TestAuth_NonObjectNestedValues(t *testing.T) {
 	for _, shape := range []string{"null", "[]", `"text"`, "42", "true"} {
 		t.Run(shape, func(t *testing.T) {
 			t.Parallel()
-			// Merge repairs a non-object auths value; removal leaves it untouched.
+			// Merge repairs a non-object auths value.
 			existing := []byte(`{"auths":` + shape + `,"counter":9007199254740993}`)
 
 			out, err := container.MergeAuth(existing, "ghcr.io", "u", "p")
@@ -221,12 +165,7 @@ func TestAuth_NonObjectNestedValues(t *testing.T) {
 
 			assertAuthJSON(t, out, `{"auths":{"ghcr.io":{"auth":"dTpw"}},"counter":9007199254740993}`)
 
-			out, removed, err := container.RemoveAuth(existing, "ghcr.io")
-			if !bytes.Equal(out, existing) || removed || err != nil {
-				t.Errorf("non-object auths: out=%q removed=%v err=%v, want original/false/nil", out, removed, err)
-			}
-
-			// A present target is replaced on merge and deleted on removal, whatever its shape.
+			// A present target is replaced, whatever its shape.
 			existing = []byte(`{"auths":{"forge.example":{"auth":"keep"},"ghcr.io":` + shape + `}}`)
 
 			out, err = container.MergeAuth(existing, "ghcr.io", "u", "p")
@@ -235,13 +174,6 @@ func TestAuth_NonObjectNestedValues(t *testing.T) {
 			}
 
 			assertAuthJSON(t, out, `{"auths":{"forge.example":{"auth":"keep"},"ghcr.io":{"auth":"dTpw"}}}`)
-
-			out, removed, err = container.RemoveAuth(existing, "ghcr.io")
-			if err != nil || !removed {
-				t.Fatalf("non-object entry: removed=%v err=%v, want true/nil", removed, err)
-			}
-
-			assertAuthJSON(t, out, `{"auths":{"forge.example":{"auth":"keep"}}}`)
 		})
 	}
 }
@@ -265,23 +197,6 @@ func TestAuth_PreservesExactNumbers(t *testing.T) {
 
 		if string(body) != existing {
 			t.Fatal("merge mutated its input")
-		}
-	})
-
-	t.Run("remove", func(t *testing.T) {
-		t.Parallel()
-
-		body := []byte(existing)
-
-		out, removed, err := container.RemoveAuth(body, "ghcr.io")
-		if err != nil || !removed {
-			t.Fatalf("remove: removed=%v err=%v, want true/nil", removed, err)
-		}
-
-		assertAuthJSON(t, out, `{"auths":{"forge.example":{"auth":"keep","counter":-9007199254740993}},"counter":9007199254740993,"metadata":[1e400,0.12345678901234567890123456789,null,true]}`)
-
-		if string(body) != existing {
-			t.Fatal("remove mutated its input")
 		}
 	})
 }

@@ -17,33 +17,6 @@ import (
 	"github.com/diggsweden/forge-ci/internal/cli/regflags"
 )
 
-func containerfileArgDefaultCmd() *cli.Command {
-	return &cli.Command{
-		Name:  "containerfile-arg-default",
-		Usage: "print an ARG default declared before the first FROM in a Containerfile",
-		Description: `Reads a Containerfile/Dockerfile and prints the value from ARG NAME=...
-before the first FROM. This is intentionally a narrow helper for base-image
-defaults used by bespoke Buildah workflows, not a full Dockerfile frontend.`,
-		Flags: []cli.Flag{
-			&cli.StringFlag{Name: flagFile, Required: true, Sources: cli.EnvVars("CONTAINERFILE"), Usage: "Containerfile/Dockerfile path"},
-			&cli.StringFlag{Name: flagName, Required: true, Sources: cli.EnvVars("ARG_NAME"), Usage: "ARG name to read"},
-		},
-		Action: func(_ context.Context, cmd *cli.Command) error {
-			value, err := appcontainer.ContainerfileArgDefault(appcontainer.ContainerfileArgDefaultInput{
-				File: cmd.String(flagFile),
-				Name: cmd.String(flagName),
-			})
-			if err != nil {
-				return err
-			}
-
-			_, _ = fmt.Fprintln(os.Stdout, value)
-
-			return nil
-		},
-	}
-}
-
 // refGroup wires `forge-ci container ref <verb>` — projections of one
 // parsed image-reference concept. canonical/name are pure string math over an
 // existing ref, platform additionally does registry I/O to pick a

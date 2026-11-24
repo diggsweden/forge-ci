@@ -4,12 +4,9 @@
 package container
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"strings"
 
 	domaincontainer "github.com/diggsweden/forge-ci/internal/domain/container"
 	"github.com/diggsweden/forge-ci/internal/domain/errs"
@@ -20,71 +17,10 @@ type RawManifestRegistry interface {
 	Manifest(ctx context.Context, ref string) ([]byte, error)
 }
 
-// ContainerfileArgDefaultInput drives ContainerfileArgDefault.
-type ContainerfileArgDefaultInput struct {
-	File string
-	Name string
-}
-
 // PlatformRefInput drives PlatformRef.
 type PlatformRefInput struct {
 	Ref      string
 	Platform string
-}
-
-// ContainerfileArgDefault returns the default value for ARG <Name>=... before
-// the first FROM. This is intentionally the same narrow parser the old shell
-// helper used for base-image defaults, not a full Dockerfile frontend.
-func ContainerfileArgDefault(in ContainerfileArgDefaultInput) (string, error) {
-	if in.File == "" || in.Name == "" {
-		return "", fmt.Errorf("file and name are required: %w", errs.ErrUsage)
-	}
-
-	file, err := os.Open(in.File)
-	if err != nil {
-		return "", fmt.Errorf("open containerfile %s: %w: %w", in.File, err, errs.ErrMissingInput)
-	}
-
-	defer func() { _ = file.Close() }()
-
-	scanner := bufio.NewScanner(file)
-
-	value, found := scanContainerfileArgDefault(scanner, in.Name)
-	if found {
-		return value, nil
-	}
-
-	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("read containerfile %s: %w", in.File, err)
-	}
-
-	return "", fmt.Errorf("%s lacks ARG %s=... before first FROM: %w", in.File, in.Name, errs.ErrValidation)
-}
-
-// scanContainerfileArgDefault scans lines before the first FROM for a
-// non-empty ARG <name>=<value> default.
-func scanContainerfileArgDefault(scanner *bufio.Scanner, argName string) (string, bool) {
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		fields := strings.Fields(line)
-		if len(fields) > 0 && strings.EqualFold(fields[0], "FROM") {
-			break
-		}
-
-		if !strings.HasPrefix(line, "ARG ") {
-			continue
-		}
-
-		line = strings.TrimPrefix(line, "ARG ")
-
-		name, value, ok := strings.Cut(line, "=")
-		if ok && name == argName && value != "" {
-			return value, true
-		}
-	}
-
-	return "", false
 }
 
 // CanonicalRef canonicalizes a Docker image reference.

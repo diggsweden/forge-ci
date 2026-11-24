@@ -1320,21 +1320,6 @@ Prints a SHA-256 material ID by default: the consumer includes that value in its
 | `--kaniko-executor` | path of the kaniko executor (default /kaniko/executor) | string | `""` | `$KANIKO_EXECUTOR` |
 | `--format` | output format: id or json | string | `"id"` | n/a |
 
-### `forge-ci container containerfile-arg-default`
-
-print an ARG default declared before the first FROM in a Containerfile
-
-```
-Reads a Containerfile/Dockerfile and prints the value from ARG NAME=...
-before the first FROM. This is intentionally a narrow helper for base-image
-defaults used by bespoke Buildah workflows, not a full Dockerfile frontend.
-```
-
-| Flag | Description | Type | Default | Env vars |
-|------|-------------|------|---------|----------|
-| `--file` | Containerfile/Dockerfile path (required) | string | `""` | `$CONTAINERFILE` |
-| `--name` | ARG name to read (required) | string | `""` | `$ARG_NAME` |
-
 ### `forge-ci container extract-npm-tarball`
 
 extract a top-level \*.tgz / \*.tar.gz with --strip-components=1 then remove it; none present is an error
@@ -1386,66 +1371,6 @@ non-matching or missing image exits non-zero and prints no digest.
 | `--arch` | required image architecture, e.g. amd64 or arm64 (required) | string | `""` | `$IMAGE_USABLE_DIGEST_ARCH` |
 | `--require-label` | required image config label as key=value (repeatable) | string | `""` | `$IMAGE_USABLE_DIGEST_REQUIRE_LABELS` |
 | `--auth-file` | registry auth file for digest/metadata inspection | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
-
-### `forge-ci container image-evidence`
-
-scan local OCI image evidence, including per-platform multi-arch layouts
-
-```
-Runs Trivy against a local OCI layout, never re-pulling the
-image from the registry. With --local-image-ref, the image is first exported
-from Buildah local storage to a temporary OCI layout, then scanned. When
---sbom-output is set, Syft scans the same local layout and writes CycloneDX JSON.
-With --registry-digest-ref and one --platform, the selected registry image is
-first copied to a temporary OCI layout, then scanned locally.
-
-For multi-platform images, set repeated --platform values and
---trivy-output-template. forge-ci prefers --scan-layout when set, otherwise
-exports --local-manifest, otherwise pulls --registry-digest-ref or
---registry-ref@--digest. Each platform is split into a single-platform OCI layout
-before Trivy runs, because Trivy's
---input mode does not select a platform from a manifest list.
-
-A Trivy scan the network stopped is run again, --trivy-attempts times in all,
-after attempt x --trivy-retry-delay-seconds: the vulnerability database
-download fails transiently. A scan that fails for another reason, a scanner
-that cannot be started and a report that does not validate are not retried.
-```
-
-| Flag | Description | Type | Default | Env vars |
-|------|-------------|------|---------|----------|
-| `--oci-layout` | existing OCI layout directory to scan | string | `""` | `$IMAGE_EVIDENCE_OCI_LAYOUT` |
-| `--local-image-ref` | Buildah local image reference to export to an OCI layout before scanning | string | `""` | `$IMAGE_EVIDENCE_LOCAL_IMAGE_REF` |
-| `--trivy-output` | destination path for Trivy JSON output | string | `""` | `$IMAGE_EVIDENCE_TRIVY_OUTPUT` |
-| `--sbom-output` | optional destination path for CycloneDX SBOM output | string | `""` | `$IMAGE_EVIDENCE_SBOM_OUTPUT` |
-| `--scan-layout` | multi-platform OCI layout directory already tagged scan; preferred when set | string | `""` | `$IMAGE_EVIDENCE_SCAN_LAYOUT`, `$SCAN_LAYOUT` |
-| `--local-manifest` | local Buildah manifest list to export before per-platform scans | string | `""` | `$IMAGE_EVIDENCE_LOCAL_MANIFEST`, `$LOCAL_MANIFEST` |
-| `--registry-digest-ref` | digest-pinned registry image ref, e.g. registry.example/owner/app@sha256:... | string | `""` | `$IMAGE_EVIDENCE_REGISTRY_DIGEST_REF` |
-| `--registry-ref` | registry image ref used with --digest when no local source is available | string | `""` | `$IMAGE_EVIDENCE_REGISTRY_REF`, `$IMAGE_REF` |
-| `--digest` | registry image digest used with --registry-ref when no local source is available | string | `""` | `$IMAGE_EVIDENCE_DIGEST`, `$DIGEST` |
-| `--auth-file` | registry auth file for digest-ref fallback sources | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
-| `--platform` | platform to scan, e.g. linux/amd64 (repeatable or comma/space-separated via env) | string | `""` | `$IMAGE_EVIDENCE_PLATFORMS`, `$PLATFORMS` |
-| `--trivy-output-template` | destination template for per-platform Trivy JSON; must contain {arch} or {platform} | string | `""` | `$IMAGE_EVIDENCE_TRIVY_OUTPUT_TEMPLATE` |
-| `--sbom-output-template` | optional per-platform CycloneDX SBOM template; must contain {arch} or {platform} | string | `""` | `$IMAGE_EVIDENCE_SBOM_OUTPUT_TEMPLATE` |
-| `--trivy-timeout` | Trivy scan timeout | string | `"30m"` | `$IMAGE_EVIDENCE_TRIVY_TIMEOUT` |
-| `--trivy-attempts` | Trivy scan attempts per image before failing | int | `3` | `$IMAGE_EVIDENCE_TRIVY_ATTEMPTS` |
-| `--trivy-retry-delay-seconds` | base delay between Trivy scan attempts | int | `20` | `$IMAGE_EVIDENCE_TRIVY_RETRY_DELAY_SECONDS` |
-| `--temp-dir` | scratch directory for the exported OCI layouts | string | `""` | `$CI_TEMP_DIR`, `$RUNNER_TEMP` |
-
-### `forge-ci container image-labels-json`
-
-fetch an image's OCI config labels as compact JSON
-
-```
-Fetches the image config selected by --ref and prints its labels
-as a compact JSON object. --auth-file accepts the Docker/containers auth config
-written by `container login`.
-```
-
-| Flag | Description | Type | Default | Env vars |
-|------|-------------|------|---------|----------|
-| `--ref` | image tag or digest ref to inspect (required) | string | `""` | `$IMAGE_REF` |
-| `--auth-file` | Docker-compatible registry auth config | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
 
 ### `forge-ci container layout`
 
@@ -1743,26 +1668,6 @@ EXAMPLES:
 | `--create-auth-file` | when --auth-file is empty, create a fresh job-local auth file under $RUNNER_TEMP | bool | `false` | `$REGISTRY_CREATE_AUTH_FILE` |
 | `--export-env` | append REGISTRY_AUTH_FILE=<auth-file> to --env-file; requires an explicit or created auth file | bool | `false` | `$REGISTRY_EXPORT_AUTH_FILE_ENV` |
 | `--env-file` | runner env file used with --export-env | string | `""` | `$FORGEJO_ENV`, `$GITHUB_ENV` |
-
-### `forge-ci container logout`
-
-remove a registry's credential from the shared OCI auth config (the inverse of login) — for long-lived self-hosted runners where the auth file outlives the job
-
-```
-Deletes the {"auths":{"<registry>":…}} entry from $REGISTRY_AUTH_FILE /
-$DOCKER_CONFIG/config.json / ~/.docker/config.json (first that applies),
-preserving every other registry's credential. Idempotent: a missing config or
-an absent entry is a successful no-op, so it is safe under "if: always()".
-
-EXAMPLES:
-   forge-ci container logout --registry ghcr.io
-   forge-ci container logout   # defaults to $CONTAINER_REGISTRY, else ghcr.io
-```
-
-| Flag | Description | Type | Default | Env vars |
-|------|-------------|------|---------|----------|
-| `--registry` | registry host to log out of (e.g. ghcr.io, forge.example) | string | `"ghcr.io"` | `$CONTAINER_REGISTRY` |
-| `--auth-file` | override the auth config path (default: $REGISTRY_AUTH_FILE, else $DOCKER_CONFIG/config.json, else ~/.docker/config.json) | string | `""` | n/a |
 
 ### `forge-ci container manifest`
 
@@ -2160,24 +2065,6 @@ EXAMPLES:
 | `--repository-owner` | namespace for bare Docker Hub image overrides; resolved OCI repositories are fully qualified and lowercased (required) | string | `""` | `$REPOSITORY_OWNER`, `$CI_PROJECT_NAMESPACE`, `$FORGEJO_REPOSITORY_OWNER`, `$GITHUB_REPOSITORY_OWNER` |
 | `--name` | optional sub-name for multi-container projects | string | `""` | `$CONTAINER_NAME` |
 
-### `forge-ci container release-identity-matches`
-
-print whether OCI labels identify the expected release
-
-```
-Reads a compact JSON object of image labels and prints true or
-false. The source label comparison is case-insensitive to tolerate forge owner
-case drift; revision, version, and ref.name are exact matches.
-```
-
-| Flag | Description | Type | Default | Env vars |
-|------|-------------|------|---------|----------|
-| `--labels-json` | compact JSON object containing image labels (required) | string | `""` | n/a |
-| `--revision` | expected org.opencontainers.image.revision (required) | string | `""` | n/a |
-| `--version` | expected org.opencontainers.image.version (required) | string | `""` | n/a |
-| `--ref-name` | expected org.opencontainers.image.ref.name (required) | string | `""` | n/a |
-| `--source` | expected org.opencontainers.image.source (required) | string | `""` | n/a |
-
 ### `forge-ci container release-images`
 
 high-level release-image planning, import, signing, promotion, rollback, and cleanup boundary
@@ -2521,30 +2408,6 @@ reattestable.
 | `--identity-ref-name` | OCI org.opencontainers.image.ref.name expected for --allow-reattest; defaults to --expected-tag | string | `""` | n/a |
 | `--identity-source` | OCI org.opencontainers.image.source expected for --allow-reattest; defaults to --expected-source | string | `""` | n/a |
 | `--auth-file` | Docker/containers auth config for registry label and attestation reads and cosign verification | string | `""` | `$FORGE_CI_REGISTRY_AUTH_FILE` |
-
-### `forge-ci container release-labels`
-
-emit standard OCI release labels as Buildah --label argv tokens
-
-```
-Prints one argv token per line: alternating --label and key=value.
-Shell callers can mapfile/readarray the output and pass the resulting array to
-buildah bud without reimplementing label policy in shell.
-```
-
-| Flag | Description | Type | Default | Env vars |
-|------|-------------|------|---------|----------|
-| `--title` | org.opencontainers.image.title (required) | string | `""` | `$OCI_LABEL_TITLE` |
-| `--version` | org.opencontainers.image.version (required) | string | `""` | `$OCI_LABEL_VERSION` |
-| `--created` | org.opencontainers.image.created (RFC 3339) (required) | string | `""` | `$OCI_LABEL_CREATED` |
-| `--revision` | org.opencontainers.image.revision (required) | string | `""` | `$OCI_LABEL_REVISION` |
-| `--ref-name` | org.opencontainers.image.ref.name (required) | string | `""` | `$OCI_LABEL_REF_NAME` |
-| `--source` | org.opencontainers.image.source and url (required) | string | `""` | `$OCI_LABEL_SOURCE` |
-| `--documentation` | org.opencontainers.image.documentation; defaults to <source>#readme | string | `""` | `$OCI_LABEL_DOCUMENTATION` |
-| `--description` | org.opencontainers.image.description | string | `""` | `$OCI_LABEL_DESCRIPTION` |
-| `--licenses` | org.opencontainers.image.licenses | string | `""` | `$OCI_LABEL_LICENSES` |
-| `--vendor` | org.opencontainers.image.vendor | string | `""` | `$OCI_LABEL_VENDOR` |
-| `--authors` | org.opencontainers.image.authors | string | `""` | `$OCI_LABEL_AUTHORS` |
 
 ### `forge-ci container runtime-publication`
 

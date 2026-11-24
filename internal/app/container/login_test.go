@@ -11,7 +11,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -217,77 +216,4 @@ func TestRegistryLogin_PathPrecedenceLowerRungs(t *testing.T) {
 			t.Errorf("auth dir mode = %v, want 0700", perm)
 		}
 	})
-}
-
-func TestRegistryLogout_RemovesOneKeepsOthersAndStays0600(t *testing.T) {
-	t.Parallel()
-
-	path := filepath.Join(t.TempDir(), "config.json")
-	for _, reg := range []string{"ghcr.io", "forge.example"} {
-		if err := appcontainer.RegistryLogin(io.Discard, appcontainer.RegistryLoginInput{
-			Registry: reg, Username: "u", Password: "p", AuthFile: path,
-		}); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	if err := appcontainer.RegistryLogout(io.Discard, appcontainer.RegistryLogoutInput{
-		Registry: "ghcr.io", AuthFile: path,
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	if got := readAuth(t, path, "ghcr.io"); got != "" {
-		t.Errorf("ghcr.io credential not removed: %q", got)
-	}
-
-	if got := readAuth(t, path, "forge.example"); got == "" {
-		t.Error("forge.example credential was clobbered by logout")
-	}
-
-	if info, err := os.Stat(path); err != nil {
-		t.Fatal(err)
-	} else if perm := info.Mode().Perm(); perm != 0o600 {
-		t.Errorf("auth file perm after logout = %o, want 600", perm)
-	}
-}
-
-func TestRegistryLogout_IsIdempotent(t *testing.T) {
-	t.Parallel()
-
-	// A missing config is a no-op for credentials: no error and no auth file.
-	// It is not a no-op on disk, and the comment used to say it was. Logout
-	// serialises through cliio.WithLock, whose contract is that the
-	// "<path>.lock" sidecar is created if absent and left in place, so the
-	// directory afterwards holds exactly that sidecar. Asserting the whole
-	// directory keeps the two apart: an auth file appearing is a logout that
-	// wrote credentials state, while the sidecar is the lock doing its job.
-	dir := t.TempDir()
-	missing := filepath.Join(dir, "config.json")
-
-	for range 2 {
-		if err := appcontainer.RegistryLogout(io.Discard, appcontainer.RegistryLogoutInput{
-			Registry: "ghcr.io", AuthFile: missing,
-		}); err != nil {
-			t.Fatalf("logout on missing config should be a no-op, got %v", err)
-		}
-	}
-
-	if _, err := os.Stat(missing); !os.IsNotExist(err) {
-		t.Errorf("logout on missing config must not create the auth file, stat err = %v", err)
-	}
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	names := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		names = append(names, entry.Name())
-	}
-
-	if want := []string{"config.json.lock"}; !slices.Equal(names, want) {
-		t.Errorf("directory after logout = %v, want only the documented lock sidecar %v", names, want)
-	}
 }

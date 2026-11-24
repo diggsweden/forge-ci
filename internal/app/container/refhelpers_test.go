@@ -8,8 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -29,24 +27,6 @@ func (f *fakeRefManifestRegistry) Manifest(_ context.Context, ref string) ([]byt
 	f.calls++
 
 	return f.raw, f.err
-}
-
-func TestContainerfileArgDefault_ReadsBeforeFirstFrom(t *testing.T) {
-	t.Parallel()
-
-	path := filepath.Join(t.TempDir(), "Containerfile")
-	if err := os.WriteFile(path, []byte("ARG BASE_IMAGE=alpine:3.20\nFROM ${BASE_IMAGE}\nARG BASE_IMAGE=too-late\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	got, err := appcontainer.ContainerfileArgDefault(appcontainer.ContainerfileArgDefaultInput{File: path, Name: "BASE_IMAGE"})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if got != "alpine:3.20" {
-		t.Fatalf("default = %q", got)
-	}
 }
 
 func TestRefHelpers_CanonicalizeImageRefs(t *testing.T) {

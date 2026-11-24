@@ -44,16 +44,6 @@ func TestPushReferenceBoundary_ProducesOneDigestSuffix(t *testing.T) {
 	require.Equal(t, "registry.example/app:v1@"+digest, image.Ref)
 }
 
-func TestLogoutBoundary_ValidatesBeforeCreatingState(t *testing.T) {
-	t.Parallel()
-	root := t.TempDir()
-	err := appcontainer.RegistryLogout(io.Discard, appcontainer.RegistryLogoutInput{AuthFile: filepath.Join(root, "missing", "auth.json")})
-	require.ErrorIs(t, err, errs.ErrUsage)
-	entries, err := os.ReadDir(root)
-	require.NoError(t, err)
-	require.Empty(t, entries)
-}
-
 func TestSignerMetadataBoundary_PreflightsAllArchitectureBindings(t *testing.T) {
 	for _, kind := range []string{"duplicate-digest", "duplicate-arch", "arch", "digest", "tag"} {
 		t.Run(kind, func(t *testing.T) {
