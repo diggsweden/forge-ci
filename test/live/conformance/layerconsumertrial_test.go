@@ -181,6 +181,16 @@ func runForgejoConsumerTrial(t *testing.T, root string, releaseCase forgejoRelea
 		t.Fatalf("workflow %s: %v", settings.Workflow, err)
 	}
 
+	// A workflow that routes its image builds to the container runner falls
+	// back to the ordinary one when neither the contract nor the caller names
+	// one, and that runner may deny the user namespaces Buildah needs. Report
+	// it before anything is created, as livetest.ChooseImageBuilder does.
+	if trialBuilder != livetest.ImageBuilderKaniko && strings.Contains(workflows[settings.Workflow], "vars."+containerRunnerVariable) &&
+		settings.Variables[containerRunnerVariable] == "" && livetest.PrivilegedRunnerLabel(t, target) == "" {
+		livetest.NotCoveredf(t, "workflow %s builds images with Buildah on the runner %s names, which needs the contract's build runner pool, whose runners permit user namespaces, and the lab publishes none; select kaniko with %s=kaniko",
+			settings.Workflow, containerRunnerVariable, livetest.ForgejoImageBuilderEnv)
+	}
+
 	const name = livetest.ConsumerTrial
 
 	// A demo shows the whole flow in one repository it keeps: the release,
