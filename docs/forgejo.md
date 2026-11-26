@@ -380,6 +380,7 @@ is unset.
 | Variable | Value |
 |---|---|
 | `CI_RUNNER_LABEL`, `CI_RUNNER_LABEL_ARM64` | JSON array of trusted runner labels, e.g. `["ci-builder"]` or `["linux","amd64"]`, of the amd64 and the arm64 pool. All labels must match. Plain and signing jobs run on `CI_RUNNER_LABEL`; native arm64 jobs, such as the signer image's arm64 build, on `CI_RUNNER_LABEL_ARM64`. |
+| `CI_BOOTSTRAP_ARCHS` | Optional. JSON array of the architectures the [signer image](#the-signer-image) and the kaniko job image are built for, e.g. `["arm64"]`; unset, `["amd64","arm64"]`. Set it where the pool has runners of one architecture only. Read by the two example workflows alone; the engine binary is published for both architectures regardless. |
 | `CI_RUNNER_LABEL_CONTAINER`, `CI_RUNNER_LABEL_CONTAINER_ARM64` | Optional, the same format: where jobs that build container images run instead of the pool, because they need user namespaces a shared pool may deny; see [Runners and runner lending](runners.md). |
 | `CI_RUNNER_LENDER`, `CI_RUNNER_LENDER_REPOSITORY` | Optional: the lender a request-runner job asks for an ephemeral runner, with the secret `CI_RUNNER_LENDER_TOKEN`; unset, nothing is borrowed. See [Runner lending](runners.md#runner-lending). |
 | `CI_IMAGE_BUILDER`, `CI_IMAGE_BUILDER_JOB_IMAGE` | The image builder type, `buildah` when unset, or `kaniko` to build on a pool that denies user namespaces, with the digest-pinned image the build jobs then run in. Set both once on the organization: the job image changes only when kaniko or its Containerfile does, not with the engine pin. See [Building on the pool with kaniko](runners.md#building-on-the-pool-with-kaniko). |
@@ -486,7 +487,9 @@ digest-pinned reference. Each architecture builds on a native runner of its
 own architecture (`CI_RUNNER_LABEL` for amd64, `CI_RUNNER_LABEL_ARM64` for
 arm64), with that architecture's engine binary. The layer sets up no
 emulation, and the engine refuses to build an architecture other than its
-host's.
+host's. A pool without runners of one of them names the architectures it has
+in the variable `CI_BOOTSTRAP_ARCHS`; the image is then built for those
+alone, and the signer jobs of every consumer must run on one of them.
 
 The image's OCI source and revision labels name the engine checkout it was
 built from. Consumers pin the digest it prints, not its descriptive tags.
