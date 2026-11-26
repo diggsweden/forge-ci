@@ -178,3 +178,46 @@ func TestSignerImageExampleSelectsTheBuilderByVariable(t *testing.T) {
 		t.Errorf("build job prepares the image builder %d times, want once", prepared)
 	}
 }
+
+// A pool with runners of one architecture cannot run a matrix that names both,
+// so the two bootstrap examples build the architectures of the variable
+// CI_BOOTSTRAP_ARCHS, amd64 and arm64 when it is unset, and every later step
+// reads that list too: an index must not wait for an architecture no job built.
+func TestBootstrapExamplesBuildTheArchitecturesOfOneVariable(t *testing.T) {
+	t.Parallel()
+
+	const (
+		matrix = `${{ fromJSON(vars.CI_BOOTSTRAP_ARCHS || '["amd64","arm64"]') }}`
+		list   = `${{ vars.CI_BOOTSTRAP_ARCHS || '["amd64","arm64"]' }}`
+	)
+
+	for example, jobs := range map[string]map[string]bool{
+		signerImageExample:    {signerRequestRunnerJob: true, signerBuildArchJob: true, "assemble-signer-image": false},
+		kanikoJobImageExample: {kanikoBuildJob: true, kanikoMergeJob: false},
+	} {
+		parsed := loadWorkflow(t, example)
+
+		for name, builds := range jobs {
+			target := parsed.jobs[name]
+
+			if builds {
+				arch := mappingValue(mappingValue(mappingValue(target.node, "strategy"), "matrix"), "arch")
+				if got := scalarString(arch); got != matrix {
+					t.Errorf("%s: job %s builds %q, want the variable's architectures %q", example, name, got, matrix)
+				}
+
+				continue
+			}
+
+			if !anyString(target.node, func(value string) bool { return value == list }) {
+				t.Errorf("%s: job %s must read the architectures it assembles from %q", example, name, list)
+			}
+
+			for _, literal := range []string{"for arch in amd64 arm64", "arch-amd64", "arch-arm64"} {
+				if jobRunsStep(target, literal) {
+					t.Errorf("%s: job %s names an architecture literally (%q); it assembles what the matrix built", example, name, literal)
+				}
+			}
+		}
+	}
+}

@@ -51,8 +51,15 @@
 # The engine package and signer image must be readable without credentials.
 # Forks must publish from main; each job refuses a mistaken side-branch dispatch.
 #
-# The image is built for linux/amd64 and linux/arm64 and pushed to the
-# instance's own registry as
+# An instance whose pool has runners of one architecture only sets the variable
+# CI_BOOTSTRAP_ARCHS to the architectures it has, as a JSON array such as
+# ["arm64"]; unset, it is ["amd64","arm64"]. The image is then built, and the
+# runner requested, for those alone, and every signer job of a consumer must
+# run on one of them. The engine binary is published for both regardless: it
+# is cross-compiled.
+#
+# The image is built for linux/amd64 and linux/arm64, or the architectures of
+# CI_BOOTSTRAP_ARCHS, and pushed to the instance's own registry as
 #
 #   <forge host>/<OWNER>/forge-ci-signer:signer-<recipe commit first 40 hex>-<engine commit>
 #
@@ -191,7 +198,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64, arm64]
+        arch: ${{ fromJSON(vars.CI_BOOTSTRAP_ARCHS || '["amd64","arm64"]') }}
     defaults:
       run:
         shell: bash
@@ -256,7 +263,7 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix:
-        arch: [amd64, arm64]
+        arch: ${{ fromJSON(vars.CI_BOOTSTRAP_ARCHS || '["amd64","arm64"]') }}
     defaults:
       run:
         shell: bash
@@ -405,29 +412,30 @@ jobs:
           token: ${{ secrets.SIGNER_REGISTRY_TOKEN }}
           create-auth-file: "true"
           export-env: "true"
-      - name: Download signer amd64 metadata
+      - name: Download signer architecture metadata
+        env:
+          CI_BOOTSTRAP_ARCHS: ${{ vars.CI_BOOTSTRAP_ARCHS || '["amd64","arm64"]' }}
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null # the resolver of the engine checkout
           source .engine/bin/lib-forge-ci.sh
-          FORGE_CI_PROVIDER=forgejo run_forge_ci artifact download \
-            --name signer-image-arch-amd64 \
-            --dir signer-image-arch-amd64/
-      - name: Download signer arm64 metadata
-        run: |
-          set -euo pipefail
-          # shellcheck source=/dev/null # the resolver of the engine checkout
-          source .engine/bin/lib-forge-ci.sh
-          FORGE_CI_PROVIDER=forgejo run_forge_ci artifact download \
-            --name signer-image-arch-arm64 \
-            --dir signer-image-arch-arm64/
+          for arch in $(printf '%s' "${CI_BOOTSTRAP_ARCHS:?}" | tr -d '[]" ' | tr ',' ' '); do
+            FORGE_CI_PROVIDER=forgejo run_forge_ci artifact download \
+              --name "signer-image-arch-${arch}" \
+              --dir "signer-image-arch-${arch}/"
+          done
       - name: Assemble and publish signer manifest
         id: assemble
+        env:
+          CI_BOOTSTRAP_ARCHS: ${{ vars.CI_BOOTSTRAP_ARCHS || '["amd64","arm64"]' }}
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null # the resolver of the engine checkout
           source .engine/bin/lib-forge-ci.sh
           : "${SIGNER_RECIPE_COMMIT_SHA:?}"
+          # The engine reads the architectures to assemble one per line.
+          IMAGE_ARCHS="$(printf '%s' "${CI_BOOTSTRAP_ARCHS:?}" | tr -d '[]" ' | tr ',' '\n')"
+          export IMAGE_ARCHS
           FORGE_CI_PROVIDER=forgejo run_forge_ci container multiarch-image assemble \
             --auth-file "${REGISTRY_AUTH_FILE:?}" \
             --source-sha "${FORGE_CI_COMMIT_SHA:?}" \

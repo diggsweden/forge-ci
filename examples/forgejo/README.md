@@ -11,7 +11,9 @@ of your organization runs it (in the fork itself, install it as
 pipeline), at the commit of `forge-ci` your consumers pin.
 Its first job publishes the layer's binary for that commit to your instance,
 without which no job of the layer runs. The others build and publish the
-signer image, for linux/amd64 and linux/arm64, and output the digest-pinned
+signer image, for linux/amd64 and linux/arm64 (or the architectures in the
+variable `CI_BOOTSTRAP_ARCHS`, for a pool that has one only), and output the
+digest-pinned
 reference every consumer `release-workflow.yml` passes as `signer-image`. Its image
 builds need user namespaces: on a pool that denies them, a `request-runner`
 job borrows a runner, or the builds use kaniko; see

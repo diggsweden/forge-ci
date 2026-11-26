@@ -11,7 +11,7 @@
 # commit is the build context as kaniko's own git context, and no forge-ci, so
 # kaniko pushes each architecture itself. A third job, on the pool with the
 # engine, admits each pushed architecture only if its architecture and
-# revision label match, and merges the two into one index. Everything that
+# revision label match, and merges them into one index. Everything that
 # follows (consumer images, the signer image) runs in that image with forge-ci.
 #
 # Copy to .forgejo/workflows/kaniko-job-image.yml of the repository that
@@ -30,6 +30,10 @@
 # consumers' jobs pull it without credentials. Pin the index digest the merge
 # job prints as CI_IMAGE_BUILDER_JOB_IMAGE, with CI_IMAGE_BUILDER=kaniko, on
 # the repositories that build with kaniko.
+#
+# A pool with runners of one architecture only sets the variable
+# CI_BOOTSTRAP_ARCHS to the architectures it has, as a JSON array such as
+# ["arm64"]; unset, it is ["amd64","arm64"]. The index then holds those alone.
 name: Kaniko job image
 # Dispatch only: the merge job runs the engine binary of the pinned commit,
 # which the signer workflow publishes, and its digest is pinned by a person.
@@ -48,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64, arm64]
+        arch: ${{ fromJSON(vars.CI_BOOTSTRAP_ARCHS || '["amd64","arm64"]') }}
     # Renovate updates this digest with the Containerfile's kaniko stage.
     container:
       image: ghcr.io/osscontainertools/kaniko:v1.28.6-debug@sha256:7ab44d0131c3051b6dea128067e258c7afb5c4815082a93b9cf6c624f2140bf0
@@ -146,13 +150,15 @@ jobs:
       # claims and was built from the pinned commit.
       - name: Admit each architecture and merge the index
         id: index
+        env:
+          CI_BOOTSTRAP_ARCHS: ${{ vars.CI_BOOTSTRAP_ARCHS || '["amd64","arm64"]' }}
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null # the resolver of the engine checkout
           source .engine/bin/lib-forge-ci.sh
           digests="${RUNNER_TEMP:?}/kaniko-job-digests"
           mkdir -p "${digests}"
-          for arch in amd64 arm64; do
+          for arch in $(printf '%s' "${CI_BOOTSTRAP_ARCHS:?}" | tr -d '[]" ' | tr ',' ' '); do
             digest=$(run_forge_ci container image usable-digest \
               --ref "${KANIKO_JOB_IMAGE:?}:kaniko-job-${FORGE_CI_COMMIT_SHA:?}-${arch}" \
               --arch "${arch}" \
